@@ -89,11 +89,17 @@ class TransactionVerifier:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 
-    def verify_sigops_input(self, tx: Transaction) -> None:
+    def verify_sigops_input(self, tx: Transaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
-        from hathor.transaction.scripts import get_sigops_count
+        from hathor.transaction.scripts import SigopCounter
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        counter = SigopCounter(
+            max_multisig_pubkeys=self._settings.MAX_MULTISIG_PUBKEYS,
+            enable_checkdatasig_count=enable_checkdatasig_count,
+        )
+
         n_txops = 0
         for tx_input in tx.inputs:
             try:
@@ -103,7 +109,7 @@ class TransactionVerifier:
             if tx_input.index >= len(spent_tx.outputs):
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(

@@ -26,6 +26,7 @@ from hathor.manager import HathorManager
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
 from hathor.util import json_dumpb, json_loadb
+from hathor.verification.verification_params import VerificationParams
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
 
@@ -42,6 +43,7 @@ class SendTokensResource(Resource):
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
         self._settings = settings
+        self.params = VerificationParams.default_for_mempool()
 
     def render_POST(self, request):
         """ POST request for /wallet/send_tokens/
@@ -132,7 +134,7 @@ class SendTokensResource(Resource):
         tx.weight = weight
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(tx)
+        self.manager.verification_service.verify(tx, self.params)
         return tx
 
     def _cb_tx_resolve(self, tx, request):

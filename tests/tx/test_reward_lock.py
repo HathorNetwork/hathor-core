@@ -72,7 +72,7 @@ class TransactionTest(unittest.TestCase):
             tx, _ = self._spend_reward_tx(self.manager, reward_block)
             self.assertEqual(tx.static_metadata.min_height, unlock_height)
             with self.assertRaises(RewardLocked):
-                self.manager.verification_service.verify(tx)
+                self.manager.verification_service.verify(tx, self.verification_params)
             add_new_blocks(self.manager, 1, advance_clock=1)
 
         # now it should be spendable
@@ -132,7 +132,7 @@ class TransactionTest(unittest.TestCase):
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
         with self.assertRaises(InvalidNewTransaction):
             self.assertTrue(self.manager.on_new_tx(tx))
 
@@ -175,7 +175,7 @@ class TransactionTest(unittest.TestCase):
 
         # now the new tx should not pass verification considering the reward lock
         with self.assertRaises(RewardLocked):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
 
         # the transaction should have been removed from the mempool
         self.assertNotIn(tx, self.manager.tx_storage.iter_mempool_from_best_index())
@@ -215,4 +215,4 @@ class TransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)

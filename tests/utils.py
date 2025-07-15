@@ -26,6 +26,7 @@ from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_addres
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 from hathor.util import Random
+from hathor.verification.verification_params import VerificationParams
 
 settings = HathorSettings()
 
@@ -610,7 +611,8 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     manager.cpu_mining_service.resolve(tx)
 
     if propagate:
-        manager.verification_service.verify(tx)
+        params = VerificationParams.default_for_mempool()
+        manager.verification_service.verify(tx, params)
         manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)

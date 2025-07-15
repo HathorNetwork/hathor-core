@@ -29,7 +29,7 @@ class _BaseTest:
 
             cls = self.get_tx_class()
             tx = cls.create_from_struct(self.tx_bytes, verbose=verbose)
-            self._verification_service.verify_without_storage(tx)
+            self._verification_service.verify_without_storage(tx, self.verification_params)
 
             key, version = v[1]
             self.assertEqual(key, 'version')

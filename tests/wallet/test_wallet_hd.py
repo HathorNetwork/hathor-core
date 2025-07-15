@@ -27,7 +27,7 @@ class WalletHDTest(unittest.TestCase):
         new_address = self.wallet.get_unused_address()
         out = WalletOutputInfo(decode_address(new_address), self.TOKENS, timelock=None)
         block = add_new_block(self.manager)
-        self.manager.verification_service.verify(block)
+        self.manager.verification_service.verify(block, self.verification_params)
         utxo = self.wallet.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((block.hash, 0))
         self.assertIsNotNone(utxo)
         self.assertEqual(self.wallet.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, self.BLOCK_TOKENS))

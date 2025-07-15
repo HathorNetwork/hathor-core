@@ -76,7 +76,7 @@ class VertexVerifiers(NamedTuple):
         poa_block_verifier = PoaBlockVerifier(settings=settings)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
-        nano_header_verifier = NanoHeaderVerifier()
+        nano_header_verifier = NanoHeaderVerifier(settings=settings)
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)
 
         return VertexVerifiers(
