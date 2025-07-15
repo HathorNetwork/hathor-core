@@ -57,6 +57,8 @@ class _RestrictionsVisitor(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> None:
         if node.id in AST_NAME_BLACKLIST:
             raise SyntaxError(f'Usage or reference to {node.id} is not allowed.')
+        if '__' in node.id:
+            raise SyntaxError('Using dunder names is not allowed.')
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
@@ -64,6 +66,11 @@ class _RestrictionsVisitor(ast.NodeVisitor):
             if '__' in node.attr:
                 raise SyntaxError('Access to internal attributes and methods is not allowed.')
         self.generic_visit(node)
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        if isinstance(node.value, str):
+            if '__' in node.value:
+                raise SyntaxError('Using dunder names is not allowed.')
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         raise SyntaxError('Async functions are not allowed.')

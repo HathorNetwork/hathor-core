@@ -157,6 +157,16 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             'Access to internal attributes and methods is not allowed.',
         )
 
+    def test_forbid_dunder_names(self) -> None:
+        self._test_forbid_syntax(
+            '__x__ = 123',
+            'Using dunder names is not allowed.'
+        )
+        self._test_forbid_syntax(
+            'x = "__x__"',
+            'Using dunder names is not allowed.'
+        )
+
     def test_forbid_async_fn(self) -> None:
         self._test_forbid_syntax(
             'async def foo():\n    ...',
