@@ -31,6 +31,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.types import VertexId
 from hathor.util import Random, initialize_hd_wallet, not_none
+from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import BaseWallet, Wallet
 from tests.test_memory_reactor_clock import TestMemoryReactorClock
 from tests.utils import DEFAULT_WORDS
@@ -118,6 +119,7 @@ class TestCase(unittest.TestCase):
         self.rng = Random(self.seed)
         self._pending_cleanups: list[Callable[..., Any]] = []
         self._settings = get_global_settings()
+        self.verification_params = VerificationParams.default_for_mempool()
 
     def tearDown(self) -> None:
         self.clean_tmpdirs()

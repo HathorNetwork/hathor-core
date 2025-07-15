@@ -15,6 +15,7 @@
 from typing import Optional
 
 from structlog import get_logger
+from typing_extensions import override
 
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import BaseTransaction
@@ -30,7 +31,13 @@ class SimulatorVertexVerifier(VertexVerifier):
 
 
 class SimulatorCpuMiningService(CpuMiningService):
-    def resolve(self, vertex: BaseTransaction, *, update_time: bool = False) -> bool:
+    @override
+    def resolve(
+        self,
+        vertex: BaseTransaction,
+        *,
+        update_time: bool = False,
+    ) -> bool:
         vertex.update_hash()
         logger.new().debug('Skipping CpuMiningService.resolve() for simulator')
         return True
