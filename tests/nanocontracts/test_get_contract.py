@@ -109,7 +109,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         contract.counter += 2
         self.assertEqual(contract.counter, 2)
 
-        # one more tim to check it added to 2 (and not to 0)
+        # one more time to check it added to 2 (and not to 0)
         contract.counter += 3
         self.assertEqual(contract.counter, 5)
 

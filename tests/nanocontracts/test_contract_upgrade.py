@@ -1,4 +1,5 @@
 from hathor.nanocontracts import Blueprint, Context, fallback, public
+from hathor.nanocontracts.error_handling import NCInternalException
 from hathor.nanocontracts.exception import BlueprintDoesNotExist, NCFail, NCInvalidSyscall, NCMethodNotFound
 from hathor.nanocontracts.runner.types import NCArgs
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
@@ -155,7 +156,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert code2_contract.counter == 0
         assert proxy_contract.counter == 1
 
-        with self.assertRaises(NCFail):
+        with self.assertRaises(NCInternalException):
             self.runner.call_public_method(proxy_id, 'upgrade', ctx, self.code3_bp_id, 'on_upgrade_fail')
         assert proxy_storage.get_blueprint_id() == self.proxy_bp_id
         assert proxy_contract.counter == 1

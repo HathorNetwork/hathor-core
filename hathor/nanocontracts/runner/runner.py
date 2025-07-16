@@ -24,9 +24,9 @@ from hathor.nanocontracts.balance_rules import BalanceRules
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.error_handling import NCInternalException
 from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
-    NCFail,
     NCForbiddenAction,
     NCInvalidContext,
     NCInvalidContractId,
@@ -169,7 +169,7 @@ class Runner:
             # Fail execution if seqnum is invalid.
             self._last_call_info = self._build_call_info(contract_id)
             # TODO: Set the seqnum in this case?
-            raise NCFail(f'invalid seqnum (diff={diff})')
+            raise NCInternalException(f'invalid seqnum (diff={diff})')
         self.block_storage.set_address_seqnum(Address(nano_header.nc_address), nano_header.nc_seqnum)
 
         vertex_metadata = tx.get_metadata()
@@ -553,7 +553,7 @@ class Runner:
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
             match nc_args:
                 case NCRawArgs(args_bytes):
-                    parser = Method.from_callable(method)
+                    parser = Method.from_callable_handled(method)
                     args = parser.deserialize_args_bytes(args_bytes)
                     kwargs = {}
                 case NCParsedArgs():
@@ -582,17 +582,11 @@ class Runner:
             rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
-        try:
-            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-            # impact the original context. Since the runner relies on the context for other critical checks, any
-            # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
-        except NCFail:
-            raise
-        except Exception as e:
-            # Convert any other exception to NCFail.
-            raise NCFail from e
+        # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+        # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+        # impact the original context. Since the runner relies on the context for other critical checks, any
+        # unauthorized modification would pose a serious security risk.
+        ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
 
         if len(self._call_info.change_trackers[contract_id]) > 1:
             call_record.changes_tracker.commit()
@@ -813,7 +807,7 @@ class Runner:
     ) -> tuple[ContractId, Any]:
         """Create a contract from another contract."""
         if not salt:
-            raise Exception('invalid salt')
+            raise NCInternalException('invalid salt')
 
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()

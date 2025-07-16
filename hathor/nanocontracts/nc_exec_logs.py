@@ -25,7 +25,12 @@ from typing import TYPE_CHECKING, Any, Literal, assert_never
 from pydantic import Field, validator
 from typing_extensions import override
 
-from hathor.nanocontracts import NCFail
+from hathor.nanocontracts.error_handling import (
+    NCInternalException,
+    __NCTransactionFail__,
+    __NCUnhandledUserException__,
+    internal_code_called_from_user_code,
+)
 from hathor.nanocontracts.runner import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.types import ContractId
 from hathor.reactor import ReactorProtocol
@@ -217,18 +222,22 @@ class NCLogger:
     __entries__: list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry] = field(default_factory=list)
     __events__: list[NCEvent] = field(default_factory=list)
 
+    @internal_code_called_from_user_code
     def debug(self, message: str, **kwargs: Any) -> None:
         """Create a new DEBUG log entry."""
         self.__log__(NCLogLevel.DEBUG, message, **kwargs)
 
+    @internal_code_called_from_user_code
     def info(self, message: str, **kwargs: Any) -> None:
         """Create a new INFO log entry."""
         self.__log__(NCLogLevel.INFO, message, **kwargs)
 
+    @internal_code_called_from_user_code
     def warn(self, message: str, **kwargs: Any) -> None:
         """Create a new WARN log entry."""
         self.__log__(NCLogLevel.WARN, message, **kwargs)
 
+    @internal_code_called_from_user_code
     def error(self, message: str, **kwargs: Any) -> None:
         """Create a new ERROR log entry."""
         self.__log__(NCLogLevel.ERROR, message, **kwargs)
@@ -236,7 +245,7 @@ class NCLogger:
     def __emit_event__(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
         if len(data) > MAX_EVENT_SIZE:
-            raise ValueError(f'event data cannot be larger than {MAX_EVENT_SIZE} bytes, is {len(data)}')
+            raise NCInternalException(f'event data cannot be larger than {MAX_EVENT_SIZE} bytes, is {len(data)}')
         self.__events__.append(NCEvent(nc_id=self.__nc_id__, data=data))
 
     def __log__(self, level: NCLogLevel, message: str, **kwargs: Any) -> None:
@@ -268,7 +277,12 @@ class NCLogStorage:
         self._path = Path(path).joinpath(NC_EXEC_LOGS_DIR)
         self._config = config
 
-    def save_logs(self, tx: Transaction, call_info: CallInfo, exception_and_tb: tuple[NCFail, str] | None) -> None:
+    def save_logs(
+        self,
+        tx: Transaction,
+        call_info: CallInfo,
+        exception_and_tb: tuple[__NCTransactionFail__, str] | None,
+    ) -> None:
         """Persist new NC execution logs."""
         assert tx.is_nano_contract()
         meta = tx.get_metadata()
@@ -290,9 +304,8 @@ class NCLogStorage:
                 if exception is None:
                     # don't save when there's no exception
                     return
-                assert isinstance(exception, NCFail)
-                if not exception.__cause__ or isinstance(exception.__cause__, NCFail):
-                    # don't save when it's a simple NCFail or caused by a NCFail
+                if not isinstance(exception, __NCUnhandledUserException__):
+                    # don't save when it's not an __NCUnhandledUserException__
                     return
             case _:
                 assert_never(self._config)

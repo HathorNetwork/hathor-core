@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, Sequence, final
 
+from hathor.nanocontracts.error_handling import internal_code_called_from_user_code
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
@@ -45,17 +46,20 @@ class BlueprintEnvironment:
         # XXX: we could replace dict|None with a Cache that can be disabled, cleared, limited, etc
         self.__cache__: dict[str, Any] | None = None if disable_cache else {}
 
-    @final
     @property
+    @internal_code_called_from_user_code
+    @final
     def rng(self) -> NanoRNG:
         """Return an RNG for the current contract."""
         return self.__runner.syscall_get_rng()
 
+    @internal_code_called_from_user_code
     @final
     def get_contract_id(self) -> ContractId:
         """Return the current contract id."""
         return self.__runner.get_current_contract_id()
 
+    @internal_code_called_from_user_code
     @final
     def get_blueprint_id(self, contract_id: Optional[ContractId] = None) -> BlueprintId:
         """Return the blueprint id of a nano contract. By default, it returns for the current contract."""
@@ -63,6 +67,7 @@ class BlueprintEnvironment:
             contract_id = self.get_contract_id()
         return self.__runner.get_blueprint_id(contract_id)
 
+    @internal_code_called_from_user_code
     def get_balance_before_current_call(
         self,
         token_uid: Optional[TokenUid] = None,
@@ -78,6 +83,7 @@ class BlueprintEnvironment:
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
         return Amount(balance.value)
 
+    @internal_code_called_from_user_code
     def get_current_balance(
         self,
         token_uid: Optional[TokenUid] = None,
@@ -93,6 +99,7 @@ class BlueprintEnvironment:
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return Amount(balance.value)
 
+    @internal_code_called_from_user_code
     @final
     def can_mint_before_current_call(
         self,
@@ -110,6 +117,7 @@ class BlueprintEnvironment:
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
         return balance.can_mint
 
+    @internal_code_called_from_user_code
     @final
     def can_mint(
         self,
@@ -127,6 +135,7 @@ class BlueprintEnvironment:
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return balance.can_mint
 
+    @internal_code_called_from_user_code
     @final
     def can_melt_before_current_call(
         self,
@@ -144,6 +153,7 @@ class BlueprintEnvironment:
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
         return balance.can_melt
 
+    @internal_code_called_from_user_code
     @final
     def can_melt(
         self,
@@ -161,6 +171,7 @@ class BlueprintEnvironment:
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return balance.can_melt
 
+    @internal_code_called_from_user_code
     @final
     def call_public_method(
         self,
@@ -173,6 +184,7 @@ class BlueprintEnvironment:
         """Call a public method of another contract."""
         return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
 
+    @internal_code_called_from_user_code
     @final
     def proxy_call_public_method(
         self,
@@ -185,6 +197,7 @@ class BlueprintEnvironment:
         """Execute a proxy call to a public method of another blueprint."""
         return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
 
+    @internal_code_called_from_user_code
     @final
     def proxy_call_public_method_nc_args(
         self,
@@ -196,26 +209,31 @@ class BlueprintEnvironment:
         """Execute a proxy call to a public method of another blueprint."""
         return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
 
+    @internal_code_called_from_user_code
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a view method of another contract."""
         return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
 
+    @internal_code_called_from_user_code
     @final
     def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
         self.__runner.syscall_revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
 
+    @internal_code_called_from_user_code
     @final
     def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
         self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount)
 
+    @internal_code_called_from_user_code
     @final
     def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Melt tokens by removing them from the balance of this nano contract."""
         self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount)
 
+    @internal_code_called_from_user_code
     @final
     def create_contract(
         self,
@@ -228,11 +246,13 @@ class BlueprintEnvironment:
         """Create a new contract."""
         return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
 
+    @internal_code_called_from_user_code
     @final
     def emit_event(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
         self.__runner.syscall_emit_event(data)
 
+    @internal_code_called_from_user_code
     @final
     def create_token(
         self,
@@ -251,6 +271,7 @@ class BlueprintEnvironment:
             melt_authority,
         )
 
+    @internal_code_called_from_user_code
     @final
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:
         """Change the blueprint of this contract."""

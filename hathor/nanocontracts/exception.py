@@ -12,45 +12,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.exception import HathorError
-from hathor.transaction.exceptions import TxValidationError
+from typing import TypeAlias
+
+from hathor.nanocontracts.error_handling import NCInternalException, NCUserException
+
+"""
+This module contains exceptions related to Nano Contracts.
+
+IMPORTANT: Exception handling during contract execution is critical. It's essential to choose the right type when
+subclassing an NC-related exception. Read the error_handling module for more information.
+
+Exceptions that are raised during Nano Contract execution will either:
+
+- Fail the transaction and become part of the blockchain state when they inherit from NCInternalException.
+- Be considered a bug and crash the full node when they do not inherit from NCInternalException.
+
+When they are raised outside contract execution, such as during verification, they must either inherit from
+HathorError or be an __NCTransactionFail__ to make sure the transaction fails verification.
+"""
 
 
-class BlueprintSyntaxError(SyntaxError):
+class BlueprintSyntaxError(NCInternalException):
     """Raised when a blueprint contains invalid syntax."""
     pass
 
 
-class NCError(HathorError):
-    """Base exception for nano contract's exceptions."""
+class NCInvalidSignature(NCInternalException):
     pass
 
 
-class NCTxValidationError(TxValidationError):
+class NCInvalidPubKey(NCInternalException):
     pass
 
 
-class NCInvalidSignature(NCTxValidationError):
+class NanoContractDoesNotExist(NCInternalException):
     pass
 
 
-class NCInvalidPubKey(NCTxValidationError):
+class BlueprintDoesNotExist(NCInternalException):
     pass
 
 
-class NCFail(NCError):
-    """Raised by Blueprint's methods to fail execution."""
-
-
-class NanoContractDoesNotExist(NCFail):
-    pass
-
-
-class BlueprintDoesNotExist(NCFail):
-    pass
-
-
-class NCSerializationError(NCFail):
+class NCSerializationError(NCInternalException):
     pass
 
 
@@ -58,91 +61,87 @@ class NCSerializationArgTooLong(NCSerializationError):
     pass
 
 
-class NCSerializationTypeError(NCSerializationError):
-    pass
-
-
-class NCViewMethodError(NCFail):
+class NCViewMethodError(NCInternalException):
     """Raised when a view method changes the state of the contract."""
     pass
 
 
-class NCMethodNotFound(NCFail):
+class NCMethodNotFound(NCInternalException):
     """Raised when a method is not found in a nano contract."""
     pass
 
 
-class NCInsufficientFunds(NCFail):
+class NCInsufficientFunds(NCInternalException):
     """Raised when there is not enough funds to withdrawal from a nano contract."""
     pass
 
 
-class NCAttributeError(NCFail):
+class NCAttributeError(NCInternalException):
     pass
 
 
-class NCInvalidContext(NCFail):
+class NCInvalidContext(NCInternalException):
     """Raised when trying to run a method with an invalid context."""
     pass
 
 
-class NCRecursionError(NCFail):
+class NCRecursionError(NCInternalException):
     """Raised when recursion gets too deep."""
 
 
-class NCNumberOfCallsExceeded(NCFail):
+class NCNumberOfCallsExceeded(NCInternalException):
     """Raised when the total number of calls have been exceeded."""
 
 
-class NCInvalidContractId(NCFail):
+class NCInvalidContractId(NCInternalException):
     """Raised when a contract call is invalid."""
 
 
-class NCInvalidMethodCall(NCFail):
+class NCInvalidMethodCall(NCInternalException):
     """Raised when a contract calls another contract's invalid method."""
 
 
-class NCInvalidInitializeMethodCall(NCFail):
+class NCInvalidInitializeMethodCall(NCInternalException):
     """Raised when a contract calls another contract's initialize method."""
 
 
-class NCInvalidPublicMethodCallFromView(NCFail):
+class NCInvalidPublicMethodCallFromView(NCInternalException):
     """Raised when a contract calls another contract's initialize method."""
 
 
-class NCAlreadyInitializedContractError(NCFail):
+class NCAlreadyInitializedContractError(NCInternalException):
     """Raised when one tries to initialize a contract that has already been initialized."""
 
 
-class NCUninitializedContractError(NCFail):
+class NCUninitializedContractError(NCInternalException):
     """Raised when a contract calls a method from an uninitialized contract."""
 
 
-class NCInvalidAction(NCFail):
+class NCInvalidAction(NCInternalException):
     """Raised when an action is invalid."""
     pass
 
 
-class NCInvalidSyscall(NCFail):
+class NCInvalidSyscall(NCInternalException):
     """Raised when a syscall is invalid."""
     pass
 
 
-class NCTokenAlreadyExists(NCFail):
+class NCTokenAlreadyExists(NCInternalException):
     """Raised when one tries to create a duplicated token."""
 
 
-class NCForbiddenAction(NCFail):
+class NCForbiddenAction(NCInternalException):
     """Raised when an action is forbidden on a method."""
     pass
 
 
-class UnknownFieldType(NCError):
+class UnknownFieldType(NCInternalException):
     """Raised when there is no field available for a given type."""
     pass
 
 
-class NCContractCreationNotFound(NCError):
+class NCContractCreationNotFound(NCInternalException):
     """Raised when a nano contract creation transaction is not found.
 
     This error might also happen when the transaction is at the mempool or when it fails execution."""
@@ -163,38 +162,44 @@ class NCContractCreationVoided(NCContractCreationNotFound):
     pass
 
 
-class OCBInvalidScript(NCError):
+class OCBInvalidScript(NCInternalException):
     """Raised when an On-Chain Blueprint script does not pass our script restrictions check.
     """
     pass
 
 
-class OCBInvalidBlueprintVertexType(NCError):
+class OCBInvalidBlueprintVertexType(NCInternalException):
     """Raised when a vertex that is not an OnChainBlueprint is used as a blueprint-id.
     """
     pass
 
 
-class OCBBlueprintNotConfirmed(NCError):
+class OCBBlueprintNotConfirmed(NCInternalException):
     """Raised when trying to use an OnChainBlueprint that is not confirmed by a block in the current best chain.
     """
 
 
-class OCBPubKeyNotAllowed(NCError):
+class OCBPubKeyNotAllowed(NCInternalException):
     """Raised when an OnChainBlueprint transaction uses a pubkey that is not explicitly allowed in the settings.
     """
 
 
-class OCBOutOfFuelDuringLoading(NCError):
+class OCBOutOfFuelDuringLoading(NCInternalException):
     """Raised when loading an On-chain Blueprint and the execution exceeds the fuel limit.
     """
 
 
-class OCBOutOfMemoryDuringLoading(NCError):
+class OCBOutOfMemoryDuringLoading(NCInternalException):
     """Raised when loading an On-chain Blueprint and the execution exceeds the memory limit.
     """
 
 
-class NCDisabledBuiltinError(NCError):
+class NCDisabledBuiltinError(NCInternalException):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """
+
+
+"""
+Just a type alias for compatibility. Represents an exception that may only be raised from user code in blueprints.
+"""
+NCFail: TypeAlias = NCUserException

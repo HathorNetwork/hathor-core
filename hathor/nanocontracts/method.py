@@ -22,7 +22,7 @@ from typing import Any, TypeVar
 from typing_extensions import Self, assert_never, override
 
 from hathor.nanocontracts import Context
-from hathor.nanocontracts.exception import NCFail, NCSerializationArgTooLong, NCSerializationError
+from hathor.nanocontracts.exception import NCSerializationArgTooLong, NCSerializationError
 from hathor.nanocontracts.nc_types import (
     NCType,
     VarUint32NCType,
@@ -38,17 +38,25 @@ T = TypeVar('T')
 
 MAX_BYTES_SERIALIZED_ARG: int = 1000
 
+"""
+The whole serialization system makes extensive use of these three exception types which may be
+triggered by user input. Any other exception type will not be handled and therefore will
+be considered a bug, crashing the full node. Ideally, we should refactor all serialization
+to use specific internal exception types. For now, we simply handle them here.
+"""
+POSSIBLE_SERIALIZATION_EXCEPTIONS = (SerializationError, ValueError, TypeError)
+
 
 def _deserialize_map_exception(nc_type: NCType[T], data: bytes) -> T:
     """ Internal handy method to deserialize `bytes` to `T` while mapping the exceptions."""
     deserializer = Deserializer.build_bytes_deserializer(data)
     try:
         value = nc_type.deserialize(deserializer)
+        deserializer.finalize()
     except MaxBytesExceededError as e:
         raise NCSerializationArgTooLong from e
-    except SerializationError as e:
+    except POSSIBLE_SERIALIZATION_EXCEPTIONS as e:
         raise NCSerializationError from e
-    deserializer.finalize()
     return value
 
 
@@ -57,11 +65,11 @@ def _serialize_map_exception(nc_type: NCType[T], value: T) -> bytes:
     serializer = Serializer.build_bytes_serializer()
     try:
         nc_type.serialize(serializer, value)
+        return bytes(serializer.finalize())
     except MaxBytesExceededError as e:
         raise NCSerializationArgTooLong from e
-    except SerializationError as e:
+    except POSSIBLE_SERIALIZATION_EXCEPTIONS as e:
         raise NCSerializationError from e
-    return bytes(serializer.finalize())
 
 
 class _ArgsNCType(NCType):
@@ -150,7 +158,7 @@ class ArgsOnly:
         return _serialize_map_exception(self.args, args)
 
     def deserialize_args_bytes(self, data: bytes) -> tuple[Any, ...]:
-        """ Shortcut to deserialize args directly from bytes instead of using a deserilizer.
+        """ Shortcut to deserialize args directly from bytes instead of using a deserializer.
         """
         return _deserialize_map_exception(self.args, data)
 
@@ -251,6 +259,14 @@ class Method:
             make_nc_type_for_return_type(method_signature.return_annotation),
         )
 
+    @classmethod
+    def from_callable_handled(cls, method: Callable) -> Self:
+        """Same as `from_callable` but mapping serialization exceptions to NC exceptions."""
+        try:
+            return cls.from_callable(method)
+        except POSSIBLE_SERIALIZATION_EXCEPTIONS as e:
+            raise NCSerializationError from e
+
     def serialize_args_bytes(self, args: tuple[Any, ...] | list[Any]) -> bytes:
         """ Shortcut to serialize args directly to a bytes instead of using a serializer.
         """
@@ -259,10 +275,7 @@ class Method:
     def deserialize_args_bytes(self, data: bytes) -> tuple[Any, ...]:
         """ Shortcut to deserialize args directly from bytes instead of using a deserializer.
         """
-        try:
-            return _deserialize_map_exception(self.args, data)
-        except Exception as e:
-            raise NCFail from e
+        return _deserialize_map_exception(self.args, data)
 
     def serialize_return_bytes(self, return_value: Any) -> bytes:
         """ Shortcut to serialize a return value directly to a bytes instead of using a serializer.

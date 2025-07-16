@@ -15,10 +15,12 @@
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts.error_handling import __NCUnhandledUserException__
 from hathor.nanocontracts.exception import (
     BlueprintDoesNotExist,
     NCFail,
     NCMethodNotFound,
+    NCSerializationError,
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.method import ArgsOnly
@@ -53,13 +55,13 @@ class TestExecutionVerification(BlueprintTestCase):
             self.runner.call_public_method(self.contract_id, 'not_found', self.create_context())
 
     def test_empty_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(__NCUnhandledUserException__) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
         assert isinstance(e.value.__cause__, TypeError)
         assert e.value.__cause__.args[0] == "MyBlueprint.initialize() missing 1 required positional argument: 'a'"
 
     def test_too_many_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(__NCUnhandledUserException__) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 123, 456)
         assert isinstance(e.value.__cause__, TypeError)
         assert e.value.__cause__.args[0] == "MyBlueprint.initialize() takes 3 positional arguments but 4 were given"
@@ -74,7 +76,7 @@ class TestExecutionVerification(BlueprintTestCase):
         args_bytes = args_parser.serialize_args_bytes(('abc',))
         nc_args = NCRawArgs(args_bytes)
 
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(NCSerializationError) as e:
             self.runner.create_contract_with_nc_args(
                 self.contract_id, self.blueprint_id, self.create_context(), nc_args
             )

@@ -115,6 +115,48 @@ function check_do_not_import_twisted_reactor_directly() {
     return 0
 }
 
+function check_inherit_from_nc_user_exception() {
+    PATTERN='class .*\((NCUserException|NCFail)\)'
+
+    if grep -RIE "$PATTERN" "hathor"; then
+        echo 'do not inherit from NCUserException or NCFail, this is only meant to be inherited by blueprint exceptions, created by users.'
+        echo 'we may allow blueprints to catch these exceptions at some point.'
+        return 1
+    fi
+    return 0
+}
+
+function check_raise_nc_user_exception() {
+    PATTERN='raise (NCUserException|NCFail)'
+
+    if grep -RIE "$PATTERN" "hathor" | grep -v '# skip-raise-nc-user-exception';  then
+        echo 'do not raise NCUserException or NCFail, this is only meant to be raised by blueprints, created by users.'
+        echo 'we may allow blueprints to catch these exceptions at some point.'
+        return 1
+    fi
+    return 0
+}
+
+function check_inherit_from_nc_transaction_fail() {
+    PATTERN='class .*\(__NCTransactionFail__\)'
+
+    if grep -RIE "$PATTERN" "${SOURCE_DIRS[@]}" | grep -v '# skip-inherit-from-nc-tx-fail';  then
+        echo 'do not inherit from __NCTransactionFail__, this is only meant to be inherited in the error_handling module.'
+        return 1
+    fi
+    return 0
+}
+
+function check_raise_nc_unhandled_exception() {
+    PATTERN='raise (__NCUnhandledInternalException__|__NCUnhandledUserException__)'
+
+    if grep -RIE "$PATTERN" "${SOURCE_DIRS[@]}" | grep -v '# skip-raise-nc-unhandled-exception'; then
+        echo 'do not raise __NCUnhandledInternalException__ or __NCUnhandledUserException__, this is only meant to be raised by the error_handling module.'
+        return 1
+    fi
+    return 0
+}
+
 # List of functions to be executed
 checks=(
 	check_version_match
@@ -123,6 +165,10 @@ checks=(
 	check_do_not_import_tests_in_hathor
 	check_do_not_import_from_hathor_in_entrypoints
 	check_do_not_import_twisted_reactor_directly
+	check_inherit_from_nc_user_exception
+	check_raise_nc_user_exception
+	check_inherit_from_nc_transaction_fail
+	check_raise_nc_unhandled_exception
 )
 
 # Initialize a variable to track if any check fails
