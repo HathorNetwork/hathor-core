@@ -293,7 +293,7 @@ class ConnectionsManagerSysctl(Sysctl):
             wl_object = self.connections.peers_whitelist
             return get_whitelist_msg(wl_object)
 
-        return 'No whitelist.'
+        return 'disabled'
 
     def set_whitelist(self, new_whitelist: str) -> None:
         """Set the whitelist-only mode. If 'on' or 'off', simply changes the
