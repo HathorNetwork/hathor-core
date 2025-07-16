@@ -62,13 +62,17 @@ class PeersWhitelist(ABC):
             self._is_running = False
         return d
 
-    def follow_wl(self, ) -> None:
+    def follow_wl(self, follow: bool = True) -> None:
         """ Changes following_wl to True. Should not be called directly."""
-        self._following_wl = True
+        self._following_wl = follow
 
     def unfollow_wl(self) -> None:
         """ Changes following_wl to False. Should not be called directly."""
         self._following_wl = False
+    
+    def following_wl(self) -> bool:
+        """ Returns True if following_wl is True, False otherwise."""
+        return self._following_wl
 
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:

@@ -903,7 +903,7 @@ class ConnectionsManager:
         self.log.warn("Swapping whitelists... ")
         self.peers_whitelist = wl_object
 
-        self.whitelist_toggle(wl_object._following_wl)
+        self.whitelist_toggle(wl_object.following_wl())
 
     def whitelist_toggle(self, wl_toggle: bool) -> None:
         """
