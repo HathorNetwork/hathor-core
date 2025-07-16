@@ -51,6 +51,10 @@ class Scenario(Enum):
 
         return simulate_fn(simulator, manager)
 
+    def get_reward_spend_min_blocks(self) -> int:
+        """Get the REWARD_SPEND_MIN_BLOCKS settings required for this scenario."""
+        return 1 if self in (Scenario.NC_EVENTS, Scenario.NC_EVENTS_REORG) else 10
+
 
 def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> Optional['DAGArtifacts']:
     simulator.run(60)
