@@ -32,7 +32,7 @@ from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import VerifiedPeerStorage
-from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
@@ -85,7 +85,7 @@ class ConnectionsManager:
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
-    p2p_whitelist: Optional[URLPeersWhitelist | FilePeersWhitelist]
+    p2p_whitelist: Optional[PeersWhitelist]
     only_whitelist: bool
 
     rate_limiter: RateLimiter
@@ -98,7 +98,7 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
-        peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None,
+        peers_whitelist: PeersWhitelist | None,
         enable_ipv6: bool,
         disable_ipv4: bool,
     ) -> None:
@@ -186,7 +186,7 @@ class ConnectionsManager:
         self.lc_connect_interval = 0.2  # seconds
 
         # Whitelisted peers.
-        self.peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = peers_whitelist
+        self.peers_whitelist: PeersWhitelist | None = peers_whitelist
 
         # One may chose whether to follow the whitelist or not. Alterable by sysctl.
         # This is a p2p_manager copy of the wl_object status "_following_wl".
@@ -888,7 +888,7 @@ class ConnectionsManager:
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
 
-    def whitelist_swap(self, wl_object: URLPeersWhitelist | FilePeersWhitelist) -> None:
+    def whitelist_swap(self, wl_object: PeersWhitelist) -> None:
         """
             Altering whitelist (URL/PATH) during full-node runtime.
         """

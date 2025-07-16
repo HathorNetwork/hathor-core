@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
+from hathor.p2p.peers_whitelist import FilePeersWhitelist, PeersWhitelist, URLPeersWhitelist
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
@@ -55,7 +55,7 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
             raise ValueError('unknown or not implemented')
 
 
-def get_whitelist_msg(wl_object: URLPeersWhitelist | FilePeersWhitelist) -> str:
+def get_whitelist_msg(wl_object: PeersWhitelist) -> str:
     getMsg = 'Whitelist Class: '
     getMsg += 'FilePeersWhitelist || ' if isinstance(wl_object, FilePeersWhitelist) else ''
     getMsg += 'URLPeersWhitelist || ' if isinstance(wl_object, URLPeersWhitelist) else ''
