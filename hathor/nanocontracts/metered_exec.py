@@ -19,6 +19,7 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 from structlog import get_logger
 
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+from hathor.nanocontracts.error_handling import NCInternalException, user_code_called_from_internal_code
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
 
 logger = get_logger()
@@ -34,11 +35,11 @@ _P = ParamSpec('_P')
 FUEL_COST_MAP = [1] * 256
 
 
-class OutOfFuelError(RuntimeError):
+class OutOfFuelError(NCInternalException):
     pass
 
 
-class OutOfMemoryError(MemoryError):
+class OutOfMemoryError(NCInternalException):
     pass
 
 
@@ -63,7 +64,7 @@ class MeteredExecutor:
             '__builtins__': EXEC_BUILTINS,
         }
         # XXX: calling compile now makes the exec step consume less fuel
-        code = compile(
+        code = user_code_called_from_internal_code(compile)(
             source=source,
             filename='<blueprint>',
             mode='exec',
@@ -72,8 +73,10 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
+
         # XXX: SECURITY: `code` and `env` need the proper restrictions by this point
-        exec(code, env)
+        user_code_called_from_internal_code(exec)(code, env)
+
         del env['__builtins__']
         return env
 
@@ -97,5 +100,7 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
-        exec(code, env)
+
+        user_code_called_from_internal_code(exec)(code, env)
+
         return cast(_T, env['__result__'])
