@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from typing import Any, Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
 
+import pytest
 from structlog import get_logger
 from twisted.trial import unittest
 
@@ -20,6 +21,7 @@ from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.manager import HathorManager
+from hathor.nanocontracts.error_handling import NCInternalException, NCUserException
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -447,18 +449,16 @@ class TestCase(unittest.TestCase):
         self.assertEqual(node_sync.synced_block, node_sync.peer_best_block)
 
     @contextmanager
-    def assertNCFail(self, class_name: str, pattern: str | re.Pattern[str] | None = None) -> Iterator[BaseException]:
+    def assertNCFail(self, class_name: str, pattern: str | re.Pattern[str] | None = None) -> Iterator[None]:
         """Assert that a NCFail is raised and it has the expected class name and str(exc) format.
         """
-        from hathor.nanocontracts.exception import NCFail
+        with pytest.raises((NCInternalException, NCUserException)) as e:
+            yield
 
-        with self.assertRaises(NCFail) as cm:
-            yield cm
-
-        self.assertEqual(cm.exception.__class__.__name__, class_name)
+        self.assertEqual(e.value.__class__.__name__, class_name)
 
         if pattern is not None:
-            actual = str(cm.exception)
+            actual = str(e.value)
             if isinstance(pattern, re.Pattern):
                 assert pattern.match(actual)
             else:

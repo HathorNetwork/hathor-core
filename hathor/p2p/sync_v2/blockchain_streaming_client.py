@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred
 
+from hathor.nanocontracts.error_handling import __NCTransactionFail__
 from hathor.p2p.sync_v2.exception import (
     BlockNotConnectedToPreviousBlock,
     InvalidVertexError,
@@ -127,7 +128,7 @@ class BlockchainStreamingClient:
         if self.tx_storage.can_validate_full(blk):
             try:
                 self.vertex_handler.on_new_block(blk, deps=[])
-            except HathorError:
+            except (HathorError, __NCTransactionFail__):
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return
         else:
