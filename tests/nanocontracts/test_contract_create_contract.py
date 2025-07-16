@@ -90,10 +90,8 @@ class MyBlueprint2(Blueprint):
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
-        self.blueprint1_id = self.gen_random_blueprint_id()
-        self.blueprint2_id = self.gen_random_blueprint_id()
-        self.register_blueprint_class(self.blueprint1_id, MyBlueprint1)
-        self.register_blueprint_class(self.blueprint2_id, MyBlueprint2)
+        self.blueprint1_id = self._register_blueprint_class(MyBlueprint1)
+        self.blueprint2_id = self._register_blueprint_class(MyBlueprint2)
 
     def test_basic(self) -> None:
         counter = 5

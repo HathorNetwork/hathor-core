@@ -31,8 +31,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         super().setUp()
         self.token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         self.nc_id = ContractId(VertexId(b'1' * 32))
-        self.blueprint_id = self.gen_random_blueprint_id()
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.runner.create_contract(self.nc_id, self.blueprint_id, self.create_context())
         self.nc_storage = self.runner.get_storage(self.nc_id)
 

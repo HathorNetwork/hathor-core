@@ -24,8 +24,7 @@ class MyBlueprint1(Blueprint):
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
-        self.blueprint1_id = self.gen_random_blueprint_id()
-        self.register_blueprint_class(self.blueprint1_id, MyBlueprint1)
+        self.blueprint1_id = self._register_blueprint_class(MyBlueprint1)
 
     def test_seqnum_fail_after_success(self) -> None:
         """tx2 will successfully execute, so tx3 will fail because it has the same seqnum."""
