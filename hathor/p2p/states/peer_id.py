@@ -171,7 +171,7 @@ class PeerIdState(BaseState):
         if not peers_whitelist._current:
             return True
 
-        if peers_whitelist._following_wl:
+        if peers_whitelist.following_wl():
             return peers_whitelist.is_peer_whitelisted(peer_id)
 
         return True

@@ -62,7 +62,7 @@ def get_whitelist_msg(wl_object: PeersWhitelist) -> str:
     getMsg += 'Whitelist: '
     getMsg += 'ON || ' if wl_object._following_wl else 'OFF || '
     if wl_object._current:
-        getMsg += 'Amount of PeerIds: {len(wl_object._current)}  '
+        getMsg += f'Amount of PeerIds: {len(wl_object._current)}  '
     else:
         getMsg += 'Current peerId list EMPTY. '
 
