@@ -77,6 +77,9 @@ class PeersWhitelist(ABC):
         """ Returns True if following_wl is True, False otherwise."""
         return self._following_wl
 
+    def current_whitelist(self) -> set[PeerId]:
+        """ Returns the current whitelist as a set of PeerId."""
+        return self._current
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:
         pass
@@ -88,7 +91,7 @@ class PeersWhitelist(ABC):
     @classmethod
     def wl_from_cmdline(cls, reactor: Reactor, p2p_wl: str, settings: HathorSettings) -> Self | None:
         if p2p_wl.lower() in ('default', 'hathorlabs'):
-            p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)#if not testnet else None
+            p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
         elif p2p_wl.lower() in ('none', 'disabled'):
             p2p_whitelist = None
         elif os.path.isfile(p2p_wl):
