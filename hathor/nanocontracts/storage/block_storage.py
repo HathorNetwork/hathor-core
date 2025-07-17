@@ -103,7 +103,6 @@ class NCBlockStorage:
         return trie
 
     def get_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
-
         try:
             nc_root_id = self.get_contract_root_id(contract_id)
             trie = self._get_trie(nc_root_id)
