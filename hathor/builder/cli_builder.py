@@ -115,10 +115,12 @@ class CliBuilder:
         )
 
         # XXX Remove this protection after Nano Contracts are launched.
-        if settings.NETWORK_NAME != 'unittests' and not settings.NETWORK_NAME.startswith('nano-testnet-'):
+        if settings.NETWORK_NAME not in ('unittests', 'nano-testnet-bravo', 'testnet-hotel'):
             # Add protection to prevent enabling Nano Contracts due to misconfigurations.
-            self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
-                                'configuration error: NanoContracts can only be enabled on localnets for now')
+            self.check_or_raise(
+                not settings.ENABLE_NANO_CONTRACTS,
+                'configuration error: NanoContracts can only be enabled on specific networks for now',
+            )
 
         vertex_parser = VertexParser(settings=settings)
         tx_storage: TransactionStorage

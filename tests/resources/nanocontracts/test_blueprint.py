@@ -17,7 +17,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
 
     def setUp(self):
         super().setUp()
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.web = StubSite(BlueprintInfoResource(self.manager))
 
     @inlineCallbacks

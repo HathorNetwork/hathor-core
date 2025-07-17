@@ -81,7 +81,7 @@ class TestActions(unittest.TestCase):
         super().setUp()
 
         self.bp_id = b'1' * 32
-        self.manager = self.create_peer('testnet', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+        self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
         self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
             self.bp_id: MyBlueprint
         })

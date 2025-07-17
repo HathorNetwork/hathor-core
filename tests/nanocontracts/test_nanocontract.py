@@ -78,7 +78,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         })
         self.nc_seqnum = 0
 
-        self.peer = self.create_peer('testnet')
+        self.peer = self.create_peer('unittests')
         self.peer.tx_storage.nc_catalog = self.catalog
 
         self.genesis = self.peer.tx_storage.get_all_genesis()

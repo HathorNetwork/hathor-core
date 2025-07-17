@@ -36,6 +36,7 @@ from twisted.python.failure import Failure
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.p2p.utils import format_address
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import ReactorProtocol as Reactor
@@ -528,7 +529,8 @@ class StratumProtocol(JSONRPC):
 
         self.log.debug('share received', block=tx, block_base=block_base.hex(), block_base_hash=block_base_hash.hex())
 
-        verifier = VertexVerifier(settings=self._settings)
+        feature_service = FeatureService(settings=self._settings, tx_storage=self.manager.tx_storage)
+        verifier = VertexVerifier(settings=self._settings, feature_service=feature_service)
 
         try:
             verifier.verify_pow(tx, override_weight=job.weight)

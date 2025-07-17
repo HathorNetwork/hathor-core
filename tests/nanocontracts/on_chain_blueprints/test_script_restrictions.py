@@ -25,7 +25,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.verification_service = self.manager.verification_service
 
     def _ocb_mine(self, blueprint: OnChainBlueprint) -> None:

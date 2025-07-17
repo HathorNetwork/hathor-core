@@ -16,7 +16,9 @@ from typing import Optional
 
 from typing_extensions import assert_never
 
-from hathor.conf.settings import HathorSettings
+from hathor.conf.settings import HathorSettings, NanoContractsSetting
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import BaseTransaction, TxVersion
 from hathor.transaction.exceptions import (
     DuplicatedParents,
@@ -45,12 +47,13 @@ _BLOCK_PARENTS_BLOCKS = 1
 
 
 class VertexVerifier:
-    __slots__ = ('_settings',)
+    __slots__ = ('_settings', '_feature_service',)
 
-    def __init__(self, *, settings: HathorSettings) -> None:
+    def __init__(self, *, settings: HathorSettings, feature_service: FeatureService):
         self._settings = settings
+        self._feature_service = feature_service
 
-    def verify_version(self, vertex: BaseTransaction) -> None:
+    def verify_version_basic(self, vertex: BaseTransaction) -> None:
         """Verify that the vertex version is valid."""
         if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version, settings=self._settings):
             raise InvalidVersionError(f"invalid vertex version: {vertex.version}")
@@ -198,8 +201,16 @@ class VertexVerifier:
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
-                if self._settings.ENABLE_NANO_CONTRACTS:
-                    allowed_headers.add(NanoHeader)
+                match self._settings.ENABLE_NANO_CONTRACTS:
+                    case NanoContractsSetting.DISABLED:
+                        pass
+                    case NanoContractsSetting.ENABLED:
+                        allowed_headers.add(NanoHeader)
+                    case NanoContractsSetting.FEATURE_ACTIVATION:
+                        if self._feature_service.is_feature_active(vertex=vertex, feature=Feature.NANO_CONTRACTS):
+                            allowed_headers.add(NanoHeader)
+                    case _ as unreachable:
+                        assert_never(unreachable)
             case _:
                 assert_never(vertex.version)
         return allowed_headers

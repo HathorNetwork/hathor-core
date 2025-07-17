@@ -1,3 +1,4 @@
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced, Trigger
@@ -11,7 +12,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # just get one of the genesis, we don't really need to create any transaction
         tx = next(iter(manager1.tx_storage.get_all_genesis()))
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
-        VertexVerifier(settings=self._settings).verify_pow(tx, override_weight=0.)
+        feature_service = FeatureService(settings=self._settings, tx_storage=manager1.tx_storage)
+        VertexVerifier(settings=self._settings, feature_service=feature_service).verify_pow(tx, override_weight=0.)
 
     def test_one_node(self) -> None:
         manager1 = self.create_peer()

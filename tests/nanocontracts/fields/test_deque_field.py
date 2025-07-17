@@ -90,7 +90,7 @@ class BlueprintWithList(Blueprint):
 class TestDequeField(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.bp_deque = b'1' * 32
         self.bp_list = b'2' * 32
         self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({

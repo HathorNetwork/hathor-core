@@ -52,7 +52,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             self.myblueprint_id: MyBlueprint
         })
 
-        self.manager = self.create_peer('testnet', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+        self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
         self.manager.tx_storage.nc_catalog = self.catalog
 
     def test_token_creation_by_vertex(self) -> None:

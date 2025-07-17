@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+from enum import StrEnum, auto, unique
 from math import log
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Union
@@ -31,6 +32,31 @@ GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
 
 HATHOR_TOKEN_UID = b'\x00'
+
+
+@unique
+class NanoContractsSetting(StrEnum):
+    """Enum to configure the state of the Nano Contracts feature."""
+
+    # Completely disabled.
+    DISABLED = auto()
+
+    # Completely enabled since network creation.
+    ENABLED = auto()
+
+    # Enabled through Feature Activation.
+    FEATURE_ACTIVATION = auto()
+
+    def __bool__(self) -> bool:
+        """
+        >>> bool(NanoContractsSetting.DISABLED)
+        False
+        >>> bool(NanoContractsSetting.ENABLED)
+        True
+        >>> bool(NanoContractsSetting.FEATURE_ACTIVATION)
+        True
+        """
+        return self in (NanoContractsSetting.ENABLED, NanoContractsSetting.FEATURE_ACTIVATION)
 
 
 class HathorSettings(NamedTuple):
@@ -437,14 +463,7 @@ class HathorSettings(NamedTuple):
     MAX_UNVERIFIED_PEERS_PER_CONN: int = 100
 
     # Used to enable nano contracts.
-    #
-    # This should NEVER be enabled for mainnet and testnet, since both networks will
-    # activate Nano Contracts through the Feature Activation.
-    ENABLE_NANO_CONTRACTS: bool = False
-
-    # This should NEVER be enabled for mainnet and testnet, since both networks will
-    # activate Nano Contracts through the Feature Activation.
-    ENABLE_ON_CHAIN_BLUEPRINTS: bool = False
+    ENABLE_NANO_CONTRACTS: NanoContractsSetting = NanoContractsSetting.DISABLED
 
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, 'str'] = {}
