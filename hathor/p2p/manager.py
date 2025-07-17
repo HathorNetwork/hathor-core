@@ -407,9 +407,6 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
-        # If whitelist only flag ON and whitelist not empty, deny peer not in whitelist.
-        # Important Note: Perhaps no peer ID in the connection...
-
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
         self.pubsub.publish(
