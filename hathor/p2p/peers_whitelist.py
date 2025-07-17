@@ -80,13 +80,13 @@ class PeersWhitelist(ABC):
     def current_whitelist(self) -> set[PeerId]:
         """ Returns the current whitelist as a set of PeerId."""
         return self._current
+
+    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
+        return peer_id in self._current
+
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:
         pass
-
-    @abstractmethod
-    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
-        raise NotImplementedError
 
     @classmethod
     def wl_from_cmdline(cls, reactor: Reactor, p2p_wl: str, settings: HathorSettings) -> Self | None:
@@ -109,9 +109,6 @@ class FilePeersWhitelist(PeersWhitelist):
 
     def refresh(self) -> None:
         self._unsafe_update()
-
-    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
-        return peer_id in self._current
 
     def _unsafe_update(self) -> Deferred[None]:
         """
@@ -169,9 +166,6 @@ class URLPeersWhitelist(PeersWhitelist):
                 self._on_remove_callback(peer_id)
 
         self._current = new_whitelist
-
-    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
-        return peer_id in self._current
 
     def _unsafe_update(self) -> Deferred[None]:
         """
