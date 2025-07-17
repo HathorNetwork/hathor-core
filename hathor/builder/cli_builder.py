@@ -38,7 +38,7 @@ from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
-from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -307,20 +307,13 @@ class CliBuilder:
         # Check whitelist pathing. Default values:
         p2p_wl = self._args.x_p2p_whitelist or 'default'
         p2p_wl = p2p_wl.strip()
-        p2p_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None
+        p2p_whitelist: PeersWhitelist | None = None
 
-        # If in testnet, it should always be disabled.
-        testnet = self._args.testnet
-
-        if p2p_wl in ('default', 'hathorlabs'):
-            p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True) if not testnet else None
-        elif p2p_wl.lower() in ('none', 'disabled'):
-            p2p_whitelist = None
-        elif os.path.isfile(p2p_wl):
-            p2p_whitelist = FilePeersWhitelist(reactor, p2p_wl) if not testnet else None
-        else:
-            # URLPeersWhitelist class rejects non-url paths.
-            p2p_whitelist = URLPeersWhitelist(reactor, p2p_wl, True)
+        p2p_whitelist = PeersWhitelist.wl_from_cmdline(
+            reactor=reactor,
+            p2p_wl=p2p_wl,
+            settings=settings,
+        )
 
         p2p_manager = ConnectionsManager(
             settings=settings,

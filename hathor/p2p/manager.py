@@ -190,7 +190,7 @@ class ConnectionsManager:
 
         # One may chose whether to follow the whitelist or not. Alterable by sysctl.
         # This is a p2p_manager copy of the wl_object status "_following_wl".
-        self.only_whitelist = self.peers_whitelist.following_wl()
+        self.only_whitelist = self.peers_whitelist.following_wl() if self.peers_whitelist else False
 
         # Pubsub object to publish events
         self.pubsub = pubsub

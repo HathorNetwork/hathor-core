@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Any, Callable, Self
 from urllib.parse import urlparse
 
 from structlog import get_logger
@@ -7,9 +7,12 @@ from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from twisted.web.client import Agent
 
+from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import parse_whitelist
 from hathor.reactor import ReactorProtocol as Reactor
+
+import os
 
 logger = get_logger()
 
@@ -81,6 +84,19 @@ class PeersWhitelist(ABC):
     @abstractmethod
     def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
         raise NotImplementedError
+
+    @classmethod
+    def wl_from_cmdline(cls, reactor: Reactor, p2p_wl: str, settings: HathorSettings) -> Self | None:
+        if p2p_wl.lower() in ('default', 'hathorlabs'):
+            p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)#if not testnet else None
+        elif p2p_wl.lower() in ('none', 'disabled'):
+            p2p_whitelist = None
+        elif os.path.isfile(p2p_wl):
+            p2p_whitelist = FilePeersWhitelist(reactor, p2p_wl)
+        else:
+            # URLPeersWhitelist class rejects non-url paths.
+            p2p_whitelist = URLPeersWhitelist(reactor, p2p_wl, True)
+        return p2p_whitelist
 
 
 class FilePeersWhitelist(PeersWhitelist):
