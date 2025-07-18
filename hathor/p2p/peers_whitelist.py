@@ -128,6 +128,9 @@ class FilePeersWhitelist(PeersWhitelist):
             content = fp.read()
         new_whitelist = parse_whitelist(content)
         self._current = new_whitelist
+        
+        # Log the difference between the first whitelist and the last.
+        self._log_diff(self._current, new_whitelist)
         return Deferred(None)
 
 
@@ -161,14 +164,9 @@ class URLPeersWhitelist(PeersWhitelist):
             return
 
         current_whitelist = set(self._current)
-
-        peers_to_add = new_whitelist - current_whitelist
-        if peers_to_add:
-            self.log.info('add new peers to whitelist', peers=peers_to_add)
+        self._log_diff(current_whitelist, new_whitelist)
 
         peers_to_remove = current_whitelist - new_whitelist
-        if peers_to_remove:
-            self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
 
         for peer_id in peers_to_remove:
             if self._on_remove_callback:
