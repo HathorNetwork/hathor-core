@@ -16,6 +16,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
+    from hathor.dag_builder import DAGBuilder
     from hathor.dag_builder.artifacts import DAGArtifacts
     from hathor.manager import HathorManager
     from hathor.simulator import Simulator
@@ -287,7 +288,6 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.types import ContractId
-    from tests.dag_builder.builder import TestDAGBuilder  # skip-import-tests-custom-check
 
     class TestEventsBlueprint1(Blueprint):
         @public
@@ -320,7 +320,7 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
         blueprint1_id: TestEventsBlueprint1,
         blueprint2_id: TestEventsBlueprint2,
     })
-    dag_builder = TestDAGBuilder.from_manager(manager)
+    dag_builder = _create_dag_builder(manager)
     artifacts = dag_builder.build_from_str(f'''
         blockchain genesis b[1..3]
         b1 < dummy
@@ -357,7 +357,6 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
     from hathor.nanocontracts import Blueprint, public
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.context import Context
-    from tests.dag_builder.builder import TestDAGBuilder  # skip-import-tests-custom-check
 
     class TestEventsBlueprint1(Blueprint):
         @public
@@ -366,7 +365,7 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
 
     blueprint1_id = b'\x11' * 32
     manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint1_id: TestEventsBlueprint1})
-    dag_builder = TestDAGBuilder.from_manager(manager)
+    dag_builder = _create_dag_builder(manager)
 
     # 2 reorgs happen, so nc1.initialize() gets executed 3 times, once in block a2 and twice in block b2
     artifacts = dag_builder.build_from_str(f'''
@@ -386,3 +385,26 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
     simulator.run(1)
 
     return artifacts
+
+
+def _create_dag_builder(manager: 'HathorManager') -> 'DAGBuilder':
+    from mnemonic import Mnemonic
+
+    from hathor.dag_builder import DAGBuilder
+    from hathor.wallet import HDWallet
+
+    seed = ('coral light army gather adapt blossom school alcohol coral light army gather '
+            'adapt blossom school alcohol coral light army gather adapt blossom school awesome')
+
+    def create_random_hd_wallet() -> HDWallet:
+        m = Mnemonic('english')
+        words = m.to_mnemonic(manager.rng.randbytes(32))
+        hd = HDWallet(words=words)
+        hd._manually_initialize()
+        return hd
+
+    return DAGBuilder.from_manager(
+        manager=manager,
+        genesis_words=seed,
+        wallet_factory=create_random_hd_wallet,
+    )
