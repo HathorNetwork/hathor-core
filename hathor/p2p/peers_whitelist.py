@@ -84,6 +84,15 @@ class PeersWhitelist(ABC):
     def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
         return peer_id in self._current
 
+    def _log_diff(self, current_wl: set[PeerId], new_wl: set[PeerId]) -> None:
+        peers_to_add = new_wl - current_wl
+        if peers_to_add:
+            self.log.info('add new peers to whitelist', peers=peers_to_add)
+
+        peers_to_remove = current_wl - new_wl
+        if peers_to_remove:
+            self.log.info('remove peers from whitelist', peers=peers_to_remove)
+
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:
         pass
