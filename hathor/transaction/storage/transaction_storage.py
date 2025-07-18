@@ -1153,16 +1153,15 @@ class TransactionStorage(ABC):
         return block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
 
     def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
-        from hathor.nanocontracts.exception import BlueprintDoesNotExist
         assert self.nc_catalog is not None
 
         if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
             return blueprint_class
 
-        self.log.debug('blueprint-id not in the catalog', blueprint_id=blueprint_id.hex())
-        if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            raise BlueprintDoesNotExist(blueprint_id.hex())
-        self.log.debug('on-chain blueprints enabled, looking for that instead')
+        self.log.debug(
+            'blueprint_id not in the catalog, looking for on-chain blueprint',
+            blueprint_id=blueprint_id.hex()
+        )
         return self.get_on_chain_blueprint(blueprint_id)
 
     def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
@@ -1199,7 +1198,6 @@ class TransactionStorage(ABC):
 
     def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
         """Return an on-chain blueprint transaction."""
-        assert self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
         from hathor.nanocontracts import OnChainBlueprint
         from hathor.nanocontracts.exception import (
             BlueprintDoesNotExist,

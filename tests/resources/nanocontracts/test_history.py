@@ -35,7 +35,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         super().setUp()
 
         self.manager = self.create_peer(
-            'testnet',
+            'unittests',
             unlock_wallet=True,
             wallet_index=True,
             nc_indexes=True,

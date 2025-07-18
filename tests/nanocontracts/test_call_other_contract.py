@@ -137,7 +137,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = [t for t in self.genesis if t.is_transaction][0]
 

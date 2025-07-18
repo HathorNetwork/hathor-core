@@ -106,7 +106,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         store = MemoryNodeTrieStore()
         block_trie = PatriciaTrie(store)
         block_storage = NCBlockStorage(block_trie)
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.runner = TestRunner(
             self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
         )

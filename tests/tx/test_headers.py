@@ -51,7 +51,7 @@ class VertexHeadersTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.blueprint_id = b'x' * 32
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyTestBlueprint
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 

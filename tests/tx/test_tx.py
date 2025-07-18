@@ -435,6 +435,7 @@ class TransactionTest(unittest.TestCase):
 
         # in first test, only with 1 parent
         self.manager.cpu_mining_service.resolve(tx)
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         with self.assertRaises(IncorrectParents):
             self.manager.verification_service.verify(tx)
 
@@ -650,6 +651,7 @@ class TransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         self.manager.cpu_mining_service.resolve(tx)
+        tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         with self.assertRaises(DuplicatedParents):
             self.manager.verification_service.verify(tx)
 

@@ -90,3 +90,20 @@ FEATURE_ACTIVATION:
       lock_in_on_timeout: false
       version: 0.63.0
       signal_support_by_default: true
+
+    NANO_CONTRACTS:
+      bit: 0
+      # N = 5_040_000
+      # Expected to be reached around Friday, 2025-07-18.
+      # Right now the best block is 5_033_266 on testnet-hotel (2025-07-16).
+      start_height: 5_040_000  # N
+      timeout_height: 5_080_320  # N + 2 * 20160 (2 weeks after the start)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.64.0
+      signal_support_by_default: true
+
+ENABLE_NANO_CONTRACTS: feature_activation
+NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
+  - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
+  - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY

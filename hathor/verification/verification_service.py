@@ -98,8 +98,7 @@ class VerificationService:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
-        self.verifiers.vertex.verify_version(vertex)
-        self.verifiers.vertex.verify_headers(vertex)
+        self.verifiers.vertex.verify_version_basic(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -120,7 +119,7 @@ class VerificationService:
                 self._verify_basic_token_creation_tx(vertex)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
-                assert self._settings.ENABLE_NANO_CONTRACTS and self._settings.ENABLE_ON_CHAIN_BLUEPRINTS
+                assert self._settings.ENABLE_NANO_CONTRACTS
                 self._verify_basic_on_chain_blueprint(vertex)
             case _:
                 assert_never(vertex.version)
@@ -162,6 +161,8 @@ class VerificationService:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
+        self.verifiers.vertex.verify_headers(vertex)
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
@@ -247,6 +248,7 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
+        self.verifiers.tx.verify_version(tx)
         self.verifiers.vertex.verify_parents(tx)
         if reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)

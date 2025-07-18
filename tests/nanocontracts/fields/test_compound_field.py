@@ -30,7 +30,7 @@ class BlueprintWithCompoundField(Blueprint):
 class TestDictField(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.bp_dict = b'1' * 32
         self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
             self.bp_dict: BlueprintWithCompoundField,
