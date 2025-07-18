@@ -65,6 +65,12 @@ class PeersWhitelist(ABC):
             self._is_running = False
         return d
 
+    def add_peer(self, peer_id: PeerId) -> None:
+        """ Adds a peer to the current whitelist. """
+        if peer_id not in self._current:
+            self._current.add(peer_id)
+            self.log.info('Peer added to whitelist', peer_id=peer_id)
+
     def follow_wl(self, follow: bool = True) -> None:
         """ Changes following_wl to True. Should not be called directly."""
         self._following_wl = follow
