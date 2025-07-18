@@ -102,7 +102,7 @@ class HelloState(BaseState):
             protocol.send_error_and_close_connection('Invalid payload.')
             return
 
-        if self._settings.ENABLE_PEER_WHITELIST and self._settings.CAPABILITY_WHITELIST not in data['capabilities']:
+        if self._settings.CAPABILITY_WHITELIST not in data['capabilities']:
             # If peer is not sending whitelist capability we must close the connection
             protocol.send_error_and_close_connection('Must have whitelist capability.')
             return
@@ -184,4 +184,4 @@ def _parse_sync_versions(hello_data: dict[str, Any]) -> set[SyncVersion]:
         return set(SyncVersion(x) for x in recognized_values)
     else:
         # XXX: implied value when sync-version capability isn't present
-        return {SyncVersion.V1_1}
+        return {SyncVersion.V2}
