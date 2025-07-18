@@ -96,3 +96,8 @@ class _SizedIntNCType(NCType[int]):
 class Int32NCType(_SizedIntNCType):
     _signed = True
     _byte_size = 4  # 4-bytes -> 32-bits
+
+
+class Uint32NCType(_SizedIntNCType):
+    _signed = False
+    _byte_size = 4  # 4-bytes -> 32-bits
