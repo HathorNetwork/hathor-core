@@ -101,7 +101,7 @@ class StatusResource(Resource):
 
         whitelist = self.manager.connections.peers_whitelist
         if whitelist is not None:
-            peer_ids = whitelist._current
+            peer_ids = whitelist.current_whitelist()
         else:
             peer_ids = set()
         data = {
