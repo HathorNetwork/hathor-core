@@ -124,6 +124,10 @@ class FilePeersWhitelist(PeersWhitelist):
             Implementation of base class function.
             Reads the file in the class path.
         """
+        # Avoiding re-entrancy. If running, should not update once more.
+        if self._is_running:
+            self.log.warning('whitelist update already running, skipping execution.')
+            return Deferred(None)
         with open(self._path, 'r', encoding='utf-8') as fp:
             content = fp.read()
         new_whitelist = parse_whitelist(content)
@@ -179,6 +183,11 @@ class URLPeersWhitelist(PeersWhitelist):
             Implementation of the child class of PeersWhitelist, called by update()
             to fetch data from the provided url.
         """
+        # Avoiding re-entrancy. If running, should not update once more.
+        if self._is_running:
+            self.log.warning('whitelist update already running, skipping execution.')
+            return Deferred(None)
+
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
         assert self._url is not None
