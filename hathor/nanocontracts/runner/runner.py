@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Callable, Concatenate, ParamSpec, TypeVar
 
-from typing_extensions import assert_never, deprecated
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.balance_rules import BalanceRules
@@ -666,15 +666,6 @@ class Runner:
 
         self._call_info.post_call(call_record)
         return ret
-
-    @deprecated('use explicit methods instead, `get_balance_before_current_call` or `get_current_balance`')
-    def get_balance(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
-        """
-        Return the contract balance for a given token before the current call, that is,
-        excluding any actions and changes in the current call.
-        This is equivalent to `get_balance_before_current_call`.
-        """
-        return self.get_balance_before_current_call(contract_id, token_uid)
 
     def get_balance_before_current_call(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
         """
