@@ -74,7 +74,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx3.hash,
             block_id=b32.hash,
-            reason='NCFail: invalid seqnum (diff=0)'
+            reason='NCInternalException: invalid seqnum (diff=0)'
         )
 
     def test_seqnum_fail_after_fail(self) -> None:
@@ -120,7 +120,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b31.hash,
-            reason='NCFail: oops'
+            reason='NCUserException: oops'
         )
 
         tx2_nano_header = tx2.get_nano_header()
@@ -133,7 +133,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx3.hash,
             block_id=b32.hash,
-            reason='NCFail: invalid seqnum (diff=0)'
+            reason='NCInternalException: invalid seqnum (diff=0)'
         )
 
     def test_seqnum_fail_after_skip(self) -> None:
@@ -185,7 +185,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx1.hash,
             block_id=b31.hash,
-            reason='NCFail: oops'
+            reason='NCUserException: oops'
         )
 
         tx2_nano_header = tx2.get_nano_header()
@@ -198,7 +198,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx3.hash,
             block_id=b32.hash,
-            reason='NCFail: invalid seqnum (diff=0)'
+            reason='NCInternalException: invalid seqnum (diff=0)'
         )
 
     def test_seqnum_fail_max_jump(self) -> None:
@@ -234,7 +234,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b31.hash,
-            reason='NCFail: invalid seqnum (diff=11)'
+            reason='NCInternalException: invalid seqnum (diff=11)'
         )
 
         nc1_nano_header = nc1.get_nano_header()
@@ -301,7 +301,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx3.hash,
             block_id=b32.hash,
-            reason='NCFail: invalid seqnum (diff=0)'
+            reason='NCInternalException: invalid seqnum (diff=0)'
         )
 
     def test_circular_dependency(self) -> None:
@@ -356,7 +356,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=nc3.hash,
             block_id=b11.hash,
-            reason='NCFail: invalid seqnum (diff=-1)'
+            reason='NCInternalException: invalid seqnum (diff=-1)'
         )
 
     def test_timestamp_rule(self) -> None:
@@ -411,7 +411,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
                 manager=self.manager,
                 tx_id=nc2.hash,
                 block_id=b12.hash,
-                reason='NCFail: invalid seqnum (diff=-1)'
+                reason='NCInternalException: invalid seqnum (diff=-1)'
             )
 
     def test_multiple_txs_same_seqnum(self) -> None:

@@ -24,6 +24,7 @@ from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts.error_handling import __NCTransactionFail__
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -176,7 +177,7 @@ class VertexHandler:
         if not metadata.validation.is_fully_connected():
             try:
                 self._verification_service.validate_full(vertex, reject_locked_reward=reject_locked_reward)
-            except HathorError as e:
+            except (HathorError, __NCTransactionFail__) as e:
                 raise InvalidNewTransaction(f'full validation failed: {str(e)}') from e
 
         return True

@@ -20,6 +20,7 @@ import hathor
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
 from hathor.exception import HathorError
+from hathor.nanocontracts.error_handling import __NCTransactionFail__
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_version import SyncVersion
@@ -113,7 +114,7 @@ class HelloState(BaseState):
         my_sync_versions = self._get_sync_versions()
         try:
             remote_sync_versions = _parse_sync_versions(data)
-        except HathorError as e:
+        except (HathorError, __NCTransactionFail__) as e:
             # this will only happen if the remote implementation is wrong
             self.log.warn('invalid protocol', error=e)
             protocol.send_error_and_close_connection('invalid protocol')
