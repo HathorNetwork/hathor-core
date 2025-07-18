@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional, final
 
-from typing_extensions import deprecated
-
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
@@ -64,24 +62,6 @@ class BlueprintEnvironment:
         if contract_id is None:
             contract_id = self.get_contract_id()
         return self.__runner.get_blueprint_id(contract_id)
-
-    @final
-    @deprecated('use explicit methods instead, `get_balance_before_current_call` or `get_current_balance`')
-    def get_balance(
-        self,
-        token_uid: Optional[TokenUid] = None,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> Amount:
-        """
-        Return the balance for a given token before the current call, that is,
-        excluding any actions and changes in the current call.
-        This is equivalent to `get_balance_before_current_call`.
-
-        For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
-        then this method will return 50 HTR.
-        """
-        return self.get_balance_before_current_call(token_uid, contract_id=contract_id)
 
     def get_balance_before_current_call(
         self,
