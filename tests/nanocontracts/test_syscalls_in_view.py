@@ -46,10 +46,6 @@ class MyBlueprint(Blueprint):
         self.syscall.get_blueprint_id()
 
     @view
-    def get_balance(self) -> None:
-        self.syscall.get_balance()
-
-    @view
     def get_balance_before_current_call(self) -> None:
         self.syscall.get_balance_before_current_call()
 
