@@ -24,7 +24,7 @@ from hathor.p2p.protocol import HathorLineReceiver
 
 
 class _HathorLineReceiverFactory(ABC, protocol.Factory):
-    inbound: bool
+    inbound: HathorSettings.ConnectionType
 
     def __init__(
         self,
