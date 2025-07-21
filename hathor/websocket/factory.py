@@ -141,7 +141,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
         """Disable history streaming for all connections."""
         self.is_history_streaming_enabled = False
         for conn in self.connections:
-            self.disable_history_streaming()
+            conn.disable_history_streaming()
 
     def _setup_rate_limit(self):
         """ Set the limit of the RateLimiter and start the buffer deques with BUFFER_SIZE
