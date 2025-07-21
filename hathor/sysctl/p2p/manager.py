@@ -135,9 +135,15 @@ class ConnectionsManagerSysctl(Sysctl):
             self.reload_entrypoints_and_connections,
         )
         self.register(
-            'whitelist_on',
+            'whitelist',
             self.get_whitelist,
             self.set_whitelist,
+        )
+
+        self.register(
+            'whitelist.status',
+            self.whitelist_status,
+            None,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -293,7 +299,7 @@ class ConnectionsManagerSysctl(Sysctl):
             wl_object = self.connections.peers_whitelist
             return get_whitelist_msg(wl_object)
 
-        return 'disabled'
+        return 'Whitelist is disabled'
 
     def set_whitelist(self, new_whitelist: str) -> None:
         """Set the whitelist-only mode. If 'on' or 'off', simply changes the
@@ -302,7 +308,6 @@ class ConnectionsManagerSysctl(Sysctl):
         It does not support eliminating the whitelist (passing None)."""
 
         wl_object: URLPeersWhitelist | FilePeersWhitelist
-        wl_url = urlparse(new_whitelist)
         option: str = new_whitelist.lower().strip()
         if option in ('on', 'off'):
             # Set the whitelist tracking ON or OFF for the currently given whitelist.
@@ -334,3 +339,18 @@ class ConnectionsManagerSysctl(Sysctl):
 
         # Notes: We need the object to get its LC started when passing it to ConnManag.
         # The connections not within the wl must be dropped. (dropped by id, done in wl_toggle)
+
+    def whitelist_status(self) -> str:
+        """Return the number of peers in the whitelist."""
+        if self.connections.peers_whitelist is None:
+            return 'Whitelist is disabled.'
+        
+        wl_object = self.connections.peers_whitelist
+        if not wl_object.following_wl():
+            return 'Whitelist is OFF.'
+
+        current_wl = wl_object.current_whitelist()
+        if not current_wl:
+            return 'Whitelist is ON, but empty.'
+
+        return f'Whitelist is ON with {len(current_wl)} peers.'
