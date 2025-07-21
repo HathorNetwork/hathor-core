@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import itertools
 from itertools import chain
 from typing import Iterator
 
@@ -21,6 +21,8 @@ from graphviz import Digraph
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
+
+_MAX_CHILDREN = 100
 
 
 class GraphvizVisualizer:
@@ -209,6 +211,7 @@ class GraphvizVisualizer:
                 node_attrs.update(dict(style='filled', penwidth='5.0'))
 
             meta = tx.get_metadata()
+            limited_children = itertools.islice(meta.children(), _MAX_CHILDREN)
 
             if graph_type == 'verification':
                 if tx.is_block:
@@ -217,7 +220,7 @@ class GraphvizVisualizer:
                 dot.node(name, **node_attrs)
 
                 if level <= max_level:
-                    for h in chain(tx.parents, meta.children):
+                    for h in chain(tx.parents, limited_children):
                         if h not in seen:
                             seen.add(h)
                             tx2 = tx.storage.get_transaction(h)

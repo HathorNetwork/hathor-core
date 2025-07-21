@@ -58,7 +58,6 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
                 first_block=None,
                 voided_by=[],
                 received_by=[],
-                children=[],
                 twins=[],
                 accumulated_weight=10.0,
                 score=20.0,

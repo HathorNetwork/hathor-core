@@ -181,20 +181,19 @@ class TransactionTest(unittest.TestCase):
         tx.get_metadata().validation = ValidationState.FULL
 
         # get info before update
-        children_len = []
+        old_children_sets = []
         for parent in tx.get_parents():
             metadata = parent.get_metadata()
-            children_len.append(len(metadata.children))
+            old_children_sets.append(set(metadata.children()))
 
         # update metadata
         tx.init_static_metadata_from_storage(self._settings, self.tx_storage)
         tx.update_initial_metadata()
 
         # genesis transactions should have only this tx in their children set
-        for old_len, parent in zip(children_len, tx.get_parents()):
+        for old_children, parent in zip(old_children_sets, tx.get_parents()):
             metadata = parent.get_metadata()
-            self.assertEqual(len(metadata.children) - old_len, 1)
-            self.assertEqual(metadata.children.pop(), tx.hash)
+            self.assertEqual(set(metadata.children()) - old_children, {tx.hash})
 
     def test_block_inputs(self):
         # a block with inputs should be invalid

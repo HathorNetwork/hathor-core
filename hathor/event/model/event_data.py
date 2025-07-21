@@ -69,7 +69,6 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     conflict_with: list[str]
     voided_by: list[str]
     received_by: list[int]
-    children: list[str]
     twins: list[str]
     accumulated_weight: float
     score: float

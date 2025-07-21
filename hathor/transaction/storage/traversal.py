@@ -99,7 +99,7 @@ class GenericWalk(ABC):
         if self.is_dag_verifications:
             if is_left_to_right:
                 meta = meta or tx.get_metadata()
-                it = chain(it, meta.children)
+                it = chain(it, meta.children())
             else:
                 it = chain(it, tx.parents)
 

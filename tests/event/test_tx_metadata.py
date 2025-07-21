@@ -26,7 +26,6 @@ def test_from_spent_output_instance() -> None:
         conflict_with=[],
         voided_by=[],
         received_by=[],
-        children=[],
         twins=[],
         accumulated_weight=0.0,
         score=0.0,

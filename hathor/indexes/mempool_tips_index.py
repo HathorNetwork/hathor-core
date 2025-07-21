@@ -103,7 +103,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             return
         tx_storage = tx.storage
         # do not include transactions that have a non-voided child
-        if any_non_voided(tx_storage, tx_meta.children):
+        if any_non_voided(tx_storage, tx_meta.children()):
             return
         # do not include transactions that have a non-voided spent output
         if any_non_voided(tx_storage, chain(*tx_meta.spent_outputs.values())):
@@ -148,7 +148,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
             # might also happen that a tip has a child that became valid, so it's not a tip anymore
             confirmed = False
-            for child_meta in filter(None, map(tx_storage.get_metadata, meta.children)):
+            for child_meta in filter(None, map(tx_storage.get_metadata, meta.children())):
                 if not child_meta.voided_by:
                     confirmed = True
                     break
@@ -168,8 +168,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             meta = not_none(tx_storage.get_metadata(tx_hash))
             if meta.voided_by:
                 continue
-            children = meta.children
-            for child_meta in filter(None, map(tx_storage.get_metadata, children)):
+            for child_meta in filter(None, map(tx_storage.get_metadata, meta.children())):
                 if not child_meta.voided_by:
                     confirmed = True
                     break

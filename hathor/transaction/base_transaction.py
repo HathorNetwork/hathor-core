@@ -756,10 +756,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert self.storage is not None
 
         for parent in self.get_parents(existing_only=True):
-            metadata = parent.get_metadata()
-            if self.hash not in metadata.children:
-                metadata.children.append(self.hash)
-                self.storage.save_transaction(parent, only_metadata=True)
+            self.storage.vertex_children.add_child(parent, self.hash)
 
     def _update_initial_accumulated_weight(self) -> None:
         """Update the vertex initial accumulated_weight."""

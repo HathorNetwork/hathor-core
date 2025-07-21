@@ -208,7 +208,9 @@ class SyncMethodsTestCase(unittest.TestCase):
         for tx in self.manager1.tx_storage.topological_iterator():
             meta1 = tx.get_metadata()
             meta2 = manager2.tx_storage.get_metadata(tx.hash)
-            self.assertCountEqual(meta1.children or [], meta2.children or [])
+            children1 = list(self.manager1.tx_storage.vertex_children.get_children(tx))
+            children2 = list(manager2.tx_storage.vertex_children.get_children(tx))
+            self.assertCountEqual(children1, children2)
             self.assertCountEqual(meta1.voided_by or [], meta2.voided_by or [])
             self.assertCountEqual(meta1.conflict_with or [], meta2.conflict_with or [])
             self.assertCountEqual(meta1.twins or [], meta2.twins or [])

@@ -3,6 +3,7 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import initialize_hd_wallet, iwindows
 from hathor.wallet import Wallet
@@ -703,11 +704,13 @@ class RocksDBIndexesTest(BaseIndexesTest):
         rocksdb_storage = RocksDBStorage(path=directory)
         parser = VertexParser(settings=self._settings)
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+        vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         self.tx_storage = TransactionRocksDBStorage(
             rocksdb_storage,
             settings=self._settings,
             vertex_parser=parser,
             nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
         )
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
