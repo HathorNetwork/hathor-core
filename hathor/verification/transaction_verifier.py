@@ -223,7 +223,7 @@ class TransactionVerifier:
 
         token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
         amount = outputs - inputs, thus:
-        - amount < 0 when melting or paying the fee
+        - amount < 0 when melting or paying fees
         - amount > 0 when minting
 
         :raises InputOutputMismatch: if the sum of inputs is not equal to outputs and there's no mint/melt
@@ -255,7 +255,7 @@ class TransactionVerifier:
                     withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
 
                     if token_info.can_melt:
-                        withdraw += get_deposit_token_withdraw_amount(self._settings, token_info.amount)
+                        withdraw += withdraw_amount
                     else:
                         # When we don't have a fee, melting is only allowed with an authority.
                         # To use a deposit token to pay the fee, the result of the conversion to HTR should be an
@@ -268,17 +268,17 @@ class TransactionVerifier:
 
                         withdraw_without_authority += withdraw_amount
             else:
-                # tokens have been minted
+                # token_info.amount > 0 so the transaction is minting tokens
                 if not token_info.can_mint:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
 
-                if token_info.version == TokenInfoVersion.DEPOSIT:
+                if token_info.version is TokenInfoVersion.DEPOSIT:
                     deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
         is_melting_without_authority = withdraw_without_authority - fee > 0
         if is_melting_without_authority:
-            raise InputOutputMismatch('some tokens were melted, but there is no melt authority input')
+            raise InputOutputMismatch('Melting tokens without a melt authority is forbidden')
 
         htr_expected_amount = withdraw + withdraw_without_authority - deposit - fee
 

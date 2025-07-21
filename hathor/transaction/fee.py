@@ -46,6 +46,17 @@ def calculate_fee(settings: HathorSettings, tx: Transaction, token_dict: dict[To
 
 
 def get_non_authority_outputs(outputs_dict: dict[TokenUid, list[TxOutput]]) -> dict[TokenUid, list[TxOutput]]:
+    """
+    Filters out token authority outputs from the given outputs dictionary.
+
+    Args:
+        outputs_dict (dict[TokenUid, list[TxOutput]]):
+            A dictionary mapping token UIDs to their respective lists of transaction outputs.
+
+    Returns:
+        dict[TokenUid, list[TxOutput]]:
+            A new dictionary with the same token UIDs, but only including outputs that are not token authorities.
+    """
     filtered_dict: dict[TokenUid, list[TxOutput]] = {}
     for token_uid, outputs in outputs_dict.items():
         filtered_dict[token_uid] = [output for output in outputs if not output.is_token_authority()]
