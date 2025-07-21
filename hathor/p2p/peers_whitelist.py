@@ -1,3 +1,4 @@
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Self
 from urllib.parse import urlparse
@@ -11,8 +12,6 @@ from hathor.conf import HathorSettings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import parse_whitelist
 from hathor.reactor import ReactorProtocol as Reactor
-
-import os
 
 logger = get_logger()
 
@@ -78,7 +77,7 @@ class PeersWhitelist(ABC):
     def unfollow_wl(self) -> None:
         """ Changes following_wl to False. Should not be called directly."""
         self._following_wl = False
-    
+
     def following_wl(self) -> bool:
         """ Returns True if following_wl is True, False otherwise."""
         return self._following_wl
@@ -138,7 +137,7 @@ class FilePeersWhitelist(PeersWhitelist):
             content = fp.read()
         new_whitelist = parse_whitelist(content)
         self._current = new_whitelist
-        
+
         # Log the difference between the first whitelist and the last.
         self._log_diff(self._current, new_whitelist)
         return Deferred(None)
@@ -154,7 +153,7 @@ class URLPeersWhitelist(PeersWhitelist):
         if self._url:
             if mainnet and self._url.lower() != 'none':
                 if result.scheme != 'https':
-                    raise ValueError(f'invalid scheme, only https is allowed: {self._url}')
+                    raise ValueError(f'invalid scheme: {self._url}')
 
                 if not result.netloc:
                     raise ValueError(f'invalid url: {self._url}')

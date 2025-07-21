@@ -304,19 +304,7 @@ class ConnectionsManagerSysctl(Sysctl):
         wl_object: URLPeersWhitelist | FilePeersWhitelist
         wl_url = urlparse(new_whitelist)
         option: str = new_whitelist.lower().strip()
-        if os.path.isfile(new_whitelist):
-            # Fetch the peerIds in the file
-            # Must check whether the peerIds within make sense.
-            # Must start the looping call of the object.
-            wl_object = FilePeersWhitelist(self.connections.reactor, new_whitelist)
-
-        elif wl_url.scheme == 'https' and wl_url.netloc:
-            # Fetch the peerIds in the URL
-            # Must ?? check whether they make sense?
-            # Must start the looping call of the object.
-            wl_object = URLPeersWhitelist(self.connections.reactor, new_whitelist, True)
-
-        elif option in ('on', 'off'):
+        if option in ('on', 'off'):
             # Set the whitelist tracking ON or OFF for the currently given whitelist.
             if option == "on":
                 # Turning the whitelist on immediately blocks all connections.
@@ -332,7 +320,14 @@ class ConnectionsManagerSysctl(Sysctl):
                 return
 
         else:
-            raise SysctlException('Invalid url/path')
+            wl_object = PeersWhitelist.wl_from_cmdline(
+                self.connections.reactor,
+                new_whitelist,
+                self.connections._settings,
+            )
+
+        if wl_object is None:
+            raise SysctlException('Sysctl does not allow whitelist swap to None. Use "off" to disable it.')
 
         wl_object.start(self.connections.drop_connection_by_peer_id)
         self.connections.whitelist_swap(wl_object)
