@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import os
-from urllib.parse import urlparse
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
@@ -344,7 +343,7 @@ class ConnectionsManagerSysctl(Sysctl):
         """Return the number of peers in the whitelist."""
         if self.connections.peers_whitelist is None:
             return 'Whitelist is disabled.'
-        
+
         wl_object = self.connections.peers_whitelist
         if not wl_object.following_wl():
             return 'Whitelist is OFF.'
