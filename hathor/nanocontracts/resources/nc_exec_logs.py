@@ -117,6 +117,23 @@ class NCExecLogsResponse(QueryParams):
 NCExecLogsResource.openapi = {
     '/nano_contract/logs': {
         'x-visibility': 'private',
+        'x-visibility-override': {'nano-testnet-bravo': 'public'},
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s',
+                    'burst': 4,
+                    'delay': 2
+                }
+            ]
+        },
         'get': {
             'operationId': 'nano_contracts_logs',
             'summary': 'Get execution logs of a nano contract',
