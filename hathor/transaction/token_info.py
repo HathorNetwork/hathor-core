@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import IntEnum
 
 
-class TokenInfoVersion(IntEnum):
+class TokenVersion(IntEnum):
+    NATIVE = 0
     DEPOSIT = 1
     FEE = 2
 
@@ -15,19 +14,21 @@ class TokenInfo:
     amount: int
     can_mint: bool
     can_melt: bool
-    version: TokenInfoVersion | None
+    version: TokenVersion
 
     @classmethod
-    def get_default(cls, version: TokenInfoVersion | None = TokenInfoVersion.DEPOSIT,
-                    is_new_token: bool = False) -> TokenInfo:
+    def get_default(cls,
+                    version: TokenVersion = TokenVersion.NATIVE,
+                    can_mint: bool = False,
+                    can_melt: bool = False) -> 'TokenInfo':
         """
         Create default deposit token info with zero amount and optional mint/melt permissions.
         """
 
         return TokenInfo(
             amount=0,
-            can_mint=is_new_token,
-            can_melt=is_new_token,
+            can_mint=can_mint,
+            can_melt=can_melt,
             version=version,
         )
 
@@ -38,5 +39,13 @@ class TokenInfo:
             amount=0,
             can_mint=False,
             can_melt=False,
-            version=None,
+            version=TokenVersion.NATIVE,
         )
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class TokenDescription:
+    token_id: bytes
+    token_name: str
+    token_symbol: str
+    # token_version: TokenVersion

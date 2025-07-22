@@ -28,7 +28,7 @@ from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
-from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
@@ -355,17 +355,17 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            token_version: TokenInfoVersion | None
+            token_version: TokenVersion
 
             if token_uid == self._settings.HATHOR_TOKEN_UID:
-                token_version = None
+                token_version = TokenVersion.NATIVE
             else:
                 assert self.storage is not None
                 token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
                 if token_creation_tx is None:
                     raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
 
-                token_version = token_creation_tx.token_info_version
+                token_version = token_creation_tx.token_version
 
             token_info = token_dict.get(
                 token_uid,

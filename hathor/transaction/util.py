@@ -21,7 +21,7 @@ from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.transaction.exceptions import InvalidOutputValue, TransactionDataError
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -107,7 +107,7 @@ def output_value_to_bytes(number: int) -> bytes:
 def validate_token_info(settings: HathorSettings,
                         token_name: str,
                         token_symbol: str,
-                        token_version: TokenInfoVersion) -> None:
+                        token_version: TokenVersion) -> None:
     """Validate token_name and token_symbol before creating a new token."""
     name_len = len(token_name)
     symbol_len = len(token_symbol)
@@ -121,6 +121,5 @@ def validate_token_info(settings: HathorSettings,
         raise TransactionDataError('Invalid token name ({})'.format(token_name))
     if clean_token_string(token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
         raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))
-    # Only HTR can have version=None; all other tokens must define and validate their version.
-    if token_version is None:
+    if token_version is TokenVersion.NATIVE:
         raise TransactionDataError('Invalid token version ({})'.format(token_version))

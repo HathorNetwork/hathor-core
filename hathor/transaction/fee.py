@@ -14,14 +14,14 @@
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction import Transaction, TxOutput
-from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.types import TokenUid
 
 
 def calculate_fee(settings: HathorSettings, tx: Transaction, token_dict: dict[TokenUid, TokenInfo]) -> int:
     """Calculate the fee for this transaction.
 
-    The fee is calculated based on fee tokens outputs. It sums up all tokens with TokenInfoVersion.FEE value.
+    The fee is calculated based on fee tokens outputs. It sums up all tokens with TokenVersion.FEE value.
 
     :return: The total fee in HTR
     :rtype: int
@@ -31,7 +31,7 @@ def calculate_fee(settings: HathorSettings, tx: Transaction, token_dict: dict[To
     outputs_dict = get_non_authority_outputs(tx.get_outputs_grouped_by_token_uid())
 
     for token_uid, token_info in token_dict.items():
-        if token_uid is settings.HATHOR_TOKEN_UID or token_info.version is TokenInfoVersion.DEPOSIT:
+        if token_info.version is TokenVersion.NATIVE or token_info.version is TokenVersion.DEPOSIT:
             continue
 
         chargeable_outputs = outputs_dict.get(token_uid, [])

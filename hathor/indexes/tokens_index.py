@@ -18,7 +18,7 @@ from typing import Iterator, NamedTuple, Optional
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 
 SCOPE = Scope(
     include_blocks=False,
@@ -120,7 +120,7 @@ class TokensIndex(BaseIndex):
                           token_uid: bytes,
                           name: str,
                           symbol: str,
-                          token_info_version: Optional[TokenInfoVersion],
+                          token_info_version: TokenVersion,
                           total: int = 0) -> None:
         """Create a token info for a new token."""
         raise NotImplementedError

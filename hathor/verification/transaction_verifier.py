@@ -39,7 +39,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.fee import calculate_fee, should_charge_fee
-from hathor.transaction.token_info import TokenInfo, TokenInfoVersion
+from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 
@@ -243,7 +243,7 @@ class TransactionVerifier:
                 # that's the usual behavior, nothing to do
                 pass
             elif token_info.amount < 0:
-                if token_info.version == TokenInfoVersion.FEE:
+                if token_info.version == TokenVersion.FEE:
                     if not token_info.can_melt:
                         raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
                             token_info.amount, token_uid.hex()))
@@ -251,7 +251,7 @@ class TransactionVerifier:
                         continue
 
                 # deposit tokens can be used to pay fees, so we can use them without an authority
-                if token_info.version == TokenInfoVersion.DEPOSIT:
+                if token_info.version == TokenVersion.DEPOSIT:
                     withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
 
                     if token_info.can_melt:
@@ -273,7 +273,7 @@ class TransactionVerifier:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
 
-                if token_info.version is TokenInfoVersion.DEPOSIT:
+                if token_info.version is TokenVersion.DEPOSIT:
                     deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
         is_melting_without_authority = withdraw_without_authority - fee > 0

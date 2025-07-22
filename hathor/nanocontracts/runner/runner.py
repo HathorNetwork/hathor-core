@@ -81,7 +81,7 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import (
     clean_token_string,
     get_deposit_token_deposit_amount,
@@ -932,7 +932,7 @@ class Runner:
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
-        token_version: TokenInfoVersion,
+        token_version: TokenVersion,
     ) -> TokenUid:
         """Create a child token from a contract."""
         try:

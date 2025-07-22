@@ -24,7 +24,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.token_info import TokenInfoVersion
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
 
@@ -598,7 +598,7 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
         token_name=token_name,
         token_symbol=token_symbol,
         timestamp=timestamp,
-        token_info_version=TokenInfoVersion.FEE
+        token_version=TokenVersion.FEE
     )
     data_to_sign = tx.get_sighash_all()
 
