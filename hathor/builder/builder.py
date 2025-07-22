@@ -349,7 +349,6 @@ class Builder:
         from hathor.p2p.peers_whitelist import URLPeersWhitelist
         url_peers_whitelist = URLPeersWhitelist(reactor, url, False)
         url_peers_whitelist.follow_wl()
-        url_peers_whitelist.start(url_peers_whitelist._on_remove_callback)
         self._peers_whitelist = url_peers_whitelist
         return self
 
