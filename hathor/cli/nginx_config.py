@@ -100,7 +100,7 @@ def _scale_rate_limit(raw_rate: str, rate_k: float) -> str:
     return f'{int(scaled_rate_amount)}{rate_units}'
 
 
-def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str) -> tuple[Visibility, bool]:
+def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str) -> tuple[Visibility, bool, bool]:
     if 'x-visibility-override' in source and override in source['x-visibility-override']:
         visibility = source['x-visibility-override'][override]
         return Visibility(visibility), False, True
