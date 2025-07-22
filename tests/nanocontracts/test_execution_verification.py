@@ -56,18 +56,17 @@ class TestExecutionVerification(BlueprintTestCase):
         with pytest.raises(NCFail) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
         assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == "MyBlueprint.initialize() missing 1 required positional argument: 'a'"
+        assert e.value.__cause__.args[0] == 'too few arguments'
 
     def test_too_many_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(NCFail, match='too many arguments'):
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 123, 456)
-        assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == "MyBlueprint.initialize() takes 3 positional arguments but 4 were given"
 
-    @pytest.mark.xfail(strict=True, reason='not implemented yet')
     def test_wrong_arg_type_parsed(self) -> None:
-        with pytest.raises(NCFail):
+        with pytest.raises(NCFail) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 'abc')
+        assert isinstance(e.value.__cause__, TypeError)
+        assert e.value.__cause__.args[0] == 'expected integer'
 
     def test_wrong_arg_type_raw(self) -> None:
         args_parser = ArgsOnly.from_arg_types((str,))

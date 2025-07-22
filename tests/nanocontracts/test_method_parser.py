@@ -2,8 +2,10 @@ import json
 from collections.abc import Callable
 from typing import Any, Optional, TypeVar
 
+import pytest
+
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCSerializationArgTooLong
+from hathor.nanocontracts.exception import NCFail, NCSerializationArgTooLong
 from hathor.nanocontracts.method import MAX_BYTES_SERIALIZED_ARG, Method
 from hathor.nanocontracts.types import SignedData, public
 from tests import unittest
@@ -61,8 +63,9 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(type(args_in), type(args_out))
 
     def test_type_str_wrong_type(self) -> None:
-        with self.assertRaises(TypeError):
+        with pytest.raises(NCFail) as e:
             self._run_test(MyBlueprint.method_str, b'')
+        assert isinstance(e.value.__cause__, TypeError)
 
     def test_type_str_empty(self) -> None:
         self._run_test(MyBlueprint.method_str, '')
@@ -127,16 +130,19 @@ class NCBlueprintTestCase(unittest.TestCase):
         self._run_test(MyBlueprint.method_int, 100)
 
     def test_type_int_too_big(self) -> None:
-        with self.assertRaises(ValueError):
+        with pytest.raises(NCFail) as e:
             self._run_test(MyBlueprint.method_int, 2**223)
+        assert isinstance(e.value.__cause__, ValueError)
 
     def test_type_int_too_small(self) -> None:
-        with self.assertRaises(ValueError):
+        with pytest.raises(NCFail) as e:
             self._run_test(MyBlueprint.method_int, -2**223 - 1)
+        assert isinstance(e.value.__cause__, ValueError)
 
     def test_type_int_wrong_type(self) -> None:
-        with self.assertRaises(TypeError):
+        with pytest.raises(NCFail) as e:
             self._run_test(MyBlueprint.method_int, 1.)
+        assert isinstance(e.value.__cause__, TypeError)
 
     def test_type_int(self) -> None:
         class Foo:
@@ -165,8 +171,9 @@ class NCBlueprintTestCase(unittest.TestCase):
             -2**224,
         ]
         for invalid_value in invalid_values:
-            with self.assertRaises(ValueError):
+            with pytest.raises(NCFail) as e:
                 self._run_test(Foo.bar, invalid_value)
+            assert isinstance(e.value.__cause__, ValueError)
 
     def test_type_bool_false(self) -> None:
         self._run_test(MyBlueprint.method_bool, False)
