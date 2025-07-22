@@ -5,6 +5,7 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.rng import NanoRNG
+from hathor.nanocontracts.types import ContractId
 from hathor.transaction import Transaction
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.simulation.base import SimulatorTestCase
@@ -24,6 +25,19 @@ class MyBlueprint(Blueprint):
             raise NCFail('bad luck')
 
 
+class AttackerBlueprint(Blueprint):
+    target: ContractId
+
+    @public
+    def initialize(self, ctx: Context, target: ContractId) -> None:
+        self.target = target
+
+    @public
+    def attack(self, ctx: Context) -> None:
+        self.syscall.rng.random = lambda: 0.75  # type: ignore[method-assign]
+        self.syscall.call_public_method(self.target, 'nop', actions=[])
+
+
 class NCConsensusTestCase(SimulatorTestCase):
     __test__ = True
 
@@ -31,8 +45,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         super().setUp()
 
         self.myblueprint_id = b'x' * 32
+        self.attacker_blueprint_id = b'y' * 32
         self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
+            self.myblueprint_id: MyBlueprint,
+            self.attacker_blueprint_id: AttackerBlueprint,
         })
 
         self.manager = self.simulator.create_peer()
@@ -50,6 +66,62 @@ class NCConsensusTestCase(SimulatorTestCase):
             rng2 = NanoRNG(seed=seed)
             v2 = [rng2.randbits(32) for _ in range(n)]
             assert v1 == v2
+
+    def test_rng_override(self) -> None:
+        seed = b'0' * 32
+        rng = NanoRNG(seed=seed)
+
+        with self.assertRaises(AttributeError, match='Cannot assign methods to this object.'):
+            rng.random = lambda self: 2  # type: ignore[method-assign, misc, assignment]
+
+        with self.assertRaises(AttributeError, match='Cannot assign methods to this object.'):
+            setattr(rng, 'random', lambda self: 2)
+
+        with self.assertRaises(AttributeError, match='Cannot assign methods to this object.'):
+            from types import MethodType
+            rng.random = MethodType(lambda self: 2, rng)  # type: ignore[method-assign]
+
+        with self.assertRaises(AttributeError, match='\'NanoRNG\' object attribute \'random\' is read-only'):
+            object.__setattr__(rng, 'random', lambda self: 2)
+
+        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+            NanoRNG.random = lambda self: 2  # type: ignore[method-assign]
+
+        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+            setattr(NanoRNG, 'random', lambda self: 2)
+
+        with self.assertRaises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+            object.__setattr__(NanoRNG, 'random', lambda self: 2)
+
+        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+            rng.__class__.random = lambda self: 2  # type: ignore[method-assign]
+
+        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+            setattr(rng.__class__, 'random', lambda self: 2)
+
+        with self.assertRaises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+            object.__setattr__(rng.__class__, 'random', lambda self: 2)
+
+        # mypy incorrectly infers the type of `rng.random` as `Never` (leading to "Never not callable [misc]")
+        # due to the override attempts above, which are expected to fail at runtime but confuse static analysis.
+        # This is a false positive in the test context; use `reveal_type(rng.random)` to inspect the inferred type.
+        assert rng.random() < 1  # type: ignore[misc]
+
+    def test_rng_shell_class(self) -> None:
+        seed = b'0' * 32
+        rng1 = NanoRNG.create_with_shell(seed=seed)
+        rng2 = NanoRNG.create_with_shell(seed=seed)
+
+        assert rng1.__class__ != rng2.__class__
+
+        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+            rng1.__class__.random = lambda self: 2  # type: ignore[method-assign]
+
+        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+            setattr(rng1.__class__, 'random', lambda self: 2)
+
+        with self.assertRaises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+            object.__setattr__(rng1.__class__, 'random', lambda self: 2)
 
     def assertGoodnessOfFitTest(self, observed: list[int], expected: list[int]) -> None:
         """Pearson chi-square goodness-of-fit test for uniform [0, 1)"""
@@ -259,3 +331,54 @@ class NCConsensusTestCase(SimulatorTestCase):
         # For L = 3, it is 99.73%.
         # In other words, this assert should pass 99.73% of the runs.
         assert -L < z_score < L
+
+    def test_attack(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+        n = 250
+        nc_calls_parts = []
+        for i in range(3, n + 3):
+            nc_calls_parts.append(f'''
+                nc{i}.nc_id = nc2
+                nc{i}.nc_method = attack()
+                nc{i} --> nc{i-1}
+            ''')
+        nc_calls = ''.join(nc_calls_parts)
+
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize()
+
+            nc2.nc_id = "{self.attacker_blueprint_id.hex()}"
+            nc2.nc_method = initialize(`nc1`)
+            nc2 --> nc1
+
+            {nc_calls}
+
+            nc{n+2} <-- b32
+        ''')
+
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex)
+
+        nc1, = artifacts.get_typed_vertices(['nc1'], Transaction)
+        assert nc1.is_nano_contract()
+        assert nc1.get_metadata().voided_by is None
+
+        names = [f'nc{i}' for i in range(3, n + 3)]
+        vertices = artifacts.get_typed_vertices(names, Transaction)
+
+        success = 0
+        fail = 0
+        for v in vertices:
+            assert v.is_nano_contract()
+            assert v.get_metadata().nc_execution is not None
+            if v.get_metadata().voided_by is None:
+                success += 1
+            else:
+                fail += 1
+        self.assertEqual(0, success)
+        self.assertEqual(n, fail)
