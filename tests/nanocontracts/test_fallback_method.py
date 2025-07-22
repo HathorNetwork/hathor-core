@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, assert_never
+from typing import assert_never
 from unittest.mock import ANY
 
 import pytest
@@ -63,7 +63,7 @@ class MyBlueprint(Blueprint):
         return f'{greeting} {x + x}'
 
     @public(allow_deposit=True)
-    def call_another_fallback(self, ctx: Context, contract_id: ContractId) -> Any:
+    def call_another_fallback(self, ctx: Context, contract_id: ContractId) -> str:
         return self.syscall.call_public_method(contract_id, 'fallback', [])
 
     @public
@@ -101,7 +101,6 @@ class TestFallbackMethod(BlueprintTestCase):
                 call_type=CallType.PUBLIC,
                 method_name='fallback',
                 str_args="('unknown', NCParsedArgs(args=('hello', 123), kwargs={}))",
-                str_kwargs='{}',
                 actions=[dict(amount=123, token_uid='00', type='deposit')]
             ),
             NCCallEndEntry.construct(timestamp=ANY),
@@ -119,7 +118,6 @@ class TestFallbackMethod(BlueprintTestCase):
                 call_type=CallType.PUBLIC,
                 method_name='fallback',
                 str_args="('unknown', NCParsedArgs(args=(), kwargs={'greeting': 'hello', 'x': 123}))",
-                str_kwargs='{}',
                 actions=[dict(amount=123, token_uid='00', type='deposit')]
             ),
             NCCallEndEntry.construct(timestamp=ANY),
@@ -137,7 +135,6 @@ class TestFallbackMethod(BlueprintTestCase):
                 call_type=CallType.PUBLIC,
                 method_name='fallback',
                 str_args="('unknown', NCParsedArgs(args=('hello',), kwargs={'x': 123}))",
-                str_kwargs='{}',
                 actions=[dict(amount=123, token_uid='00', type='deposit')]
             ),
             NCCallEndEntry.construct(timestamp=ANY),
@@ -168,7 +165,6 @@ class TestFallbackMethod(BlueprintTestCase):
                 call_type=CallType.PUBLIC,
                 method_name='fallback',
                 str_args=f"('unknown', NCRawArgs('{args_bytes.hex()}'))",
-                str_kwargs='{}',
                 actions=[dict(amount=123, token_uid='00', type='deposit')]
             ),
             NCCallEndEntry.construct(timestamp=ANY),
@@ -176,8 +172,10 @@ class TestFallbackMethod(BlueprintTestCase):
 
     def test_dag_fallback(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
-        args_parser = ArgsOnly.from_arg_types((str, int))
-        valid_args_bytes = args_parser.serialize_args_bytes(('hello', 123))
+        valid_args_parser = ArgsOnly.from_arg_types((str, int))
+        valid_args_bytes = valid_args_parser.serialize_args_bytes(('hello', 123))
+        invalid_args_parser = ArgsOnly.from_arg_types((int, int))
+        invalid_args_bytes = invalid_args_parser.serialize_args_bytes((123, 456))
 
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
@@ -192,7 +190,7 @@ class TestFallbackMethod(BlueprintTestCase):
 
             nc3.nc_id = nc1
             nc3.nc_method = unknown
-            nc3.nc_args_bytes = "00"
+            nc3.nc_args_bytes = "{invalid_args_bytes.hex()}"
 
             nc1 <-- nc2 <-- nc3 <-- b11
         ''')
@@ -213,7 +211,7 @@ class TestFallbackMethod(BlueprintTestCase):
             manager=self.manager,
             tx_id=nc3.hash,
             block_id=b11.hash,
-            reason='NCFail: unsupported args: 00',
+            reason=f'NCFail: unsupported args: {invalid_args_bytes.hex()}',
         )
 
     def test_call_own_fallback(self) -> None:

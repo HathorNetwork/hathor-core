@@ -108,7 +108,6 @@ class NCCallBeginEntry(_BaseNCEntry):
     call_type: CallType
     method_name: str
     str_args: str = '()'
-    str_kwargs: str = '{}'
     actions: list[dict[str, Any]] | None
 
     @staticmethod
@@ -124,7 +123,6 @@ class NCCallBeginEntry(_BaseNCEntry):
             call_type=call_record.type,
             method_name=call_record.method_name,
             str_args=str(call_record.args),
-            str_kwargs=str(call_record.kwargs),
             timestamp=timestamp,
             actions=actions
         )
