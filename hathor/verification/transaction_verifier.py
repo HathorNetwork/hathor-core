@@ -236,37 +236,48 @@ class TransactionVerifier:
         fee = 0 if not should_charge_fee(self._settings) else calculate_fee(self._settings, tx, token_dict)
 
         for token_uid, token_info in token_dict.items():
-            if token_uid == self._settings.HATHOR_TOKEN_UID:
+            if token_info.version is TokenVersion.NATIVE:
                 continue
 
             if token_info.amount == 0:
                 # that's the usual behavior, nothing to do
                 pass
             elif token_info.amount < 0:
-                if token_info.version == TokenVersion.FEE:
-                    if not token_info.can_melt:
-                        raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
-                            token_info.amount, token_uid.hex()))
-                    else:
-                        continue
-
-                # deposit tokens can be used to pay fees, so we can use them without an authority
-                if token_info.version == TokenVersion.DEPOSIT:
-                    withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
-
-                    if token_info.can_melt:
-                        withdraw += withdraw_amount
-                    else:
-                        # When we don't have a fee, melting is only allowed with an authority.
-                        # To use a deposit token to pay the fee, the result of the conversion to HTR should be an
-                        # integer otherwise it will allow users to melt tokens due to `ceil` function in the
-                        # get_deposit_token_withdraw_amount. For example, 199 Tokens -> 1HTR could
-                        if fee == 0 or not (token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer():
+                match token_info.version:
+                    case TokenVersion.FEE:
+                        if not token_info.can_melt:
                             raise InputOutputMismatch(
-                                '{} {} tokens melted, but there is no melt authority input'.format(
-                                    token_info.amount, token_uid.hex()))
+                                '{} {} tokens melted, but there is no melt authority input'
+                                .format(token_info.amount, token_uid.hex())
+                            )
+                        else:
+                            continue
+                    case TokenVersion.DEPOSIT:
+                        # deposit tokens can be used to pay fees, so we can use them without an authority
+                        if token_info.version == TokenVersion.DEPOSIT:
+                            withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
 
-                        withdraw_without_authority += withdraw_amount
+                            if token_info.can_melt:
+                                withdraw += withdraw_amount
+                            else:
+                                # When we don't have a fee, melting is only allowed with an authority.
+                                # To use a deposit token to pay the fee, the result of the conversion
+                                # to HTR should be an integer, otherwise it will allow users to melt tokens due
+                                # to `ceil` function in the get_deposit_token_withdraw_amount.
+                                # For example, 199 Tokens -> 1HTR could
+                                if fee == 0 or not (
+                                    token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE
+                                ).is_integer():
+                                    raise InputOutputMismatch(
+                                        '{} {} tokens melted, but there is no melt authority input'.format(
+                                            token_info.amount, token_uid.hex()))
+
+                                withdraw_without_authority += withdraw_amount
+                    case TokenVersion.NATIVE:
+                        continue
+                    case _:
+                        from typing_extensions import assert_never
+                        assert_never(token_info.version)
             else:
                 # token_info.amount > 0 so the transaction is minting tokens
                 if not token_info.can_mint:
