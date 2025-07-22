@@ -148,6 +148,7 @@ class Runner:
         self._call_info: CallInfo | None = None
 
         self._rng: NanoRNG | None = NanoRNG(seed) if seed is not None else None
+        self._rng_per_contract: dict[ContractId, NanoRNG] = {}
 
         # Information about updated tokens in the current call via syscalls.
         self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
@@ -762,7 +763,10 @@ class Runner:
         """Return the RNG for the current contract being executed."""
         if self._rng is None:
             raise ValueError('no seed was provided')
-        return self._rng
+        contract_id = self.get_current_contract_id()
+        if contract_id not in self._rng_per_contract:
+            self._rng_per_contract[contract_id] = NanoRNG.create_with_shell(seed=self._rng.randbytes(32))
+        return self._rng_per_contract[contract_id]
 
     def _internal_create_contract(self, contract_id: ContractId, blueprint_id: BlueprintId) -> None:
         """Create a new contract without calling the initialize() method."""
