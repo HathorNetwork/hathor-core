@@ -16,7 +16,7 @@ import os
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.peers_whitelist import FilePeersWhitelist, PeersWhitelist, URLPeersWhitelist
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
@@ -306,7 +306,7 @@ class ConnectionsManagerSysctl(Sysctl):
         the whitelist object, following it by default.
         It does not support eliminating the whitelist (passing None)."""
 
-        wl_object: URLPeersWhitelist | FilePeersWhitelist
+        wl_object: PeersWhitelist
         option: str = new_whitelist.lower().strip()
         if option in ('on', 'off'):
             # Set the whitelist tracking ON or OFF for the currently given whitelist.

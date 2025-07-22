@@ -343,6 +343,16 @@ class Builder:
         self._peer = peer
         return self
 
+    def set_url_whitelist(self, reactor: Reactor) -> 'Builder':
+        """Sets the peers whitelist to a URLPeersWhitelist."""
+        url = 'https://something.com'
+        from hathor.p2p.peers_whitelist import URLPeersWhitelist
+        url_peers_whitelist = URLPeersWhitelist(reactor, url, False)
+        url_peers_whitelist.follow_wl()
+        url_peers_whitelist.start(url_peers_whitelist._on_remove_callback)
+        self._peers_whitelist = url_peers_whitelist
+        return self
+
     def _get_or_create_settings(self) -> HathorSettingsType:
         """Return the HathorSettings instance set on this builder, or a new one if not set."""
         if self._settings is None:
