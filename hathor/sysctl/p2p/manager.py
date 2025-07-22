@@ -55,6 +55,7 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
 
 
 def get_whitelist_msg(wl_object: PeersWhitelist) -> str:
+    from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
     getMsg = 'Whitelist Class: '
     getMsg += 'FilePeersWhitelist || ' if isinstance(wl_object, FilePeersWhitelist) else ''
     getMsg += 'URLPeersWhitelist || ' if isinstance(wl_object, URLPeersWhitelist) else ''
