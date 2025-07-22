@@ -204,7 +204,7 @@ class TestCase(unittest.TestCase):
         enable_event_queue: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
-        mock_peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None,
+        url_whitelist: bool = False,
         nc_indexes: bool = False,
         nc_log_config: NCLogConfig | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
@@ -260,6 +260,9 @@ class TestCase(unittest.TestCase):
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
 
+        if url_whitelist:
+            builder.set_url_whitelist(self.reactor)
+
         if nc_indexes:
             builder.enable_nc_indexes()
 
@@ -267,8 +270,6 @@ class TestCase(unittest.TestCase):
             builder.set_nc_log_config(nc_log_config)
 
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
-
-
 
         return manager
 

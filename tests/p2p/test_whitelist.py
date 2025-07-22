@@ -45,12 +45,12 @@ class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
         self._settings = get_global_settings()
-        manager1 = self.create_peer(network)
+        manager1 = self.create_peer(network, url_whitelist=True)
         manager1.connections.peers_whitelist.follow_wl()
 
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-        manager2 = self.create_peer(network)
+        manager2 = self.create_peer(network, url_whitelist=True)
         # Both follow their respective whitelist, although manager1 is not in manager2's whitelist.
         manager2.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
