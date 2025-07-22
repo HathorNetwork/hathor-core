@@ -205,6 +205,7 @@ class TestCase(unittest.TestCase):
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
         url_whitelist: bool = False,
+        mock_peers_whitelist: URLPeersWhitelist | FilePeersWhitelist | None = None,
         nc_indexes: bool = False,
         nc_log_config: NCLogConfig | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
@@ -259,9 +260,10 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
-
+        '''
         if url_whitelist:
             builder.set_url_whitelist(self.reactor)
+        '''
 
         if nc_indexes:
             builder.enable_nc_indexes()
@@ -270,7 +272,17 @@ class TestCase(unittest.TestCase):
             builder.set_nc_log_config(nc_log_config)
 
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
-
+    '''
+        if not mock_peers_whitelist:
+            # All test is made in testnet, never in mainnet.
+            # Mock peers_whitelist must be initiated beforehand
+            # If given None in testing, it defaults to URL.
+            url = "https://something.com"
+            mock_peers_whitelist = URLPeersWhitelist(manager.reactor, url, True)
+            mock_peers_whitelist.follow_wl()
+            mock_peers_whitelist.start(mock_peers_whitelist._on_remove_callback)
+            manager.connections.peers_whitelist = mock_peers_whitelist
+    '''
         return manager
 
     def create_tx_storage(self, settings: HathorSettings | None = None) -> TransactionStorage:

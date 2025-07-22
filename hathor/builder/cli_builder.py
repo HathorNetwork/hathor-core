@@ -301,9 +301,6 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
-        # We are remodeling the whitelist_only trope.
-        # Now, we must use solely the p2p_whitelist flag, which shall receive
-
         # Check whitelist pathing. Default values:
         p2p_wl = self._args.x_p2p_whitelist or 'default'
         p2p_wl = p2p_wl.strip()

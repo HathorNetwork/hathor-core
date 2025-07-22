@@ -8,9 +8,11 @@ class CapabilitiesTestCase(unittest.TestCase):
     def test_capabilities(self) -> None:
         network = 'testnet'
         manager1 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
-                                                           self._settings.CAPABILITY_SYNC_VERSION])
+                                                           self._settings.CAPABILITY_SYNC_VERSION],
+                                                           url_whitelist=True)
         manager2 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
-                                                           self._settings.CAPABILITY_SYNC_VERSION])
+                                                           self._settings.CAPABILITY_SYNC_VERSION],
+                                                           url_whitelist=True)
 
         assert manager1.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
         assert manager2.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
