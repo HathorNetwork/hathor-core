@@ -12,6 +12,7 @@ from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCAction, NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import sign_pycoin
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import BaseTransaction, Block, Transaction, TxOutput
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
@@ -20,7 +21,7 @@ from hathor.types import VertexId
 from hathor.wallet.base_wallet import WalletOutputInfo
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.simulation.base import SimulatorTestCase
-from tests.utils import add_custom_tx, create_tokens, gen_custom_base_tx
+from tests.utils import add_blocks_unlock_reward, add_custom_tx, create_tokens, gen_custom_base_tx
 
 settings = HathorSettings()
 
@@ -119,7 +120,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         method_parser = Method.from_callable(getattr(MyBlueprint, nc_method))
 
         if nc is None:
-            nc = Transaction()
+            nc = Transaction(timestamp=int(self.manager.reactor.seconds()))
         assert isinstance(nc, Transaction)
 
         nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
@@ -149,8 +150,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.reactor.advance(10)
         return nc
 
-    def _finish_preparing_tx(self, tx):
-        tx.timestamp = int(self.manager.reactor.seconds())
+    def _finish_preparing_tx(self, tx: Transaction, *, set_timestamp: bool = True) -> Transaction:
+        if set_timestamp:
+            tx.timestamp = int(self.manager.reactor.seconds())
         tx.parents = self.manager.get_new_tx_parents()
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         return tx
@@ -218,10 +220,9 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.assertNoBlocksVoided()
 
-    def test_nc_consensus_success_custom_token(self):
+    def test_nc_consensus_success_custom_token(self) -> None:
         token_creation_tx = create_tokens(self.manager, mint_amount=100, use_genesis=False, propagate=False)
-        self._finish_preparing_tx(token_creation_tx)
-        token_creation_tx.timestamp += 1
+        self._finish_preparing_tx(token_creation_tx, set_timestamp=False)
         self.manager.cpu_mining_service.resolve(token_creation_tx)
         self.manager.on_new_tx(token_creation_tx)
 
@@ -250,10 +251,11 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Make a deposit.
 
+        add_blocks_unlock_reward(self.manager)
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
             1, self.manager.tx_storage, token_uid=self.token_uid
         )
-        tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
+        tx = self.wallet.prepare_transaction(Transaction, _inputs, [], timestamp=int(self.manager.reactor.seconds()))
         tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx, is_custom_token=is_custom_token, nc_actions=[
             NanoHeaderAction(
                 type=NCActionType.DEPOSIT,
@@ -265,8 +267,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.on_new_tx(tx)
         self.assertIsNone(tx.get_metadata().voided_by)
 
-        trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
-        self.assertTrue(self.simulator.run(7200, trigger=trigger))
+        add_new_blocks(self.manager, 2, advance_clock=1)
 
         meta = tx.get_metadata()
         self.assertIsNotNone(meta.first_block)
@@ -288,7 +289,10 @@ class NCConsensusTestCase(SimulatorTestCase):
             _tokens.append(self.token_uid)
             _output_token_index = 1
 
-        tx2 = Transaction(outputs=[TxOutput(1, b'', _output_token_index)])
+        tx2 = Transaction(
+            outputs=[TxOutput(1, b'', _output_token_index)],
+            timestamp=int(self.manager.reactor.seconds()),
+        )
         tx2.tokens = _tokens
         tx2 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx2, nc_actions=[
             NanoHeaderAction(
@@ -301,8 +305,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.on_new_tx(tx2)
         self.assertIsNone(tx2.get_metadata().voided_by)
 
-        trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
-        self.assertTrue(self.simulator.run(7200, trigger=trigger))
+        add_new_blocks(self.manager, 2, advance_clock=1)
 
         meta2 = tx2.get_metadata()
         self.assertIsNotNone(meta2.first_block)
@@ -316,7 +319,10 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         # Make a withdrawal of the remainder.
 
-        tx3 = Transaction(outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)])
+        tx3 = Transaction(
+            outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)],
+            timestamp=int(self.manager.reactor.seconds()),
+        )
         tx3.tokens = _tokens
         tx3 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx3, nc_actions=[
             NanoHeaderAction(
@@ -329,8 +335,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.on_new_tx(tx3)
         self.assertIsNone(tx3.get_metadata().voided_by)
 
-        trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
-        self.assertTrue(self.simulator.run(7200, trigger=trigger))
+        add_new_blocks(self.manager, 2, advance_clock=1)
 
         meta3 = tx3.get_metadata()
         self.assertIsNotNone(meta3.first_block)
@@ -347,7 +352,10 @@ class NCConsensusTestCase(SimulatorTestCase):
             _tokens.append(self.token_uid)
             _output_token_index = 1
 
-        tx4 = Transaction(outputs=[TxOutput(2, b'', _output_token_index)])
+        tx4 = Transaction(
+            outputs=[TxOutput(2, b'', _output_token_index)],
+            timestamp=int(self.manager.reactor.seconds()),
+        )
         tx4.tokens = _tokens
         tx4 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx4, nc_actions=[
             NanoHeaderAction(
@@ -360,8 +368,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.on_new_tx(tx4)
         self.assertIsNone(tx4.get_metadata().voided_by)
 
-        trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
-        self.assertTrue(self.simulator.run(7200, trigger=trigger))
+        add_new_blocks(self.manager, 2, advance_clock=1)
 
         meta4 = tx4.get_metadata()
         self.assertIsNotNone(meta4.first_block)
