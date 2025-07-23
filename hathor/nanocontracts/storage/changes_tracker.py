@@ -190,11 +190,6 @@ class NCChangesTracker(NCContractStorage):
 
         self.has_been_commited = True
 
-    def reset(self) -> None:
-        """Discard all local changes without persisting."""
-        self.data = {}
-        self._balance_diff = {}
-
     @override
     def _get_mutable_balance(self, token_uid: bytes) -> MutableBalance:
         internal_key = BalanceKey(self.nc_id, token_uid)
