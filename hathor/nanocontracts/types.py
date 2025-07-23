@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, NewType, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, Literal, NewType, TypeAlias, TypeVar
 
 from typing_extensions import override
 
@@ -28,6 +28,7 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_method_types,
 )
 from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
@@ -405,3 +406,6 @@ NCAction: TypeAlias = (
     | NCGrantAuthorityAction
     | NCAcquireAuthorityAction
 )
+
+"""A type representing all the possible create token versions """
+NCTokenVersion: TypeAlias = Literal[TokenVersion.DEPOSIT, TokenVersion.FEE]

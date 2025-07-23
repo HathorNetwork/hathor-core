@@ -925,20 +925,20 @@ class Runner:
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_token')
-    def syscall_create_child_token(
+    def syscall_create_child_deposit_token(
         self,
         token_name: str,
         token_symbol: str,
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
-        token_version: TokenVersion,
     ) -> TokenUid:
-        """Create a child token from a contract."""
+        """Create a child deposit token from a contract."""
+        token_version = TokenVersion.DEPOSIT
         try:
             validate_token_info(self._settings, token_name, token_symbol, token_version)
         except TransactionDataError as e:
-            raise NCInvalidSyscall('invalid token description') from e
+            raise NCInvalidSyscall(str(e)) from e
 
         last_call_record = self.get_current_call_record()
         parent_id = last_call_record.contract_id
@@ -968,10 +968,31 @@ class Runner:
             htr_amount=-htr_amount,
             token_symbol=token_symbol,
             token_name=token_name,
+            token_version=token_version
         )
         last_call_record.index_updates.append(syscall_record)
 
         return token_id
+
+    @_forbid_syscall_from_view('create_token')
+    def syscall_create_child_fee_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool,
+        melt_authority: bool,
+    ) -> TokenUid:
+        """Create a child deposit token from a contract."""
+
+        if not self._settings.FEE_FEATURE_FLAG:
+            NCInvalidSyscall('Creating fee based tokens feature is not enabled')
+        try:
+            validate_token_info(self._settings, token_name, token_symbol, TokenVersion.FEE)
+        except TransactionDataError as e:
+            raise NCInvalidSyscall(str(e)) from e
+
+        raise NotImplementedError('syscall not implemented')
 
     @_forbid_syscall_from_view('emit_event')
     def syscall_emit_event(self, data: bytes) -> None:

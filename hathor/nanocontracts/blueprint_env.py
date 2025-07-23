@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, final
 from typing_extensions import deprecated
 
 from hathor.nanocontracts.storage import NCContractStorage
-from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
+from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCTokenVersion, TokenUid
 from hathor.transaction.token_info import TokenVersion
 
 if TYPE_CHECKING:
@@ -262,17 +262,29 @@ class BlueprintEnvironment:
         amount: int,
         mint_authority: bool = True,
         melt_authority: bool = True,
-        token_version: TokenVersion = TokenVersion.DEPOSIT
+        token_version: NCTokenVersion = TokenVersion.DEPOSIT,
     ) -> TokenUid:
         """Create a new token."""
-        return self.__runner.syscall_create_child_token(
-            token_name,
-            token_symbol,
-            amount,
-            mint_authority,
-            melt_authority,
-            token_version
-        )
+        match token_version:
+            case TokenVersion.DEPOSIT:
+                return self.__runner.syscall_create_child_deposit_token(
+                    token_name,
+                    token_symbol,
+                    amount,
+                    mint_authority,
+                    melt_authority
+                )
+            case TokenVersion.FEE:
+                return self.__runner.syscall_create_child_fee_token(
+                    token_name,
+                    token_symbol,
+                    amount,
+                    mint_authority,
+                    melt_authority
+                )
+            case _:
+                from typing_extensions import assert_never
+                assert_never(token_version)
 
     @final
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:

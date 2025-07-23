@@ -20,7 +20,7 @@ class TransactionDoesNotExist(HathorError):
 
 
 class TokenCreationTransactionDoesNotExist(TransactionDoesNotExist):
-    """You are trying to get a transaction that does not exist"""
+    """You are trying to get a token creation transaction that does not exist"""
 
 
 class TransactionMetadataDoesNotExist(HathorError):

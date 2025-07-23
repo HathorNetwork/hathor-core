@@ -77,7 +77,7 @@ class SyscallUpdateTokensRecord:
     htr_amount: int
     token_symbol: str | None = None
     token_name: str | None = None
-    token_version: TokenVersion = TokenVersion.NATIVE
+    token_version: TokenVersion | None = None
 
     def __post_init__(self) -> None:
         match self.type:
