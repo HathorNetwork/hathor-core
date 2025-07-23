@@ -343,7 +343,7 @@ class Builder:
         self._peer = peer
         return self
 
-    def set_url_whitelist(self, reactor: Reactor, url: str ='') -> 'Builder':
+    def set_url_whitelist(self, reactor: Reactor, url: str = '') -> 'Builder':
         """Sets the peers whitelist to a URLPeersWhitelist."""
         self.check_if_can_modify()
         if not url:

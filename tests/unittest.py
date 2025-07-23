@@ -264,7 +264,6 @@ class TestCase(unittest.TestCase):
         if url_whitelist:
             builder.set_url_whitelist(self.reactor)
 
-
         if nc_indexes:
             builder.enable_nc_indexes()
 
