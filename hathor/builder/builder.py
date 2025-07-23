@@ -343,9 +343,11 @@ class Builder:
         self._peer = peer
         return self
 
-    def set_url_whitelist(self, reactor: Reactor) -> 'Builder':
+    def set_url_whitelist(self, reactor: Reactor, url: str ='') -> 'Builder':
         """Sets the peers whitelist to a URLPeersWhitelist."""
-        url = 'https://something.com'
+        self.check_if_can_modify()
+        if not url:
+            url = 'https://something.com'
         from hathor.p2p.peers_whitelist import URLPeersWhitelist
         url_peers_whitelist = URLPeersWhitelist(reactor, url, False)
         url_peers_whitelist.follow_wl()
