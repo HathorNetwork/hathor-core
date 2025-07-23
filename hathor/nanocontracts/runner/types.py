@@ -24,6 +24,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError, NCSerializationError
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathor.transaction.token_info import TokenInfoVersion
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -76,6 +77,7 @@ class SyscallUpdateTokensRecord:
     htr_amount: int
     token_symbol: str | None = None
     token_name: str | None = None
+    token_version: TokenInfoVersion = TokenInfoVersion.DEPOSIT
 
     def __post_init__(self) -> None:
         match self.type:
@@ -91,6 +93,7 @@ class SyscallUpdateTokensRecord:
             type=self.type,
             token_uid=self.token_uid.hex(),
             token_amount=self.token_amount,
+            token_version=self.token_version,
             htr_amount=self.htr_amount,
         )
 
@@ -102,6 +105,7 @@ class SyscallUpdateTokensRecord:
             type=json_dict['type'],
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
             token_amount=json_dict['token_amount'],
+            token_version=json_dict['token_version'],
             htr_amount=json_dict['htr_amount'],
         )
 
