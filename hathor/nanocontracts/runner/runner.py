@@ -28,6 +28,7 @@ from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
     NCFail,
     NCForbiddenAction,
+    NCForbiddenReentrancy,
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
@@ -55,6 +56,7 @@ from hathor.nanocontracts.runner.types import (
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
+    NC_ALLOW_REENTRANCY,
     NC_ALLOWED_ACTIONS_ATTR,
     NC_FALLBACK_METHOD,
     NC_INITIALIZE_METHOD,
@@ -560,6 +562,8 @@ class Runner:
                 case _:
                     assert_never(nc_args)
 
+        self._validate_reentrancy(contract_id, called_method_name, method)
+
         call_record = CallRecord(
             type=CallType.PUBLIC,
             depth=self._call_info.depth,
@@ -905,6 +909,17 @@ class Runner:
                     raise NCInvalidContext('token_uid mismatch')
                 if isinstance(action, BaseTokenAction) and action.amount < 0:
                     raise NCInvalidContext('amount must be positive')
+
+    def _validate_reentrancy(self, contract_id: ContractId, method_name: str, method: Any) -> None:
+        """Check whether a reentrancy is happening and whether it is allowed."""
+        assert self._call_info is not None
+        allow_reentrancy = getattr(method, NC_ALLOW_REENTRANCY, False)
+        if allow_reentrancy:
+            return
+
+        for call_record in self._call_info.stack:
+            if call_record.contract_id == contract_id and call_record.method_name == method_name:
+                raise NCForbiddenReentrancy(f'reentrancy is forbidden on method `{method_name}`')
 
     def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> None:
         """Check whether actions are allowed."""
