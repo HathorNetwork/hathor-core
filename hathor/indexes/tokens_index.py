@@ -51,6 +51,11 @@ class TokenIndexInfo(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_version(self) -> TokenVersion:
+        """The token version"""
+        raise NotImplementedError
+
+    @abstractmethod
     def get_total(self) -> int:
         """The token's total supply"""
         raise NotImplementedError
