@@ -304,9 +304,8 @@ class CliBuilder:
         # Check whitelist pathing. Default values:
         p2p_wl = self._args.x_p2p_whitelist or 'default'
         p2p_wl = p2p_wl.strip()
-        p2p_whitelist: PeersWhitelist | None = None
 
-        p2p_whitelist = PeersWhitelist.wl_from_cmdline(
+        p2p_whitelist = PeersWhitelist.create_from_cmdline(
             reactor=reactor,
             p2p_wl=p2p_wl,
             settings=settings,

@@ -56,17 +56,18 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
 
 def get_whitelist_msg(wl_object: PeersWhitelist) -> str:
     from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
-    getMsg = 'Whitelist Class: '
-    getMsg += 'FilePeersWhitelist || ' if isinstance(wl_object, FilePeersWhitelist) else ''
-    getMsg += 'URLPeersWhitelist || ' if isinstance(wl_object, URLPeersWhitelist) else ''
-    getMsg += 'Whitelist: '
-    getMsg += 'ON || ' if wl_object._following_wl else 'OFF || '
-    if wl_object._current:
-        getMsg += f'Amount of PeerIds: {len(wl_object._current)}  '
-    else:
-        getMsg += 'Current peerId list EMPTY. '
 
-    return getMsg
+    if isinstance(wl_object, FilePeersWhitelist):
+        return f'{wl_object.path()}'
+
+    elif isinstance(wl_object, URLPeersWhitelist):
+        return f'{wl_object.url()}'
+
+    elif wl_object is None:
+        return 'none'
+    
+    else:
+        raise SysctlException('Invalid whitelist')
 
 
 class ConnectionsManagerSysctl(Sysctl):
@@ -299,7 +300,7 @@ class ConnectionsManagerSysctl(Sysctl):
             wl_object = self.connections.peers_whitelist
             return get_whitelist_msg(wl_object)
 
-        return 'Whitelist is disabled'
+        return 'none'
 
     def set_whitelist(self, new_whitelist: str) -> None:
         """Set the whitelist-only mode. If 'on' or 'off', simply changes the
@@ -325,7 +326,7 @@ class ConnectionsManagerSysctl(Sysctl):
                 return
 
         else:
-            wl_object = PeersWhitelist.wl_from_cmdline(
+            wl_object = PeersWhitelist.create_from_cmdline(
                 self.connections.reactor,
                 new_whitelist,
                 self.connections._settings,
@@ -343,14 +344,14 @@ class ConnectionsManagerSysctl(Sysctl):
     def whitelist_status(self) -> str:
         """Return the number of peers in the whitelist."""
         if self.connections.peers_whitelist is None:
-            return 'Whitelist is disabled.'
+            return 'disabled'
 
         wl_object = self.connections.peers_whitelist
         if not wl_object.following_wl():
-            return 'Whitelist is OFF.'
+            return 'off'
 
         current_wl = wl_object.current_whitelist()
         if not current_wl:
-            return 'Whitelist is ON, but empty.'
+            return 'none'
 
-        return f'Whitelist is ON with {len(current_wl)} peers.'
+        return 'on'

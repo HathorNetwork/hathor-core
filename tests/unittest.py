@@ -272,7 +272,7 @@ class TestCase(unittest.TestCase):
 
         manager = self.create_peer_from_builder(builder, start_manager=start_manager)
 
-        if not mock_peers_whitelist:
+        """ if not mock_peers_whitelist:
             # All test is made in testnet, never in mainnet.
             # Mock peers_whitelist must be initiated beforehand
             # If given None in testing, it defaults to URL.
@@ -280,7 +280,7 @@ class TestCase(unittest.TestCase):
             mock_peers_whitelist = URLPeersWhitelist(manager.reactor, url, True)
             mock_peers_whitelist.follow_wl()
             mock_peers_whitelist.start(mock_peers_whitelist._on_remove_callback)
-            manager.connections.peers_whitelist = mock_peers_whitelist
+            manager.connections.peers_whitelist = mock_peers_whitelist """
 
         return manager
 

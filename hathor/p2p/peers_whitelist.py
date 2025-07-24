@@ -57,6 +57,11 @@ class PeersWhitelist(ABC):
         self._reactor.callLater(WHITELIST_RETRY_INTERVAL, self._start_lc)
 
     def update(self) -> Deferred[None]:
+        # Avoiding re-entrancy. If running, should not update once more.
+        if self._is_running:
+            self.log.warning('whitelist update already running, skipping execution.')
+            return Deferred(None)
+
         self._is_running = True
         try:
             d = self._unsafe_update()
@@ -100,10 +105,10 @@ class PeersWhitelist(ABC):
 
     @abstractmethod
     def _unsafe_update(self) -> Deferred[None]:
-        pass
+        raise NotImplementedError
 
     @classmethod
-    def wl_from_cmdline(cls, reactor: Reactor, p2p_wl: str, settings: HathorSettings) -> Self | None:
+    def create_from_cmdline(cls, reactor: Reactor, p2p_wl: str, settings: HathorSettings) -> Self | None:
         if p2p_wl.lower() in ('default', 'hathorlabs'):
             p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
         elif p2p_wl.lower() in ('none', 'disabled'):
@@ -121,6 +126,9 @@ class FilePeersWhitelist(PeersWhitelist):
         super().__init__(reactor)
         self._path = path
 
+    def path(self) -> str:
+        return self._path
+
     def refresh(self) -> None:
         self._unsafe_update()
 
@@ -130,12 +138,17 @@ class FilePeersWhitelist(PeersWhitelist):
             Reads the file in the class path.
         """
         # Avoiding re-entrancy. If running, should not update once more.
-        if self._is_running:
-            self.log.warning('whitelist update already running, skipping execution.')
-            return Deferred(None)
         with open(self._path, 'r', encoding='utf-8') as fp:
             content = fp.read()
         new_whitelist = parse_whitelist(content)
+
+        current_whitelist = set(self._current)
+        peers_to_remove = current_whitelist - new_whitelist
+
+        for peer_id in peers_to_remove:
+            if self._on_remove_callback:
+                self._on_remove_callback(peer_id)
+
         self._current = new_whitelist
 
         # Log the difference between the first whitelist and the last.
@@ -159,11 +172,13 @@ class URLPeersWhitelist(PeersWhitelist):
                     raise ValueError(f'invalid url: {self._url}')
         self.update()
 
+    def url(self) -> str | None:
+        return self._url
+
     def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
         self.log.error('update whitelist failed', args=args, kwargs=kwargs)
 
     def _update_whitelist_cb(self, body: bytes) -> None:
-        # assert self.manager is not None  # Assumes manager always not to be None.
         self.log.info('update whitelist got response')
         try:
             text = body.decode()
@@ -188,11 +203,6 @@ class URLPeersWhitelist(PeersWhitelist):
             Implementation of the child class of PeersWhitelist, called by update()
             to fetch data from the provided url.
         """
-        # Avoiding re-entrancy. If running, should not update once more.
-        if self._is_running:
-            self.log.warning('whitelist update already running, skipping execution.')
-            return Deferred(None)
-
         from twisted.web.client import readBody
         from twisted.web.http_headers import Headers
         assert self._url is not None
