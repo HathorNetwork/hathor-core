@@ -34,8 +34,6 @@ class MyBlueprint(Blueprint):
 
     def assert_balance(self, token_uid: TokenUid, *, before: int, current: int) -> None:
         assert self.syscall.get_balance_before_current_call(token_uid) == before
-        # deprecated method, equivalent to get_balance_before_current_call
-        assert self.syscall.get_balance(token_uid) == before
         assert self.syscall.get_current_balance(token_uid) == current
 
     def assert_token_balance(self, *, before: int, current: int) -> None:
