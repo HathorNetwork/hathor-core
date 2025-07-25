@@ -164,26 +164,26 @@ class BlueprintEnvironment:
     @final
     def call_public_method(
         self,
-        nc_id: ContractId,
-        method_name: str,
-        actions: Sequence[NCAction],
+        _nc_id: ContractId,
+        _method_name: str,
+        _actions: Sequence[NCAction],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
         """Call a public method of another contract."""
-        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_call_another_contract_public_method(_nc_id, _method_name, _actions, args, kwargs)
 
     @final
     def proxy_call_public_method(
         self,
-        blueprint_id: BlueprintId,
-        method_name: str,
-        actions: Sequence[NCAction],
+        _blueprint_id: BlueprintId,
+        _method_name: str,
+        _actions: Sequence[NCAction],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_proxy_call_public_method(_blueprint_id, _method_name, _actions, args, kwargs)
 
     @final
     def proxy_call_public_method_nc_args(
@@ -197,9 +197,15 @@ class BlueprintEnvironment:
         return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
 
     @final
-    def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
+    def call_view_method(
+        self,
+        _nc_id: ContractId,
+        _method_name: str,
+        *args: Any,
+        **kwargs: Any
+    ) -> Any:
         """Call a view method of another contract."""
-        return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
+        return self.__runner.syscall_call_another_contract_view_method(_nc_id, _method_name, args, kwargs)
 
     @final
     def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
@@ -219,14 +225,14 @@ class BlueprintEnvironment:
     @final
     def create_contract(
         self,
-        blueprint_id: BlueprintId,
-        salt: bytes,
-        actions: Sequence[NCAction],
+        _blueprint_id: BlueprintId,
+        _salt: bytes,
+        _actions: Sequence[NCAction],
         *args: Any,
         **kwargs: Any,
     ) -> tuple[ContractId, Any]:
         """Create a new contract."""
-        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
+        return self.__runner.syscall_create_another_contract(_blueprint_id, _salt, _actions, args, kwargs)
 
     @final
     def emit_event(self, data: bytes) -> None:

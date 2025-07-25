@@ -81,7 +81,7 @@ class CallerBlueprint(Blueprint):
         self.syscall.call_public_method(
             self.other_id,
             'grant_all_to_other',
-            actions=[],
+            [],  # actions
             contract_id=self.syscall.get_contract_id(),
             token_uid=token_uid,
         )
@@ -98,7 +98,7 @@ class CallerBlueprint(Blueprint):
         self.syscall.call_public_method(
             self.other_id,
             'revoke_all_from_other',
-            actions=[],
+            [],  # actions
             contract_id=self.syscall.get_contract_id(),
             token_uid=token_uid,
         )

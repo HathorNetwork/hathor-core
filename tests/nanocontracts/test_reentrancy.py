@@ -40,7 +40,7 @@ class MyBlueprint(Blueprint):
         actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)]
         # This contract is vulnerable to reentrancy attack because it is transfering before reducing the balance.
         # Another issue is that it doesn't assert self.balances[address] >= 0.
-        self.syscall.call_public_method(contract, method, actions=actions)
+        self.syscall.call_public_method(contract, method, actions)
         self.balances[address] -= amount
 
     @public
@@ -53,7 +53,7 @@ class MyBlueprint(Blueprint):
         # This contract is not vulnerable to reentrancy attack. The only difference relies on the moment the balance is
         # updated.
         self.balances[address] -= amount
-        self.syscall.call_public_method(contract, method, actions=actions)
+        self.syscall.call_public_method(contract, method, actions)
 
 
 class AttackerBlueprint(Blueprint):
@@ -73,7 +73,7 @@ class AttackerBlueprint(Blueprint):
         self.amount = Amount(action.amount)
 
         actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=self.amount)]
-        self.syscall.call_public_method(target, 'deposit', actions=actions)
+        self.syscall.call_public_method(target, 'deposit', actions)
 
     @public(allow_deposit=True)
     def nop(self, ctx: Context) -> None:
@@ -95,7 +95,7 @@ class AttackerBlueprint(Blueprint):
         self.syscall.call_public_method(
             self.target,
             method,
-            actions=[],
+            [],  # actions
             amount=self.amount,
             contract=self.syscall.get_contract_id(),
             method='attack',

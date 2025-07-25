@@ -35,7 +35,7 @@ class AttackerBlueprint(Blueprint):
     @public
     def attack(self, ctx: Context) -> None:
         self.syscall.rng.random = lambda: 0.75  # type: ignore[method-assign]
-        self.syscall.call_public_method(self.target, 'nop', actions=[])
+        self.syscall.call_public_method(self.target, 'nop', [])
 
 
 class NCConsensusTestCase(SimulatorTestCase):
