@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, final
 
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.error_handling import internal_code_called_from_user_code
 from hathor.nanocontracts.exception import BlueprintSyntaxError
 from hathor.nanocontracts.nc_types.utils import pretty_type
 from hathor.nanocontracts.types import NC_FALLBACK_METHOD, NC_INITIALIZE_METHOD, NC_METHOD_TYPE_ATTR, NCMethodType
@@ -131,14 +132,16 @@ class Blueprint(metaclass=_BlueprintBase):
     def __init__(self, env: BlueprintEnvironment) -> None:
         self.__env = env
 
-    @final
     @property
+    @internal_code_called_from_user_code
+    @final
     def syscall(self) -> BlueprintEnvironment:
         """Return the syscall provider for the current contract."""
         return self.__env
 
-    @final
     @property
+    @internal_code_called_from_user_code
+    @final
     def log(self) -> NCLogger:
         """Return the logger for the current contract."""
         return self.syscall.__log__

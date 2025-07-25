@@ -298,7 +298,7 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
         def fail(self, ctx: Context) -> None:
             # This will not be emitted because the tx will fail.
             self.syscall.emit_event(b'test event on fail')
-            raise NCFail
+            raise NCFail  # skip-raise-nc-user-exception
 
         @public
         def call_another(self, ctx: Context, contract_id: ContractId) -> None:
