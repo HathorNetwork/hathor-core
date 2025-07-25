@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.63.1"
+version = "0.64.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -23,7 +23,6 @@ homepage = "https://hathor.network/"
 repository = "https://github.com/HathorNetwork/hathor-core/"
 # https://pypi.org/classifiers/
 classifiers = [
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
@@ -35,7 +34,7 @@ exclude = ["tests", "tests.*"]
 [tool.poetry.scripts]
 hathor-cli = 'hathor.cli.main:main'
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 flake8 = "~7.1.1"
 isort = {version = "~5.13.2", extras = ["colors"]}
 mypy = {version = "^1.10.1", markers = "implementation_name == 'cpython'"}
@@ -51,7 +50,7 @@ types-pyopenssl = "=22.1.0.2"
 types-pyyaml = "=6.0.12.9"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<4"
+python = ">=3.11,<4"
 twisted = "~24.7.0"
 autobahn = "~24.4.2"
 base58 = "~2.1.1"
@@ -75,7 +74,7 @@ idna = "~3.4"
 setproctitle = "^1.3.3"
 sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
-hathorlib = "^0.6.1"
+hathorlib = "^0.11.0"
 pydantic = "~1.10.17"
 pyyaml = "^6.0.1"
 typing-extensions = "~4.12.2"
@@ -176,6 +175,7 @@ addopts = "-n auto"
 markers = [
     "slow",
 ]
+norecursedirs = ["tests/nanocontracts/test_blueprints"]
 
 [build-system]
 requires = ["poetry-core >= 1.3.2", "cython < 0.30"]

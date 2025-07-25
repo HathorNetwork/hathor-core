@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Callable, Generator, NamedTuple, Optional
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
-from twisted.internet.task import LoopingCall, deferLater
+from twisted.internet.task import LoopingCall
 
 from hathor.conf.settings import HathorSettings
 from hathor.exception import InvalidNewTransaction
@@ -171,8 +171,9 @@ class NodeBlockSync(SyncAgent):
         # Maximum running time to consider a sync stale.
         self.max_running_time: int = 30 * 60  # seconds
 
-        # Whether we propagate transactions or not
-        self._is_relaying = False
+        # Whether vertex relay is enabled or not.
+        self._outbound_relay_enabled = False  # from us to the peer
+        self._inbound_relay_enabled = False   # from the peer to us
 
         # Whether to sync with this peer
         self._is_enabled: bool = False
@@ -224,7 +225,7 @@ class NodeBlockSync(SyncAgent):
         # blocks as priorities to help miners get the blocks as fast as we can
         # We decided not to implement this right now because we already have some producers
         # being used in the sync algorithm and the code was becoming a bit too complex
-        if self._is_relaying:
+        if self._outbound_relay_enabled:
             self.send_data(tx)
 
     def is_started(self) -> bool:
@@ -515,6 +516,7 @@ class NodeBlockSync(SyncAgent):
         """ Send a RELAY message.
         """
         self.log.debug('send_relay', enable=enable)
+        self._inbound_relay_enabled = enable
         self.send_message(ProtocolMessages.RELAY, json.dumps(enable))
 
     def handle_relay(self, payload: str) -> None:
@@ -522,11 +524,11 @@ class NodeBlockSync(SyncAgent):
         """
         if not payload:
             # XXX: "legacy" nothing means enable
-            self._is_relaying = True
+            self._outbound_relay_enabled = True
         else:
             val = json.loads(payload)
             if isinstance(val, bool):
-                self._is_relaying = val
+                self._outbound_relay_enabled = val
             else:
                 self.protocol.send_error_and_close_connection('RELAY: invalid value')
                 return
@@ -613,17 +615,11 @@ class NodeBlockSync(SyncAgent):
         return lo
 
     @inlineCallbacks
-    def on_block_complete(self, blk: Block, vertex_list: list[BaseTransaction]) -> Generator[Any, Any, None]:
+    def on_block_complete(self, blk: Block, vertex_list: list[Transaction]) -> Generator[Any, Any, None]:
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
-            for tx in vertex_list:
-                if not self.tx_storage.transaction_exists(tx.hash):
-                    self.vertex_handler.on_new_vertex(tx, fails_silently=False)
-                yield deferLater(self.reactor, 0, lambda: None)
-
-            if not self.tx_storage.transaction_exists(blk.hash):
-                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
+            yield self.vertex_handler.on_new_block(blk, deps=vertex_list)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')
 
@@ -1038,6 +1034,7 @@ class NodeBlockSync(SyncAgent):
         tx.storage = self.tx_storage
 
         assert self._tx_streaming_client is not None
+        assert isinstance(tx, Transaction)
         self._tx_streaming_client.handle_transaction(tx)
 
     @inlineCallbacks
@@ -1128,6 +1125,12 @@ class NodeBlockSync(SyncAgent):
     def handle_data(self, payload: str) -> None:
         """ Handle a DATA message.
         """
+        if not self._inbound_relay_enabled:
+            # Unsolicited vertex.
+            # Should we have a grace period when incoming relay is disabled? Is the decay mechanism enough?
+            self.protocol.increase_misbehavior_score(weight=1)
+            return
+
         if not payload:
             return
         part1, _, part2 = payload.partition(' ')
@@ -1166,17 +1169,18 @@ class NodeBlockSync(SyncAgent):
             # XXX: maybe we could add a hash blacklist and punish peers propagating known bad txs
             self.tx_storage.compare_bytes_with_local_tx(tx)
             return
-        else:
-            # If we have not requested the data, it is a new transaction being propagated
-            # in the network, thus, we propagate it as well.
-            if self.tx_storage.can_validate_full(tx):
-                self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
-                try:
-                    success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
-                    if success:
-                        self.protocol.connections.send_tx_to_peers(tx)
-                except InvalidNewTransaction:
-                    self.protocol.send_error_and_close_connection('invalid vertex received')
-            else:
-                self.log.debug('skipping tx received in real time from peer',
-                               tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+
+        # Unsolicited vertices must be fully validated.
+        if not self.tx_storage.can_validate_full(tx):
+            self.log.debug('skipping tx received in real time from peer',
+                           tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+            return
+
+        # Finally, it is either an unsolicited new transaction or block.
+        self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
+        try:
+            success = self.vertex_handler.on_new_relayed_vertex(tx)
+            if success:
+                self.protocol.connections.send_tx_to_peers(tx)
+        except InvalidNewTransaction:
+            self.protocol.send_error_and_close_connection('invalid vertex received')

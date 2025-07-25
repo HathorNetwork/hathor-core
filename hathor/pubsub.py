@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import defaultdict, deque
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional
@@ -24,6 +26,7 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.utils.zope import verified_cast
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.nc_exec_logs import NCEvent
     from hathor.transaction import BaseTransaction, Block
 
 logger = get_logger()
@@ -138,6 +141,8 @@ class HathorEvents(Enum):
 
     REORG_FINISHED = 'reorg:finished'
 
+    NC_EVENT = 'nc:event'
+
 
 class EventArguments:
     """Simple object for storing event arguments.
@@ -149,6 +154,7 @@ class EventArguments:
     old_best_block: 'Block'
     new_best_block: 'Block'
     common_block: 'Block'
+    nc_event: NCEvent
 
     def __init__(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():

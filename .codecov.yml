@@ -11,7 +11,7 @@ coverage:
     project:
       default:
         # minimum coverage ratio that the commit must meet to be considered a success
-        target: 82%
+        target: 85%
         if_ci_failed: error
         only_pulls: true
 

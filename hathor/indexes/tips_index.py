@@ -18,6 +18,7 @@ from enum import Enum
 from intervaltree import Interval
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
@@ -60,7 +61,8 @@ class TipsIndex(BaseIndex):
     TODO Use an interval tree stored in disk, possibly using a B-tree.
     """
 
-    def __init__(self, *, scope_type: ScopeType):
+    def __init__(self, *, scope_type: ScopeType, settings: HathorSettings) -> None:
+        super().__init__(settings=settings)
         self._scope_type = scope_type
 
     def get_scope(self) -> Scope:

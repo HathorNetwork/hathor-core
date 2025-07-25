@@ -1,6 +1,7 @@
 import base58
 
 from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_public_key_bytes_compressed
+from hathor.exception import InvalidNewTransaction
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
@@ -102,7 +103,8 @@ class MultisigTestCase(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(tx)
         # Transaction is still locked
-        self.assertFalse(self.manager.propagate_tx(tx))
+        with self.assertRaises(InvalidNewTransaction):
+            self.manager.propagate_tx(tx)
 
         self.clock.advance(6)
         tx.timestamp = int(self.clock.seconds())
@@ -116,7 +118,8 @@ class MultisigTestCase(unittest.TestCase):
         tx2 = Transaction.create_from_struct(tx.get_struct())
         tx2.inputs[0].data = p2pkh_input_data
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertFalse(self.manager.propagate_tx(tx2))
+        with self.assertRaises(InvalidNewTransaction):
+            self.manager.propagate_tx(tx2)
 
         # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))

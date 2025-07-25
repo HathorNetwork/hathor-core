@@ -63,14 +63,14 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertNotEqual(tx1.hash, tx3.hash)
         self.assertNotEqual(tx2.hash, tx3.hash)
 
-        self.assertTrue(self.manager1.propagate_tx(tx1, False))
+        self.assertTrue(self.manager1.propagate_tx(tx1))
         self.run_to_completion()
         meta1 = tx1.get_metadata()
         self.assertEqual(meta1.conflict_with, None)
         self.assertEqual(meta1.voided_by, None)
 
         # Propagate a conflicting transaction.
-        self.assertTrue(self.manager1.propagate_tx(tx2, False))
+        self.assertTrue(self.manager1.propagate_tx(tx2))
         self.run_to_completion()
 
         meta1 = tx1.get_metadata(force_reload=True)
@@ -225,7 +225,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         # ---
 
         self.clock.advance(15)
-        self.assertTrue(self.manager1.propagate_tx(tx4, False))
+        self.assertTrue(self.manager1.propagate_tx(tx4))
         self.clock.advance(15)
 
         self.run_to_completion()
@@ -287,7 +287,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         tx7.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx7)
         self.clock.advance(15)
-        self.manager1.propagate_tx(tx7, False)
+        self.manager1.propagate_tx(tx7)
         self.clock.advance(15)
 
         meta1 = tx1.get_metadata(force_reload=True)

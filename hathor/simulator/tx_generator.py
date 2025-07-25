@@ -94,7 +94,7 @@ class RandomTransactionGenerator:
         """ Schedule the generation of a new transaction.
         """
         if self.tx:
-            ret = self.manager.propagate_tx(self.tx, fails_silently=False)
+            ret = self.manager.propagate_tx(self.tx)
             assert ret is True
             self.transactions_found += 1
             self.latest_transactions.appendleft(self.tx.hash)

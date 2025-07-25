@@ -1,10 +1,10 @@
-# before changing these variables, make sure the tag $PYTHON-alpine$ALPINE exists first
+# before changing these variables, make sure the tag $PYTHON-slim-$DEBIAN exists first
 # list of valid tags hese: https://hub.docker.com/_/python
-ARG PYTHON=3.11
+ARG PYTHON=3.12
 ARG DEBIAN=bullseye
 
 # stage-0: copy pyproject.toml/poetry.lock and install the production set of dependencies
-FROM python:$PYTHON-slim-$DEBIAN as stage-0
+FROM python:$PYTHON-slim-$DEBIAN AS stage-0
 ARG PYTHON
 # install runtime first deps to speedup the dev deps and because layers will be reused on stage-1
 RUN apt-get -qy update

@@ -21,7 +21,6 @@ from hathor.stratum import (
     StratumFactory,
 )
 from hathor.transaction.block import Block
-from hathor.transaction.storage import TransactionMemoryStorage
 from tests import unittest
 
 
@@ -227,13 +226,13 @@ class StratumJobTest(_BaseStratumTest):
 class StratumClientTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        storage = TransactionMemoryStorage(settings=self._settings)
+        storage = self.create_tx_storage()
         self.block = storage.get_transaction(self._settings.GENESIS_BLOCK_HASH)
         self.transport = StringTransportWithDisconnection()
         self.protocol = StratumClient(reactor=self.clock)
         self.protocol.makeConnection(self.transport)
         self.job_request_params = {
-            'data': self.block.get_header_without_nonce().hex(),
+            'data': self.block.get_mining_header_without_nonce().hex(),
             'job_id': 'a734d03fe4b64739be2894742f3de20f',
             'nonce_size': Block.SERIALIZATION_NONCE_SIZE,
             'weight': self.block.weight,

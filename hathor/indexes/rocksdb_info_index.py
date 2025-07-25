@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.memory_info_index import MemoryInfoIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.transaction import BaseTransaction
@@ -37,10 +38,10 @@ _DB_LATEST_TIMESTAMP = b'latest_ts'
 
 
 class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
-    def __init__(self, db: 'rocksdb.DB', *, cf_name: Optional[bytes] = None) -> None:
+    def __init__(self, db: 'rocksdb.DB', *, settings: HathorSettings, cf_name: Optional[bytes] = None) -> None:
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
-        MemoryInfoIndex.__init__(self)
+        MemoryInfoIndex.__init__(self, settings=settings)
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         self._load_all_values()

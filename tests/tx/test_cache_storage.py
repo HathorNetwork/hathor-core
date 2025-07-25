@@ -13,7 +13,6 @@ class CacheStorageTest(unittest.TestCase):
         super().setUp()
 
         builder = self.get_builder() \
-            .use_memory() \
             .use_tx_storage_cache(capacity=5) \
             .set_wallet(self._create_test_wallet(unlocked=True))
         self.manager = self.create_peer_from_builder(builder)

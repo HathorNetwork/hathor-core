@@ -132,7 +132,7 @@ class SysctlInitTest(unittest.TestCase):
         run_node = CustomRunNode(argv=[
             '--sysctl', 'tcp:8181',
             '--sysctl-init-file', sysctl_init_file_path,  # relative to src/hathor
-            '--memory-storage',
+            '--temp-data',
         ])
         self.assertTrue(run_node is not None)
         conn = run_node.manager.connections
@@ -192,7 +192,7 @@ class SysctlInitTest(unittest.TestCase):
         run_node = CustomRunNode(argv=[
             '--sysctl', 'tcp:8181',
             '--sysctl-init-file', sysctl_init_file_path,  # relative to src/hathor
-            '--memory-storage',
+            '--temp-data',
         ])
         self.assertTrue(run_node is not None)
         conn = run_node.manager.connections

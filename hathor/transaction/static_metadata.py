@@ -101,7 +101,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
             height=height,
             min_height=min_height,
             feature_activation_bit_counts=feature_activation_bit_counts,
-            feature_states={},  # This will be populated in a future PR
+            feature_states={},  # This will be populated in a future PR, it's currently still in normal metadata
         )
 
     @staticmethod

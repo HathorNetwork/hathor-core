@@ -80,7 +80,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
-        manager1.propagate_tx(initial, fails_silently=False)
+        manager1.propagate_tx(initial)
         self.graphviz.labels[initial.hash] = 'initial'
 
         x = initial
@@ -116,7 +116,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
-        manager1.propagate_tx(initial, fails_silently=False)
+        manager1.propagate_tx(initial)
         self.graphviz.labels[not_none(initial.hash)] = 'initial'
 
         x = initial

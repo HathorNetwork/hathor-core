@@ -84,7 +84,7 @@ class SoftVoidedTestCase(SimulatorTestCase):
         blk1.timestamp = txD1.timestamp + 1
         blk1.nonce = self.rng.getrandbits(32)
         blk1.update_hash()
-        self.assertTrue(manager2.propagate_tx(blk1, fails_silently=False))
+        self.assertTrue(manager2.propagate_tx(blk1))
         blk1meta = blk1.get_metadata()
         self.assertIsNone(blk1meta.voided_by)
         graphviz.labels[blk1.hash] = 'blk1'
@@ -97,7 +97,7 @@ class SoftVoidedTestCase(SimulatorTestCase):
             txC.parents[1] = txD1.hash
         txC.weight = 25
         txC.update_hash()
-        manager2.propagate_tx(txC, fails_silently=False)
+        manager2.propagate_tx(txC)
         metaC = txC.get_metadata()
         self.assertIsNone(metaC.voided_by)
         graphviz.labels[txC.hash] = 'txC'
@@ -105,7 +105,7 @@ class SoftVoidedTestCase(SimulatorTestCase):
         txD2 = gen_custom_tx(manager2, [(txB, 0)])
         txD2.timestamp = txD1.timestamp + 2
         txD2.update_hash()
-        manager2.propagate_tx(txD2, fails_silently=False)
+        manager2.propagate_tx(txD2)
         graphviz.labels[txD2.hash] = 'txD2'
 
         blk1meta = blk1.get_metadata()
