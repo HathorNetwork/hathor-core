@@ -816,11 +816,13 @@ class HathorManager:
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
-        :param tx: transaction to be added
+        :param vertex: transaction to be added
         :param quiet: if True will not log when a new tx is accepted
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        success = self.vertex_handler.on_new_relayed_vertex(vertex, reject_locked_reward=reject_locked_reward)
+        success = self.vertex_handler.on_new_relayed_vertex(vertex,
+                                                            reject_locked_reward=reject_locked_reward,
+                                                            quiet=quiet)
 
         if propagate_to_peers and success:
             self.connections.send_tx_to_peers(vertex)

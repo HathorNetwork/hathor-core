@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
 from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
@@ -29,6 +28,7 @@ from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
+from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
@@ -43,29 +43,12 @@ _FUNDS_FORMAT_STRING = '!BBBBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
-@dataclass(slots=True, kw_only=True)
-class TokenInfo:
-    amount: int
-    can_mint: bool
-    can_melt: bool
-
-    @staticmethod
-    def get_default() -> TokenInfo:
-        """Create a default, emtpy token info."""
-        return TokenInfo(
-            amount=0,
-            can_mint=False,
-            can_melt=False,
-        )
-
-
 class RewardLockedInfo(NamedTuple):
     block_hash: VertexId
     blocks_needed: int
 
 
 class Transaction(GenericVertex[TransactionStaticMetadata]):
-
     __slots__ = ['tokens', '_sighash_cache', '_sighash_data_cache']
 
     SERIALIZATION_NONCE_SIZE = 4
@@ -161,6 +144,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         :param buf: Bytes of a serialized transaction
         :type buf: bytes
+
+        :param verbose: Verbose callback
+        :type verbose: VerboseCallback
 
         :return: A buffer containing the remaining struct bytes
         :rtype: bytes
@@ -357,33 +343,43 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
-        token_dict: dict[TokenUid, TokenInfo] = {}
-
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo.get_default()
+        token_dict: dict[TokenUid, TokenInfo] = {
+            self._settings.HATHOR_TOKEN_UID: TokenInfo.get_htr_default()
+        }
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            token_info = token_dict.get(token_uid, TokenInfo.get_default())
-            amount = token_info.amount
-            can_mint = token_info.can_mint
-            can_melt = token_info.can_melt
-            if spent_output.is_token_authority():
-                can_mint = can_mint or spent_output.can_mint_token()
-                can_melt = can_melt or spent_output.can_melt_token()
+            token_version: TokenVersion
+
+            if token_uid == self._settings.HATHOR_TOKEN_UID:
+                token_version = TokenVersion.NATIVE
             else:
-                amount -= spent_output.value
-            token_dict[token_uid] = TokenInfo(
-                amount=amount,
-                can_mint=can_mint,
-                can_melt=can_melt,
+                from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+                assert self.storage is not None
+                try:
+                    token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
+                    token_version = token_creation_tx.token_version
+                except TransactionDoesNotExist:
+                    raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
+
+            token_info = token_dict.get(
+                token_uid,
+                TokenInfo.get_default(version=token_version)
             )
 
+            if spent_output.is_token_authority():
+                token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()
+                token_info.can_melt = token_info.can_melt or spent_output.can_melt_token()
+            else:
+                token_info.amount -= spent_output.value
+
+            token_dict[token_uid] = token_info
         return token_dict
 
     def _update_token_info_from_outputs(self, *, token_dict: dict[TokenUid, TokenInfo]) -> None:
@@ -412,7 +408,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                     raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
             else:
                 # for regular outputs, just subtract from the total amount
-                token_dict[token_uid].amount = token_info.amount + tx_output.value
+                token_info.amount += tx_output.value
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent
@@ -442,6 +438,55 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             if meta.voided_by:
                 return True
         return False
+
+    def get_spent_output(self, tx_input: TxInput) -> tuple[TxOutput, TokenUid]:
+        """
+        Retrieves the output spent by a given input, along with its associated token UID.
+
+        Args:
+            tx_input (TxInput): The transaction input referencing the spent output.
+
+        Returns:
+            tuple[TxOutput, TokenUid]: A tuple containing the spent TxOutput and its corresponding TokenUid.
+        """
+        spent_tx = self.get_spent_tx(tx_input)
+        spent_output = spent_tx.outputs[tx_input.index]
+        token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+        return spent_output, token_uid
+
+    def get_spent_outputs_grouped_by_token_uid(self) -> dict[TokenUid, list[TxOutput]]:
+        """
+        Groups all spent outputs by their associated token UID.
+
+        Iterates over the transaction's inputs, retrieves the spent outputs, and
+        organizes them into a dictionary grouped by TokenUid.
+
+        Returns:
+            dict[TokenUid, list[TxOutput]]: A dictionary where each key is a TokenUid
+            and the value is a list of TxOutputs associated with that token.
+        """
+        outputs_dict: dict[TokenUid, list[TxOutput]] = {}
+        for tx_input in self.inputs:
+            spent_output, token_uid = self.get_spent_output(tx_input)
+            outputs_dict.setdefault(token_uid, []).append(spent_output)
+        return outputs_dict
+
+    def get_outputs_grouped_by_token_uid(self) -> dict[TokenUid, list[TxOutput]]:
+        """
+        Groups the current transaction's outputs by their associated token UID.
+
+        Iterates over the transaction's outputs and organizes them into a dictionary
+        where each entry represents a token and its corresponding outputs.
+
+        Returns:
+            dict[TokenUid, list[TxOutput]]: A dictionary mapping each TokenUid to a
+            list of TxOutputs that belong to that token.
+        """
+        outputs_dict: dict[TokenUid, list[TxOutput]] = {}
+        for tx_output in self.outputs:
+            token_uid = self.get_token_uid(tx_output.get_token_index())
+            outputs_dict.setdefault(token_uid, []).append(tx_output)
+        return outputs_dict
 
     @override
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:

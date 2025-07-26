@@ -10,7 +10,7 @@ from hathor.nanocontracts.types import ContractId, NCWithdrawalAction, TokenUid,
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.transaction.token_creation_tx import TokenDescription
+from hathor.transaction.token_info import TokenDescription
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.utils import assert_nc_failure_reason

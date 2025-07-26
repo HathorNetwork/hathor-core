@@ -270,7 +270,12 @@ class IndexesManager(ABC):
                             from hathor.nanocontracts.runner.types import SyscallRecordType
                             assert syscall.type is SyscallRecordType.CREATE_TOKEN, syscall.type
                             assert syscall.token_name is not None and syscall.token_symbol is not None
-                            self.tokens.create_token_info(syscall.token_uid, syscall.token_name, syscall.token_symbol)
+                            assert syscall.token_version is not None
+
+                            self.tokens.create_token_info(syscall.token_uid,
+                                                          syscall.token_name,
+                                                          syscall.token_symbol,
+                                                          syscall.token_version)
 
                         self.tokens.add_to_total(syscall.token_uid, syscall.token_amount)
                         self.tokens.add_to_total(HATHOR_TOKEN_UID, syscall.htr_amount)

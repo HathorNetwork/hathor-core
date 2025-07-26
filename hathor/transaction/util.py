@@ -21,6 +21,7 @@ from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.transaction.exceptions import InvalidOutputValue, TransactionDataError
+from hathor.transaction.token_info import TokenVersion, is_valid_token_version
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -55,11 +56,11 @@ def unpack_len(n: int, buf: bytes | memoryview) -> tuple[bytes, bytes | memoryvi
     return ret, buf[n:]
 
 
-def get_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
+def get_deposit_token_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
     return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
 
 
-def get_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
+def get_deposit_token_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 
@@ -103,7 +104,10 @@ def output_value_to_bytes(number: int) -> bytes:
     return bytes(serializer.finalize())
 
 
-def validate_token_name_and_symbol(settings: HathorSettings, token_name: str, token_symbol: str) -> None:
+def validate_token_info(settings: HathorSettings,
+                        token_name: str,
+                        token_symbol: str,
+                        token_version: TokenVersion) -> None:
     """Validate token_name and token_symbol before creating a new token."""
     name_len = len(token_name)
     symbol_len = len(token_symbol)
@@ -112,8 +116,10 @@ def validate_token_name_and_symbol(settings: HathorSettings, token_name: str, to
     if symbol_len == 0 or symbol_len > settings.MAX_LENGTH_TOKEN_SYMBOL:
         raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
 
-    # Can't create token with hathor name or symbol
+    # Can't create token with hathor name or symbol and version None
     if clean_token_string(token_name) == clean_token_string(settings.HATHOR_TOKEN_NAME):
         raise TransactionDataError('Invalid token name ({})'.format(token_name))
     if clean_token_string(token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
         raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))
+    if token_version is TokenVersion.NATIVE or not is_valid_token_version(token_version):
+        raise TransactionDataError('Invalid token version ({})'.format(token_version))
