@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Sequence, TypeVar
+from __future__ import annotations
+
+from typing import Any, Sequence, TypeVar
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
 
@@ -21,11 +23,21 @@ from hathor.difficulty import Hash
 T = TypeVar('T')
 
 
-class NanoRNG:
+class NoMethodOverrideMeta(type):
+    __slots__ = ()
+
+    def __setattr__(cls, name: str, value: Any) -> None:
+        raise AttributeError(f'Cannot override method `{name}`')
+
+
+class NanoRNG(metaclass=NoMethodOverrideMeta):
     """Implement a deterministic random number generator that will be used by the sorter.
 
     This implementation uses the ChaCha20 encryption as RNG.
     """
+
+    __slots__ = ('__seed', '__encryptor')
+
     def __init__(self, seed: bytes) -> None:
         self.__seed = Hash(seed)
 
@@ -36,17 +48,39 @@ class NanoRNG:
         cipher = Cipher(algorithm, mode=None)
         self.__encryptor = cipher.encryptor()
 
+    @classmethod
+    def create_with_shell(cls, seed: bytes) -> NanoRNG:
+        """Create a NanoRNG instance wrapped in a lightweight shell subclass.
+
+        This method dynamically creates a subclass of NanoRNG (a "shell" class) and instantiates it. The shell class is
+        useful to prevent sharing classes and objects among different contracts.
+        """
+        class ShellNanoRNG(NanoRNG):
+            pass
+        return ShellNanoRNG(seed=seed)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if callable(value):
+            raise AttributeError("Cannot assign methods to this object.")
+        super().__setattr__(name, value)
+
     @property
     def seed(self) -> Hash:
         """Return the seed used to create the RNG."""
         return self.__seed
 
+    def randbytes(self, size: int) -> bytes:
+        """Return a random string of bytes."""
+        assert size >= 1
+        ciphertext = self.__encryptor.update(b'\0' * size)
+        assert len(ciphertext) == size
+        return ciphertext
+
     def randbits(self, bits: int) -> int:
         """Return a random integer in the range [0, 2**bits)."""
-        # Generate 64-bit random string of bytes.
         assert bits >= 1
         size = (bits + 7) // 8
-        ciphertext = self.__encryptor.update(b'\0' * size)
+        ciphertext = self.randbytes(size)
         x = int.from_bytes(ciphertext, byteorder='little', signed=False)
         return x % (2**bits)
 
