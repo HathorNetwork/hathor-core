@@ -137,6 +137,11 @@ class NCForbiddenAction(NCFail):
     pass
 
 
+class NCForbiddenReentrancy(NCFail):
+    """Raised when a reentrancy is forbidden on a method."""
+    pass
+
+
 class UnknownFieldType(NCError):
     """Raised when there is no field available for a given type."""
     pass
