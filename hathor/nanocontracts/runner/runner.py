@@ -581,7 +581,7 @@ class Runner:
             # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
             # impact the original context. Since the runner relies on the context for other critical checks, any
             # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, ctx.copy(), *args)
+            ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
         except NCFail:
             raise
         except Exception as e:
@@ -712,7 +712,7 @@ class Runner:
         )
         self._call_info.pre_call(call_record)
 
-        ret = self._metered_executor.call(method, *args)
+        ret = self._metered_executor.call(method, args=args)
 
         if not changes_tracker.is_empty():
             raise NCViewMethodError('view methods cannot change the state')

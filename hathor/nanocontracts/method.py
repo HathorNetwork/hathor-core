@@ -306,7 +306,13 @@ class Method:
                 raise NCFail(f"{self.name}() got multiple values for argument '{name}'")
             merged[name] = arg
 
-        return _serialize_map_exception(self.args, tuple(merged.values()))
+        ordered_args = []
+        for name in self.arg_names:
+            if name not in merged:
+                raise NCFail(f"{self.name}() missing required argument: '{name}'")
+            ordered_args.append(merged[name])
+
+        return _serialize_map_exception(self.args, tuple(ordered_args))
 
     def deserialize_args_bytes(self, data: bytes) -> tuple[Any, ...]:
         """ Shortcut to deserialize args directly from bytes instead of using a deserializer.
