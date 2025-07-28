@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import re
+
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
@@ -53,10 +55,8 @@ class TestExecutionVerification(BlueprintTestCase):
             self.runner.call_public_method(self.contract_id, 'not_found', self.create_context())
 
     def test_empty_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(NCFail, match=re.escape("initialize() missing required argument: 'a'")):
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
-        assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == 'too few arguments'
 
     def test_too_many_args(self) -> None:
         with pytest.raises(NCFail, match='too many arguments'):
