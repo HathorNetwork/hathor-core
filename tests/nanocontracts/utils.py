@@ -1,12 +1,20 @@
+from typing import Any
+
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
+from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
+from hathor.nanocontracts.utils import sign_pycoin
 from hathor.reactor import ReactorProtocol
+from hathor.transaction import Transaction
+from hathor.transaction.headers.nano_header import NanoHeader, NanoHeaderAction
 from hathor.transaction.storage import TransactionStorage
 from hathor.types import VertexId
 from hathor.util import not_none
+from hathor.wallet import HDWallet
 
 
 class TestRunner(Runner):
@@ -54,3 +62,39 @@ def assert_nc_failure_reason(*, manager: HathorManager, tx_id: VertexId, block_i
         f'found:\n\n'
         f'{failure_entry.error_traceback}'
     )
+
+
+def set_nano_header(
+    *,
+    tx: Transaction,
+    wallet: HDWallet,
+    nc_id: VertexId,
+    nc_actions: list[NanoHeaderAction] | None = None,
+    nc_method: str | None = None,
+    nc_args: tuple[Any, ...] | None = None,
+    blueprint: type[Blueprint] | None = None,
+    seqnum: int = 1,
+) -> None:
+    """Configure a nano header for a tx."""
+    assert len(tx.headers) == 0
+    privkey = wallet.get_key_at_index(0)
+
+    nc_args_bytes = b'\x00'
+    if nc_args is not None:
+        assert nc_method is not None
+        method_parser = Method.from_callable(getattr(blueprint, nc_method))
+        nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
+
+    nano_header = NanoHeader(
+        tx=tx,
+        nc_seqnum=seqnum,
+        nc_id=nc_id,
+        nc_method=nc_method if nc_method is not None else 'nop',
+        nc_args_bytes=nc_args_bytes,
+        nc_address=b'',
+        nc_script=b'',
+        nc_actions=nc_actions if nc_actions is not None else [],
+    )
+
+    sign_pycoin(nano_header, privkey)
+    tx.headers.append(nano_header)

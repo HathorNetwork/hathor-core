@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
 
 if TYPE_CHECKING:
-    from hathor.nanocontracts.runner.types import CallRecord, NCSyscallRecord
+    from hathor.nanocontracts.runner.types import CallRecord, NCIndexUpdateRecord
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -27,7 +27,7 @@ class MetaNCCallRecord:
     blueprint_id: bytes
     contract_id: bytes
     method_name: str
-    index_updates: list[NCSyscallRecord]
+    index_updates: list[NCIndexUpdateRecord]
 
     def to_json(self) -> dict[str, Any]:
         """Convert this record to a json dict."""
@@ -41,12 +41,12 @@ class MetaNCCallRecord:
     @classmethod
     def from_json(cls, json_dict: dict[str, Any]) -> Self:
         """Create an instance from a json dict."""
-        from hathor.nanocontracts.runner.types import nc_syscall_record_from_json
+        from hathor.nanocontracts.runner.types import nc_index_update_record_from_json
         return cls(
             blueprint_id=bytes.fromhex(json_dict['blueprint_id']),
             contract_id=bytes.fromhex(json_dict['contract_id']),
             method_name=json_dict['method_name'],
-            index_updates=[nc_syscall_record_from_json(syscall) for syscall in json_dict['index_updates']]
+            index_updates=[nc_index_update_record_from_json(syscall) for syscall in json_dict['index_updates']]
         )
 
     @classmethod

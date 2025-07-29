@@ -218,9 +218,10 @@ class IndexesManager(ABC):
         """
         from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
-            NCSyscallRecord,
+            NCIndexUpdateRecord,
             SyscallCreateContractRecord,
             SyscallUpdateTokensRecord,
+            UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import ContractId
         from hathor.transaction.nc_execution_state import NCExecutionState
@@ -230,7 +231,7 @@ class IndexesManager(ABC):
         assert meta.nc_execution is NCExecutionState.SUCCESS
         assert meta.nc_calls
         first_call = meta.nc_calls[0]
-        nc_syscalls: list[NCSyscallRecord] = []
+        index_records: list[NCIndexUpdateRecord] = []
 
         # Add to indexes.
         for call in meta.nc_calls:
@@ -238,12 +239,12 @@ class IndexesManager(ABC):
             if self.nc_history:
                 self.nc_history.add_single_key(call.contract_id, tx)
 
-            # Accumulate all syscalls.
-            nc_syscalls.extend(call.index_updates)
+            # Accumulate all index update records.
+            index_records.extend(call.index_updates)
 
         created_contracts: set[ContractId] = set()
-        for syscall in nc_syscalls:
-            match syscall:
+        for record in index_records:
+            match record:
                 case SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
                     assert contract_id not in created_contracts, f'contract {contract_id.hex()} created multiple times'
                     assert contract_id != first_call.contract_id, (
@@ -264,19 +265,27 @@ class IndexesManager(ABC):
                     # and the respective destroyed/created HTR too.
                     if self.tokens:
                         try:
-                            self.tokens.get_token_info(syscall.token_uid)
+                            self.tokens.get_token_info(record.token_uid)
                         except KeyError:
                             # If the token doesn't exist in the index yet, it must be a token creation syscall.
-                            from hathor.nanocontracts.runner.types import SyscallRecordType
-                            assert syscall.type is SyscallRecordType.CREATE_TOKEN, syscall.type
-                            assert syscall.token_name is not None and syscall.token_symbol is not None
-                            self.tokens.create_token_info(syscall.token_uid, syscall.token_name, syscall.token_symbol)
+                            from hathor.nanocontracts.runner.types import IndexUpdateRecordType
+                            assert record.type is IndexUpdateRecordType.CREATE_TOKEN, record.type
+                            assert record.token_name is not None and record.token_symbol is not None
+                            self.tokens.create_token_info_from_contract(
+                                token_uid=record.token_uid,
+                                name=record.token_name,
+                                symbol=record.token_symbol,
+                            )
 
-                        self.tokens.add_to_total(syscall.token_uid, syscall.token_amount)
-                        self.tokens.add_to_total(HATHOR_TOKEN_UID, syscall.htr_amount)
+                        self.tokens.add_to_total(record.token_uid, record.token_amount)
+                        self.tokens.add_to_total(HATHOR_TOKEN_UID, record.htr_amount)
+
+                case UpdateAuthoritiesRecord():
+                    if self.tokens:
+                        self.tokens.update_authorities_from_contract(record)
 
                 case _:
-                    assert_never(syscall)
+                    assert_never(record)
 
     def handle_contract_unexecution(self, tx: BaseTransaction) -> None:
         """
@@ -285,9 +294,10 @@ class IndexesManager(ABC):
         """
         from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
-            NCSyscallRecord,
+            NCIndexUpdateRecord,
             SyscallCreateContractRecord,
             SyscallUpdateTokensRecord,
+            UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import NC_INITIALIZE_METHOD, ContractId
 
@@ -296,7 +306,7 @@ class IndexesManager(ABC):
         assert meta.nc_execution is NCExecutionState.SUCCESS
         assert meta.nc_calls
         first_call = meta.nc_calls[0]
-        nc_syscalls: list[NCSyscallRecord] = []
+        records: list[NCIndexUpdateRecord] = []
 
         # Remove from indexes, but we must keep the first call's contract still in the indexes.
         for call in meta.nc_calls:
@@ -305,11 +315,11 @@ class IndexesManager(ABC):
                 self.nc_history.remove_single_key(call.contract_id, tx)
 
             # Accumulate all syscalls.
-            nc_syscalls.extend(call.index_updates)
+            records.extend(call.index_updates)
 
         created_contracts: set[ContractId] = set()
-        for syscall in nc_syscalls:
-            match syscall:
+        for record in records:
+            match record:
                 case SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
                     assert contract_id not in created_contracts, f'contract {contract_id.hex()} created multiple times'
                     assert contract_id != first_call.contract_id, (
@@ -331,15 +341,19 @@ class IndexesManager(ABC):
                 case SyscallUpdateTokensRecord():
                     # Undo the tokens update.
                     if self.tokens:
-                        self.tokens.add_to_total(syscall.token_uid, -syscall.token_amount)
-                        self.tokens.add_to_total(HATHOR_TOKEN_UID, -syscall.htr_amount)
+                        self.tokens.add_to_total(record.token_uid, -record.token_amount)
+                        self.tokens.add_to_total(HATHOR_TOKEN_UID, -record.htr_amount)
 
-                        from hathor.nanocontracts.runner.types import SyscallRecordType
-                        if syscall.type is SyscallRecordType.CREATE_TOKEN:
-                            self.tokens.destroy_token(syscall.token_uid)
+                        from hathor.nanocontracts.runner.types import IndexUpdateRecordType
+                        if record.type is IndexUpdateRecordType.CREATE_TOKEN:
+                            self.tokens.destroy_token(record.token_uid)
+
+                case UpdateAuthoritiesRecord():
+                    if self.tokens:
+                        self.tokens.update_authorities_from_contract(record, undo=True)
 
                 case _:
-                    assert_never(syscall)
+                    assert_never(record)
 
     def add_tx(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
