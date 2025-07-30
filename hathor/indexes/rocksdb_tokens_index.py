@@ -296,7 +296,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self.log.debug('create_token_info',
                            tx=tx.hash_hex,
                            name=tx.token_name,
-                           symb=tx.token_symbol,
+                           symbol=tx.token_symbol,
                            version=tx.token_version)
             key_info = self._to_key_info(tx.hash)
             token_info = self._db.get((self._cf, key_info))
