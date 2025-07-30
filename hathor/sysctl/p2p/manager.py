@@ -65,7 +65,7 @@ def get_whitelist_msg(wl_object: PeersWhitelist) -> str:
 
     elif wl_object is None:
         return 'none'
-    
+
     else:
         raise SysctlException('Invalid whitelist')
 

@@ -7,12 +7,14 @@ from tests import unittest
 class CapabilitiesTestCase(unittest.TestCase):
     def test_capabilities(self) -> None:
         network = 'testnet'
+        url_1 = "https://whitelist1.com"
+        url_2 = "https://whitelist2.com"
         manager1 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
                                                            self._settings.CAPABILITY_SYNC_VERSION],
-                                    url_whitelist=True)
+                                    url_whitelist=url_1)
         manager2 = self.create_peer(network, capabilities=[self._settings.CAPABILITY_WHITELIST,
                                                            self._settings.CAPABILITY_SYNC_VERSION],
-                                    url_whitelist=True)
+                                    url_whitelist=url_2)
 
         assert manager1.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
         assert manager2.connections.peers_whitelist is not None, 'Peers whitelist should not be None'

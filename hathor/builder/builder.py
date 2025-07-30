@@ -351,6 +351,7 @@ class Builder:
         from hathor.p2p.peers_whitelist import URLPeersWhitelist
         url_peers_whitelist = URLPeersWhitelist(reactor, url, False)
         url_peers_whitelist.follow_wl()
+        # We do not start the URLPeersWhitelist here, as it is started by the ConnectionsManager
         self._peers_whitelist = url_peers_whitelist
         return self
 

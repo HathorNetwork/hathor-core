@@ -17,12 +17,13 @@ class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
         self._settings = get_global_settings()
-
-        manager1 = self.create_peer(network, url_whitelist=True)
+        url_1 = 'https://whitelist1.com'
+        url_2 = 'https://whitelist2.com'
+        manager1 = self.create_peer(network, url_whitelist=url_1)
         manager1.connections.peers_whitelist.follow_wl(True)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-        manager2 = self.create_peer(network, url_whitelist=True)
+        manager2 = self.create_peer(network, url_whitelist=url_2)
         manager2.connections.peers_whitelist.follow_wl(True)
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
@@ -44,13 +45,15 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
+        url_1 = 'https://whitelist1.com'
+        url_2 = 'https://whitelist2.com'
         self._settings = get_global_settings()
-        manager1 = self.create_peer(network, url_whitelist=True)
+        manager1 = self.create_peer(network, url_whitelist=url_1)
         manager1.connections.peers_whitelist.follow_wl()
 
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-        manager2 = self.create_peer(network, url_whitelist=True)
+        manager2 = self.create_peer(network, url_whitelist=url_2)
         # Both follow their respective whitelist, although manager1 is not in manager2's whitelist.
         manager2.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -78,12 +81,13 @@ class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
         self._settings = get_global_settings()
-
-        manager1 = self.create_peer(network, url_whitelist=True)
+        url_1 = 'https://whitelist1.com'
+        url_2 = 'https://whitelist2.com'
+        manager1 = self.create_peer(network, url_whitelist=url_1)
         manager1.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-        manager2 = self.create_peer(network, url_whitelist=True)
+        manager2 = self.create_peer(network, url_whitelist=url_2)
         manager2.connections.peers_whitelist.follow_wl()
         self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
