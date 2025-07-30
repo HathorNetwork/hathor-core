@@ -1,5 +1,7 @@
 from math import floor, sqrt
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
@@ -71,41 +73,38 @@ class NCConsensusTestCase(SimulatorTestCase):
         seed = b'0' * 32
         rng = NanoRNG(seed=seed)
 
-        with self.assertRaises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
             rng.random = lambda self: 2  # type: ignore[method-assign, misc, assignment]
 
-        with self.assertRaises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
             setattr(rng, 'random', lambda self: 2)
 
-        with self.assertRaises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
             from types import MethodType
             rng.random = MethodType(lambda self: 2, rng)  # type: ignore[method-assign]
 
-        with self.assertRaises(AttributeError, match='\'NanoRNG\' object attribute \'random\' is read-only'):
+        with pytest.raises(AttributeError, match='\'NanoRNG\' object attribute \'random\' is read-only'):
             object.__setattr__(rng, 'random', lambda self: 2)
 
-        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='Cannot override method `random`'):
             NanoRNG.random = lambda self: 2  # type: ignore[method-assign]
 
-        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='Cannot override method `random`'):
             setattr(NanoRNG, 'random', lambda self: 2)
 
-        with self.assertRaises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
             object.__setattr__(NanoRNG, 'random', lambda self: 2)
 
-        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='Cannot override method `random`'):
             rng.__class__.random = lambda self: 2  # type: ignore[method-assign]
 
-        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='Cannot override method `random`'):
             setattr(rng.__class__, 'random', lambda self: 2)
 
-        with self.assertRaises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
             object.__setattr__(rng.__class__, 'random', lambda self: 2)
 
-        # mypy incorrectly infers the type of `rng.random` as `Never` (leading to "Never not callable [misc]")
-        # due to the override attempts above, which are expected to fail at runtime but confuse static analysis.
-        # This is a false positive in the test context; use `reveal_type(rng.random)` to inspect the inferred type.
-        assert rng.random() < 1  # type: ignore[misc]
+        assert rng.random() < 1
 
     def test_rng_shell_class(self) -> None:
         seed = b'0' * 32
@@ -114,13 +113,13 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         assert rng1.__class__ != rng2.__class__
 
-        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='Cannot override method `random`'):
             rng1.__class__.random = lambda self: 2  # type: ignore[method-assign]
 
-        with self.assertRaises(AttributeError, match='AttributeError: Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='Cannot override method `random`'):
             setattr(rng1.__class__, 'random', lambda self: 2)
 
-        with self.assertRaises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
             object.__setattr__(rng1.__class__, 'random', lambda self: 2)
 
     def assertGoodnessOfFitTest(self, observed: list[int], expected: list[int]) -> None:
