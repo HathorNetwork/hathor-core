@@ -69,6 +69,18 @@ class MyBlueprint(Blueprint):
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> int:
         return 'abc'  # type: ignore[return-value]
 
+    @public
+    def call_mutate_list(self, ctx: Context, other_id: ContractId) -> None:
+        items = [1, 2, 3]
+        self.syscall.call_public_method(other_id, 'mutate_list', [], items)
+        assert items == [1, 2, 3]
+
+    @public
+    def mutate_list(self, ctx: Context, items: list[int]) -> None:
+        assert items == [1, 2, 3]
+        items.append(4)
+        assert items == [1, 2, 3, 4]
+
 
 class TestTypesAcrossContracts(BlueprintTestCase):
     def setUp(self) -> None:
@@ -152,3 +164,11 @@ class TestTypesAcrossContracts(BlueprintTestCase):
             )
         assert isinstance(e.value.__cause__, TypeError)
         assert e.value.__cause__.args[0] == 'expected integer'
+
+    def test_arg_mutation(self) -> None:
+        self.runner.call_public_method(
+            self.contract_id1,
+            'call_mutate_list',
+            self.create_context(),
+            self.contract_id2,
+        )
