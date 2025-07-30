@@ -22,8 +22,8 @@ from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFai
 from hathor.nanocontracts.exception import NCError, NCInvalidMethodCall
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry
-from hathor.nanocontracts.runner.types import CallType, NCArgs, NCParsedArgs, NCRawArgs
-from hathor.nanocontracts.types import ContractId, NCDepositAction, TokenUid, fallback
+from hathor.nanocontracts.runner.types import CallType
+from hathor.nanocontracts.types import ContractId, NCArgs, NCDepositAction, NCParsedArgs, NCRawArgs, TokenUid, fallback
 from hathor.transaction import Block, Transaction
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -65,6 +65,13 @@ class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def call_another_fallback(self, ctx: Context, contract_id: ContractId) -> Any:
         return self.syscall.call_public_method(contract_id, 'fallback', [])
+
+    @public
+    def call_own_fallback(self, ctx: Context) -> None:
+        # Even though users are not supposed to call the fallback like this, there's no harm and current
+        # code allows it, so I'm adding a test to cover it. We may prohibit it in the future.
+        nc_args = NCParsedArgs(args=(), kwargs=dict(greeting='hello', x=123))
+        self.fallback(ctx, 'unknown', nc_args)
 
 
 class TestFallbackMethod(BlueprintTestCase):
@@ -208,3 +215,6 @@ class TestFallbackMethod(BlueprintTestCase):
             block_id=b11.hash,
             reason='NCFail: unsupported args: 00',
         )
+
+    def test_call_own_fallback(self) -> None:
+        self.runner.call_public_method(self.contract_id, 'call_own_fallback', self.create_context())

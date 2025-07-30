@@ -1,7 +1,6 @@
 from hathor.nanocontracts import Blueprint, Context, fallback, public
 from hathor.nanocontracts.exception import BlueprintDoesNotExist, NCFail, NCInvalidSyscall, NCMethodNotFound
-from hathor.nanocontracts.runner.types import NCArgs
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCArgs
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 

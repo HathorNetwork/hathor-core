@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
-    from hathor.nanocontracts.runner.types import NCArgs
+    from hathor.nanocontracts.types import NCArgs
 
 
 class BlueprintEnvironment:

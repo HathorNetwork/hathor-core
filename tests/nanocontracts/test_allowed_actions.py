@@ -18,11 +18,11 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCForbiddenAction
-from hathor.nanocontracts.runner.types import NCArgs
 from hathor.nanocontracts.types import (
     NCAcquireAuthorityAction,
     NCAction,
     NCActionType,
+    NCArgs,
     NCDepositAction,
     NCGrantAuthorityAction,
     NCWithdrawalAction,

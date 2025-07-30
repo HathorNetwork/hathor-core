@@ -17,8 +17,7 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import NCViewMethodError
-from hathor.nanocontracts.runner.types import NCRawArgs
-from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCRawArgs, TokenUid, VertexId
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
