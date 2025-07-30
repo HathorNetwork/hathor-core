@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
+from hathor.nanocontracts.error_handling import __NCTransactionFail__
 from hathor.p2p.sync_v2.exception import (
     InvalidVertexError,
     StreamingError,
@@ -230,7 +231,7 @@ class TransactionStreamingClient:
 
         try:
             yield self.sync_agent.on_block_complete(blk, vertex_list)
-        except HathorError as e:
+        except (HathorError, __NCTransactionFail__) as e:
             self.fails(InvalidVertexError(repr(e)))
             return False
 

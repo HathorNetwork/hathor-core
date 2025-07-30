@@ -20,7 +20,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Sequence, final
 
 from hathor.crypto.util import get_address_b58_from_bytes
-from hathor.nanocontracts.exception import NCFail, NCInvalidContext
+from hathor.nanocontracts.error_handling import NCInternalException
+from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
 from hathor.transaction.exceptions import TxValidationError
@@ -108,7 +109,7 @@ class Context:
         """Get exactly one action for the provided token, and fail otherwise."""
         actions = self.actions.get(token_uid)
         if actions is None or len(actions) != 1:
-            raise NCFail(f'expected exactly 1 action for token {token_uid.hex()}')
+            raise NCInternalException(f'expected exactly 1 action for token {token_uid.hex()}')
         return actions[0]
 
     def copy(self) -> Context:

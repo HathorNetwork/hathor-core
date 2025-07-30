@@ -125,7 +125,8 @@ class BlockConsensusAlgorithm:
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
         """
-        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, NCFail
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+        from hathor.nanocontracts.error_handling import __NCTransactionFail__
         from hathor.nanocontracts.types import Address
 
         assert self._settings.ENABLE_NANO_CONTRACTS
@@ -194,10 +195,15 @@ class BlockConsensusAlgorithm:
                 continue
 
             runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
-            exception_and_tb: tuple[NCFail, str] | None = None
+            exception_and_tb: tuple[__NCTransactionFail__, str] | None = None
+
             try:
                 runner.execute_from_tx(tx)
-            except NCFail as e:
+            except __NCTransactionFail__ as e:
+                # These are the exception types that will make an NC transaction fail.
+                # Any other exception will bubble up and crash the full node.
+                # See the `error_handling` module for more information.
+
                 kwargs: dict[str, Any] = {}
                 if tx.name:
                     kwargs['__name'] = tx.name

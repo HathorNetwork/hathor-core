@@ -22,6 +22,7 @@ from typing_extensions import Literal, Self, assert_never
 
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError, NCSerializationError
+from hathor.nanocontracts.method import POSSIBLE_SERIALIZATION_EXCEPTIONS
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
 
@@ -282,7 +283,7 @@ class NCRawArgs:
         try:
             args_parser = ArgsOnly.from_arg_types(arg_types)
             return args_parser.deserialize_args_bytes(self.args_bytes)
-        except (NCSerializationError, TypeError):
+        except (NCSerializationError, *POSSIBLE_SERIALIZATION_EXCEPTIONS):
             return None
 
 

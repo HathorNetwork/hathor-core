@@ -19,6 +19,7 @@ from typing import Any, Sequence, TypeVar
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
 
 from hathor.difficulty import Hash
+from hathor.nanocontracts.error_handling import internal_code_called_from_user_code
 
 T = TypeVar('T')
 
@@ -68,6 +69,7 @@ class NanoRNG(metaclass=NoMethodOverrideMeta):
         super().__setattr__(name, value)
 
     @property
+    @internal_code_called_from_user_code
     def seed(self) -> Hash:
         """Return the seed used to create the RNG."""
         return self.__seed

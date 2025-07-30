@@ -22,6 +22,7 @@ from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
+from hathor.nanocontracts.error_handling import NCInternalException
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.nc_types import make_nc_type_for_field_type
 from hathor.nanocontracts.types import ContractId, VertexId
@@ -217,7 +218,7 @@ class NanoContractStateResource(Resource):
                 value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
                 if type(value) is bytes:
                     value = value.hex()
-            except Exception as e:
+            except (Exception, NCInternalException) as e:
                 calls[call_info] = NCValueErrorResponse(errmsg=repr(e))
             else:
                 calls[call_info] = NCValueSuccessResponse(value=value)
