@@ -23,21 +23,18 @@ from hathor.indexes.tokens_index import TokensIndex
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCInvalidAction
-from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import NCActionType, TokenUid
-from hathor.nanocontracts.utils import sign_pycoin
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.util import not_none
 from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
-from tests.nanocontracts.utils import assert_nc_failure_reason
+from tests.nanocontracts.utils import assert_nc_failure_reason, set_nano_header
 
 
 class MyBlueprint(Blueprint):
@@ -81,7 +78,7 @@ class TestActions(unittest.TestCase):
         super().setUp()
 
         self.bp_id = b'1' * 32
-        self.manager = self.create_peer('testnet', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+        self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
         self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
             self.bp_id: MyBlueprint
         })
@@ -142,31 +139,19 @@ class TestActions(unittest.TestCase):
         nc_args: tuple[Any, ...] | None = None,
     ) -> None:
         """Configure a nano header for a tx."""
-        assert len(tx.headers) == 0
-        wallet = self.dag_builder._exporter._wallets['main']
+        wallet = self.dag_builder.get_main_wallet()
         assert isinstance(wallet, HDWallet)
-        privkey = wallet.get_key_at_index(0)
-
-        nc_args_bytes = b'\x00'
-        if nc_args is not None:
-            assert nc_method is not None
-            method_parser = Method.from_callable(getattr(MyBlueprint, nc_method))
-            nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
-
-        nano_header = NanoHeader(
+        set_nano_header(
             tx=tx,
-            nc_seqnum=self.nc_seqnum,
+            wallet=wallet,
             nc_id=self.tx0.hash,
-            nc_method=nc_method if nc_method is not None else 'nop',
-            nc_args_bytes=nc_args_bytes,
-            nc_address=b'',
-            nc_script=b'',
-            nc_actions=nc_actions if nc_actions is not None else [],
+            nc_actions=nc_actions,
+            nc_method=nc_method,
+            nc_args=nc_args,
+            blueprint=MyBlueprint,
+            seqnum=self.nc_seqnum
         )
         self.nc_seqnum += 1
-
-        sign_pycoin(nano_header, privkey)
-        tx.headers.append(nano_header)
 
     def _change_tx_balance(
         self,

@@ -21,11 +21,9 @@ ZLIB_BOMB: bytes = _load_file('bomb.zlib')
 
 
 class OnChainBlueprintScriptTestCase(unittest.TestCase):
-    use_memory_storage = True
-
     def setUp(self):
         super().setUp()
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.verification_service = self.manager.verification_service
 
     def _ocb_mine(self, blueprint: OnChainBlueprint) -> None:

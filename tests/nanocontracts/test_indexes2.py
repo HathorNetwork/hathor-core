@@ -37,9 +37,8 @@ class TestIndexes2(BlueprintTestCase):
         assert self.manager.tx_storage.indexes.tokens is not None
         self.tokens_index = self.manager.tx_storage.indexes.tokens
 
-        self.blueprint_id = self.gen_random_blueprint_id()
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
 
     def test_indexes_tx_affected_twice(self) -> None:
         amount = 10000

@@ -126,8 +126,7 @@ class TxVersion(IntEnum):
         }
 
         settings = get_global_settings()
-        if settings.ENABLE_NANO_CONTRACTS and settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            # XXX This code should not run on any network except nano-testnet.
+        if settings.ENABLE_NANO_CONTRACTS:
             from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
             cls_map[TxVersion.ON_CHAIN_BLUEPRINT] = OnChainBlueprint
 

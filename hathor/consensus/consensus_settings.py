@@ -86,8 +86,7 @@ class PowSettings(_BaseConsensusSettings):
             TxVersion.MERGE_MINED_BLOCK,
         }
 
-        if settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            assert settings.ENABLE_NANO_CONTRACTS
+        if settings.ENABLE_NANO_CONTRACTS:
             versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         return versions
@@ -153,8 +152,7 @@ class PoaSettings(_BaseConsensusSettings):
             #  This may be removed if we refactor the way genesis is constructed.
             versions.add(TxVersion.REGULAR_BLOCK)
 
-        if settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            assert settings.ENABLE_NANO_CONTRACTS
+        if settings.ENABLE_NANO_CONTRACTS:
             versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         return versions

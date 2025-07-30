@@ -65,9 +65,8 @@ class TestAllowedActions(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.blueprint_id = self.gen_random_blueprint_id()
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.contract_id = self.gen_random_contract_id()
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
 
         self.token_a = self.gen_random_token_uid()
         self.address = self.gen_random_address()
@@ -139,8 +138,7 @@ class TestAllowedActions(BlueprintTestCase):
                     pass
 
             runner = self.build_runner()
-            blueprint_id = self.gen_random_blueprint_id()
-            self.register_blueprint_class(blueprint_id, MyOtherBlueprint)
+            blueprint_id = self._register_blueprint_class(MyOtherBlueprint)
             runner.create_contract(self.contract_id, blueprint_id, self._get_context())
             method_name = allowed_action.name.lower()
             forbidden_actions = self.all_actions.difference({allowed_action})

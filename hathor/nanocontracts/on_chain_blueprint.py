@@ -230,9 +230,8 @@ class OnChainBlueprint(Transaction):
                          outputs=outputs or [], tokens=tokens, parents=parents or [], hash=hash, storage=storage)
 
         self._settings = get_global_settings()
-        if not self._settings.ENABLE_ON_CHAIN_BLUEPRINTS:
-            assert self._settings.ENABLE_NANO_CONTRACTS, 'OnChainBlueprints require NanoContracts to be enabled'
-            raise RuntimeError('OnChainBlueprints are disabled')
+        if not self._settings.ENABLE_NANO_CONTRACTS:
+            raise RuntimeError('NanoContracts are disabled')
 
         # Pubkey and signature of the transaction owner / caller.
         self.nc_pubkey: bytes = b''

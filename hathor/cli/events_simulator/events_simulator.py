@@ -57,11 +57,13 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
         possible_scenarios = [scenario.name for scenario in Scenario]
         raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
+    settings = get_global_settings()._replace(REWARD_SPEND_MIN_BLOCKS=scenario.get_reward_spend_min_blocks())
     log = logger.new()
     simulator = Simulator(args.seed)
     simulator.start()
     builder = simulator.get_default_builder() \
-        .enable_event_queue()
+        .enable_event_queue() \
+        .set_settings(settings)
 
     manager = simulator.create_peer(builder)
     event_ws_factory = manager._event_manager._event_ws_factory
@@ -70,7 +72,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     forwarding_ws_factory = EventForwardingWebsocketFactory(
         simulator=simulator,
         peer_id='simulator_peer_id',
-        settings=get_global_settings(),
+        settings=settings,
         reactor=reactor,
         event_storage=event_ws_factory._event_storage
     )

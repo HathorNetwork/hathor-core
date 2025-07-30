@@ -57,7 +57,7 @@ class MyBlueprint(Blueprint):
         if self.contract is None:
             return
 
-        actions: list[NCAction] = []
+        actions = []
         for action in ctx.__all_actions__:
             assert isinstance(action, NCDepositAction)
             amount = 1 + action.amount // 2
@@ -69,7 +69,7 @@ class MyBlueprint(Blueprint):
         if self.contract is None:
             return
 
-        actions: list[NCAction] = []
+        actions = []
         for action in ctx.__all_actions__:
             assert isinstance(action, NCWithdrawalAction)
             balance = self.syscall.get_balance_before_current_call(action.token_uid)
@@ -137,7 +137,7 @@ class NCBlueprintTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = [t for t in self.genesis if t.is_transaction][0]
 
@@ -389,7 +389,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         token2_uid = TokenUid(b'b' * 32)
         token3_uid = TokenUid(b'c' * 32)
 
-        actions: list[NCAction] = [
+        actions = [
             NCDepositAction(token_uid=token1_uid, amount=100),
             NCDepositAction(token_uid=token2_uid, amount=50),
             NCDepositAction(token_uid=token3_uid, amount=25),

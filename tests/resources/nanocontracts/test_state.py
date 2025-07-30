@@ -100,7 +100,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
 
-        self.manager = self.create_peer('testnet', unlock_wallet=True, wallet_index=True)
+        self.manager = self.create_peer('unittests', unlock_wallet=True, wallet_index=True)
         self.tx_storage = self.manager.tx_storage
 
         self.genesis = self.tx_storage.get_all_genesis()

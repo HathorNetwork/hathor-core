@@ -14,13 +14,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.reward_lock.reward_lock import get_minimum_best_height
-from hathor.transaction import BaseTransaction, Transaction, TxInput
+from hathor.transaction import BaseTransaction, Transaction, TxInput, TxVersion
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
@@ -30,6 +32,7 @@ from hathor.transaction.exceptions import (
     InvalidInputData,
     InvalidInputDataSize,
     InvalidToken,
+    InvalidVersionError,
     RewardLocked,
     ScriptError,
     TimestampError,
@@ -49,11 +52,18 @@ cpu = get_cpu_profiler()
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa')
+    __slots__ = ('_settings', '_daa', '_feature_service')
 
-    def __init__(self, *, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        daa: DifficultyAdjustmentAlgorithm,
+        feature_service: FeatureService,
+    ) -> None:
         self._settings = settings
         self._daa = daa
+        self._feature_service = feature_service
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -255,3 +265,25 @@ class TransactionVerifier:
                 htr_info.amount,
                 htr_expected_amount,
             ))
+
+    def verify_version(self, tx: Transaction) -> None:
+        """Verify that the vertex version is valid."""
+        from hathor.conf.settings import NanoContractsSetting
+        allowed_tx_versions = {
+            TxVersion.REGULAR_TRANSACTION,
+            TxVersion.TOKEN_CREATION_TRANSACTION,
+        }
+
+        match self._settings.ENABLE_NANO_CONTRACTS:
+            case NanoContractsSetting.DISABLED:
+                pass
+            case NanoContractsSetting.ENABLED:
+                allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
+            case NanoContractsSetting.FEATURE_ACTIVATION:
+                if self._feature_service.is_feature_active(vertex=tx, feature=Feature.NANO_CONTRACTS):
+                    allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
+            case _ as unreachable:
+                assert_never(unreachable)
+
+        if tx.version not in allowed_tx_versions:
+            raise InvalidVersionError(f'invalid vertex version: {tx.version}')

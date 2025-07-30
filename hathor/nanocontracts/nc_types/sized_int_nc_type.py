@@ -44,12 +44,12 @@ class _SizedIntNCType(NCType[int]):
 
     @classmethod
     def _lower_bound_value(self) -> int | None:
-        if not self._signed:
-            return 0
-        if self._byte_size is not None:
-            return -(2**self._byte_size)
-        else:
+        if self._byte_size is None:
             return None
+        if self._signed:
+            return -(2**(self._byte_size * 8 - 1))
+        else:
+            return 0
 
     @override
     @classmethod
@@ -95,4 +95,9 @@ class _SizedIntNCType(NCType[int]):
 
 class Int32NCType(_SizedIntNCType):
     _signed = True
+    _byte_size = 4  # 4-bytes -> 32-bits
+
+
+class Uint32NCType(_SizedIntNCType):
+    _signed = False
     _byte_size = 4  # 4-bytes -> 32-bits

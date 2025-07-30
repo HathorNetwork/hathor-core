@@ -34,8 +34,6 @@ class MyBlueprint(Blueprint):
 
     def assert_balance(self, token_uid: TokenUid, *, before: int, current: int) -> None:
         assert self.syscall.get_balance_before_current_call(token_uid) == before
-        # deprecated method, equivalent to get_balance_before_current_call
-        assert self.syscall.get_balance(token_uid) == before
         assert self.syscall.get_current_balance(token_uid) == current
 
     def assert_token_balance(self, *, before: int, current: int) -> None:
@@ -127,14 +125,13 @@ class TestExecutionOrder(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.blueprint_id = self.gen_random_blueprint_id()
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.contract_id1 = self.gen_random_contract_id()
         self.contract_id2 = self.gen_random_contract_id()
         self.token_a = self.gen_random_token_uid()
         self.tx = self.get_genesis_tx()
         self.address = self.gen_random_address()
 
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
         action = NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=10)
         self.runner.create_contract(self.contract_id1, self.blueprint_id, self._get_context(action), self.token_a)
         self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(action), self.token_a)

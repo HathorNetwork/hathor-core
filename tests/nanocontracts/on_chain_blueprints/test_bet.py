@@ -49,11 +49,9 @@ class BetInfo(NamedTuple):
 
 
 class OnChainBetBlueprintTestCase(unittest.TestCase):
-    use_memory_storage = True
-
     def setUp(self) -> None:
         super().setUp()
-        self.manager = self.create_peer('testnet')
+        self.manager = self.create_peer('unittests')
         self.wallet = initialize_hd_wallet(DEFAULT_WORDS)
         self.token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         self.initialize_contract()  # will set self.nc_id, self.runner, self.nc_storage

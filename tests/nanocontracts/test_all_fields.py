@@ -28,7 +28,7 @@ from tests.nanocontracts.test_blueprints.all_fields import AllFieldsBlueprint
 
 class TestAllFields(unittest.TestCase):
     def test_all_fields_builtin(self) -> None:
-        manager = self.create_peer('testnet')
+        manager = self.create_peer('unittests')
         blueprint_id = BlueprintId(VertexId(b'\x01' * 32))
         manager.tx_storage.nc_catalog.blueprints[blueprint_id] = AllFieldsBlueprint
 
@@ -55,7 +55,7 @@ class TestAllFields(unittest.TestCase):
     def test_all_fields_ocb(self) -> None:
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
-        manager = self.create_peer('testnet')
+        manager = self.create_peer('unittests')
         dag_builder = TestDAGBuilder.from_manager(manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]

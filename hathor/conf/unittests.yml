@@ -23,8 +23,7 @@ FEATURE_ACTIVATION:
   max_signal_bits: 4
   default_threshold: 3
 
-ENABLE_NANO_CONTRACTS: true
-ENABLE_ON_CHAIN_BLUEPRINTS: true
+ENABLE_NANO_CONTRACTS: enabled
 
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   # keypair wallet:

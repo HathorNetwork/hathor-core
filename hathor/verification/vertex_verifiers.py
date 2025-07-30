@@ -50,7 +50,7 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
-        vertex_verifier = VertexVerifier(settings=settings)
+        vertex_verifier = VertexVerifier(settings=settings, feature_service=feature_service)
 
         return cls.create(
             settings=settings,
@@ -74,7 +74,7 @@ class VertexVerifiers(NamedTuple):
         block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         poa_block_verifier = PoaBlockVerifier(settings=settings)
-        tx_verifier = TransactionVerifier(settings=settings, daa=daa)
+        tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
         nano_header_verifier = NanoHeaderVerifier()
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)

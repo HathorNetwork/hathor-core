@@ -248,7 +248,7 @@ def _build_vertex_verifiers(
     """
     return VertexVerifiers.create(
         settings=settings,
-        vertex_verifier=SimulatorVertexVerifier(settings=settings),
+        vertex_verifier=SimulatorVertexVerifier(settings=settings, feature_service=feature_service),
         daa=daa,
         feature_service=feature_service,
     )

@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -38,7 +39,8 @@ class GenesisTest(unittest.TestCase):
         self.storage = self.create_tx_storage()
 
     def test_pow(self):
-        verifier = VertexVerifier(settings=self._settings)
+        feature_service = FeatureService(settings=self._settings, tx_storage=self.storage)
+        verifier = VertexVerifier(settings=self._settings, feature_service=feature_service)
         genesis = self.storage.get_all_genesis()
         for g in genesis:
             self.assertEqual(g.calculate_hash(), g.hash)

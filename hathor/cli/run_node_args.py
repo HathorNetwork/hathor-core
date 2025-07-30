@@ -30,6 +30,7 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     auto_hostname: bool
     unsafe_mode: Optional[str]
     testnet: bool
+    testnet_hotel: bool
     test_mode_tx_weight: bool
     dns: Optional[str]
     peer: Optional[str]

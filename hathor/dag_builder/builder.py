@@ -97,6 +97,9 @@ class DAGBuilder:
             blueprints_module=blueprints_module,
         )
 
+    def get_main_wallet(self) -> BaseWallet:
+        return self._exporter.get_wallet('main')
+
     def parse_tokens(self, tokens: Iterator[Token]) -> None:
         """Parse tokens and update the DAG accordingly."""
         for parts in tokens:

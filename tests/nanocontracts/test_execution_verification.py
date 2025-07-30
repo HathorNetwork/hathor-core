@@ -35,9 +35,8 @@ class MyBlueprint(Blueprint):
 class TestExecutionVerification(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.blueprint_id = self.gen_random_blueprint_id()
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.contract_id = self.gen_random_contract_id()
-        self.register_blueprint_class(self.blueprint_id, MyBlueprint)
 
     def test_blueprint_does_not_exist(self) -> None:
         with pytest.raises(BlueprintDoesNotExist):

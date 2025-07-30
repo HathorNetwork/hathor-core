@@ -19,7 +19,10 @@ from typing import Any, Optional, TypeAlias, Union, cast
 from pydantic import Extra, validator
 from typing_extensions import Self
 
+from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.pubsub import EventArguments
+from hathor.transaction import Transaction
+from hathor.transaction.headers import VertexHeaderId
 from hathor.utils.pydantic import BaseModel
 
 
@@ -41,6 +44,18 @@ class TxInput(BaseModel):
     tx_id: str
     index: int
     spent_output: TxOutput
+
+
+class NanoHeader(BaseModel):
+    id: str
+    nc_seqnum: int
+    nc_id: str
+    nc_method: str
+    nc_address: str
+
+
+# Union type to model all header types, currently only nano header exists
+TxHeader: TypeAlias = NanoHeader
 
 
 class SpentOutput(BaseModel):
@@ -119,6 +134,7 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
     token_name: Optional[str]
     token_symbol: Optional[str]
     aux_pow: Optional[str] = None
+    headers: list[TxHeader] = []
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> Self:
@@ -139,6 +155,22 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
             )
 
         tx_json['inputs'] = inputs
+
+        headers = []
+        if args.tx.is_nano_contract():
+            assert isinstance(args.tx, Transaction)
+            nano_header = args.tx.get_nano_header()
+            headers.append(
+                dict(
+                   id=VertexHeaderId.NANO_HEADER.value.hex(),
+                   nc_seqnum=nano_header.nc_seqnum,
+                   nc_id=nano_header.nc_id.hex(),
+                   nc_method=nano_header.nc_method,
+                   nc_address=get_address_b58_from_bytes(nano_header.nc_address),
+                )
+            )
+
+        tx_json['headers'] = headers
         return cls(**tx_json)
 
 

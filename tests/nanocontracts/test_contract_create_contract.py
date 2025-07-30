@@ -7,7 +7,6 @@ from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
     BlueprintId,
     ContractId,
-    NCAction,
     NCActionType,
     NCDepositAction,
     NCGrantAuthorityAction,
@@ -39,7 +38,7 @@ class MyBlueprint1(Blueprint):
             action = ctx.get_single_action(token_uid)
             salt = b'x'
             assert isinstance(action, NCDepositAction)
-            new_actions: list[NCAction] = [NCDepositAction(token_uid=token_uid, amount=action.amount - initial)]
+            new_actions = [NCDepositAction(token_uid=token_uid, amount=action.amount - initial)]
             self.contract, _ = self.syscall.create_contract(
                 blueprint_id, salt, new_actions, blueprint_id, initial - 1, self.token_uid
             )
@@ -49,7 +48,7 @@ class MyBlueprint1(Blueprint):
 
     @public
     def create_children(self, ctx: Context, blueprint_id: BlueprintId, salt: bytes) -> None:
-        new_actions: list[NCAction] = []
+        new_actions = []
         if self.token_uid and self.syscall.can_mint(self.token_uid):
             new_actions.append(NCGrantAuthorityAction(token_uid=self.token_uid, mint=True, melt=True))
         self.syscall.create_contract(blueprint_id, salt + b'1', new_actions, blueprint_id, 0, self.token_uid)
@@ -90,10 +89,8 @@ class MyBlueprint2(Blueprint):
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
-        self.blueprint1_id = self.gen_random_blueprint_id()
-        self.blueprint2_id = self.gen_random_blueprint_id()
-        self.register_blueprint_class(self.blueprint1_id, MyBlueprint1)
-        self.register_blueprint_class(self.blueprint2_id, MyBlueprint2)
+        self.blueprint1_id = self._register_blueprint_class(MyBlueprint1)
+        self.blueprint2_id = self._register_blueprint_class(MyBlueprint2)
 
     def test_basic(self) -> None:
         counter = 5
@@ -101,7 +98,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         token_uid = TokenUid(HATHOR_TOKEN_UID)
         deposit = 100
-        actions: list[NCAction] = [NCDepositAction(token_uid=token_uid, amount=deposit)]
+        actions = [NCDepositAction(token_uid=token_uid, amount=deposit)]
         address = self.gen_random_address()
         ctx = Context(actions, self.get_genesis_tx(), address, timestamp=0)
         self.runner.create_contract(nc1_id, self.blueprint1_id, ctx, self.blueprint1_id, counter, None)
