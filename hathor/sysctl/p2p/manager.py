@@ -308,7 +308,7 @@ class ConnectionsManagerSysctl(Sysctl):
         the whitelist object, following it by default.
         It does not support eliminating the whitelist (passing None)."""
 
-        wl_object: PeersWhitelist
+        wl_object: PeersWhitelist | None
         option: str = new_whitelist.lower().strip()
         if option in ('on', 'off'):
             # Set the whitelist tracking ON or OFF for the currently given whitelist.

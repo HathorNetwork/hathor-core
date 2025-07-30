@@ -8,7 +8,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from twisted.web.client import Agent
 
-from hathor.conf import HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import parse_whitelist
 from hathor.reactor import ReactorProtocol as Reactor
@@ -109,6 +109,7 @@ class PeersWhitelist(ABC):
 
     @classmethod
     def create_from_cmdline(cls, reactor: Reactor, p2p_wl: str, settings: HathorSettings) -> Self | None:
+        p2p_whitelist: PeersWhitelist | None = None
         if p2p_wl.lower() in ('default', 'hathorlabs'):
             p2p_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
         elif p2p_wl.lower() in ('none', 'disabled'):
@@ -118,7 +119,7 @@ class PeersWhitelist(ABC):
         else:
             # URLPeersWhitelist class rejects non-url paths.
             p2p_whitelist = URLPeersWhitelist(reactor, p2p_wl, True)
-        return p2p_whitelist
+        return p2p_whitelist  # type: ignore[return-value]
 
 
 class FilePeersWhitelist(PeersWhitelist):
