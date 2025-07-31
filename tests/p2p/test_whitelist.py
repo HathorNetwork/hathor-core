@@ -175,10 +175,32 @@ class WhitelistTestCase(unittest.TestCase):
             assert isinstance(_update_whitelist_err_mock.call_args.args[0].value, TimeoutError)
 
     def test_no_whitelist_but_follow(self) -> None:
-        pass
+        network = 'testnet'
+        self._settings = get_global_settings()
+        url_1 = 'https://whitelist1.com'
+        url_2 = 'https://whitelist2.com'
+        manager1 = self.create_peer(network, url_whitelist=url_1)
+        manager1.connections.peers_whitelist.follow_wl()
+        self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-    def test_whitelist_no_follow(self) -> None:
-        pass
+        manager2 = self.create_peer(network, url_whitelist=url_2)
+        manager2.connections.peers_whitelist.follow_wl()
+        self.assertEqual(manager2.connections.get_enabled_sync_versions(), {SyncVersion.V2})
 
-    def test_no_whitelist_unfollow(self) -> None:
-        pass
+        # No peers will be added to the whitelist, so _current is empty.
+        # Regardless of the follow_wl flag being up, they must connect in this case.
+
+        self.assertTrue(len(manager1.connections.peers_whitelist.current_whitelist()) == 0)
+        self.assertTrue(len(manager2.connections.peers_whitelist.current_whitelist()) == 0)
+
+        conn = FakeConnection(manager1, manager2)
+        self.assertFalse(conn.tr1.disconnecting)
+        self.assertFalse(conn.tr2.disconnecting)
+
+        # Run the p2p protocol.
+        for _ in range(100):
+            conn.run_one_step(debug=True)
+            self.clock.advance(0.1)
+
+        self.assertFalse(conn.tr1.disconnecting)
+        self.assertFalse(conn.tr2.disconnecting)
