@@ -10,7 +10,7 @@ from hathor.nanocontracts.types import ContractId, NCWithdrawalAction, TokenUid,
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.transaction.token_creation_tx import TokenDescription
+from hathor.transaction.token_info import TokenDescription
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.utils import assert_nc_failure_reason
@@ -31,7 +31,7 @@ class MyBlueprint(Blueprint):
         pass
 
     @public(allow_deposit=True)
-    def create_token(
+    def create_deposit_token(
         self,
         ctx: Context,
         token_name: str,
@@ -40,7 +40,7 @@ class MyBlueprint(Blueprint):
         mint_authority: bool,
         melt_authority: bool,
     ) -> None:
-        self.syscall.create_token(token_name, token_symbol, amount, mint_authority, melt_authority)
+        self.syscall.create_deposit_token(token_name, token_symbol, amount, mint_authority, melt_authority)
 
 
 class NCNanoContractTestCase(unittest.TestCase):
@@ -174,11 +174,11 @@ class NCNanoContractTestCase(unittest.TestCase):
             tx1.nc_method = initialize()
 
             tx2.nc_id = tx1
-            tx2.nc_method = create_token("MyToken", "{token_symbol}", 100, false, false)
+            tx2.nc_method = create_deposit_token("MyToken", "{token_symbol}", 100, false, false)
             tx2.nc_deposit = 3 HTR
 
             tx3.nc_id = tx1
-            tx3.nc_method = create_token("MyToken (2)", "{token_symbol}", 50, true, false)
+            tx3.nc_method = create_deposit_token("MyToken (2)", "{token_symbol}", 50, true, false)
             tx3.nc_deposit = 1 HTR
 
             tx2 < tx3

@@ -271,10 +271,13 @@ class IndexesManager(ABC):
                             from hathor.nanocontracts.runner.types import IndexUpdateRecordType
                             assert record.type is IndexUpdateRecordType.CREATE_TOKEN, record.type
                             assert record.token_name is not None and record.token_symbol is not None
+                            assert record.token_version is not None
+
                             self.tokens.create_token_info_from_contract(
                                 token_uid=record.token_uid,
                                 name=record.token_name,
                                 symbol=record.token_symbol,
+                                version=record.token_version
                             )
 
                         self.tokens.add_to_total(record.token_uid, record.token_amount)
