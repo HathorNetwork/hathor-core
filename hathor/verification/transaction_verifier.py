@@ -41,10 +41,9 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.fee import calculate_fee, is_fee_tokens_enabled
-from hathor.transaction.token_info import TokenInfo, TokenVersion
+from hathor.transaction.token_info import TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
-from hathor.types import TokenUid, VertexId
+from hathor.types import VertexId
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -225,86 +224,45 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_sum(self, tx: Transaction, token_dict: dict[TokenUid, TokenInfo]) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token.
-        If sum of inputs and outputs is not 0, at least one of the following should be true:
-        - make sure outputs matches inputs.
-        - make sure inputs have mint/melt authority.
+    def verify_sum(self, token_dict: TokenInfoDict) -> None:
+        """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
+        and outputs is not 0, make sure inputs have mint/melt authority.
 
         token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
         amount = outputs - inputs, thus:
-        - amount < 0 when melting or paying fees
+        - amount < 0 when melting
         - amount > 0 when minting
 
-        :raises InputOutputMismatch: if the sum of inputs is not equal to outputs and there's no mint/melt
-        :raises InputOutputMismatch: if the sum of inputs is not equal to outputs plus fee
-        :raises InputOutputMismatch: if the sum of inputs without authority is bigger than the fee
+        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
+        fee = token_dict.calculate_fee(self._settings)
         withdraw = 0
-        withdraw_without_authority = 0
         deposit = 0
-        fee = 0 if not is_fee_tokens_enabled(self._settings) else calculate_fee(self._settings, tx, token_dict)
-
         for token_uid, token_info in token_dict.items():
-            if token_info.version is TokenVersion.NATIVE:
+            if token_uid == self._settings.HATHOR_TOKEN_UID:
                 continue
 
             if token_info.amount == 0:
                 # that's the usual behavior, nothing to do
                 pass
             elif token_info.amount < 0:
-                match token_info.version:
-                    case TokenVersion.FEE:
-                        if not token_info.can_melt:
-                            raise InputOutputMismatch(
-                                '{} {} tokens melted, but there is no melt authority input'
-                                .format(token_info.amount, token_uid.hex())
-                            )
-                        else:
-                            continue
-                    case TokenVersion.DEPOSIT:
-                        # deposit tokens can be used to pay fees, so we can use them without an authority
-                        if token_info.version == TokenVersion.DEPOSIT:
-                            withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
-
-                            if token_info.can_melt:
-                                withdraw += withdraw_amount
-                            else:
-                                # When we don't have a fee, melting is only allowed with an authority.
-                                # To use a deposit token to pay the fee, the result of the conversion
-                                # to HTR should be an integer, otherwise it will allow users to melt tokens due
-                                # to `ceil` function in the get_deposit_token_withdraw_amount.
-                                # For example, 199 Tokens -> 1HTR could
-                                if fee == 0 or not (
-                                    token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE
-                                ).is_integer():
-                                    raise InputOutputMismatch(
-                                        '{} {} tokens melted, but there is no melt authority input'.format(
-                                            token_info.amount, token_uid.hex()))
-
-                                withdraw_without_authority += withdraw_amount
-                    case TokenVersion.NATIVE:
-                        continue
-                    case _:
-                        from typing_extensions import assert_never
-                        assert_never(token_info.version)
+                # tokens have been melted
+                if not token_info.can_melt and (fee == 0 or token_info.version != TokenVersion.DEPOSIT):
+                    raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
+                        token_info.amount, token_uid.hex()))
+                if token_info.version == TokenVersion.DEPOSIT:
+                    withdraw += get_deposit_token_withdraw_amount(self._settings, token_info.amount)
             else:
-                # token_info.amount > 0 so the transaction is minting tokens
+                # tokens have been minted
                 if not token_info.can_mint:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
-
-                if token_info.version is TokenVersion.DEPOSIT:
+                if token_info.version == TokenVersion.DEPOSIT:
                     deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
-        is_melting_without_authority = withdraw_without_authority - fee > 0
-        if is_melting_without_authority:
-            raise InputOutputMismatch('Melting tokens without a melt authority is forbidden')
-
-        htr_expected_amount = withdraw + withdraw_without_authority - deposit - fee
-
+        # check whether the deposit/withdraw amount is correct
+        htr_expected_amount = withdraw - deposit - fee
         htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
-
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,

@@ -118,7 +118,7 @@ class CreateTxResource(Resource):
         # need to run verify_inputs first to check if all inputs exist
         verifiers.tx.verify_inputs(tx, skip_script=True)
         verifiers.vertex.verify_parents(tx)
-        verifiers.tx.verify_sum(tx, tx.get_complete_token_info())
+        verifiers.tx.verify_sum(tx.get_complete_token_info())
 
 
 CreateTxResource.openapi = {

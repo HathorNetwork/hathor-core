@@ -20,10 +20,9 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
-from hathor.transaction.token_info import TokenInfo, TokenVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import VerboseCallback, decode_string_utf8, int_to_bytes, unpack, unpack_len
-from hathor.types import TokenUid
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
@@ -208,14 +207,14 @@ class TokenCreationTransaction(Transaction):
             verbose: VerboseCallback = None) -> tuple[str, str, TokenVersion, bytes]:
         """ Gets the token name, symbol and version from serialized format
         """
-        (token_version,), buf = unpack('!B', buf)
+        (raw_token_version,), buf = unpack('!B', buf)
         if verbose:
-            verbose('token_version', token_version)
+            verbose('token_version', raw_token_version)
 
         try:
-            TokenVersion(token_version)
+            token_version = TokenVersion(raw_token_version)
         except ValueError:
-            raise ValueError('unknown token version: {}'.format(token_version))
+            raise ValueError('unknown token version: {}'.format(raw_token_version))
 
         (name_len,), buf = unpack('!B', buf)
         if verbose:
@@ -251,7 +250,7 @@ class TokenCreationTransaction(Transaction):
         return json
 
     @override
-    def _get_token_info_from_inputs(self) -> dict[TokenUid, TokenInfo]:
+    def _get_token_info_from_inputs(self) -> TokenInfoDict:
         token_dict = super()._get_token_info_from_inputs()
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
