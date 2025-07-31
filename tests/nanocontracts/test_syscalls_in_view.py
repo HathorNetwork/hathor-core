@@ -103,6 +103,10 @@ class MyBlueprint(Blueprint):
         self.syscall.create_token('', '', 0)
 
     @view
+    def create_fee_token(self) -> None:
+        self.syscall.create_fee_token('', '', 0)
+
+    @view
     def proxy_call_public_method(self) -> None:
         self.syscall.proxy_call_public_method(BlueprintId(VertexId(b'')), '', [])
 

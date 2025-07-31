@@ -37,6 +37,7 @@ from hathor.nanocontracts.types import (
 )
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
+from hathor.transaction.token_info import TokenVersion
 from hathor.util import collect_n, json_dumpb, json_loadb
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -68,6 +69,7 @@ class _InfoDict(TypedDict):
     name: str
     symbol: str
     total: int
+    version: TokenVersion
     n_contracts_can_mint: int
     n_contracts_can_melt: int
 
@@ -189,6 +191,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         token_uid: bytes,
         name: str,
         symbol: str,
+        version: TokenVersion,
         total: int = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
@@ -200,6 +203,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             'name': name,
             'symbol': symbol,
             'total': total,
+            'version': version,
             'n_contracts_can_mint': n_contracts_can_mint,
             'n_contracts_can_melt': n_contracts_can_melt,
         })
@@ -210,12 +214,14 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         token_uid: bytes,
         name: str,
         symbol: str,
+        version: TokenVersion,
         total: int = 0,
     ) -> None:
         self.create_token_info(
             token_uid=token_uid,
             name=name,
             symbol=symbol,
+            version=version,
             total=total,
             n_contracts_can_mint=1,
             n_contracts_can_melt=1,
@@ -264,6 +270,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self._settings.HATHOR_TOKEN_UID,
             self._settings.HATHOR_TOKEN_NAME,
             self._settings.HATHOR_TOKEN_SYMBOL,
+            TokenVersion.NATIVE,
             self._settings.GENESIS_TOKENS,
         )
 
@@ -319,11 +326,15 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
             from hathor.transaction.token_creation_tx import TokenCreationTransaction
             tx = cast(TokenCreationTransaction, tx)
-            self.log.debug('create_token_info', tx=tx.hash_hex, name=tx.token_name, symb=tx.token_symbol)
+            self.log.debug('create_token_info',
+                           tx=tx.hash_hex,
+                           name=tx.token_name,
+                           symbol=tx.token_symbol,
+                           version=tx.token_version)
             key_info = self._to_key_info(tx.hash)
             token_info = self._db.get((self._cf, key_info))
             if token_info is None:
-                self.create_token_info(tx.hash, tx.token_name, tx.token_symbol)
+                self.create_token_info(tx.hash, tx.token_name, tx.token_symbol, tx.token_version)
 
         if tx.is_transaction:
             # Adding this tx to the transactions key list
@@ -514,6 +525,9 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
 
     def get_symbol(self) -> Optional[str]:
         return self._info['symbol']
+
+    def get_version(self) -> TokenVersion:
+        return self._info['version']
 
     def get_total(self) -> int:
         return self._info['total']
