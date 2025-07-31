@@ -34,6 +34,7 @@ from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Verte
 from hathor.transaction.block import Block
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.storage.exceptions import (
+    TokenCreationTransactionDoesNotExist,
     TransactionDoesNotExist,
     TransactionIsNotABlock,
     TransactionNotInAllowedScopeError,
@@ -58,6 +59,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
     from hathor.nanocontracts.types import BlueprintId, ContractId
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 cpu = get_cpu_profiler()
 
@@ -547,6 +549,21 @@ class TransactionStorage(ABC):
         else:
             tx = self._get_transaction(hash_bytes)
         self.post_get_validation(tx)
+        return tx
+
+    def get_token_creation_transaction(self, hash_bytes: bytes) -> TokenCreationTransaction:
+        """Acquire the lock and get the token creation transaction with hash `hash_bytes`.
+
+        :param hash_bytes: Hash in bytes that will be checked.
+        :raises TransactionDoesNotExist: If the transaction with the given hash does not exist.
+        :raises TokenCreationTransactionDoesNotExist: If the transaction exists but is not a TokenCreationTransaction.
+        :return: The TokenCreationTransaction instance.
+        """
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+
+        tx = self.get_transaction(hash_bytes)
+        if not isinstance(tx, TokenCreationTransaction):
+            raise TokenCreationTransactionDoesNotExist(hash_bytes)
         return tx
 
     def get_block_by_height(self, height: int) -> Optional[Block]:

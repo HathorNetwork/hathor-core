@@ -271,8 +271,9 @@ class TestMutableAttributes(BlueprintTestCase):
 
     def test_search_mutable_properties(self) -> None:
         mutable_props = sorted(self.runner.call_public_method(self.contract_id, 'check', self.create_context()))
+        sorted_known_cases = sorted(KNOWN_CASES)
         debug = False
         if debug:
             for prop in mutable_props:
                 print(f"    '{prop}',")
-        self.assertEqual(mutable_props, KNOWN_CASES)
+        self.assertEqual(mutable_props, sorted_known_cases)

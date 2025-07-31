@@ -242,7 +242,7 @@ class BlueprintEnvironment:
         self.__runner.syscall_emit_event(data)
 
     @final
-    def create_token(
+    def create_deposit_token(
         self,
         token_name: str,
         token_symbol: str,
@@ -250,13 +250,31 @@ class BlueprintEnvironment:
         mint_authority: bool = True,
         melt_authority: bool = True,
     ) -> TokenUid:
-        """Create a new token."""
-        return self.__runner.syscall_create_child_token(
+        """Create a new deposit-based token."""
+        return self.__runner.syscall_create_child_deposit_token(
             token_name,
             token_symbol,
             amount,
             mint_authority,
-            melt_authority,
+            melt_authority
+        )
+
+    @final
+    def create_fee_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool = True,
+        melt_authority: bool = True,
+    ) -> TokenUid:
+        """Create a new fee-based token."""
+        return self.__runner.syscall_create_child_fee_token(
+            token_name,
+            token_symbol,
+            amount,
+            mint_authority,
+            melt_authority
         )
 
     @final
