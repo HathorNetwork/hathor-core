@@ -27,7 +27,7 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_self_arg,
     validate_method_types,
 )
-from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
@@ -257,7 +257,6 @@ def fallback(
         third_arg = arg_spec.args[2]
         fourth_arg = arg_spec.args[3]
 
-        from hathor.nanocontracts.runner.types import NCArgs
         if arg_spec.annotations[third_arg] is not str or arg_spec.annotations[fourth_arg] is not NCArgs:
             raise BlueprintSyntaxError(msg)
 
@@ -405,3 +404,31 @@ NCAction: TypeAlias = (
     | NCGrantAuthorityAction
     | NCAcquireAuthorityAction
 )
+
+
+@dataclass(slots=True, frozen=True)
+class NCRawArgs:
+    args_bytes: bytes
+
+    def __str__(self) -> str:
+        return self.args_bytes.hex()
+
+    def __repr__(self) -> str:
+        return f"NCRawArgs('{str(self)}')"
+
+    def try_parse_as(self, arg_types: tuple[type, ...]) -> tuple[Any, ...] | None:
+        from hathor.nanocontracts.method import ArgsOnly
+        try:
+            args_parser = ArgsOnly.from_arg_types(arg_types)
+            return args_parser.deserialize_args_bytes(self.args_bytes)
+        except (NCSerializationError, TypeError):
+            return None
+
+
+@dataclass(slots=True, frozen=True)
+class NCParsedArgs:
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+
+
+NCArgs: TypeAlias = NCRawArgs | NCParsedArgs

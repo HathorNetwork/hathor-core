@@ -18,8 +18,7 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.exception import BlueprintSyntaxError
-from hathor.nanocontracts.runner.types import NCArgs
-from hathor.nanocontracts.types import Address, fallback
+from hathor.nanocontracts.types import Address, NCArgs, fallback
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 

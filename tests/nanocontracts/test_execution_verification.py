@@ -22,7 +22,7 @@ from hathor.nanocontracts.exception import (
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.method import ArgsOnly
-from hathor.nanocontracts.runner.types import NCRawArgs
+from hathor.nanocontracts.types import NCRawArgs
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 

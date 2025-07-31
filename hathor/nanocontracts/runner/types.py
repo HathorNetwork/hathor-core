@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 from typing_extensions import Literal, Self, assert_never
 
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError, NCSerializationError
+from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
 
@@ -265,31 +265,3 @@ class CallInfo:
         else:
             assert type(call_record.changes_tracker.storage) is NCContractStorage
         self.nc_logger.__log_call_end__()
-
-
-@dataclass(slots=True, frozen=True)
-class NCRawArgs:
-    args_bytes: bytes
-
-    def __str__(self) -> str:
-        return self.args_bytes.hex()
-
-    def __repr__(self) -> str:
-        return f"NCRawArgs('{str(self)}')"
-
-    def try_parse_as(self, arg_types: tuple[type, ...]) -> tuple[Any, ...] | None:
-        from hathor.nanocontracts.method import ArgsOnly
-        try:
-            args_parser = ArgsOnly.from_arg_types(arg_types)
-            return args_parser.deserialize_args_bytes(self.args_bytes)
-        except (NCSerializationError, TypeError):
-            return None
-
-
-@dataclass(slots=True, frozen=True)
-class NCParsedArgs:
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-
-
-NCArgs: TypeAlias = NCRawArgs | NCParsedArgs
