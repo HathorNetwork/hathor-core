@@ -1,21 +1,11 @@
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any
 
 
 class TokenVersion(IntEnum):
     NATIVE = 0
     DEPOSIT = 1
     FEE = 2
-
-
-def is_valid_token_version(value: Any) -> bool:
-    """Check if the given value is a valid TokenVersion."""
-    try:
-        TokenVersion(value)
-        return True
-    except ValueError:
-        return False
 
 
 # used when (de)serializing token information
@@ -58,4 +48,3 @@ class TokenDescription:
     token_id: bytes
     token_name: str
     token_symbol: str
-    # token_version: TokenVersion

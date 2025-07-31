@@ -63,7 +63,7 @@ def get_non_authority_outputs(outputs_dict: dict[TokenUid, list[TxOutput]]) -> d
     return filtered_dict
 
 
-def should_charge_fee(settings: HathorSettings) -> bool:
+def is_fee_tokens_enabled(settings: HathorSettings) -> bool:
     """Check if this transaction should charge a fee based on the FEE_FEATURE_FLAG
     """
     return settings.FEE_FEATURE_FLAG

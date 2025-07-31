@@ -966,7 +966,7 @@ class Runner:
         blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
         return blueprint_class(env)
 
-    @_forbid_syscall_from_view('create_token')
+    @_forbid_syscall_from_view('create_deposit_token')
     def syscall_create_child_deposit_token(
         self,
         token_name: str,
@@ -976,9 +976,8 @@ class Runner:
         melt_authority: bool,
     ) -> TokenUid:
         """Create a child deposit token from a contract."""
-        token_version = TokenVersion.DEPOSIT
         try:
-            validate_token_info(self._settings, token_name, token_symbol, token_version)
+            validate_token_info(self._settings, token_name, token_symbol, TokenVersion.DEPOSIT)
         except TransactionDataError as e:
             raise NCInvalidSyscall(str(e)) from e
 
@@ -1010,7 +1009,7 @@ class Runner:
             htr_amount=-htr_amount,
             token_symbol=token_symbol,
             token_name=token_name,
-            token_version=token_version
+            token_version=TokenVersion.DEPOSIT
         )
         last_call_record.index_updates.append(syscall_record)
 

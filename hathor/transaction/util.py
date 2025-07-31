@@ -21,7 +21,7 @@ from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.transaction.exceptions import InvalidOutputValue, TransactionDataError
-from hathor.transaction.token_info import TokenVersion, is_valid_token_version
+from hathor.transaction.token_info import TokenVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -116,10 +116,10 @@ def validate_token_info(settings: HathorSettings,
     if symbol_len == 0 or symbol_len > settings.MAX_LENGTH_TOKEN_SYMBOL:
         raise TransactionDataError('Invalid token symbol length ({})'.format(symbol_len))
 
-    # Can't create token with hathor name or symbol and version None
+    # Can't create token with hathor name or symbol and version NATIVE
     if clean_token_string(token_name) == clean_token_string(settings.HATHOR_TOKEN_NAME):
         raise TransactionDataError('Invalid token name ({})'.format(token_name))
     if clean_token_string(token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
         raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))
-    if token_version is TokenVersion.NATIVE or not is_valid_token_version(token_version):
+    if token_version is TokenVersion.NATIVE:
         raise TransactionDataError('Invalid token version ({})'.format(token_version))

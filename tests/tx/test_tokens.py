@@ -9,7 +9,6 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
@@ -547,15 +546,8 @@ class TokenTest(unittest.TestCase):
         tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
         info = tx.serialize_token_info()
 
-        def generate_invalid_enum_value(start: int = 1) -> int:
-            valid_values = {item.value for item in TokenVersion}
-            candidate = start
-            while candidate in valid_values:
-                candidate += 1
-            return candidate
-
         # try with a version outsite the enum
-        invalid_version = generate_invalid_enum_value(1)
+        invalid_version = 100
         info2 = bytes(int_to_bytes(invalid_version, 1)) + info[1:]
 
         with self.assertRaises(ValueError):

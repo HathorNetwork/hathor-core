@@ -41,7 +41,7 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.fee import calculate_fee, should_charge_fee
+from hathor.transaction.fee import calculate_fee, is_fee_tokens_enabled
 from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -243,7 +243,7 @@ class TransactionVerifier:
         withdraw = 0
         withdraw_without_authority = 0
         deposit = 0
-        fee = 0 if not should_charge_fee(self._settings) else calculate_fee(self._settings, tx, token_dict)
+        fee = 0 if not is_fee_tokens_enabled(self._settings) else calculate_fee(self._settings, tx, token_dict)
 
         for token_uid, token_info in token_dict.items():
             if token_info.version is TokenVersion.NATIVE:

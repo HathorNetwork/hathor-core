@@ -26,7 +26,7 @@ from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, amount: int) -> None:
-        self.syscall.create_token(token_name='token a', token_symbol='TKA', amount=amount)
+        self.syscall.create_deposit_token(token_name='token a', token_symbol='TKA', amount=amount)
 
 
 class TestIndexes2(BlueprintTestCase):

@@ -519,7 +519,7 @@ class TokenTest(unittest.TestCase):
 
     def test_fee_token_activation(self) -> None:
         with patch(
-            'hathor.verification.token_creation_transaction_verifier.should_charge_fee',
+            'hathor.verification.token_creation_transaction_verifier.is_fee_tokens_enabled',
             return_value=False
         ):
             with pytest.raises(InvalidNewTransaction) as e:
