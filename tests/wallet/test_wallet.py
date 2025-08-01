@@ -265,6 +265,6 @@ class BasicWalletTest(unittest.TestCase):
         tx2.weight = 1
         tx2.timestamp = blocks[-1].timestamp + 1
         self.manager.cpu_mining_service.resolve(tx2)
-        self.assertTrue(self.manager.on_new_tx(tx2, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx2))
         self.clock.advance(2)
         self.assertEqual(0, len(w.maybe_spent_txs[self._settings.HATHOR_TOKEN_UID]))

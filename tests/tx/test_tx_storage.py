@@ -513,7 +513,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             block.parents = parents
         block.weight = 10
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
-        self.manager.propagate_tx(block, fails_silently=False)
+        self.manager.propagate_tx(block)
         self.reactor.advance(5)
         return block
 
@@ -568,13 +568,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
         yield gatherResults(deferreds)
         self.tx_storage._disable_weakref()
 
-    def test_full_verification_attribute(self):
-        self.assertFalse(self.tx_storage.is_running_full_verification())
-        self.tx_storage.start_full_verification()
-        self.assertTrue(self.tx_storage.is_running_full_verification())
-        self.tx_storage.finish_full_verification()
-        self.assertFalse(self.tx_storage.is_running_full_verification())
-
     def test_key_value_attribute(self):
         attr = 'test'
         val = 'a'
@@ -606,31 +599,11 @@ class BaseCacheStorageTest(BaseTransactionStorageTest):
         self.assertFalse(self.tx_storage.store.transaction_exists(tx_hash))
 
 
-class TransactionMemoryStorageTest(BaseTransactionStorageTest):
-    __test__ = True
-
-    def _config_builder(self, builder: TestBuilder) -> None:
-        builder.use_memory()
-
-
-class CacheMemoryStorageTest(BaseCacheStorageTest):
-    __test__ = True
-
-    def _config_builder(self, builder: TestBuilder) -> None:
-        builder.use_memory()
-        builder.use_tx_storage_cache(capacity=5)
-
-
 class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
     def _config_builder(self, builder: TestBuilder) -> None:
-        self.directory = tempfile.mkdtemp()
-        builder.use_rocksdb(self.directory)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
+        pass
 
     def test_storage_new_blocks(self):
         self.tx_storage._always_use_topological_dfs = True
@@ -641,10 +614,4 @@ class CacheRocksDBStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def _config_builder(self, builder: TestBuilder) -> None:
-        self.directory = tempfile.mkdtemp()
-        builder.use_rocksdb(self.directory)
         builder.use_tx_storage_cache(capacity=5)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()

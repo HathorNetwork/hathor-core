@@ -82,7 +82,7 @@ FEATURE_ACTIVATION:
     NOP_FEATURE_1:
       bit: 0
       # N = 4_495_680
-      # Expected to be reached around Tuesday, 2025-01-06.
+      # Expected to be reached around Monday, 2025-01-06.
       # Right now the best block is 4_489_259 on testnet (2025-01-03).
       start_height: 4_495_680  # N
       timeout_height: 4_576_320  # N + 4 * 20160 (4 weeks after the start)

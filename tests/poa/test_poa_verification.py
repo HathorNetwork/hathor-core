@@ -68,14 +68,14 @@ class PoaVerificationTest(unittest.TestCase):
     def test_poa_block_verify_basic(self) -> None:
         block = self._get_valid_poa_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
         verify_poa_wrapped = Mock(wraps=self.verifiers.poa_block.verify_poa)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(PoaBlockVerifier, 'verify_poa', verify_poa_wrapped),
@@ -83,7 +83,7 @@ class PoaVerificationTest(unittest.TestCase):
             self.manager.verification_service.verify_basic(block)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_not_called()
@@ -128,6 +128,7 @@ class PoaVerificationTest(unittest.TestCase):
         block = self._get_valid_poa_block()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
@@ -141,6 +142,7 @@ class PoaVerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
             patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
@@ -155,6 +157,7 @@ class PoaVerificationTest(unittest.TestCase):
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_not_called()
@@ -170,14 +173,14 @@ class PoaVerificationTest(unittest.TestCase):
     def test_poa_block_validate_basic(self) -> None:
         block = self._get_valid_poa_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
         verify_poa_wrapped = Mock(wraps=self.verifiers.poa_block.verify_poa)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(PoaBlockVerifier, 'verify_poa', verify_poa_wrapped),
@@ -185,7 +188,7 @@ class PoaVerificationTest(unittest.TestCase):
             self.manager.verification_service.validate_basic(block)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_not_called()
@@ -219,8 +222,9 @@ class PoaVerificationTest(unittest.TestCase):
     def test_poa_block_validate_full(self) -> None:
         block = self._get_valid_poa_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
@@ -236,8 +240,9 @@ class PoaVerificationTest(unittest.TestCase):
         verify_poa_wrapped = Mock(wraps=self.verifiers.poa_block.verify_poa)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
             patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
@@ -254,8 +259,9 @@ class PoaVerificationTest(unittest.TestCase):
             self.manager.verification_service.validate_full(block)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_not_called()

@@ -19,18 +19,20 @@ block rewards.
 NOTE: This module could use a better name.
 """
 
+from __future__ import annotations
+
 from enum import IntFlag
 from math import log
 from typing import TYPE_CHECKING, Callable, ClassVar, Optional
 
 from structlog import get_logger
 
-from hathor.conf.settings import HathorSettings
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
 from hathor.util import iwindows
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction import Block, Transaction
 
 logger = get_logger()

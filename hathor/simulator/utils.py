@@ -109,7 +109,7 @@ def add_new_block(
         block.signal_bits = signal_bits
     manager.cpu_mining_service.resolve(block)
     if propagate:
-        manager.propagate_tx(block, fails_silently=False)
+        manager.propagate_tx(block)
     if advance_clock:
         assert hasattr(manager.reactor, 'advance')
         manager.reactor.advance(advance_clock)

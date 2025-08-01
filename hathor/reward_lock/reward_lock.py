@@ -12,18 +12,20 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Iterator, Optional
 
-from hathor.conf.settings import HathorSettings
 from hathor.transaction import Block
 from hathor.util import not_none
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
     from hathor.transaction.transaction import RewardLockedInfo, Transaction
 
 
-def iter_spent_rewards(tx: 'Transaction', storage: 'VertexStorageProtocol') -> Iterator[Block]:
+def iter_spent_rewards(tx: Transaction, storage: VertexStorageProtocol) -> Iterator[Block]:
     """Iterate over all the rewards being spent, assumes tx has been verified."""
     for input_tx in tx.inputs:
         spent_tx = storage.get_vertex(input_tx.tx_id)
@@ -32,7 +34,7 @@ def iter_spent_rewards(tx: 'Transaction', storage: 'VertexStorageProtocol') -> I
             yield spent_tx
 
 
-def is_spent_reward_locked(settings: HathorSettings, tx: 'Transaction') -> bool:
+def is_spent_reward_locked(settings: HathorSettings, tx: Transaction) -> bool:
     """ Check whether any spent reward is currently locked, considering only the block rewards spent by this tx
     itself, and not the inherited `min_height`"""
     return get_spent_reward_locked_info(settings, tx, not_none(tx.storage)) is not None
@@ -40,9 +42,9 @@ def is_spent_reward_locked(settings: HathorSettings, tx: 'Transaction') -> bool:
 
 def get_spent_reward_locked_info(
     settings: HathorSettings,
-    tx: 'Transaction',
-    storage: 'VertexStorageProtocol',
-) -> Optional['RewardLockedInfo']:
+    tx: Transaction,
+    storage: VertexStorageProtocol,
+) -> Optional[RewardLockedInfo]:
     """Check if any input block reward is locked, returning the locked information if any, or None if they are all
     unlocked."""
     from hathor.transaction.transaction import RewardLockedInfo
@@ -54,7 +56,7 @@ def get_spent_reward_locked_info(
     return None
 
 
-def get_minimum_best_height(storage: 'VertexStorageProtocol') -> int:
+def get_minimum_best_height(storage: VertexStorageProtocol) -> int:
     """Return the height of the current best block that shall be used for `min_height` verification."""
     import math
 
