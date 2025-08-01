@@ -1,5 +1,4 @@
 from collections.abc import Iterator
-from importlib import import_module
 from sys import version_info
 from types import MethodType
 from typing import Any
@@ -314,11 +313,12 @@ class MyBlueprint(Blueprint):
         mutable_props.extend(search_writeable_properties(MyBlueprint, 'MyBlueprint'))
         mutable_props.extend(search_writeable_properties(self, 'self'))
         mutable_props.extend(search_writeable_properties(ctx, 'ctx'))
+        custom_import = EXEC_BUILTINS['__import__']
         for module_name, import_names in ALLOWED_IMPORTS.items():
             if module_name == 'typing':
                 # FIXME: typing module causes problems for some reason
                 continue
-            module = import_module(module_name)
+            module = custom_import(module_name, fromlist=list(import_names))
             for import_name in import_names:
                 obj = getattr(module, import_name)
                 obj_name = f'{module_name}.{import_name}'
