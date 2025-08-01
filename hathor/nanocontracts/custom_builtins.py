@@ -33,6 +33,7 @@ from typing import (
 from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
+from hathor.nanocontracts.faux_immutability import __freeze_obj__
 from hathor.nanocontracts.on_chain_blueprint import ALLOWED_IMPORTS, BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
@@ -239,7 +240,16 @@ def _generate_restricted_import_function(allowed_imports: dict[str, set[str]]) -
         for import_what in fromlist:
             if import_what not in allowed_fromlist:
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
-        return builtins.__import__(name=name, globals=globals, fromlist=fromlist, level=0)
+        module = builtins.__import__(name=name, globals=globals, fromlist=fromlist, level=0)
+
+        class FakeModule:
+            __slots__ = tuple(fromlist)
+        fake_module = FakeModule()
+        for name in fromlist:
+            obj = getattr(module, name)
+            setattr(fake_module, name, __freeze_obj__(obj))
+
+        return fake_module
     return __import__
 
 
