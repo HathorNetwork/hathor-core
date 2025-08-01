@@ -433,7 +433,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data2['success'])
 
     @inlineCallbacks
-    def test_fee_token(self):
+    def test_fee_token(self):  # TODO: Adding the return type is causing mypy to fail
         self.manager.wallet.unlock(b'MYPASS')
         resource = StubSite(TokenResource(self.manager))
 

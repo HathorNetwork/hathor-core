@@ -21,6 +21,7 @@ from typing_extensions import assert_never, override
 
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.rocksdb_utils import (
+    _INTERNAL_HATHOR_TOKEN_UID,
     InternalUid,
     RocksDBIndexUtils,
     from_internal_token_uid,
@@ -177,12 +178,41 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def _to_value_info(self, info: _InfoDict) -> bytes:
         return json_dumpb(info)
 
-    def _from_value_info(self, value: bytes) -> _InfoDict:
+    def _from_value_info(self, value: bytes, key_any: _KeyAny) -> _InfoDict:
+        """Deserialize token info from JSON bytes and handle backward compatibility.
+
+        This method converts stored JSON bytes back to a token info dictionary,
+        ensuring all required fields are present. It handles backward compatibility
+        by providing default values for missing fields that were added in later versions.
+
+        Args:
+            value: JSON-encoded bytes containing token information
+            key_any: The key used to retrieve this value
+
+        Returns:
+            A dictionary containing complete token information with all required fields
+
+        Raises:
+            AssertionError: If required fields are missing after applying defaults
+        """
         info = json_loadb(value)
         if info.get('n_contracts_can_mint') is None:
             assert info.get('n_contracts_can_melt') is None
             info['n_contracts_can_mint'] = 0
             info['n_contracts_can_melt'] = 0
+
+        if info.get('version') is None:
+            if key_any.token_uid_internal == _INTERNAL_HATHOR_TOKEN_UID:
+                info['version'] = TokenVersion.NATIVE
+            else:
+                info['version'] = TokenVersion.DEPOSIT
+
+        assert info.get('name') is not None
+        assert info.get('symbol') is not None
+        assert info.get('version') is not None
+        assert info.get('total') is not None
+        assert info.get('n_contracts_can_mint') is not None
+        assert info.get('n_contracts_can_melt') is not None
 
         return cast(_InfoDict, info)
 
@@ -282,7 +312,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self._create_genesis_info()
             old_value_info = self._db.get((self._cf, key_info))
         assert old_value_info is not None
-        dict_info = self._from_value_info(old_value_info)
+        dict_info = self._from_value_info(old_value_info, self._from_key_any(key_info))
         dict_info['total'] += amount
         new_value_info = self._to_value_info(dict_info)
         self._db.put((self._cf, key_info), new_value_info)
@@ -414,7 +444,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             if key_any.tag is not _Tag.INFO:
                 break
             self.log.debug('seek found', token=key_any.token_uid_internal.hex())
-            info = self._from_value_info(value)
+            info = self._from_value_info(value, key_any)
             token_uid = from_internal_token_uid(key_any.token_uid_internal)
             token_index_info = RocksDBTokenIndexInfo(self, token_uid, info)
             yield token_uid, token_index_info
@@ -425,7 +455,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         value = self._db.get((self._cf, key_info))
         if value is None:
             raise KeyError('unknown token')
-        info = self._from_value_info(value)
+        info = self._from_value_info(value, self._from_key_any(key_info))
         return RocksDBTokenIndexInfo(self, token_uid, info)
 
     @override
@@ -434,7 +464,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         key_info = self._to_key_info(record.token_uid)
         old_value_info = self._db.get((self._cf, key_info))
         assert old_value_info is not None
-        dict_info = self._from_value_info(old_value_info)
+        dict_info = self._from_value_info(old_value_info, self._from_key_any(key_info))
 
         increment: int
         match record.sub_type:
