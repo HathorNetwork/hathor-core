@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Sequence, TypeVar
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms
+from cryptography.hazmat.primitives.ciphers import Cipher, CipherContext, algorithms
 
 from hathor.difficulty import Hash
 
@@ -36,19 +36,20 @@ class NanoRNG(metaclass=NoMethodOverrideMeta):
     This implementation uses the ChaCha20 encryption as RNG.
     """
 
-    __slots__ = ('__seed', '__encryptor', '__frozen')
+    __slots__ = ('__seed', '__encryptor')
 
     def __init__(self, seed: bytes) -> None:
-        self.__seed = Hash(seed)
+        self.__seed: Hash
+        object.__setattr__(self, '_NanoRNG__seed', Hash(seed))
 
         key = self.__seed
         nonce = self.__seed[:16]
 
         algorithm = algorithms.ChaCha20(key, nonce)
         cipher = Cipher(algorithm, mode=None)
-        self.__encryptor = cipher.encryptor()
 
-        self.__frozen = True
+        self.__encryptor: CipherContext
+        object.__setattr__(self, '_NanoRNG__encryptor', cipher.encryptor())
 
     @classmethod
     def create_with_shell(cls, seed: bytes) -> NanoRNG:
@@ -63,9 +64,7 @@ class NanoRNG(metaclass=NoMethodOverrideMeta):
         return ShellNanoRNG(seed=seed)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if getattr(self, '_NanoRNG__frozen', False):
-            raise AttributeError("Cannot assign methods to this object.")
-        super().__setattr__(name, value)
+        raise AttributeError("Cannot assign methods to this object.")
 
     @property
     def seed(self) -> Hash:

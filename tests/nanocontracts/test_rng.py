@@ -73,36 +73,106 @@ class NCConsensusTestCase(SimulatorTestCase):
         seed = b'0' * 32
         rng = NanoRNG(seed=seed)
 
+        #
+        # Existing attribute on instance
+        #
+
+        # protected by overridden __setattr__
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+            rng._NanoRNG__seed = b'1' * 32
+
+        # protected by overridden __setattr__
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+            setattr(rng, '_NanoRNG__seed', b'1' * 32)
+
+        # it doesn't protect against this case
+        object.__setattr__(rng, '_NanoRNG__seed', b'changed')
+        assert getattr(rng, '_NanoRNG__seed') == b'changed'
+
+        #
+        # New attribute on instance
+        #
+
+        # protected by overridden NanoRNG.__setattr__
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+            rng.new_attr = 123
+
+        # protected by overridden NanoRNG.__setattr__
+        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+            setattr(rng, 'new_attr', 123)
+
+        # protected by __slots__
+        with pytest.raises(AttributeError, match="'NanoRNG' object has no attribute 'new_attr'"):
+            object.__setattr__(rng, 'new_attr', 123)
+
+        #
+        # Existing method on instance
+        #
+
+        # protected by overridden NanoRNG.__setattr__
         with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
             rng.random = lambda self: 2  # type: ignore[method-assign, misc, assignment]
 
+        # protected by overridden NanoRNG.__setattr__
         with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
             setattr(rng, 'random', lambda self: 2)
 
+        # protected by overridden NanoRNG.__setattr__
         with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
             from types import MethodType
             rng.random = MethodType(lambda self: 2, rng)  # type: ignore[method-assign]
 
+        # protected by __slots__
         with pytest.raises(AttributeError, match='\'NanoRNG\' object attribute \'random\' is read-only'):
             object.__setattr__(rng, 'random', lambda self: 2)
 
+        #
+        # Existing method on class
+        #
+
+        # protected by overridden NoMethodOverrideMeta.__setattr__
         with pytest.raises(AttributeError, match='Cannot override method `random`'):
             NanoRNG.random = lambda self: 2  # type: ignore[method-assign]
 
+        # protected by overridden NoMethodOverrideMeta.__setattr__
         with pytest.raises(AttributeError, match='Cannot override method `random`'):
             setattr(NanoRNG, 'random', lambda self: 2)
 
+        # protected by Python itself
         with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
             object.__setattr__(NanoRNG, 'random', lambda self: 2)
 
+        #
+        # Existing method on __class__
+        #
+
+        # protected by overridden NoMethodOverrideMeta.__setattr__
         with pytest.raises(AttributeError, match='Cannot override method `random`'):
             rng.__class__.random = lambda self: 2  # type: ignore[method-assign]
 
+        # protected by overridden NoMethodOverrideMeta.__setattr__
         with pytest.raises(AttributeError, match='Cannot override method `random`'):
             setattr(rng.__class__, 'random', lambda self: 2)
 
+        # protected by Python itself
         with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
             object.__setattr__(rng.__class__, 'random', lambda self: 2)
+
+        #
+        # New attribute on class
+        #
+
+        # protected by overridden NoMethodOverrideMeta.__setattr__
+        with pytest.raises(AttributeError, match='Cannot override method `new_attr`'):
+            NanoRNG.new_attr = 123
+
+        # protected by overridden NoMethodOverrideMeta.__setattr__
+        with pytest.raises(AttributeError, match='Cannot override method `new_attr`'):
+            setattr(NanoRNG, 'new_attr', 123)
+
+        # protected by Python itself
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+            object.__setattr__(NanoRNG, 'new_attr', 123)
 
         assert rng.random() < 1
 
