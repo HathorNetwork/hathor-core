@@ -218,7 +218,7 @@ class ImportFunction(Protocol):
         ...
 
 
-def _generate_restriced_import_function(allowed_imports: dict[str, set[str]]) -> ImportFunction:
+def _generate_restricted_import_function(allowed_imports: dict[str, set[str]]) -> ImportFunction:
     """Returns a function equivalent to builtins.__import__ but that will only import `allowed_imports`"""
     @_wraps(builtins.__import__)
     def __import__(
@@ -228,7 +228,7 @@ def _generate_restriced_import_function(allowed_imports: dict[str, set[str]]) ->
         fromlist: Sequence[str] = (),
         level: int = 0,
     ) -> types.ModuleType:
-        if level > 0:
+        if level != 0:
             raise ImportError('Relative imports are not allowed')
         if not fromlist and name != 'typing':
             # XXX: typing is allowed here because Foo[T] triggers a __import__('typing', fromlist=None) for some reason
@@ -329,7 +329,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: will trigger the execution of the imported module
     # (name: str, globals: Mapping[str, object] | None = None, locals: Mapping[str, object] | None = None,
     #  fromlist: Sequence[str] = (), level: int = 0) -> types.ModuleType
-    '__import__': _generate_restriced_import_function(ALLOWED_IMPORTS),
+    '__import__': _generate_restricted_import_function(ALLOWED_IMPORTS),
 
     # XXX: also required to declare classes
     # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name otherwise,
