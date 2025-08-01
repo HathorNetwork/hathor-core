@@ -45,17 +45,17 @@ class Context:
     __vertex: VertexData
     __timestamp: int
 
-    __ALLOWED_ATTRS__ = (
+    __ALLOWED_ATTRS__ = {
         'vertex',
         'address',
         'timestamp',
         'actions',
         'actions_list',
-    )
+    }
 
-    __ALLOWED_METHODS__ = (
+    __ALLOWED_METHODS__ = {
         'get_single_action',
-    )
+    }
 
     def __init__(
         self,

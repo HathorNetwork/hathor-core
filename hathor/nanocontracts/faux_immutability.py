@@ -80,18 +80,18 @@ def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None
     object.__setattr__(obj, name, value)
 
 def __freeze_obj__(obj: object) -> object:
-    allowed_attrs = getattr(obj, '__ALLOWED_ATTRS__', ())
-    allowed_methods = getattr(obj, '__ALLOWED_METHODS__', ())
+    allowed_attrs = getattr(obj, '__ALLOWED_ATTRS__', None)
+    allowed_methods = getattr(obj, '__ALLOWED_METHODS__', None)
 
-    if not allowed_attrs or not allowed_methods:
+    if allowed_attrs is None or allowed_methods is None:
         # TODO: Can't freeze
         return obj
 
-    return FrozenObj(obj=obj, allowed_attrs=allowed_attrs, allowed_methods=allowed_methods)
+    return FrozenWrapper(obj=obj, allowed_attrs=allowed_attrs, allowed_methods=allowed_methods)
 
 
 @final
-class FrozenCallable(FauxImmutable):
+class FrozenWrapperCallable(FauxImmutable):
     __slots__ = ('__callable',)
 
     def __init__(self, callable: object) -> None:
@@ -101,7 +101,7 @@ class FrozenCallable(FauxImmutable):
         return self.__callable(*args, **kwargs)
 
 @final
-class FrozenObj(FauxImmutable):
+class FrozenWrapper(FauxImmutable):
     __slots__ = ('__obj', '__allowed_attrs', '__allowed_methods')
 
     def __init__(self, *, obj: object, allowed_attrs: set[str], allowed_methods: set[str]) -> None:
@@ -114,7 +114,7 @@ class FrozenObj(FauxImmutable):
             return getattr(self.__obj, name)
 
         if name in self.__allowed_methods:
-            return FrozenCallable(getattr(self.__obj, name))
+            return FrozenWrapperCallable(getattr(self.__obj, name))
 
         raise AttributeError(f'FORBIDDEN! FORBIDDEN! {name}')
 
