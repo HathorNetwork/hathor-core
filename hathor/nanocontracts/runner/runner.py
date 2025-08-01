@@ -88,7 +88,7 @@ from hathor.transaction.util import (
     clean_token_string,
     get_deposit_token_deposit_amount,
     get_deposit_token_withdraw_amount,
-    validate_token_info,
+    validate_token_name_and_symbol,
 )
 
 P = ParamSpec('P')
@@ -977,7 +977,7 @@ class Runner:
     ) -> TokenUid:
         """Create a child deposit token from a contract."""
         try:
-            validate_token_info(self._settings, token_name, token_symbol, TokenVersion.DEPOSIT)
+            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
         except TransactionDataError as e:
             raise NCInvalidSyscall(str(e)) from e
 
@@ -1025,14 +1025,6 @@ class Runner:
         melt_authority: bool,
     ) -> TokenUid:
         """Create a child deposit token from a contract."""
-
-        if not self._settings.FEE_FEATURE_FLAG:
-            NCInvalidSyscall('Creating fee based tokens feature is not enabled')
-        try:
-            validate_token_info(self._settings, token_name, token_symbol, TokenVersion.FEE)
-        except TransactionDataError as e:
-            raise NCInvalidSyscall(str(e)) from e
-
         raise NotImplementedError('syscall not implemented')
 
     @_forbid_syscall_from_view('emit_event')

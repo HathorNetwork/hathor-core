@@ -9,6 +9,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
@@ -500,6 +501,14 @@ class TokenTest(unittest.TestCase):
         TokenCreationTransaction.deserialize_token_info(token_info)
         update_tx(tx)
         self.manager.verification_service.verify(tx)
+
+        # Hathor token version
+        tx.token_name = 'Test'
+        tx.token_symbol = 'tst'
+        tx.token_version = TokenVersion.NATIVE
+        update_tx(tx)
+        with pytest.raises(TransactionDataError, match=f'Invalid token version \\({tx.token_version}\\)'):
+            self.manager.verification_service.verify(tx)
 
     def test_token_mint_zero(self):
         # try to mint 0 tokens

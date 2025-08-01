@@ -237,6 +237,7 @@ class TransactionVerifier:
         """
         fee = token_dict.calculate_fee(self._settings)
         withdraw = 0
+        withdraw_without_authority = 0
         deposit = 0
         for token_uid, token_info in token_dict.items():
             if token_uid == self._settings.HATHOR_TOKEN_UID:
@@ -247,21 +248,38 @@ class TransactionVerifier:
                 pass
             elif token_info.amount < 0:
                 # tokens have been melted
-                if not token_info.can_melt and (fee == 0 or token_info.version != TokenVersion.DEPOSIT):
+                if not token_info.can_melt and token_info.version != TokenVersion.DEPOSIT:
                     raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
                         token_info.amount, token_uid.hex()))
                 if token_info.version == TokenVersion.DEPOSIT:
-                    withdraw += get_deposit_token_withdraw_amount(self._settings, token_info.amount)
+                    withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
+                    if token_info.can_melt:
+                        withdraw += withdraw_amount
+                    else:
+                        # Any melting operation without authority is forbidden.
+                        # It includes trying to pay fee with non-integer amounts.
+                        # For example (DBT - Deposit based token)
+                        # 1.99 DBT results in 0.01 HTR and (0.99 DBT melted) => this one is forbidden
+                        is_integer_amount = (token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer()
+                        if fee == 0 or not is_integer_amount:
+                            raise InputOutputMismatch(
+                                '{} {} tokens melted, but there is no melt authority input'.format(
+                                    token_info.amount, token_uid.hex()))
+                        withdraw_without_authority += withdraw_amount
             else:
-                # tokens have been minted
+                # token_info.amount > 0, so the transaction is minting tokens
                 if not token_info.can_mint:
                     raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
                         (-1) * token_info.amount, token_uid.hex()))
                 if token_info.version == TokenVersion.DEPOSIT:
                     deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
+        is_melting_without_authority = withdraw_without_authority - fee > 0
+        if is_melting_without_authority:
+            raise InputOutputMismatch('Melting tokens without a melt authority is forbidden')
+
         # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit - fee
+        htr_expected_amount = withdraw + withdraw_without_authority - deposit - fee
         htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(

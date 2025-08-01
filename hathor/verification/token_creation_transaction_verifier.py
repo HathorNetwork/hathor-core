@@ -14,10 +14,9 @@
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
-from hathor.transaction.fee import is_fee_tokens_enabled
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenVersion
-from hathor.transaction.util import validate_token_info
+from hathor.transaction.util import validate_token_name_and_symbol
 from hathor.types import TokenUid
 
 
@@ -43,8 +42,13 @@ class TokenCreationTransactionVerifier:
     def verify_token_info(self, tx: TokenCreationTransaction) -> None:
         """ Validates token info
         """
-        validate_token_info(self._settings, tx.token_name, tx.token_symbol, tx.token_version)
+        validate_token_name_and_symbol(self._settings, tx.token_name, tx.token_symbol)
 
-        # Can't create the token with a non activated version
-        if tx.token_version is TokenVersion.FEE and not is_fee_tokens_enabled(self._settings):
-            raise TransactionDataError('Invalid token info version ({})'.format(tx.token_version))
+        # Can't create the token with NATIVE or a non-activated version
+        version_validations = [
+            tx.token_version == TokenVersion.NATIVE,
+            tx.token_version == TokenVersion.FEE and not self._settings.ENABLE_FEE_TOKEN
+        ]
+
+        if any(version_validations):
+            raise TransactionDataError('Invalid token version ({})'.format(tx.token_version))

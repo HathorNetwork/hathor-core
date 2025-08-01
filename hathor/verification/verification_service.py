@@ -257,10 +257,11 @@ class VerificationService:
 
         We also overload verify_sum to make some different checks
         """
+        # we should validate the token info before verifying the tx
+        self.verifiers.token_creation_tx.verify_token_info(tx)
         token_dict = tx.get_complete_token_info()
         self._verify_tx(tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
-        self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction) -> None:
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
