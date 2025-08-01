@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
+from hathor.transaction.token_info import TokenVersion
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.runner.types import UpdateAuthoritiesRecord
@@ -52,6 +53,11 @@ class TokenIndexInfo(ABC):
     @abstractmethod
     def get_symbol(self) -> Optional[str]:
         """The token symbol"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_version(self) -> TokenVersion:
+        """The token version"""
         raise NotImplementedError
 
     @abstractmethod
@@ -135,6 +141,7 @@ class TokensIndex(BaseIndex):
         token_uid: bytes,
         name: str,
         symbol: str,
+        token_info_version: TokenVersion,
         total: int = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
@@ -148,6 +155,7 @@ class TokensIndex(BaseIndex):
         token_uid: bytes,
         name: str,
         symbol: str,
+        version: TokenVersion,
         total: int = 0,
     ) -> None:
         """Create a token info for a new token created in a contract."""

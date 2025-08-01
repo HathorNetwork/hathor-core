@@ -32,7 +32,7 @@ from hathor.nanocontracts.storage.contract_storage import (
 )
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid
-from hathor.transaction.token_creation_tx import TokenDescription
+from hathor.transaction.token_info import TokenDescription
 
 T = TypeVar('T')
 D = TypeVar('D')

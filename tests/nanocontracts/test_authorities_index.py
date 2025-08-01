@@ -44,7 +44,7 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def create_token(self, ctx: Context) -> None:
-        self.token_uid = self.syscall.create_token(token_name='token a', token_symbol='TKA', amount=1000)
+        self.token_uid = self.syscall.create_deposit_token(token_name='token a', token_symbol='TKA', amount=1000)
 
     @public(allow_acquire_authority=True)
     def allow_acquire_authority(self, ctx: Context) -> None:
