@@ -14,23 +14,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence, TypeVar
+from typing import Sequence, TypeVar, final
 
 from cryptography.hazmat.primitives.ciphers import Cipher, CipherContext, algorithms
 
 from hathor.difficulty import Hash
+from hathor.nanocontracts.faux_immutability import FauxImmutable, __set_faux_immutable__
 
 T = TypeVar('T')
 
 
-class NoMethodOverrideMeta(type):
-    __slots__ = ()
-
-    def __setattr__(cls, name: str, value: Any) -> None:
-        raise AttributeError(f'Cannot override method `{name}`')
-
-
-class NanoRNG(metaclass=NoMethodOverrideMeta):
+@final
+class NanoRNG(FauxImmutable):
     """Implement a deterministic random number generator that will be used by the sorter.
 
     This implementation uses the ChaCha20 encryption as RNG.
@@ -40,31 +35,15 @@ class NanoRNG(metaclass=NoMethodOverrideMeta):
 
     def __init__(self, seed: bytes) -> None:
         self.__seed: Hash
-        object.__setattr__(self, '_NanoRNG__seed', Hash(seed))
+        self.__encryptor: CipherContext
+        __set_faux_immutable__(self, '__seed', Hash(seed))
 
         key = self.__seed
         nonce = self.__seed[:16]
 
         algorithm = algorithms.ChaCha20(key, nonce)
         cipher = Cipher(algorithm, mode=None)
-
-        self.__encryptor: CipherContext
-        object.__setattr__(self, '_NanoRNG__encryptor', cipher.encryptor())
-
-    @classmethod
-    def create_with_shell(cls, seed: bytes) -> NanoRNG:
-        """Create a NanoRNG instance wrapped in a lightweight shell subclass.
-
-        This method dynamically creates a subclass of NanoRNG (a "shell" class) and instantiates it. The shell class is
-        useful to prevent sharing classes and objects among different contracts.
-        """
-        class ShellNanoRNG(NanoRNG):
-            __slots__ = ()
-
-        return ShellNanoRNG(seed=seed)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        raise AttributeError("Cannot assign methods to this object.")
+        __set_faux_immutable__(self, '__encryptor', cipher.encryptor())
 
     @property
     def seed(self) -> Hash:
