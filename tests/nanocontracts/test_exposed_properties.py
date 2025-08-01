@@ -45,15 +45,6 @@ KNOWN_CASES = [
     'hathor.nanocontracts.blueprint.Blueprint.log',
     'hathor.nanocontracts.blueprint.Blueprint.some_new_attribute',
     'hathor.nanocontracts.blueprint.Blueprint.syscall',
-    'hathor.nanocontracts.context.Context.actions',
-    'hathor.nanocontracts.context.Context.actions_list',
-    'hathor.nanocontracts.context.Context.address',
-    'hathor.nanocontracts.context.Context.copy',
-    'hathor.nanocontracts.context.Context.get_single_action',
-    'hathor.nanocontracts.context.Context.some_new_attribute',
-    'hathor.nanocontracts.context.Context.timestamp',
-    'hathor.nanocontracts.context.Context.to_json',
-    'hathor.nanocontracts.context.Context.vertex',
     'hathor.nanocontracts.exception.NCFail.add_note',
     'hathor.nanocontracts.exception.NCFail.args',
     'hathor.nanocontracts.exception.NCFail.some_new_attribute',
@@ -343,7 +334,7 @@ class TestMutableAttributes(BlueprintTestCase):
 
     def test_search_mutable_properties(self) -> None:
         mutable_props = sorted(self.runner.call_public_method(self.contract_id, 'check', self.create_context()))
-        debug = False
+        debug = True
         if debug:
             for prop in mutable_props:
                 print(f"    '{prop}',")

@@ -35,6 +35,7 @@ from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
+from hathor.nanocontracts.faux_immutable import __freeze_obj__
 from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
@@ -249,7 +250,7 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
             if import_what not in allowed_fromlist:
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
 
-            setattr(fake_module, import_what, allowed_fromlist[import_what])
+            setattr(fake_module, import_what, __freeze_obj__(allowed_fromlist[import_what]))
 
         # This cast is safe because the only requirement is that the object contains the imported attributes.
         return cast(types.ModuleType, fake_module)

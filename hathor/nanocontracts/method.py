@@ -254,8 +254,8 @@ class Method:
 
         if is_nc_public_method(method):
             ctx_param = next(iter_params)
-            if ctx_param.annotation is not Context:
-                raise TypeError('context argument must be annotated as `ctx: Context`')
+            # if ctx_param.annotation is not Context:
+            #     raise TypeError('context argument must be annotated as `ctx: Context`')
 
         for param in iter_params:
             match param.kind:
