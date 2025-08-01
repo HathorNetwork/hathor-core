@@ -15,8 +15,7 @@
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
-from hathor.nanocontracts.runner.types import NCArgs
-from hathor.nanocontracts.types import ContractId, fallback, view
+from hathor.nanocontracts.types import ContractId, NCArgs, fallback, view
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
