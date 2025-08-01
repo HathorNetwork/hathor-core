@@ -17,13 +17,13 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Sequence
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
+from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.exception import NCInvalidAction, NCInvalidSignature
 from hathor.nanocontracts.types import BaseAuthorityAction, NCAction, NCActionType, TokenUid
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import ScriptError, TooManySigOps
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
-from hathor.transaction.scripts import create_output_script, get_sigops_count
+from hathor.transaction.scripts import SigopCounter, create_output_script
 from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 
 MAX_NC_SCRIPT_SIZE: int = 1024
@@ -43,7 +43,10 @@ ALLOWED_ACTION_SETS: frozenset[frozenset[NCActionType]] = frozenset([
 
 
 class NanoHeaderVerifier:
-    __slots__ = ()
+    __slots__ = ('_settings',)
+
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
 
     def verify_nc_signature(self, tx: BaseTransaction) -> None:
         """Verify if the caller's signature is valid."""
@@ -59,8 +62,12 @@ class NanoHeaderVerifier:
                 f'nc_script larger than max: {len(nano_header.nc_script)} > {MAX_NC_SCRIPT_SIZE}'
             )
 
+        counter = SigopCounter(
+            max_multisig_pubkeys=self._settings.MAX_MULTISIG_PUBKEYS,
+            enable_checkdatasig_count=True,
+        )
         output_script = create_output_script(nano_header.nc_address)
-        sigops_count = get_sigops_count(nano_header.nc_script, output_script)
+        sigops_count = counter.get_sigops_count(nano_header.nc_script, output_script)
         if sigops_count > MAX_NC_SCRIPT_SIGOPS_COUNT:
             raise TooManySigOps(f'sigops count greater than max: {sigops_count} > {MAX_NC_SCRIPT_SIGOPS_COUNT}')
 

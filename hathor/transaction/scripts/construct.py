@@ -177,8 +177,18 @@ def parse_script_ops(data: bytes) -> Generator[_ScriptOperation, None, None]:
             yield _ScriptOperation(opcode=op, position=last_pos, data=None)
 
 
-def count_sigops(data: bytes) -> int:
-    """ Count number of signature operations on the script
+class SigopCounter:
+    def __init__(
+        self,
+        *,
+        max_multisig_pubkeys: int,
+        enable_checkdatasig_count: bool,
+    ) -> None:
+        self.max_multisig_pubkeys = max_multisig_pubkeys
+        self.enable_checkdatasig_count = enable_checkdatasig_count
+
+    def count_sigops(self, data: bytes) -> int:
+        """ Count number of signature operations on the script
 
         :param data: script to parse that contains data and opcodes
         :type data: bytes
@@ -190,40 +200,43 @@ def count_sigops(data: bytes) -> int:
 
         :return: number of signature operations the script would do if it was executed
         :rtype: int
-    """
-    from hathor.transaction.scripts import Opcode
-    from hathor.transaction.scripts.execute import decode_opn, get_script_op
-    settings = get_global_settings()
-    n_ops: int = 0
-    data_len: int = len(data)
-    pos: int = 0
-    last_opcode: Union[int, None] = None
+        """
+        from hathor.transaction.scripts import Opcode
+        from hathor.transaction.scripts.execute import decode_opn, get_script_op
+        n_ops: int = 0
+        data_len: int = len(data)
+        pos: int = 0
+        last_opcode: Union[int, None] = None
 
-    while pos < data_len:
-        opcode, pos = get_script_op(pos, data)
+        while pos < data_len:
+            opcode, pos = get_script_op(pos, data)
 
-        if opcode == Opcode.OP_CHECKSIG:
-            n_ops += 1
-        elif opcode == Opcode.OP_CHECKMULTISIG:
-            assert isinstance(last_opcode, int)
-            if Opcode.OP_0 <= last_opcode <= Opcode.OP_16:
-                # Conventional OP_CHECKMULTISIG: <sign_1>...<sign_m> <m> <pubkey_1>...<pubkey_n> <n> <checkmultisig>
-                # this function will run op_checksig with each pair (sign_x, pubkey_y) until all signatures
-                # are verified so the worst case scenario is n op_checksig and the best m op_checksig
-                # we know m <= n, so for now we are counting n operations (the upper limit)
-                n_ops += decode_opn(last_opcode)
-            else:
-                # Unconventional OP_CHECKMULTISIG:
-                # We count the limit for PUBKEYS, since this is also the upper limit on signature operations
-                # that any op_checkmultisig would run
-                n_ops += settings.MAX_MULTISIG_PUBKEYS
-        last_opcode = opcode
-    return n_ops
+            match opcode:
+                case Opcode.OP_CHECKSIG:
+                    n_ops += 1
+                case Opcode.OP_CHECKMULTISIG:
+                    if last_opcode is not None and Opcode.OP_0 <= last_opcode <= Opcode.OP_16:
+                        # Conventional OP_CHECKMULTISIG: <sign_1>...<sign_m> <m> <pubkey_1>...<pubkey_n> <n>
+                        # <checkmultisig> this function will run op_checksig with each pair (sign_x, pubkey_y) until
+                        # all signatures are verified so the worst case scenario is n op_checksig and the best m
+                        # op_checksig we know m <= n, so for now we are counting n operations (the upper limit)
+                        n_ops += decode_opn(last_opcode)
+                    else:
+                        # Unconventional OP_CHECKMULTISIG:
+                        # We count the limit for PUBKEYS, since this is also the upper limit on signature operations
+                        # that any op_checkmultisig would run
+                        n_ops += self.max_multisig_pubkeys
+                case Opcode.OP_CHECKDATASIG:
+                    if self.enable_checkdatasig_count:
+                        n_ops += 1
+            last_opcode = opcode
+        return n_ops
 
+    def get_sigops_count(self, data: bytes, output_script: Optional[bytes] = None) -> int:
+        """ Count number of signature operations on the script.
 
-def get_sigops_count(data: bytes, output_script: Optional[bytes] = None) -> int:
-    """ Count number of signature operations on the script, if it's an input script and the spent output is passed
-        check the spent output for MultiSig and count operations on redeem_script too
+        If it's an input script and the spent output is passed check the spent output for MultiSig and count operations
+        on redeem_script too.
 
         :param data: script to parse with opcodes
         :type data: bytes
@@ -236,17 +249,17 @@ def get_sigops_count(data: bytes, output_script: Optional[bytes] = None) -> int:
 
         :return: number of signature operations the script would do if it was executed
         :rtype: int
-    """
-    # If validating an input, should check the spent_tx for MultiSig
-    if output_script is not None:
-        # If it's multisig we have to validate the redeem_script sigop count
-        from hathor.transaction.scripts import MultiSig
-        if MultiSig.re_match.search(output_script):
-            multisig_data = MultiSig.get_multisig_data(data)
-            # input_script + redeem_script
-            return count_sigops(multisig_data)
+        """
+        # If validating an input, should check the spent_tx for MultiSig
+        if output_script is not None:
+            # If it's P2PSH we have to validate the redeem_script sigop count
+            from hathor.transaction.scripts import MultiSig
+            if MultiSig.re_match.search(output_script):
+                multisig_data = MultiSig.get_multisig_data(data)
+                # input_script + redeem_script
+                return self.count_sigops(multisig_data)
 
-    return count_sigops(data)
+        return self.count_sigops(data)
 
 
 def get_pushdata(data: bytes) -> bytes:
