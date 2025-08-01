@@ -1,3 +1,4 @@
+from io import TextIOWrapper
 from os import PathLike
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
@@ -88,8 +89,15 @@ class BlueprintTestCase(unittest.TestCase):
     def register_blueprint_file(self, path: PathLike[str], blueprint_id: BlueprintId | None = None) -> BlueprintId:
         """Register a blueprint file with an optional id, allowing contracts to be created from it."""
         with open(path, 'r') as f:
-            code = Code.from_python_code(f.read(), self._settings)
+            return self.register_blueprint_contents(f, blueprint_id)
 
+    def register_blueprint_contents(
+        self,
+        contents: TextIOWrapper,
+        blueprint_id: BlueprintId | None = None,
+    ) -> BlueprintId:
+        """Register blueprint contents with an optional id, allowing contracts to be created from it."""
+        code = Code.from_python_code(contents.read(), self._settings)
         verifier = OnChainBlueprintVerifier(settings=self._settings)
         ocb = OnChainBlueprint(hash=b'', code=code)
         verifier.verify_code(ocb)
