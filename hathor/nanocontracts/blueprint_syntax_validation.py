@@ -18,7 +18,7 @@ import inspect
 from typing import Callable
 
 from hathor.nanocontracts.exception import BlueprintSyntaxError
-from hathor.nanocontracts.faux_immutability import FrozenObj
+from hathor.nanocontracts.faux_immutability import FrozenWrapper
 
 
 def validate_has_self_arg(fn: Callable, annotation_name: str) -> None:
@@ -86,7 +86,7 @@ def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:
     from hathor.nanocontracts import Context
     second_arg = arg_spec.args[1]
     second_ann = arg_spec.annotations[second_arg]
-    is_context = second_ann.is_(Context) if isinstance(second_ann, FrozenObj) else second_ann is Context
+    is_context = second_ann.is_(Context) if isinstance(second_ann, FrozenWrapper) else second_ann is Context
     if not is_context:
         raise BlueprintSyntaxError(
             f'@{annotation_name} method second arg `{second_arg}` argument must be of type `Context`: '
