@@ -184,6 +184,19 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             info['n_contracts_can_mint'] = 0
             info['n_contracts_can_melt'] = 0
 
+        if info.get('version') is None:
+            if info.get('name') == self._settings.HATHOR_TOKEN_NAME:
+                info['version'] = TokenVersion.NATIVE
+            else:
+                info['version'] = TokenVersion.DEPOSIT
+
+        assert info['name'] is not None
+        assert info['symbol'] is not None
+        assert info['version'] is not None
+        assert info['total'] is not None
+        assert info['n_contracts_can_mint'] is not None
+        assert info['n_contracts_can_melt'] is not None
+
         return cast(_InfoDict, info)
 
     def create_token_info(

@@ -1,3 +1,17 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -36,16 +50,6 @@ class TokenInfo:
             can_mint=can_mint,
             can_melt=can_melt,
             version=version,
-        )
-
-    @classmethod
-    def get_htr_default(cls):
-        """Create a default token info for HTR"""
-        return TokenInfo(
-            amount=0,
-            can_mint=False,
-            can_melt=False,
-            version=TokenVersion.NATIVE,
         )
 
 
