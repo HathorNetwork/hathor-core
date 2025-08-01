@@ -167,6 +167,7 @@ KNOWN_CASES = [
     'memoryview.tobytes',
     'memoryview.tolist',
     'memoryview.toreadonly',
+    'object.some_new_attribute',
     'open.some_new_attribute',
     'print.some_new_attribute',
     'property.deleter',
@@ -192,6 +193,9 @@ KNOWN_CASES = [
     'range.stop',
     'repr.some_new_attribute',
     'setattr.some_new_attribute',
+    'super.some_new_attribute',
+    'type.mro',
+    'type.some_new_attribute',
     'vars.some_new_attribute',
 ]
 

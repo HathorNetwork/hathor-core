@@ -106,6 +106,9 @@ AST_NAME_BLACKLIST: set[str] = {
     'open',
     'setattr',
     'vars',
+    'type',
+    'object',
+    'super',
 }
 
 

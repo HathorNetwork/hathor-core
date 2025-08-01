@@ -514,11 +514,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'next': builtins.next,
 
     # O(1)
-    # type object
-    # () -> object
-    'object': builtins.object,
-
-    # O(1)
     # (number: int | SupportsIndex, /) -> str
     'oct': builtins.object,
 
@@ -586,24 +581,11 @@ EXEC_BUILTINS: dict[str, Any] = {
     # (iterable: Iterable[T], /, start: T) -> T
     'sum': builtins.sum,
 
-    # O(1)
-    # type super
-    # (t: Any, obj: Any, /) -> super
-    # (t: Any, /) -> super
-    # () -> super
-    'super': builtins.super,
-
     # XXX: consumes an iterator when calling
     # O(N) for N=len(iterable)
     # type tuple(Sequence[T])
     # (iterable: Iterable[T] = ..., /) -> tuple[T]
     'tuple': builtins.tuple,
-
-    # O(1)
-    # type type
-    # (o: object, /) -> type
-    # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
-    'type': builtins.type,
 
     # O(1)
     # type zip(Iterator[T])
@@ -766,7 +748,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: used to dynamically set attributes, must not be allowed
     'setattr': _generate_disabled_builtin_func('setattr'),
 
-    # XXX: same reasoning as locals
+    # XXX: can be used to inspect an object's attributes, including "private" ones
     'vars': _generate_disabled_builtin_func('vars'),
 
     # XXX: disallow just in case
@@ -791,4 +773,25 @@ EXEC_BUILTINS: dict[str, Any] = {
     #     doc: str | None = ...,
     # ) -> property
     'property': _generate_disabled_builtin_func('property'),
+
+    # XXX: Can be used to get an object's class and its metaclass
+    # O(1)
+    # type type
+    # (o: object, /) -> type
+    # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
+    'type': _generate_disabled_builtin_func('type'),
+
+    # XXX: Root object which contains dangerous methods such as `__setattr__`
+    # O(1)
+    # type object
+    # () -> object
+    'object': _generate_disabled_builtin_func('object'),
+
+    # XXX: Can be used to get the root `object`
+    # O(1)
+    # type super
+    # (t: Any, obj: Any, /) -> super
+    # (t: Any, /) -> super
+    # () -> super
+    'super': _generate_disabled_builtin_func('super'),
 }
