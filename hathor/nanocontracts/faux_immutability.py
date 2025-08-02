@@ -82,12 +82,16 @@ def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None
         name = f'_{obj.__class__.__name__}{name}'
     object.__setattr__(obj, name, value)
 
-def __freeze_obj__(obj: object) -> object:
-    if type(obj) not in _FREEZABLE_TYPES:
-        # TODO: Can't freeze
-        return obj
+def __freeze__(obj: object) -> object:
+    ty = obj if isinstance(obj, type) else type(obj)
+    if ty is FrozenWrapper:
+        return ty
 
-    return FrozenWrapper(obj)
+    if ty not in _FREEZABLE_TYPES:
+        # TODO: Can't freeze
+        return ty
+
+    return FrozenWrapper(obj, ty)
 
 
 @final
@@ -102,16 +106,17 @@ class FrozenWrapperCallable(FauxImmutable):
 
 @final
 class FrozenWrapper(FauxImmutable):
-    __slots__ = ('__obj',)
+    __slots__ = ('__obj', '__ty')
 
-    def __init__(self, obj: object) -> None:
+    def __init__(self, obj: object, ty: type) -> None:
         __set_faux_immutable__(self, '__obj', obj)
+        __set_faux_immutable__(self, '__ty', ty)
 
     def __getattr__(self, name):
-        allowed_attrs, allowed_methods = _FREEZABLE_TYPES[type(self.__obj)]
+        allowed_attrs, allowed_methods = _FREEZABLE_TYPES[self.__ty]
 
         if name in allowed_attrs:
-            return getattr(self.__obj, name)
+            return __freeze__(getattr(self.__obj, name))
 
         if name in allowed_methods:
             return FrozenWrapperCallable(getattr(self.__obj, name))
@@ -122,7 +127,7 @@ class FrozenWrapper(FauxImmutable):
         return self.__obj is obj
 
     def __dir__(self):
-        allowed_attrs, allowed_methods = _FREEZABLE_TYPES[type(self.__obj)]
+        allowed_attrs, allowed_methods = _FREEZABLE_TYPES[self.__ty]
         return tuple(allowed_attrs | allowed_methods)
 
 
