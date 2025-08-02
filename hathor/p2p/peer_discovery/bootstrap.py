@@ -39,4 +39,4 @@ class BootstrapPeerDiscovery(PeerDiscovery):
     @override
     async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
         for entrypoint in self.entrypoints:
-            connect_to_endpoint(entrypoint)
+            connect_to_endpoint(entrypoint, discovery_call=True)  # type: ignore[call-arg]
