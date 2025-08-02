@@ -88,7 +88,7 @@ class CodeBlueprint3(Blueprint):
     def inc(self, ctx: Context) -> None:
         self.counter += 3
 
-    @public
+    @public(allow_reentrancy=True)
     def on_upgrade_inc(self, ctx: Context) -> None:
         self.counter += 100
 
