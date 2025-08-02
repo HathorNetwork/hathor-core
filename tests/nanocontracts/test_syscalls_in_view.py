@@ -98,8 +98,12 @@ class MyBlueprint(Blueprint):
         self.syscall.emit_event(b'')
 
     @view
-    def create_token(self) -> None:
-        self.syscall.create_token('', '', 0)
+    def create_deposit_token(self) -> None:
+        self.syscall.create_deposit_token('', '', 0)
+
+    @view
+    def create_fee_token(self) -> None:
+        self.syscall.create_fee_token('', '', 0)
 
     @view
     def proxy_call_public_method(self) -> None:

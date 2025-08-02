@@ -21,9 +21,8 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.validation_state import ValidationState
-from hathor.types import TokenUid
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
 cpu = get_cpu_profiler()
@@ -228,7 +227,7 @@ class VerificationService:
         tx: Transaction,
         *,
         reject_locked_reward: bool,
-        token_dict: dict[TokenUid, TokenInfo] | None = None
+        token_dict: TokenInfoDict | None = None
     ) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
