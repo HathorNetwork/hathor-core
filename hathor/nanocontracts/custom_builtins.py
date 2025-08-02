@@ -600,12 +600,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'tuple': builtins.tuple,
 
     # O(1)
-    # type type
-    # (o: object, /) -> type
-    # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
-    'type': builtins.type,
-
-    # O(1)
     # type zip(Iterator[T])
     # (iter: Iterable[T], /, *, strict: bool = ...) -> zip[tuple[T]]
     # (iter1: Iterable[T1], iter2: Iterable[T2], /, *, strict: bool = ...) -> zip[tuple[T1, T2]]
@@ -791,4 +785,11 @@ EXEC_BUILTINS: dict[str, Any] = {
     #     doc: str | None = ...,
     # ) -> property
     'property': _generate_disabled_builtin_func('property'),
+
+    # XXX: Can be used to get an object's class and its metaclass
+    # O(1)
+    # type type
+    # (o: object, /) -> type
+    # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
+    'type': _generate_disabled_builtin_func('type'),
 }
