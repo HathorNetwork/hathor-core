@@ -187,9 +187,8 @@ class CallRecord:
     # The context passed in this call.
     ctx: Context | None
 
-    # The args and kwargs provided to the method.
+    # The args provided to the method.
     args: tuple[Any, ...]
-    kwargs: dict[str, Any]
 
     # Keep track of all changes made by this call.
     changes_tracker: NCChangesTracker

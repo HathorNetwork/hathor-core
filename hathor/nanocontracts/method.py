@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from inspect import Parameter, _empty as EMPTY, signature
+from inspect import Parameter, Signature, _empty as EMPTY, signature
 from types import FunctionType, MethodType
 from typing import Any, TypeVar
 
@@ -41,27 +41,35 @@ MAX_BYTES_SERIALIZED_ARG: int = 1000
 
 def _deserialize_map_exception(nc_type: NCType[T], data: bytes) -> T:
     """ Internal handy method to deserialize `bytes` to `T` while mapping the exceptions."""
-    deserializer = Deserializer.build_bytes_deserializer(data)
     try:
+        deserializer = Deserializer.build_bytes_deserializer(data)
         value = nc_type.deserialize(deserializer)
+        deserializer.finalize()
+        return value
     except MaxBytesExceededError as e:
         raise NCSerializationArgTooLong from e
     except SerializationError as e:
         raise NCSerializationError from e
-    deserializer.finalize()
-    return value
+    except NCFail:
+        raise
+    except Exception as e:
+        raise NCFail from e
 
 
 def _serialize_map_exception(nc_type: NCType[T], value: T) -> bytes:
     """ Internal handy method to serialize `T` to `bytes` while mapping the exceptions."""
-    serializer = Serializer.build_bytes_serializer()
     try:
+        serializer = Serializer.build_bytes_serializer()
         nc_type.serialize(serializer, value)
+        return bytes(serializer.finalize())
     except MaxBytesExceededError as e:
         raise NCSerializationArgTooLong from e
     except SerializationError as e:
         raise NCSerializationError from e
-    return bytes(serializer.finalize())
+    except NCFail:
+        raise
+    except Exception as e:
+        raise NCFail from e
 
 
 class _ArgsNCType(NCType):
@@ -91,7 +99,7 @@ class _ArgsNCType(NCType):
         with serializer.with_max_bytes(self._max_bytes) as serializer:
             num_args = len(args)
             if num_args > len(self._args):
-                raise TypeError('too many argumens')
+                raise TypeError('too many arguments')
             # XXX: default arguments are currently not supported, thus we reject too few arguments too
             if num_args < len(self._args):
                 raise TypeError('too few arguments')
@@ -105,7 +113,7 @@ class _ArgsNCType(NCType):
             # TODO: normalize exceptions
             num_args = _num_args_nc_type.deserialize(deserializer)
             if num_args > len(self._args):
-                raise TypeError('too many argumens')
+                raise TypeError('too many arguments')
             # XXX: default arguments are currently not supported, thus we reject too few arguments too
             if num_args < len(self._args):
                 raise TypeError('too few arguments')
@@ -128,7 +136,7 @@ class _ArgsNCType(NCType):
 class ArgsOnly:
     """ This class is used to parse only arguments of a call, when all that is provided is a list of argument types.
 
-    It's primary use is for implementing `NCRawArgs.try_parse_as`.
+    Its primary use is for implementing `NCRawArgs.try_parse_as`.
     """
     args: _ArgsNCType
 
@@ -150,9 +158,35 @@ class ArgsOnly:
         return _serialize_map_exception(self.args, args)
 
     def deserialize_args_bytes(self, data: bytes) -> tuple[Any, ...]:
-        """ Shortcut to deserialize args directly from bytes instead of using a deserilizer.
+        """ Shortcut to deserialize args directly from bytes instead of using a deserializer.
         """
         return _deserialize_map_exception(self.args, data)
+
+
+class ReturnOnly:
+    """
+    This class is used to parse only the return of a method.
+
+    Its primary use is for validating the fallback method.
+    """
+    return_nc_type: NCType
+
+    def __init__(self, return_nc_type: NCType) -> None:
+        self.return_nc_type = return_nc_type
+
+    @classmethod
+    def from_callable(cls, method: Callable) -> Self:
+        method_signature = _get_method_signature(method)
+        nc_type = make_nc_type_for_return_type(method_signature.return_annotation)
+        return cls(nc_type)
+
+    def serialize_return_bytes(self, return_value: Any) -> bytes:
+        """Shortcut to serialize a return value directly to bytes instead of using a serializer."""
+        return _serialize_map_exception(self.return_nc_type, return_value)
+
+    def deserialize_return_bytes(self, data: bytes) -> Any:
+        """Shortcut to deserialize a return value directly from bytes instead of using a deserializer."""
+        return _deserialize_map_exception(self.return_nc_type, data)
 
 
 # XXX: currently the relationship between the method's signature's types and the `NCType`s type's cannot be described
@@ -167,18 +201,28 @@ class Method:
     For arguments, `make_nc_type_for_arg_type` is used, which tends to preserve original types as much as possible, but
     for return types `make_nc_type_for_return_type` is used, which supports `None`.
     """
+    name: str
+    arg_names: tuple[str, ...]
     args: _ArgsNCType
     return_: NCType
 
-    def __init__(self, args_nc_type: _ArgsNCType, return_nc_type: NCType) -> None:
+    def __init__(
+        self,
+        *,
+        name: str,
+        arg_names: Iterable[str],
+        args_nc_type: _ArgsNCType,
+        return_nc_type: NCType,
+    ) -> None:
         """Do not build directly, use `Method.from_callable`"""
+        self.name = name
+        self.arg_names = tuple(arg_names)
         self.args = args_nc_type
         self.return_ = return_nc_type
 
     @classmethod
     def from_callable(cls, method: Callable) -> Self:
-        if not callable(method):
-            raise TypeError(f'{method!r} is not a callable object')
+        method_signature = _get_method_signature(method)
 
         # XXX: bound methods don't have the self argument
         is_bound_method: bool
@@ -191,23 +235,12 @@ class Method:
             case _:
                 raise TypeError(f'{method!r} is neither a function or a bound method')
 
-        # XXX: explicit all arguments to explain the choices, even if default
-        method_signature = signature(
-            method,
-            follow_wrapped=True,  # we're interested in the implementation's signature, so we follow wrappers
-            globals=None,  # don't expose any global
-            locals=None,  # don't expose any local
-            # XXX: do not evaluate strings, this means `from __future__ import annotations` is not supported, ideally
-            #      we should support it because it's very convenient, but it must be done with care, otherwise we could
-            #      run into cases that do `def foo(self, i: '2**100**100') -> None`, which is syntatically legal
-            eval_str=False,
-        )
-
         for param in method_signature.parameters.values():
             if isinstance(param.annotation, str):
                 raise TypeError('string annotations (including `from __future__ import annotations`), '
                                 'are not supported')
 
+        arg_names = []
         args_nc_types = []
         iter_params = iter(method_signature.parameters.values())
 
@@ -244,25 +277,47 @@ class Method:
             # XXX: this can (and probably will) be implemented in the future
             if param.default is not EMPTY:
                 raise TypeError('default values are not supported')
+            arg_names.append(param.name)
             args_nc_types.append(make_nc_type_for_arg_type(param.annotation))
 
         return cls(
-            _ArgsNCType(args_nc_types, max_bytes=MAX_BYTES_SERIALIZED_ARG),
-            make_nc_type_for_return_type(method_signature.return_annotation),
+            name=method.__name__,
+            arg_names=arg_names,
+            args_nc_type=_ArgsNCType(args_nc_types, max_bytes=MAX_BYTES_SERIALIZED_ARG),
+            return_nc_type=make_nc_type_for_return_type(method_signature.return_annotation),
         )
 
-    def serialize_args_bytes(self, args: tuple[Any, ...] | list[Any]) -> bytes:
+    def serialize_args_bytes(self, args: tuple[Any, ...] | list[Any], kwargs: dict[str, Any] | None = None) -> bytes:
         """ Shortcut to serialize args directly to a bytes instead of using a serializer.
         """
-        return _serialize_map_exception(self.args, args)
+        if len(args) > len(self.arg_names):
+            raise NCFail('too many arguments')
+
+        merged: dict[str, Any] = {}
+        for index, arg in enumerate(args):
+            name = self.arg_names[index]
+            merged[name] = arg
+
+        kwargs = kwargs or {}
+        for name, arg in kwargs.items():
+            if name not in self.arg_names:
+                raise NCFail(f"{self.name}() got an unexpected keyword argument '{name}'")
+            if name in merged:
+                raise NCFail(f"{self.name}() got multiple values for argument '{name}'")
+            merged[name] = arg
+
+        ordered_args = []
+        for name in self.arg_names:
+            if name not in merged:
+                raise NCFail(f"{self.name}() missing required argument: '{name}'")
+            ordered_args.append(merged[name])
+
+        return _serialize_map_exception(self.args, tuple(ordered_args))
 
     def deserialize_args_bytes(self, data: bytes) -> tuple[Any, ...]:
         """ Shortcut to deserialize args directly from bytes instead of using a deserializer.
         """
-        try:
-            return _deserialize_map_exception(self.args, data)
-        except Exception as e:
-            raise NCFail from e
+        return _deserialize_map_exception(self.args, data)
 
     def serialize_return_bytes(self, return_value: Any) -> bytes:
         """ Shortcut to serialize a return value directly to a bytes instead of using a serializer.
@@ -273,3 +328,20 @@ class Method:
         """ Shortcut to deserialize a return value directly from bytes instead of using a deserializer.
         """
         return _deserialize_map_exception(self.return_, data)
+
+
+def _get_method_signature(method: Callable) -> Signature:
+    if not callable(method):
+        raise TypeError(f'{method!r} is not a callable object')
+
+    # XXX: explicit all arguments to explain the choices, even if default
+    return signature(
+        method,
+        follow_wrapped=True,  # we're interested in the implementation's signature, so we follow wrappers
+        globals=None,  # don't expose any global
+        locals=None,  # don't expose any local
+        # XXX: do not evaluate strings, this means `from __future__ import annotations` is not supported, ideally
+        #      we should support it because it's very convenient, but it must be done with care, otherwise we could
+        #      run into cases that do `def foo(self, i: '2**100**100') -> None`, which is syntactically legal
+        eval_str=False,
+    )

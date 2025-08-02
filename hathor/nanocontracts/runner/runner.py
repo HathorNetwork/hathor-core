@@ -39,7 +39,7 @@ from hathor.nanocontracts.exception import (
     NCViewMethodError,
 )
 from hathor.nanocontracts.metered_exec import MeteredExecutor
-from hathor.nanocontracts.method import Method
+from hathor.nanocontracts.method import Method, ReturnOnly
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.types import (
     CallInfo,
@@ -76,6 +76,7 @@ from hathor.nanocontracts.types import (
 from hathor.nanocontracts.utils import (
     derive_child_contract_id,
     derive_child_token_id,
+    is_nc_fallback_method,
     is_nc_public_method,
     is_nc_view_method,
 )
@@ -538,30 +539,23 @@ class Runner:
         method = getattr(blueprint, method_name, None)
 
         called_method_name: str = method_name
+        parser: Method | ReturnOnly
         args: tuple[Any, ...]
-        kwargs: dict[str, Any]
         if method is None:
             assert method_name != NC_INITIALIZE_METHOD
             fallback_method = getattr(blueprint, NC_FALLBACK_METHOD, None)
             if fallback_method is None:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
             method = fallback_method
+            assert is_nc_fallback_method(method)
+            parser = ReturnOnly.from_callable(method)
             called_method_name = NC_FALLBACK_METHOD
             args = method_name, nc_args
-            kwargs = {}
         else:
             if not is_nc_public_method(method):
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
-            match nc_args:
-                case NCRawArgs(args_bytes):
-                    parser = Method.from_callable(method)
-                    args = parser.deserialize_args_bytes(args_bytes)
-                    kwargs = {}
-                case NCParsedArgs():
-                    args = nc_args.args
-                    kwargs = nc_args.kwargs
-                case _:
-                    assert_never(nc_args)
+            parser = Method.from_callable(method)
+            args = self._validate_nc_args_for_method(parser, nc_args)
 
         call_record = CallRecord(
             type=CallType.PUBLIC,
@@ -571,7 +565,6 @@ class Runner:
             method_name=called_method_name,
             ctx=ctx,
             args=args,
-            kwargs=kwargs,
             changes_tracker=changes_tracker,
             index_updates=[],
         )
@@ -588,7 +581,7 @@ class Runner:
             # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
             # impact the original context. Since the runner relies on the context for other critical checks, any
             # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
+            ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
         except NCFail:
             raise
         except Exception as e:
@@ -599,7 +592,37 @@ class Runner:
             call_record.changes_tracker.commit()
 
         self._call_info.post_call(call_record)
-        return ret
+        return self._validate_return_type_for_method(parser, ret)
+
+    @staticmethod
+    def _validate_nc_args_for_method(method: Method, nc_args: NCArgs) -> tuple[Any, ...]:
+        """
+        Given a method and its NCArgs, return the merged args and kwargs,
+        while validating their types and cloning the objects.
+        """
+        args_bytes: bytes
+        match nc_args:
+            case NCParsedArgs():
+                # Even though we could simply validate the type with `check_value/isinstance` and return the args,
+                # we do a round-trip to create a new instance and secure mutation of objects across contracts.
+                args_bytes = method.serialize_args_bytes(nc_args.args, nc_args.kwargs)
+            case NCRawArgs(args_bytes):
+                # Nothing to do, we can just deserialize the bytes directly.
+                pass
+            case _:
+                assert_never(nc_args)
+
+        return method.deserialize_args_bytes(args_bytes)
+
+    @staticmethod
+    def _validate_return_type_for_method(method: Method | ReturnOnly, return_value: Any) -> Any:
+        """
+        Given a method and its return value, return that value, while validating its type and cloning the object.
+        """
+        # Even though we could simply validate the type with `check_value/isinstance` and return the value,
+        # we do a round-trip to create a new instance and secure mutation of objects across contracts.
+        return_bytes = method.serialize_return_bytes(return_value)
+        return method.deserialize_return_bytes(return_bytes)
 
     def call_view_method(self, contract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method."""
@@ -665,6 +688,16 @@ class Runner:
 
         changes_tracker = self._create_changes_tracker(contract_id)
         blueprint_id = self.get_blueprint_id(contract_id)
+        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        method = getattr(blueprint, method_name, None)
+
+        if method is None:
+            raise NCMethodNotFound(method_name)
+        if not is_nc_view_method(method):
+            raise NCInvalidMethodCall('not a view method')
+
+        parser = Method.from_callable(method)
+        args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
 
         call_record = CallRecord(
             type=CallType.VIEW,
@@ -674,27 +707,18 @@ class Runner:
             method_name=method_name,
             ctx=None,
             args=args,
-            kwargs=kwargs,
             changes_tracker=changes_tracker,
             index_updates=None,
         )
         self._call_info.pre_call(call_record)
 
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
-        method = getattr(blueprint, method_name)
-
-        if method is None:
-            raise NCMethodNotFound(method_name)
-        if not is_nc_view_method(method):
-            raise NCInvalidMethodCall('not a view method')
-
-        ret = self._metered_executor.call(method, *args, **kwargs)
+        ret = self._metered_executor.call(method, args=args)
 
         if not changes_tracker.is_empty():
             raise NCViewMethodError('view methods cannot change the state')
 
         self._call_info.post_call(call_record)
-        return ret
+        return self._validate_return_type_for_method(parser, ret)
 
     def get_balance_before_current_call(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
         """
