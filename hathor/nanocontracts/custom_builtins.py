@@ -240,6 +240,9 @@ def _generate_restricted_import_function(allowed_imports: dict[str, set[str]]) -
         for import_what in fromlist:
             if import_what not in allowed_fromlist:
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
+        # TODO: We don't really need to call the builtin import. We can simply return the objects ourselves, from a
+        #  constant dict with all allowed objects. And we can easily modify them if necessary. Just like we do for
+        #  custom builtins.
         module = builtins.__import__(name=name, globals=globals, fromlist=fromlist, level=0)
 
         class FakeModule:
