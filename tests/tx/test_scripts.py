@@ -747,7 +747,7 @@ class TestScripts(unittest.TestCase):
         for addr in addrs:
             script = create_base_script(addr)
             self.assertIsInstance(script, P2PKH)
-            self.assertEqual(script.get_type(), 'P2PKH')
+            self.assertEqual(script.get_info().type, 'P2PKH')
             self.assertEqual(script.get_address(), addr)
             self.assertEqual(script.get_timelock(), None)
             baddress = base58.b58decode(addr)
@@ -764,7 +764,7 @@ class TestScripts(unittest.TestCase):
         for addr in addrs:
             script = create_base_script(addr)
             self.assertIsInstance(script, MultiSig)
-            self.assertEqual(script.get_type(), 'MultiSig')
+            self.assertEqual(script.get_info().type, 'MultiSig')
             self.assertEqual(script.get_address(), addr)
             self.assertEqual(script.get_timelock(), None)
             baddress = base58.b58decode(addr)

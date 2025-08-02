@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import Self
 
+from hathor.transaction.scripts import parse_address_script
+from hathor.transaction.scripts.base_script import ScriptInfo
 from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
@@ -129,14 +131,17 @@ class TxInputData:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TxOutputData:
     value: int
-    script: bytes
+    raw_script: bytes
+    parsed_script: ScriptInfo | None
     token_data: int
 
     @classmethod
     def create_from_txout(cls, txout: TxOutput) -> Self:
+        parsed = parse_address_script(txout.script)
         return cls(
             value=txout.value,
-            script=txout.script,
+            raw_script=txout.script,
+            parsed_script=parsed.get_info() if parsed is not None else None,
             token_data=txout.token_data,
         )
 

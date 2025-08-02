@@ -74,7 +74,7 @@ class _ValidateAddressResource(Resource):
                 'valid': True,
                 'script': base64.b64encode(base_script.get_script()).decode('ascii'),
                 'address': base_script.get_address(),
-                'type': base_script.get_type().lower(),
+                'type': base_script.get_info().type.lower(),
             }
 
         return json_dumpb(ret)

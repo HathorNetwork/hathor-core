@@ -46,25 +46,10 @@ class MultiSig(BaseScript):
         self.address = address
         self.timelock = timelock
 
-    def to_human_readable(self) -> dict[str, Any]:
-        """ Decode MultiSig class to dict with its type and data
-
-            :return: dict with MultiSig info
-            :rtype: dict[str:]
-        """
-        ret: dict[str, Any] = {}
-        ret['type'] = self.get_type()
-        ret['address'] = self.address
-        ret['timelock'] = self.timelock
-        return ret
-
-    def get_type(self) -> str:
-        return 'MultiSig'
-
     def get_script(self) -> bytes:
         return MultiSig.create_output_script(decode_address(self.address), self.timelock)
 
-    def get_address(self) -> Optional[str]:
+    def get_address(self) -> str:
         return self.address
 
     def get_timelock(self) -> Optional[int]:

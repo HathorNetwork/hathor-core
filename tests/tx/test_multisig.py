@@ -133,7 +133,7 @@ class MultisigTestCase(unittest.TestCase):
         self.assertEqual(cls_script.address, self.multisig_address_b58)
 
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
-        self.assertEqual(cls_script.to_human_readable(), expected_dict)
+        self.assertEqual(cls_script.get_info().to_dict(), expected_dict)
 
         script_eval(tx, tx_input, tx1)
 

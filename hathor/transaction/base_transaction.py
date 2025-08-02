@@ -1112,7 +1112,7 @@ class TxOutput:
 
         script_type = parse_address_script(self.script)
         if script_type:
-            ret = script_type.to_human_readable()
+            ret = script_type.get_info().to_dict()
             ret['value'] = self.value
             ret['token_data'] = self.token_data
             return ret
