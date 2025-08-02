@@ -282,15 +282,6 @@ class NCActionType(Enum):
     GRANT_AUTHORITY = 3
     ACQUIRE_AUTHORITY = 4
 
-    __ALLOWED_ATTRS__ = {
-        'DEPOSIT',
-        'WITHDRAWAL',
-        'GRANT_AUTHORITY',
-        'ACQUIRE_AUTHORITY',
-    }
-
-    __ALLOWED_METHODS__ = {}
-
     def __str__(self) -> str:
         return self.name
 

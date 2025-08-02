@@ -14,6 +14,9 @@
 
 from typing import final
 
+from hathor.nanocontracts import Context
+from hathor.nanocontracts.types import NCActionType
+
 
 class _FauxImmutabilityMeta(type):
     __slots__ = ()
@@ -80,14 +83,11 @@ def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None
     object.__setattr__(obj, name, value)
 
 def __freeze_obj__(obj: object) -> object:
-    allowed_attrs = getattr(obj, '__ALLOWED_ATTRS__', None)
-    allowed_methods = getattr(obj, '__ALLOWED_METHODS__', None)
-
-    if allowed_attrs is None or allowed_methods is None:
+    if type(obj) not in _FREEZABLE_TYPES:
         # TODO: Can't freeze
         return obj
 
-    return FrozenWrapper(obj=obj, allowed_attrs=allowed_attrs, allowed_methods=allowed_methods)
+    return FrozenWrapper(obj)
 
 
 @final
@@ -102,21 +102,50 @@ class FrozenWrapperCallable(FauxImmutable):
 
 @final
 class FrozenWrapper(FauxImmutable):
-    __slots__ = ('__obj', '__allowed_attrs', '__allowed_methods')
+    __slots__ = ('__obj',)
 
-    def __init__(self, *, obj: object, allowed_attrs: set[str], allowed_methods: set[str]) -> None:
+    def __init__(self, obj: object) -> None:
         __set_faux_immutable__(self, '__obj', obj)
-        __set_faux_immutable__(self, '__allowed_attrs', allowed_attrs)
-        __set_faux_immutable__(self, '__allowed_methods', allowed_methods)
 
     def __getattr__(self, name):
-        if name in self.__allowed_attrs:
+        allowed_attrs, allowed_methods = _FREEZABLE_TYPES[type(self.__obj)]
+
+        if name in allowed_attrs:
             return getattr(self.__obj, name)
 
-        if name in self.__allowed_methods:
+        if name in allowed_methods:
             return FrozenWrapperCallable(getattr(self.__obj, name))
 
         raise AttributeError(f'FORBIDDEN! FORBIDDEN! {name}')
 
-    def is_(self, obj: object) -> bool:
+    def __is__(self, obj: object) -> bool:
         return self.__obj is obj
+
+    def __dir__(self):
+        allowed_attrs, allowed_methods = _FREEZABLE_TYPES[type(self.__obj)]
+        return tuple(allowed_attrs | allowed_methods)
+
+
+_FREEZABLE_TYPES: dict[type, tuple[frozenset[str], frozenset[str]]] = {
+    NCActionType: (
+        frozenset({
+            'DEPOSIT',
+            'WITHDRAWAL',
+            'GRANT_AUTHORITY',
+            'ACQUIRE_AUTHORITY',
+        }),
+        frozenset(),
+    ),
+    Context: (
+        frozenset({
+            'vertex',
+            'address',
+            'timestamp',
+            'actions',
+            'actions_list',
+        }),
+        frozenset({
+            'get_single_action',
+        }),
+    )
+}
