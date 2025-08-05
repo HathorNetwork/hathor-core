@@ -1,5 +1,7 @@
 from typing import Any, cast
 
+import pytest
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
@@ -74,6 +76,7 @@ class MyBlueprint(Blueprint):
             raise NCFail('counter is zero')
 
 
+@pytest.mark.does_metered_call
 class NCConsensusTestCase(SimulatorTestCase):
     __test__ = True
 
