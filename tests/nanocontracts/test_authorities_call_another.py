@@ -51,7 +51,7 @@ class CallerBlueprint(Blueprint):
     def initialize(self, ctx: Context, other_id: ContractId) -> None:
         self.other_id = other_id
 
-    @public(allow_grant_authority=True)
+    @public(allow_grant_authority=True, allow_reentrancy=True)
     def nop(self, ctx: Context) -> None:
         pass
 
@@ -60,7 +60,7 @@ class CallerBlueprint(Blueprint):
         action = NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
         self.syscall.call_public_method(self.other_id, 'nop', [action])
 
-    @public(allow_grant_authority=True)
+    @public(allow_grant_authority=True, allow_reentrancy=True)
     def revoke_from_self(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
         self.syscall.revoke_authorities(token_uid, revoke_mint=mint, revoke_melt=melt)
 
