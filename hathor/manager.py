@@ -812,7 +812,7 @@ class HathorManager:
         *,
         quiet: bool = False,
         propagate_to_peers: bool = True,
-        reject_locked_reward: bool = True
+        reject_locked_reward: bool = True,
     ) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
@@ -820,7 +820,10 @@ class HathorManager:
         :param quiet: if True will not log when a new tx is accepted
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        success = self.vertex_handler.on_new_relayed_vertex(vertex, reject_locked_reward=reject_locked_reward)
+        from hathor.verification.verification_params import VerificationParams
+
+        params = VerificationParams(enable_checkdatasig_count=True, reject_locked_reward=reject_locked_reward)
+        success = self.vertex_handler._old_on_new_vertex(vertex, params, quiet=quiet)
 
         if propagate_to_peers and success:
             self.connections.send_tx_to_peers(vertex)

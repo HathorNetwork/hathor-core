@@ -785,7 +785,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
         assert str(e.value) == 'DEPOSIT token index 2 not found'
 
     def test_token_uid_not_in_list(self) -> None:
@@ -813,7 +813,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
         assert str(e.value) == f'action {action_type.name} token {self.tka.hash_hex} invalid authorities: 0b100'
 
     def _test_invalid_htr_authority(self, action_type: NCActionType) -> None:
@@ -823,7 +823,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
         assert str(e.value) == f'{action_type.name} action cannot be executed on HTR token'
 
     def test_invalid_grant_unknown_authority(self) -> None:
@@ -849,7 +849,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
         assert str(e.value) == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires mint, but no input has it'
 
     def test_grant_authority_cannot_melt(self) -> None:
@@ -863,7 +863,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
         assert str(e.value) == f'GRANT_AUTHORITY token {self.tka.hash_hex} requires melt, but no input has it'
 
     def test_acquire_authority_cannot_mint_with_melt(self) -> None:
@@ -881,7 +881,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(InvalidToken, match='output at index 2 has mint authority, but no input has it'):
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
 
     def test_use_authority_cannot_melt_with_mint(self) -> None:
         # Try to create a melt authority output with an action to acquire a mint authority.
@@ -898,7 +898,7 @@ class TestActions(unittest.TestCase):
         ])
 
         with pytest.raises(InvalidToken, match='output at index 2 has melt authority, but no input has it'):
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
 
     def test_actions_max_len_fail(self) -> None:
         # Try to create too many actions.
@@ -908,4 +908,4 @@ class TestActions(unittest.TestCase):
         self._set_nano_header(tx=self.tx1, nc_actions=actions)
 
         with pytest.raises(NCInvalidAction, match='more actions than the max allowed: 17 > 16'):
-            self.manager.verification_service.verify(self.tx1)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)

@@ -175,14 +175,21 @@ class VertexVerifier:
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
-    def verify_sigops_output(self, vertex: BaseTransaction) -> None:
+    def verify_sigops_output(self, vertex: BaseTransaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all outputs and verify that the total sum is below the limit
         """
-        from hathor.transaction.scripts import get_sigops_count
+        from hathor.transaction.scripts import SigopCounter
+
+        max_multisig_pubkeys = self._settings.MAX_MULTISIG_PUBKEYS
+        counter = SigopCounter(
+            max_multisig_pubkeys=max_multisig_pubkeys,
+            enable_checkdatasig_count=enable_checkdatasig_count,
+        )
+
         n_txops = 0
 
         for tx_output in vertex.outputs:
-            n_txops += get_sigops_count(tx_output.script)
+            n_txops += counter.get_sigops_count(tx_output.script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(

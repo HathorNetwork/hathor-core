@@ -28,6 +28,7 @@ from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.types import VertexId
+from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -46,6 +47,9 @@ class TransactionStreamingClient:
         self.protocol = self.sync_agent.protocol
         self.tx_storage = self.sync_agent.tx_storage
         self.verification_service = self.protocol.node.verification_service
+        # XXX: since it's not straightforward to get the correct block, it's OK to just disable checkdatasig counting,
+        #      it will be correctly enabled when doing a full validation anyway.
+        self.verification_params = VerificationParams(enable_checkdatasig_count=False)
         self.reactor = sync_agent.reactor
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
@@ -153,7 +157,7 @@ class TransactionStreamingClient:
         # Run basic verification.
         if not tx.is_genesis:
             try:
-                self.verification_service.verify_basic(tx)
+                self.verification_service.verify_basic(tx, self.verification_params)
             except TxValidationError as e:
                 self.fails(InvalidVertexError(repr(e)))
                 return

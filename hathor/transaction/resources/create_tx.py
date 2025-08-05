@@ -89,6 +89,7 @@ class CreateTxResource(Resource):
             # conservative estimate of the input data size to estimate a valid weight
             tx_input.data = b'\0' * 107
         tx.weight = self.manager.daa.minimum_tx_weight(fake_signed_tx)
+        tx.init_static_metadata_from_storage(self.manager._settings, self.manager.tx_storage)
         self._verify_unsigned_skip_pow(tx)
 
         if tx.is_double_spending():
@@ -113,8 +114,8 @@ class CreateTxResource(Resource):
         verifiers.vertex.verify_number_of_outputs(tx)
         verifiers.vertex.verify_outputs(tx)
         verifiers.tx.verify_output_token_indexes(tx)
-        verifiers.vertex.verify_sigops_output(tx)
-        verifiers.tx.verify_sigops_input(tx)
+        verifiers.vertex.verify_sigops_output(tx, enable_checkdatasig_count=True)
+        verifiers.tx.verify_sigops_input(tx, enable_checkdatasig_count=True)
         # need to run verify_inputs first to check if all inputs exist
         verifiers.tx.verify_inputs(tx, skip_script=True)
         verifiers.vertex.verify_parents(tx)
