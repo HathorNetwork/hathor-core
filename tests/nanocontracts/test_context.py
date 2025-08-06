@@ -6,6 +6,8 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.vertex_data import NanoHeaderData, VertexData
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import TxVersion
+from hathor.transaction.scripts import parse_address_script
+from hathor.util import not_none
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
@@ -67,9 +69,6 @@ class ContextTestCase(BlueprintTestCase):
         assert GLOBAL_VERTEX_DATA is not None
         vertex_data = copy.deepcopy(GLOBAL_VERTEX_DATA)
 
-        # XXX: nonce varies, even for a weight of 1.0
-        # XXX: inptus/outputs/parents ignored since the dag builder will pick whatever to fill it in
-
         self.assertEqual(vertex_data.version, TxVersion.REGULAR_TRANSACTION)
         self.assertEqual(vertex_data.hash, nc2.hash)
         self.assertEqual(vertex_data.signal_bits, 0)
@@ -78,6 +77,24 @@ class ContextTestCase(BlueprintTestCase):
         self.assertEqual(vertex_data.block.hash, b12.hash)
         self.assertEqual(vertex_data.block.timestamp, b12.timestamp)
         self.assertEqual(vertex_data.block.height, b12.get_height())
+        self.assertEqual(vertex_data.nonce, nc2.nonce)
+        self.assertEqual(vertex_data.parents, tuple(nc2.parents))
+
+        for i, input_tx in enumerate(nc2.inputs):
+            assert vertex_data.inputs[i].tx_id == input_tx.tx_id
+            assert vertex_data.inputs[i].index == input_tx.index
+            assert vertex_data.inputs[i].data == input_tx.data
+
+        for i, output in enumerate(nc2.outputs):
+            parsed = not_none(parse_address_script(output.script))
+            assert vertex_data.outputs[i].value == output.value
+            assert vertex_data.outputs[i].raw_script == output.script
+            assert not_none(vertex_data.outputs[i].parsed_script).type == parsed.get_type()
+            assert not_none(vertex_data.outputs[i].parsed_script).address == parsed.get_address()
+            assert not_none(vertex_data.outputs[i].parsed_script).timelock == parsed.get_timelock()
+            assert vertex_data.outputs[i].token_data == output.token_data
+
+        self.assertEqual(set(vertex_data.parents), set(nc2.parents))
         nano_header_data, = vertex_data.headers
         assert isinstance(nano_header_data, NanoHeaderData)
         self.assertEqual(nano_header_data.nc_id, nc1.hash)
