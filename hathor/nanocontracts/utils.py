@@ -41,6 +41,11 @@ def is_nc_view_method(method: Callable) -> bool:
     return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.VIEW
 
 
+def is_nc_fallback_method(method: Callable) -> bool:
+    """Return True if the method is nc_fallback."""
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.FALLBACK
+
+
 def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: ModuleType | None = None) -> str:
     """Get blueprint code from a file."""
     import io
