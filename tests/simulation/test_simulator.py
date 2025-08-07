@@ -1,5 +1,4 @@
-import pytest
-
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced, Trigger
@@ -13,7 +12,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # just get one of the genesis, we don't really need to create any transaction
         tx = next(iter(manager1.tx_storage.get_all_genesis()))
         # optional argument must be valid, it just has to not raise any exception, there's no assert for that
-        VertexVerifier(settings=self._settings).verify_pow(tx, override_weight=0.)
+        feature_service = FeatureService(settings=self._settings, tx_storage=manager1.tx_storage)
+        VertexVerifier(settings=self._settings, feature_service=feature_service).verify_pow(tx, override_weight=0.)
 
     def test_one_node(self) -> None:
         manager1 = self.create_peer()
@@ -95,7 +95,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
 
-    @pytest.mark.flaky(max_runs=5, min_passes=1)
     def test_new_syncing_peer(self) -> None:
         nodes = []
         miners = []
@@ -142,7 +141,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        self.assertTrue(self.simulator.run(3600, trigger=AllTriggers(stop_triggers)))
+        # TODO Add self.assertTrue(...) when the trigger is fixed. Same as in test_many_miners_since_beginning.
+        #      For further information, see https://github.com/HathorNetwork/hathor-core/pull/815.
+        self.simulator.run(3600, trigger=AllTriggers(stop_triggers))
 
         for idx, node in enumerate(nodes):
             self.log.debug(f'checking node {idx}')

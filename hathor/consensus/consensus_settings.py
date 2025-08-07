@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 from abc import ABC, abstractmethod
 from enum import Enum, unique
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias
 
 from pydantic import Field, NonNegativeInt, PrivateAttr, validator
 from typing_extensions import override
@@ -23,6 +25,9 @@ from typing_extensions import override
 from hathor.transaction import TxVersion
 from hathor.util import json_dumpb
 from hathor.utils.pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
 
 
 @unique
@@ -44,13 +49,19 @@ class _BaseConsensusSettings(ABC, BaseModel):
         return self.type is ConsensusType.PROOF_OF_AUTHORITY
 
     @abstractmethod
-    def _get_valid_vertex_versions(self, include_genesis: bool) -> set[TxVersion]:
+    def _get_valid_vertex_versions(self, include_genesis: bool, *, settings: HathorSettings) -> set[TxVersion]:
         """Return a set of `TxVersion`s that are valid in for this consensus type."""
         raise NotImplementedError
 
-    def is_vertex_version_valid(self, version: TxVersion, include_genesis: bool = False) -> bool:
+    def is_vertex_version_valid(
+        self,
+        version: TxVersion,
+        *,
+        settings: HathorSettings,
+        include_genesis: bool = False,
+    ) -> bool:
         """Return whether a `TxVersion` is valid for this consensus type."""
-        return version in self._get_valid_vertex_versions(include_genesis)
+        return version in self._get_valid_vertex_versions(include_genesis, settings=settings)
 
     def get_peer_hello_hash(self) -> str | None:
         """Return a hash of consensus settings to be used in peer hello validation."""
@@ -67,13 +78,18 @@ class PowSettings(_BaseConsensusSettings):
     type: Literal[ConsensusType.PROOF_OF_WORK] = ConsensusType.PROOF_OF_WORK
 
     @override
-    def _get_valid_vertex_versions(self, include_genesis: bool) -> set[TxVersion]:
-        return {
+    def _get_valid_vertex_versions(self, include_genesis: bool, *, settings: HathorSettings) -> set[TxVersion]:
+        versions = {
             TxVersion.REGULAR_BLOCK,
             TxVersion.REGULAR_TRANSACTION,
             TxVersion.TOKEN_CREATION_TRANSACTION,
-            TxVersion.MERGE_MINED_BLOCK
+            TxVersion.MERGE_MINED_BLOCK,
         }
+
+        if settings.ENABLE_NANO_CONTRACTS:
+            versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
+
+        return versions
 
     @override
     def get_peer_hello_hash(self) -> str | None:
@@ -124,7 +140,7 @@ class PoaSettings(_BaseConsensusSettings):
         return signers
 
     @override
-    def _get_valid_vertex_versions(self, include_genesis: bool) -> set[TxVersion]:
+    def _get_valid_vertex_versions(self, include_genesis: bool, *, settings: HathorSettings) -> set[TxVersion]:
         versions = {
             TxVersion.POA_BLOCK,
             TxVersion.REGULAR_TRANSACTION,
@@ -135,6 +151,9 @@ class PoaSettings(_BaseConsensusSettings):
             # TODO: We have to add REGULAR_BLOCK to allow genesis deserialization.
             #  This may be removed if we refactor the way genesis is constructed.
             versions.add(TxVersion.REGULAR_BLOCK)
+
+        if settings.ENABLE_NANO_CONTRACTS:
+            versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         return versions
 

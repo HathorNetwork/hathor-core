@@ -24,6 +24,10 @@ from twisted.web.resource import Resource
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts.resources.builtin import BlueprintBuiltinResource
+from hathor.nanocontracts.resources.nc_creation import NCCreationResource
+from hathor.nanocontracts.resources.nc_exec_logs import NCExecLogsResource
+from hathor.nanocontracts.resources.on_chain import BlueprintOnChainResource
 from hathor.prometheus import PrometheusMetricsExporter
 
 if TYPE_CHECKING:
@@ -250,6 +254,26 @@ class ResourcesBuilder:
                 (b'utxo_search', UtxoSearchResource(self.manager), root),
             ])
 
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.resources import (
+                BlueprintInfoResource,
+                BlueprintSourceCodeResource,
+                NanoContractHistoryResource,
+                NanoContractStateResource,
+            )
+            nc_resource = Resource()
+            root.putChild(b'nano_contract', nc_resource)
+            blueprint_resource = Resource()
+            nc_resource.putChild(b'blueprint', blueprint_resource)
+            blueprint_resource.putChild(b'info', BlueprintInfoResource(self.manager))
+            blueprint_resource.putChild(b'builtin', BlueprintBuiltinResource(self.manager))
+            blueprint_resource.putChild(b'on_chain', BlueprintOnChainResource(self.manager))
+            blueprint_resource.putChild(b'source', BlueprintSourceCodeResource(self.manager))
+            nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
+            nc_resource.putChild(b'state', NanoContractStateResource(self.manager))
+            nc_resource.putChild(b'creation', NCCreationResource(self.manager))
+            nc_resource.putChild(b'logs', NCExecLogsResource(self.manager))
+
         if self._args.enable_debug_api:
             debug_resource = Resource()
             root.putChild(b'_debug', debug_resource)
@@ -323,6 +347,7 @@ class ResourcesBuilder:
 
         # Set websocket factory in metrics. It'll be started when the manager is started.
         self.manager.websocket_factory = ws_factory
+        self.manager.metrics.websocket_factory = ws_factory
 
         self._built_status = True
         return status_server

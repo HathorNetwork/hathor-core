@@ -20,21 +20,19 @@ To enable the Event Queue feature, you must add this CLI option when running the
 For example:
 
 ```bash
-poetry run hathor-cli run_node --memory-storage --status 8080 --testnet --enable-event-queue
+poetry run hathor-cli run_node --temp-data --status 8080 --testnet --enable-event-queue
 ```
 
 ### First run
 
-If this is the first time your full node is running with the event queue enabled, there are 3 possibilities:
+If this is the first time your full node is running with the event queue enabled, there are 2 possibilities:
 
-1. You're running the full node using memory storage, like in the example above;
-2. You're running the full node using RocksDB storage (the default option), and
-   1. You're performing a sync from scratch, that is, you don't have an existing database, or
-   2. You're running from an existing database.
+1. You're performing a sync from scratch or you're using a temporary database (like in the example above), that is, you don't have an existing database, or
+2. You're running from an existing database.
 
-For cases 1 and 2.1, the full node will start normally, events will be generated in real time while vertices are synced, and they'll be sent to the WebSocket connection accordingly, as explained below.
+For case 1, the full node will start normally, events will be generated in real time while vertices are synced and they'll be sent to the WebSocket connection accordingly, as explained below.
 
-For case 2.2, an extra loading step will be performed during full node initialization, generating events for all existing vertices in your database. This step is slower than normal full node initialization and can take several minutes. Note that this will only be necessary once — after initialization, the events generated for your database are persisted and will be used in subsequent runs.
+For case 2, an extra loading step will be performed during full node initialization, generating events for all existing vertices in your database. This step is slower than normal full node initialization and can take several minutes. Note that this will only be necessary once — after initialization, the events generated for your database are persisted and will be used in subsequent runs.
 
 ### Subsequent runs when using RocksDB
 

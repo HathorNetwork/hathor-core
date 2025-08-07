@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Iterator, Optional, Union
 from intervaltree import Interval, IntervalTree
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.memory_tips_index import MemoryTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.indexes.tips_index import ScopeType
@@ -61,8 +62,8 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
     # It is useful because the interval tree allows access only by the interval.
     tx_last_interval: dict[bytes, Interval]
 
-    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType):
-        MemoryTipsIndex.__init__(self, scope_type=scope_type)
+    def __init__(self, db: 'rocksdb.DB', *, scope_type: ScopeType, settings: HathorSettings) -> None:
+        MemoryTipsIndex.__init__(self, scope_type=scope_type, settings=settings)
         self._name = scope_type.get_name()
         self.log = logger.new()  # XXX: override MemoryTipsIndex logger so it shows the correct module
         RocksDBIndexUtils.__init__(self, db, f'tips-{self._name}'.encode())

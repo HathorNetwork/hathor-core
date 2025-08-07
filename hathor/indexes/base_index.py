@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Optional
 
 from structlog import get_logger
 
-from hathor.conf.get_settings import get_global_settings
 from hathor.indexes.scope import Scope
 from hathor.transaction.base_transaction import BaseTransaction
 
@@ -36,8 +35,8 @@ class BaseIndex(ABC):
     This class exists so we can interact with indexes without knowing anything specific to its implemented. It was
     created to generalize how we initialize indexes and keep track of which ones are up-to-date.
     """
-    def __init__(self, *, settings: HathorSettings | None = None) -> None:
-        self._settings = settings or get_global_settings()
+    def __init__(self, *, settings: HathorSettings) -> None:
+        self._settings = settings
         self.log = logger.new()
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
@@ -57,7 +56,7 @@ class BaseIndex(ABC):
         """ The returned string is used to generate the relevant attributes for storing an indexe's state in the db.
 
         If None is returned, the database will not store the index initialization state and they will always be
-        initialized. This is the expected mode that memory-only indexes will use.
+        initialized.
         """
         raise NotImplementedError
 

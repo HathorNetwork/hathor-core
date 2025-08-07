@@ -23,6 +23,7 @@ def main(filename: str, genesis_seed: str) -> None:
 
     from hathor.conf.get_settings import get_global_settings
     from hathor.daa import DifficultyAdjustmentAlgorithm
+    from hathor.nanocontracts.catalog import generate_catalog_from_settings
     from hathor.wallet import HDWallet
     settings = get_global_settings()
 
@@ -36,6 +37,7 @@ def main(filename: str, genesis_seed: str) -> None:
 
     genesis_wallet = wallet_factory(genesis_seed)
     daa = DifficultyAdjustmentAlgorithm(settings=settings)
+    nc_catalog = generate_catalog_from_settings(settings)
 
     builder = DAGBuilder(
         settings=settings,
@@ -43,6 +45,7 @@ def main(filename: str, genesis_seed: str) -> None:
         genesis_wallet=genesis_wallet,
         wallet_factory=wallet_factory,
         vertex_resolver=lambda x: None,
+        nc_catalog=nc_catalog,
     )
 
     fp = open(filename, 'r')

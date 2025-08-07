@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import datetime
 import gc
 import json
 import math
 import sys
 import time
-import warnings
 from collections import OrderedDict
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     import structlog
 
     from hathor.transaction.base_transaction import BaseTransaction
+    from hathor.wallet import HDWallet
 
 logger = get_logger()
 
@@ -65,23 +67,6 @@ def practically_equal(a: dict[Any, Any], b: dict[Any, Any]) -> bool:
         if v != a[k]:
             return False
     return True
-
-
-def deprecated(msg: str) -> Callable[..., Any]:
-    """Use to indicate that a function or method has been deprecated."""
-    warnings.simplefilter('default', DeprecationWarning)
-
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # warnings.warn('{} is deprecated. {}'.format(func.__name__, msg),
-            #               category=DeprecationWarning, stacklevel=2)
-            return func(*args, **kwargs)
-
-        wrapper.__deprecated = func  # type: ignore
-        return wrapper
-
-    return decorator
 
 
 def skip_warning(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -374,6 +359,37 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
             next(it)
         except StopIteration:
             return it
+    return it
+
+
+def skip_until(it: Iterator[_T], condition: Callable[[_T], bool]) -> Iterator[_T]:
+    """ Skip all elements and stops after condition is True, it will also skip the element where condition is True.
+
+    Example:
+
+    >>> list(skip_until(iter(range(10)), lambda x: x == 0))
+    [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    >>> list(skip_until(iter(range(10)), lambda x: x > 0))
+    [2, 3, 4, 5, 6, 7, 8, 9]
+
+    >>> list(skip_until(iter(range(10)), lambda x: x == 8))
+    [9]
+
+    >>> list(skip_until(iter(range(10)), lambda x: x == 9))
+    []
+
+    >>> list(skip_until(iter(range(10)), lambda x: x == 10))
+    []
+    """
+    while True:
+        try:
+            i = next(it)
+        except StopIteration:
+            return it
+        else:
+            if condition(i):
+                break
     return it
 
 
@@ -823,3 +839,19 @@ def bytes_to_vertexid(data: bytes) -> VertexId:
     if len(data) != 32:
         raise ValueError('length must be exactly 32 bytes')
     return VertexId(data)
+
+
+def bytes_from_hex(hex_str: str) -> bytes | None:
+    """Convert a hex string to bytes or return None if it's invalid."""
+    try:
+        return bytes.fromhex(hex_str)
+    except ValueError:
+        return None
+
+
+def initialize_hd_wallet(words: str) -> HDWallet:
+    """Get an initialized HDWallet from the provided words."""
+    from hathor.wallet import HDWallet
+    hd = HDWallet(words=words)
+    hd._manually_initialize()
+    return hd

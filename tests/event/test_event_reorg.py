@@ -1,5 +1,5 @@
 from hathor.event.model.event_type import EventType
-from hathor.event.storage import EventMemoryStorage
+from hathor.event.storage import EventRocksDBStorage
 from hathor.simulator.utils import add_new_blocks
 from tests import unittest
 from tests.utils import BURN_ADDRESS, get_genesis_key
@@ -9,11 +9,12 @@ class EventReorgTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         self.network = 'testnet'
-        self.event_storage = EventMemoryStorage()
+        self.event_storage = EventRocksDBStorage(
+            rocksdb_storage=self.create_rocksdb_storage(),
+        )
         self.manager = self.create_peer(
             self.network,
             enable_event_queue=True,
-            full_verification=False,
             event_storage=self.event_storage
         )
 
@@ -34,7 +35,7 @@ class EventReorgTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage, address=BURN_ADDRESS)
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
-        self.manager.propagate_tx(b0, fails_silently=False)
+        self.manager.propagate_tx(b0)
         self.log.debug('reorg block propagated')
         self.run_to_completion()
 
@@ -50,6 +51,7 @@ class EventReorgTest(unittest.TestCase):
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[0].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_TX2_HASH.hex()}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_TX1_HASH.hex()}),
+            (EventType.VERTEX_METADATA_CHANGED, {'hash': self._settings.GENESIS_BLOCK_HASH.hex()}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[0].hash_hex}),
             (EventType.VERTEX_METADATA_CHANGED, {'hash': blocks[1].hash_hex}),
             (EventType.NEW_VERTEX_ACCEPTED, {'hash': blocks[1].hash_hex}),

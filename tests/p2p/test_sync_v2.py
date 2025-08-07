@@ -41,7 +41,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
                     partial_blocks.add(tx.hash)
         return partial_blocks
 
-    def _run_restart_test(self, *, full_verification: bool, use_tx_storage_cache: bool) -> None:
+    def _run_restart_test(self, *, use_tx_storage_cache: bool) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
 
@@ -63,11 +63,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         gen_tx1.stop()
 
         # Create a new peer and run sync for a while (but stop before getting synced).
-        path = self.mkdtemp()
         peer = PrivatePeer.auto_generated()
         builder2 = self.simulator.get_default_builder() \
-            .set_peer(peer) \
-            .use_rocksdb(path)
+            .set_peer(peer)
 
         manager2 = self.simulator.create_peer(builder2)
         conn12 = FakeConnection(manager1, manager2, latency=0.05)
@@ -92,6 +90,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.remove_connection(conn12)
         manager2.stop()
         assert isinstance(manager2.tx_storage, TransactionRocksDBStorage)
+        temp_dir = not_none(manager2.tx_storage._rocksdb_storage.temp_dir)
         manager2.tx_storage._rocksdb_storage.close()
         del manager2
 
@@ -104,12 +103,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # Restart full node using the same db.
         builder3 = self.simulator.get_default_builder() \
             .set_peer(peer) \
-            .use_rocksdb(path)
-
-        if full_verification:
-            builder3.enable_full_verification()
-        else:
-            builder3.disable_full_verification()
+            .set_rocksdb_path(temp_dir)
 
         if use_tx_storage_cache:
             builder3.use_tx_storage_cache()
@@ -146,17 +140,11 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertEqual(manager1.tx_storage.get_vertices_count(), manager3.tx_storage.get_vertices_count())
         self.assertConsensusEqualSyncV2(manager1, manager3)
 
-    def test_restart_fullnode_full_verification(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=False)
-
     def test_restart_fullnode_quick(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=False)
+        self._run_restart_test(use_tx_storage_cache=False)
 
     def test_restart_fullnode_quick_with_cache(self) -> None:
-        self._run_restart_test(full_verification=False, use_tx_storage_cache=True)
-
-    def test_restart_fullnode_full_verification_with_cache(self) -> None:
-        self._run_restart_test(full_verification=True, use_tx_storage_cache=True)
+        self._run_restart_test(use_tx_storage_cache=True)
 
     def test_exceeds_streaming_and_mempool_limits(self) -> None:
         manager1 = self.create_peer()

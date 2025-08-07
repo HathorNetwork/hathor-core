@@ -14,6 +14,7 @@
 
 import re
 from enum import Enum, auto
+from textwrap import dedent
 from typing import Any, Iterator
 
 """
@@ -27,14 +28,55 @@ Syntax:
     a --> b --> c               # c is a parent of b which is a parent of a
     a.out[i] <<< b c d          # b, c, and d spend the i-th output of a
     a < b < c                   # a must be created before b and b must be created before c
-    a > b > c                   # a must be created after b and b must be creater after c
-    a.attr = value              # set value of attribute attr to a
+    a > b > c                   # a must be created after b and b must be created after c
+    a.attr1 = value             # set value of attribute attr to a
+    a.attr2 = "value"           # a string literal
+
+    a.attr3 = ```               # a multiline string literal.
+        if foo:                 # parsing is limited — there's no support for comments nor escaping characters.
+            bar                 # both start and end delimiters must be in their own line.
+    ```
+
+Special keywords:
+
+    b10 < dummy                 # `dummy` is a tx created automatically that spends genesis tokens and provides
+                                # outputs to txs defined by the user. It's usually useful to set it after some
+                                # block to pass the reward lock
 
 Special attributes:
+
     a.out[i] = 100 HTR          # set that the i-th output of a holds 100 HTR
     a.out[i] = 100 TOKEN        # set that the i-th output of a holds 100 TOKEN where TOKEN is a custom token
     a.weight = 50               # set vertex weight
 
+Nano Contracts:
+
+    tx1.nc_id = "{'ff' * 32}"          # create a Nano Contract with some custom nc_id
+    tx1.nc_id = tx2                    # create a Nano Contract with another tx's id as its nc_id
+    tx1.nc_deposit = 10 HTR            # perform a deposit in a Nano Contract
+    tx1.nc_withdrawal = 10 HTR         # perform a withdraw in a Nano Contract
+    tx1.nc_method = initialize("00")   # call a Nano Contract method
+    tx2.nc_method = initialize(`tx1`)  # call a Nano Contract method with another tx's id as an argument
+    tx2.nc_seqnum = 5
+
+    # Points to a contract created by another contract.
+    tx1.nc_id = child_contract(contract_creator_id, salt.hex(), blueprint_id.hex())
+
+On-chain Blueprints:
+
+    ocb1.ocb_private_key = "{private_key}"   # private key bytes in hex to sign the OCB
+    ocb1.ocb_password = "{password}"         # password bytes in hex to sign the OCB
+
+    ocb.ocb_code = "{ocb_code_bytes)}"       # create an on-chain Blueprint with some custom code.
+                                             # the literal should be the hex value of uncompressed code bytes.
+
+    ocb.ocb_code = ```
+        class MyBlueprint(Blueprint):        # multiline strings can also be used to directly inline custom code.
+            pass                             # given its limitations (describe above), for complex code it is
+    ```                                      # recommended to use separate files (see below).
+
+    ocb.ocb_code = my_blueprint.py, MyTest   # set a filename and a class name to create an OCB using code from a file.
+                                             # configure the root directory when instantiating the DagBuilder.
 
 Example:
 
@@ -72,7 +114,21 @@ Example:
     b5 < c0 < c10 < b20
     b6 < tx3
     b16 < tx4
+
+    # Nano Contracts and on-chain Blueprints
+    ocb1.ocb_private_key = "{unittest.OCB_TEST_PRIVKEY.hex()}"
+    ocb1.ocb_password = "{unittest.OCB_TEST_PASSWORD.hex()}"
+    ocb1.ocb_code = "{load_blueprint_code('bet.py', 'Bet').encode().hex()}"
+
+    nc1.nc_id = ocb1
+    nc1.nc_method = initialize("00", "00", 0)
+
+    ocb1 <-- b300
+    b300 < nc1
+
 """
+
+MULTILINE_DELIMITER = '```'
 
 
 class TokenType(Enum):
@@ -110,8 +166,29 @@ def tokenize(content: str) -> Iterator[Token]:
     """
     blockchain_re = re.compile(r'^([a-zA-Z][a-zA-Z0-9-_]*)\[([0-9]+)..([0-9]+)\]$')
     first_parent: str | None
+
+    # A `(name, key, lines)` tuple where `lines` contains the multiline string as it accumulates line by line.
+    multiline_accumulator: tuple[str, str, list[str]] | None = None
+
     for line in content.split('\n'):
         line, _, _ = line.partition('#')
+
+        if multiline_accumulator is not None:
+            if MULTILINE_DELIMITER not in line:
+                _name, _key, lines = multiline_accumulator
+                lines.append(line)
+                continue
+
+            if line.strip() != MULTILINE_DELIMITER:
+                raise SyntaxError('invalid multiline string end')
+
+            name, key, lines = multiline_accumulator
+            multiline = dedent('\n'.join(lines))
+            complete_value = MULTILINE_DELIMITER + multiline + MULTILINE_DELIMITER
+            yield TokenType.ATTRIBUTE, (name, key, complete_value)
+            multiline_accumulator = None
+            continue
+
         line = line.strip()
         if not line:
             continue
@@ -140,7 +217,17 @@ def tokenize(content: str) -> Iterator[Token]:
                 attrs = parts[4:]
                 yield (TokenType.OUTPUT, (name, index, amount, token, attrs))
             else:
-                yield (TokenType.ATTRIBUTE, (name, key, ' '.join(parts[2:])))
+                value = ' '.join(parts[2:])
+
+                if MULTILINE_DELIMITER not in value:
+                    yield TokenType.ATTRIBUTE, (name, key, value)
+                    continue
+
+                if value != MULTILINE_DELIMITER:
+                    raise SyntaxError('invalid multiline string start')
+
+                assert multiline_accumulator is None
+                multiline_accumulator = name, key, []
 
         elif parts[1] == '<--':
             for _to, _from in collect_pairs(parts, '<--'):
@@ -170,3 +257,6 @@ def tokenize(content: str) -> Iterator[Token]:
 
         else:
             raise SyntaxError(line)
+
+    if multiline_accumulator is not None:
+        raise SyntaxError('unclosed multiline string')

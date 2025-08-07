@@ -90,7 +90,7 @@ class DbImport(RunNode):
             tx = parser.deserialize(tx_bytes)
             assert tx is not None
             tx.storage = self.tx_storage
-            self.manager.on_new_tx(tx, quiet=True, fails_silently=False)
+            self.manager.on_new_tx(tx, quiet=True)
             yield tx
 
 

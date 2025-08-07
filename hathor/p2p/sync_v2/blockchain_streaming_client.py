@@ -126,7 +126,7 @@ class BlockchainStreamingClient:
 
         if self.tx_storage.can_validate_full(blk):
             try:
-                self.vertex_handler.on_new_vertex(blk, fails_silently=False)
+                self.vertex_handler.on_new_block(blk, deps=[])
             except HathorError:
                 self.fails(InvalidVertexError(blk.hash.hex()))
                 return

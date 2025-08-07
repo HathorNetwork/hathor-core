@@ -30,9 +30,11 @@ from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
-from hathor.indexes import IndexesManager, MemoryIndexesManager, RocksDBIndexesManager
+from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -66,22 +68,23 @@ class CliBuilder:
         if not condition:
             raise BuilderError(message)
 
+    def check_or_warn(self, condition: bool, message: str) -> None:
+        """Will log a warning `message` if `condition` is False."""
+        if not condition:
+            self.log.warn(message)
+
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
         from hathor.builder import SyncSupportLevel
         from hathor.conf.get_settings import get_global_settings, get_settings_source
         from hathor.daa import TestMode
-        from hathor.event.storage import EventMemoryStorage, EventRocksDBStorage, EventStorage
+        from hathor.event.storage import EventRocksDBStorage, EventStorage
         from hathor.event.websocket.factory import EventWebsocketFactory
+        from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
-        from hathor.transaction.storage import (
-            TransactionCacheStorage,
-            TransactionMemoryStorage,
-            TransactionRocksDBStorage,
-            TransactionStorage,
-        )
+        from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
         from hathor.util import get_environment_info
 
         settings = get_global_settings()
@@ -112,51 +115,49 @@ class CliBuilder:
         )
 
         # XXX Remove this protection after Nano Contracts are launched.
-        if settings.NETWORK_NAME not in {'nano-testnet-alpha', 'unittests'}:
+        if settings.NETWORK_NAME not in ('unittests', 'nano-testnet-bravo', 'testnet-hotel'):
             # Add protection to prevent enabling Nano Contracts due to misconfigurations.
-            self.check_or_raise(not settings.ENABLE_NANO_CONTRACTS,
-                                'configuration error: NanoContracts can only be enabled on localnets for now')
+            self.check_or_raise(
+                not settings.ENABLE_NANO_CONTRACTS,
+                'configuration error: NanoContracts can only be enabled on specific networks for now',
+            )
 
         vertex_parser = VertexParser(settings=settings)
         tx_storage: TransactionStorage
         event_storage: EventStorage
         indexes: IndexesManager
-        feature_storage: FeatureActivationStorage | None = None
-        self.rocksdb_storage: Optional[RocksDBStorage] = None
         self.event_ws_factory: Optional[EventWebsocketFactory] = None
 
-        if self._args.memory_storage:
-            self.check_or_raise(not self._args.data, '--data should not be used with --memory-storage')
-            # if using MemoryStorage, no need to have cache
-            indexes = MemoryIndexesManager()
-            tx_storage = TransactionMemoryStorage(indexes, settings=settings)
-            event_storage = EventMemoryStorage()
-            self.check_or_raise(not self._args.x_rocksdb_indexes, 'RocksDB indexes require RocksDB data')
-            self.log.info('with storage', storage_class=type(tx_storage).__name__)
-        else:
-            self.check_or_raise(bool(self._args.data), '--data is expected')
-            assert self._args.data is not None
-            if self._args.rocksdb_storage:
-                self.log.warn('--rocksdb-storage is now implied, no need to specify it')
-            cache_capacity = self._args.rocksdb_cache
-            self.rocksdb_storage = RocksDBStorage(path=self._args.data, cache_capacity=cache_capacity)
+        memory_msg = 'is deprecated. use --temp-data instead'
+        self.check_or_raise(not self._args.memory_storage, f'--memory-storage {memory_msg}')
+        self.check_or_raise(not self._args.memory_indexes, f'--memory-indexes {memory_msg}')
 
-            # Initialize indexes manager.
-            if self._args.memory_indexes:
-                indexes = MemoryIndexesManager()
-            else:
-                indexes = RocksDBIndexesManager(self.rocksdb_storage)
+        self.check_or_raise(bool(self._args.data) or self._args.temp_data, 'either --data or --temp-data is expected')
+        cache_capacity = self._args.rocksdb_cache
+        self.rocksdb_storage = (
+            RocksDBStorage(path=self._args.data, cache_capacity=cache_capacity)
+            if self._args.data else RocksDBStorage.create_temp(cache_capacity)
+        )
 
-            kwargs: dict[str, Any] = {}
-            if self._args.disable_cache:
-                # We should only pass indexes if cache is disabled. Otherwise,
-                # only TransactionCacheStorage should have indexes.
-                kwargs['indexes'] = indexes
-            tx_storage = TransactionRocksDBStorage(
-                self.rocksdb_storage, settings=settings, vertex_parser=vertex_parser, **kwargs
-            )
-            event_storage = EventRocksDBStorage(self.rocksdb_storage)
-            feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
+        self.nc_storage_factory: NCStorageFactory = NCRocksDBStorageFactory(self.rocksdb_storage)
+
+        # Initialize indexes manager.
+        indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
+
+        kwargs: dict[str, Any] = {}
+        if self._args.disable_cache:
+            # We should only pass indexes if cache is disabled. Otherwise,
+            # only TransactionCacheStorage should have indexes.
+            kwargs['indexes'] = indexes
+        tx_storage = TransactionRocksDBStorage(
+            self.rocksdb_storage,
+            settings=settings,
+            vertex_parser=vertex_parser,
+            nc_storage_factory=self.nc_storage_factory,
+            **kwargs
+        )
+        event_storage = EventRocksDBStorage(self.rocksdb_storage)
+        feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
 
         self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
 
@@ -167,14 +168,14 @@ class CliBuilder:
             self.check_or_raise(self._args.cache_size is None, 'cannot use --disable-cache with --cache-size')
             self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
 
-        if self._args.memory_storage:
-            if self._args.cache_size:
-                self.log.warn('using --cache-size with --memory-storage has no effect')
-            if self._args.cache_interval:
-                self.log.warn('using --cache-interval with --memory-storage has no effect')
-
-        if not self._args.disable_cache and not self._args.memory_storage:
-            tx_storage = TransactionCacheStorage(tx_storage, reactor, indexes=indexes, settings=settings)
+        if not self._args.disable_cache:
+            tx_storage = TransactionCacheStorage(
+                tx_storage,
+                reactor,
+                indexes=indexes,
+                settings=settings,
+                nc_storage_factory=self.nc_storage_factory,
+            )
             tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:
                 tx_storage.interval = self._args.cache_interval
@@ -183,6 +184,10 @@ class CliBuilder:
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
 
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.catalog import generate_catalog_from_settings
+            self.tx_storage.nc_catalog = generate_catalog_from_settings(settings)
+
         self.wallet = None
         if self._args.wallet:
             self.wallet = self.create_wallet()
@@ -190,20 +195,13 @@ class CliBuilder:
 
         hostname = self.get_hostname()
 
-        if self._args.sync_bridge:
-            raise BuilderError('--sync-bridge was removed')
-        elif self._args.sync_v1_only:
-            raise BuilderError('--sync-v1-only was removed')
-        elif self._args.sync_v2_only:
-            self.log.warn('--sync-v2-only is the default, this parameter has no effect')
-        elif self._args.x_remove_sync_v1:
-            self.log.warn('--x-remove-sync-v1 is deprecated and has no effect')
-        elif self._args.x_sync_bridge:
-            raise BuilderError('--x-sync-bridge was removed')
-        elif self._args.x_sync_v1_only:
-            raise BuilderError('--x-sync-v1-only was removed')
-        elif self._args.x_sync_v2_only:
-            self.log.warn('--x-sync-v2-only is deprecated and will be removed')
+        self.check_or_raise(not self._args.sync_bridge, '--sync-bridge was removed')
+        self.check_or_raise(not self._args.sync_v1_only, '--sync-v1-only was removed')
+        self.check_or_raise(not self._args.x_sync_bridge, '--x-sync-bridge was removed')
+        self.check_or_raise(not self._args.x_sync_v1_only, '--x-sync-v1-only was removed')
+        self.check_or_warn(not self._args.sync_v2_only, '--sync-v2-only is the default, this parameter has no effect')
+        self.check_or_warn(not self._args.x_remove_sync_v1, '--x-remove-sync-v1 is deprecated and has no effect')
+        self.check_or_warn(not self._args.x_sync_v2_only, '--x-sync-v2-only is deprecated and will be removed')
 
         pubsub = PubSubManager(reactor)
 
@@ -236,12 +234,36 @@ class CliBuilder:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
-        self.check_or_raise(not self._args.x_full_verification, '--x-full-verification is deprecated')
+        if self._args.nc_indexes and tx_storage.indexes is not None:
+            self.log.debug('enable nano indexes')
+            tx_storage.indexes.enable_nc_indexes()
+
+        from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
+        nc_calls_sorter = random_nc_calls_sorter
+
+        assert self.nc_storage_factory is not None
+        runner_factory = RunnerFactory(
+            reactor=reactor,
+            settings=settings,
+            tx_storage=tx_storage,
+            nc_storage_factory=self.nc_storage_factory,
+        )
+
+        nc_log_storage = NCLogStorage(
+            settings=settings,
+            path=self.rocksdb_storage.path,
+            config=self._args.nc_exec_logs,
+        )
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
+            self.nc_storage_factory,
             soft_voided_tx_ids,
             pubsub=pubsub,
+            settings=settings,
+            runner_factory=runner_factory,
+            nc_log_storage=nc_log_storage,
+            nc_calls_sorter=nc_calls_sorter,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -333,7 +355,6 @@ class CliBuilder:
             wallet=self.wallet,
             checkpoints=settings.CHECKPOINTS,
             environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
-            full_verification=False,
             enable_event_queue=self._args.x_enable_event_queue or self._args.enable_event_queue,
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
@@ -342,6 +363,7 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            runner_factory=runner_factory,
         )
 
         if self._args.x_ipython_kernel:
@@ -380,14 +402,6 @@ class CliBuilder:
         if self._args.bootstrap:
             entrypoints = [PeerEndpoint.parse(desc) for desc in self._args.bootstrap]
             p2p_manager.add_peer_discovery(BootstrapPeerDiscovery(entrypoints))
-
-        if self._args.x_rocksdb_indexes:
-            self.log.warn('--x-rocksdb-indexes is now the default, no need to specify it')
-            if self._args.memory_indexes:
-                raise BuilderError('You cannot use --memory-indexes and --x-rocksdb-indexes.')
-
-        if self._args.memory_indexes and self._args.memory_storage:
-            self.log.warn('--memory-indexes is implied for memory storage or JSON storage')
 
         for description in self._args.listen:
             p2p_manager.add_listen_address_description(description)

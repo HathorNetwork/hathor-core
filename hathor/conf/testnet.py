@@ -109,7 +109,20 @@ SETTINGS = HathorSettings(
                 lock_in_on_timeout=False,
                 version='0.63.0',
                 signal_support_by_default=True,
-            )
+            ),
+
+            Feature.COUNT_CHECKDATASIG_OP: Criteria(
+                bit=0,
+                # N = 5_120_640
+                # Expected to be reached around Wednesday, 2025-08-13 03:09:44 GMT
+                # Right now the best block is 5_102_018 at Wednesday, 2025-08-06 15:58:44 GMT
+                start_height=5_120_640,  # N
+                timeout_height=5_241_600,  # N + 6 * 20160 (6 weeks after the start)
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.64.0',
+                signal_support_by_default=True,
+            ),
         }
     )
 )

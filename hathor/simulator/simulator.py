@@ -81,9 +81,7 @@ class Simulator:
         return Builder() \
             .set_peer(PrivatePeer.auto_generated()) \
             .set_soft_voided_tx_ids(set()) \
-            .enable_full_verification() \
             .enable_sync_v2() \
-            .use_memory() \
             .set_settings(self.settings)
 
     def create_peer(self, builder: Optional[Builder] = None) -> HathorManager:
@@ -250,7 +248,7 @@ def _build_vertex_verifiers(
     """
     return VertexVerifiers.create(
         settings=settings,
-        vertex_verifier=SimulatorVertexVerifier(settings=settings),
+        vertex_verifier=SimulatorVertexVerifier(settings=settings, feature_service=feature_service),
         daa=daa,
         feature_service=feature_service,
     )
