@@ -89,20 +89,40 @@ class BlueprintTestCase(unittest.TestCase):
     def register_blueprint_file(self, path: PathLike[str], blueprint_id: BlueprintId | None = None) -> BlueprintId:
         """Register a blueprint file with an optional id, allowing contracts to be created from it."""
         with open(path, 'r') as f:
-            return self.register_blueprint_contents(f, blueprint_id)
+            return self._register_blueprint_contents(f, blueprint_id)
 
-    def register_blueprint_contents(
+    def _register_blueprint_contents(
         self,
         contents: TextIOWrapper,
         blueprint_id: BlueprintId | None = None,
+        *,
+        skip_verification: bool = False,
+        inject_in_class: dict[str, object] | None = None,
     ) -> BlueprintId:
-        """Register blueprint contents with an optional id, allowing contracts to be created from it."""
-        code = Code.from_python_code(contents.read(), self._settings)
-        verifier = OnChainBlueprintVerifier(settings=self._settings)
-        ocb = OnChainBlueprint(hash=b'', code=code)
-        verifier.verify_code(ocb)
+        """
+        Register blueprint contents with an optional id, allowing contracts to be created from it.
 
-        return self._register_blueprint_class(ocb.get_blueprint_class(), blueprint_id)
+        Args:
+            contents: the blueprint source code, usually a file or StringIO
+            blueprint_id: optional ID for the blueprint
+            skip_verification: skip verifying the blueprint with restrictions such as AST verification
+            inject_in_class: objects to inject in the blueprint class, accessible in contract runtime
+
+        Returns: the blueprint_id
+        """
+        code = Code.from_python_code(contents.read(), self._settings)
+        ocb = OnChainBlueprint(hash=b'', code=code)
+
+        if not skip_verification:
+            verifier = OnChainBlueprintVerifier(settings=self._settings)
+            verifier.verify_code(ocb)
+
+        blueprint_class = ocb.get_blueprint_class()
+        if inject_in_class is not None:
+            for key, value in inject_in_class.items():
+                setattr(blueprint_class, key, value)
+
+        return self._register_blueprint_class(blueprint_class, blueprint_id)
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""

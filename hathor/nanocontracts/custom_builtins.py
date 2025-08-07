@@ -27,13 +27,15 @@ from typing import (
     Sequence,
     SupportsIndex,
     TypeVar,
+    cast,
     final,
 )
 
 from typing_extensions import Self, TypeVarTuple
 
+from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
-from hathor.nanocontracts.on_chain_blueprint import ALLOWED_IMPORTS, BLUEPRINT_CLASS_NAME
+from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
 Ts = TypeVarTuple('Ts')
@@ -218,7 +220,7 @@ class ImportFunction(Protocol):
         ...
 
 
-def _generate_restricted_import_function(allowed_imports: dict[str, set[str]]) -> ImportFunction:
+def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, object]]) -> ImportFunction:
     """Returns a function equivalent to builtins.__import__ but that will only import `allowed_imports`"""
     @_wraps(builtins.__import__)
     def __import__(
@@ -235,11 +237,23 @@ def _generate_restricted_import_function(allowed_imports: dict[str, set[str]]) -
             raise ImportError('Only `from ... import ...` imports are allowed')
         if name not in allowed_imports:
             raise ImportError(f'Import from "{name}" is not allowed.')
+
+        # Create a fake module class that will only be returned by this import call
+        class FakeModule:
+            __slots__ = tuple(fromlist)
+
+        fake_module = FakeModule()
         allowed_fromlist = allowed_imports[name]
+
         for import_what in fromlist:
             if import_what not in allowed_fromlist:
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
-        return builtins.__import__(name=name, globals=globals, fromlist=fromlist, level=0)
+
+            setattr(fake_module, import_what, allowed_fromlist[import_what])
+
+        # This cast is safe because the only requirement is that the object contains the imported attributes.
+        return cast(types.ModuleType, fake_module)
+
     return __import__
 
 
