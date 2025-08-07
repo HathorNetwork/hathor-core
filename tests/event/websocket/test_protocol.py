@@ -101,11 +101,12 @@ def test_send_event_response() -> None:
                         b'"timestamp":123.0,"type":"VERTEX_METADATA_CHANGED","data":{"hash":"abc","nonce":123,'
                         b'"timestamp":456,"signal_bits":0,"version":1,"weight":10.0,"inputs":[],"outputs":[],'
                         b'"parents":[],'
-                        b'"tokens":[],"token_name":null,"token_symbol":null,"aux_pow":null,"metadata":{"hash":"abc",'
+                        b'"tokens":[],"token_name":null,"token_symbol":null,"aux_pow":null,"headers":[],'
+                        b'"metadata":{"hash":"abc",'
                         b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],"children":[],'
                         b'"twins":[],"accumulated_weight":10.0,"score":20.0,"accumulated_weight_raw":"1024",'
                         b'"score_raw":"1048576","first_block":null,"height":100,'
-                        b'"validation":"validation"}},"group_id":null},"latest_event_id":10,'
+                        b'"validation":"validation","nc_execution":null}},"group_id":null},"latest_event_id":10,'
                         b'"stream_id":"stream_id"}')
 
     protocol.sendMessage.assert_called_once_with(expected_payload)

@@ -19,6 +19,8 @@ from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
+from hathor.verification.nano_header_verifier import NanoHeaderVerifier
+from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
@@ -33,6 +35,8 @@ class VertexVerifiers(NamedTuple):
     poa_block: PoaBlockVerifier
     tx: TransactionVerifier
     token_creation_tx: TokenCreationTransactionVerifier
+    nano_header: NanoHeaderVerifier
+    on_chain_blueprint: OnChainBlueprintVerifier
 
     @classmethod
     def create_defaults(
@@ -46,7 +50,7 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
-        vertex_verifier = VertexVerifier(settings=settings)
+        vertex_verifier = VertexVerifier(settings=settings, feature_service=feature_service)
 
         return cls.create(
             settings=settings,
@@ -70,8 +74,10 @@ class VertexVerifiers(NamedTuple):
         block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         poa_block_verifier = PoaBlockVerifier(settings=settings)
-        tx_verifier = TransactionVerifier(settings=settings, daa=daa)
+        tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
+        nano_header_verifier = NanoHeaderVerifier(settings=settings)
+        on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)
 
         return VertexVerifiers(
             vertex=vertex_verifier,
@@ -80,4 +86,6 @@ class VertexVerifiers(NamedTuple):
             poa_block=poa_block_verifier,
             tx=tx_verifier,
             token_creation_tx=token_creation_tx_verifier,
+            nano_header=nano_header_verifier,
+            on_chain_blueprint=on_chain_blueprint_verifier,
         )

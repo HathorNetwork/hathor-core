@@ -62,7 +62,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
         b2.nonce = self.rng.getrandbits(32)
         b2.update_hash()
         self.graphviz.labels[b2.hash] = 'b2'
-        self.assertTrue(manager1.propagate_tx(b2, fails_silently=False))
+        self.assertTrue(manager1.propagate_tx(b2))
         self.simulator.run(10)
 
         self.assertIsNone(txA1.get_metadata().voided_by)

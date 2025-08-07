@@ -21,6 +21,8 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.util import is_token_uid_valid, json_dumpb
 
+_MAX_UTXO_LIST_LENGTH: int = 100
+
 
 @register_resource
 class TokenResource(Resource):
@@ -42,18 +44,22 @@ class TokenResource(Resource):
         except KeyError:
             return {'success': False, 'message': 'Unknown token'}
 
-        mint = []
-        melt = []
+        mint: list[dict[str, Any]] = []
+        melt: list[dict[str, Any]] = []
 
         transactions_count = tokens_index.get_transactions_count(token_uid)
 
         for tx_hash, index in token_info.iter_mint_utxos():
+            if len(mint) >= _MAX_UTXO_LIST_LENGTH:
+                break
             mint.append({
                 'tx_id': tx_hash.hex(),
                 'index': index
             })
 
         for tx_hash, index in token_info.iter_melt_utxos():
+            if len(melt) >= _MAX_UTXO_LIST_LENGTH:
+                break
             melt.append({
                 'tx_id': tx_hash.hex(),
                 'index': index
@@ -63,8 +69,12 @@ class TokenResource(Resource):
             'name': token_info.get_name(),
             'symbol': token_info.get_symbol(),
             'success': True,
+            # XXX: mint and melt keys are deprecated and we should remove them from the API soon.
+            #      They're a truncated list with up to _MAX_UTXO_LIST_LENGTH items.
             'mint': mint,
             'melt': melt,
+            'can_mint': token_info.can_mint(),
+            'can_melt': token_info.can_melt(),
             'total': token_info.get_total(),
             'transactions_count': transactions_count,
         }
@@ -200,6 +210,8 @@ TokenResource.openapi = {
                                                 "index": 1
                                             }
                                         ],
+                                        'can_mint': True,
+                                        'can_melt': True,
                                         'total': 50000,
                                         'transactions_count': 3,
                                     }

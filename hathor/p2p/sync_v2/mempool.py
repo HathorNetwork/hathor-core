@@ -19,7 +19,7 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.exception import InvalidNewTransaction
-from hathor.transaction import BaseTransaction
+from hathor.transaction import Transaction
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -95,7 +95,7 @@ class SyncMempoolManager:
         while self.missing_tips:
             self.log.debug('We have missing tips! Let\'s start!', missing_tips=[x.hex() for x in self.missing_tips])
             tx_id = next(iter(self.missing_tips))
-            tx: BaseTransaction = yield self.sync_agent.get_tx(tx_id)
+            tx: Transaction = yield self.sync_agent.get_tx(tx_id)
             # Stack used by the DFS in the dependencies.
             # We use a deque for performance reasons.
             self.log.debug('start mempool DSF', tx=tx.hash_hex)
@@ -106,7 +106,7 @@ class SyncMempoolManager:
         return False
 
     @inlineCallbacks
-    def _dfs(self, stack: deque[BaseTransaction]) -> Generator[Deferred, Any, None]:
+    def _dfs(self, stack: deque[Transaction]) -> Generator[Deferred, Any, None]:
         """DFS method."""
         while stack:
             tx = stack[-1]
@@ -123,7 +123,7 @@ class SyncMempoolManager:
                 if len(stack) > self.MAX_STACK_LENGTH:
                     stack.popleft()
 
-    def _next_missing_dep(self, tx: BaseTransaction) -> Optional[bytes]:
+    def _next_missing_dep(self, tx: Transaction) -> Optional[bytes]:
         """Get the first missing dependency found of tx."""
         assert not tx.is_block
         for txin in tx.inputs:
@@ -134,13 +134,13 @@ class SyncMempoolManager:
                 return parent
         return None
 
-    def _add_tx(self, tx: BaseTransaction) -> None:
+    def _add_tx(self, tx: Transaction) -> None:
         """Add tx to the DAG."""
         self.missing_tips.discard(tx.hash)
         if self.tx_storage.transaction_exists(tx.hash):
             return
         try:
-            success = self.vertex_handler.on_new_vertex(tx, fails_silently=False)
+            success = self.vertex_handler.on_new_mempool_transaction(tx)
             if success:
                 self.sync_agent.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:

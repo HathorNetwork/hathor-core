@@ -118,4 +118,4 @@ class MultiSigSpendTest(unittest.TestCase):
         tx_raw = output[0].split(':')[1].strip()
 
         tx = Transaction.create_from_struct(bytes.fromhex(tx_raw))
-        self.assertTrue(self.manager.propagate_tx(tx, False))
+        self.assertTrue(self.manager.propagate_tx(tx))

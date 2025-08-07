@@ -13,9 +13,9 @@
 #  limitations under the License.
 
 from hathor.transaction.scripts.construct import (
+    SigopCounter,
     create_base_script,
     create_output_script,
-    get_sigops_count,
     parse_address_script,
 )
 from hathor.transaction.scripts.execute import ScriptExtras, script_eval
@@ -32,9 +32,9 @@ __all__ = [
     'NanoContractMatchValues',
     'HathorScript',
     'ScriptExtras',
+    'SigopCounter',
     'parse_address_script',
     'create_base_script',
     'create_output_script',
     'script_eval',
-    'get_sigops_count',
 ]

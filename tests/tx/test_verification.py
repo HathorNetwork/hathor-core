@@ -113,20 +113,20 @@ class VerificationTest(unittest.TestCase):
     def test_block_verify_basic(self) -> None:
         block = self._get_valid_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.verify_basic(block)
+            self.manager.verification_service.verify_basic(block, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -153,7 +153,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block)
+            self.manager.verification_service.verify_without_storage(block, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -170,6 +170,7 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_block()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
@@ -183,6 +184,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
             patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
@@ -193,10 +195,11 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
-            self.manager.verification_service.verify(block)
+            self.manager.verification_service.verify(block, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
@@ -212,20 +215,20 @@ class VerificationTest(unittest.TestCase):
     def test_block_validate_basic(self) -> None:
         block = self._get_valid_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.validate_basic(block)
+            self.manager.verification_service.validate_basic(block, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -235,7 +238,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(block)
+        self.manager.verification_service.validate_full(block, self.verification_params)
         self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -246,7 +249,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(block)
+            self.manager.verification_service.validate_basic(block, self.verification_params)
 
         # Block methods
         verify_weight_wrapped2.assert_not_called()
@@ -258,7 +261,8 @@ class VerificationTest(unittest.TestCase):
     def test_block_validate_full(self) -> None:
         block = self._get_valid_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
@@ -274,7 +278,8 @@ class VerificationTest(unittest.TestCase):
         verify_mandatory_signaling_wrapped = Mock(wraps=self.verifiers.block.verify_mandatory_signaling)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
@@ -288,10 +293,11 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
-            self.manager.verification_service.validate_full(block)
+            self.manager.verification_service.validate_full(block, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Block methods
@@ -310,20 +316,20 @@ class VerificationTest(unittest.TestCase):
     def test_merge_mined_block_verify_basic(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.verify_basic(block)
+            self.manager.verification_service.verify_basic(block, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -350,7 +356,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block)
+            self.manager.verification_service.verify_without_storage(block, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -367,6 +373,7 @@ class VerificationTest(unittest.TestCase):
         block = self._get_valid_merge_mined_block()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_no_inputs_wrapped = Mock(wraps=self.verifiers.block.verify_no_inputs)
@@ -382,6 +389,7 @@ class VerificationTest(unittest.TestCase):
 
         with (
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
             patch.object(BlockVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
@@ -393,10 +401,11 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
-            self.manager.verification_service.verify(block)
+            self.manager.verification_service.verify(block, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Block methods
         verify_pow_wrapped.assert_called_once()
@@ -415,20 +424,20 @@ class VerificationTest(unittest.TestCase):
     def test_merge_mined_block_validate_basic(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
 
         verify_weight_wrapped = Mock(wraps=self.verifiers.block.verify_weight)
         verify_reward_wrapped = Mock(wraps=self.verifiers.block.verify_reward)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.validate_basic(block)
+            self.manager.verification_service.validate_basic(block, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
 
         # Block methods
         verify_weight_wrapped.assert_called_once()
@@ -438,7 +447,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(block)
+        self.manager.verification_service.validate_full(block, self.verification_params)
         self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -449,7 +458,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(block)
+            self.manager.verification_service.validate_basic(block, self.verification_params)
 
         # Block methods
         verify_weight_wrapped2.assert_not_called()
@@ -461,7 +470,8 @@ class VerificationTest(unittest.TestCase):
     def test_merge_mined_block_validate_full(self) -> None:
         block = self._get_valid_merge_mined_block()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
@@ -479,7 +489,8 @@ class VerificationTest(unittest.TestCase):
         verify_aux_pow_wrapped = Mock(wraps=self.verifiers.merge_mined_block.verify_aux_pow)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(BlockVerifier, 'verify_no_inputs', verify_no_inputs_wrapped),
@@ -494,10 +505,11 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
-            self.manager.verification_service.validate_full(block)
+            self.manager.verification_service.validate_full(block, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Block methods
@@ -519,7 +531,7 @@ class VerificationTest(unittest.TestCase):
     def test_transaction_verify_basic(self) -> None:
         tx = self._get_valid_tx()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -531,7 +543,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -541,10 +553,10 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_basic(tx)
+            self.manager.verification_service.verify_basic(tx, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -575,7 +587,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(tx)
+            self.manager.verification_service.verify_without_storage(tx, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -592,6 +604,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_number_of_inputs)
@@ -604,9 +617,11 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
+        verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
         with (
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
@@ -618,11 +633,13 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
+            patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
         ):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Transaction methods
         verify_pow_wrapped.assert_called_once()
@@ -636,13 +653,14 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
+        verify_tx_version_wrapped.assert_called_once()
 
     def test_transaction_validate_basic(self) -> None:
         # add enough blocks so that it can be fully validated later on the tests
         add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -654,7 +672,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -664,10 +682,10 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.validate_basic(tx)
+            self.manager.verification_service.validate_basic(tx, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -683,7 +701,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(tx.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(tx)
+        self.manager.verification_service.validate_full(tx, self.verification_params)
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -704,7 +722,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(tx)
+            self.manager.verification_service.validate_basic(tx, self.verification_params)
 
         # Transaction methods
         verify_parents_basic_wrapped2.assert_not_called()
@@ -722,7 +740,8 @@ class VerificationTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
         tx = self._get_valid_tx()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -738,9 +757,11 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
+        verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -755,11 +776,13 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
+            patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
         ):
-            self.manager.verification_service.validate_full(tx)
+            self.manager.verification_service.validate_full(tx, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         assert verify_outputs_wrapped.call_count == 2
 
         # Transaction methods
@@ -776,6 +799,7 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # validation should be FULL
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
@@ -798,7 +822,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(tx)
+            self.manager.verification_service.validate_basic(tx, self.verification_params)
 
         # Transaction methods
         verify_parents_basic_wrapped2.assert_not_called()
@@ -815,7 +839,7 @@ class VerificationTest(unittest.TestCase):
     def test_token_creation_transaction_verify_basic(self) -> None:
         tx = self._get_valid_token_creation_tx()
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -827,7 +851,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -837,10 +861,10 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_basic(tx)
+            self.manager.verification_service.verify_basic(tx, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -871,7 +895,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(tx)
+            self.manager.verification_service.verify_without_storage(tx, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -887,6 +911,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_token_creation_tx()
 
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
 
         verify_pow_wrapped = Mock(wraps=self.verifiers.vertex.verify_pow)
         verify_number_of_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_number_of_inputs)
@@ -899,12 +924,14 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
+        verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
         verify_token_info_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_token_info)
         verify_minted_tokens_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_minted_tokens)
 
         with (
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_pow', verify_pow_wrapped),
             patch.object(TransactionVerifier, 'verify_number_of_inputs', verify_number_of_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_output_token_indexes', verify_output_token_indexes_wrapped),
@@ -916,13 +943,15 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
+            patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_minted_tokens', verify_minted_tokens_wrapped),
         ):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
 
         # Transaction methods
         verify_pow_wrapped.assert_called_once()
@@ -936,6 +965,7 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
+        verify_tx_version_wrapped.assert_called_once()
 
         # TokenCreationTransaction methods
         verify_token_info_wrapped.assert_called_once()
@@ -945,7 +975,7 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_token_creation_tx()
         tx.get_metadata().validation = ValidationState.INITIAL
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -957,7 +987,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped = Mock(wraps=self.verifiers.vertex.verify_sigops_output)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -967,10 +997,10 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.validate_basic(tx)
+            self.manager.verification_service.validate_basic(tx, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
         verify_outputs_wrapped.assert_called_once()
 
         # Transaction methods
@@ -986,7 +1016,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(tx.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(tx)
+        self.manager.verification_service.validate_full(tx, self.verification_params)
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -1007,7 +1037,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(tx)
+            self.manager.verification_service.validate_basic(tx, self.verification_params)
 
         # Transaction methods
         verify_parents_basic_wrapped2.assert_not_called()
@@ -1025,7 +1055,8 @@ class VerificationTest(unittest.TestCase):
         tx = self._get_valid_token_creation_tx()
         tx.get_metadata().validation = ValidationState.INITIAL
 
-        verify_version_wrapped = Mock(wraps=self.verifiers.vertex.verify_version)
+        verify_version_basic_wrapped = Mock(wraps=self.verifiers.vertex.verify_version_basic)
+        verify_headers_wrapped = Mock(wraps=self.verifiers.vertex.verify_headers)
         verify_outputs_wrapped = Mock(wraps=self.verifiers.vertex.verify_outputs)
 
         verify_parents_basic_wrapped = Mock(wraps=self.verifiers.tx.verify_parents_basic)
@@ -1041,12 +1072,14 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
         verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
+        verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
         verify_token_info_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_token_info)
         verify_minted_tokens_wrapped = Mock(wraps=self.verifiers.token_creation_tx.verify_minted_tokens)
 
         with (
-            patch.object(VertexVerifier, 'verify_version', verify_version_wrapped),
+            patch.object(VertexVerifier, 'verify_version_basic', verify_version_basic_wrapped),
+            patch.object(VertexVerifier, 'verify_headers', verify_headers_wrapped),
             patch.object(VertexVerifier, 'verify_outputs', verify_outputs_wrapped),
             patch.object(TransactionVerifier, 'verify_parents_basic', verify_parents_basic_wrapped),
             patch.object(TransactionVerifier, 'verify_weight', verify_weight_wrapped),
@@ -1061,13 +1094,15 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
             patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
+            patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_minted_tokens', verify_minted_tokens_wrapped),
         ):
-            self.manager.verification_service.validate_full(tx)
+            self.manager.verification_service.validate_full(tx, self.verification_params)
 
         # Vertex methods
-        verify_version_wrapped.assert_called_once()
+        verify_version_basic_wrapped.assert_called_once()
+        verify_headers_wrapped.assert_called_once()
         assert verify_outputs_wrapped.call_count == 2
 
         # Transaction methods
@@ -1084,6 +1119,7 @@ class VerificationTest(unittest.TestCase):
         verify_parents_wrapped.assert_called_once()
         verify_sum_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
+        verify_tx_version_wrapped.assert_called_once()
 
         # TokenCreationTransaction methods
         verify_token_info_wrapped.assert_called_once()

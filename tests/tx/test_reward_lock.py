@@ -7,7 +7,6 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
-from hathor.transaction.storage import TransactionMemoryStorage
 from hathor.wallet import Wallet
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, get_genesis_key
@@ -23,7 +22,7 @@ class TransactionTest(unittest.TestCase):
         self.genesis_public_key = self.genesis_private_key.public_key()
 
         # this makes sure we can spend the genesis outputs
-        self.tx_storage = TransactionMemoryStorage(settings=self._settings)
+        self.tx_storage = self.create_tx_storage()
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
@@ -73,13 +72,13 @@ class TransactionTest(unittest.TestCase):
             tx, _ = self._spend_reward_tx(self.manager, reward_block)
             self.assertEqual(tx.static_metadata.min_height, unlock_height)
             with self.assertRaises(RewardLocked):
-                self.manager.verification_service.verify(tx)
+                self.manager.verification_service.verify(tx, self.verification_params)
             add_new_blocks(self.manager, 1, advance_clock=1)
 
         # now it should be spendable
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.propagate_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.propagate_tx(tx))
 
     def test_block_with_not_enough_height(self) -> None:
         # add block with a reward we can spend
@@ -93,7 +92,7 @@ class TransactionTest(unittest.TestCase):
         #      transaction before it can the RewardLocked exception is raised
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False, reject_locked_reward=False))
+        self.assertTrue(self.manager.on_new_tx(tx, reject_locked_reward=False))
 
         # new block will try to confirm it and fail
         with pytest.raises(InvalidNewTransaction) as e:
@@ -115,7 +114,7 @@ class TransactionTest(unittest.TestCase):
         # add tx that spends the reward
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx))
 
         # new block will be able to confirm it
         add_new_blocks(self.manager, 1, advance_clock=1)
@@ -133,9 +132,9 @@ class TransactionTest(unittest.TestCase):
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
         with self.assertRaises(InvalidNewTransaction):
-            self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+            self.assertTrue(self.manager.on_new_tx(tx))
 
     def test_mempool_tx_with_enough_height(self) -> None:
         # add block with a reward we can spend
@@ -147,7 +146,7 @@ class TransactionTest(unittest.TestCase):
         # add tx that spends the reward, must not fail
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx))
 
     def test_mempool_tx_invalid_after_reorg(self) -> None:
         # add block with a reward we can spend
@@ -161,7 +160,7 @@ class TransactionTest(unittest.TestCase):
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         assert tx_address not in balance_per_address
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, fails_silently=False))
+        self.assertTrue(self.manager.on_new_tx(tx))
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         assert balance_per_address[tx_address] == 6400
 
@@ -171,12 +170,12 @@ class TransactionTest(unittest.TestCase):
         b0 = tb0.generate_mining_block(self.manager.rng, storage=self.manager.tx_storage)
         b0.weight = 10
         self.manager.cpu_mining_service.resolve(b0)
-        self.manager.propagate_tx(b0, fails_silently=False)
+        self.manager.propagate_tx(b0)
         self.clock.advance(1)
 
         # now the new tx should not pass verification considering the reward lock
         with self.assertRaises(RewardLocked):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
 
         # the transaction should have been removed from the mempool
         self.assertNotIn(tx, self.manager.tx_storage.iter_mempool_from_best_index())
@@ -216,4 +215,4 @@ class TransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         with self.assertRaises(RewardLocked):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)

@@ -7,7 +7,7 @@ from tests import unittest
 class RunNodeTest(unittest.TestCase):
     # In this case we just want to go through the code to see if it's okay
 
-    def test_memory_storage(self):
+    def test_temp_data(self):
         class CustomRunNode(RunNode):
             def start_manager(self) -> None:
                 pass
@@ -15,7 +15,7 @@ class RunNodeTest(unittest.TestCase):
             def register_signal_handlers(self) -> None:
                 pass
 
-        run_node = CustomRunNode(argv=['--memory-storage'])
+        run_node = CustomRunNode(argv=['--temp-data'])
         self.assertTrue(run_node is not None)
 
     @patch('twisted.internet.reactor.listenTCP')
@@ -28,7 +28,7 @@ class RunNodeTest(unittest.TestCase):
             def register_signal_handlers(self) -> None:
                 pass
 
-        run_node = CustomRunNode(argv=['--memory-storage', '--status', '1234'])
+        run_node = CustomRunNode(argv=['--temp-data', '--status', '1234'])
         self.assertTrue(run_node is not None)
 
         mock_listenTCP.assert_called_with(1234, ANY)
@@ -43,7 +43,7 @@ class RunNodeTest(unittest.TestCase):
             def register_signal_handlers(self) -> None:
                 pass
 
-        run_node = CustomRunNode(argv=['--memory-storage', '--x-enable-ipv6', '--status', '1234'])
+        run_node = CustomRunNode(argv=['--temp-data', '--x-enable-ipv6', '--status', '1234'])
         self.assertTrue(run_node is not None)
 
         mock_listenTCP.assert_called_with(1234, ANY, interface='::0')
@@ -59,4 +59,4 @@ class RunNodeTest(unittest.TestCase):
 
         # Should call system exit
         with self.assertRaises(SystemExit):
-            CustomRunNode(argv=['--memory-storage', '--x-disable-ipv4', '--status', '1234'])
+            CustomRunNode(argv=['--temp-data', '--x-disable-ipv4', '--status', '1234'])

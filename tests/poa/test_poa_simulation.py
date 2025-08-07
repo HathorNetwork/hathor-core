@@ -75,7 +75,7 @@ def _assert_height_weight_signer_id(
 
 class PoaSimulationTest(SimulatorTestCase):
     def _get_manager(self, signer: PoaSigner | None = None) -> HathorManager:
-        builder = self.simulator.get_default_builder().disable_full_verification()
+        builder = self.simulator.get_default_builder()
         if signer:
             builder.set_poa_signer(signer)
         artifacts = self.simulator.create_artifacts(builder)
@@ -324,19 +324,16 @@ class PoaSimulationTest(SimulatorTestCase):
         )
 
     def test_existing_storage(self) -> None:
-        import tempfile
-        rocksdb_directory = tempfile.mkdtemp()
-        self.tmpdirs.append(rocksdb_directory)
         signer = get_signer()
         signer_id = signer._signer_id
 
         self.simulator.settings = get_settings(signer, time_between_blocks=10)
         builder = self.simulator.get_default_builder() \
             .set_poa_signer(signer) \
-            .use_rocksdb(path=rocksdb_directory)
 
         artifacts1 = self.simulator.create_artifacts(builder)
         manager1 = artifacts1.manager
+        rocksdb_dir = not_none(artifacts1.rocksdb_storage.temp_dir)
         manager1.allow_mining_without_peers()
 
         self.simulator.run(50)
@@ -357,7 +354,7 @@ class PoaSimulationTest(SimulatorTestCase):
 
         builder = self.simulator.get_default_builder() \
             .set_poa_signer(signer) \
-            .use_rocksdb(path=rocksdb_directory)
+            .set_rocksdb_path(path=rocksdb_dir)
 
         artifacts = self.simulator.create_artifacts(builder)
         manager2 = artifacts.manager
@@ -419,8 +416,7 @@ class PoaSimulationTest(SimulatorTestCase):
 
         builder_1b = self.simulator.get_default_builder() \
             .set_tx_storage(storage_1a) \
-            .set_poa_signer(signer1) \
-            .disable_full_verification()
+            .set_poa_signer(signer1)
         artifacts_1b = self.simulator.create_artifacts(builder_1b)
         manager_1b = artifacts_1b.manager
         manager_1b.allow_mining_without_peers()
@@ -569,4 +565,4 @@ class PoaSimulationTest(SimulatorTestCase):
         token_tx.inputs[0].data = P2PKH.create_input_data(public_key_bytes, signature)
         token_tx.update_hash()
 
-        assert manager.on_new_tx(token_tx, fails_silently=False)
+        assert manager.on_new_tx(token_tx)

@@ -25,9 +25,10 @@ from hathor.p2p.sync_v2.exception import (
     UnexpectedVertex,
 )
 from hathor.p2p.sync_v2.streamers import StreamEnd
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.types import VertexId
+from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -46,6 +47,9 @@ class TransactionStreamingClient:
         self.protocol = self.sync_agent.protocol
         self.tx_storage = self.sync_agent.tx_storage
         self.verification_service = self.protocol.node.verification_service
+        # XXX: since it's not straightforward to get the correct block, it's OK to just disable checkdatasig counting,
+        #      it will be correctly enabled when doing a full validation anyway.
+        self.verification_params = VerificationParams(enable_checkdatasig_count=False)
         self.reactor = sync_agent.reactor
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
@@ -66,7 +70,7 @@ class TransactionStreamingClient:
         self._tx_max_quantity = limit
 
         # Queue of transactions waiting to be processed.
-        self._queue: deque[BaseTransaction] = deque()
+        self._queue: deque[Transaction] = deque()
 
         # Keeps the response code if the streaming has ended.
         self._response_code: Optional[StreamEnd] = None
@@ -79,7 +83,7 @@ class TransactionStreamingClient:
 
         # In-memory database of transactions already received but still
         # waiting for dependencies.
-        self._db: dict[VertexId, BaseTransaction] = {}
+        self._db: dict[VertexId, Transaction] = {}
         self._existing_deps: set[VertexId] = set()
 
         self._prepare_block(self.partial_blocks[0])
@@ -103,7 +107,7 @@ class TransactionStreamingClient:
             return
         self._deferred.errback(reason)
 
-    def handle_transaction(self, tx: BaseTransaction) -> None:
+    def handle_transaction(self, tx: Transaction) -> None:
         """This method is called by the sync agent when a TRANSACTION message is received."""
         if self._deferred.called:
             return
@@ -147,13 +151,13 @@ class TransactionStreamingClient:
         self.reactor.callLater(0, self.process_queue)
 
     @inlineCallbacks
-    def _process_transaction(self, tx: BaseTransaction) -> Generator[Any, Any, None]:
+    def _process_transaction(self, tx: Transaction) -> Generator[Any, Any, None]:
         """Process transaction."""
 
         # Run basic verification.
         if not tx.is_genesis:
             try:
-                self.verification_service.verify_basic(tx)
+                self.verification_service.verify_basic(tx, self.verification_params)
             except TxValidationError as e:
                 self.fails(InvalidVertexError(repr(e)))
                 return
@@ -177,6 +181,7 @@ class TransactionStreamingClient:
 
         self._update_dependencies(tx)
 
+        assert isinstance(tx, Transaction)
         self._db[tx.hash] = tx
 
         if not self._waiting_for:
@@ -191,9 +196,9 @@ class TransactionStreamingClient:
         if self._tx_received % 100 == 0:
             self.log.debug('tx streaming in progress', txs_received=self._tx_received)
 
-    def _update_dependencies(self, tx: BaseTransaction) -> None:
+    def _update_dependencies(self, vertex: BaseTransaction) -> None:
         """Update _existing_deps and _waiting_for with the dependencies."""
-        for dep in tx.get_all_dependencies():
+        for dep in vertex.get_all_dependencies():
             if self.tx_storage.transaction_exists(dep) or dep in self._db:
                 self._existing_deps.add(dep)
             else:
