@@ -14,6 +14,10 @@
 
 from __future__ import annotations
 
+from typing import Callable, TypeVar
+
+from typing_extensions import ParamSpec
+
 
 def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dict[str, object]) -> None:
     """Run validations during faux-immutable class creation."""
@@ -59,25 +63,6 @@ class _FauxImmutableMeta(type):
             _validate_faux_immutable_meta(name, bases, attrs)
         return super().__new__(cls, name, bases, attrs, **kwargs)
 
-    def __call__(cls, *args, **kwargs):
-        """Override the default `__call__` behavior to create shell classes."""
-        # Keep the same name as the original class.
-        name = cls.__name__
-
-        # The original class is the shell's only base.
-        bases = (cls,)
-
-        # The shell doesn't have any slots and must skip validation to bypass the inheritance rule.
-        attrs = dict(__slots__=(), __skip_faux_immutability_validation__=True)
-
-        # Create a dynamic class that is only used on this call.
-        shell_type = type(name, bases, attrs)
-
-        # Use it to instantiate the object, init it, and return it. This mimics the default `__call__` behavior.
-        obj = cls.__new__(shell_type)
-        shell_type.__init__(obj, *args, **kwargs)
-        return obj
-
     def __setattr__(cls, name: str, value: object) -> None:
         raise AttributeError(f'cannot set attribute `{name}` on faux-immutable class')
 
@@ -92,6 +77,31 @@ class FauxImmutable(metaclass=_FauxImmutableMeta):
 
     def __setattr__(self, name: str, value: object) -> None:
         raise AttributeError(f'cannot set attribute `{name}` on faux-immutable object')
+
+
+T = TypeVar('T', bound=FauxImmutable)
+P = ParamSpec('P')
+
+
+def create_with_shell(cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    """Mimic `cls.__call__` method behavior, but wrapping the created instance with an ad-hoc shell class."""
+    # Keep the same name as the original class.
+    assert isinstance(cls, type)
+    name = cls.__name__
+
+    # The original class is the shell's only base.
+    bases = (cls,)
+
+    # The shell doesn't have any slots and must skip validation to bypass the inheritance rule.
+    attrs = dict(__slots__=(), __skip_faux_immutability_validation__=True)
+
+    # Create a dynamic class that is only used on this call.
+    shell_type: type[T] = type(name, bases, attrs)
+
+    # Use it to instantiate the object, init it, and return it. This mimics the default `__call__` behavior.
+    obj: T = cls.__new__(shell_type)
+    shell_type.__init__(obj, *args, **kwargs)
+    return obj
 
 
 def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None:
