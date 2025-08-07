@@ -1,4 +1,5 @@
 import os
+from textwrap import dedent
 
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
@@ -50,49 +51,60 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         self._ocb_mine(blueprint)
         return blueprint
 
-    def _test_forbid_syntax(self, code: str, err_msg: str) -> None:
+    def _test_forbid_syntax(
+        self,
+        code: str,
+        syntax_errors: tuple[str, ...],
+    ) -> None:
         blueprint = self._create_on_chain_blueprint(code)
         with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert isinstance(cm.exception.__cause__.__cause__, SyntaxError)
         assert cm.exception.args[0] == 'full validation failed: forbidden syntax'
-        assert cm.exception.__cause__.__cause__.args[0] == err_msg
+        # The first error is always the one that makes the tx fail
+        assert cm.exception.__cause__.__cause__.args[0] == syntax_errors[0]
+
+        rules = self.manager.verification_service.verifiers.on_chain_blueprint.blueprint_code_rules()
+        errors = []
+        for rule in rules:
+            try:
+                rule(blueprint)
+            except SyntaxError as e:
+                errors.append(e)
+            except Exception:
+                # this test function is not interested in non-syntax errors
+                pass
+
+        assert len(errors) == len(syntax_errors)
+        for error, expected in zip(errors, syntax_errors, strict=True):
+            assert error.args[0] == expected
 
     def test_forbid_import(self) -> None:
         self._test_forbid_syntax(
             'import os',
-            'Import statements are not allowed.',
+            syntax_errors=('Import statements are not allowed.',),
         )
 
     def test_forbid_import_from(self) -> None:
         self._test_forbid_syntax(
             'from os import path',
-            'Importing from "os" is not allowed.',
+            syntax_errors=('Importing from "os" is not allowed.',),
         )
         # XXX: only math.ceil and math.floor are currently allowed, log should error
         self._test_forbid_syntax(
             'from math import log',
-            'Importing "log" from "math" is not allowed.',
+            syntax_errors=('Importing "log" from "math" is not allowed.',),
         )
 
     def test_forbid_try_except(self) -> None:
         self._test_forbid_syntax(
             'try:\n    ...\nexcept:\n    ...',
-            'Try/Except blocks are not allowed.',
+            syntax_errors=('Try/Except blocks are not allowed.',),
         )
 
     def test_forbid_names_blacklist(self) -> None:
         forbidden_cases = {
-            '__builtins__': [
-                r'''x = __builtins__('dir')''',
-                r'''y = __builtins__.dir''',
-            ],
-            '__import__': [
-                r'''sys = __import__('sys')''',
-                r'''os = __import__('os.path')''',
-                r'''path = __import__('os.path', fromlist=[None])''',
-            ],
             'compile': [
                 r'''code = compile('print("foo")')''',
             ],
@@ -135,30 +147,197 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         }
         for attr, codes in forbidden_cases.items():
             for code in codes:
-                self._test_forbid_syntax(code, f'Usage or reference to {attr} is not allowed.')
+                self._test_forbid_syntax(code, syntax_errors=(f'Usage or reference to {attr} is not allowed.',))
+
+        forbidden_cases_with_dunder = {
+            '__builtins__': [
+                r'''x = __builtins__('dir')''',
+                r'''y = __builtins__.dir''',
+            ],
+            '__import__': [
+                r'''sys = __import__('sys')''',
+                r'''os = __import__('os.path')''',
+                r'''path = __import__('os.path', fromlist=[None])''',
+            ],
+        }
+        for attr, codes in forbidden_cases_with_dunder.items():
+            for code in codes:
+                self._test_forbid_syntax(
+                    code,
+                    syntax_errors=(
+                        'script contains dunder text',
+                        f'Usage or reference to {attr} is not allowed.',
+                    )
+                )
 
     def test_forbid_internal_attr(self) -> None:
         self._test_forbid_syntax(
             'x = 1\nx.__class__',
-            'Access to internal attributes and methods is not allowed.',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
         )
         self._test_forbid_syntax(
             'x = 1\nx.__runner',
-            'Access to internal attributes and methods is not allowed.',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
         )
         self._test_forbid_syntax(
             'x = 1\nx._Context__runner',
-            'Access to internal attributes and methods is not allowed.',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
         )
         self._test_forbid_syntax(
             'x = log.__entries__',
-            'Access to internal attributes and methods is not allowed.',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            'x().__setattr__',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            'super().__setattr__',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            '(lambda: object).__setattr__',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            '(lambda: object)().__setattr__',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            '(object,)[0].__setattr__',
+            syntax_errors=(
+                'script contains dunder text',
+                'Access to internal attributes and methods is not allowed.',
+            ),
+        )
+
+    def test_forbid_dunder_names(self) -> None:
+        self._test_forbid_syntax(
+            '__x__ = 123',
+            syntax_errors=(
+                'script contains dunder text',
+                'Using dunder names is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            'x = "__x__"',
+            syntax_errors=('script contains dunder text',),
+        )
+        self._test_forbid_syntax(
+            '__',
+            syntax_errors=(
+                'script contains dunder text',
+                'Using dunder names is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            dedent('''
+                class Foo:
+                    __slots__ = ()
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'Using dunder names is not allowed.',
+            ),
+        )
+        self._test_forbid_syntax(
+            dedent('''
+                class Foo:
+                    __match_args__ = ('__dict__',)
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'Using dunder names is not allowed.',
+            ),
+        )
+
+    def test_forbid_magic_methods(self) -> None:
+        self._test_forbid_syntax(
+            dedent('''
+                class Foo:
+                    def __init__(self):
+                        pass
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'magic methods are not allowed',
+            ),
+        )
+        self._test_forbid_syntax(
+            dedent('''
+                class Foo:
+                    def __new__(self):
+                        pass
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'magic methods are not allowed',
+            ),
+        )
+        self._test_forbid_syntax(
+            dedent('''
+                class Foo:
+                    def __setattr__(self):
+                        pass
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'magic methods are not allowed',
+            ),
+        )
+
+    def test_forbid_match_dunder(self) -> None:
+        self._test_forbid_syntax(
+            dedent('''
+                match 123:
+                    case int(__dict__=my_dict):
+                        pass
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'cannot match on dunder name',
+            )
+        )
+        self._test_forbid_syntax(
+            dedent('''
+                match 123:
+                    case {'__dict__': 123}:
+                        pass
+            '''),
+            syntax_errors=(
+                'script contains dunder text',
+                'cannot match on dunder name',
+            ),
         )
 
     def test_forbid_async_fn(self) -> None:
         self._test_forbid_syntax(
             'async def foo():\n    ...',
-            'Async functions are not allowed.',
+            syntax_errors=('Async functions are not allowed.',)
         )
 
     def test_forbid_await_syntax(self) -> None:
@@ -168,15 +347,24 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         #      forms a valid syntax tree
         self._test_forbid_syntax(
             'x = await foo()',
-            'Await is not allowed.',
+            syntax_errors=(
+                'Await is not allowed.',
+                "'await' outside function",
+            ),
         )
         self._test_forbid_syntax(
             'async for i in range(10):\n    ...',
-            'Async loops are not allowed.',
+            syntax_errors=(
+                'Async loops are not allowed.',
+                "'async for' outside async function",
+            ),
         )
         self._test_forbid_syntax(
             'async with foo():\n    ...',
-            'Async contexts are not allowed.',
+            syntax_errors=(
+                'Async contexts are not allowed.',
+                "'async with' outside async function",
+            ),
         )
 
     def test_blueprint_type_not_a_class(self) -> None:
