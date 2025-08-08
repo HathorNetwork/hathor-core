@@ -218,6 +218,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
     def create_token_info(
         self,
+        *,
         token_uid: bytes,
         name: str,
         symbol: str,
@@ -297,11 +298,11 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
     def _create_genesis_info(self) -> None:
         self.create_token_info(
-            self._settings.HATHOR_TOKEN_UID,
-            self._settings.HATHOR_TOKEN_NAME,
-            self._settings.HATHOR_TOKEN_SYMBOL,
-            TokenVersion.NATIVE,
-            self._settings.GENESIS_TOKENS,
+            token_uid=self._settings.HATHOR_TOKEN_UID,
+            name=self._settings.HATHOR_TOKEN_NAME,
+            symbol=self._settings.HATHOR_TOKEN_SYMBOL,
+            version=TokenVersion.NATIVE,
+            total=self._settings.GENESIS_TOKENS,
         )
 
     @override
@@ -364,7 +365,11 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             key_info = self._to_key_info(tx.hash)
             token_info = self._db.get((self._cf, key_info))
             if token_info is None:
-                self.create_token_info(tx.hash, tx.token_name, tx.token_symbol, tx.token_version)
+                self.create_token_info(
+                    token_uid=tx.hash,
+                    name=tx.token_name,
+                    symbol=tx.token_symbol,
+                    version=tx.token_version)
 
         if tx.is_transaction:
             # Adding this tx to the transactions key list

@@ -131,13 +131,21 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         token_bytes1 = bytes.fromhex('001c382847d8440d05da95420bee2ebeb32bc437f82a9ae47b0745c8a29a7b0d')
         expected_token_version = TokenVersion.DEPOSIT
         self.manager.tx_storage.indexes.tokens.create_token_info(
-            token_bytes1, 'Test Coin', 'TSC', expected_token_version)
+            token_uid=token_bytes1,
+            name='Test Coin',
+            symbol='TSC',
+            version=expected_token_version
+        )
         token_info = self.manager.tx_storage.indexes.tokens.get_token_info(token_bytes1)
         self.assertEqual(token_info.get_version(), expected_token_version)
 
         token_bytes2 = bytes.fromhex('007231eee3cb6160d95172a409d634d0866eafc8775f5729fff6a61e7850aba5')
         self.manager.tx_storage.indexes.tokens.create_token_info(
-            token_bytes2, 'NewCoin', 'NCN', expected_token_version)
+            token_uid=token_bytes2,
+            name='NewCoin',
+            symbol='NCN',
+            version=expected_token_version
+        )
         token_info2 = self.manager.tx_storage.indexes.tokens.get_token_info(token_bytes2)
         self.assertEqual(token_info2.get_version(), expected_token_version)
 
@@ -232,7 +240,11 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         token_bytes1 = bytes.fromhex('000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6dd13db330')
         self.manager.tx_storage.indexes.tokens.create_token_info(
-            token_bytes1, 'Wat wat', 'WAT', TokenVersion.DEPOSIT)
+            token_uid=token_bytes1,
+            name='Wat wat',
+            symbol='WAT',
+            version=TokenVersion.DEPOSIT
+        )
 
         response = yield self.web.get(
             "transaction", {b'id': b'00005f234469407614bf0abedec8f722bb5e534949ad37650f6077c899741ed7'})

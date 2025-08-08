@@ -378,7 +378,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 token_info.amount -= spent_output.value
 
                 if token_version is TokenVersion.FEE:
-                    token_dict.chargeable_spent_outputs += 1
+                    token_info.chargeable_inputs += 1
 
             token_dict[token_uid] = token_info
         return token_dict
@@ -408,11 +408,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 if tx_output.value > TxOutput.ALL_AUTHORITIES:
                     raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
             else:
-                # for regular outputs, just subtract from the total amount
+                # for regular outputs subtract from the total amount
                 token_info.amount += tx_output.value
 
                 if token_info.version is TokenVersion.FEE:
-                    token_dict.chargeable_outputs += 1
+                    token_info.chargeable_outputs += 1
 
     def is_double_spending(self) -> bool:
         """ Iterate through inputs to check if they were already spent

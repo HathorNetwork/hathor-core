@@ -42,6 +42,26 @@ class InputOutputMismatch(TxValidationError):
     """Input and output amounts are not equal"""
 
 
+class MintedWithoutAuthorityInputs(InputOutputMismatch):
+    """Tokens were minted without authority inputs"""
+
+    from hathor.types import TokenUid
+
+    def __init__(self, amount: int, token_uid: TokenUid) -> None:
+        super().__init__('{} {} tokens minted, but there is no mint authority input'.format(
+            (-1) * amount, token_uid.hex()))
+
+
+class MeltedWithoutAuthorityInputs(InputOutputMismatch):
+    """Tokens were melted without authority inputs"""
+
+    from hathor.types import TokenUid
+
+    def __init__(self, amount: int, token_uid: TokenUid) -> None:
+        super().__init__('{} {} tokens melted, but there is no melt authority input'.format(
+            (-1) * amount, token_uid.hex()))
+
+
 class InvalidInputData(TxValidationError):
     """Input data does not solve output script correctly"""
 

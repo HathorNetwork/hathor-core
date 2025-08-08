@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
@@ -33,6 +34,8 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidToken,
     InvalidVersionError,
+    MeltedWithoutAuthorityInputs,
+    MintedWithoutAuthorityInputs,
     RewardLocked,
     ScriptError,
     TimestampError,
@@ -41,9 +44,9 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     WeightError,
 )
-from hathor.transaction.token_info import TokenInfoDict, TokenVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
-from hathor.types import VertexId
+from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -235,44 +238,24 @@ class TransactionVerifier:
 
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        fee = token_dict.calculate_fee(self._settings)
+        deposit = 0
         withdraw = 0
         withdraw_without_authority = 0
-        deposit = 0
-        for token_uid, token_info in token_dict.items():
-            if token_uid == self._settings.HATHOR_TOKEN_UID:
-                continue
+        fee = token_dict.calculate_fee(self._settings)
 
-            if token_info.amount == 0:
-                # that's the usual behavior, nothing to do
-                pass
-            elif token_info.amount < 0:
-                # tokens have been melted
-                if not token_info.can_melt and token_info.version != TokenVersion.DEPOSIT:
-                    raise InputOutputMismatch('{} {} tokens melted, but there is no melt authority input'.format(
-                        token_info.amount, token_uid.hex()))
-                if token_info.version == TokenVersion.DEPOSIT:
-                    withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
-                    if token_info.can_melt:
-                        withdraw += withdraw_amount
-                    else:
-                        # Any melting operation without authority is forbidden.
-                        # It includes trying to pay fee with non-integer amounts.
-                        # For example (DBT - Deposit based token)
-                        # 1.99 DBT results in 0.01 HTR and (0.99 DBT melted) => this one is forbidden
-                        is_integer_amount = (token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer()
-                        if fee == 0 or not is_integer_amount:
-                            raise InputOutputMismatch(
-                                '{} {} tokens melted, but there is no melt authority input'.format(
-                                    token_info.amount, token_uid.hex()))
-                        withdraw_without_authority += withdraw_amount
-            else:
-                # token_info.amount > 0, so the transaction is minting tokens
-                if not token_info.can_mint:
-                    raise InputOutputMismatch('{} {} tokens minted, but there is no mint authority input'.format(
-                        (-1) * token_info.amount, token_uid.hex()))
-                if token_info.version == TokenVersion.DEPOSIT:
-                    deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
+        for token_uid, token_info in token_dict.items():
+            match token_info.version:
+                case TokenVersion.NATIVE:
+                    continue
+                case TokenVersion.DEPOSIT:
+                    result = self._verify_deposit_token(fee, token_uid, token_info)
+                    deposit += result.deposit
+                    withdraw += result.withdraw
+                    withdraw_without_authority += result.withdraw_without_authority
+                case TokenVersion.FEE:
+                    self._verify_fee_token(token_uid, token_info)
+                case _:
+                    assert_never(token_info)
 
         is_melting_without_authority = withdraw_without_authority - fee > 0
         if is_melting_without_authority:
@@ -286,6 +269,38 @@ class TransactionVerifier:
                 htr_info.amount,
                 htr_expected_amount,
             ))
+
+    def _verify_fee_token(self, token_uid: TokenUid, token_info: TokenInfo) -> None:
+        if token_info.has_been_melted() and not token_info.can_melt:
+            raise MeltedWithoutAuthorityInputs(token_info.amount, token_uid)
+        if token_info.has_been_minted() and not token_info.can_mint:
+            raise MintedWithoutAuthorityInputs(token_info.amount, token_uid)
+
+    def _verify_deposit_token(self, fee: int, token_uid: TokenUid, token_info: TokenInfo) -> DepositTokenVerifyResult:
+        result = DepositTokenVerifyResult()
+        if token_info.has_been_melted():
+            withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
+            if token_info.can_melt:
+                result.withdraw += withdraw_amount
+            else:
+                # Any melting operation without authority is forbidden.
+                # It includes trying to pay fee with non-integer amounts.
+                # For example (DBT - Deposit based token)
+                # 1.99 DBT results in 0.01 HTR and (0.99 DBT melted) => this one is forbidden
+                is_integer_amount = (
+                    token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer()
+                if fee == 0 or not is_integer_amount:
+                    raise MeltedWithoutAuthorityInputs(token_info.amount, token_uid)
+
+                result.withdraw_without_authority += withdraw_amount
+
+        if token_info.has_been_minted():
+            if not token_info.can_mint:
+                raise MintedWithoutAuthorityInputs(token_info.amount, token_uid)
+
+            result.deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
+
+        return result
 
     def verify_version(self, tx: Transaction) -> None:
         """Verify that the vertex version is valid."""
@@ -308,3 +323,10 @@ class TransactionVerifier:
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
+
+
+@dataclass(kw_only=True)
+class DepositTokenVerifyResult:
+    deposit: int = 0
+    withdraw_without_authority: int = 0
+    withdraw: int = 0

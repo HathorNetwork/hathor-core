@@ -6,6 +6,8 @@ from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InputOutputMismatch, TransactionDataError
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_withdraw_amount
 from tests import unittest
 from tests.utils import (
@@ -38,31 +40,39 @@ class FeeTokenTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
 
     def test_fee_token_melt(self) -> None:
-        htr_change_utxo_index = 3
         initial_mint_amount = 500
-        tx = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount)
-        token_uid = tx.tokens[0]
+        htr_amount = 100
+        fee_tx = create_fee_tokens(
+            self.manager,
+            self.address_b58,
+            initial_mint_amount,
+            genesis_output_amount=htr_amount
+        )
+        fee_tx2 = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount, 'FBT2', 'FFB')
+        fee_tx3 = create_fee_tokens(self.manager, self.address_b58, initial_mint_amount, 'FBT3', 'FFF')
+        fee_token_uid = fee_tx.tokens[0]
+        fee_token2_uid = fee_tx2.tokens[0]
+        fee_token3_uid = fee_tx3.tokens[0]
         parents = self.manager.get_new_tx_parents()
         script = P2PKH.create_output_script(self.address)
 
-        # melt tokens and transfer melt authority
-        melt_amount = 100
-        new_token_amount = tx.outputs[0].value - melt_amount
-
         inputs = [
             # token amount
-            TxInput(tx.hash, 0, b''),
+            TxInput(fee_tx.hash, 0, b''),
             # Melt authority
-            TxInput(tx.hash, 2, b''),
+            TxInput(fee_tx.hash, 2, b''),
             # HTR for fee
-            TxInput(tx.hash, 3, b'')
+            TxInput(fee_tx.hash, 4, b'')
         ]
 
         outputs = [
             # New token amount
-            TxOutput(new_token_amount, script, 1),
+            TxOutput(100, script, 1),
+            TxOutput(100, script, 1),
+            TxOutput(100, script, 1),
+            TxOutput(100, script, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
         ]
 
         tx2 = Transaction(
@@ -70,21 +80,65 @@ class FeeTokenTest(unittest.TestCase):
             inputs=inputs,
             outputs=outputs,
             parents=parents,
-            tokens=[token_uid],
+            tokens=[fee_token_uid],
             storage=self.manager.tx_storage,
             timestamp=int(self.clock.seconds())
         )
-        # pick the last tip tx output in HTR then subtracts the fee
+        # Melt 100 tokens from fee_token and add 4 outputs, should charge only by the outputs count
         tx_fee = tx2.get_complete_token_info().calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 1)
-        change_value = tx.outputs[htr_change_utxo_index].value - tx_fee
+        self.assertEqual(tx_fee, 4)
+        change_value = htr_amount - tx_fee
         outputs.append(TxOutput(change_value, script, 0))
 
         #  It's the tx item output signature
         #  this signature_data allows the tx output to be spent by the tx2 inputs
         self.sign_inputs(tx2)
         self.resolve_and_propagate(tx2)
-        self.check_tokens_index(token_uid, tx.hash, 1, tx2.hash, 1, new_token_amount)  # check total amount of tokens
+
+        inputs = [
+            TxInput(tx2.hash, 0, b''),
+            TxInput(tx2.hash, 1, b''),
+            TxInput(tx2.hash, 2, b''),
+            TxInput(tx2.hash, 3, b''),
+            # melt authority
+            TxInput(tx2.hash, 4, b''),
+            # HTR
+            TxInput(tx2.hash, 5, b''),
+            # fee token 2 - amount
+            TxInput(fee_tx2.hash, 0, b''),
+            # fee token 2 Melt authority
+            TxInput(fee_tx2.hash, 2, b''),
+            # fee token 3 - amount
+            TxInput(fee_tx3.hash, 0, b''),
+            # fee token 3 Melt authority
+            TxInput(fee_tx3.hash, 2, b''),
+        ]
+
+        outputs = [
+            TxOutput(100, script, 2),
+            TxOutput(100, script, 2),
+            TxOutput(100, script, 2)
+        ]
+
+        tx3 = Transaction(
+            weight=1,
+            inputs=inputs,
+            outputs=outputs,
+            parents=self.manager.get_new_tx_parents(),
+            tokens=[fee_token_uid, fee_token2_uid, fee_token3_uid],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.clock.seconds())
+        )
+
+        # melting 2 tokens without outputs, should charge FEE_PER_OUT * 2 = 2
+        # melting 1 token with outputs, should charge 1 per non-authority output = 3
+        tx3_fee = tx3.get_complete_token_info().calculate_fee(self.manager._settings)
+        # Multiple inputs should be only charge once per token when no outputs are present
+        self.assertEqual(tx3_fee, 5)
+        tx3.outputs.append(TxOutput(change_value - tx3_fee, script, 0))
+
+        self.sign_inputs(tx3)
+        self.resolve_and_propagate(tx3)
 
     def test_fee_token_melt_without_authority(self) -> None:
         htr_change_utxo_index = 3
@@ -593,6 +647,86 @@ class FeeTokenTest(unittest.TestCase):
         with pytest.raises(InvalidNewTransaction) as e:
             create_fee_tokens(custom_manager, self.address_b58)
         assert isinstance(e.value.__cause__, TransactionDataError)
+
+    def test_verify_token_info(self) -> None:
+        """
+        By adding the TokenVersion enum as an argument of create token transaction
+        we should assert the validation when some invalid token data is propagated
+        """
+        script = P2PKH.create_output_script(self.address)
+
+        parents = self.manager.get_new_tx_parents()
+
+        deposit_input = [TxInput(self.genesis_blocks[0].hash, 0, b'')]
+        timestamp = int(self.manager.reactor.seconds())
+
+        outputs = [
+            # mint output
+            TxOutput(500, script, 0b00000001),
+            # authority outputs
+            TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
+            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            # deposit output
+            TxOutput(self.genesis_blocks[0].outputs[0].value, script, 0)
+        ]
+
+        # Invalid token_version
+        tx = TokenCreationTransaction(
+            weight=1,
+            parents=parents,
+            storage=self.manager.tx_storage,
+            inputs=deposit_input,
+            outputs=outputs,
+            token_name='ValidName',
+            token_symbol='VNA',
+            timestamp=timestamp,
+            token_version=TokenVersion.NATIVE
+        )
+        self.sign_inputs(tx)
+
+        # Invalid token_name
+        tx2 = TokenCreationTransaction(
+            weight=1,
+            parents=parents,
+            storage=self.manager.tx_storage,
+            inputs=deposit_input,
+            outputs=outputs,
+            token_name='Hathor',
+            token_symbol='ITK',
+            timestamp=timestamp,
+            token_version=TokenVersion.DEPOSIT
+        )
+        self.sign_inputs(tx2)
+
+        # Invalid token_symbol
+        tx3 = TokenCreationTransaction(
+            weight=1,
+            parents=parents,
+            storage=self.manager.tx_storage,
+            inputs=deposit_input,
+            outputs=outputs,
+            token_name='ValidName',
+            token_symbol='HTR',
+            timestamp=timestamp,
+            token_version=TokenVersion.FEE
+        )
+
+        self.sign_inputs(tx3)
+
+        with pytest.raises(InvalidNewTransaction) as e:
+            self.resolve_and_propagate(tx)
+        message = str(e.value)
+        assert 'Invalid token version (0)' in message
+
+        with pytest.raises(InvalidNewTransaction) as e:
+            self.resolve_and_propagate(tx2)
+        message = str(e.value)
+        assert 'Invalid token name (Hathor)' in message
+
+        with pytest.raises(InvalidNewTransaction) as e:
+            self.resolve_and_propagate(tx3)
+        message = str(e.value)
+        assert 'Invalid token symbol (HTR)' in message
 
     def check_tokens_index(self, token_uid: bytes, mint_tx_hash: bytes, mint_output: int, melt_tx_hash: bytes,
                            melt_output: int, token_amount: int) -> None:

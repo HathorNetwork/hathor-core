@@ -138,10 +138,11 @@ class TokensIndex(BaseIndex):
     @abstractmethod
     def create_token_info(
         self,
+        *,
         token_uid: bytes,
         name: str,
         symbol: str,
-        token_info_version: TokenVersion,
+        version: TokenVersion,
         total: int = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,

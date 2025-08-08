@@ -35,6 +35,10 @@ class TokenInfo:
     can_mint: bool
     can_melt: bool
     version: TokenVersion
+    # count of non-authority outputs that is used to calculate the fee
+    chargeable_outputs: int = 0
+    # count of non-authority inputs that is used to calculate the fee
+    chargeable_inputs: int = 0
 
     @classmethod
     def get_default(cls,
@@ -52,6 +56,20 @@ class TokenInfo:
             version=version,
         )
 
+    def has_been_melted(self) -> bool:
+        """
+        Check if this token has been melted.
+        A token is considered melted if its amount is negative.
+        """
+        return self.amount < 0
+
+    def has_been_minted(self) -> bool:
+        """
+        Check if this token has been minted.
+        A token is considered minted if its amount is positive.
+        """
+        return self.amount > 0
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class TokenDescription:
@@ -61,17 +79,32 @@ class TokenDescription:
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):
-    __slots__ = ('chargeable_outputs', 'chargeable_spent_outputs')
-
-    def __init__(self):
-        super().__init__()
-        self.chargeable_outputs = 0
-        self.chargeable_spent_outputs = 0
-
     def calculate_fee(self, settings: 'HathorSettings') -> int:
-        fee = 0
-        if self.chargeable_spent_outputs > 0 and self.chargeable_outputs == 0:
-            fee += settings.FEE_PER_OUTPUT
+        """
+         Calculate the total fee based on the number of chargeable
+         outputs and inputs for each token in the transaction.
 
-        fee += self.chargeable_outputs * settings.FEE_PER_OUTPUT
+         The Transaction.get_complete_token_info() should be called before calculating the fee.
+
+         The fee is determined using the following rules:
+         - If a token has one or more chargeable outputs, the fee is calculated
+           as `chargeable_outputs * settings.FEE_PER_OUTPUT`.
+         - If a token has zero chargeable outputs but one or more chargeable inputs,
+           a flat fee of `settings.FEE_PER_OUTPUT` is applied.
+
+         Args:
+             settings (HathorSettings): The configuration object containing fee-related
+                 parameters, such as `FEE_PER_OUTPUT`.
+
+         Returns:
+             int: The total transaction fee
+         """
+        fee = 0
+
+        for token_uid, token_info in self.items():
+            if token_info.chargeable_outputs > 0:
+                fee += token_info.chargeable_outputs * settings.FEE_PER_OUTPUT
+            else:
+                if token_info.chargeable_inputs > 0:
+                    fee += settings.FEE_PER_OUTPUT
         return fee
