@@ -62,15 +62,37 @@ class OtherBlueprint(Blueprint):
         self.syscall.melt_tokens(token_uid, amount)
 
 
+class FeeTokenBlueprint(Blueprint):
+    created_fee_token_uid: TokenUid
+
+    @public(allow_deposit=True, allow_grant_authority=True)
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_deposit=True, allow_grant_authority=True)
+    def create_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
+        return self.syscall.create_fee_token(name, symbol, amount)
+
+    @public
+    def mint(self, ctx: Context, amount: int) -> None:
+        self.syscall.mint_tokens(self.created_fee_token_uid, amount)
+
+    @public
+    def melt(self, ctx: Context, amount: int) -> None:
+        self.syscall.melt_tokens(self.created_fee_token_uid, amount)
+
+
 class NCNanoContractTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
         self.my_blueprint_id = self.gen_random_blueprint_id()
         self.other_blueprint_id = self.gen_random_blueprint_id()
+        self.fee_blueprint_id = self.gen_random_blueprint_id()
 
         self.nc_catalog.blueprints[self.my_blueprint_id] = MyBlueprint
         self.nc_catalog.blueprints[self.other_blueprint_id] = OtherBlueprint
+        self.nc_catalog.blueprints[self.fee_blueprint_id] = FeeTokenBlueprint
 
     def test_basics(self) -> None:
         nc1_id = self.gen_random_contract_id()
@@ -195,3 +217,32 @@ class NCNanoContractTestCase(BlueprintTestCase):
             htr_balance_key: Balance(value=1002, can_mint=False, can_melt=False),
             tka_balance_key: Balance(value=667, can_mint=False, can_melt=False),
         }
+
+    def test_fee_tokens(self) -> None:
+        nc_id = self.gen_random_contract_id()
+
+        ctx_initialize = Context(
+            actions=[],
+            vertex=self.get_genesis_tx(),
+            address=self.gen_random_address(),
+            timestamp=0,
+        )
+
+        self.runner.create_contract(nc_id, self.fee_blueprint_id, ctx_initialize)
+        storage = self.runner.get_storage(nc_id)
+
+        ctx_create_token = Context(
+            actions=[NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1000)],
+            vertex=self.get_genesis_tx(),
+            address=self.gen_random_address(),
+            timestamp=0,
+        )
+
+        token_uid = self.runner.call_public_method(nc_id, 'create_token', ctx_create_token, 'FeeToken', 'FBT', 1000000)
+
+        token_balance = storage.get_balance(token_uid)
+        htr_balance = storage.get_balance(TokenUid(HATHOR_TOKEN_UID))
+
+        assert token_balance.value == 1000000
+        assert token_balance.can_mint and token_balance.can_melt
+        assert htr_balance.value == 999

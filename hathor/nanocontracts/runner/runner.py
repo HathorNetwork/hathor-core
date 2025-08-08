@@ -990,7 +990,7 @@ class Runner:
         htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
-        changes_tracker.create_token(token_id, token_name, token_symbol)
+        changes_tracker.create_token(token_id, token_name, token_symbol, TokenVersion.DEPOSIT)
         changes_tracker.grant_authorities(
             token_id,
             grant_mint=mint_authority,
@@ -1024,8 +1024,46 @@ class Runner:
         mint_authority: bool,
         melt_authority: bool,
     ) -> TokenUid:
-        """Create a child deposit token from a contract."""
-        raise NotImplementedError('syscall not implemented')
+        """Create a child fee token from a contract."""
+        try:
+            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
+        except TransactionDataError as e:
+            raise NCInvalidSyscall(str(e)) from e
+
+        last_call_record = self.get_current_call_record()
+        parent_id = last_call_record.contract_id
+        cleaned_token_symbol = clean_token_string(token_symbol)
+        token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
+
+        token_amount = amount
+        # For fee tokens, we only need to pay the transaction fee, not deposit HTR
+        fee_amount = self._settings.FEE_PER_OUTPUT
+
+        changes_tracker = self.get_current_changes_tracker(parent_id)
+        changes_tracker.create_token(token_id, token_name, token_symbol, TokenVersion.FEE)
+        changes_tracker.grant_authorities(
+            token_id,
+            grant_mint=mint_authority,
+            grant_melt=melt_authority,
+        )
+        changes_tracker.add_balance(token_id, amount)
+        changes_tracker.add_balance(HATHOR_TOKEN_UID, -fee_amount)
+        self._updated_tokens_totals[token_id] += amount
+        self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] -= fee_amount
+
+        assert last_call_record.index_updates is not None
+        syscall_record = SyscallUpdateTokensRecord(
+            type=IndexUpdateRecordType.CREATE_TOKEN,
+            token_uid=token_id,
+            token_amount=token_amount,
+            htr_amount=-fee_amount,
+            token_symbol=token_symbol,
+            token_name=token_name,
+            token_version=TokenVersion.FEE
+        )
+        last_call_record.index_updates.append(syscall_record)
+
+        return token_id
 
     @_forbid_syscall_from_view('emit_event')
     def syscall_emit_event(self, data: bytes) -> None:

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from hathor.nanocontracts.storage.block_storage import NCBlockStorage
     from hathor.nanocontracts.types import TokenUid
+    from hathor.transaction.token_info import TokenDescription, TokenVersion
 
 
 class TokenProxy:
@@ -31,6 +32,12 @@ class TokenProxy:
         """Proxy to block_storage.has_token()."""
         return self.__block_storage.has_token(token_id)
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def create_token(
+        self,
+        token_id: TokenUid,
+        token_name: str,
+        token_symbol: str,
+        token_version: TokenVersion
+    ) -> None:
         """Proxy to block_storage.create_token()."""
-        self.__block_storage.create_token(token_id, token_name, token_symbol)
+        self.__block_storage.create_token(token_id, token_name, token_symbol, token_version)
