@@ -18,7 +18,6 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 
 from structlog import get_logger
 
-from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
 
 logger = get_logger()
@@ -59,6 +58,7 @@ class MeteredExecutor:
     def exec(self, source: str, /) -> dict[str, Any]:
         """ This is equivalent to `exec(source)` but with execution metering and memory limiting.
         """
+        from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
         }
@@ -80,6 +80,7 @@ class MeteredExecutor:
     def call(self, func: Callable[_P, _T], /, *, args: _P.args) -> _T:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
+        from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
             '__func__': func,

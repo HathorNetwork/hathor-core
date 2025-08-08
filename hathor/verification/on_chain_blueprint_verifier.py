@@ -22,9 +22,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_from_bytes_compressed
 from hathor.nanocontracts import OnChainBlueprint
+from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import (
-    ALLOWED_IMPORTS,
     AST_NAME_BLACKLIST,
     BLUEPRINT_CLASS_NAME,
     PYTHON_CODE_COMPAT_VERSION,
