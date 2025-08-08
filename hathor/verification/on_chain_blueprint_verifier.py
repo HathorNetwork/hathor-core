@@ -210,6 +210,9 @@ class OnChainBlueprintVerifier:
 
     def verify_code(self, tx: OnChainBlueprint) -> None:
         """Run all verification related to the blueprint code."""
+        if tx.hash in self._settings.SKIP_OCB_VERIFICATION:
+            return
+
         for rule in self.blueprint_code_rules():
             try:
                 rule(tx)
