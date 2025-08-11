@@ -1,32 +1,131 @@
 .PHONY: all
-all: docker
+all: help
 
-tag = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
-no_rate_limit_tag = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:no-rate-limit-latest
+DEFAULT_LATEST_TAG = latest
+DEFAULT_NO_RATE_LIMIT_TAG = no-rate-limit-latest
 
+# Build and Push Commands
+# =======================
+
+# GCP / Nano Testnet
+NANO_TESTNET_REGISTRY = us-central1-docker.pkg.dev/nano-testnet/fullnodes/webtank
+
+NANO_TESTNET_BRAVO_TAG_LATEST = bravo-latest
+NANO_TESTNET_BRAVO_TAG_NO_RATE_LIMIT = bravo-no-rate-limit-latest
+
+.PHONY: nano-testnet
+nano-testnet: nano-testnet-default nano-testnet-no-rate-limit nano-testnet-bravo-default nano-testnet-bravo-no-rate-limit
+	@echo "All Nano Testnet images built and pushed successfully!"
+
+.PHONY: nano-testnet-default
+nano-testnet-default: clean nginx.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for Nano Testnet..."
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: nano-testnet-no-rate-limit
+nano-testnet-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for Nano Testnet..."
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
+.PHONY: nano-testnet-bravo-default
+nano-testnet-bravo-default: clean nginx_bravo.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing bravo image for Nano Testnet..."
+	mv nginx_bravo.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(NANO_TESTNET_BRAVO_TAG_LATEST) .
+
+.PHONY: nano-testnet-bravo-no-rate-limit
+nano-testnet-bravo-no-rate-limit: clean nginx_bravo.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit bravo image for Nano Testnet..."
+	mv nginx_bravo.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(NANO_TESTNET_BRAVO_TAG_NO_RATE_LIMIT) .
+
+# GCP / Standalone Fullnodes
+STANDALONE_FULLNODES_REGISTRY = us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank
+
+.PHONY: standalone-fullnodes
+standalone-fullnodes: standalone-fullnodes-default standalone-fullnodes-no-rate-limit
+	@echo "All Standalone Fullnodes images built and pushed successfully!"
+
+.PHONY: standalone-fullnodes-default
+standalone-fullnodes-default: clean nginx.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for Standalone Fullnodes..."
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(STANDALONE_FULLNODES_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: standalone-fullnodes-no-rate-limit
+standalone-fullnodes-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for Standalone Fullnodes..."
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(STANDALONE_FULLNODES_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
+# GCP / Ekvilibro
+EKVILIBRO_REGISTRY = us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank
+
+.PHONY: ekvilibro
+ekvilibro: ekvilibro-default ekvilibro-no-rate-limit
+	@echo "All Ekvilibro images built and pushed successfully!"
+
+.PHONY: ekvilibro-default
+ekvilibro-default: clean nginx.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for Ekvilibro..."
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: ekvilibro-no-rate-limit
+ekvilibro-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for Ekvilibro..."
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
+# AWS / Main Account
+AWS_MAIN_REGISTRY = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank
+
+.PHONY: aws-main
+aws-main: aws-main-default aws-main-no-rate-limit
+	@echo "All AWS Main images built and pushed successfully!"
+
+.PHONY: aws-main-default
+aws-main-default: clean nginx.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for AWS Main..."
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: aws-main-no-rate-limit
+aws-main-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for AWS Main..."
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
+# Build All (convenience command)
+.PHONY: build-all
+build-all: nano-testnet standalone-fullnodes ekvilibro aws-main
+	@echo "All images built and pushed successfully!"
+
+# Legacy commands for backward compatibility
 .PHONY: docker
-docker: docker-default docker-no-rate-limit
+docker: aws-main
 
-# Default Nginx Image
 .PHONY: docker-default
-docker-default: nginx.conf set_real_ip_from_cloudfront
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(tag) .
+docker-default: aws-main-default
+
+.PHONY: docker-no-rate-limit
+docker-no-rate-limit: aws-main-no-rate-limit
+
+# Configuration Generation
+# ========================
 
 nginx.conf: export PYTHONPATH := ../..
 nginx.conf:
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
 	python -m hathor generate_nginx_config - > $@
 
-# Nginx Image used for private use cases, with rate limits disabled
-.PHONY: docker-no-rate-limit
-docker-no-rate-limit: nginx_no_rate_limit.conf set_real_ip_from_cloudfront
-	mv nginx_no_rate_limit.conf nginx.conf
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(no_rate_limit_tag) .
-
 nginx_no_rate_limit.conf: export PYTHONPATH := ../..
 nginx_no_rate_limit.conf:
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
 	python -m hathor generate_nginx_config --disable-rate-limits - > $@
+
+nginx_bravo.conf: export PYTHONPATH := ../..
+nginx_bravo.conf:
+	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
+	python -m hathor generate_nginx_config --override nano-testnet-bravo - > $@
 
 set_real_ip_from_cloudfront:
 	curl https://ip-ranges.amazonaws.com/ip-ranges.json -s \
@@ -35,6 +134,46 @@ set_real_ip_from_cloudfront:
 	| xargs -n 1 printf "set_real_ip_from %s;\n" \
 	> $@
 
+# Utility Commands
+# ===============
+
 .PHONY: clean
 clean:
-	rm -f nginx.conf set_real_ip_from_cloudfront
+	rm -f nginx.conf nginx_no_rate_limit.conf nginx_bravo.conf set_real_ip_from_cloudfront
+
+.PHONY: help
+help:
+	@echo "Available commands:"
+	@echo ""
+	@echo "Project/Account Commands:"
+	@echo "  nano-testnet              			- Build and push all images for GCP Project Nano Testnet"
+	@echo "  nano-testnet-default      			- Build and push default image for GCP Project Nano Testnet"
+	@echo "  nano-testnet-no-rate-limit 		- Build and push no-rate-limit image for GCP Project Nano Testnet"
+	@echo "  nano-testnet-bravo-default 		- Build and push bravo image for GCP Project Nano Testnet"
+	@echo "  nano-testnet-bravo-no-rate-limit 	- Build and push no-rate-limit bravo image for GCP Project Nano Testnet"
+	@echo "  standalone-fullnodes	   			- Build and push all images for GCP Project Standalone Fullnodes"
+	@echo "  standalone-fullnodes-default 		- Build and push default image for GCP Project Standalone Fullnodes"
+	@echo "  standalone-fullnodes-no-rate-limit - Build and push no-rate-limit image for GCP Project Standalone Fullnodes"
+	@echo "  ekvilibro                 			- Build and push all images for GCP Project Ekvilibro"
+	@echo "  ekvilibro-default         			- Build and push default image for GCP Project Ekvilibro"
+	@echo "  ekvilibro-no-rate-limit   			- Build and push no-rate-limit image for GCP Project Ekvilibro"
+	@echo "  aws-main                  			- Build and push all images for AWS Main Account"
+	@echo "  aws-main-default          			- Build and push default image for AWS Main Account"
+	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
+	@echo ""
+	@echo "Utility Commands:"
+	@echo "  build-all                 - Build and push all active project images"
+	@echo "  clean                     - Remove generated files"
+	@echo "  help                      - Show this help message"
+	@echo ""
+	@echo "Legacy Commands (for backward compatibility):"
+	@echo "  docker                    - Alias for aws-main"
+	@echo "  docker-default            - Alias for aws-main-default"
+	@echo "  docker-no-rate-limit      - Alias for aws-main-no-rate-limit"
+	@echo ""
+	@echo "Supported Projects/Accounts:"
+	@echo "  - Nano Testnet: $(NANO_TESTNET_REGISTRY)"
+	@echo "  - Standalone Fullnodes: $(STANDALONE_FULLNODES_REGISTRY)"
+	@echo "  - Ekvilibro: $(EKVILIBRO_REGISTRY)"
+	@echo "  - AWS Main Account: $(AWS_MAIN_REGISTRY)"
+	@echo ""
