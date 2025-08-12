@@ -70,7 +70,7 @@ class TestActions(unittest.TestCase):
     initial state and every vertex that we'll need. Then, we manually manipulate a tx's nano header adding the
     required actions and changing inputs/outputs accordingly.
 
-    The dag builder deos not currently support authority actions. Even when it supports them, it's good to keep those
+    The dag builder does not currently support authority actions. Even when it supports them, it's good to keep those
     tests manual to make basic assertions without the implicitness of the dag builder.
     """
 
@@ -467,7 +467,7 @@ class TestActions(unittest.TestCase):
         # Check that tx2 successfully executes.
         assert self.tx2.get_metadata().voided_by is None
 
-    def test_mint_tokens_success(self) -> None:
+    def _test_mint_tokens_success(self, *, invert_actions_order: bool) -> None:
         # Grant a TKA mint authority to the nano contract and then use it to mint tokens.
         self.test_grant_authority_mint_success()
         assert self._get_all_balances() == {
@@ -477,12 +477,15 @@ class TestActions(unittest.TestCase):
 
         # Add actions so both minted tokens and htr used to mint tokens are in/from the tx outputs/inputs.
         self._change_tx_balance(tx=self.tx2, update_htr_output=-200, update_tka_output=20000)
+        nc_actions = [
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=20000),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200),
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
         self._set_nano_header(
             tx=self.tx2,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=20000),
-                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200),
-            ],
+            nc_actions=nc_actions,
             nc_method='mint',
             nc_args=(self.tka.hash, 20000),
         )
@@ -505,6 +508,12 @@ class TestActions(unittest.TestCase):
             htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK - 200,
             tka_total=self.initial_tka_total + 20000,
         )
+
+    def test_mint_tokens_success(self) -> None:
+        self._test_mint_tokens_success(invert_actions_order=False)
+
+    def test_mint_tokens_success_inverted(self) -> None:
+        self._test_mint_tokens_success(invert_actions_order=True)
 
     def test_grant_and_mint_same_tx_success(self) -> None:
         # Add a GRANT_AUTHORITY action to mint TKA, and add a mint authority input accordingly.
@@ -566,7 +575,7 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total + 20000,
         )
 
-    def test_mint_tokens_and_partial_withdrawal_success(self) -> None:
+    def _test_mint_tokens_and_partial_withdrawal_success(self, *, invert_actions_order: bool) -> None:
         # Grant a TKA mint authority to the nano contract and then use it to mint tokens.
         self.test_grant_authority_mint_success()
         assert self._get_all_balances() == {
@@ -576,12 +585,15 @@ class TestActions(unittest.TestCase):
 
         # Add actions paying for HTR with the input and withdrawing part of the minted token from the contract.
         self._change_tx_balance(tx=self.tx2, update_htr_output=-200, update_tka_output=10000)
+        nc_actions = [
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10000),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200),
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
         self._set_nano_header(
             tx=self.tx2,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10000),
-                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200),
-            ],
+            nc_actions=nc_actions,
             nc_method='mint',
             nc_args=(self.tka.hash, 20000)
         )
@@ -604,7 +616,13 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total + 20000,
         )
 
-    def test_melt_tokens_success(self) -> None:
+    def test_mint_tokens_and_partial_withdrawal_success(self) -> None:
+        self._test_mint_tokens_and_partial_withdrawal_success(invert_actions_order=False)
+
+    def test_mint_tokens_and_partial_withdrawal_success_inverted(self) -> None:
+        self._test_mint_tokens_and_partial_withdrawal_success(invert_actions_order=True)
+
+    def _test_melt_tokens_success(self, *, invert_actions_order: bool) -> None:
         # Grant a TKA melt authority to the nano contract and then use it to melt tokens.
         self.test_grant_authority_melt_success()
         assert self._get_all_balances() == {
@@ -614,12 +632,15 @@ class TestActions(unittest.TestCase):
 
         # Add actions so both melted tokens and htr received from melt are from/in the tx inputs/outputs.
         self._change_tx_balance(tx=self.tx2, update_htr_output=5, update_tka_output=-500)
+        nc_actions = [
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=500),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5),
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
         self._set_nano_header(
             tx=self.tx2,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=500),
-                NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5),
-            ],
+            nc_actions=nc_actions,
             nc_method='melt',
             nc_args=(self.tka.hash, 500)
         )
@@ -642,6 +663,12 @@ class TestActions(unittest.TestCase):
             htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK + 5,
             tka_total=self.initial_tka_total - 500,
         )
+
+    def test_melt_tokens_success(self) -> None:
+        self._test_melt_tokens_success(invert_actions_order=False)
+
+    def test_melt_tokens_success_inverted(self) -> None:
+        self._test_melt_tokens_success(invert_actions_order=True)
 
     def test_melt_tokens_from_contract_success(self) -> None:
         # Grant a TKA melt authority to the nano contract and then use it to melt tokens.
@@ -678,7 +705,7 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total - 500,
         )
 
-    def test_melt_tokens_from_contract_and_input_success(self) -> None:
+    def _test_melt_tokens_from_contract_and_input_success(self, *, invert_actions_order: bool) -> None:
         # Grant a TKA melt authority to the nano contract and then use it to melt tokens.
         self.test_grant_authority_melt_success()
         assert self._get_all_balances() == {
@@ -688,12 +715,15 @@ class TestActions(unittest.TestCase):
 
         # Add actions so part of the tokens are melted from inputs and part from the contract.
         self._change_tx_balance(tx=self.tx2, update_htr_output=5, update_tka_output=-250)
+        nc_actions = [
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=250),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5),
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
         self._set_nano_header(
             tx=self.tx2,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=250),
-                NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5),
-            ],
+            nc_actions=nc_actions,
             nc_method='melt',
             nc_args=(self.tka.hash, 500)
         )
@@ -716,54 +746,68 @@ class TestActions(unittest.TestCase):
             tka_total=self.initial_tka_total - 500,
         )
 
+    def test_melt_tokens_from_contract_and_input_success(self) -> None:
+        self._test_melt_tokens_from_contract_and_input_success(invert_actions_order=False)
+
+    def test_melt_tokens_from_contract_and_input_success_inverted(self) -> None:
+        self._test_melt_tokens_from_contract_and_input_success(invert_actions_order=True)
+
+    def _test_acquire_and_grant_same_token_not_allowed(self, *, invert_actions_order: bool) -> None:
+        nc_actions = [
+            NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+            NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
+        self._set_nano_header(
+            tx=self.tx1,
+            nc_actions=nc_actions,
+        )
+
+        with pytest.raises(NCInvalidAction) as e:
+            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
+
     def test_acquire_and_grant_same_token_not_allowed(self) -> None:
-        self._set_nano_header(
-            tx=self.tx1,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-            ],
-        )
+        self._test_acquire_and_grant_same_token_not_allowed(invert_actions_order=False)
 
-        with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
+    def test_acquire_and_grant_same_token_not_allowed_inverted(self) -> None:
+        self._test_acquire_and_grant_same_token_not_allowed(invert_actions_order=True)
 
-    def test_grant_and_acquire_same_token_not_allowed(self) -> None:
-        self._set_nano_header(
-            tx=self.tx1,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-                NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-            ],
-        )
-
-        with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
-        assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
-
-    def test_conflicting_actions(self) -> None:
+    def _test_conflicting_actions(self, *, invert_actions_order: bool) -> None:
         # Add 2 conflicting actions for the same token.
-        self._set_nano_header(tx=self.tx1, nc_actions=[
+        nc_actions = [
             NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=1),
             NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=2),
-        ])
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
+        self._set_nano_header(tx=self.tx1, nc_actions=nc_actions)
 
         with pytest.raises(NCInvalidAction) as e:
             self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
         assert str(e.value) == 'conflicting actions for token 00'
 
-    def test_non_conflicting_actions_success(self) -> None:
+    def test_conflicting_actions(self) -> None:
+        self._test_conflicting_actions(invert_actions_order=False)
+
+    def test_conflicting_actions_inverted(self) -> None:
+        self._test_conflicting_actions(invert_actions_order=True)
+
+    def _test_non_conflicting_actions_success(self, *, invert_actions_order: bool) -> None:
         # Add a GRANT_AUTHORITY action to mint TKA, and add a mint authority input accordingly.
         # Also add a DEPOSIT action with the same token and update the tx output accordingly.
         self._change_tx_balance(tx=self.tx1, add_inputs=[self._create_tka_mint_input()])
         self._change_tx_balance(tx=self.tx1, update_tka_output=-100)
+        nc_actions = [
+            NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=100),
+        ]
+        if invert_actions_order:
+            nc_actions.reverse()
         self._set_nano_header(
             tx=self.tx1,
-            nc_actions=[
-                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=100),
-            ],
+            nc_actions=nc_actions,
         )
 
         # Execute tx1
@@ -777,6 +821,12 @@ class TestActions(unittest.TestCase):
             self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
             self.tka_balance_key: Balance(value=1100, can_mint=True, can_melt=False),
         }
+
+    def test_non_conflicting_actions_success(self) -> None:
+        self._test_non_conflicting_actions_success(invert_actions_order=False)
+
+    def test_non_conflicting_actions_success_inverted(self) -> None:
+        self._test_non_conflicting_actions_success(invert_actions_order=True)
 
     def test_token_index_not_found(self) -> None:
         # Add an action with a token index out of bounds.
