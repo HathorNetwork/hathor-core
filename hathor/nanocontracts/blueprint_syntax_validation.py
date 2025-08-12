@@ -83,7 +83,7 @@ def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:
         )
 
     from hathor.nanocontracts import Context
-    from hathor.nanocontracts.faux_immutability import FrozenWrapper
+    from hathor.nanocontracts.faux_immutable import FrozenWrapper
     second_arg = arg_spec.args[1]
     second_ann = arg_spec.annotations[second_arg]
     is_context = second_ann.__is__(Context) if isinstance(second_ann, FrozenWrapper) else second_ann is Context
