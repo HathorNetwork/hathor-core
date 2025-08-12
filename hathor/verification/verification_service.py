@@ -102,6 +102,9 @@ class VerificationService:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
+        if vertex.hash in self._settings.SKIP_VERIFICATION:
+            return
+
         self.verifiers.vertex.verify_version_basic(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
@@ -165,6 +168,9 @@ class VerificationService:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
+        if vertex.hash in self._settings.SKIP_VERIFICATION:
+            return
+
         self.verifiers.vertex.verify_headers(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
@@ -268,6 +274,9 @@ class VerificationService:
         self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
+        if vertex.hash in self._settings.SKIP_VERIFICATION:
+            return
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
