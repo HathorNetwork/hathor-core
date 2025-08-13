@@ -43,22 +43,30 @@ class FrozenObject(FauxImmutable):
 
     def __getattr__(self, name):
         if name in self.__allowed_access.attrs:
-            return __freeze__(getattr(self.__obj, name))
+            # TODO
+            # return __freeze__(getattr(self.__obj, name))
+            return getattr(self.__obj, name)
 
         if name in self.__allowed_access.methods:
-            return __freeze__(getattr(self.__obj, name))
+            # TODO
+            # return __freeze__(getattr(self.__obj, name))
+            return getattr(self.__obj, name)
 
         raise AttributeError(f'FORBIDDEN! {name} on "{self.__obj}"')
 
     def __getitem__(self, key):
         if '__getitem__' in self.__allowed_access.methods:
-            return __freeze__(self.__obj[key])
+            # TODO
+            # return __freeze__(self.__obj[key])
+            return self.__obj[key]
 
         raise AttributeError(f'FORBIDDEN! __getitem__ on "{self.__obj}"')
 
     def __call__(self, *args, **kwargs):
         if '__call__' in self.__allowed_access.methods:
-            return __freeze__(self.__obj(*args, **kwargs))
+            # TODO
+            # return __freeze__(self.__obj(*args, **kwargs))
+            return self.__obj(*args, **kwargs)
 
         raise AttributeError(f'FORBIDDEN! __call__ on "{self.__obj}"')
 
@@ -90,14 +98,3 @@ def __is_frozen__(obj1: object, obj2: object) -> bool:
 
 def __get_frozen_inner__(obj: object) -> object:
     return obj._FrozenObject__obj if isinstance(obj, FrozenObject) else obj
-
-# @final
-# class FrozenWrapperCallable(FauxImmutable):
-#     __slots__ = ('__callable',)
-#
-#     def __init__(self, callable_: object) -> None:
-#         assert callable(callable_)
-#         __set_faux_immutable__(self, '_FrozenWrapperCallable__callable', callable_)
-#
-#     def __call__(self, *args, **kwargs):
-#         return self.__callable(*args, **kwargs)
