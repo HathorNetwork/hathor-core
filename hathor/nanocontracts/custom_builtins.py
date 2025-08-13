@@ -438,7 +438,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     'hex': builtins.hex,
 
     # We allow `isinstance()` checks
-    'isinstance': __is_instance_frozen__,
+    'isinstance': __freeze__(__is_instance_frozen__),
 
     # O(1) various -> int
     # (x: ConvertibleToInt = ..., /) -> int
@@ -515,7 +515,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     # type range(Sequence[int])
     # (stop: SupportsIndex, /) -> range
     # (start: SupportsIndex, stop: SupportsIndex, step: SupportsIndex = ..., /) -> range
-    'range': custom_range,
+    'range': __freeze__(custom_range),
 
     # XXX: can consume an iterator when calling
     # O(N) for N=len(sequence)

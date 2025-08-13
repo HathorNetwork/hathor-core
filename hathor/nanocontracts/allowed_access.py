@@ -14,8 +14,14 @@
 
 from dataclasses import dataclass, field
 
+from typing import NewType
+
+from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.faux_immutable import __is_instance_frozen__
 from hathor.nanocontracts.types import NCActionType, NCDepositAction, NCWithdrawalAction, NCGrantAuthorityAction, \
-    NCAcquireAuthorityAction, SignedData
+    NCAcquireAuthorityAction, SignedData, Address, Amount, BlueprintId, ContractId, Timestamp, TokenUid, \
+    TxOutputScript, VertexId
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -34,7 +40,7 @@ class AllowedAccess:
 
 
 def get_allowed_access(obj: object) -> AllowedAccessKind | None:
-    if isinstance(obj, type):
+    if isinstance(obj, type) or isinstance(obj, NewType):
         allowed = ALLOWED_ACCESS.get(obj)
         return allowed.type if allowed is not None else None
 
@@ -59,7 +65,7 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
                 'token_uid',
                 'amount',
             }),
-        )
+        ),
     ),
     NCWithdrawalAction: AllowedAccess(
         instance=AllowedAccessKind(
@@ -67,7 +73,7 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
                 'token_uid',
                 'amount',
             }),
-        )
+        ),
     ),
     NCGrantAuthorityAction: AllowedAccess(
         instance=AllowedAccessKind(
@@ -76,7 +82,7 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
                 'mint',
                 'melt'
             }),
-        )
+        ),
     ),
     NCAcquireAuthorityAction: AllowedAccess(
         instance=AllowedAccessKind(
@@ -85,7 +91,7 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
                 'mint',
                 'melt'
             }),
-        )
+        ),
     ),
     SignedData: AllowedAccess(
         type=AllowedAccessKind(
@@ -97,8 +103,33 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
             methods=frozenset({
                 'checksig',
             }),
-        )
-    )
+        ),
+    ),
+    Context: AllowedAccess(
+        instance=AllowedAccessKind(
+            attrs=frozenset({
+                'vertex',
+                'address',
+                'timestamp',
+                'actions',
+                'actions_list',
+            }),
+            methods=frozenset({
+                'get_single_action',
+            }),
+        ),
+    ),
+    NCFail: AllowedAccess(), # TODO: How to deal with wrapped exceptions? We can't raise them
+    range: AllowedAccess(),
+    Address: AllowedAccess(),
+    Amount: AllowedAccess(),
+    BlueprintId: AllowedAccess(),
+    ContractId: AllowedAccess(),
+    Timestamp: AllowedAccess(),
+    TokenUid: AllowedAccess(),
+    TxOutputScript: AllowedAccess(),
+    VertexId: AllowedAccess(),
+    __is_instance_frozen__: AllowedAccess(),
 }
 
 

@@ -20,8 +20,6 @@ from typing import Callable, TypeVar, final
 
 from typing_extensions import ParamSpec
 
-from hathor.nanocontracts.allowed_access import get_allowed_access
-
 
 def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dict[str, object]) -> None:
     """Run validations during faux-immutable class creation."""
@@ -165,6 +163,7 @@ def __get_inner_shell_type__(shell: typing.Any) -> typing.Any:
 
 
 def __freeze__(obj):
+    from hathor.nanocontracts.allowed_access import get_allowed_access
     # if obj is FrozenWrapper:
     #     return ty
 
@@ -190,21 +189,26 @@ def __freeze__(obj):
 
 @final
 class FrozenObject(FauxImmutable):
-    __slots__ = ('__obj',)
+    __slots__ = ('__obj', '__allowed_access')
     __skip_faux_immutability_validation__ = True
 
     def __init__(self, obj: object) -> None:
+        from hathor.nanocontracts.allowed_access import get_allowed_access, AllowedAccessKind
         self.__obj: object
+        self.__allowed_access: AllowedAccessKind
+
+        allowed = get_allowed_access(obj)
+        assert allowed is not None
+
         __set_faux_immutable__(self, '_FrozenObject__obj', obj)
+        __set_faux_immutable__(self, '_FrozenObject__allowed_access', allowed)
 
     def __getattr__(self, name):
-        allowed = get_allowed_access(self.__obj)
-
-        if name in allowed.attrs:
+        if name in self.__allowed_access.attrs:
             # TODO: Wrap return
             return __freeze__(getattr(self.__obj, name))
 
-        if name in allowed.methods:
+        if name in self.__allowed_access.methods:
             # TODO: Wrap return
             # return FrozenWrapperCallable(getattr(self.__obj, name))
             return getattr(self.__obj, name)
@@ -212,16 +216,13 @@ class FrozenObject(FauxImmutable):
         raise AttributeError(f'FORBIDDEN! {name} on {self.__obj}')
 
     def __getitem__(self, key):
-        allowed = get_allowed_access(self.__obj)
-
-        if '__getitem__' in allowed.methods:
+        if '__getitem__' in self.__allowed_access.methods:
             return __freeze__(self.__obj[key])
 
         raise AttributeError(f'FORBIDDEN! __getitem__ on {self.__obj}')
 
     def __dir__(self):
-        allowed = get_allowed_access(self.__obj)
-        return tuple(allowed.all())
+        return tuple(self.__allowed_access.all())
 
 
 def __is_instance_frozen__(obj: object, type_: object) -> bool:
