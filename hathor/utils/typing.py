@@ -216,4 +216,5 @@ def is_subclass(cls: type, class_or_tuple: type | tuple[type] | UnionType, /) ->
     """
     while (super_type := getattr(cls, '__supertype__', None)) is not None:
         cls = super_type
-    return issubclass(cls, class_or_tuple)
+    from hathor.frozen_object import __get_frozen_inner__
+    return issubclass(__get_frozen_inner__(cls), class_or_tuple)

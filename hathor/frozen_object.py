@@ -14,20 +14,6 @@
 
 from __future__ import annotations
 
-import inspect
-import types
-import typing
-from dataclasses import dataclass, field
-from math import ceil
-
-from typing import NewType, NamedTuple, Optional, TypeAlias, Union
-
-from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import NCActionType, NCDepositAction, NCWithdrawalAction, NCGrantAuthorityAction, \
-    NCAcquireAuthorityAction, SignedData, Address, Amount, BlueprintId, ContractId, Timestamp, TokenUid, \
-    TxOutputScript, VertexId, NCRawArgs, NCParsedArgs, fallback, public, view
 from typing import final
 
 from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__
@@ -102,8 +88,8 @@ def __is_frozen__(obj1: object, obj2: object) -> bool:
     assert not isinstance(obj2, FrozenObject)
     return obj1 is obj2
 
-def __get_frozen_obj__(frozen_obj: FrozenObject) -> object:
-    return frozen_obj._FrozenObject__obj
+def __get_frozen_inner__(obj: object) -> object:
+    return obj._FrozenObject__obj if isinstance(obj, FrozenObject) else obj
 
 # @final
 # class FrozenWrapperCallable(FauxImmutable):
