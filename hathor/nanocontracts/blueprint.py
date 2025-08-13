@@ -98,7 +98,8 @@ class _BlueprintBase(type):
         if NC_INITIALIZE_METHOD not in attrs:
             raise BlueprintSyntaxError(f'blueprints require a method called `{NC_INITIALIZE_METHOD}`')
 
-        method = attrs[NC_INITIALIZE_METHOD]
+        from hathor.frozen_object import __get_frozen_obj__
+        method = __get_frozen_obj__(attrs[NC_INITIALIZE_METHOD])
         method_type = getattr(method, NC_METHOD_TYPE_ATTR, None)
 
         if method_type is not NCMethodType.PUBLIC:

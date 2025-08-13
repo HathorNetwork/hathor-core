@@ -102,6 +102,9 @@ def __is_frozen__(obj1: object, obj2: object) -> bool:
     assert not isinstance(obj2, FrozenObject)
     return obj1 is obj2
 
+def __get_frozen_obj__(frozen_obj: FrozenObject) -> object:
+    return frozen_obj._FrozenObject__obj
+
 # @final
 # class FrozenWrapperCallable(FauxImmutable):
 #     __slots__ = ('__callable',)
