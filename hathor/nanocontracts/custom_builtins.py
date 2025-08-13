@@ -35,6 +35,7 @@ from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
+from hathor.nanocontracts.faux_immutable import create_function_shell
 from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
@@ -249,7 +250,8 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
             if import_what not in allowed_fromlist:
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
 
-            setattr(fake_module, import_what, allowed_fromlist[import_what])
+            obj: Any = allowed_fromlist[import_what]
+            setattr(fake_module, import_what, create_function_shell(obj))
 
         # This cast is safe because the only requirement is that the object contains the imported attributes.
         return cast(types.ModuleType, fake_module)
@@ -266,7 +268,7 @@ def _generate_disabled_builtin_func(name: str) -> Callable[..., NoReturn]:
         raise NCDisabledBuiltinError(msg)
 
     assert func is not None
-    return _wraps(func)(__disabled__)
+    return create_function_shell(__disabled__)
 
 
 @_wraps(builtins.all)
@@ -322,18 +324,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: check https://github.com/python/mypy/blob/master/mypy/typeshed/stdlib/builtins.pyi for the full typing
     # XXX: check https://github.com/python/cpython/blob/main/Python/bltinmodule.c for the implementation
 
-    # XXX: basic constants, these aren't strictly needed since they are considered literals by the language
-    'False': False,
-    'None': None,
-    'True': True,
-
-    # special constant to indicate a method is not implemented
-    # see: https://docs.python.org/3/library/constants.html#NotImplemented
-    'NotImplemented': builtins.NotImplemented,
-
-    # This is the same as writting `...` so there's no point in preventing it
-    'Ellipsis': builtins.Ellipsis,
-
     # XXX: required to declare classes
     # O(1)
     # (func: Callable[[], CellType | Any], name: str, /, *bases: Any, metaclass: Any = ..., **kwds: Any) -> Any
@@ -354,18 +344,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # make it always True, which is how we'll normally run anyway
     '__debug__': True,
 
-    # empty docs
-    '__doc__': '',
-
-    # this means the module that loaded the code, it can be None so we just set it to None
-    '__loader__': None,
-
-    # this can be None
-    '__package__': None,
-
-    # this can also be None
-    '__spec__': None,
-
     # O(1)
     # (x: SupportsAbs[T], /) -> T
     'abs': builtins.abs,
@@ -373,12 +351,12 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: consumes an iterable when calling
     # O(N) for N=len(iterable)
     # (iterable: Iterable[object], /) -> bool
-    'all': custom_all,
+    'all': create_function_shell(custom_all),
 
     # XXX: consumes an iterable when calling
     # O(N) for N=len(iterable)
     # (iterable: Iterable[object], /) -> bool
-    'any': custom_any,
+    'any': create_function_shell(custom_any),
 
     # O(1)
     # (number: int | SupportsIndex, /) -> str
@@ -410,10 +388,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # decorator
     'classmethod': builtins.classmethod,
 
-    # O(1)
-    # type complex
-    'complex': builtins.complex,
-
     # XXX: consumes an iterator when calling
     # O(N) for N=len(iterable)
     # type dict(MutableMapping[K, V])
@@ -434,7 +408,7 @@ EXEC_BUILTINS: dict[str, Any] = {
 
     # O(1)
     # (iterable: Iterable[T], start: int = 0) -> enumerate(Iterator[T])
-    'enumerate': enumerate,
+    'enumerate': create_function_shell(enumerate),
 
     # O(1)
     # (function: None, iterable: Iterable[T | None], /) -> filter(Iterator[T])
@@ -442,10 +416,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # (function: Callable[[S], TypeIs[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
     # (function: Callable[[T], Any], iterable: Iterable[T], /) -> filter(Iterator[T])
     'filter': builtins.filter,
-
-    # O(1)
-    # type float
-    'float': builtins.float,
 
     # O(N) for N=len(value)
     # (value: object, format_spec: str = "", /) -> str
@@ -529,7 +499,7 @@ EXEC_BUILTINS: dict[str, Any] = {
 
     # O(1)
     # (number: int | SupportsIndex, /) -> str
-    'oct': builtins.object,
+    'oct': builtins.oct,
 
     # O(1)
     # (c: str | bytes | bytearray, /) -> int

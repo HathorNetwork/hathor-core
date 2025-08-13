@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Sequence, final
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCFail, NCInvalidContext
+from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__, init_with_shell
 from hathor.nanocontracts.types import Address, ContractId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import VertexData
 from hathor.transaction.exceptions import TxValidationError
@@ -32,7 +33,7 @@ _EMPTY_MAP: MappingProxyType[TokenUid, tuple[NCAction, ...]] = MappingProxyType(
 
 
 @final
-class Context:
+class Context(FauxImmutable):
     """Context passed to a method call. An empty list of actions means the
     method is being called with no deposits and withdrawals.
 
@@ -40,10 +41,6 @@ class Context:
     to have both a deposit and a withdrawal for the same token.
     """
     __slots__ = ('__actions', '__address', '__vertex', '__timestamp', '__all_actions__')
-    __actions: MappingProxyType[TokenUid, tuple[NCAction, ...]]
-    __address: Address | ContractId
-    __vertex: VertexData
-    __timestamp: int
 
     def __init__(
         self,
@@ -52,10 +49,14 @@ class Context:
         address: Address | ContractId,
         timestamp: int,
     ) -> None:
+        self.__actions: MappingProxyType[TokenUid, tuple[NCAction, ...]]
+        self.__address: Address | ContractId
+        self.__vertex: VertexData
+        self.__timestamp: int
         # Dict of action where the key is the token_uid.
         # If empty, it is a method call without any actions.
         if not actions:
-            self.__actions = _EMPTY_MAP
+            __set_faux_immutable__(self, '_Context__actions', _EMPTY_MAP)
         else:
             from hathor.verification.nano_header_verifier import NanoHeaderVerifier
             try:
@@ -66,21 +67,23 @@ class Context:
             actions_map: defaultdict[TokenUid, tuple[NCAction, ...]] = defaultdict(tuple)
             for action in actions:
                 actions_map[action.token_uid] = (*actions_map[action.token_uid], action)
-            self.__actions = MappingProxyType(actions_map)
+            __set_faux_immutable__(self, '_Context__actions', MappingProxyType(actions_map))
 
-        self.__all_actions__: tuple[NCAction, ...] = tuple(chain(*self.__actions.values()))
+        self.__all_actions__: tuple[NCAction, ...]
+        __set_faux_immutable__(self, '__all_actions__', tuple(chain(*self.__actions.values())))
 
         # Vertex calling the method.
-        if isinstance(vertex, VertexData):
-            self.__vertex = vertex
-        else:
-            self.__vertex = VertexData.create_from_vertex(vertex)
+        __set_faux_immutable__(
+            self,
+            '_Context__vertex',
+            vertex if isinstance(vertex, VertexData) else VertexData.create_from_vertex(vertex),
+        )
 
         # Address calling the method.
-        self.__address = address
+        __set_faux_immutable__(self, '_Context__address', address)
 
         # Timestamp of the first block confirming tx.
-        self.__timestamp = timestamp
+        __set_faux_immutable__(self, '_Context__timestamp', timestamp)
 
     @property
     def vertex(self) -> VertexData:
@@ -100,9 +103,9 @@ class Context:
         return self.__actions
 
     @property
-    def actions_list(self) -> list[NCAction]:
+    def actions_list(self) -> Sequence[NCAction]:
         """Get a list of all actions."""
-        return list(self.__all_actions__)
+        return tuple(self.__all_actions__)
 
     def get_single_action(self, token_uid: TokenUid) -> NCAction:
         """Get exactly one action for the provided token, and fail otherwise."""
@@ -113,7 +116,8 @@ class Context:
 
     def copy(self) -> Context:
         """Return a copy of the context."""
-        return Context(
+        return init_with_shell(
+            Context,
             actions=list(self.__all_actions__),
             vertex=self.vertex,
             address=self.address,

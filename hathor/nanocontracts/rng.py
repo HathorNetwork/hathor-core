@@ -36,14 +36,14 @@ class NanoRNG(FauxImmutable):
     def __init__(self, seed: bytes) -> None:
         self.__seed: Hash
         self.__encryptor: CipherContext
-        __set_faux_immutable__(self, '__seed', Hash(seed))
+        __set_faux_immutable__(self, '_NanoRNG__seed', Hash(seed))
 
         key = self.__seed
         nonce = self.__seed[:16]
 
         algorithm = algorithms.ChaCha20(key, nonce)
         cipher = Cipher(algorithm, mode=None)
-        __set_faux_immutable__(self, '__encryptor', cipher.encryptor())
+        __set_faux_immutable__(self, '_NanoRNG__encryptor', cipher.encryptor())
 
     @property
     def seed(self) -> Hash:

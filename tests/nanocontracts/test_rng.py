@@ -6,7 +6,7 @@ from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.faux_immutable import create_with_shell
+from hathor.nanocontracts.faux_immutable import init_with_shell
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.types import ContractId
 from hathor.transaction import Transaction
@@ -179,8 +179,8 @@ class NCConsensusTestCase(SimulatorTestCase):
 
     def test_rng_shell_class(self) -> None:
         seed = b'0' * 32
-        rng1 = create_with_shell(NanoRNG, seed=seed)
-        rng2 = create_with_shell(NanoRNG, seed=seed)
+        rng1 = init_with_shell(NanoRNG, seed=seed)
+        rng2 = init_with_shell(NanoRNG, seed=seed)
 
         assert rng1.__class__ != rng2.__class__
 

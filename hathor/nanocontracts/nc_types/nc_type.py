@@ -19,6 +19,7 @@ from typing import Generic, NamedTuple, TypeAlias, TypeVar, final
 
 from typing_extensions import Self
 
+from hathor.nanocontracts.faux_immutable import __get_inner_shell_type__
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap, get_aliased_type, get_usable_origin_type
 from hathor.serialization import Deserializer, Serializer
 
@@ -58,6 +59,7 @@ class NCType(ABC, Generic[T]):
         A `type_nc_type_map` associates concrete types to concrete NCType classes, while a `type_alias_map` associate
         types with substitute types to use instead.
         """
+        type_ = __get_inner_shell_type__(type_)
         usable_origin = get_usable_origin_type(type_, type_map=type_map)
         nc_type = type_map.nc_types_map[usable_origin]
         # XXX: first we try to create the nc_type without making an alias, this ensures that an invalid annotation

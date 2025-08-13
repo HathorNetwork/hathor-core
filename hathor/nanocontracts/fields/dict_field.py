@@ -17,6 +17,7 @@ from typing import TypeVar, get_args, get_origin, overload
 
 from typing_extensions import Self, override
 
+from hathor.nanocontracts.faux_immutable import __get_inner_shell_type__
 from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
 from hathor.nanocontracts.fields.field import Field
 from hathor.nanocontracts.nc_types import NCType, VarUint32NCType
@@ -66,8 +67,9 @@ class DictStorageContainer(StorageContainer[Mapping[K, V]]):
         if not args or len(args) != 2:
             raise TypeError(f'expected {type_.__name__}[<key type>, <value type>]')
         key_type, value_type = args
-        if not is_origin_hashable(key_type):
-            raise TypeError(f'{key_type} is not hashable')
+        actual_key_type = __get_inner_shell_type__(key_type)
+        if not is_origin_hashable(actual_key_type):
+            raise TypeError(f'{actual_key_type} is not hashable')
 
     @override
     @classmethod

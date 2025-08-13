@@ -19,6 +19,7 @@ from typing import Generic, NamedTuple, TypeVar, final, get_origin
 
 from typing_extensions import TYPE_CHECKING, Self
 
+from hathor.nanocontracts.faux_immutable import __get_inner_shell_type__
 from hathor.nanocontracts.fields.utils import TypeToFieldMap
 from hathor.nanocontracts.nc_types import NCType
 from hathor.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
@@ -60,6 +61,7 @@ class Field(Generic[T], ABC):
     @staticmethod
     def from_name_and_type(name: str, type_: type[T], /, *, type_map: TypeMap) -> Field[T]:
         from hathor.nanocontracts.fields.nc_type_field import NCTypeField
+        type_ = __get_inner_shell_type__(type_)
 
         # if we have a `dict[int, int]` we use `get_origin()` to get the `dict` part, since it's a different instance
         origin_type = get_origin(type_) or type_

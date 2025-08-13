@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import inspect
+import typing
 from typing import Callable, TypeVar
 
 from typing_extensions import ParamSpec
@@ -83,11 +85,14 @@ T = TypeVar('T', bound=FauxImmutable)
 P = ParamSpec('P')
 
 
-def create_with_shell(cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
-    """Mimic `cls.__call__` method behavior, but wrapping the created instance with an ad-hoc shell class."""
-    # Keep the same name as the original class.
-    assert isinstance(cls, type)
-    name = cls.__name__
+def init_with_shell(cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    """
+    Mimic `cls.__call__` method behavior, but wrapping the created instance with an ad-hoc shell class.
+    Use this for wrapping instances of classes that should be faux-immutable.
+    """
+    # Keep the same name as the original class, with the shell identifier.
+    assert inspect.isclass(cls)
+    name = f'{cls.__name__}__Shell'
 
     # The original class is the shell's only base.
     bases = (cls,)
@@ -99,9 +104,47 @@ def create_with_shell(cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) ->
     shell_type: type[T] = type(name, bases, attrs)
 
     # Use it to instantiate the object, init it, and return it. This mimics the default `__call__` behavior.
-    obj: T = cls.__new__(shell_type)
+    obj: T = cls.__new__(shell_type)  # type: ignore[call-overload]
     shell_type.__init__(obj, *args, **kwargs)
     return obj
+
+
+# TODO: Rename?
+def create_function_shell(f: Callable[P, T]) -> Callable[P, T]:
+    """
+    Wrap the provided function with an ad-hoc shell class.
+    Use this for wrapping functions that should be faux-immutable.
+    """
+    # Keep the same name as the original callable, with the shell identifier.
+    if (
+        not callable(f)
+        or inspect.isclass(f)
+        or type(f) is typing._SpecialForm
+        or f is typing.NamedTuple
+    ):
+        return f
+    name = f'{f.__name__}__Shell'
+
+    # No base classes.
+    bases = ()
+
+    def call(_self: object, *args: P.args, **kwargs: P.kwargs) -> T:
+        return f(*args, **kwargs)
+
+    # The shell doesn't have any slots and must skip validation to bypass the inheritance rule.
+    # The callable is stored in the `__call__` method.
+    attrs = dict(
+        __slots__=(),
+        __skip_faux_immutability_validation__=True,
+        __shell_inner__=f,
+        __call__=call,
+    )
+
+    # Create a dynamic class that is only used on this call.
+    shell_type = type(name, bases, attrs)
+
+    # Use it to instantiate the object and return it. Mypy doesn't like this.
+    return shell_type.__new__(shell_type)  # type: ignore[call-overload]
 
 
 def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None:
@@ -110,10 +153,10 @@ def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None
     use this utility function to bypass the protections.
     Only use it when you know what you're doing.
     """
-    if name.startswith('__') and not name.endswith('__'):
-        # Account for Python's name mangling.
-        name = f'_{obj.__class__.__name__}{name}'
-
     # This shows that a faux-immutable class is never actually immutable.
     # It's always possible to mutate it via `object.__setattr__`.
     object.__setattr__(obj, name, value)
+
+
+def __get_inner_shell_type__(shell: typing.Any) -> typing.Any:
+    return getattr(shell, '__shell_inner__', shell)

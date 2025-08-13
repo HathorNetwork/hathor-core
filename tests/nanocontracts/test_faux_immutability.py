@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.nanocontracts.faux_immutable import FauxImmutable, create_with_shell
+from hathor.nanocontracts.faux_immutable import FauxImmutable, init_with_shell
 
 
 def test_missing_slots() -> None:
@@ -226,8 +226,8 @@ def test_shell_class() -> None:
     class Foo(FauxImmutable):
         __slots__ = ()
 
-    foo1 = create_with_shell(Foo)
-    foo2 = create_with_shell(Foo)
+    foo1 = init_with_shell(Foo)
+    foo2 = init_with_shell(Foo)
 
     assert foo1.__class__ is not Foo
     assert foo1.__class__ != Foo
