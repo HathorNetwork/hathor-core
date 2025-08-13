@@ -24,7 +24,6 @@ KNOWN_CASES = [
     'hathor.nanocontracts.blueprint.Blueprint.log',
     'hathor.nanocontracts.blueprint.Blueprint.some_new_attribute',
     'hathor.nanocontracts.blueprint.Blueprint.syscall',
-    # TODO: Why are these added?
     'hathor.nanocontracts.context.Context.actions.fget.some_new_attribute',
     'hathor.nanocontracts.context.Context.actions_list.fget.some_new_attribute',
     'hathor.nanocontracts.context.Context.address.fget.some_new_attribute',
