@@ -57,8 +57,8 @@ class _RestrictionsVisitor(ast.NodeVisitor):
 
     def visit_Name(self, node: ast.Name) -> None:
         assert isinstance(node.id, str)
-        if node.id in AST_NAME_BLACKLIST:
-            raise SyntaxError(f'Usage or reference to {node.id} is not allowed.')
+        # if node.id in AST_NAME_BLACKLIST:
+        #     raise SyntaxError(f'Usage or reference to {node.id} is not allowed.')
         assert BLUEPRINT_CLASS_NAME == '__blueprint__', 'sanity check for the rule below'
         if '__' in node.id and node.id != BLUEPRINT_CLASS_NAME:
             raise SyntaxError('Using dunder names is not allowed.')

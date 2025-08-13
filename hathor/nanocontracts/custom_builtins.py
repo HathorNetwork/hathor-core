@@ -35,7 +35,7 @@ from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
-from hathor.nanocontracts.faux_immutable import create_function_shell
+from hathor.nanocontracts.faux_immutable import create_function_shell, __freeze__, __is_instance_frozen__
 from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
@@ -251,7 +251,7 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
 
             obj: Any = allowed_fromlist[import_what]
-            setattr(fake_module, import_what, create_function_shell(obj))
+            setattr(fake_module, import_what, __freeze__(obj))
 
         # This cast is safe because the only requirement is that the object contains the imported attributes.
         return cast(types.ModuleType, fake_module)
@@ -438,7 +438,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     'hex': builtins.hex,
 
     # We allow `isinstance()` checks
-    'isinstance': builtins.isinstance,
+    'isinstance': __is_instance_frozen__,
 
     # O(1) various -> int
     # (x: ConvertibleToInt = ..., /) -> int
@@ -724,7 +724,8 @@ EXEC_BUILTINS: dict[str, Any] = {
     'open': _generate_disabled_builtin_func('open'),
 
     # XXX: used for printing, which is not allowed, we could expose a function that does logging to help with debugging
-    'print': _generate_disabled_builtin_func('print'),
+    # 'print': _generate_disabled_builtin_func('print'),
+    'print': print,
 
     # XXX: same as exit function
     'quit': _generate_disabled_builtin_func('quit'),
@@ -763,7 +764,8 @@ EXEC_BUILTINS: dict[str, Any] = {
     # type type
     # (o: object, /) -> type
     # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
-    'type': _generate_disabled_builtin_func('type'),
+    # 'type': _generate_disabled_builtin_func('type'),
+    'type': type,
 
     # XXX: Root object which contains dangerous methods such as `__setattr__`
     # O(1)

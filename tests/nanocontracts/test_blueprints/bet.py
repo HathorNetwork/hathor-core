@@ -151,7 +151,11 @@ class Bet(Blueprint):
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
         action = self._get_action(ctx)
+        print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAa')
+        print(NCDepositAction)
+        print(type(NCDepositAction))
         assert isinstance(action, NCDepositAction)
+        print('BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB')
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
         if ctx.timestamp > self.date_last_bet:

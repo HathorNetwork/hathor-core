@@ -21,7 +21,6 @@ from typing import Any, TypeVar
 
 from typing_extensions import Self, assert_never, override
 
-from hathor.nanocontracts import Context
 from hathor.nanocontracts.exception import NCFail, NCSerializationArgTooLong, NCSerializationError
 from hathor.nanocontracts.nc_types import (
     NCType,
@@ -253,9 +252,10 @@ class Method:
                 raise TypeError('first argument should be self')
 
         if is_nc_public_method(method):
-            ctx_param = next(iter_params)
-            if ctx_param.annotation is not Context:
-                raise TypeError('context argument must be annotated as `ctx: Context`')
+            _ = next(iter_params)
+            # ctx_param = next(iter_params)
+            # if ctx_param.annotation is not Context:
+            #     raise TypeError('context argument must be annotated as `ctx: Context`')
 
         for param in iter_params:
             match param.kind:

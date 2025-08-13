@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import inspect
 import typing
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, final
 
 from typing_extensions import ParamSpec
+
+from hathor.nanocontracts.allowed_access import get_allowed_access
 
 
 def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dict[str, object]) -> None:
@@ -147,7 +149,7 @@ def create_function_shell(f: Callable[P, T]) -> Callable[P, T]:
     return shell_type.__new__(shell_type)  # type: ignore[call-overload]
 
 
-def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None:
+def __set_faux_immutable__(obj: object, name: str, value: object) -> None:
     """
     When setting attributes on the `__init__` method of a faux-immutable class,
     use this utility function to bypass the protections.
@@ -160,3 +162,73 @@ def __set_faux_immutable__(obj: FauxImmutable, name: str, value: object) -> None
 
 def __get_inner_shell_type__(shell: typing.Any) -> typing.Any:
     return getattr(shell, '__shell_inner__', shell)
+
+
+def __freeze__(obj):
+    # if obj is FrozenWrapper:
+    #     return ty
+
+    if get_allowed_access(obj) is None:
+        # TODO: Can't freeze
+        return obj
+
+    return FrozenObject(obj)
+
+
+
+# @final
+# class FrozenWrapperCallable(FauxImmutable):
+#     __slots__ = ('__callable',)
+#
+#     def __init__(self, callable_: object) -> None:
+#         assert callable(callable_)
+#         __set_faux_immutable__(self, '_FrozenWrapperCallable__callable', callable_)
+#
+#     def __call__(self, *args, **kwargs):
+#         return self.__callable(*args, **kwargs)
+
+
+@final
+class FrozenObject(FauxImmutable):
+    __slots__ = ('__obj',)
+    __skip_faux_immutability_validation__ = True
+
+    def __init__(self, obj: object) -> None:
+        self.__obj: object
+        __set_faux_immutable__(self, '_FrozenObject__obj', obj)
+
+    def __getattr__(self, name):
+        allowed = get_allowed_access(self.__obj)
+
+        if name in allowed.attrs:
+            # TODO: Wrap return
+            return __freeze__(getattr(self.__obj, name))
+
+        if name in allowed.methods:
+            # TODO: Wrap return
+            # return FrozenWrapperCallable(getattr(self.__obj, name))
+            return getattr(self.__obj, name)
+
+        raise AttributeError(f'FORBIDDEN! {name} on {self.__obj}')
+
+    def __getitem__(self, key):
+        allowed = get_allowed_access(self.__obj)
+
+        if '__getitem__' in allowed.methods:
+            return __freeze__(self.__obj[key])
+
+        raise AttributeError(f'FORBIDDEN! __getitem__ on {self.__obj}')
+
+    def __dir__(self):
+        allowed = get_allowed_access(self.__obj)
+        return tuple(allowed.all())
+
+
+def __is_instance_frozen__(obj: object, type_: object) -> bool:
+    if isinstance(obj, FrozenObject):
+        obj = obj._FrozenObject__obj
+
+    if isinstance(type_, FrozenObject):
+        type_ = type_._FrozenObject__obj
+
+    return isinstance(obj, type_)

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import traceback
 from typing import Any, Callable, ParamSpec, TypeVar, cast
 
 from structlog import get_logger
@@ -97,5 +98,10 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
-        exec(code, env)
+        # TODO: Without this it's really hard to debug internal exceptions
+        try:
+            exec(code, env)
+        except Exception :
+            traceback.print_exc()
+            raise
         return cast(_T, env['__result__'])

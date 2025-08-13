@@ -17,7 +17,7 @@ from hathor.nanocontracts.types import (
     Timestamp,
     TokenUid,
     TxOutputScript,
-    VertexId,
+    VertexId, NCActionType,
 )
 from hathor.transaction import BaseTransaction
 from hathor.transaction.scripts import P2PKH

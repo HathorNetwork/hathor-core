@@ -83,8 +83,11 @@ def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:
         )
 
     from hathor.nanocontracts import Context
+    from hathor.nanocontracts.faux_immutable import FrozenObject
     second_arg = arg_spec.args[1]
-    if arg_spec.annotations[second_arg] is not Context:
+    second_ann = arg_spec.annotations[second_arg]
+    is_context = second_ann.__is__(Context) if isinstance(second_ann, FrozenObject) else second_ann is Context
+    if not is_context:
         raise BlueprintSyntaxError(
             f'@{annotation_name} method second arg `{second_arg}` argument must be of type `Context`: '
             f'`{fn.__name__}()`'
