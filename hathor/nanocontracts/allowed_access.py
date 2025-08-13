@@ -11,17 +11,20 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import types
+import typing
 from dataclasses import dataclass, field
 
-from typing import NewType
+from typing import NewType, NamedTuple, Optional, TypeAlias, Union
 
+from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts.custom_builtins import custom_range
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.faux_immutable import __is_instance_frozen__
 from hathor.nanocontracts.types import NCActionType, NCDepositAction, NCWithdrawalAction, NCGrantAuthorityAction, \
     NCAcquireAuthorityAction, SignedData, Address, Amount, BlueprintId, ContractId, Timestamp, TokenUid, \
-    TxOutputScript, VertexId
+    TxOutputScript, VertexId, NCRawArgs, NCParsedArgs, fallback, public, view
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -40,7 +43,13 @@ class AllowedAccess:
 
 
 def get_allowed_access(obj: object) -> AllowedAccessKind | None:
-    if isinstance(obj, type) or isinstance(obj, NewType):
+    # TODO: Freezing classes will break inheritance?
+    if (
+        isinstance(obj, type)
+        or isinstance(obj, NewType)
+        or isinstance(obj, types.FunctionType)
+        or isinstance(obj, typing._SpecialForm)
+    ):
         allowed = ALLOWED_ACCESS.get(obj)
         return allowed.type if allowed is not None else None
 
@@ -49,6 +58,14 @@ def get_allowed_access(obj: object) -> AllowedAccessKind | None:
 
 
 ALLOWED_ACCESS: dict[type, AllowedAccess] = {
+    Blueprint: AllowedAccess(
+        instance=AllowedAccessKind(
+            attrs=frozenset({
+                'syscall',
+                'log',
+            }),
+        ),
+    ),
     NCActionType: AllowedAccess(
         type=AllowedAccessKind(
             attrs=frozenset({
@@ -119,8 +136,26 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
             }),
         ),
     ),
+    NCRawArgs: AllowedAccess(
+        instance=AllowedAccessKind(
+            attrs=frozenset({
+                'args_bytes',
+            }),
+            methods=frozenset({
+                'try_parse_as',
+            }),
+        ),
+    ),
+    NCParsedArgs: AllowedAccess(
+        instance=AllowedAccessKind(
+            attrs=frozenset({
+                'args',
+                'kwargs',
+            }),
+        ),
+    ),
     NCFail: AllowedAccess(), # TODO: How to deal with wrapped exceptions? We can't raise them
-    range: AllowedAccess(),
+    custom_range: AllowedAccess(),
     Address: AllowedAccess(),
     Amount: AllowedAccess(),
     BlueprintId: AllowedAccess(),
@@ -130,6 +165,13 @@ ALLOWED_ACCESS: dict[type, AllowedAccess] = {
     TxOutputScript: AllowedAccess(),
     VertexId: AllowedAccess(),
     __is_instance_frozen__: AllowedAccess(),
+    fallback: AllowedAccess(),
+    public: AllowedAccess(),
+    view: AllowedAccess(),
+    NamedTuple: AllowedAccess(),
+    Optional: AllowedAccess(),
+    TypeAlias: AllowedAccess(),
+    Union: AllowedAccess(),
 }
 
 

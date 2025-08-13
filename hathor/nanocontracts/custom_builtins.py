@@ -251,6 +251,8 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
 
             obj: Any = allowed_fromlist[import_what]
+            # TODO: Since this is in runtime, maybe it'll break matches.
+            #       Maybe move it to compile time?
             setattr(fake_module, import_what, __freeze__(obj))
 
         # This cast is safe because the only requirement is that the object contains the imported attributes.
