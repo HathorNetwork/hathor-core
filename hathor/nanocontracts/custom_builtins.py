@@ -33,9 +33,10 @@ from typing import (
 
 from typing_extensions import Self, TypeVarTuple
 
+from hathor.frozen_object import __freeze__, __is_instance_frozen__
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
-from hathor.nanocontracts.faux_immutable import create_function_shell, __freeze__, __is_instance_frozen__
+from hathor.nanocontracts.faux_immutable import create_function_shell
 from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
@@ -253,7 +254,11 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
             obj: Any = allowed_fromlist[import_what]
             # TODO: Since this is in runtime, maybe it'll break matches.
             #       Maybe move it to compile time?
-            setattr(fake_module, import_what, __freeze__(obj))
+            from hathor.frozen_object import __freeze__
+
+            not_freeze = {'NCFail', 'Blueprint'}
+
+            setattr(fake_module, import_what, obj if import_what in not_freeze else __freeze__(obj))
 
         # This cast is safe because the only requirement is that the object contains the imported attributes.
         return cast(types.ModuleType, fake_module)

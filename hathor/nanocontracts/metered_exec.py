@@ -73,8 +73,13 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
-        # XXX: SECURITY: `code` and `env` need the proper restrictions by this point
-        exec(code, env)
+        # TODO: Without this it's really hard to debug internal exceptions
+        try:
+            # XXX: SECURITY: `code` and `env` need the proper restrictions by this point
+            exec(code, env)
+        except Exception :
+            traceback.print_exc()
+            raise
         del env['__builtins__']
         return env
 

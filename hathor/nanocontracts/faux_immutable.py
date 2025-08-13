@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import inspect
 import typing
-from typing import Callable, TypeVar, final
+from typing import Callable, TypeVar
 
 from typing_extensions import ParamSpec
 
@@ -160,76 +160,3 @@ def __set_faux_immutable__(obj: object, name: str, value: object) -> None:
 
 def __get_inner_shell_type__(shell: typing.Any) -> typing.Any:
     return getattr(shell, '__shell_inner__', shell)
-
-
-def __freeze__(obj):
-    from hathor.nanocontracts.allowed_access import get_allowed_access
-    # if obj is FrozenWrapper:
-    #     return ty
-
-    if get_allowed_access(obj) is None:
-        # TODO: Can't freeze
-        return obj
-
-    return FrozenObject(obj)
-
-
-
-# @final
-# class FrozenWrapperCallable(FauxImmutable):
-#     __slots__ = ('__callable',)
-#
-#     def __init__(self, callable_: object) -> None:
-#         assert callable(callable_)
-#         __set_faux_immutable__(self, '_FrozenWrapperCallable__callable', callable_)
-#
-#     def __call__(self, *args, **kwargs):
-#         return self.__callable(*args, **kwargs)
-
-
-@final
-class FrozenObject(FauxImmutable):
-    __slots__ = ('__obj', '__allowed_access')
-    __skip_faux_immutability_validation__ = True
-
-    def __init__(self, obj: object) -> None:
-        from hathor.nanocontracts.allowed_access import get_allowed_access, AllowedAccessKind
-        self.__obj: object
-        self.__allowed_access: AllowedAccessKind
-
-        allowed = get_allowed_access(obj)
-        assert allowed is not None
-
-        __set_faux_immutable__(self, '_FrozenObject__obj', obj)
-        __set_faux_immutable__(self, '_FrozenObject__allowed_access', allowed)
-
-    def __getattr__(self, name):
-        if name in self.__allowed_access.attrs:
-            # TODO: Wrap return
-            return __freeze__(getattr(self.__obj, name))
-
-        if name in self.__allowed_access.methods:
-            # TODO: Wrap return
-            # return FrozenWrapperCallable(getattr(self.__obj, name))
-            return getattr(self.__obj, name)
-
-        raise AttributeError(f'FORBIDDEN! {name} on {self.__obj}')
-
-    def __getitem__(self, key):
-        if '__getitem__' in self.__allowed_access.methods:
-            return __freeze__(self.__obj[key])
-
-        raise AttributeError(f'FORBIDDEN! __getitem__ on {self.__obj}')
-
-    def __dir__(self):
-        return tuple(self.__allowed_access.all())
-
-
-def __is_instance_frozen__(obj: object, type_: object) -> bool:
-    if isinstance(obj, FrozenObject):
-        obj = obj._FrozenObject__obj
-
-    if isinstance(type_, FrozenObject):
-        type_ = type_._FrozenObject__obj
-
-    return isinstance(obj, type_)
