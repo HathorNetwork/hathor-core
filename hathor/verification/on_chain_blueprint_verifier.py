@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import ast
+from typing import Callable
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -21,9 +22,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_from_bytes_compressed
 from hathor.nanocontracts import OnChainBlueprint
+from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import (
-    ALLOWED_IMPORTS,
     AST_NAME_BLACKLIST,
     BLUEPRINT_CLASS_NAME,
     PYTHON_CODE_COMPAT_VERSION,
@@ -55,14 +56,39 @@ class _RestrictionsVisitor(ast.NodeVisitor):
         raise SyntaxError('Try/Except blocks are not allowed.')
 
     def visit_Name(self, node: ast.Name) -> None:
+        assert isinstance(node.id, str)
         if node.id in AST_NAME_BLACKLIST:
             raise SyntaxError(f'Usage or reference to {node.id} is not allowed.')
+        assert BLUEPRINT_CLASS_NAME == '__blueprint__', 'sanity check for the rule below'
+        if '__' in node.id and node.id != BLUEPRINT_CLASS_NAME:
+            raise SyntaxError('Using dunder names is not allowed.')
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        if isinstance(node.value, ast.Name):
-            if '__' in node.attr:
-                raise SyntaxError('Access to internal attributes and methods is not allowed.')
+        assert isinstance(node.attr, str)
+        if '__' in node.attr:
+            raise SyntaxError('Access to internal attributes and methods is not allowed.')
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        assert isinstance(node.name, str)
+        if '__' in node.name:
+            raise SyntaxError('magic methods are not allowed')
+        self.generic_visit(node)
+
+    def visit_MatchClass(self, node: ast.MatchClass) -> None:
+        for name in node.kwd_attrs:
+            assert isinstance(name, str)
+            if '__' in name:
+                raise SyntaxError('cannot match on dunder name')
+        self.generic_visit(node)
+
+    def visit_MatchMapping(self, node: ast.MatchMapping) -> None:
+        for name in node.keys:
+            assert isinstance(name, ast.Constant)
+            assert isinstance(name.value, str)
+            if '__' in name.value:
+                raise SyntaxError('cannot match on dunder name')
         self.generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -172,12 +198,23 @@ class OnChainBlueprintVerifier:
         tx._ast_cache = parsed_tree
         return parsed_tree
 
+    def blueprint_code_rules(self) -> tuple[Callable[[OnChainBlueprint], None], ...]:
+        """Get all rules used in code verification."""
+        return (
+            self._verify_raw_text,
+            self._verify_python_script,
+            self._verify_script_restrictions,
+            self._verify_has_blueprint_attr,
+            self._verify_blueprint_type,
+        )
+
     def verify_code(self, tx: OnChainBlueprint) -> None:
         """Run all verification related to the blueprint code."""
-        self._verify_python_script(tx)
-        self._verify_script_restrictions(tx)
-        self._verify_has_blueprint_attr(tx)
-        self._verify_blueprint_type(tx)
+        for rule in self.blueprint_code_rules():
+            try:
+                rule(tx)
+            except SyntaxError as e:
+                raise OCBInvalidScript('forbidden syntax') from e
 
     def _verify_python_script(self, tx: OnChainBlueprint) -> None:
         """Verify that the script can be parsed at all."""
@@ -186,12 +223,15 @@ class OnChainBlueprintVerifier:
         except SyntaxError as e:
             raise OCBInvalidScript('Could not correctly parse the script') from e
 
+    def _verify_raw_text(self, tx: OnChainBlueprint) -> None:
+        """Verify that the script does not use any forbidden text."""
+        assert BLUEPRINT_CLASS_NAME == '__blueprint__', 'sanity check for the rule below'
+        if '__' in tx.code.text.replace(BLUEPRINT_CLASS_NAME, ''):
+            raise SyntaxError('script contains dunder text')
+
     def _verify_script_restrictions(self, tx: OnChainBlueprint) -> None:
         """Verify that the script does not use any forbidden syntax."""
-        try:
-            _RestrictionsVisitor().visit(self._get_python_code_ast(tx))
-        except SyntaxError as e:
-            raise OCBInvalidScript('forbidden syntax') from e
+        _RestrictionsVisitor().visit(self._get_python_code_ast(tx))
 
     def _verify_has_blueprint_attr(self, tx: OnChainBlueprint) -> None:
         """Verify that the script defines a __blueprint__ attribute."""

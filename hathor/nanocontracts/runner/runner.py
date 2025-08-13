@@ -38,6 +38,7 @@ from hathor.nanocontracts.exception import (
     NCUninitializedContractError,
     NCViewMethodError,
 )
+from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
 from hathor.nanocontracts.rng import NanoRNG
@@ -789,7 +790,7 @@ class Runner:
             raise ValueError('no seed was provided')
         contract_id = self.get_current_contract_id()
         if contract_id not in self._rng_per_contract:
-            self._rng_per_contract[contract_id] = NanoRNG.create_with_shell(seed=self._rng.randbytes(32))
+            self._rng_per_contract[contract_id] = create_with_shell(NanoRNG, seed=self._rng.randbytes(32))
         return self._rng_per_contract[contract_id]
 
     def _internal_create_contract(self, contract_id: ContractId, blueprint_id: BlueprintId) -> None:

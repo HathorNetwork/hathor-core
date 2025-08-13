@@ -20,10 +20,10 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import MAINNET_SETTINGS_FILEPATH, TESTNET_SETTINGS_FILEPATH
+from hathor.conf import MAINNET_SETTINGS_FILEPATH, TESTNET_GOLF_SETTINGS_FILEPATH
 from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
 from hathor.conf.settings import DECIMAL_PLACES, GENESIS_TOKEN_UNITS, GENESIS_TOKENS, HathorSettings
-from hathor.conf.testnet import SETTINGS as TESTNET_SETTINGS
+from hathor.conf.testnet_golf import SETTINGS as TESTNET_GOLF_SETTINGS
 
 
 @pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])
@@ -238,5 +238,5 @@ def test_mainnet_settings_migration():
     assert MAINNET_SETTINGS == HathorSettings.from_yaml(filepath=MAINNET_SETTINGS_FILEPATH)
 
 
-def test_testnet_settings_migration():
-    assert TESTNET_SETTINGS == HathorSettings.from_yaml(filepath=TESTNET_SETTINGS_FILEPATH)
+def test_testnet_golf_settings_migration():
+    assert TESTNET_GOLF_SETTINGS == HathorSettings.from_yaml(filepath=TESTNET_GOLF_SETTINGS_FILEPATH)

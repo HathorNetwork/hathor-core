@@ -100,16 +100,20 @@ def _scale_rate_limit(raw_rate: str, rate_k: float) -> str:
     return f'{int(scaled_rate_amount)}{rate_units}'
 
 
-def _get_visibility(source: dict[str, Any], fallback: Visibility) -> tuple[Visibility, bool]:
+def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str) -> tuple[Visibility, bool, bool]:
+    if 'x-visibility-override' in source and override in source['x-visibility-override']:
+        visibility = source['x-visibility-override'][override]
+        return Visibility(visibility), False, True
     if 'x-visibility' in source:
-        return Visibility(source['x-visibility']), False
+        return Visibility(source['x-visibility']), False, False
     else:
-        return fallback, True
+        return fallback, True, False
 
 
 def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: float = 1.0,
                           fallback_visibility: Visibility = Visibility.PRIVATE,
-                          disable_rate_limits: bool = False) -> None:
+                          disable_rate_limits: bool = False,
+                          override: str = "") -> None:
     """ Entry point of the functionality provided by the cli
     """
     from datetime import datetime
@@ -122,9 +126,11 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     locations: dict[str, dict[str, Any]] = {}
     limit_rate_zones: list[RateLimitZone] = []
     for path, params in openapi['paths'].items():
-        visibility, did_fallback = _get_visibility(params, fallback_visibility)
+        visibility, did_fallback, did_override = _get_visibility(params, fallback_visibility, override)
         if did_fallback:
             warn(f'Visibility not set for path `{path}`, falling back to {fallback_visibility}')
+        if did_override:
+            warn(f'Visibility overridden for path `{path}` to {visibility}')
         if visibility is Visibility.PRIVATE:
             continue
 
@@ -138,7 +144,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
             if method not in params:
                 continue
             method_params = params[method]
-            method_visibility, _ = _get_visibility(method_params, Visibility.PUBLIC)
+            method_visibility, _, _ = _get_visibility(method_params, Visibility.PUBLIC, override)
             if method_visibility is Visibility.PRIVATE:
                 continue
             allowed_methods.add(method.upper())
@@ -150,6 +156,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
 
         rate_limits = params.get('x-rate-limit')
         if not rate_limits:
+            warn(f'Path `{path}` is public but has no rate limits, ignoring')
             continue
 
         path_key = path.lower().replace('/', '__').replace('.', '__').replace('{', '').replace('}', '')
@@ -352,6 +359,8 @@ def main():
                         help='Set the visibility for paths without `x-visibility`, defaults to private')
     parser.add_argument('--disable-rate-limits', type=bool, default=False,
                         help='Disable including rate-limits in the config, defaults to False')
+    parser.add_argument('--override', type=str, default='',
+                        help='Override visibility for paths with `x-visibility-override` for the given value')
     parser.add_argument('out', type=argparse.FileType('w', encoding='UTF-8'), default=sys.stdout, nargs='?',
                         help='Output file where nginx config will be written')
     args = parser.parse_args()
@@ -359,4 +368,5 @@ def main():
     openapi = get_openapi(args.input_openapi_json)
     generate_nginx_config(openapi, out_file=args.out, rate_k=args.rate_multiplier,
                           fallback_visibility=args.fallback_visibility,
-                          disable_rate_limits=args.disable_rate_limits)
+                          disable_rate_limits=args.disable_rate_limits,
+                          override=args.override)

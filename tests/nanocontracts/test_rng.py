@@ -6,6 +6,7 @@ from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.types import ContractId
 from hathor.transaction import Transaction
@@ -78,11 +79,11 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden __setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `_NanoRNG__seed` on faux-immutable object'):
             rng._NanoRNG__seed = b'1' * 32
 
         # protected by overridden __setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `_NanoRNG__seed` on faux-immutable object'):
             setattr(rng, '_NanoRNG__seed', b'1' * 32)
 
         # it doesn't protect against this case
@@ -94,11 +95,11 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `new_attr` on faux-immutable object'):
             rng.new_attr = 123
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `new_attr` on faux-immutable object'):
             setattr(rng, 'new_attr', 123)
 
         # protected by __slots__
@@ -110,15 +111,15 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable object'):
             rng.random = lambda self: 2  # type: ignore[method-assign, misc, assignment]
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable object'):
             setattr(rng, 'random', lambda self: 2)
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='Cannot assign methods to this object.'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable object'):
             from types import MethodType
             rng.random = MethodType(lambda self: 2, rng)  # type: ignore[method-assign]
 
@@ -131,15 +132,15 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
             NanoRNG.random = lambda self: 2  # type: ignore[method-assign]
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
             setattr(NanoRNG, 'random', lambda self: 2)
 
         # protected by Python itself
-        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to _FauxImmutableMeta object'):
             object.__setattr__(NanoRNG, 'random', lambda self: 2)
 
         #
@@ -147,15 +148,15 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
             rng.__class__.random = lambda self: 2  # type: ignore[method-assign]
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
             setattr(rng.__class__, 'random', lambda self: 2)
 
         # protected by Python itself
-        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to _FauxImmutableMeta object'):
             object.__setattr__(rng.__class__, 'random', lambda self: 2)
 
         #
@@ -163,33 +164,33 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='Cannot override method `new_attr`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `new_attr` on faux-immutable class'):
             NanoRNG.new_attr = 123
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='Cannot override method `new_attr`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `new_attr` on faux-immutable class'):
             setattr(NanoRNG, 'new_attr', 123)
 
         # protected by Python itself
-        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to _FauxImmutableMeta object'):
             object.__setattr__(NanoRNG, 'new_attr', 123)
 
         assert rng.random() < 1
 
     def test_rng_shell_class(self) -> None:
         seed = b'0' * 32
-        rng1 = NanoRNG.create_with_shell(seed=seed)
-        rng2 = NanoRNG.create_with_shell(seed=seed)
+        rng1 = create_with_shell(NanoRNG, seed=seed)
+        rng2 = create_with_shell(NanoRNG, seed=seed)
 
         assert rng1.__class__ != rng2.__class__
 
-        with pytest.raises(AttributeError, match='Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
             rng1.__class__.random = lambda self: 2  # type: ignore[method-assign]
 
-        with pytest.raises(AttributeError, match='Cannot override method `random`'):
+        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
             setattr(rng1.__class__, 'random', lambda self: 2)
 
-        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to NoMethodOverrideMeta object'):
+        with pytest.raises(TypeError, match='can\'t apply this __setattr__ to _FauxImmutableMeta object'):
             object.__setattr__(rng1.__class__, 'random', lambda self: 2)
 
     def assertGoodnessOfFitTest(self, observed: list[int], expected: list[int]) -> None:

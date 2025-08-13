@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum, unique
 from typing import TYPE_CHECKING
 
 from typing_extensions import Self
 
+from hathor.transaction.scripts import P2PKH, MultiSig, parse_address_script
 from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
@@ -126,17 +128,41 @@ class TxInputData:
         )
 
 
+@unique
+class ScriptType(StrEnum):
+    P2PKH = 'P2PKH'
+    MULTI_SIG = 'MultiSig'
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ScriptInfo:
+    type: ScriptType
+    address: str
+    timelock: int | None
+
+    @classmethod
+    def from_script(cls, script: P2PKH | MultiSig) -> Self:
+        return cls(
+            type=ScriptType(script.get_type()),
+            address=script.get_address(),
+            timelock=script.get_timelock(),
+        )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TxOutputData:
     value: int
-    script: bytes
+    raw_script: bytes
+    parsed_script: ScriptInfo | None
     token_data: int
 
     @classmethod
     def create_from_txout(cls, txout: TxOutput) -> Self:
+        parsed = parse_address_script(txout.script)
         return cls(
             value=txout.value,
-            script=txout.script,
+            raw_script=txout.script,
+            parsed_script=ScriptInfo.from_script(parsed) if parsed is not None else None,
             token_data=txout.token_data,
         )
 

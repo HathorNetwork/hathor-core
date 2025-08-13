@@ -64,7 +64,7 @@ class MultiSig(BaseScript):
     def get_script(self) -> bytes:
         return MultiSig.create_output_script(decode_address(self.address), self.timelock)
 
-    def get_address(self) -> Optional[str]:
+    def get_address(self) -> str:
         return self.address
 
     def get_timelock(self) -> Optional[int]:
