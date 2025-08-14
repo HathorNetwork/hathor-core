@@ -27,6 +27,8 @@ from hathor.transaction import BaseTransaction, Transaction, TxInput, TxVersion
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
+    ForbiddenMelt,
+    ForbiddenMint,
     IncorrectParents,
     InexistentInput,
     InputOutputMismatch,
@@ -34,8 +36,6 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidToken,
     InvalidVersionError,
-    MeltedWithoutAuthorityInputs,
-    MintedWithoutAuthorityInputs,
     RewardLocked,
     ScriptError,
     TimestampError,
@@ -259,7 +259,7 @@ class TransactionVerifier:
 
         is_melting_without_authority = withdraw_without_authority - fee > 0
         if is_melting_without_authority:
-            raise InputOutputMismatch('Melting tokens without a melt authority is forbidden')
+            raise ForbiddenMelt('Melting tokens without a melt authority is forbidden')
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw + withdraw_without_authority - deposit - fee
@@ -272,9 +272,9 @@ class TransactionVerifier:
 
     def _verify_fee_token(self, token_uid: TokenUid, token_info: TokenInfo) -> None:
         if token_info.has_been_melted() and not token_info.can_melt:
-            raise MeltedWithoutAuthorityInputs(token_info.amount, token_uid)
+            raise ForbiddenMelt.from_token(token_info.amount, token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
-            raise MintedWithoutAuthorityInputs(token_info.amount, token_uid)
+            raise ForbiddenMint(token_info.amount, token_uid)
 
     def _verify_deposit_token(self, fee: int, token_uid: TokenUid, token_info: TokenInfo) -> DepositTokenVerifyResult:
         result = DepositTokenVerifyResult()
@@ -287,16 +287,20 @@ class TransactionVerifier:
                 # It includes trying to pay fee with non-integer amounts.
                 # For example (DBT - Deposit based token)
                 # 1.99 DBT results in 0.01 HTR and (0.99 DBT melted) => this one is forbidden
+                if fee == 0:
+                    raise ForbiddenMelt.from_token(token_info.amount, token_uid)
                 is_integer_amount = (
                     token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer()
-                if fee == 0 or not is_integer_amount:
-                    raise MeltedWithoutAuthorityInputs(token_info.amount, token_uid)
+                if not is_integer_amount:
+                    raise ForbiddenMelt(
+                        "Paying fees with non integer amount is forbidden"
+                    )
 
                 result.withdraw_without_authority += withdraw_amount
 
         if token_info.has_been_minted():
             if not token_info.can_mint:
-                raise MintedWithoutAuthorityInputs(token_info.amount, token_uid)
+                raise ForbiddenMint(token_info.amount, token_uid)
 
             result.deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
@@ -325,7 +329,7 @@ class TransactionVerifier:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class DepositTokenVerifyResult:
     deposit: int = 0
     withdraw_without_authority: int = 0

@@ -1,6 +1,7 @@
 import math
+from typing import Any, Generator
 
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
@@ -433,7 +434,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data2['success'])
 
     @inlineCallbacks
-    def test_fee_token(self):  # TODO: Adding the return type is causing mypy to fail
+    def test_fee_token(self) -> Generator[Deferred[Any], Any, None]:
         self.manager.wallet.unlock(b'MYPASS')
         resource = StubSite(TokenResource(self.manager))
 

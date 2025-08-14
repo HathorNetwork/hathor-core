@@ -62,13 +62,32 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-    def test_input_output_match(self):
+    def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]
 
         _input = TxInput(genesis_block.hash, 0, b'')
 
         # spend less than what was generated
         value = genesis_block.outputs[0].value - 1
+        address = get_address_from_public_key(self.genesis_public_key)
+        script = P2PKH.create_output_script(address)
+        output = TxOutput(value, script)
+        tx = Transaction(inputs=[_input], outputs=[output], storage=self.tx_storage)
+
+        data_to_sign = tx.get_sighash_all()
+        public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
+        _input.data = P2PKH.create_input_data(public_bytes, signature)
+
+        with self.assertRaises(InputOutputMismatch):
+            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+
+    def test_input_output_match_more_htr(self):
+        genesis_block = self.genesis_blocks[0]
+
+        _input = TxInput(genesis_block.hash, 0, b'')
+
+        # spend more than what was generated
+        value = genesis_block.outputs[0].value + 1
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
