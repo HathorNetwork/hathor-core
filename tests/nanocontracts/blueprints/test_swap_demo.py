@@ -37,7 +37,7 @@ class SwapDemoTestCase(BlueprintTestCase):
         context = Context(
             actions=[deposit_a, deposit_b],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
 
@@ -68,7 +68,7 @@ class SwapDemoTestCase(BlueprintTestCase):
         context = Context(
             actions=[swap_a, swap_b],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
 

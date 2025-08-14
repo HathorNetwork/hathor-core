@@ -102,7 +102,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
                 NCDepositAction(token_uid=token_a_uid, amount=1000),
             ],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=0,
         )
 
@@ -112,7 +112,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         ctx_grant = Context(
             actions=[NCGrantAuthorityAction(token_uid=token_a_uid, mint=True, melt=True)],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx_grant)
@@ -120,7 +120,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         ctx = Context(
             actions=[],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=0,
         )
 
