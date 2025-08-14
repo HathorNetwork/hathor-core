@@ -410,7 +410,7 @@ class Runner:
         ctx = Context(
             actions=actions,
             vertex=first_ctx.vertex,
-            address=last_call_record.contract_id,
+            caller_id=last_call_record.contract_id,
             timestamp=first_ctx.timestamp,
         )
         return self._execute_public_method_call(

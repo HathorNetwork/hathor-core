@@ -178,6 +178,6 @@ class BlueprintTestCase(unittest.TestCase):
         return Context(
             actions=actions if actions is not None else [],
             vertex=vertex or self.get_genesis_tx(),
-            address=address or self.gen_random_address(),
+            caller_id=address or self.gen_random_address(),
             timestamp=timestamp or self.now,
         )

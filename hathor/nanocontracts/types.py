@@ -31,15 +31,26 @@ from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerialization
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
+
 # Types to be used by blueprints.
-Address = NewType('Address', bytes)
+class Address(bytes):
+    __slots__ = ()
+
+
+class VertexId(bytes):
+    __slots__ = ()
+
+
+class ContractId(VertexId):
+    __slots__ = ()
+
+
 Amount = NewType('Amount', int)
 Timestamp = NewType('Timestamp', int)
 TokenUid = NewType('TokenUid', bytes)
 TxOutputScript = NewType('TxOutputScript', bytes)
-VertexId = NewType('VertexId', bytes)
 BlueprintId = NewType('BlueprintId', VertexId)
-ContractId = NewType('ContractId', VertexId)
+CallerId: TypeAlias = Address | ContractId
 
 T = TypeVar('T')
 

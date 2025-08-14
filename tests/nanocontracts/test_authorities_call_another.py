@@ -127,13 +127,13 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         caller_ctx = Context(
             actions=caller_actions or [],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         callee_ctx = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.caller_id, self.caller_blueprint_id, caller_ctx, other_id=self.callee_id)
@@ -145,7 +145,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(
@@ -156,7 +156,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=actions,
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(
@@ -167,7 +167,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(
@@ -219,7 +219,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(self.callee_id, 'nop', context)
@@ -229,7 +229,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(
@@ -244,7 +244,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=False, melt=True)],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(self.callee_id, 'nop', context)
@@ -254,7 +254,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(
@@ -284,7 +284,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(self.caller_id, 'call_grant_all_to_other_then_revoke', context, self.token_a)
@@ -296,7 +296,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         context = Context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True)],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.call_public_method(self.caller_id, 'call_revoke_all_from_other', context, self.token_a)
