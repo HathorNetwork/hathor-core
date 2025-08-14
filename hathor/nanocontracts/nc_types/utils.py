@@ -33,7 +33,7 @@ logger = get_logger()
 
 T = TypeVar('T')
 TypeAliasMap: TypeAlias = Mapping[type | UnionType, type]
-TypeToNCTypeMap: TypeAlias = Mapping[type | UnionType, type['NCType']]
+TypeToNCTypeMap: TypeAlias = Mapping[type | UnionType | tuple[type, ...], type['NCType']]
 
 
 def get_origin_classes(type_: type) -> Iterator[type]:
@@ -218,7 +218,7 @@ def get_usable_origin_type(
     *,
     type_map: 'NCType.TypeMap',
     _verbose: bool = True,
-) -> type:
+) -> type | tuple[type, ...]:
     """ The purpose of this function is to map a given type into a type that is usable in a NCType.TypeMap
 
     It takes into account type-aliasing according to NCType.TypeMap.alias_map. If the given type cannot be used in the
@@ -243,7 +243,16 @@ def get_usable_origin_type(
 
     # if we have a `dict[int, int]` we use `get_origin()` to get the `dict` part, since it's a different instance
     aliased_type: type = get_aliased_type(type_, type_map.alias_map, _verbose=_verbose)
-    origin_aliased_type: type = get_origin(aliased_type) or aliased_type
+    origin_aliased_type: type | tuple[type, ...] = get_origin(aliased_type) or aliased_type
+
+    if origin_aliased_type is UnionType:
+        # When it's an union and None is not in it, it's not Optional,
+        # so we must index by args which is a tuple of types.
+        # This is done for support of specific union types such as CallerId (Address | ContractId)
+        args = get_args(aliased_type)
+        assert args is not None
+        if NoneType not in args:
+            origin_aliased_type = args
 
     if origin_aliased_type in type_map.nc_types_map:
         return origin_aliased_type

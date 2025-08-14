@@ -324,7 +324,7 @@ class NanoHeader(VertexBaseHeader):
         context = Context(
             actions=action_list,
             vertex=self.tx,
-            address=Address(self.nc_address),
+            caller_id=Address(self.nc_address),
             timestamp=timestamp,
         )
         return context

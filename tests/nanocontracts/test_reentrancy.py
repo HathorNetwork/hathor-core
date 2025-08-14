@@ -21,7 +21,7 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def deposit(self, ctx: Context) -> None:
-        address = ctx.address
+        address = ctx.caller_id
         action = ctx.get_single_action(HTR_TOKEN_UID)
         assert isinstance(action, NCDepositAction)
         amount = action.amount
@@ -33,7 +33,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
-        address = ctx.address
+        address = ctx.caller_id
         if amount > self.balances.get(address, 0):
             raise InsufficientBalance('insufficient balance')
 
@@ -45,7 +45,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def fixed_transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
-        address = ctx.address
+        address = ctx.caller_id
         if amount > self.balances.get(address, 0):
             raise InsufficientBalance('insufficient balance')
 

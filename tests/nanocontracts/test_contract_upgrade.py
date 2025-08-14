@@ -113,7 +113,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
 
         tx = self.get_genesis_tx()
         address = self.gen_random_address()
-        ctx = Context(actions=[], vertex=tx, address=address, timestamp=0)
+        ctx = Context(actions=[], vertex=tx, caller_id=address, timestamp=0)
 
         self.runner.create_contract(code1_id, self.code1_bp_id, ctx)
         self.runner.create_contract(code2_id, self.code2_bp_id, ctx)

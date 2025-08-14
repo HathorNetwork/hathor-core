@@ -43,7 +43,7 @@ class ViolationsTestCase(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
@@ -57,7 +57,7 @@ class ViolationsTestCase(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
@@ -70,7 +70,7 @@ class ViolationsTestCase(BlueprintTestCase):
         context = Context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)

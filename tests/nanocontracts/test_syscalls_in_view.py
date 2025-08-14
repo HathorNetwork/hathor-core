@@ -124,7 +124,7 @@ class TestSyscallsInView(BlueprintTestCase):
         self.ctx = Context(
             actions=[],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=self.now,
         )
 

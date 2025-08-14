@@ -31,7 +31,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
         self.ctx = Context(
             actions=[],
             vertex=self.get_genesis_tx(),
-            address=Address(self.gen_random_address()),
+            caller_id=Address(self.gen_random_address()),
             timestamp=self.now,
         )
 

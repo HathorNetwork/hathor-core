@@ -19,6 +19,7 @@ from typing import NamedTuple, TypeVar, Union
 from hathor.nanocontracts.nc_types.address_nc_type import AddressNCType
 from hathor.nanocontracts.nc_types.bool_nc_type import BoolNCType
 from hathor.nanocontracts.nc_types.bytes_nc_type import BytesLikeNCType, BytesNCType
+from hathor.nanocontracts.nc_types.caller_id_nc_type import CallerIdNCType
 from hathor.nanocontracts.nc_types.collection_nc_type import DequeNCType, FrozenSetNCType, ListNCType, SetNCType
 from hathor.nanocontracts.nc_types.dataclass_nc_type import DataclassNCType
 from hathor.nanocontracts.nc_types.fixed_size_bytes_nc_type import Bytes32NCType
@@ -56,6 +57,7 @@ __all__ = [
     'BoolNCType',
     'BytesLikeNCType',
     'BytesNCType',
+    'CallerIdNCType',
     'DataclassNCType',
     'DequeNCType',
     'DictNCType',
@@ -124,6 +126,7 @@ FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     TxOutputScript: BytesLikeNCType[TxOutputScript],
     VertexId: Bytes32NCType,
     SignedData: SignedDataNCType,
+    (Address, ContractId): CallerIdNCType,
 }
 
 # This mapping includes all supported NCType classes, should only be used for parsing function calls
