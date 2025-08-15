@@ -52,6 +52,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         BlueprintId=nc.types.BlueprintId,
         ContractId=nc.types.ContractId,
         VertexId=nc.types.VertexId,
+        CallerId=nc.types.CallerId,
         NCDepositAction=nc.types.NCDepositAction,
         NCWithdrawalAction=nc.types.NCWithdrawalAction,
         NCGrantAuthorityAction=nc.types.NCGrantAuthorityAction,
