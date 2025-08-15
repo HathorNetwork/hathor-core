@@ -23,12 +23,9 @@ from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_from_bytes_compressed
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
+from hathor.nanocontracts.custom_builtins import AST_NAME_BLACKLIST
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
-from hathor.nanocontracts.on_chain_blueprint import (
-    AST_NAME_BLACKLIST,
-    BLUEPRINT_CLASS_NAME,
-    PYTHON_CODE_COMPAT_VERSION,
-)
+from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME, PYTHON_CODE_COMPAT_VERSION
 
 
 class _RestrictionsVisitor(ast.NodeVisitor):

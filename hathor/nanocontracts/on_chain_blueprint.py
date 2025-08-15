@@ -53,28 +53,6 @@ PYTHON_CODE_COMPAT_VERSION = (3, 11)
 # max compression level, used as default
 MAX_COMPRESSION_LEVEL = 9
 
-# these names aren't allowed in the code, to be checked in the AST only
-AST_NAME_BLACKLIST: set[str] = {
-    '__builtins__',
-    '__import__',
-    'compile',
-    'delattr',
-    'dir',
-    'eval',
-    'exec',
-    'getattr',
-    'globals',
-    'hasattr',
-    'input',
-    'locals',
-    'open',
-    'setattr',
-    'vars',
-    'type',
-    'object',
-    'super',
-}
-
 
 @unique
 class CodeKind(IntEnum):
