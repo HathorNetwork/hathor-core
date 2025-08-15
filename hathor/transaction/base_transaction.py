@@ -23,17 +23,26 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from itertools import chain
 from math import isfinite, log
-from struct import error as StructError, pack
+from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
+from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import (
+    VerboseCallback,
+    bytes_to_output_value,
+    int_to_bytes,
+    output_value_to_bytes,
+    unpack,
+    unpack_len,
+)
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
@@ -48,7 +57,6 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
-_MAX_OUTPUT_VALUE_32 = 2**31 - 1  # max value (inclusive) before having to use 8 bytes: 2147483647 ~= 2.14748e+09
 
 TX_HASH_SIZE = 32   # 256 bits, 32 bytes
 
@@ -91,7 +99,9 @@ class TxVersion(IntEnum):
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
+    # DEPRECATED_NANO_CONTRACT = 4  # XXX: Temporary to keep compatibility
     POA_BLOCK = 5
+    ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
     def _missing_(cls, value: Any) -> None:
@@ -115,6 +125,11 @@ class TxVersion(IntEnum):
             TxVersion.POA_BLOCK: PoaBlock
         }
 
+        settings = get_global_settings()
+        if settings.ENABLE_NANO_CONTRACTS:
+            from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
+            cls_map[TxVersion.ON_CHAIN_BLUEPRINT] = OnChainBlueprint
+
         cls = cls_map.get(self)
 
         if cls is None:
@@ -130,6 +145,10 @@ StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covaria
 
 class GenericVertex(ABC, Generic[StaticMetadataT]):
     """Hathor generic vertex"""
+
+    __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
+                 'storage', '_settings', '_metadata', '_static_metadata', 'headers', 'name', 'MAX_NUM_INPUTS',
+                 'MAX_NUM_OUTPUTS', '__weakref__']
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -185,6 +204,14 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
+        self.headers: list[VertexBaseHeader] = []
+
+        # A name solely for debugging purposes.
+        self.name: str | None = None
+
+        self.MAX_NUM_INPUTS = self._settings.MAX_NUM_INPUTS
+        self.MAX_NUM_OUTPUTS = self._settings.MAX_NUM_OUTPUTS
+
     @classproperty
     def log(cls):
         """ This is a workaround because of a bug on structlog (or abc).
@@ -231,6 +258,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def is_transaction(self) -> bool:
         raise NotImplementedError
 
+    def is_nano_contract(self) -> bool:
+        """Return True if this transaction is a nano contract or not."""
+        return False
+
     def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
@@ -246,10 +277,26 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
         return buf
 
+    def get_header_from_bytes(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
+        """Parse bytes and return the next header in buffer."""
+        from hathor.transaction.vertex_parser import VertexParser
+
+        if len(self.headers) >= self.get_maximum_number_of_headers():
+            raise ValueError('too many headers')
+        header_type = buf[:1]
+        header_class = VertexParser.get_header_parser(header_type, self._settings)
+        header, buf = header_class.deserialize(self, buf)
+        self.headers.append(header)
+        return buf
+
+    def get_maximum_number_of_headers(self) -> int:
+        """Return the maximum number of headers for this vertex."""
+        return 1
+
     @classmethod
     @abstractmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> 'BaseTransaction':
+                           *, verbose: VerboseCallback = None) -> Self:
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -396,6 +443,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             struct_bytes += parent
         return struct_bytes
 
+    def get_headers_struct(self) -> bytes:
+        """Return the serialization of the headers only."""
+        return b''.join(h.serialize() for h in self.headers)
+
     def get_struct_without_nonce(self) -> bytes:
         """Return a partial serialization of the transaction, without including the nonce field
 
@@ -423,16 +474,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         struct_bytes = self.get_struct_without_nonce()
         struct_bytes += self.get_struct_nonce()
+        struct_bytes += self.get_headers_struct()
         return struct_bytes
 
     def get_all_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
         return set(chain(self.parents, (i.tx_id for i in self.inputs)))
-
-    def get_tx_dependencies(self) -> set[bytes]:
-        """Set of all tx-hashes needed to fully validate this, except for block parent, i.e. only tx parents/inputs."""
-        parents = self.parents[1:] if self.is_block else self.parents
-        return set(chain(parents, (i.tx_id for i in self.inputs)))
 
     def get_tx_parents(self) -> set[bytes]:
         """Set of parent tx hashes, typically used for syncing transactions."""
@@ -520,23 +567,26 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         funds_hash.update(self.get_funds_struct())
         return funds_hash.digest()
 
-    def get_graph_hash(self) -> bytes:
-        """Return the sha256 of the graph part of the transaction
+    def get_graph_and_headers_hash(self) -> bytes:
+        """Return the sha256 of the graph part of the transaction + its headers
 
-        :return: the hash of the funds data
+        :return: the hash of the graph and headers data
         :rtype: bytes
         """
-        graph_hash = hashlib.sha256()
-        graph_hash.update(self.get_graph_struct())
-        return graph_hash.digest()
+        h = hashlib.sha256()
+        h.update(self.get_graph_struct())
+        h.update(self.get_headers_struct())
+        return h.digest()
 
-    def get_header_without_nonce(self) -> bytes:
+    def get_mining_header_without_nonce(self) -> bytes:
         """Return the transaction header without the nonce
 
         :return: transaction header without the nonce
         :rtype: bytes
         """
-        return self.get_funds_hash() + self.get_graph_hash()
+        data = self.get_funds_hash() + self.get_graph_and_headers_hash()
+        assert len(data) == 64, 'the mining data should have a fixed size of 64 bytes'
+        return data
 
     def calculate_hash1(self) -> 'HASH':
         """Return the sha256 of the transaction without including the `nonce`
@@ -545,7 +595,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :rtype: :py:class:`_hashlib.HASH`
         """
         calculate_hash1 = hashlib.sha256()
-        calculate_hash1.update(self.get_header_without_nonce())
+        calculate_hash1.update(self.get_mining_header_without_nonce())
         return calculate_hash1
 
     def calculate_hash2(self, part1: 'HASH') -> bytes:
@@ -816,19 +866,20 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         return ret
 
-    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> 'BaseTransaction':
+    def clone(self, *, include_metadata: bool = True, include_storage: bool = True) -> Self:
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
         """
-        new_tx = self.create_from_struct(self.get_struct())
+        new_tx = self.create_from_struct(
+            self.get_struct(),
+            storage=self.storage if include_storage else None,
+        )
         # static_metadata can be safely copied as it is a frozen dataclass
         new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
-        if include_storage:
-            new_tx.storage = self.storage
         return new_tx
 
     @abstractmethod
@@ -1080,32 +1131,3 @@ class TxOutput:
         if decode_script:
             data['decoded'] = self.to_human_readable()
         return data
-
-
-def bytes_to_output_value(buf: bytes) -> tuple[int, bytes]:
-    (value_high_byte,), _ = unpack('!b', buf)
-    if value_high_byte < 0:
-        output_struct = '!q'
-        value_sign = -1
-    else:
-        output_struct = '!i'
-        value_sign = 1
-    try:
-        (signed_value,), buf = unpack(output_struct, buf)
-    except StructError as e:
-        raise InvalidOutputValue('Invalid byte struct for output') from e
-    value = signed_value * value_sign
-    assert value >= 0
-    if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
-        raise ValueError('Value fits in 4 bytes but is using 8 bytes')
-    return value, buf
-
-
-def output_value_to_bytes(number: int) -> bytes:
-    if number <= 0:
-        raise InvalidOutputValue('Invalid value for output')
-
-    if number > _MAX_OUTPUT_VALUE_32:
-        return (-number).to_bytes(8, byteorder='big', signed=True)
-    else:
-        return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well

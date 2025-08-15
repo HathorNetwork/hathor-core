@@ -5,7 +5,7 @@ import subprocess
 import time
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import requests
 from cryptography.hazmat.backends import default_backend
@@ -26,11 +26,17 @@ from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_addres
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import get_deposit_amount
 from hathor.util import Random
+from hathor.verification.verification_params import VerificationParams
 
 settings = HathorSettings()
 
 # useful for adding blocks to a different wallet
 BURN_ADDRESS = bytes.fromhex('28acbfb94571417423c1ed66f706730c4aea516ac5762cccb8')
+
+DEFAULT_WORDS: str = (
+    'bind daring above film health blush during tiny neck slight clown salmon '
+    'wine brown good setup later omit jaguar tourist rescue flip pet salute'
+)
 
 
 def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningService) -> bytes:
@@ -45,19 +51,62 @@ def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningServ
     return block.get_struct()
 
 
-def add_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+def add_custom_tx(
+    manager: HathorManager,
+    tx_inputs: list[tuple[BaseTransaction, int]],
+    *,
+    n_outputs: int = 1,
+    base_parent: Optional[Transaction] = None,
+    weight: Optional[float] = None,
+    resolve: bool = False,
+    address: Optional[str] = None,
+    inc_timestamp: int = 0
+) -> Transaction:
     """Add a custom tx based on the gen_custom_tx(...) method."""
-    tx = gen_custom_tx(manager, tx_inputs, n_outputs=n_outputs, base_parent=base_parent, weight=weight,
-                       resolve=resolve, address=address, inc_timestamp=inc_timestamp)
-    manager.propagate_tx(tx, fails_silently=False)
+    tx = gen_custom_tx(manager,
+                       tx_inputs,
+                       n_outputs=n_outputs,
+                       base_parent=base_parent,
+                       weight=weight,
+                       resolve=resolve,
+                       address=address,
+                       inc_timestamp=inc_timestamp)
+    manager.propagate_tx(tx)
     return tx
 
 
-def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction, int]], *, n_outputs: int = 1,
-                  base_parent: Optional[Transaction] = None, weight: Optional[float] = None,
-                  resolve: bool = False, address: Optional[str] = None, inc_timestamp: int = 0) -> Transaction:
+def gen_custom_tx(manager: HathorManager,
+                  tx_inputs: list[tuple[BaseTransaction, int]],
+                  *,
+                  n_outputs: int = 1,
+                  base_parent: Optional[Transaction] = None,
+                  weight: Optional[float] = None,
+                  resolve: bool = False,
+                  address: Optional[str] = None,
+                  inc_timestamp: int = 0) -> Transaction:
+    """Generate a custom tx based on the inputs and outputs. It gives full control to the
+    inputs and can be used to generate conflicts and specific patterns in the DAG."""
+    tx = gen_custom_base_tx(manager,
+                            tx_inputs,
+                            n_outputs=n_outputs,
+                            base_parent=base_parent,
+                            weight=weight,
+                            resolve=resolve,
+                            address=address,
+                            inc_timestamp=inc_timestamp)
+    return cast(Transaction, tx)
+
+
+def gen_custom_base_tx(manager: HathorManager,
+                       tx_inputs: list[tuple[BaseTransaction, int]],
+                       *,
+                       n_outputs: int = 1,
+                       base_parent: Optional[Transaction] = None,
+                       weight: Optional[float] = None,
+                       resolve: bool = False,
+                       address: Optional[str] = None,
+                       inc_timestamp: int = 0,
+                       cls: type[BaseTransaction] = Transaction) -> BaseTransaction:
     """Generate a custom tx based on the inputs and outputs. It gives full control to the
     inputs and can be used to generate conflicts and specific patterns in the DAG."""
     wallet = manager.wallet
@@ -95,7 +144,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
     else:
         raise NotImplementedError
 
-    tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
+    tx2 = wallet.prepare_transaction(cls, inputs, outputs)
     tx2.storage = manager.tx_storage
     tx2.timestamp = max(tx_base.timestamp + 1, int(manager.reactor.seconds()))
 
@@ -122,7 +171,7 @@ def gen_custom_tx(manager: HathorManager, tx_inputs: list[tuple[BaseTransaction,
 def add_new_double_spending(manager: HathorManager, *, use_same_parents: bool = False,
                             tx: Optional[Transaction] = None, weight: float = 1) -> Transaction:
     tx = gen_new_double_spending(manager, use_same_parents=use_same_parents, tx=tx, weight=weight)
-    manager.propagate_tx(tx, fails_silently=False)
+    manager.propagate_tx(tx)
     return tx
 
 
@@ -149,7 +198,7 @@ def add_new_tx(
     """
     tx = gen_new_tx(manager, address, value)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
     if advance_clock:
         manager.reactor.advance(advance_clock)  # type: ignore[attr-defined]
     return tx
@@ -219,7 +268,7 @@ def run_server(
     """
     command = ' '.join([
         'python -m hathor run_node',
-        '--memory-storage',
+        '--temp-data',
         '--wallet hd',
         '--wallet-enable-api',
         '--hostname {}'.format(hostname),
@@ -411,6 +460,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
     change_output: Optional[TxOutput]
     parents: list[bytes]
+    timestamp: int | None = None
     if use_genesis:
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None
@@ -425,6 +475,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
             block = add_new_block(manager, advance_clock=1, address=address)
             deposit_input.append(TxInput(block.hash, 0, b''))
             total_reward += block.outputs[0].value
+            timestamp = block.timestamp + 1
 
         if total_reward > deposit_amount:
             change_output = TxOutput(total_reward - deposit_amount, script, 0)
@@ -432,7 +483,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
             change_output = None
 
         add_blocks_unlock_reward(manager)
-        timestamp = int(manager.reactor.seconds())
+        assert timestamp is not None
         parents = manager.get_new_tx_parents(timestamp)
 
     outputs = []
@@ -472,7 +523,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
 
     manager.cpu_mining_service.resolve(tx)
     if propagate:
-        manager.propagate_tx(tx, fails_silently=False)
+        manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
     return tx
@@ -560,8 +611,9 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     manager.cpu_mining_service.resolve(tx)
 
     if propagate:
-        manager.verification_service.verify(tx)
-        manager.propagate_tx(tx, fails_silently=False)
+        params = VerificationParams.default_for_mempool()
+        manager.verification_service.verify(tx, params)
+        manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
 
@@ -582,6 +634,7 @@ class EventMocker:
         inputs=[],
         outputs=[],
         parents=[],
+        headers=[],
         tokens=[],
         metadata=TxMetadata(
             hash='abc',

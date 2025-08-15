@@ -17,6 +17,7 @@ from typing import Optional
 from pydantic import Extra
 
 from hathor.feature_activation.feature import Feature  # skip-cli-import-custom-check
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig  # skip-cli-import-custom-check
 from hathor.utils.pydantic import BaseModel  # skip-cli-import-custom-check
 
 
@@ -29,6 +30,8 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     auto_hostname: bool
     unsafe_mode: Optional[str]
     testnet: bool
+    testnet_hotel: bool
+    testnet_golf: bool
     test_mode_tx_weight: bool
     dns: Optional[str]
     peer: Optional[str]
@@ -40,9 +43,9 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     stratum: Optional[int]
     x_stratum_ipv6_interface: Optional[str]
     data: Optional[str]
-    rocksdb_storage: bool
     memory_storage: bool
     memory_indexes: bool
+    temp_data: bool
     rocksdb_cache: Optional[int]
     wallet: Optional[str]
     wallet_enable_api: bool
@@ -59,7 +62,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     cache_interval: Optional[int]
     recursion_limit: Optional[int]
     allow_mining_without_peers: bool
-    x_full_verification: bool
     procname_prefix: str
     allow_non_standard_script: bool
     max_output_script_size: Optional[int]
@@ -74,7 +76,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     sync_v1_only: bool
     sync_v2_only: bool
     x_localhost_only: bool
-    x_rocksdb_indexes: bool
     x_enable_event_queue: bool
     enable_event_queue: bool
     peer_id_blacklist: list[str]
@@ -88,3 +89,6 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     disable_ws_history_streaming: bool
     x_enable_ipv6: bool
     x_disable_ipv4: bool
+    localnet: bool
+    nc_indexes: bool
+    nc_exec_logs: NCLogConfig

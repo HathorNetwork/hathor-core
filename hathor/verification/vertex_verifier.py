@@ -14,10 +14,15 @@
 
 from typing import Optional
 
-from hathor.conf.settings import HathorSettings
-from hathor.transaction import BaseTransaction
+from typing_extensions import assert_never
+
+from hathor.conf.settings import HathorSettings, NanoContractsSetting
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
+from hathor.transaction import BaseTransaction, TxVersion
 from hathor.transaction.exceptions import (
     DuplicatedParents,
+    HeaderNotSupported,
     IncorrectParents,
     InvalidOutputScriptSize,
     InvalidOutputValue,
@@ -26,9 +31,11 @@ from hathor.transaction.exceptions import (
     ParentDoesNotExist,
     PowError,
     TimestampError,
+    TooManyHeaders,
     TooManyOutputs,
     TooManySigOps,
 )
+from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -40,14 +47,15 @@ _BLOCK_PARENTS_BLOCKS = 1
 
 
 class VertexVerifier:
-    __slots__ = ('_settings',)
+    __slots__ = ('_settings', '_feature_service',)
 
-    def __init__(self, *, settings: HathorSettings) -> None:
+    def __init__(self, *, settings: HathorSettings, feature_service: FeatureService):
         self._settings = settings
+        self._feature_service = feature_service
 
-    def verify_version(self, vertex: BaseTransaction) -> None:
+    def verify_version_basic(self, vertex: BaseTransaction) -> None:
         """Verify that the vertex version is valid."""
-        if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version):
+        if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version, settings=self._settings):
             raise InvalidVersionError(f"invalid vertex version: {vertex.version}")
 
     def verify_parents(self, vertex: BaseTransaction) -> None:
@@ -167,15 +175,61 @@ class VertexVerifier:
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
-    def verify_sigops_output(self, vertex: BaseTransaction) -> None:
+    def verify_sigops_output(self, vertex: BaseTransaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all outputs and verify that the total sum is below the limit
         """
-        from hathor.transaction.scripts import get_sigops_count
+        from hathor.transaction.scripts import SigopCounter
+
+        max_multisig_pubkeys = self._settings.MAX_MULTISIG_PUBKEYS
+        counter = SigopCounter(
+            max_multisig_pubkeys=max_multisig_pubkeys,
+            enable_checkdatasig_count=enable_checkdatasig_count,
+        )
+
         n_txops = 0
 
         for tx_output in vertex.outputs:
-            n_txops += get_sigops_count(tx_output.script)
+            n_txops += counter.get_sigops_count(tx_output.script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
+
+    def get_allowed_headers(self, vertex: BaseTransaction) -> set[type[VertexBaseHeader]]:
+        """Return a set of allowed headers for the vertex."""
+        allowed_headers: set[type[VertexBaseHeader]] = set()
+        match vertex.version:
+            case TxVersion.REGULAR_BLOCK:
+                pass
+            case TxVersion.MERGE_MINED_BLOCK:
+                pass
+            case TxVersion.POA_BLOCK:
+                pass
+            case TxVersion.ON_CHAIN_BLUEPRINT:
+                pass
+            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+                match self._settings.ENABLE_NANO_CONTRACTS:
+                    case NanoContractsSetting.DISABLED:
+                        pass
+                    case NanoContractsSetting.ENABLED:
+                        allowed_headers.add(NanoHeader)
+                    case NanoContractsSetting.FEATURE_ACTIVATION:
+                        if self._feature_service.is_feature_active(vertex=vertex, feature=Feature.NANO_CONTRACTS):
+                            allowed_headers.add(NanoHeader)
+                    case _ as unreachable:
+                        assert_never(unreachable)
+            case _:
+                assert_never(vertex.version)
+        return allowed_headers
+
+    def verify_headers(self, vertex: BaseTransaction) -> None:
+        """Verify the headers."""
+        if len(vertex.headers) > vertex.get_maximum_number_of_headers():
+            raise TooManyHeaders('Maximum number of headers exceeded')
+
+        allowed_headers = self.get_allowed_headers(vertex)
+        for header in vertex.headers:
+            if type(header) not in allowed_headers:
+                raise HeaderNotSupported(
+                    f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
+                )

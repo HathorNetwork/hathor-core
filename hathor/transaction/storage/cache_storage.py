@@ -12,19 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import OrderedDict
-from typing import Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from twisted.internet import threads
 from typing_extensions import override
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.storage import NCStorageFactory
 
 
 class TransactionCacheStorage(BaseTransactionStorage):
@@ -41,7 +46,8 @@ class TransactionCacheStorage(BaseTransactionStorage):
         interval: int = 5,
         capacity: int = 10000,
         *,
-        settings: HathorSettings,
+        settings: 'HathorSettings',
+        nc_storage_factory: NCStorageFactory,
         indexes: Optional[IndexesManager],
         _clone_if_needed: bool = False,
     ) -> None:
@@ -79,7 +85,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # we need to use only one weakref dict, so we must first initialize super, and then
         # attribute the same weakref for both.
-        super().__init__(indexes=indexes, settings=settings)
+        super().__init__(indexes=indexes, settings=settings, nc_storage_factory=nc_storage_factory)
         self._tx_weakref = store._tx_weakref
         # XXX: just to make sure this isn't being used anywhere, setters/getters should be used instead
         del self._allow_scope

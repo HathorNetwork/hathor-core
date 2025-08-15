@@ -14,10 +14,11 @@
 
 from abc import abstractmethod
 from enum import Enum
-from typing import Iterator, NamedTuple, Optional
+from typing import Iterator, NamedTuple
 
 from structlog import get_logger
 
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
@@ -55,7 +56,8 @@ class TimestampIndex(BaseIndex):
     """ Index of transactions sorted by their timestamps.
     """
 
-    def __init__(self, *, scope_type: ScopeType):
+    def __init__(self, *, scope_type: ScopeType, settings: HathorSettings) -> None:
+        super().__init__(settings=settings)
         self._scope_type = scope_type
 
     def get_scope(self) -> Scope:
@@ -91,7 +93,7 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_older(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
+    def get_older(self, timestamp: int, hash_bytes: bytes | None, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the oldest
 
         :param timestamp: Timestamp reference to start the search
@@ -102,19 +104,13 @@ class TimestampIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def get_newer(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[bytes], bool]:
+    def get_newer(self, timestamp: int, hash_bytes: bytes | None, count: int) -> tuple[list[bytes], bool]:
         """ Get transactions or blocks from the timestamp/hash_bytes reference to the newest
 
         :param timestamp: Timestamp reference to start the search
         :param hash_bytes: Hash reference to start the search
         :param count: Number of transactions or blocks to be returned
         :return: List of tx hashes and a boolean indicating if has more txs
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_hashes_and_next_idx(self, from_idx: RangeIdx, count: int) -> tuple[list[bytes], Optional[RangeIdx]]:
-        """ Get up to count hashes if available and the next range-index, this is used by sync-v1.
         """
         raise NotImplementedError
 

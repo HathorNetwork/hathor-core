@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
-from hathor.transaction.storage import TransactionMemoryStorage
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -21,6 +21,8 @@ def get_genesis_output():
         address = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX'
     elif settings.NETWORK_NAME == 'unittests':
         address = 'HRXVDmLVdq8pgok1BCUKpiFWdAVAy4a5AJ'
+    elif settings.NETWORK_NAME.startswith('nano-testnet'):
+        address = 'WZhKusv57pvzotZrf4s7yt7P7PXEqyFTHk'
     else:
         raise ValueError('Network unknown.')
 
@@ -34,10 +36,11 @@ class GenesisTest(unittest.TestCase):
         self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
         verifiers = VertexVerifiers.create_defaults(settings=self._settings, daa=self._daa, feature_service=Mock())
         self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
-        self.storage = TransactionMemoryStorage(settings=settings)
+        self.storage = self.create_tx_storage()
 
     def test_pow(self):
-        verifier = VertexVerifier(settings=self._settings)
+        feature_service = FeatureService(settings=self._settings, tx_storage=self.storage)
+        verifier = VertexVerifier(settings=self._settings, feature_service=feature_service)
         genesis = self.storage.get_all_genesis()
         for g in genesis:
             self.assertEqual(g.calculate_hash(), g.hash)
@@ -46,7 +49,7 @@ class GenesisTest(unittest.TestCase):
     def test_verify(self):
         genesis = self.storage.get_all_genesis()
         for g in genesis:
-            self._verification_service.verify_without_storage(g)
+            self._verification_service.verify_without_storage(g, self.verification_params)
 
     def test_output(self):
         # Test if block output is valid

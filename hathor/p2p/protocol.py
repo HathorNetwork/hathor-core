@@ -43,6 +43,10 @@ if TYPE_CHECKING:
 logger = get_logger()
 cpu = get_cpu_profiler()
 
+MISBEHAVIOR_KEY = 'misbehavior'
+MISBEHAVIOR_THRESHOLD = 100
+MISBEHAVIOR_WINDOW = 3600  # decay in 1h
+
 
 class HathorProtocol:
     """ Implements Hathor Peer-to-Peer Protocol. An instance of this class is
@@ -172,6 +176,10 @@ class HathorProtocol:
             max_size=self._settings.MAX_UNVERIFIED_PEERS_PER_CONN,
         )
 
+        # Misbehavior score that is increased after protocol violations.
+        self._misbehavior_score = RateLimiter(self.reactor)
+        self._misbehavior_score.set_limit(MISBEHAVIOR_KEY, MISBEHAVIOR_THRESHOLD, MISBEHAVIOR_WINDOW)
+
         # Protocol version is initially unset
         self.sync_version = None
 
@@ -245,6 +253,13 @@ class HathorProtocol:
         # We cannot use self.disconnect() because it will wait to send pending data.
         self.disconnect(force=True)
 
+    def increase_misbehavior_score(self, *, weight: int) -> None:
+        """Increase misbehavior score and acts if the threshold is reached."""
+        if not self._misbehavior_score.add_hit(MISBEHAVIOR_KEY, weight):
+            score = self._misbehavior_score.get_limit(MISBEHAVIOR_KEY)
+            self.log.warn('connection closed due to misbehavior', score=score)
+            self.send_error_and_close_connection('Misbehavior score is too high')
+
     def on_connect(self) -> None:
         """ Executed when the connection is established.
         """
@@ -315,11 +330,6 @@ class HathorProtocol:
             self.peer.info.last_seen = now
 
         if not self.ratelimit.add_hit(self.RateLimitKeys.GLOBAL):
-            # XXX: on Python 3.11 the result of the following expression:
-            #      '{}'.format(HathorProtocol.RateLimitKeys.GLOBAL)
-            #      is not 'global' but 'RateLimitKeys.GLOBAL', even though the enum value *is* a string, but it seems
-            #      that something like `str(value)` is called which results in a different value (usually not the case
-            #      for regular strings, but it is for enum+str), using `enum_variant.value` side-steps this problem
             self.state.send_throttle(self.RateLimitKeys.GLOBAL.value)
             return
 

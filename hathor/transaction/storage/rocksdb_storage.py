@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from structlog import get_logger
 from typing_extensions import override
 
-from hathor.conf.settings import HathorSettings
 from hathor.indexes import IndexesManager
 from hathor.storage import RocksDBStorage
 from hathor.transaction.static_metadata import VertexStaticMetadata
@@ -29,6 +30,8 @@ from hathor.transaction.vertex_parser import VertexParser
 if TYPE_CHECKING:
     import rocksdb
 
+    from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.storage import NCStorageFactory
     from hathor.transaction import BaseTransaction
 
 logger = get_logger()
@@ -52,8 +55,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         rocksdb_storage: RocksDBStorage,
         indexes: Optional[IndexesManager] = None,
         *,
-        settings: HathorSettings,
+        settings: 'HathorSettings',
         vertex_parser: VertexParser,
+        nc_storage_factory: NCStorageFactory,
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
@@ -64,7 +68,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
         self.vertex_parser = vertex_parser
-        super().__init__(indexes=indexes, settings=settings)
+        super().__init__(indexes=indexes, settings=settings, nc_storage_factory=nc_storage_factory)
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.transaction_metadata import TransactionMetadata

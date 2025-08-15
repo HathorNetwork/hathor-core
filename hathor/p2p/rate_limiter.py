@@ -71,13 +71,14 @@ class RateLimiter:
             return True
         max_hits, window_seconds = self.keys[key]
 
+        now = self.reactor.seconds()
+
         if key not in self.hits:
-            self.hits[key] = RateLimiterLimit(weight, self.reactor.seconds())
-            return True
+            self.hits[key] = RateLimiterLimit(0, now)
 
         hits, latest_time = self.hits[key]
 
-        dt = self.reactor.seconds() - latest_time
+        dt = now - latest_time
 
         # rate = max_hits / window_seconds (hits per second)
         # x = dt * rate

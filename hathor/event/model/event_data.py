@@ -12,12 +12,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Optional, TypeAlias, Union, cast
+from __future__ import annotations
+
+from typing import Any, Optional, TypeAlias, Union, cast
 
 from pydantic import Extra, validator
 from typing_extensions import Self
 
+from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.pubsub import EventArguments
+from hathor.transaction import Transaction
+from hathor.transaction.headers import VertexHeaderId
 from hathor.utils.pydantic import BaseModel
 
 
@@ -31,13 +36,26 @@ class TxOutput(BaseModel, extra=Extra.ignore):
     value: int
     token_data: int
     script: str
-    decoded: Optional[DecodedTxOutput]
+    # Instead of None, an empty dict represents an unknown script, as requested by our wallet-service use case.
+    decoded: DecodedTxOutput | dict[Any, Any]
 
 
 class TxInput(BaseModel):
     tx_id: str
     index: int
     spent_output: TxOutput
+
+
+class NanoHeader(BaseModel):
+    id: str
+    nc_seqnum: int
+    nc_id: str
+    nc_method: str
+    nc_address: str
+
+
+# Union type to model all header types, currently only nano header exists
+TxHeader: TypeAlias = NanoHeader
 
 
 class SpentOutput(BaseModel):
@@ -60,6 +78,7 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     first_block: Optional[str]
     height: int
     validation: str
+    nc_execution: str | None
 
     @validator('spent_outputs', pre=True, each_item=True)
     def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, list[Union[int, list[str]]]]) -> SpentOutput:
@@ -115,6 +134,7 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
     token_name: Optional[str]
     token_symbol: Optional[str]
     aux_pow: Optional[str] = None
+    headers: list[TxHeader] = []
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> Self:
@@ -123,17 +143,9 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
         tx_json = tx_extra_data_json['tx']
         meta_json = tx_extra_data_json['meta']
         tx_json['metadata'] = meta_json
-        tx_json['outputs'] = [
-            output | dict(decoded=output['decoded'] or None)
-            for output in tx_json['outputs']
-        ]
 
         inputs = []
         for tx_input in tx_json['inputs']:
-            decoded = tx_input.get('decoded')
-            if decoded and decoded.get('address') is None:
-                # we remove the decoded data if it does not contain an address
-                tx_input['decoded'] = None
             inputs.append(
                 dict(
                     tx_id=tx_input['tx_id'],
@@ -143,6 +155,22 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
             )
 
         tx_json['inputs'] = inputs
+
+        headers = []
+        if args.tx.is_nano_contract():
+            assert isinstance(args.tx, Transaction)
+            nano_header = args.tx.get_nano_header()
+            headers.append(
+                dict(
+                   id=VertexHeaderId.NANO_HEADER.value.hex(),
+                   nc_seqnum=nano_header.nc_seqnum,
+                   nc_id=nano_header.nc_id.hex(),
+                   nc_method=nano_header.nc_method,
+                   nc_address=get_address_b58_from_bytes(nano_header.nc_address),
+                )
+            )
+
+        tx_json['headers'] = headers
         return cls(**tx_json)
 
 
@@ -167,5 +195,38 @@ class ReorgData(BaseEventData):
         )
 
 
+class NCEventData(BaseEventData):
+    """Class that represents data for a custom nano contract event."""
+
+    # The ID of the transaction that executed a nano contract.
+    vertex_id: str
+
+    # The ID of the nano contract that was executed.
+    nc_id: str
+
+    # The nano contract execution state.
+    nc_execution: str
+
+    # The block that confirmed this transaction, executing the nano contract.
+    first_block: str
+
+    # Custom data provided by the blueprint.
+    data_hex: str
+
+    @classmethod
+    def from_event_arguments(cls, args: EventArguments) -> NCEventData:
+        meta = args.tx.get_metadata()
+        assert meta.nc_execution is not None
+        assert meta.first_block is not None
+
+        return cls(
+            vertex_id=args.tx.hash_hex,
+            nc_id=args.nc_event.nc_id.hex(),
+            nc_execution=meta.nc_execution,
+            first_block=meta.first_block.hex(),
+            data_hex=args.nc_event.data.hex(),
+        )
+
+
 # Union type to encompass BaseEventData polymorphism
-EventData: TypeAlias = EmptyData | TxData | TxDataWithoutMeta | ReorgData
+EventData: TypeAlias = EmptyData | TxData | TxDataWithoutMeta | ReorgData | NCEventData

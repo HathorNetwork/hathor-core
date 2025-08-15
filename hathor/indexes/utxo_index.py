@@ -19,6 +19,7 @@ from typing import Iterator, Optional
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.conf.settings import HathorSettings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
@@ -107,7 +108,8 @@ class UtxoIndex(BaseIndex):
     address can be extracted from.
     """
 
-    def __init__(self):
+    def __init__(self, *, settings: HathorSettings) -> None:
+        super().__init__(settings=settings)
         self.log = logger.new()
 
     # interface methods provided by the base class

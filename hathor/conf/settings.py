@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+from enum import StrEnum, auto, unique
 from math import log
 from pathlib import Path
 from typing import Any, NamedTuple, Optional, Union
@@ -31,6 +32,31 @@ GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
 
 HATHOR_TOKEN_UID = b'\x00'
+
+
+@unique
+class NanoContractsSetting(StrEnum):
+    """Enum to configure the state of the Nano Contracts feature."""
+
+    # Completely disabled.
+    DISABLED = auto()
+
+    # Completely enabled since network creation.
+    ENABLED = auto()
+
+    # Enabled through Feature Activation.
+    FEATURE_ACTIVATION = auto()
+
+    def __bool__(self) -> bool:
+        """
+        >>> bool(NanoContractsSetting.DISABLED)
+        False
+        >>> bool(NanoContractsSetting.ENABLED)
+        True
+        >>> bool(NanoContractsSetting.FEATURE_ACTIVATION)
+        True
+        """
+        return self in (NanoContractsSetting.ENABLED, NanoContractsSetting.FEATURE_ACTIVATION)
 
 
 class HathorSettings(NamedTuple):
@@ -359,10 +385,6 @@ class HathorSettings(NamedTuple):
     # Amount in which tx min weight reaches the middle point between the minimum and maximum weight
     MIN_TX_WEIGHT_K: int = 100
 
-    # When the node is being initialized (with a full verification) we don't verify
-    # the difficulty of all blocks, we execute the validation every N blocks only
-    VERIFY_WEIGHT_EVERY_N_BLOCKS: int = 1000
-
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
@@ -392,6 +414,9 @@ class HathorSettings(NamedTuple):
 
     # List of soft voided transaction.
     SOFT_VOIDED_TX_IDS: list[bytes] = []
+
+    # List of transactions to skip verification.
+    SKIP_VERIFICATION: list[bytes] = []
 
     # Identifier used in metadata's voided_by to mark a tx as soft-voided.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
@@ -441,10 +466,7 @@ class HathorSettings(NamedTuple):
     MAX_UNVERIFIED_PEERS_PER_CONN: int = 100
 
     # Used to enable nano contracts.
-    #
-    # This should NEVER be enabled for mainnet and testnet, since both networks will
-    # activate Nano Contracts through the Feature Activation.
-    ENABLE_NANO_CONTRACTS: bool = False
+    ENABLE_NANO_CONTRACTS: NanoContractsSetting = NanoContractsSetting.DISABLED
 
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, 'str'] = {}
@@ -455,6 +477,24 @@ class HathorSettings(NamedTuple):
     # The name and symbol of the native token. This is only used in APIs to serve clients.
     NATIVE_TOKEN_NAME: str = 'Hathor'
     NATIVE_TOKEN_SYMBOL: str = 'HTR'
+
+    # The pubkeys allowed to create on-chain-blueprints in the network
+    # XXX: in the future this restriction will be lifted, possibly through a feature activation
+    NC_ON_CHAIN_BLUEPRINT_RESTRICTED: bool = True
+    NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES: list[str] = []
+
+    # Max length in bytes allowed for on-chain blueprint code after decompression, 240KB (not KiB)
+    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED: int = 240_000
+
+    # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
+    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
+
+    # TODO: align this with a realistic value later
+    # fuel units are arbitrary but it's roughly the number of opcodes, memory_limit is in bytes
+    NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE: int = 100_000  # 100K opcodes
+    NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE: int = 100 * 1024 * 1024  # 100MiB
+    NC_INITIAL_FUEL_TO_CALL_METHOD: int = 1_000_000  # 1M opcodes
+    NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
@@ -551,6 +591,12 @@ _VALIDATORS = dict(
     )(parse_hex_str),
     _parse_soft_voided_tx_id=pydantic.validator(
         'SOFT_VOIDED_TX_IDS',
+        pre=True,
+        allow_reuse=True,
+        each_item=True
+    )(parse_hex_str),
+    _parse_skipped_verification_tx_id=pydantic.validator(
+        'SKIP_VERIFICATION',
         pre=True,
         allow_reuse=True,
         each_item=True

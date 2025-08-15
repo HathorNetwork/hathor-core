@@ -13,6 +13,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
+from hathor.verification.verification_params import VerificationParams
 from tests.unittest import TestBuilder
 from tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, add_new_tx, create_tokens
 
@@ -36,6 +37,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.manager = artifacts.manager
         self.tx_storage = artifacts.tx_storage
         self._settings = artifacts.settings
+        self.verification_params = VerificationParams.default_for_mempool()
 
         assert artifacts.wallet is not None
 
@@ -55,7 +57,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
                            nonce=100781, storage=self.tx_storage)
         self.manager.cpu_mining_service.resolve(self.block)
         self.block.init_static_metadata_from_storage(self._settings, self.tx_storage)
-        self.manager.verification_service.verify(self.block)
+        self.manager.verification_service.verify(self.block, self.verification_params)
         self.block.get_metadata().validation = ValidationState.FULL
 
         tx_parents = [tx.hash for tx in self.genesis_txs]
@@ -96,7 +98,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(1, len(self.genesis_blocks))
         self.assertEqual(2, len(self.genesis_txs))
         for tx in self.genesis:
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
 
         for tx in self.genesis:
             tx2 = self.tx_storage.get_transaction(tx.hash)
@@ -513,7 +515,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
             block.parents = parents
         block.weight = 10
         self.assertTrue(self.manager.cpu_mining_service.resolve(block))
-        self.manager.propagate_tx(block, fails_silently=False)
+        self.manager.propagate_tx(block)
         self.reactor.advance(5)
         return block
 
@@ -568,13 +570,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
         yield gatherResults(deferreds)
         self.tx_storage._disable_weakref()
 
-    def test_full_verification_attribute(self):
-        self.assertFalse(self.tx_storage.is_running_full_verification())
-        self.tx_storage.start_full_verification()
-        self.assertTrue(self.tx_storage.is_running_full_verification())
-        self.tx_storage.finish_full_verification()
-        self.assertFalse(self.tx_storage.is_running_full_verification())
-
     def test_key_value_attribute(self):
         attr = 'test'
         val = 'a'
@@ -606,31 +601,11 @@ class BaseCacheStorageTest(BaseTransactionStorageTest):
         self.assertFalse(self.tx_storage.store.transaction_exists(tx_hash))
 
 
-class TransactionMemoryStorageTest(BaseTransactionStorageTest):
-    __test__ = True
-
-    def _config_builder(self, builder: TestBuilder) -> None:
-        builder.use_memory()
-
-
-class CacheMemoryStorageTest(BaseCacheStorageTest):
-    __test__ = True
-
-    def _config_builder(self, builder: TestBuilder) -> None:
-        builder.use_memory()
-        builder.use_tx_storage_cache(capacity=5)
-
-
 class TransactionRocksDBStorageTest(BaseTransactionStorageTest):
     __test__ = True
 
     def _config_builder(self, builder: TestBuilder) -> None:
-        self.directory = tempfile.mkdtemp()
-        builder.use_rocksdb(self.directory)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
+        pass
 
     def test_storage_new_blocks(self):
         self.tx_storage._always_use_topological_dfs = True
@@ -641,10 +616,4 @@ class CacheRocksDBStorageTest(BaseCacheStorageTest):
     __test__ = True
 
     def _config_builder(self, builder: TestBuilder) -> None:
-        self.directory = tempfile.mkdtemp()
-        builder.use_rocksdb(self.directory)
         builder.use_tx_storage_cache(capacity=5)
-
-    def tearDown(self):
-        shutil.rmtree(self.directory)
-        super().tearDown()
