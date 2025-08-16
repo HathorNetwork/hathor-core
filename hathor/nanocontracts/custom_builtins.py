@@ -35,6 +35,7 @@ from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
+from hathor.nanocontracts.faux_immutable import FauxImmutable
 from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
 
 T = TypeVar('T')
@@ -260,13 +261,16 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
 def _generate_disabled_builtin_func(name: str) -> Callable[..., NoReturn]:
     """Generate a function analogous to `func` but that will always raise an exception when called."""
     func = getattr(builtins, name, None)
+    assert func is not None
     msg = f'The use of `{name}` has been disabled'
 
-    def __disabled__(*_args: Any, **_kwargs: Any) -> NoReturn:
-        raise NCDisabledBuiltinError(msg)
+    class __Disabled__(FauxImmutable):
+        __slots__ = ()
 
-    assert func is not None
-    return _wraps(func)(__disabled__)
+        def __call__(self, *args: Any, **kwargs: Any) -> NoReturn:
+            raise NCDisabledBuiltinError(msg)
+
+    return __Disabled__()
 
 
 @_wraps(builtins.all)
@@ -317,22 +321,172 @@ def filter(function: None | Callable[[T], object], iterable: Iterable[T]) -> Ite
             yield i
 
 
+# list of all builtins that are disabled
+DISABLED_BUILTINS: frozenset[str] = frozenset({
+    # XXX: async is disabled
+    'aiter',
+
+    # XXX: async is disabled
+    'anext',
+
+    # XXX: used to call sys.breakpointhook, must not be allowed, or we expose a function that raises an exception
+    'breakpoint',
+
+    # XXX: used to compile dynamic code, must not be allowed
+    'compile',
+
+    # XXX: might be harmless, but it's a _Printer and printing is disabled
+    'copyright',
+
+    # XXX: might be harmless, but it's a _Printer and printing is disabled
+    'credits',
+
+    # XXX: used to alter attributes dynamically, must not be allowed
+    'delattr',
+
+    # XXX: used to list attributes dynamically, must not be allowed
+    'dir',
+
+    # XXX: used to run dynamic code, must not be allowed
+    'eval',
+
+    # XXX: used to run dynamic code, must not be allowed
+    'exec',
+
+    # XXX: used to raise SystemExit exception to close the process, we could make it raise a NCFail
+    'exit',
+
+    # XXX: used to dynamically get an attribute, must not be allowed
+    'getattr',
+
+    # XXX: used to dynamically list variables in the global scope, we already restrict those, so it might be fine
+    'globals',
+
+    # XXX: used to dynamically check if an attribute exists, must not be allowed
+    'hasattr',
+
+    # XXX: interactive helper, but interactivity is not allowed
+    'help',
+
+    # XXX: used to get the address of an object, which allows a blueprint to not be a pure function
+    'id',
+
+    # XXX: interactive input, but interactivity is not allowed
+    'input',
+
+    # XXX: could be used to introspect on the objects we provide, disallow it just in case
+    'issubclass',
+
+    # XXX: might be harmless, but it's a _Printer and printing is disabled
+    'license',
+
+    # XXX: used to dynamically access all local variables, could be fine, but restrict it just in case
+    'locals',
+
+    # XXX: used for the low level buffer protocol, disallow it just in case
+    'memoryview',
+
+    # XXX: used to open files, which is not allowed, maybe expose a dummy function that always fails
+    'open',
+
+    # XXX: used for printing, which is not allowed, we could expose a function that does logging to help with debugging
+    'print',
+
+    # XXX: same as exit function
+    'quit',
+
+    # XXX: used to dynamically set attributes, must not be allowed
+    'setattr',
+
+    # XXX: can be used to inspect an object's attributes, including "private" ones
+    'vars',
+
+    # XXX: disallow just in case
+    # O(1)
+    # __repr__ shortcut
+    # (obj: object, /) -> str
+    'ascii',
+
+    # XXX: disallow just in case
+    # O(1)
+    # __repr__ shortcut
+    # (obj: object, /) -> str
+    'repr',
+
+    # XXX: can be used to hide explicit function calls, not sure if this is a problem
+    # O(1)
+    # type property
+    # (
+    #     fget: Callable[[Any], Any] | None = ...,
+    #     fset: Callable[[Any, Any], None] | None = ...,
+    #     fdel: Callable[[Any], None] | None = ...,
+    #     doc: str | None = ...,
+    # ) -> property
+    'property',
+
+    # XXX: Can be used to get an object's class and its metaclass
+    # O(1)
+    # type type
+    # (o: object, /) -> type
+    # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
+    'type',
+
+    # XXX: Root object which contains dangerous methods such as `__setattr__`
+    # O(1)
+    # type object
+    # () -> object
+    'object',
+
+    # XXX: Can be used to get the root `object`
+    # O(1)
+    # type super
+    # (t: Any, obj: Any, /) -> super
+    # (t: Any, /) -> super
+    # () -> super
+    'super',
+
+    # These are not necessary and can't be accessed, so we don't include them.
+    '__doc__',
+    '__loader__',
+    '__package__',
+    '__spec__',
+
+    # type complex
+    # This is useless for Blueprints.
+    'complex',
+
+    # =====================================
+    # These are not included in the list because they're not callables, so we should generate
+    # disabled functions for them. Also, some of them shouldn't be blocked in the AST.
+
+    # XXX: basic constants, they are considered literals by the language so we don't need to include in builtins.
+    # 'False',
+    # 'None',
+    # 'True',
+
+    # special constant to indicate a method is not implemented
+    # see: https://docs.python.org/3/library/constants.html#NotImplemented
+    # not necessary, devs should use `NotImplementedError` instead
+    # 'NotImplemented',
+
+    # This is the same as writting `...` so it's not necessary
+    # 'Ellipsis',
+})
+
+
+# these names aren't allowed in the code, to be checked in the AST only
+AST_NAME_BLACKLIST: frozenset[str] = frozenset({
+    '__builtins__',
+    '__build_class__',
+    '__import__',
+    *DISABLED_BUILTINS,
+})
+
+
 # list of allowed builtins during execution of an on-chain blueprint code
 EXEC_BUILTINS: dict[str, Any] = {
     # XXX: check https://github.com/python/mypy/blob/master/mypy/typeshed/stdlib/builtins.pyi for the full typing
     # XXX: check https://github.com/python/cpython/blob/main/Python/bltinmodule.c for the implementation
-
-    # XXX: basic constants, these aren't strictly needed since they are considered literals by the language
-    'False': False,
-    'None': None,
-    'True': True,
-
-    # special constant to indicate a method is not implemented
-    # see: https://docs.python.org/3/library/constants.html#NotImplemented
-    'NotImplemented': builtins.NotImplemented,
-
-    # This is the same as writting `...` so there's no point in preventing it
-    'Ellipsis': builtins.Ellipsis,
 
     # XXX: required to declare classes
     # O(1)
@@ -353,18 +507,6 @@ EXEC_BUILTINS: dict[str, Any] = {
 
     # make it always True, which is how we'll normally run anyway
     '__debug__': True,
-
-    # empty docs
-    '__doc__': '',
-
-    # this means the module that loaded the code, it can be None so we just set it to None
-    '__loader__': None,
-
-    # this can be None
-    '__package__': None,
-
-    # this can also be None
-    '__spec__': None,
 
     # O(1)
     # (x: SupportsAbs[T], /) -> T
@@ -409,10 +551,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # O(1)
     # decorator
     'classmethod': builtins.classmethod,
-
-    # O(1)
-    # type complex
-    'complex': builtins.complex,
 
     # XXX: consumes an iterator when calling
     # O(N) for N=len(iterable)
@@ -529,7 +667,7 @@ EXEC_BUILTINS: dict[str, Any] = {
 
     # O(1)
     # (number: int | SupportsIndex, /) -> str
-    'oct': builtins.object,
+    'oct': builtins.oct,
 
     # O(1)
     # (c: str | bytes | bytearray, /) -> int
@@ -684,128 +822,11 @@ EXEC_BUILTINS: dict[str, Any] = {
     'UserWarning': builtins.UserWarning,
     'Warning': builtins.Warning,
 
-    # These other builtins are NOT exposed:
+    # All other builtins are NOT exposed:
     # =====================================
 
-    # XXX: async is disabled
-    'aiter': _generate_disabled_builtin_func('aiter'),
-
-    # XXX: async is disabled
-    'anext': _generate_disabled_builtin_func('anext'),
-
-    # XXX: used to call sys.breakpointhook, must not be allowed, or we expose a function that raises an exception
-    'breakpoint': _generate_disabled_builtin_func('breakpoint'),
-
-    # XXX: used to compile dynamic code, must not be allowed
-    'compile': _generate_disabled_builtin_func('compile'),
-
-    # XXX: might be harmless, but it's a _Printer and printing is disabled
-    'copyright': _generate_disabled_builtin_func('copyright'),
-
-    # XXX: might be harmless, but it's a _Printer and printing is disabled
-    'credits': _generate_disabled_builtin_func('credits'),
-
-    # XXX: used to alter attributes dynamically, must not be allowed
-    'delattr': _generate_disabled_builtin_func('delattr'),
-
-    # XXX: used to list attributes dynamically, must not be allowed
-    'dir': _generate_disabled_builtin_func('dir'),
-
-    # XXX: used to run dynamic code, must not be allowed
-    'eval': _generate_disabled_builtin_func('eval'),
-
-    # XXX: used to run dynamic code, must not be allowed
-    'exec': _generate_disabled_builtin_func('exec'),
-
-    # XXX: used to raise SystemExit exception to close the process, we could make it raise a NCFail
-    'exit': _generate_disabled_builtin_func('exit'),
-
-    # XXX: used to dynamically get an attribute, must not be allowed
-    'getattr': _generate_disabled_builtin_func('getattr'),
-
-    # XXX: used to dynamically list variables in the global scope, we already restrict those, so it might be fine
-    'globals': _generate_disabled_builtin_func('globals'),
-
-    # XXX: used to dynamically check if an attribute exists, must not be allowed
-    'hasattr': _generate_disabled_builtin_func('hasattr'),
-
-    # XXX: interactive helper, but interactivity is not allowed
-    'help': _generate_disabled_builtin_func('help'),
-
-    # XXX: used to get the address of an object, which allows a blueprint to not be a pure function
-    'id': _generate_disabled_builtin_func('id'),
-
-    # XXX: interactive input, but interactivity is not allowed
-    'input': _generate_disabled_builtin_func('input'),
-
-    # XXX: could be used to introspect on the objects we provide, disallow it just in case
-    'issubclass': _generate_disabled_builtin_func('issubclass'),
-
-    # XXX: might be harmless, but it's a _Printer and printing is disabled
-    'license': _generate_disabled_builtin_func('license'),
-
-    # XXX: used to dynamically access all local variables, could be fine, but restrict it just in case
-    'locals': _generate_disabled_builtin_func('locals'),
-
-    # XXX: used for the low level buffer protocol, disallow it just in case
-    'memoryview': _generate_disabled_builtin_func('memoryview'),
-
-    # XXX: used to open files, which is not allowed, maybe expose a dummy function that always fails
-    'open': _generate_disabled_builtin_func('open'),
-
-    # XXX: used for printing, which is not allowed, we could expose a function that does logging to help with debugging
-    'print': _generate_disabled_builtin_func('print'),
-
-    # XXX: same as exit function
-    'quit': _generate_disabled_builtin_func('quit'),
-
-    # XXX: used to dynamically set attributes, must not be allowed
-    'setattr': _generate_disabled_builtin_func('setattr'),
-
-    # XXX: can be used to inspect an object's attributes, including "private" ones
-    'vars': _generate_disabled_builtin_func('vars'),
-
-    # XXX: disallow just in case
-    # O(1)
-    # __repr__ shortcut
-    # (obj: object, /) -> str
-    'ascii': _generate_disabled_builtin_func('ascii'),
-
-    # XXX: disallow just in case
-    # O(1)
-    # __repr__ shortcut
-    # (obj: object, /) -> str
-    'repr': _generate_disabled_builtin_func('repr'),
-
-    # XXX: can be used to hide explicit function calls, not sure if this is a problem
-    # O(1)
-    # type property
-    # (
-    #     fget: Callable[[Any], Any] | None = ...,
-    #     fset: Callable[[Any, Any], None] | None = ...,
-    #     fdel: Callable[[Any], None] | None = ...,
-    #     doc: str | None = ...,
-    # ) -> property
-    'property': _generate_disabled_builtin_func('property'),
-
-    # XXX: Can be used to get an object's class and its metaclass
-    # O(1)
-    # type type
-    # (o: object, /) -> type
-    # (name: str, bases: tuple[type, ...], namespace: dict[str, Any], /, **kwds: Any) -> T(type)
-    'type': _generate_disabled_builtin_func('type'),
-
-    # XXX: Root object which contains dangerous methods such as `__setattr__`
-    # O(1)
-    # type object
-    # () -> object
-    'object': _generate_disabled_builtin_func('object'),
-
-    # XXX: Can be used to get the root `object`
-    # O(1)
-    # type super
-    # (t: Any, obj: Any, /) -> super
-    # (t: Any, /) -> super
-    # () -> super
-    'super': _generate_disabled_builtin_func('super'),
+    **{
+        name: _generate_disabled_builtin_func(name)
+        for name in DISABLED_BUILTINS
+    },
 }
