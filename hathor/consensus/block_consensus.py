@@ -86,13 +86,9 @@ class BlockConsensusAlgorithm:
         """Execute the method calls for transactions confirmed by this block handling reorgs."""
         # If we reach this point, Nano Contracts must be enabled.
         assert self._settings.ENABLE_NANO_CONTRACTS
+        assert not block.is_genesis
 
         meta = block.get_metadata()
-
-        if block.is_genesis:
-            self._nc_initialize_genesis(block)
-            return
-
         if meta.voided_by:
             # If the block is voided, skip execution.
             return
@@ -248,8 +244,8 @@ class BlockConsensusAlgorithm:
                           tx=tx.hash.hex(),
                           execution=tx_meta.nc_execution.value)
             match tx_meta.nc_execution:
-                case NCExecutionState.PENDING:
-                    assert False  # should never happen
+                case NCExecutionState.PENDING:  # pragma: no cover
+                    assert False, 'unexpected pending state'  # should never happen
                 case NCExecutionState.SUCCESS:
                     assert tx_meta.voided_by is None
                 case NCExecutionState.FAILURE:
@@ -257,7 +253,7 @@ class BlockConsensusAlgorithm:
                 case NCExecutionState.SKIPPED:
                     assert tx_meta.voided_by
                     assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
-                case _:
+                case _:  # pragma: no cover
                     assert_never(tx_meta.nc_execution)
 
     def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
@@ -423,7 +419,7 @@ class BlockConsensusAlgorithm:
                 self.update_voided_by_from_parents(block)
 
             else:
-                # Either eveyone has the same score or there is a winner.
+                # Either everyone has the same score or there is a winner.
 
                 valid_heads = []
                 for head in heads:
