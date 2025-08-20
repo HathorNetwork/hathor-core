@@ -128,7 +128,7 @@ class VerificationService:
                 assert type(vertex) is OnChainBlueprint
                 assert self._settings.ENABLE_NANO_CONTRACTS
                 self._verify_basic_on_chain_blueprint(vertex, params)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
@@ -192,9 +192,8 @@ class VerificationService:
                 self._verify_token_creation_tx(vertex, params)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
-                # TODO: on-chain blueprint verifications
                 self._verify_tx(vertex, params)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
@@ -297,7 +296,7 @@ class VerificationService:
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
                 self._verify_without_storage_on_chain_blueprint(vertex, params)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():

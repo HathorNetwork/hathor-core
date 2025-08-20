@@ -216,9 +216,9 @@ class VertexVerifier:
                     case NanoContractsSetting.FEATURE_ACTIVATION:
                         if self._feature_service.is_feature_active(vertex=vertex, feature=Feature.NANO_CONTRACTS):
                             allowed_headers.add(NanoHeader)
-                    case _ as unreachable:
+                    case _ as unreachable:  # pragma: no cover
                         assert_never(unreachable)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
 
