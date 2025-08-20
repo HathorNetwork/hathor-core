@@ -143,8 +143,19 @@ class Context:
 
     def to_json(self) -> dict[str, Any]:
         """Return a JSON representation of the context."""
+        caller_id: str
+        match self.caller_id:
+            case Address():
+                caller_id = get_address_b58_from_bytes(self.caller_id)
+            case ContractId():
+                caller_id = self.caller_id.hex()
+            case _:
+                assert_never(self.caller_id)
+
         return {
             'actions': [action.to_json() for action in self.__all_actions__],
-            'caller_id': get_address_b58_from_bytes(self.caller_id),
+            'caller_id': caller_id,
             'timestamp': self.timestamp,
+            # XXX: Deprecated attribute
+            'address': caller_id,
         }

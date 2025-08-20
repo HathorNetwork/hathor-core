@@ -58,6 +58,7 @@ NC_INITIALIZE_METHOD: str = 'initialize'
 NC_FALLBACK_METHOD: str = 'fallback'
 
 NC_ALLOWED_ACTIONS_ATTR = '__nc_allowed_actions'
+NC_ALLOW_REENTRANCY = '__nc_allow_reentrancy'
 NC_METHOD_TYPE_ATTR: str = '__nc_method_type'
 
 
@@ -163,6 +164,7 @@ def _create_decorator_with_allowed_actions(
     allow_grant_authority: bool | None,
     allow_acquire_authority: bool | None,
     allow_actions: list[NCActionType] | None,
+    allow_reentrancy: bool,
 ) -> Callable:
     """Internal utility to create a decorator that sets allowed actions."""
     flags = {
@@ -179,6 +181,7 @@ def _create_decorator_with_allowed_actions(
         allowed_actions = set(allow_actions) if allow_actions else set()
         allowed_actions.update(action for action, flag in flags.items() if flag)
         setattr(fn, NC_ALLOWED_ACTIONS_ATTR, allowed_actions)
+        setattr(fn, NC_ALLOW_REENTRANCY, allow_reentrancy)
 
         decorator_body(fn)
         return fn
@@ -197,6 +200,7 @@ def public(
     allow_grant_authority: bool | None = None,
     allow_acquire_authority: bool | None = None,
     allow_actions: list[NCActionType] | None = None,
+    allow_reentrancy: bool = False,
 ) -> Callable:
     """Decorator to mark a blueprint method as public."""
     def decorator(fn: Callable) -> None:
@@ -219,6 +223,7 @@ def public(
         allow_grant_authority=allow_grant_authority,
         allow_acquire_authority=allow_acquire_authority,
         allow_actions=allow_actions,
+        allow_reentrancy=allow_reentrancy,
     )
 
 
@@ -246,6 +251,7 @@ def fallback(
     allow_grant_authority: bool | None = None,
     allow_acquire_authority: bool | None = None,
     allow_actions: list[NCActionType] | None = None,
+    allow_reentrancy: bool = False,
 ) -> Callable:
     """Decorator to mark a blueprint method as fallback. The method must also be called `fallback`."""
     def decorator(fn: Callable) -> None:
@@ -279,6 +285,7 @@ def fallback(
         allow_grant_authority=allow_grant_authority,
         allow_acquire_authority=allow_acquire_authority,
         allow_actions=allow_actions,
+        allow_reentrancy=allow_reentrancy,
     )
 
 

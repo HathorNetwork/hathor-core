@@ -80,7 +80,7 @@ class MyBlueprint(Blueprint):
         if actions:
             self.syscall.call_public_method(self.contract, 'get_tokens_from_another_contract', actions)
 
-    @public
+    @public(allow_reentrancy=True)
     def dec(self, ctx: Context, fail_on_zero: bool) -> None:
         if self.counter == 0:
             if fail_on_zero:

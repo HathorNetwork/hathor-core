@@ -28,6 +28,7 @@ from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
     NCFail,
     NCForbiddenAction,
+    NCForbiddenReentrancy,
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
@@ -55,6 +56,7 @@ from hathor.nanocontracts.runner.types import (
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
+    NC_ALLOW_REENTRANCY,
     NC_ALLOWED_ACTIONS_ATTR,
     NC_FALLBACK_METHOD,
     NC_INITIALIZE_METHOD,
@@ -371,15 +373,18 @@ class Runner:
             method_name=method_name,
             actions=actions,
             nc_args=nc_args,
+            skip_reentrancy_validation=True,
         )
 
     def _unsafe_call_another_contract_public_method(
         self,
+        *,
         contract_id: ContractId,
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
         nc_args: NCArgs,
+        skip_reentrancy_validation: bool = False,
     ) -> Any:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
@@ -419,6 +424,7 @@ class Runner:
             method_name=method_name,
             ctx=ctx,
             nc_args=nc_args,
+            skip_reentrancy_validation=skip_reentrancy_validation,
         )
 
     def _reset_all_change_trackers(self) -> None:
@@ -527,6 +533,7 @@ class Runner:
         method_name: str,
         ctx: Context,
         nc_args: NCArgs,
+        skip_reentrancy_validation: bool = False,
     ) -> Any:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
@@ -557,6 +564,9 @@ class Runner:
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
             parser = Method.from_callable(method)
             args = self._validate_nc_args_for_method(parser, nc_args)
+
+        if not skip_reentrancy_validation:
+            self._validate_reentrancy(contract_id, called_method_name, method)
 
         call_record = CallRecord(
             type=CallType.PUBLIC,
@@ -855,11 +865,11 @@ class Runner:
         self._internal_create_contract(child_id, blueprint_id)
         nc_args = NCParsedArgs(args, kwargs)
         ret = self._unsafe_call_another_contract_public_method(
-            child_id,
-            blueprint_id,
-            NC_INITIALIZE_METHOD,
-            actions,
-            nc_args,
+            contract_id=child_id,
+            blueprint_id=blueprint_id,
+            method_name=NC_INITIALIZE_METHOD,
+            actions=actions,
+            nc_args=nc_args,
         )
 
         assert last_call_record.index_updates is not None
@@ -972,6 +982,17 @@ class Runner:
                     raise NCInvalidContext('token_uid mismatch')
                 if isinstance(action, BaseTokenAction) and action.amount < 0:
                     raise NCInvalidContext('amount must be positive')
+
+    def _validate_reentrancy(self, contract_id: ContractId, method_name: str, method: Any) -> None:
+        """Check whether a reentrancy is happening and whether it is allowed."""
+        assert self._call_info is not None
+        allow_reentrancy = getattr(method, NC_ALLOW_REENTRANCY, False)
+        if allow_reentrancy:
+            return
+
+        for call_record in self._call_info.stack:
+            if call_record.contract_id == contract_id:
+                raise NCForbiddenReentrancy(f'reentrancy is forbidden on method `{method_name}`')
 
     def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> None:
         """Check whether actions are allowed."""
