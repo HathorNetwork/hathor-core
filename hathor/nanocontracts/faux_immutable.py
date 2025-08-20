@@ -34,6 +34,7 @@ def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dic
         '__qualname__',
         '__doc__',
         '__init__',
+        '__call__',
     })
 
     # Prohibit all other dunder attributes/methods.

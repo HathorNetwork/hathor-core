@@ -31,11 +31,11 @@ def test_defines_dunder() -> None:
             def __setattr__(self, name: str, value: object) -> None:
                 pass
 
-    with pytest.raises(TypeError, match='faux-immutable class `Foo2` must not define `__call__`'):
+    with pytest.raises(TypeError, match='faux-immutable class `Foo2` must not define `__setattr__`'):
         class Foo2(FauxImmutable):
             __slots__ = ()
 
-            def __call__(self, name: str, value: object) -> None:
+            def __setattr__(self, name: str, value: object) -> None:
                 pass
 
 
