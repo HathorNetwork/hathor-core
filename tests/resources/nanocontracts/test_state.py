@@ -12,7 +12,16 @@ from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.resources import NanoContractStateResource
-from hathor.nanocontracts.types import Address, NCActionType, NCDepositAction, Timestamp, TokenUid
+from hathor.nanocontracts.types import (
+    Address,
+    CallerId,
+    ContractId,
+    NCActionType,
+    NCDepositAction,
+    Timestamp,
+    TokenUid,
+    VertexId,
+)
 from hathor.nanocontracts.utils import sign_openssl
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
@@ -40,12 +49,19 @@ class MyBlueprint(Blueprint):
     address_details: dict[Address, dict[str, Amount]]
     bytes_field: bytes
     dict_with_bytes: dict[bytes, str]
+    last_caller_id: CallerId
+    last_bet_address: Address
+    last_vertex_id: VertexId
+    self_contract_id: ContractId
 
     @public
     def initialize(self, ctx: Context, token_uid: TokenUid, date_last_bet: Timestamp) -> None:
         self.token_uid = token_uid
         self.date_last_bet = date_last_bet
         self.total = 0
+        self.last_caller_id = ctx.caller_id
+        self.self_contract_id = ContractId(ctx.vertex.hash)
+        self.last_vertex_id = VertexId(ctx.vertex.hash)
 
     @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:
@@ -58,6 +74,9 @@ class MyBlueprint(Blueprint):
         else:
             partial[score] += action.amount
         self.address_details[address] = partial
+        self.last_bet_address = address
+        self.last_caller_id = ctx.caller_id
+        self.last_vertex_id = VertexId(ctx.vertex.hash)
 
         encoded_score = score.encode()
         self.bytes_field = encoded_score
@@ -302,6 +321,10 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'fields[]', b'token_uid'),
                 (b'fields[]', b'total'),
                 (b'fields[]', b'date_last_bet'),
+                (b'fields[]', b'last_caller_id'),
+                (b'fields[]', b'last_bet_address'),
+                (b'fields[]', b'last_vertex_id'),
+                (b'fields[]', b'self_contract_id'),
                 (b'fields[]', address_param.encode()),
                 (b'fields[]', b'bytes_field'),
                 (b'fields[]', dict_with_bytes_param.encode()),
@@ -312,9 +335,14 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         fields2 = data2['fields']
         self.assertEqual(data2['blueprint_id'], self.bet_id.hex())
         self.assertEqual(data2['blueprint_name'], 'MyBlueprint')
+        self.assertEqual(len(data2['fields']), 10)
         self.assertEqual(fields2['token_uid'], {'value': settings.HATHOR_TOKEN_UID.hex()})
         self.assertEqual(fields2['total'], {'value': 10**11})
         self.assertEqual(fields2['date_last_bet'], {'value': date_last_bet})
+        self.assertEqual(fields2['last_caller_id'], {'value': address_b58})
+        self.assertEqual(fields2['last_bet_address'], {'value': address_b58})
+        self.assertEqual(fields2['last_vertex_id'], {'value': nc_bet.hash.hex()})
+        self.assertEqual(fields2['self_contract_id'], {'value': nc.hash.hex()})
         self.assertEqual(len(fields2[address_param]), 1)
         # TODO: RE-IMPLEMENT SUPPORT FOR THIS
         # FIXME

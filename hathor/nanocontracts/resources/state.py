@@ -204,9 +204,8 @@ class NanoContractStateResource(Resource):
                 fields[field] = NCValueErrorResponse(errmsg='field not found')
                 continue
 
-            if type(value) is bytes:
-                value = value.hex()
-            fields[field] = NCValueSuccessResponse(value=value)
+            json_value = field_nc_type.value_to_json(value)
+            fields[field] = NCValueSuccessResponse(value=json_value)
 
         # Call view methods.
         runner.disable_call_trace()  # call trace is not required for calling view methods.
