@@ -1,5 +1,6 @@
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
-from hathor.nanocontracts.types import Amount, ContractId, NCAction, NCDepositAction, TokenUid
+from hathor.nanocontracts.exception import NCForbiddenReentrancy
+from hathor.nanocontracts.types import Amount, CallerId, ContractId, NCAction, NCDepositAction, TokenUid
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 HTR_TOKEN_UID = TokenUid(b'\0')
@@ -10,10 +11,8 @@ class InsufficientBalance(NCFail):
 
 
 class MyBlueprint(Blueprint):
-    # I used dict[bytes, int] for two reasons:
-    # 1. `bytes` works for both Address and ContractId
-    # 2. int allows negative values
-    balances: dict[bytes, int]
+    # I used dict[CallerId, int] because int allows negative values.
+    balances: dict[CallerId, int]
 
     @public
     def initialize(self, ctx: Context) -> None:
@@ -31,7 +30,7 @@ class MyBlueprint(Blueprint):
         else:
             self.balances[address] += amount
 
-    @public
+    @public(allow_reentrancy=True)
     def transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
         address = ctx.caller_id
         if amount > self.balances.get(address, 0):
@@ -43,7 +42,7 @@ class MyBlueprint(Blueprint):
         self.syscall.call_public_method(contract, method, actions=actions)
         self.balances[address] -= amount
 
-    @public
+    @public(allow_reentrancy=True)
     def fixed_transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
         address = ctx.caller_id
         if amount > self.balances.get(address, 0):
@@ -54,6 +53,16 @@ class MyBlueprint(Blueprint):
         # updated.
         self.balances[address] -= amount
         self.syscall.call_public_method(contract, method, actions=actions)
+
+    @public
+    def protected_transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
+        address = ctx.caller_id
+        if amount > self.balances.get(address, 0):
+            raise InsufficientBalance('insufficient balance')
+
+        actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)]
+        self.syscall.call_public_method(contract, method, actions=actions)
+        self.balances[address] -= amount
 
 
 class AttackerBlueprint(Blueprint):
@@ -79,15 +88,19 @@ class AttackerBlueprint(Blueprint):
     def nop(self, ctx: Context) -> None:
         pass
 
-    @public(allow_deposit=True)
+    @public(allow_deposit=True, allow_reentrancy=True)
     def attack(self, ctx: Context) -> None:
-        self._run_attack('transfer_to')
+        self._run_attack('transfer_to', 'attack')
 
-    @public(allow_deposit=True)
-    def attack_fail(self, ctx: Context) -> None:
-        self._run_attack('fixed_transfer_to')
+    @public(allow_deposit=True, allow_reentrancy=True)
+    def attack_fixed(self, ctx: Context) -> None:
+        self._run_attack('fixed_transfer_to', 'attack_fixed')
 
-    def _run_attack(self, method: str) -> None:
+    @public(allow_deposit=True, allow_reentrancy=True)
+    def attack_protected(self, ctx: Context) -> None:
+        self._run_attack('protected_transfer_to', 'attack_protected')
+
+    def _run_attack(self, method: str, callback: str) -> None:
         if self.counter >= self.n_calls:
             return
 
@@ -98,7 +111,7 @@ class AttackerBlueprint(Blueprint):
             actions=[],
             amount=self.amount,
             contract=self.syscall.get_contract_id(),
-            method='attack',
+            method=callback,
         )
 
 
@@ -197,7 +210,7 @@ class NCReentrancyTestCase(BlueprintTestCase):
         assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150 - self.n_calls * 50
         assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == self.n_calls * 50
 
-    def test_attack_fail(self) -> None:
+    def test_attack_fail_fixed(self) -> None:
         tx = self.get_genesis_tx()
 
         # Attacker contract has a balance of 0.50 HTR in the target contract.
@@ -206,7 +219,23 @@ class NCReentrancyTestCase(BlueprintTestCase):
             ctx = Context([], tx, self.address1, timestamp=0)
             self.runner.call_public_method(
                 self.nc_attacker_id,
-                'attack_fail',
+                'attack_fixed',
+                ctx,
+            )
+
+        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
+        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == 0
+
+    def test_attack_fail_protected(self) -> None:
+        tx = self.get_genesis_tx()
+
+        # Attacker contract has a balance of 0.50 HTR in the target contract.
+        # It tries to extract more than 0.50 HTR and fails.
+        with self.assertRaises(NCForbiddenReentrancy):
+            ctx = Context([], tx, self.address1, timestamp=0)
+            self.runner.call_public_method(
+                self.nc_attacker_id,
+                'attack_protected',
                 ctx,
             )
 
