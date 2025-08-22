@@ -69,7 +69,7 @@ class Node:
 
         This method assumes that all children already have their ids calculated.
         """
-        h = hashlib.sha1()
+        h = hashlib.sha256()
         h.update(self.key)
         if self.content is not None:
             h.update(self.content)
