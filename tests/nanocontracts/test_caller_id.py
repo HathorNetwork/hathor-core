@@ -53,7 +53,7 @@ class TestCallerId(BlueprintTestCase):
 
     def test_callers(self) -> None:
         address = self.gen_random_address()
-        ctx = self.create_context(address=address)
+        ctx = self.create_context(caller_id=address)
         self.runner.create_contract(self.contract_id1, self.blueprint_id, ctx)
         contract1 = self.get_readonly_contract(self.contract_id1)
 

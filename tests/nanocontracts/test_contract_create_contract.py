@@ -100,7 +100,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         deposit = 100
         actions = [NCDepositAction(token_uid=token_uid, amount=deposit)]
         address = self.gen_random_address()
-        ctx = Context(actions, self.get_genesis_tx(), address, timestamp=0)
+        ctx = self.create_context(actions, caller_id=address)
         self.runner.create_contract(nc1_id, self.blueprint1_id, ctx, self.blueprint1_id, counter, None)
 
         nc_id = nc1_id
@@ -124,7 +124,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             expected -= 1
 
         actions = []
-        ctx = Context(actions, self.get_genesis_tx(), address, timestamp=0)
+        ctx = self.create_context(actions, self.get_genesis_tx(), address)
         salt = b'123'
         self.runner.call_public_method(nc1_id, 'create_children', ctx, self.blueprint1_id, salt)
         child1_id = derive_child_contract_id(nc1_id, salt + b'1', self.blueprint1_id)
