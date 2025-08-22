@@ -28,7 +28,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
 
         self.blueprint_id = self.gen_random_blueprint_id()
         self.contract_id = self.gen_random_contract_id()
-        self.ctx = Context(
+        self.ctx = self.create_context(
             actions=[],
             vertex=self.get_genesis_tx(),
             caller_id=Address(self.gen_random_address()),

@@ -85,7 +85,7 @@ class TestAllowedActions(BlueprintTestCase):
             assert action_type in all_actions_types, f'missing {action_type.name}'
 
     def _get_context(self, *actions: NCAction) -> Context:
-        return Context(
+        return self.create_context(
             actions=list(actions),
             vertex=self.tx,
             caller_id=self.address,

@@ -121,7 +121,7 @@ class TestSyscallsInView(BlueprintTestCase):
 
         self.blueprint_id = self._register_blueprint_class(MyBlueprint)
 
-        self.ctx = Context(
+        self.ctx = self.create_context(
             actions=[],
             vertex=self.get_genesis_tx(),
             caller_id=self.gen_random_address(),

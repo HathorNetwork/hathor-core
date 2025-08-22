@@ -154,7 +154,7 @@ class Bet(Blueprint):
         assert isinstance(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
-        if ctx.timestamp > self.date_last_bet:
+        if ctx.block.timestamp > self.date_last_bet:
             raise TooLate(f'cannot place bets after {self.date_last_bet}')
         amount = Amount(action.amount)
         self.total = Amount(self.total + amount)

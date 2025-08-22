@@ -1,4 +1,3 @@
-from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
@@ -34,7 +33,7 @@ class SwapDemoTestCase(BlueprintTestCase):
         token_b, multiplier_b, amount_b = init_token_b
         deposit_a = NCDepositAction(token_uid=token_a, amount=amount_a)
         deposit_b = NCDepositAction(token_uid=token_b, amount=amount_b)
-        context = Context(
+        context = self.create_context(
             actions=[deposit_a, deposit_b],
             vertex=self.tx,
             caller_id=self.address,
@@ -65,7 +64,7 @@ class SwapDemoTestCase(BlueprintTestCase):
         action_b_type = self.get_action_type(value_b)
         swap_a = action_a_type(token_uid=token_a, amount=abs(value_a))
         swap_b = action_b_type(token_uid=token_b, amount=abs(value_b))
-        context = Context(
+        context = self.create_context(
             actions=[swap_a, swap_b],
             vertex=self.tx,
             caller_id=self.address,

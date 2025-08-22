@@ -81,7 +81,7 @@ class TestFallbackMethod(BlueprintTestCase):
         self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.contract_id = self.gen_random_contract_id()
 
-        self.ctx = Context(
+        self.ctx = self.create_context(
             actions=[NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=123)],
             vertex=self.get_genesis_tx(),
             caller_id=self.gen_random_address(),

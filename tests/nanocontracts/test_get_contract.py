@@ -65,11 +65,8 @@ class NCGetContractTestCase(BlueprintTestCase):
     def get_current_timestamp(self) -> int:
         return int(self.clock.seconds())
 
-    def dummy_context(self) -> Context:
-        return Context([], self.get_any_tx(), Address(b''), timestamp=self.get_current_timestamp())
-
     def initialize_contract(self) -> None:
-        self.runner.create_contract(self.nc_id, self.blueprint_id, self.dummy_context())
+        self.runner.create_contract(self.nc_id, self.blueprint_id, self.create_context())
 
     def test_get_readonly_contract(self) -> None:
         contract = self.get_readonly_contract(self.nc_id)
@@ -90,7 +87,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         with self.assertRaises(RuntimeError):
             contract.counter += 1
 
-        ctx = self.dummy_context()
+        ctx = self.create_context()
 
         with self.assertRaises(RuntimeError):
             contract.totals[address] = Amount(5)
@@ -120,7 +117,7 @@ class NCGetContractTestCase(BlueprintTestCase):
         # no effect on actual stored value
         self.assertEqual(contract.counter, 5)
 
-        ctx = self.dummy_context()
+        ctx = self.create_context()
         address, _ = self.get_any_address()
 
         # direct view call works:
