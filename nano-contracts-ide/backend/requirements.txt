@@ -1,0 +1,13 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+aiofiles==23.2.1
+redis==5.0.1
+cryptography==41.0.7
+structlog==23.2.0
+pytest==7.4.3
+pytest-asyncio==0.21.1
+requests==2.31.0
+
+# Note: zlib and ast are built-in Python modules, no need to install
