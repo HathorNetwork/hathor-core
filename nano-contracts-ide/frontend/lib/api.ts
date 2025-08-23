@@ -140,6 +140,8 @@ export interface ChatResponse {
   message: string;
   error?: string;
   suggestions?: string[];
+  original_code?: string;
+  modified_code?: string;
 }
 
 export const aiApi = {

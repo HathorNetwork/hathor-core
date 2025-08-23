@@ -7,10 +7,35 @@ from pydantic import BaseModel
 import structlog
 import openai
 import os
+import re
+import difflib
 from datetime import datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+def extract_modified_code_from_response(response_text: str, original_code: str = None) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Extract modified code from AI response.
+    Returns (diff_text, original_code, modified_code)
+    """
+    try:
+        # Look for modified code blocks in the response
+        modified_pattern = r'```python:modified\n(.*?)\n```'
+        modified_matches = re.findall(modified_pattern, response_text, re.DOTALL)
+        
+        if not modified_matches or not original_code:
+            return None, None, None
+        
+        modified_code = modified_matches[0]  # Take the first modified code found
+        
+        # We'll generate the diff client-side, so just return None for diff_text
+        return None, original_code, modified_code
+        
+    except Exception as e:
+        logger.error("Failed to extract modified code from response", error=str(e))
+        return None, None, None
+
 
 class ChatRequest(BaseModel):
     """Request to chat with AI assistant"""
@@ -26,6 +51,8 @@ class ChatResponse(BaseModel):
     message: str
     error: Optional[str] = None
     suggestions: List[str] = []
+    original_code: Optional[str] = None  # Original code
+    modified_code: Optional[str] = None  # Modified code
 
 # Hathor-specific system prompt
 HATHOR_SYSTEM_PROMPT = """
@@ -106,6 +133,61 @@ You help developers with:
 6. Testing strategies
 
 Be friendly, helpful, and use appropriate emojis! When you see code issues, offer specific suggestions with examples.
+
+CODE MODIFICATION:
+When a user requests code improvements, fixes, or modifications, provide the complete modified code in a special format.
+
+1. If the user's message contains words like "fix", "improve", "change", "update", "modify", or "refactor", provide modified code
+2. When generating code suggestions, provide BOTH a regular explanation AND the complete modified code
+3. Use this EXACT format for code modifications:
+
+```python:modified
+# Complete modified code here
+from hathor.nanocontracts import Blueprint
+# ... rest of the modified code
+```
+
+CODE MODIFICATION RULES:
+- Always return the COMPLETE file content, not just fragments
+- Use the exact marker ```python:modified to identify modified code blocks
+- Maintain all original code that doesn't need changes
+- Keep proper indentation and formatting
+- Add clear comments for significant changes
+- Don't remove unrelated code or comments
+
+EXAMPLE:
+User: "Fix the increment method to validate the amount parameter"
+Response: "I'll help you add validation to the increment method! Here's the updated code:
+
+```python:modified
+from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.types import public, view
+
+class SimpleCounter(Blueprint):
+    count: int
+    
+    @public
+    def initialize(self, ctx: Context) -> None:
+        self.count = 0
+    
+    @public
+    def increment(self, ctx: Context, amount: int) -> None:
+        # Added validation for amount parameter
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        self.count += amount
+    
+    @view
+    def get_count(self) -> int:
+        return self.count
+
+__blueprint__ = SimpleCounter
+```
+
+This adds validation to ensure the amount is positive before incrementing the counter."
+
+Be friendly, helpful, and use appropriate emojis! When you see code issues, offer specific suggestions with examples.
 """
 
 @router.post("/chat", response_model=ChatResponse)
@@ -169,6 +251,12 @@ async def chat_with_assistant(request: ChatRequest):
         
         assistant_message = response.choices[0].message.content
         
+        # Extract modified code if present
+        diff_text, original_code, modified_code = extract_modified_code_from_response(
+            assistant_message, 
+            request.current_file_content
+        )
+        
         # Generate helpful suggestions based on the response
         suggestions = []
         if "error" in request.message.lower() or any("error" in msg.lower() for msg in request.console_messages):
@@ -189,7 +277,9 @@ async def chat_with_assistant(request: ChatRequest):
         return ChatResponse(
             success=True,
             message=assistant_message,
-            suggestions=list(set(suggestions))  # Remove duplicates
+            suggestions=list(set(suggestions)),  # Remove duplicates
+            original_code=original_code,
+            modified_code=modified_code
         )
         
     except Exception as e:

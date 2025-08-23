@@ -5,6 +5,9 @@ import { MessageSquare, X, Send, Lightbulb, ChevronLeft, ChevronRight } from 'lu
 import { useIDEStore } from '@/store/ide-store';
 import { aiApi } from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { DiffViewer } from './DiffViewer';
 
 interface Message {
   id: string;
@@ -12,6 +15,8 @@ interface Message {
   content: string;
   timestamp: Date;
   suggestions?: string[];
+  originalCode?: string;
+  modifiedCode?: string;
 }
 
 interface AIAssistantProps {
@@ -24,7 +29,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { files, activeFileId, consoleMessages } = useIDEStore();
+  const { files, activeFileId, consoleMessages, updateFile } = useIDEStore();
 
   const activeFile = files.find(f => f.id === activeFileId);
 
@@ -74,7 +79,9 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
         type: 'assistant',
         content: response.message,
         timestamp: new Date(),
-        suggestions: response.suggestions
+        suggestions: response.suggestions,
+        originalCode: response.original_code,
+        modifiedCode: response.modified_code
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -100,6 +107,27 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
 
   const handleSuggestionClick = (suggestion: string) => {
     setInputMessage(suggestion);
+  };
+
+  const handleApplyDiff = (modifiedCode: string, messageId: string) => {
+    if (activeFileId && activeFile) {
+      updateFile(activeFileId, modifiedCode);
+      // Remove the diff from the message to indicate it's been applied
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === messageId ? { ...msg, originalCode: undefined, modifiedCode: undefined } : msg
+        )
+      );
+    }
+  };
+
+  const handleRejectDiff = (messageId: string) => {
+    // Remove the diff from the message
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === messageId ? { ...msg, originalCode: undefined, modifiedCode: undefined } : msg
+      )
+    );
   };
 
   if (isCollapsed) {
@@ -149,36 +177,54 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
             className={`mb-4 ${message.type === 'user' ? 'text-right' : 'text-left'}`}
           >
             <div
-              className={`inline-block max-w-full p-3 rounded-lg text-sm ${
-                message.type === 'user'
-                  ? 'bg-blue-600 text-white ml-8'
-                  : 'bg-gray-700 text-gray-100 mr-8'
-              }`}
+              className={`inline-block max-w-full p-3 rounded-lg text-sm ${message.type === 'user'
+                ? 'bg-blue-600 text-white ml-8'
+                : 'bg-gray-700 text-gray-100 mr-8'
+                }`}
             >
               {message.type === 'assistant' ? (
-                <div className="prose prose-sm prose-invert max-w-none">
+                <div className="text-sm leading-relaxed">
                   <ReactMarkdown
                     components={{
-                      code: ({ node, inline, className, children, ...props }) => {
-                        return inline ? (
-                          <code className="bg-gray-600 px-1 py-0.5 rounded text-xs" {...props}>
+                      pre: ({ children }) => {
+                        const only = Array.isArray(children) ? children[0] : children;
+                        const text = only?.props?.children;
+                        if (typeof text === 'string' && !text.includes('\n') && text.length < 80) {
+                          return (
+                            <code className="bg-gray-800 text-blue-300 px-2 py-1 rounded-md text-xs font-mono border border-gray-600">
+                              {text}
+                            </code>
+                          );
+                        }
+                        
+                        // For multi-line code blocks, use syntax highlighting
+                        const match = /language-(\w+)/.exec(only?.props?.className || '');
+                        const language = match ? match[1] : 'python';
+                        
+                        return (
+                          <SyntaxHighlighter
+                            style={vscDarkPlus}
+                            language={language}
+                            PreTag="div"
+                            className="text-xs rounded-lg my-2"
+                            customStyle={{
+                              margin: '0.5rem 0',
+                              borderRadius: '0.5rem',
+                              fontSize: '0.75rem',
+                            }}
+                          >
+                            {String(text).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        );
+                      },
+                      code: ({ inline, children, ...props }) =>
+                        inline ? (
+                          <code className="bg-gray-800 text-blue-300 px-2 py-1 rounded-md text-xs font-mono border border-gray-600" {...props}>
                             {children}
                           </code>
                         ) : (
-                          <pre className="bg-gray-900 p-2 rounded overflow-x-auto">
-                            <code className="text-xs" {...props}>
-                              {children}
-                            </code>
-                          </pre>
-                        );
-                      },
-                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                      ul: ({ children }) => <ul className="list-disc list-inside mb-2">{children}</ul>,
-                      ol: ({ children }) => <ol className="list-decimal list-inside mb-2">{children}</ol>,
-                      li: ({ children }) => <li className="mb-1">{children}</li>,
-                      h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                          <code className="bg-gray-800 text-blue-300 px-2 py-1 rounded-md text-xs font-mono border border-gray-600" {...props}>{children}</code>
+                        ),
                     }}
                   >
                     {message.content}
@@ -187,7 +233,20 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
               ) : (
                 <div className="whitespace-pre-wrap">{message.content}</div>
               )}
-              
+
+              {/* Diff Viewer */}
+              {message.originalCode && message.modifiedCode && activeFile && (
+                <div className="mt-3">
+                  <DiffViewer
+                    originalCode={message.originalCode}
+                    modifiedCode={message.modifiedCode}
+                    fileName={activeFile.name}
+                    onApply={(modifiedCode) => handleApplyDiff(modifiedCode, message.id)}
+                    onReject={() => handleRejectDiff(message.id)}
+                  />
+                </div>
+              )}
+
               {/* Suggestions */}
               {message.suggestions && message.suggestions.length > 0 && (
                 <div className="mt-3 space-y-1">
