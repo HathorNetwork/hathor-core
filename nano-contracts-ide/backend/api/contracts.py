@@ -38,6 +38,7 @@ class ExecuteRequest(BaseModel):
     kwargs: Dict[str, Any] = {}
     actions: List[Dict[str, Any]] = []
     context: Optional[Dict[str, Any]] = None
+    caller_address: Optional[str] = None  # Optional caller address for multi-user testing
 
 
 class ExecuteResponse(BaseModel):
@@ -117,7 +118,8 @@ async def execute_contract(request: ExecuteRequest):
             args=request.args,
             kwargs=request.kwargs,
             actions=request.actions,
-            context=request.context
+            context=request.context,
+            caller_address=request.caller_address
         )
 
         return ExecuteResponse(

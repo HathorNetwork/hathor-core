@@ -46,6 +46,7 @@ export interface ExecuteRequest {
   kwargs?: Record<string, any>;
   actions?: Array<Record<string, any>>;
   context?: Record<string, any>;
+  caller_address?: string;
 }
 
 export interface ExecuteResponse {

@@ -14,6 +14,7 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({});
   const [isExecuting, setIsExecuting] = useState(false);
   const [contractId, setContractId] = useState<string | undefined>();
+  const [selectedCaller, setSelectedCaller] = useState<string>('alice');
   const { addConsoleMessage } = useIDEStore();
 
   // Update parameter values when method changes
@@ -26,15 +27,81 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
     setParameterValues(prev => ({ ...prev, [paramName]: value }));
   };
 
-  // Method definitions with parameter details
+  // Predefined caller addresses for testing (32 bytes = 64 hex characters, all valid hex)
+  const callerAddresses = {
+    alice: 'a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd',
+    bob: 'b2c3d4e5f67890123456789012345678901234567890123456789012345abcde',
+    charlie: 'c3d4e5f678901234567890123456789012345678901234567890123456abcdef',
+    owner: 'f0e1d2c3b4a5987654321098765432109876543210987654321098765432',
+  };
+
+  // Method definitions with parameter details (supports both SimpleCounter and MultiUserToken)
   const methodDefinitions = [
+    // SimpleCounter methods
     { 
       name: 'initialize', 
       description: 'Initialize the contract', 
       parameters: [
-        { name: 'initial_value', type: 'int', description: 'Starting counter value', placeholder: '0' }
+        { name: 'name', type: 'string', description: 'Token name', placeholder: 'MyToken' },
+        { name: 'symbol', type: 'string', description: 'Token symbol', placeholder: 'MTK' },
+        { name: 'initial_supply', type: 'int', description: 'Initial token supply', placeholder: '1000' }
       ]
     },
+    // Token contract methods
+    { 
+      name: 'get_balance', 
+      description: 'Get token balance of an address', 
+      parameters: [
+        { name: 'address', type: 'address', description: 'Address to check', placeholder: 'Select from dropdown' }
+      ]
+    },
+    { 
+      name: 'get_total_supply', 
+      description: 'Get total token supply', 
+      parameters: []
+    },
+    { 
+      name: 'mint', 
+      description: 'Mint new tokens (owner only)', 
+      parameters: [
+        { name: 'to_address', type: 'address', description: 'Recipient address', placeholder: 'Select from dropdown' },
+        { name: 'amount', type: 'int', description: 'Amount to mint', placeholder: '100' }
+      ]
+    },
+    { 
+      name: 'transfer', 
+      description: 'Transfer tokens to another address', 
+      parameters: [
+        { name: 'to_address', type: 'address', description: 'Recipient address', placeholder: 'Select from dropdown' },
+        { name: 'amount', type: 'int', description: 'Amount to transfer', placeholder: '10' }
+      ]
+    },
+    { 
+      name: 'approve', 
+      description: 'Approve spender to transfer tokens', 
+      parameters: [
+        { name: 'spender', type: 'address', description: 'Spender address', placeholder: 'Select from dropdown' },
+        { name: 'amount', type: 'int', description: 'Amount to approve', placeholder: '50' }
+      ]
+    },
+    { 
+      name: 'transfer_from', 
+      description: 'Transfer tokens using allowance', 
+      parameters: [
+        { name: 'from_address', type: 'address', description: 'Source address', placeholder: 'Select from dropdown' },
+        { name: 'to_address', type: 'address', description: 'Recipient address', placeholder: 'Select from dropdown' },
+        { name: 'amount', type: 'int', description: 'Amount to transfer', placeholder: '5' }
+      ]
+    },
+    { 
+      name: 'get_allowance', 
+      description: 'Get approved amount between addresses', 
+      parameters: [
+        { name: 'owner', type: 'address', description: 'Token owner address', placeholder: 'Select from dropdown' },
+        { name: 'spender', type: 'address', description: 'Spender address', placeholder: 'Select from dropdown' }
+      ]
+    },
+    // Legacy SimpleCounter methods for backward compatibility
     { 
       name: 'get_count', 
       description: 'Get current counter value', 
@@ -46,11 +113,6 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
       parameters: [
         { name: 'amount', type: 'int', description: 'Amount to increment by', placeholder: '1' }
       ]
-    },
-    { 
-      name: 'reset', 
-      description: 'Reset counter to zero', 
-      parameters: []
     },
   ];
 
@@ -80,7 +142,7 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
       if (currentMethod?.parameters && currentMethod.parameters.length > 0) {
         args = currentMethod.parameters.map(param => {
           const value = parameterValues[param.name] || '';
-          if (!value && param.name !== 'initial_value') {
+          if (!value && param.name !== 'initial_value' && param.name !== 'initial_supply') {
             throw new Error(`Missing required parameter: ${param.name}`);
           }
           if (param.type === 'int') {
@@ -95,6 +157,12 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
               throw new Error(`Invalid float value for ${param.name}: ${value}`);
             }
             return floatValue;
+          } else if (param.type === 'address') {
+            // Convert address selection to hex string (backend will convert to bytes)
+            if (value in callerAddresses) {
+              return callerAddresses[value as keyof typeof callerAddresses];
+            }
+            return value; // Return as-is if not a predefined address
           } else {
             return value; // string or other types
           }
@@ -106,6 +174,7 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
         method_name: selectedMethod,
         args,
         kwargs: {},
+        caller_address: callerAddresses[selectedCaller as keyof typeof callerAddresses],
       });
 
       if (result.success) {
@@ -161,6 +230,26 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
         
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
+            Caller Address:
+          </label>
+          <select
+            value={selectedCaller}
+            onChange={(e) => setSelectedCaller(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500 mb-2"
+          >
+            {Object.keys(callerAddresses).map((name) => (
+              <option key={name} value={name}>
+                {name} ({callerAddresses[name as keyof typeof callerAddresses].slice(0, 8)}...)
+              </option>
+            ))}
+          </select>
+          <div className="text-xs text-gray-400 mb-4">
+            Full: {callerAddresses[selectedCaller as keyof typeof callerAddresses]}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
             Method to Execute:
           </label>
           <select
@@ -183,14 +272,29 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
               {param.name} ({param.type})
               <span className="text-gray-400 text-xs ml-1">- {param.description}</span>
             </label>
-            <input
-              type={param.type === 'int' || param.type === 'float' ? 'number' : 'text'}
-              value={parameterValues[param.name] || ''}
-              onChange={(e) => updateParameterValue(param.name, e.target.value)}
-              placeholder={param.placeholder}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-              step={param.type === 'float' ? '0.1' : undefined}
-            />
+            {param.type === 'address' ? (
+              <select
+                value={parameterValues[param.name] || ''}
+                onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select address...</option>
+                {Object.keys(callerAddresses).map((name) => (
+                  <option key={name} value={name}>
+                    {name} ({callerAddresses[name as keyof typeof callerAddresses].slice(0, 8)}...)
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={param.type === 'int' || param.type === 'float' ? 'number' : 'text'}
+                value={parameterValues[param.name] || ''}
+                onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                placeholder={param.placeholder}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                step={param.type === 'float' ? '0.1' : undefined}
+              />
+            )}
           </div>
         ))}
 

@@ -59,7 +59,7 @@ class MockReactor:
     def callLater(self, delay, func, *args, **kwargs):
         # For IDE purposes, we execute immediately
         return func(*args, **kwargs)
-    
+
     def seconds(self):
         """Return current time in seconds (delegated to clock)"""
         return self.clock.seconds()
@@ -85,6 +85,7 @@ _global_block_storage = None
 _global_runner_instance = None
 _global_runner_engines = {}
 
+
 class MockTransactionStorage:
     """Mock transaction storage for IDE execution"""
 
@@ -101,7 +102,8 @@ class MockTransactionStorage:
     def store_blueprint(self, blueprint_id: BlueprintId, blueprint_class: type[Blueprint]):
         """Store blueprint class"""
         self._blueprints[blueprint_id] = blueprint_class
-        logger.info(f"Stored blueprint {blueprint_id.hex()}, total blueprints: {len(self._blueprints)}")
+        logger.info(f"Stored blueprint {blueprint_id.hex()}, total blueprints: {
+                    len(self._blueprints)}")
 
 
 class ContractRunner:
@@ -111,23 +113,23 @@ class ContractRunner:
         # Set environment variable for nano contracts enabled configuration
         import os
         from hathor.conf.settings import NanoContractsSetting
-        
+
         # Set up environment to use our custom IDE configuration with nano contracts enabled
         ide_config_path = Path(__file__).parent.parent / 'ide_config.yml'
         os.environ['HATHOR_CONFIG_YAML'] = str(ide_config_path)
-        
+
         # Initialize mock components
         self.reactor = MockReactor()
         self.settings = self._create_test_settings()
         self.tx_storage = MockTransactionStorage()
-        
+
         # Use global storage to persist contract state across API calls
         global _global_storage_factory, _global_block_storage
         if _global_storage_factory is None:
             _global_storage_factory = NCMemoryStorageFactory()
             _global_block_storage = _global_storage_factory.get_empty_block_storage()
             logger.info("Initialized global contract storage")
-        
+
         self.storage_factory = _global_storage_factory
         self.block_storage = _global_block_storage
 
@@ -154,7 +156,7 @@ class ContractRunner:
         """Create test settings for IDE execution"""
         # Import the nano contracts setting enum
         from hathor.conf.settings import NanoContractsSetting
-        
+
         # Use testnet-golf settings as base for IDE
         settings = HathorSettings(
             P2PKH_VERSION_BYTE=b'\x49',
@@ -226,7 +228,8 @@ class ContractRunner:
         args: List[Any] = None,
         kwargs: Dict[str, Any] = None,
         actions: List[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        caller_address: Optional[str] = None
     ) -> ExecutionResult:
         """Execute a contract method"""
         try:
@@ -241,7 +244,7 @@ class ContractRunner:
             # Use a fixed seed so all operations share the same state
             import hashlib
             session_key = "ide_session"  # Use same session for all operations
-            
+
             global _global_runner_engines
             if session_key not in _global_runner_engines:
                 seed_input = b'ide_session_seed'
@@ -251,26 +254,37 @@ class ContractRunner:
                     seed=proper_seed
                 )
                 logger.info("Created persistent runner engine for IDE session")
-            
+
             runner = _global_runner_engines[session_key]
 
             # Convert string contract_id to ContractId
             contract_id_obj = ContractId(VertexId(bytes.fromhex(contract_id)))
 
-            # Create mock context
+            # Create mock context with caller address simulation
             from hathor.nanocontracts.vertex_data import VertexData
             from hathor.transaction import Transaction
+            import hashlib
 
             # Create a minimal transaction for context
             mock_tx = Transaction()
-            mock_tx.hash = b'mock_tx_hash_' + os.urandom(16)
 
+            # Use provided caller address or generate a default one
+            if caller_address:
+                # Convert hex string to bytes for the caller
+                caller_hash = bytes.fromhex(caller_address)
+            else:
+                # Generate a default caller hash
+                caller_input = b'default_caller_' + contract_id.encode('utf-8')
+                caller_hash = hashlib.sha256(caller_input).digest()
+
+            mock_tx.hash = caller_hash
             vertex_data = VertexData.create_from_vertex(mock_tx)
 
             ctx = Context(
                 actions=[],  # Convert actions if needed
                 vertex=vertex_data,
-                caller_id=contract_id_obj,  # Mock caller
+                # Use caller address as caller_id
+                caller_id=ContractId(VertexId(caller_hash)),
                 timestamp=int(self.reactor.clock.seconds())
             )
 
@@ -279,60 +293,151 @@ class ContractRunner:
                 if method_name == "initialize":
                     # For initialize, we need to create the contract first
                     # The contract_id passed in is actually the blueprint_id from compilation
-                    blueprint_id_obj = BlueprintId(VertexId(bytes.fromhex(contract_id)))
-                    
+                    blueprint_id_obj = BlueprintId(
+                        VertexId(bytes.fromhex(contract_id)))
+
                     # Generate a new contract_id for this instance
                     import hashlib
-                    contract_input = b'contract_instance_' + contract_id.encode('utf-8') + os.urandom(8)
+                    contract_input = b'contract_instance_' + \
+                        contract_id.encode('utf-8') + os.urandom(8)
                     contract_hash = hashlib.sha256(contract_input).digest()
                     new_contract_id = ContractId(VertexId(contract_hash))
-                    
+
                     logger.info(f"Creating contract with args: {args}")
-                    # Try minimal signature first
+                    # For create_contract, we need to pass the initialization arguments properly
                     try:
+                        # create_contract signature: (contract_id, blueprint_id, ctx, *init_args)
                         result = runner.create_contract(
                             new_contract_id,
-                            blueprint_id_obj
+                            blueprint_id_obj,
+                            ctx,
+                            *args  # Pass initialization arguments
                         )
-                        logger.info(f"Success with minimal args, result: {result}")
+                        logger.info(
+                            f"Success creating contract, result: {result}")
                     except Exception as e:
-                        logger.info(f"Minimal args failed: {e}")
-                        # Try just with context
-                        try:
-                            result = runner.create_contract(
-                                new_contract_id,
-                                blueprint_id_obj,
-                                ctx
-                            )
-                            logger.info(f"Success with ctx, result: {result}")
-                        except Exception as e2:
-                            logger.info(f"With ctx also failed: {e2}")
-                            raise e2
+                        logger.error(f"Contract creation failed: {
+                                     str(e)}", exc_info=True)
+                        raise e
                 else:
-                    # Check if this is a view method or public method
-                    view_methods = ['get_count', 'get_balance']  # Common view methods
-                    
-                    if method_name in view_methods:
+                    # Try to determine if this is a view method by introspecting the blueprint
+                    is_view_method = False
+
+                    try:
+                        # For regular method calls, we need to get the blueprint_id from storage
+                        # This is a simplified approach - in a real implementation,
+                        # we'd track contract_id -> blueprint_id mapping
+                        # For now, let's try to get it from our stored blueprints
+                        blueprint_class = None
+                        for stored_blueprint_id, stored_class in self.tx_storage._blueprints.items():
+                            blueprint_class = stored_class
+                            break  # Use the first/most recent blueprint for now
+
+                        if not blueprint_class:
+                            raise ValueError("No blueprint class found")
+
+                        # Check if the method exists and is decorated as a view method
+                        if hasattr(blueprint_class, method_name):
+                            method = getattr(blueprint_class, method_name)
+                            logger.info(f"Method object: {method}")
+                            logger.info(f"Method attributes: {dir(method)}")
+
+                            # Check if method has view decoration (Hathor specific)
+                            # The attribute is __nc_method_type and value is NCMethodType enum
+                            method_type_attr = getattr(
+                                method, '__nc_method_type', None)
+                            if method_type_attr is not None:
+                                logger.info(f"Found __nc_method_type: {
+                                            method_type_attr}")
+                                # Check if it's VIEW enum value
+                                is_view_method = str(
+                                    method_type_attr) == 'NCMethodType.VIEW'
+                            else:
+                                # Try _nc_method_type (single underscore)
+                                method_type_attr = getattr(
+                                    method, '_nc_method_type', None)
+                                if method_type_attr is not None:
+                                    logger.info(f"Found _nc_method_type: {
+                                                method_type_attr}")
+                                    is_view_method = method_type_attr == 'view'
+                                else:
+                                    logger.info(
+                                        "No method type attribute found")
+                        else:
+                            logger.warning(
+                                f"Method {method_name} not found on blueprint class")
+
+                        logger.info(f"Method {method_name} is_view_method: {
+                                    is_view_method}")
+
+                    except Exception as e:
+                        logger.warning(f"Could not determine method type for {
+                                       method_name}: {e}")
+                        # Default to public method if we can't determine
+                        is_view_method = False
+
+                    if is_view_method:
                         # Call view method (don't pass ctx to view methods)
-                        result = runner.call_view_method(
-                            contract_id_obj,
-                            method_name,
-                            *args
-                        )
+                        logger.info(f"Calling view method {
+                                    method_name} with args: {args}")
+
+                        # Convert hex string addresses to bytes for view methods
+                        converted_args = []
+                        for arg in args:
+                            if isinstance(arg, str) and len(arg) == 64 and all(c in '0123456789abcdefABCDEF' for c in arg):
+                                # This looks like a hex address, convert to bytes
+                                converted_args.append(bytes.fromhex(arg))
+                                logger.info(f"Converted hex string {
+                                            arg} to bytes")
+                            else:
+                                converted_args.append(arg)
+
+                        try:
+                            result = runner.call_view_method(
+                                contract_id_obj,
+                                method_name,
+                                *converted_args
+                            )
+                            logger.info(f"View method result: {result}")
+                        except Exception as e:
+                            logger.error(f"View method failed: {
+                                         str(e)}", exc_info=True)
+                            raise e
                     else:
                         # Call public method
-                        result = runner.call_public_method(
-                            contract_id_obj,
-                            method_name,
-                            ctx,
-                            *args
-                        )
+                        logger.info(f"Calling public method {
+                                    method_name} with args: {args}")
+
+                        # Convert hex string addresses to bytes for public methods too
+                        converted_args = []
+                        for arg in args:
+                            if isinstance(arg, str) and len(arg) == 64 and all(c in '0123456789abcdefABCDEF' for c in arg):
+                                # This looks like a hex address, convert to bytes
+                                converted_args.append(bytes.fromhex(arg))
+                                logger.info(f"Converted hex string {
+                                            arg} to bytes")
+                            else:
+                                converted_args.append(arg)
+
+                        try:
+                            result = runner.call_public_method(
+                                contract_id_obj,
+                                method_name,
+                                ctx,
+                                *converted_args
+                            )
+                            logger.info(f"Public method result: {result}")
+                        except Exception as e:
+                            logger.error(f"Public method failed: {
+                                         str(e)}", exc_info=True)
+                            raise e
 
                 # For initialize method, return the contract ID that was created
                 if method_name == "initialize":
                     return ExecutionResult(
                         success=True,
-                        result={"contract_id": new_contract_id.hex(), "initialization_result": result},
+                        result={"contract_id": new_contract_id.hex(
+                        ), "initialization_result": result},
                         gas_used=500,  # Mock gas usage
                         logs=[],
                         state_changes={}
