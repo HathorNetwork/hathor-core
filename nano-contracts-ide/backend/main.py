@@ -3,6 +3,10 @@ Main FastAPI application for Nano Contracts IDE
 """
 import os
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +17,7 @@ from api.contracts import router as contracts_router
 from api.validation import router as validation_router
 from api.storage import router as storage_router
 from api.network import router as network_router
+from api.ai_assistant import router as ai_assistant_router
 from core.config import get_settings
 
 
@@ -57,6 +62,7 @@ app.include_router(validation_router,
                    prefix="/api/validation", tags=["validation"])
 app.include_router(storage_router, prefix="/api/storage", tags=["storage"])
 app.include_router(network_router, prefix="/api/network", tags=["network"])
+app.include_router(ai_assistant_router, prefix="/api/ai", tags=["ai-assistant"])
 
 
 @app.get("/")

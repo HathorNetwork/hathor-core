@@ -102,8 +102,7 @@ class MockTransactionStorage:
     def store_blueprint(self, blueprint_id: BlueprintId, blueprint_class: type[Blueprint]):
         """Store blueprint class"""
         self._blueprints[blueprint_id] = blueprint_class
-        logger.info(f"Stored blueprint {blueprint_id.hex()}, total blueprints: {
-                    len(self._blueprints)}")
+        logger.info(f"Stored blueprint {blueprint_id.hex()}, total blueprints: {len(self._blueprints)}")
 
 
 class ContractRunner:
@@ -316,8 +315,7 @@ class ContractRunner:
                         logger.info(
                             f"Success creating contract, result: {result}")
                     except Exception as e:
-                        logger.error(f"Contract creation failed: {
-                                     str(e)}", exc_info=True)
+                        logger.error(f"Contract creation failed: {str(e)}", exc_info=True)
                         raise e
                 else:
                     # Try to determine if this is a view method by introspecting the blueprint
@@ -347,8 +345,7 @@ class ContractRunner:
                             method_type_attr = getattr(
                                 method, '__nc_method_type', None)
                             if method_type_attr is not None:
-                                logger.info(f"Found __nc_method_type: {
-                                            method_type_attr}")
+                                logger.info(f"Found __nc_method_type: {method_type_attr}")
                                 # Check if it's VIEW enum value
                                 is_view_method = str(
                                     method_type_attr) == 'NCMethodType.VIEW'
@@ -357,8 +354,7 @@ class ContractRunner:
                                 method_type_attr = getattr(
                                     method, '_nc_method_type', None)
                                 if method_type_attr is not None:
-                                    logger.info(f"Found _nc_method_type: {
-                                                method_type_attr}")
+                                    logger.info(f"Found _nc_method_type: {method_type_attr}")
                                     is_view_method = method_type_attr == 'view'
                                 else:
                                     logger.info(
@@ -367,19 +363,16 @@ class ContractRunner:
                             logger.warning(
                                 f"Method {method_name} not found on blueprint class")
 
-                        logger.info(f"Method {method_name} is_view_method: {
-                                    is_view_method}")
+                        logger.info(f"Method {method_name} is_view_method: {is_view_method}")
 
                     except Exception as e:
-                        logger.warning(f"Could not determine method type for {
-                                       method_name}: {e}")
+                        logger.warning(f"Could not determine method type for {method_name}: {e}")
                         # Default to public method if we can't determine
                         is_view_method = False
 
                     if is_view_method:
                         # Call view method (don't pass ctx to view methods)
-                        logger.info(f"Calling view method {
-                                    method_name} with args: {args}")
+                        logger.info(f"Calling view method {method_name} with args: {args}")
 
                         # Convert hex string addresses to bytes for view methods
                         converted_args = []
@@ -387,8 +380,7 @@ class ContractRunner:
                             if isinstance(arg, str) and len(arg) == 64 and all(c in '0123456789abcdefABCDEF' for c in arg):
                                 # This looks like a hex address, convert to bytes
                                 converted_args.append(bytes.fromhex(arg))
-                                logger.info(f"Converted hex string {
-                                            arg} to bytes")
+                                logger.info(f"Converted hex string {arg} to bytes")
                             else:
                                 converted_args.append(arg)
 
@@ -400,13 +392,11 @@ class ContractRunner:
                             )
                             logger.info(f"View method result: {result}")
                         except Exception as e:
-                            logger.error(f"View method failed: {
-                                         str(e)}", exc_info=True)
+                            logger.error(f"View method failed: {str(e)}", exc_info=True)
                             raise e
                     else:
                         # Call public method
-                        logger.info(f"Calling public method {
-                                    method_name} with args: {args}")
+                        logger.info(f"Calling public method {method_name} with args: {args}")
 
                         # Convert hex string addresses to bytes for public methods too
                         converted_args = []
@@ -414,8 +404,7 @@ class ContractRunner:
                             if isinstance(arg, str) and len(arg) == 64 and all(c in '0123456789abcdefABCDEF' for c in arg):
                                 # This looks like a hex address, convert to bytes
                                 converted_args.append(bytes.fromhex(arg))
-                                logger.info(f"Converted hex string {
-                                            arg} to bytes")
+                                logger.info(f"Converted hex string {arg} to bytes")
                             else:
                                 converted_args.append(arg)
 
@@ -428,8 +417,7 @@ class ContractRunner:
                             )
                             logger.info(f"Public method result: {result}")
                         except Exception as e:
-                            logger.error(f"Public method failed: {
-                                         str(e)}", exc_info=True)
+                            logger.error(f"Public method failed: {str(e)}", exc_info=True)
                             raise e
 
                 # For initialize method, return the contract ID that was created

@@ -127,6 +127,38 @@ export const storageApi = {
   },
 };
 
+export interface ChatRequest {
+  message: string;
+  current_file_content?: string;
+  current_file_name?: string;
+  console_messages?: string[];
+  context?: Record<string, any>;
+}
+
+export interface ChatResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+  suggestions?: string[];
+}
+
+export const aiApi = {
+  chat: async (request: ChatRequest): Promise<ChatResponse> => {
+    const response = await api.post('/api/ai/chat', request);
+    return response.data;
+  },
+
+  getSuggestions: async (): Promise<{ suggestions: string[] }> => {
+    const response = await api.get('/api/ai/suggestions');
+    return response.data;
+  },
+
+  getExamples: async (): Promise<{ examples: any[] }> => {
+    const response = await api.get('/api/ai/examples');
+    return response.data;
+  },
+};
+
 export const healthApi = {
   check: async (): Promise<{ status: string }> => {
     const response = await api.get('/health');

@@ -111,3 +111,20 @@
 .Resizer.disabled:hover {
   opacity: 0.2;
 }
+
+/* AI Assistant styles */
+.prose-invert {
+  color: #e5e7eb;
+}
+
+.prose-invert code {
+  color: #fbbf24;
+}
+
+.prose-invert pre {
+  background-color: #1f2937;
+}
+
+.prose-invert strong {
+  color: #f9fafb;
+}

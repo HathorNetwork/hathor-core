@@ -1,17 +1,21 @@
 'use client';
 
 import React from 'react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from 'react-resizable-panels';
 import { FileExplorer } from './FileExplorer/FileExplorer';
 import { CodeEditor } from './Editor/CodeEditor';
 import { Console } from './Console/Console';
 import { Toolbar } from './Toolbar/Toolbar';
 import { MethodExecutor } from './Execution/MethodExecutor';
+import { AIAssistant } from './AI/AIAssistant';
 import { useIDEStore } from '@/store/ide-store';
 import { contractsApi, validationApi } from '@/lib/api';
 
 export function IDE() {
   const [currentBlueprintId, setCurrentBlueprintId] = React.useState<string | undefined>();
+  const [isAICollapsed, setIsAICollapsed] = React.useState(false);
+  const aiPanelRef = React.useRef<ImperativePanelHandle>(null);
+  const codePanelRef = React.useRef<ImperativePanelHandle>(null);
   
   const {
     files,
@@ -161,7 +165,7 @@ export function IDE() {
           
           <PanelResizeHandle className="w-1 bg-gray-800 hover:bg-blue-600 transition-colors" />
           
-          <Panel defaultSize={55}>
+          <Panel ref={codePanelRef} defaultSize={35}>
             <PanelGroup direction="vertical">
               <Panel defaultSize={70}>
                 <CodeEditor />
@@ -173,6 +177,33 @@ export function IDE() {
                 <Console />
               </Panel>
             </PanelGroup>
+          </Panel>
+          
+          <PanelResizeHandle className="w-1 bg-gray-800 hover:bg-blue-600 transition-colors" />
+          
+          <Panel ref={aiPanelRef} defaultSize={20} minSize={3} maxSize={40}>
+            <AIAssistant
+              isCollapsed={isAICollapsed}
+              onToggleCollapse={() => {
+                const newCollapsed = !isAICollapsed;
+                setIsAICollapsed(newCollapsed);
+                
+                // Use imperative API to resize panels
+                setTimeout(() => {
+                  if (aiPanelRef.current && codePanelRef.current) {
+                    if (newCollapsed) {
+                      // Collapse AI panel to minimum, expand code panel
+                      aiPanelRef.current.resize(3);
+                      codePanelRef.current.resize(52);
+                    } else {
+                      // Expand AI panel, shrink code panel
+                      aiPanelRef.current.resize(20);
+                      codePanelRef.current.resize(35);
+                    }
+                  }
+                }, 10);
+              }}
+            />
           </Panel>
         </PanelGroup>
       </div>
