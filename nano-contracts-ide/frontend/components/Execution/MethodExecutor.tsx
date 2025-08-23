@@ -1,21 +1,40 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Play, Settings } from 'lucide-react';
 import { useIDEStore } from '@/store/ide-store';
 import { contractsApi } from '@/lib/api';
+import { parseContractMethods, MethodDefinition } from '@/utils/contractParser';
 
 interface MethodExecutorProps {
   blueprintId?: string;
 }
 
 export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) => {
-  const [selectedMethod, setSelectedMethod] = useState('initialize');
+  const [selectedMethod, setSelectedMethod] = useState('');
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({});
   const [isExecuting, setIsExecuting] = useState(false);
   const [contractId, setContractId] = useState<string | undefined>();
   const [selectedCaller, setSelectedCaller] = useState<string>('alice');
-  const { addConsoleMessage } = useIDEStore();
+  const { addConsoleMessage, files, activeFileId } = useIDEStore();
+
+  // Get current file content to parse methods
+  const activeFile = files.find(f => f.id === activeFileId);
+  
+  // Parse methods from current file
+  const methodDefinitions = useMemo(() => {
+    if (!activeFile?.content) return [];
+    return parseContractMethods(activeFile.content);
+  }, [activeFile?.content]);
+
+  // Set default method when methods are loaded
+  useEffect(() => {
+    if (methodDefinitions.length > 0 && !selectedMethod) {
+      // Try to find 'initialize' method first, otherwise use the first method
+      const initMethod = methodDefinitions.find(m => m.name === 'initialize');
+      setSelectedMethod(initMethod ? initMethod.name : methodDefinitions[0].name);
+    }
+  }, [methodDefinitions, selectedMethod]);
 
   // Update parameter values when method changes
   const handleMethodChange = (method: string) => {
@@ -35,86 +54,6 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
     owner: 'f0e1d2c3b4a5987654321098765432109876543210987654321098765432',
   };
 
-  // Method definitions with parameter details (supports both SimpleCounter and MultiUserToken)
-  const methodDefinitions = [
-    // SimpleCounter methods
-    { 
-      name: 'initialize', 
-      description: 'Initialize the contract', 
-      parameters: [
-        { name: 'name', type: 'string', description: 'Token name', placeholder: 'MyToken' },
-        { name: 'symbol', type: 'string', description: 'Token symbol', placeholder: 'MTK' },
-        { name: 'initial_supply', type: 'int', description: 'Initial token supply', placeholder: '1000' }
-      ]
-    },
-    // Token contract methods
-    { 
-      name: 'get_balance', 
-      description: 'Get token balance of an address', 
-      parameters: [
-        { name: 'address', type: 'address', description: 'Address to check', placeholder: 'Select from dropdown' }
-      ]
-    },
-    { 
-      name: 'get_total_supply', 
-      description: 'Get total token supply', 
-      parameters: []
-    },
-    { 
-      name: 'mint', 
-      description: 'Mint new tokens (owner only)', 
-      parameters: [
-        { name: 'to_address', type: 'address', description: 'Recipient address', placeholder: 'Select from dropdown' },
-        { name: 'amount', type: 'int', description: 'Amount to mint', placeholder: '100' }
-      ]
-    },
-    { 
-      name: 'transfer', 
-      description: 'Transfer tokens to another address', 
-      parameters: [
-        { name: 'to_address', type: 'address', description: 'Recipient address', placeholder: 'Select from dropdown' },
-        { name: 'amount', type: 'int', description: 'Amount to transfer', placeholder: '10' }
-      ]
-    },
-    { 
-      name: 'approve', 
-      description: 'Approve spender to transfer tokens', 
-      parameters: [
-        { name: 'spender', type: 'address', description: 'Spender address', placeholder: 'Select from dropdown' },
-        { name: 'amount', type: 'int', description: 'Amount to approve', placeholder: '50' }
-      ]
-    },
-    { 
-      name: 'transfer_from', 
-      description: 'Transfer tokens using allowance', 
-      parameters: [
-        { name: 'from_address', type: 'address', description: 'Source address', placeholder: 'Select from dropdown' },
-        { name: 'to_address', type: 'address', description: 'Recipient address', placeholder: 'Select from dropdown' },
-        { name: 'amount', type: 'int', description: 'Amount to transfer', placeholder: '5' }
-      ]
-    },
-    { 
-      name: 'get_allowance', 
-      description: 'Get approved amount between addresses', 
-      parameters: [
-        { name: 'owner', type: 'address', description: 'Token owner address', placeholder: 'Select from dropdown' },
-        { name: 'spender', type: 'address', description: 'Spender address', placeholder: 'Select from dropdown' }
-      ]
-    },
-    // Legacy SimpleCounter methods for backward compatibility
-    { 
-      name: 'get_count', 
-      description: 'Get current counter value', 
-      parameters: []
-    },
-    { 
-      name: 'increment', 
-      description: 'Increment the counter', 
-      parameters: [
-        { name: 'amount', type: 'int', description: 'Amount to increment by', placeholder: '1' }
-      ]
-    },
-  ];
 
   const handleExecute = async () => {
     if (!blueprintId) {
@@ -175,6 +114,7 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
         args,
         kwargs: {},
         caller_address: callerAddresses[selectedCaller as keyof typeof callerAddresses],
+        method_type: currentMethod?.decorator,
       });
 
       if (result.success) {
@@ -210,6 +150,18 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
         <div className="text-gray-400 text-center">
           <Settings className="mx-auto mb-2" size={20} />
           <p className="text-sm">Compile a contract first to execute methods</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (methodDefinitions.length === 0) {
+    return (
+      <div className="h-full bg-gray-800 border-r border-gray-700 p-4 flex items-center justify-center">
+        <div className="text-gray-400 text-center">
+          <Settings className="mx-auto mb-2" size={20} />
+          <p className="text-sm">No methods found in contract</p>
+          <p className="text-xs mt-1">Make sure your contract has @public or @view decorated methods</p>
         </div>
       </div>
     );

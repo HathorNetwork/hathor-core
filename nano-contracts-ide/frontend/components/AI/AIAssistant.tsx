@@ -62,11 +62,20 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
         .slice(-5)
         .map(msg => `[${msg.type.toUpperCase()}] ${msg.message}`);
 
+      // Convert recent messages to conversation history (last 6 messages)
+      const conversationHistory = messages
+        .slice(-6)
+        .map(msg => ({
+          role: msg.type === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.content
+        }));
+
       const response = await aiApi.chat({
         message: inputMessage.trim(),
         current_file_content: activeFile?.content,
         current_file_name: activeFile?.name,
         console_messages: recentConsoleMessages,
+        conversation_history: conversationHistory,
         context: {
           total_files: files.length,
           has_compiled_contracts: consoleMessages.some(msg => msg.message.includes('compiled')),

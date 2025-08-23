@@ -153,13 +153,13 @@ export function IDE() {
       
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal">
-          <Panel defaultSize={20} minSize={15} maxSize={30}>
+          <Panel defaultSize={20} minSize={15} maxSize={25}>
             <FileExplorer />
           </Panel>
           
           <PanelResizeHandle className="w-1 bg-gray-800 hover:bg-blue-600 transition-colors" />
           
-          <Panel defaultSize={25} minSize={20} maxSize={35}>
+          <Panel defaultSize={25} minSize={15} maxSize={30}>
             <MethodExecutor blueprintId={currentBlueprintId} />
           </Panel>
           

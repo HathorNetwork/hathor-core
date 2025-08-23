@@ -37,6 +37,11 @@ def extract_modified_code_from_response(response_text: str, original_code: str =
         return None, None, None
 
 
+class ChatMessage(BaseModel):
+    """Individual chat message"""
+    role: str  # 'user' or 'assistant'
+    content: str
+
 class ChatRequest(BaseModel):
     """Request to chat with AI assistant"""
     message: str
@@ -44,6 +49,7 @@ class ChatRequest(BaseModel):
     current_file_name: Optional[str] = None
     console_messages: List[str] = []
     context: Optional[Dict[str, Any]] = None
+    conversation_history: List[ChatMessage] = []  # Recent conversation history
 
 class ChatResponse(BaseModel):
     """Response from AI assistant"""
@@ -137,9 +143,14 @@ Be friendly, helpful, and use appropriate emojis! When you see code issues, offe
 CODE MODIFICATION:
 When a user requests code improvements, fixes, or modifications, provide the complete modified code in a special format.
 
-1. If the user's message contains words like "fix", "improve", "change", "update", "modify", or "refactor", provide modified code
-2. When generating code suggestions, provide BOTH a regular explanation AND the complete modified code
-3. Use this EXACT format for code modifications:
+IMPORTANT: If ANY of these conditions are met, you MUST provide modified code:
+1. User message contains words like: "fix", "improve", "change", "update", "modify", "refactor", "add", "remove", "implement"
+2. User asks you to "do the changes", "make the changes", "apply", "update my file", or similar action requests
+3. User references previous suggestions you made and asks you to implement them
+4. User asks for specific functionality to be added to existing code
+5. When generating code that should replace or update the current file content
+
+ALWAYS use this EXACT format for code modifications:
 
 ```python:modified
 # Complete modified code here
@@ -149,11 +160,12 @@ from hathor.nanocontracts import Blueprint
 
 CODE MODIFICATION RULES:
 - Always return the COMPLETE file content, not just fragments
-- Use the exact marker ```python:modified to identify modified code blocks
+- Use the exact marker ```python:modified to identify modified code blocks (this triggers diff generation)
 - Maintain all original code that doesn't need changes
 - Keep proper indentation and formatting
 - Add clear comments for significant changes
 - Don't remove unrelated code or comments
+- NEVER use regular ```python blocks when the user wants file changes
 
 EXAMPLE:
 User: "Fix the increment method to validate the amount parameter"
@@ -239,13 +251,21 @@ async def chat_with_assistant(request: ChatRequest):
         # Call OpenAI API
         client = openai.OpenAI(api_key=api_key)
         
+        # Build messages array with conversation history
+        messages = [{"role": "system", "content": full_context}]
+        
+        # Add recent conversation history (limit to last 6 messages to stay within token limits)
+        recent_history = request.conversation_history[-6:] if request.conversation_history else []
+        for msg in recent_history:
+            messages.append({"role": msg.role, "content": msg.content})
+        
+        # Add current message
+        messages.append({"role": "user", "content": request.message})
+        
         response = client.chat.completions.create(
             model="gpt-4o-mini",  # Use the more affordable model
-            messages=[
-                {"role": "system", "content": full_context},
-                {"role": "user", "content": request.message}
-            ],
-            max_tokens=500,
+            messages=messages,
+            max_tokens=800,  # Increase token limit slightly for more detailed responses
             temperature=0.7
         )
         

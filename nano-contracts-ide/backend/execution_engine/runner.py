@@ -228,7 +228,8 @@ class ContractRunner:
         kwargs: Dict[str, Any] = None,
         actions: List[Dict[str, Any]] = None,
         context: Optional[Dict[str, Any]] = None,
-        caller_address: Optional[str] = None
+        caller_address: Optional[str] = None,
+        method_type: Optional[str] = None
     ) -> ExecutionResult:
         """Execute a contract method"""
         try:
@@ -318,57 +319,9 @@ class ContractRunner:
                         logger.error(f"Contract creation failed: {str(e)}", exc_info=True)
                         raise e
                 else:
-                    # Try to determine if this is a view method by introspecting the blueprint
-                    is_view_method = False
-
-                    try:
-                        # For regular method calls, we need to get the blueprint_id from storage
-                        # This is a simplified approach - in a real implementation,
-                        # we'd track contract_id -> blueprint_id mapping
-                        # For now, let's try to get it from our stored blueprints
-                        blueprint_class = None
-                        for stored_blueprint_id, stored_class in self.tx_storage._blueprints.items():
-                            blueprint_class = stored_class
-                            break  # Use the first/most recent blueprint for now
-
-                        if not blueprint_class:
-                            raise ValueError("No blueprint class found")
-
-                        # Check if the method exists and is decorated as a view method
-                        if hasattr(blueprint_class, method_name):
-                            method = getattr(blueprint_class, method_name)
-                            logger.info(f"Method object: {method}")
-                            logger.info(f"Method attributes: {dir(method)}")
-
-                            # Check if method has view decoration (Hathor specific)
-                            # The attribute is __nc_method_type and value is NCMethodType enum
-                            method_type_attr = getattr(
-                                method, '__nc_method_type', None)
-                            if method_type_attr is not None:
-                                logger.info(f"Found __nc_method_type: {method_type_attr}")
-                                # Check if it's VIEW enum value
-                                is_view_method = str(
-                                    method_type_attr) == 'NCMethodType.VIEW'
-                            else:
-                                # Try _nc_method_type (single underscore)
-                                method_type_attr = getattr(
-                                    method, '_nc_method_type', None)
-                                if method_type_attr is not None:
-                                    logger.info(f"Found _nc_method_type: {method_type_attr}")
-                                    is_view_method = method_type_attr == 'view'
-                                else:
-                                    logger.info(
-                                        "No method type attribute found")
-                        else:
-                            logger.warning(
-                                f"Method {method_name} not found on blueprint class")
-
-                        logger.info(f"Method {method_name} is_view_method: {is_view_method}")
-
-                    except Exception as e:
-                        logger.warning(f"Could not determine method type for {method_name}: {e}")
-                        # Default to public method if we can't determine
-                        is_view_method = False
+                    # Use provided method_type instead of auto-detection
+                    is_view_method = method_type == 'view'
+                    logger.info(f"Method {method_name} type from frontend: {method_type}, is_view_method: {is_view_method}")
 
                     if is_view_method:
                         # Call view method (don't pass ctx to view methods)

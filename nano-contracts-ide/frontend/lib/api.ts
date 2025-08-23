@@ -47,6 +47,7 @@ export interface ExecuteRequest {
   actions?: Array<Record<string, any>>;
   context?: Record<string, any>;
   caller_address?: string;
+  method_type?: 'public' | 'view';
 }
 
 export interface ExecuteResponse {
@@ -127,12 +128,18 @@ export const storageApi = {
   },
 };
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface ChatRequest {
   message: string;
   current_file_content?: string;
   current_file_name?: string;
   console_messages?: string[];
   context?: Record<string, any>;
+  conversation_history?: ChatMessage[];
 }
 
 export interface ChatResponse {
