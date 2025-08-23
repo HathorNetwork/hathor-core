@@ -102,6 +102,13 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
               return callerAddresses[value as keyof typeof callerAddresses];
             }
             return value; // Return as-is if not a predefined address
+          } else if (param.type === 'hex') {
+            // For hex parameters, ensure it's a valid hex string and return as-is
+            // Backend will convert to bytes
+            if (value && !/^[0-9a-fA-F]*$/.test(value)) {
+              throw new Error(`Invalid hex value for ${param.name}: ${value}. Use only 0-9 and a-f characters.`);
+            }
+            return value;
           } else {
             return value; // string or other types
           }

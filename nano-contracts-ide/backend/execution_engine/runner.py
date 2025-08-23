@@ -304,6 +304,17 @@ class ContractRunner:
                     new_contract_id = ContractId(VertexId(contract_hash))
 
                     logger.info(f"Creating contract with args: {args}")
+                    
+                    # Convert hex string arguments to bytes for initialization
+                    converted_args = []
+                    for arg in args:
+                        if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
+                            # This looks like a hex string, convert to bytes
+                            converted_args.append(bytes.fromhex(arg))
+                            logger.info(f"Converted hex string {arg} to bytes")
+                        else:
+                            converted_args.append(arg)
+                    
                     # For create_contract, we need to pass the initialization arguments properly
                     try:
                         # create_contract signature: (contract_id, blueprint_id, ctx, *init_args)
@@ -311,7 +322,7 @@ class ContractRunner:
                             new_contract_id,
                             blueprint_id_obj,
                             ctx,
-                            *args  # Pass initialization arguments
+                            *converted_args  # Pass converted initialization arguments
                         )
                         logger.info(
                             f"Success creating contract, result: {result}")
@@ -327,11 +338,11 @@ class ContractRunner:
                         # Call view method (don't pass ctx to view methods)
                         logger.info(f"Calling view method {method_name} with args: {args}")
 
-                        # Convert hex string addresses to bytes for view methods
+                        # Convert hex string arguments to bytes for view methods
                         converted_args = []
                         for arg in args:
-                            if isinstance(arg, str) and len(arg) == 64 and all(c in '0123456789abcdefABCDEF' for c in arg):
-                                # This looks like a hex address, convert to bytes
+                            if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
+                                # This looks like a hex string, convert to bytes
                                 converted_args.append(bytes.fromhex(arg))
                                 logger.info(f"Converted hex string {arg} to bytes")
                             else:
@@ -351,11 +362,11 @@ class ContractRunner:
                         # Call public method
                         logger.info(f"Calling public method {method_name} with args: {args}")
 
-                        # Convert hex string addresses to bytes for public methods too
+                        # Convert hex string arguments to bytes for public methods
                         converted_args = []
                         for arg in args:
-                            if isinstance(arg, str) and len(arg) == 64 and all(c in '0123456789abcdefABCDEF' for c in arg):
-                                # This looks like a hex address, convert to bytes
+                            if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
+                                # This looks like a hex string, convert to bytes
                                 converted_args.append(bytes.fromhex(arg))
                                 logger.info(f"Converted hex string {arg} to bytes")
                             else:
@@ -384,9 +395,11 @@ class ContractRunner:
                         state_changes={}
                     )
                 else:
+                    # Convert bytes results to hex strings for JSON serialization
+                    processed_result = self._process_result_for_json(result)
                     return ExecutionResult(
                         success=True,
-                        result=result,
+                        result=processed_result,
                         gas_used=500,  # Mock gas usage
                         logs=[],
                         state_changes={}
@@ -438,3 +451,14 @@ class ContractRunner:
             logger.error("Failed to get contract methods",
                          error=str(e), exc_info=True)
             return []
+
+    def _process_result_for_json(self, result):
+        """Convert bytes objects to hex strings for JSON serialization"""
+        if isinstance(result, bytes):
+            return result.hex()
+        elif isinstance(result, dict):
+            return {k: self._process_result_for_json(v) for k, v in result.items()}
+        elif isinstance(result, (list, tuple)):
+            return [self._process_result_for_json(item) for item in result]
+        else:
+            return result

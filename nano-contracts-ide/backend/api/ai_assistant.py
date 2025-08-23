@@ -87,9 +87,12 @@ class MyContract(Blueprint):
     
     @public
     def initialize(self, ctx: Context, initial_value: int) -> None:
-        \"\"\"Initialize contract state\"\"\"
+        \"\"\"Initialize contract state - MUST initialize ALL state variables\"\"\"
+        # Initialize ALL state variables declared above
         self.count = initial_value
         self.owner = ctx.vertex.hash
+        
+        # ALL state variables must be assigned in initialize() or they won't exist
     
     @view
     def get_count(self) -> int:
@@ -122,6 +125,13 @@ COMMON GOTCHAS:
 - Addresses are bytes, not strings
 - View methods can't modify state
 - Always include proper error handling
+- NEVER import from typing module (typing.Dict, typing.List, etc.) - use built-in dict, list types
+- Use dict[str, int] syntax for type hints, not Dict[str, int]
+- NEVER define custom __init__() methods in Blueprint classes - use initialize() method instead
+- CRITICAL: ALL state variables declared at class level MUST be initialized in the @public initialize() method
+- If you declare "balance: int" at class level, you MUST do "self.balance = 0" in initialize()
+- Container fields like dict and list must be initialized: self.balances = {}, self.items = []
+- Uninitialized state variables will cause AttributeError when accessed later
 
 SECURITY BEST PRACTICES:
 - Validate all user inputs

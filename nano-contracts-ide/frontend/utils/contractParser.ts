@@ -95,15 +95,26 @@ function parseMethodParameters(paramsString: string, decorator: 'public' | 'view
       const defaultValue = paramMatch[3]?.trim();
       
       // Map Python types to more user-friendly types
-      const typeMapping: Record<string, string> = {
-        'int': 'int',
-        'str': 'string',
-        'float': 'float',
-        'bool': 'boolean',
-        'bytes': 'address',
-      };
-      
-      const mappedType = typeMapping[type] || type;
+      // For bytes, infer the intent based on parameter name
+      let mappedType: string;
+      if (type === 'bytes') {
+        // Check if parameter name suggests it's an address
+        const addressPatterns = /^(.*_address|address_.*|caller|owner|recipient|sender|from|to)$/i;
+        if (addressPatterns.test(name)) {
+          mappedType = 'address';
+        } else {
+          // For other bytes parameters (token_a, token_b, data, etc.), treat as hex string
+          mappedType = 'hex';
+        }
+      } else {
+        const typeMapping: Record<string, string> = {
+          'int': 'int',
+          'str': 'string',
+          'float': 'float',
+          'bool': 'boolean',
+        };
+        mappedType = typeMapping[type] || type;
+      }
       
       // Generate description and placeholder based on name and type
       let description = `${name.replace(/_/g, ' ')}`;
@@ -112,6 +123,9 @@ function parseMethodParameters(paramsString: string, decorator: 'public' | 'view
       if (mappedType === 'address') {
         description = `Address for ${name.replace(/_/g, ' ')}`;
         placeholder = 'Select from dropdown';
+      } else if (mappedType === 'hex') {
+        description = `${name.replace(/_/g, ' ')} (hex bytes)`;
+        placeholder = 'Enter hex string (e.g., deadbeef...)';
       } else if (mappedType === 'int') {
         placeholder = defaultValue || '0';
       } else if (mappedType === 'string') {

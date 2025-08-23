@@ -87,6 +87,14 @@ async def compile_contract(request: CompileRequest):
             blueprint_name=request.blueprint_name
         )
 
+        # Check if compilation actually succeeded
+        if not compile_result.success:
+            return CompileResponse(
+                success=False,
+                errors=compile_result.errors,
+                warnings=compile_result.warnings
+            )
+
         return CompileResponse(
             success=True,
             blueprint_id=compile_result.blueprint_id,
