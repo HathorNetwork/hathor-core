@@ -310,8 +310,11 @@ class ContractRunner:
                     for arg in args:
                         if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
                             # This looks like a hex string, convert to bytes
+                            # Handle different Hathor SDK types:
+                            # - Address: 40 hex chars (20 bytes)
+                            # - TokenUid, ContractId, BlueprintId, VertexId: 64 hex chars (32 bytes)
                             converted_args.append(bytes.fromhex(arg))
-                            logger.info(f"Converted hex string {arg} to bytes")
+                            logger.info(f"Converted hex string {arg} ({len(arg)} chars -> {len(arg)//2} bytes) to bytes")
                         else:
                             converted_args.append(arg)
                     
@@ -343,8 +346,11 @@ class ContractRunner:
                         for arg in args:
                             if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
                                 # This looks like a hex string, convert to bytes
+                                # Handle different Hathor SDK types:
+                                # - Address: 40 hex chars (20 bytes)
+                                # - TokenUid, ContractId, BlueprintId, VertexId: 64 hex chars (32 bytes)
                                 converted_args.append(bytes.fromhex(arg))
-                                logger.info(f"Converted hex string {arg} to bytes")
+                                logger.info(f"Converted hex string {arg} ({len(arg)} chars -> {len(arg)//2} bytes) to bytes")
                             else:
                                 converted_args.append(arg)
 
@@ -367,8 +373,11 @@ class ContractRunner:
                         for arg in args:
                             if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
                                 # This looks like a hex string, convert to bytes
+                                # Handle different Hathor SDK types:
+                                # - Address: 40 hex chars (20 bytes)
+                                # - TokenUid, ContractId, BlueprintId, VertexId: 64 hex chars (32 bytes)
                                 converted_args.append(bytes.fromhex(arg))
-                                logger.info(f"Converted hex string {arg} to bytes")
+                                logger.info(f"Converted hex string {arg} ({len(arg)} chars -> {len(arg)//2} bytes) to bytes")
                             else:
                                 converted_args.append(arg)
 

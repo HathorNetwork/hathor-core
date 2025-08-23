@@ -26,7 +26,13 @@ export function IDE() {
     isCompiling,
     isExecuting,
     addCompiledContract,
+    initializeStore,
   } = useIDEStore();
+
+  // Initialize storage on component mount
+  React.useEffect(() => {
+    initializeStore();
+  }, [initializeStore]);
 
   const activeFile = files.find((f) => f.id === activeFileId);
 

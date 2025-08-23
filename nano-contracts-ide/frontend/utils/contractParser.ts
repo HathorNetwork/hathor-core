@@ -94,16 +94,40 @@ function parseMethodParameters(paramsString: string, decorator: 'public' | 'view
       let type = paramMatch[2].trim();
       const defaultValue = paramMatch[3]?.trim();
       
-      // Map Python types to more user-friendly types
-      // For bytes, infer the intent based on parameter name
+      // Map Python types to more user-friendly types with Hathor SDK types
       let mappedType: string;
-      if (type === 'bytes') {
-        // Check if parameter name suggests it's an address
+      
+      // Handle Hathor Blueprint SDK types
+      if (type === 'Address') {
+        mappedType = 'address';
+      } else if (type === 'TokenUid') {
+        mappedType = 'tokenuid';
+      } else if (type === 'ContractId') {
+        mappedType = 'contractid';
+      } else if (type === 'BlueprintId') {
+        mappedType = 'blueprintid';
+      } else if (type === 'VertexId') {
+        mappedType = 'vertexid';
+      } else if (type === 'Amount') {
+        mappedType = 'amount';
+      } else if (type === 'Timestamp') {
+        mappedType = 'timestamp';
+      } else if (type === 'TxOutputScript') {
+        mappedType = 'hex';
+      } else if (type === 'bytes') {
+        // For bytes, infer the intent based on parameter name
         const addressPatterns = /^(.*_address|address_.*|caller|owner|recipient|sender|from|to)$/i;
+        const tokenPatterns = /^(.*_token|token_.*|.*_uid|uid_.*|token_a|token_b)$/i;
+        const contractPatterns = /^(.*_contract|contract_.*|.*_id|id_.*)$/i;
+        
         if (addressPatterns.test(name)) {
           mappedType = 'address';
+        } else if (tokenPatterns.test(name)) {
+          mappedType = 'tokenuid';
+        } else if (contractPatterns.test(name)) {
+          mappedType = 'contractid';
         } else {
-          // For other bytes parameters (token_a, token_b, data, etc.), treat as hex string
+          // For other bytes parameters (data, script, etc.), treat as hex string
           mappedType = 'hex';
         }
       } else {
@@ -120,9 +144,28 @@ function parseMethodParameters(paramsString: string, decorator: 'public' | 'view
       let description = `${name.replace(/_/g, ' ')}`;
       let placeholder = '';
       
+      // Handle different Hathor SDK types
       if (mappedType === 'address') {
-        description = `Address for ${name.replace(/_/g, ' ')}`;
+        description = `Address for ${name.replace(/_/g, ' ')} (20 bytes)`;
         placeholder = 'Select from dropdown';
+      } else if (mappedType === 'tokenuid') {
+        description = `Token UID for ${name.replace(/_/g, ' ')} (32 bytes)`;
+        placeholder = 'Enter token UID (64 hex chars)';
+      } else if (mappedType === 'contractid') {
+        description = `Contract ID for ${name.replace(/_/g, ' ')} (32 bytes)`;
+        placeholder = 'Enter contract ID (64 hex chars)';
+      } else if (mappedType === 'blueprintid') {
+        description = `Blueprint ID for ${name.replace(/_/g, ' ')} (32 bytes)`;
+        placeholder = 'Enter blueprint ID (64 hex chars)';
+      } else if (mappedType === 'vertexid') {
+        description = `Vertex ID for ${name.replace(/_/g, ' ')} (32 bytes)`;
+        placeholder = 'Enter vertex ID (64 hex chars)';
+      } else if (mappedType === 'amount') {
+        description = `Amount for ${name.replace(/_/g, ' ')} (last 2 digits = decimals)`;
+        placeholder = 'Enter amount (e.g., 1025 = 10.25 tokens)';
+      } else if (mappedType === 'timestamp') {
+        description = `Timestamp for ${name.replace(/_/g, ' ')} (Unix epoch seconds)`;
+        placeholder = 'Enter timestamp (e.g., 1578052800)';
       } else if (mappedType === 'hex') {
         description = `${name.replace(/_/g, ' ')} (hex bytes)`;
         placeholder = 'Enter hex string (e.g., deadbeef...)';

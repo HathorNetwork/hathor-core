@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Send, Lightbulb, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useIDEStore } from '@/store/ide-store';
 import { aiApi } from '@/lib/api';
+import { storage } from '@/lib/storage';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -25,13 +26,42 @@ interface AIAssistantProps {
 }
 
 export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleCollapse }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { files, activeFileId, consoleMessages, updateFile } = useIDEStore();
+  const { 
+    files, 
+    activeFileId, 
+    consoleMessages, 
+    updateFile, 
+    chatSessions,
+    activeChatSessionId,
+    createChatSession,
+    addChatMessage,
+    getChatSession,
+    setActiveChatSession 
+  } = useIDEStore();
 
   const activeFile = files.find(f => f.id === activeFileId);
+
+  // Get current chat session, creating one if needed
+  const currentChatSession = getChatSession(activeChatSessionId || '') || null;
+  const messages: Message[] = currentChatSession ? currentChatSession.messages.map(msg => ({
+    id: msg.id,
+    type: msg.role === 'user' ? 'user' : 'assistant',
+    content: msg.content,
+    timestamp: new Date(msg.timestamp),
+    suggestions: msg.suggestions,
+    originalCode: msg.originalCode,
+    modifiedCode: msg.modifiedCode
+  })) : [];
+
+  // Ensure there's always an active chat session
+  useEffect(() => {
+    if (!activeChatSessionId || !getChatSession(activeChatSessionId)) {
+      createChatSession();
+    }
+  }, [activeChatSessionId, createChatSession, getChatSession]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -43,16 +73,16 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim() || isLoading || !activeChatSessionId) return;
 
-    const userMessage: Message = {
+    const userMessage = {
       id: Date.now().toString(),
-      type: 'user',
+      role: 'user' as const,
       content: inputMessage.trim(),
-      timestamp: new Date()
+      timestamp: Date.now()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    addChatMessage(activeChatSessionId, userMessage);
     setInputMessage('');
     setIsLoading(true);
 
@@ -83,24 +113,33 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
         }
       });
 
-      const assistantMessage: Message = {
+      // Debug logging to see what we're getting from the backend
+      console.log('AI Response:', {
+        hasOriginalCode: !!response.original_code,
+        hasModifiedCode: !!response.modified_code,
+        originalCodeLength: response.original_code?.length,
+        modifiedCodeLength: response.modified_code?.length,
+        messagePreview: response.message.substring(0, 100)
+      });
+
+      const assistantMessage = {
         id: (Date.now() + 1).toString(),
-        type: 'assistant',
+        role: 'assistant' as const,
         content: response.message,
-        timestamp: new Date(),
+        timestamp: Date.now(),
         suggestions: response.suggestions,
         originalCode: response.original_code,
         modifiedCode: response.modified_code
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      addChatMessage(activeChatSessionId, assistantMessage);
 
     } catch (error) {
-      const errorMessage: Message = {
+      const errorMessage = {
         id: (Date.now() + 1).toString(),
-        type: 'assistant',
+        role: 'assistant' as const,
         content: "Sorry, I'm having trouble right now! 😅 But I'm still here to help with general nano contract questions!",
-        timestamp: new Date(),
+        timestamp: Date.now(),
         suggestions: [
           "Check your nano contract syntax",
           "Ensure proper method decorators",
@@ -108,7 +147,9 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
         ]
       };
 
-      setMessages(prev => [...prev, errorMessage]);
+      if (activeChatSessionId) {
+        addChatMessage(activeChatSessionId, errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -119,24 +160,51 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({ isCollapsed, onToggleC
   };
 
   const handleApplyDiff = (modifiedCode: string, messageId: string) => {
-    if (activeFileId && activeFile) {
+    if (activeFileId && activeFile && activeChatSessionId) {
       updateFile(activeFileId, modifiedCode);
-      // Remove the diff from the message to indicate it's been applied
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === messageId ? { ...msg, originalCode: undefined, modifiedCode: undefined } : msg
-        )
-      );
+      // Update the message in the chat session to remove the diff
+      const session = getChatSession(activeChatSessionId);
+      if (session) {
+        const updatedSession = {
+          ...session,
+          messages: session.messages.map(msg =>
+            msg.id === messageId 
+              ? { ...msg, originalCode: undefined, modifiedCode: undefined } 
+              : msg
+          ),
+          lastModified: Date.now()
+        };
+        // Save the updated session directly to storage
+        storage.saveChatSession(updatedSession).catch(console.error);
+        // Update the store
+        useIDEStore.setState(state => ({
+          chatSessions: state.chatSessions.map(s => s.id === activeChatSessionId ? updatedSession : s)
+        }));
+      }
     }
   };
 
   const handleRejectDiff = (messageId: string) => {
-    // Remove the diff from the message
-    setMessages(prev =>
-      prev.map(msg =>
-        msg.id === messageId ? { ...msg, originalCode: undefined, modifiedCode: undefined } : msg
-      )
-    );
+    if (activeChatSessionId) {
+      const session = getChatSession(activeChatSessionId);
+      if (session) {
+        const updatedSession = {
+          ...session,
+          messages: session.messages.map(msg =>
+            msg.id === messageId 
+              ? { ...msg, originalCode: undefined, modifiedCode: undefined } 
+              : msg
+          ),
+          lastModified: Date.now()
+        };
+        // Save the updated session directly to storage
+        storage.saveChatSession(updatedSession).catch(console.error);
+        // Update the store
+        useIDEStore.setState(state => ({
+          chatSessions: state.chatSessions.map(s => s.id === activeChatSessionId ? updatedSession : s)
+        }));
+      }
+    }
   };
 
   if (isCollapsed) {

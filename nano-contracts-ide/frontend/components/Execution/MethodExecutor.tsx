@@ -46,12 +46,29 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
     setParameterValues(prev => ({ ...prev, [paramName]: value }));
   };
 
-  // Predefined caller addresses for testing (32 bytes = 64 hex characters, all valid hex)
+  // Predefined caller addresses for testing (20 bytes = 40 hex characters, all valid hex)
   const callerAddresses = {
-    alice: 'a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd',
-    bob: 'b2c3d4e5f67890123456789012345678901234567890123456789012345abcde',
-    charlie: 'c3d4e5f678901234567890123456789012345678901234567890123456abcdef',
-    owner: 'f0e1d2c3b4a5987654321098765432109876543210987654321098765432',
+    alice: 'a1b2c3d4e5f6789012345678901234567890abcd',
+    bob: 'b2c3d4e5f67890123456789012345678901abcde',
+    charlie: 'c3d4e5f678901234567890123456789012abcdef',
+    owner: 'f0e1d2c3b4a59876543210987654321098765432',
+  };
+
+  // Predefined sample values for different Hathor SDK types
+  const sampleValues = {
+    tokenuid: {
+      htr: '0000000000000000000000000000000000000000000000000000000000000000',
+      token_a: '00000943573723a28e3dd980c10e08419d0e00bc647a95f4ca9671ebea7d5669',
+      token_b: '000002d4c7e859c6b1ba1bb2a3d59bb1e2d0ff3bb9a5b3b4b5f5e3c9d8e8c9bb',
+    },
+    contractid: {
+      contract_1: '000063f99b133c7630bc9d0117919f5b8726155412ad063dbbd618bdc7f85d7a',
+      contract_2: '0001b8c4e2d1c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8',
+    },
+    blueprintid: {
+      blueprint_1: '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+      blueprint_2: '4dc143711cef8ec895911f5fb822c21787fa3f78502f93cc73739d345f882606',
+    },
   };
 
 
@@ -102,6 +119,28 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
               return callerAddresses[value as keyof typeof callerAddresses];
             }
             return value; // Return as-is if not a predefined address
+          } else if (param.type === 'tokenuid' || param.type === 'contractid' || param.type === 'blueprintid' || param.type === 'vertexid') {
+            // For Hathor SDK ID types, validate hex string (32 bytes = 64 hex chars)
+            // If it's a predefined value from dropdown, it's already valid
+            const finalValue = value || '';
+            if (finalValue && (!/^[0-9a-fA-F]{64}$/.test(finalValue))) {
+              throw new Error(`Invalid ${param.type} for ${param.name}: ${finalValue}. Must be 64 hex characters (32 bytes).`);
+            }
+            return finalValue;
+          } else if (param.type === 'amount') {
+            // For Amount type, validate integer
+            const amountValue = parseInt(value || '0');
+            if (isNaN(amountValue) || amountValue < 0) {
+              throw new Error(`Invalid amount for ${param.name}: ${value}. Must be a non-negative integer where last 2 digits are decimals.`);
+            }
+            return amountValue;
+          } else if (param.type === 'timestamp') {
+            // For Timestamp type, validate Unix epoch seconds
+            const timestampValue = parseInt(value || '0');
+            if (isNaN(timestampValue) || timestampValue < 0) {
+              throw new Error(`Invalid timestamp for ${param.name}: ${value}. Must be a non-negative integer (Unix epoch seconds).`);
+            }
+            return timestampValue;
           } else if (param.type === 'hex') {
             // For hex parameters, ensure it's a valid hex string and return as-is
             // Backend will convert to bytes
@@ -244,14 +283,119 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
                   </option>
                 ))}
               </select>
+            ) : param.type === 'tokenuid' ? (
+              <div className="space-y-2">
+                <select
+                  value={parameterValues[param.name] || ''}
+                  onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select token UID or enter custom...</option>
+                  {Object.entries(sampleValues.tokenuid).map(([name, uid]) => (
+                    <option key={name} value={uid}>
+                      {name.toUpperCase()} ({uid.slice(0, 8)}...)
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={parameterValues[param.name] || ''}
+                  onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                  placeholder={param.placeholder}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  maxLength={64}
+                  pattern="[0-9a-fA-F]{64}"
+                  title="Enter exactly 64 hexadecimal characters (0-9, a-f, A-F)"
+                />
+              </div>
+            ) : param.type === 'contractid' ? (
+              <div className="space-y-2">
+                <select
+                  value={parameterValues[param.name] || ''}
+                  onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select contract ID or enter custom...</option>
+                  {Object.entries(sampleValues.contractid).map(([name, id]) => (
+                    <option key={name} value={id}>
+                      {name.replace('_', ' ').toUpperCase()} ({id.slice(0, 8)}...)
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={parameterValues[param.name] || ''}
+                  onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                  placeholder={param.placeholder}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  maxLength={64}
+                  pattern="[0-9a-fA-F]{64}"
+                  title="Enter exactly 64 hexadecimal characters (0-9, a-f, A-F)"
+                />
+              </div>
+            ) : param.type === 'blueprintid' ? (
+              <div className="space-y-2">
+                <select
+                  value={parameterValues[param.name] || ''}
+                  onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select blueprint ID or enter custom...</option>
+                  {Object.entries(sampleValues.blueprintid).map(([name, id]) => (
+                    <option key={name} value={id}>
+                      {name.replace('_', ' ').toUpperCase()} ({id.slice(0, 8)}...)
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={parameterValues[param.name] || ''}
+                  onChange={(e) => updateParameterValue(param.name, e.target.value)}
+                  placeholder={param.placeholder}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  maxLength={64}
+                  pattern="[0-9a-fA-F]{64}"
+                  title="Enter exactly 64 hexadecimal characters (0-9, a-f, A-F)"
+                />
+              </div>
             ) : (
               <input
-                type={param.type === 'int' || param.type === 'float' ? 'number' : 'text'}
+                type={
+                  param.type === 'int' || param.type === 'amount' || param.type === 'timestamp' 
+                    ? 'number' 
+                    : param.type === 'float' 
+                      ? 'number' 
+                      : 'text'
+                }
                 value={parameterValues[param.name] || ''}
                 onChange={(e) => updateParameterValue(param.name, e.target.value)}
                 placeholder={param.placeholder}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                step={param.type === 'float' ? '0.1' : undefined}
+                step={param.type === 'float' ? '0.1' : param.type === 'amount' || param.type === 'timestamp' ? '1' : undefined}
+                min={param.type === 'amount' || param.type === 'timestamp' ? '0' : undefined}
+                maxLength={
+                  param.type === 'tokenuid' || param.type === 'contractid' || param.type === 'blueprintid' || param.type === 'vertexid' 
+                    ? 64 
+                    : undefined
+                }
+                pattern={
+                  param.type === 'tokenuid' || param.type === 'contractid' || param.type === 'blueprintid' || param.type === 'vertexid' 
+                    ? '[0-9a-fA-F]{64}' 
+                    : param.type === 'hex'
+                      ? '[0-9a-fA-F]*'
+                      : undefined
+                }
+                title={
+                  param.type === 'tokenuid' || param.type === 'contractid' || param.type === 'blueprintid' || param.type === 'vertexid' 
+                    ? 'Enter exactly 64 hexadecimal characters (0-9, a-f, A-F)'
+                    : param.type === 'hex'
+                      ? 'Enter hexadecimal characters (0-9, a-f, A-F)'
+                      : param.type === 'amount'
+                        ? 'Enter amount where last 2 digits represent decimals (e.g., 1025 = 10.25 tokens)'
+                        : param.type === 'timestamp'
+                          ? 'Enter Unix timestamp in seconds'
+                          : undefined
+                }
               />
             )}
           </div>
