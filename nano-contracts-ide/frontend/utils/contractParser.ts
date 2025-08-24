@@ -146,7 +146,7 @@ function parseMethodParameters(paramsString: string, decorator: 'public' | 'view
       
       // Handle different Hathor SDK types
       if (mappedType === 'address') {
-        description = `Address for ${name.replace(/_/g, ' ')} (20 bytes)`;
+        description = `Address for ${name.replace(/_/g, ' ')} (25 bytes)`;
         placeholder = 'Select from dropdown';
       } else if (mappedType === 'tokenuid') {
         description = `Token UID for ${name.replace(/_/g, ' ')} (32 bytes)`;

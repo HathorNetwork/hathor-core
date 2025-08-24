@@ -46,12 +46,13 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
     setParameterValues(prev => ({ ...prev, [paramName]: value }));
   };
 
-  // Predefined caller addresses for testing (20 bytes = 40 hex characters, all valid hex)
+  // Predefined caller addresses for testing (25 bytes = 50 hex characters for Address)
+  // All addresses must be exactly 50 hex characters (0-9, a-f)
   const callerAddresses = {
-    alice: 'a1b2c3d4e5f6789012345678901234567890abcd',
-    bob: 'b2c3d4e5f67890123456789012345678901abcde',
-    charlie: 'c3d4e5f678901234567890123456789012abcdef',
-    owner: 'f0e1d2c3b4a59876543210987654321098765432',
+    alice: 'a1b2c3d4e5f6789012345678901234567890abcdef12345678',
+    bob: 'b2c3d4e5f67890123456789012345678901abcdef23456789',
+    charlie: 'c3d4e5f678901234567890123456789012abcdef3456789a',
+    owner: 'f0e1d2c3b4a59876543210987654321098765432109876543',
   };
 
   // Predefined sample values for different Hathor SDK types
@@ -163,6 +164,9 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
         method_type: currentMethod?.decorator,
       });
 
+      // Debug log to see what we're getting
+      console.log('Execution result:', result);
+
       if (result.success) {
         addConsoleMessage('success', `✅ Method '${selectedMethod}' executed successfully`);
         
@@ -181,7 +185,25 @@ export const MethodExecutor: React.FC<MethodExecutorProps> = ({ blueprintId }) =
           addConsoleMessage('info', `Gas used: ${result.gas_used}`);
         }
       } else {
-        addConsoleMessage('error', `Method execution failed: ${result.error}`);
+        // Show detailed error message
+        const errorMessage = result.error || 'Unknown error occurred';
+        addConsoleMessage('error', `❌ Method execution failed:`);
+        
+        // Parse and display error details
+        if (errorMessage.includes('AttributeError')) {
+          addConsoleMessage('error', `  → ${errorMessage}`);
+          if (errorMessage.includes('cannot set a container field')) {
+            addConsoleMessage('warning', '  💡 Hint: Container fields (dict, list, set) are auto-initialized. Remove assignments like self.balances = {}');
+          } else if (errorMessage.includes("'Context' object has no attribute 'address'")) {
+            addConsoleMessage('warning', '  💡 Hint: Use ctx.vertex.hash instead of ctx.address for caller identity');
+          }
+        } else if (errorMessage.includes('ValueError')) {
+          addConsoleMessage('error', `  → ${errorMessage}`);
+        } else if (errorMessage.includes('TypeError')) {
+          addConsoleMessage('error', `  → ${errorMessage}`);
+        } else {
+          addConsoleMessage('error', `  → ${errorMessage}`);
+        }
       }
     } catch (error: any) {
       addConsoleMessage('error', `Execution error: ${error.message || error}`);

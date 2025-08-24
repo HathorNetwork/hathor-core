@@ -104,7 +104,7 @@ CORE HATHOR KNOWLEDGE:
 - Contract state is defined as class attributes with type hints
 
 BLUEPRINT SDK TYPE SYSTEM:
-- Address: bytes (20 bytes wallet address)
+- Address: bytes (25 bytes wallet address in Hathor)
 - Amount: int (token amounts, last 2 digits are decimals, e.g., 1025 = 10.25 tokens)
 - BlueprintId: bytes (32 bytes blueprint identifier)
 - ContractId: bytes (32 bytes contract identifier)
@@ -206,7 +206,7 @@ KEY PATTERNS:
 - @view methods should NOT have ctx parameter
 - Initialize all state variables in the initialize method
 - Use ctx.vertex.hash to get caller address (this is the standard way)
-- Use bytes type for addresses (20 bytes), contracts (32 bytes), tokens (32 bytes)
+- Use bytes type for addresses (25 bytes), contracts (32 bytes), tokens (32 bytes)
 - Container types must be fully parameterized: dict[str, int], list[Address], etc.
 - Always validate inputs and handle edge cases
 - Multi-token balances controlled by Hathor engine, not direct contract code

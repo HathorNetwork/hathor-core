@@ -118,7 +118,7 @@ A simple DEX liquidity pool for token swapping with proper Hathor constraints
 """
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public, view, TokenUid, Address, Amount
+from hathor.nanocontracts.types import public, view, TokenUid, VertexId, Amount
 
 
 class LiquidityPool(Blueprint):
@@ -130,7 +130,7 @@ class LiquidityPool(Blueprint):
     # Contract state - all fields must be initialized in initialize()
     token_a: TokenUid
     token_b: TokenUid
-    owner: Address
+    owner: VertexId  # Using VertexId instead of Address for IDE compatibility
     fee_rate: int
     total_liquidity: Amount
     
@@ -139,7 +139,7 @@ class LiquidityPool(Blueprint):
         """Initialize the liquidity pool contract"""
         self.token_a = token_a
         self.token_b = token_b
-        self.owner = ctx.vertex.hash
+        self.owner = ctx.vertex.hash  # This is a 32-byte VertexId
         self.fee_rate = fee_rate  # Fee in basis points (e.g., 30 = 0.3%)
         self.total_liquidity = 0
     
@@ -149,8 +149,8 @@ class LiquidityPool(Blueprint):
         return (self.token_a, self.token_b)
     
     @view
-    def get_owner(self) -> Address:
-        """Get contract owner address"""
+    def get_owner(self) -> VertexId:
+        """Get contract owner ID"""
         return self.owner
     
     @view

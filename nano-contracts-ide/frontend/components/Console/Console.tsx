@@ -85,7 +85,7 @@ export const Console: React.FC = () => {
                   [{formatTime(msg.timestamp)}]
                 </span>
                 {getIcon(msg.type)}
-                <span className={clsx('flex-1 break-all', getMessageClass(msg.type))}>
+                <span className={clsx('flex-1 break-all whitespace-pre-wrap', getMessageClass(msg.type))}>
                   {msg.message}
                 </span>
               </div>

@@ -63,6 +63,12 @@ export function IDE() {
         return;
       }
 
+      // Debug: Log the contract code being sent
+      console.log('Compiling contract:', activeFile.name);
+      console.log('Contract content preview:', activeFile.content.substring(0, 200));
+      console.log('Contains "Address":', activeFile.content.includes('Address'));
+      console.log('Contains "VertexId":', activeFile.content.includes('VertexId'));
+      
       // Compile the contract
       const result = await contractsApi.compile({
         code: activeFile.content,

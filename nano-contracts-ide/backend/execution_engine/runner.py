@@ -271,11 +271,18 @@ class ContractRunner:
             # Use provided caller address or generate a default one
             if caller_address:
                 # Convert hex string to bytes for the caller
+                logger.info(f"Caller address input: {caller_address} (length: {len(caller_address)})")
+                # If it's 64 hex chars (32 bytes), truncate to 50 chars (25 bytes) for Address
+                if len(caller_address) == 64:
+                    caller_address = caller_address[:50]  # Take first 25 bytes (50 hex chars)
                 caller_hash = bytes.fromhex(caller_address)
+                logger.info(f"Final caller hash: {caller_hash.hex()} (length: {len(caller_hash)} bytes)")
             else:
-                # Generate a default caller hash
+                # Generate a default caller hash (25 bytes for Address)
                 caller_input = b'default_caller_' + contract_id.encode('utf-8')
-                caller_hash = hashlib.sha256(caller_input).digest()
+                full_hash = hashlib.sha256(caller_input).digest()
+                caller_hash = full_hash[:25]  # Take first 25 bytes for Address
+                logger.info(f"Generated caller hash: {caller_hash.hex()} (length: {len(caller_hash)} bytes)")
 
             mock_tx.hash = caller_hash
             vertex_data = VertexData.create_from_vertex(mock_tx)
@@ -311,7 +318,7 @@ class ContractRunner:
                         if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
                             # This looks like a hex string, convert to bytes
                             # Handle different Hathor SDK types:
-                            # - Address: 40 hex chars (20 bytes)
+                            # - Address: 50 hex chars (25 bytes)
                             # - TokenUid, ContractId, BlueprintId, VertexId: 64 hex chars (32 bytes)
                             converted_args.append(bytes.fromhex(arg))
                             logger.info(f"Converted hex string {arg} ({len(arg)} chars -> {len(arg)//2} bytes) to bytes")
@@ -330,8 +337,11 @@ class ContractRunner:
                         logger.info(
                             f"Success creating contract, result: {result}")
                     except Exception as e:
-                        logger.error(f"Contract creation failed: {str(e)}", exc_info=True)
-                        raise e
+                        import traceback
+                        error_details = traceback.format_exc()
+                        logger.error(f"Contract creation failed: {str(e)}\n{error_details}")
+                        # Include the full error details in the raised exception
+                        raise Exception(f"{str(e)}\n{error_details}")
                 else:
                     # Use provided method_type instead of auto-detection
                     is_view_method = method_type == 'view'
@@ -347,7 +357,7 @@ class ContractRunner:
                             if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
                                 # This looks like a hex string, convert to bytes
                                 # Handle different Hathor SDK types:
-                                # - Address: 40 hex chars (20 bytes)
+                                # - Address: 50 hex chars (25 bytes)
                                 # - TokenUid, ContractId, BlueprintId, VertexId: 64 hex chars (32 bytes)
                                 converted_args.append(bytes.fromhex(arg))
                                 logger.info(f"Converted hex string {arg} ({len(arg)} chars -> {len(arg)//2} bytes) to bytes")
@@ -362,8 +372,10 @@ class ContractRunner:
                             )
                             logger.info(f"View method result: {result}")
                         except Exception as e:
-                            logger.error(f"View method failed: {str(e)}", exc_info=True)
-                            raise e
+                            import traceback
+                            error_details = traceback.format_exc()
+                            logger.error(f"View method failed: {str(e)}\n{error_details}")
+                            raise Exception(f"{str(e)}\n{error_details}")
                     else:
                         # Call public method
                         logger.info(f"Calling public method {method_name} with args: {args}")
@@ -374,7 +386,7 @@ class ContractRunner:
                             if isinstance(arg, str) and len(arg) >= 2 and all(c in '0123456789abcdefABCDEF' for c in arg):
                                 # This looks like a hex string, convert to bytes
                                 # Handle different Hathor SDK types:
-                                # - Address: 40 hex chars (20 bytes)
+                                # - Address: 50 hex chars (25 bytes)
                                 # - TokenUid, ContractId, BlueprintId, VertexId: 64 hex chars (32 bytes)
                                 converted_args.append(bytes.fromhex(arg))
                                 logger.info(f"Converted hex string {arg} ({len(arg)} chars -> {len(arg)//2} bytes) to bytes")
@@ -390,8 +402,10 @@ class ContractRunner:
                             )
                             logger.info(f"Public method result: {result}")
                         except Exception as e:
-                            logger.error(f"Public method failed: {str(e)}", exc_info=True)
-                            raise e
+                            import traceback
+                            error_details = traceback.format_exc()
+                            logger.error(f"Public method failed: {str(e)}\n{error_details}")
+                            raise Exception(f"{str(e)}\n{error_details}")
 
                 # For initialize method, return the contract ID that was created
                 if method_name == "initialize":
@@ -415,11 +429,30 @@ class ContractRunner:
                     )
 
             except NCFail as e:
-                logger.warning(
-                    "Contract execution failed with NCFail", error=str(e))
+                # NCFail contains the actual error from the nano contract execution
+                import traceback
+                error_msg = str(e)
+                
+                # Extract the actual error from NCFail if it contains one
+                if hasattr(e, '__cause__') and e.__cause__:
+                    error_msg = f"{error_msg}\nCaused by: {str(e.__cause__)}"
+                
+                # Get the full traceback for debugging
+                error_details = traceback.format_exc()
+                
+                # Extract the most relevant error info
+                if "AttributeError" in error_details:
+                    # Find the AttributeError line
+                    for line in error_details.split('\n'):
+                        if 'AttributeError:' in line:
+                            error_msg = line.strip()
+                            break
+                
+                logger.warning(f"Contract execution failed with NCFail: {error_msg}")
+                
                 return ExecutionResult(
                     success=False,
-                    error=f"Contract execution failed: {str(e)}"
+                    error=error_msg
                 )
             except Exception as e:
                 logger.error("Contract execution failed",
