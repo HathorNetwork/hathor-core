@@ -255,3 +255,9 @@ class BlueprintEnvironment:
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:
         """Change the blueprint of this contract."""
         self.__runner.syscall_change_blueprint(blueprint_id)
+
+    @final
+    def get_contract(self, contract_id: ContractId) -> Any:
+        """Get a contract accessor for the given contract ID."""
+        from hathor.nanocontracts.contract_accessor import ContractAccessor
+        return ContractAccessor(runner=self.__runner, contract_id=contract_id)
