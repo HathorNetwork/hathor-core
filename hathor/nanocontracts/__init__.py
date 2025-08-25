@@ -15,6 +15,7 @@
 from hathor.conf import settings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
+from hathor.nanocontracts.contract_accessor import get_contract
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
 from hathor.nanocontracts.runner import Runner
@@ -40,4 +41,5 @@ __all__ = [
     'view',
     'NC_EXECUTION_FAIL_ID',
     'HATHOR_TOKEN_UID',
+    'get_contract',
 ]

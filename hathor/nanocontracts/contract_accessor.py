@@ -14,10 +14,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence, assert_never, final
+from typing import TYPE_CHECKING, Any, Callable, Sequence, assert_never, final
 
 from hathor.nanocontracts.blueprint import NC_FIELDS_ATTR
 from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__
+from hathor.nanocontracts.lazy_import import LazyImport
 from hathor.nanocontracts.types import (
     NC_FALLBACK_METHOD,
     NC_INITIALIZE_METHOD,
@@ -32,6 +33,16 @@ if TYPE_CHECKING:
 
 
 _FORBIDDEN_METHODS = frozenset({NC_INITIALIZE_METHOD, NC_FALLBACK_METHOD})
+
+
+def create_get_contract(runner: Runner) -> Callable[[ContractId], Any]:
+    def get_contract(contract_id: ContractId) -> Any:
+        """Get a contract accessor for the given contract ID."""
+        return ContractAccessor(runner=runner, contract_id=contract_id)
+    return get_contract
+
+
+get_contract = LazyImport('get_contract', create_get_contract)
 
 
 @final
