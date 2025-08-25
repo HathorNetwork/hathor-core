@@ -36,6 +36,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
     'hathor.nanocontracts': dict(
         Blueprint=nc.Blueprint,
         HATHOR_TOKEN_UID=nc.HATHOR_TOKEN_UID,
+        get_contract=nc.contract_accessor.get_contract,
     ),
     'hathor.nanocontracts.blueprint': dict(Blueprint=nc.Blueprint),
     'hathor.nanocontracts.context': dict(Context=nc.Context),
