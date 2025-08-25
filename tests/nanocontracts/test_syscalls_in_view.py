@@ -114,6 +114,10 @@ class MyBlueprint(Blueprint):
     def change_blueprint(self) -> None:
         self.syscall.change_blueprint(BlueprintId(VertexId(b'')))
 
+    @view
+    def get_contract(self) -> None:
+        self.syscall.get_contract(ContractId(b''), blueprint_id=None)
+
 
 class TestSyscallsInView(BlueprintTestCase):
     def setUp(self) -> None:
@@ -151,6 +155,7 @@ class TestSyscallsInView(BlueprintTestCase):
             'can_melt',
             'can_melt_before_current_call',
             'call_view_method',
+            'get_contract'
         }
 
         for method_name, method in BlueprintEnvironment.__dict__.items():
