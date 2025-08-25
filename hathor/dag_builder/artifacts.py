@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Sequence, TypeVar
 
 from hathor.dag_builder.types import DAGNode
 from hathor.manager import HathorManager
@@ -49,9 +49,9 @@ class DAGArtifacts:
         assert isinstance(vertex, type_)
         return vertex
 
-    def get_typed_vertices(self, names: list[str], type_: type[T]) -> list[T]:
+    def get_typed_vertices(self, names: Sequence[str], type_: type[T]) -> Sequence[T]:
         """Get a list of vertices by name, asserting they are of the provided type."""
-        return [self.get_typed_vertex(name, type_) for name in names]
+        return tuple(self.get_typed_vertex(name, type_) for name in names)
 
     def propagate_with(self, manager: HathorManager, *, up_to: str | None = None) -> None:
         """

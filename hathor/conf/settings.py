@@ -31,7 +31,7 @@ DECIMAL_PLACES = 2
 GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
 GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
 
-HATHOR_TOKEN_UID = b'\x00'
+HATHOR_TOKEN_UID: bytes = b'\x00'
 
 
 @unique
@@ -469,7 +469,7 @@ class HathorSettings(NamedTuple):
     ENABLE_NANO_CONTRACTS: NanoContractsSetting = NanoContractsSetting.DISABLED
 
     # List of enabled blueprints.
-    BLUEPRINTS: dict[bytes, 'str'] = {}
+    BLUEPRINTS: dict[bytes, str] = {}
 
     # The consensus algorithm protocol settings.
     CONSENSUS_ALGORITHM: ConsensusSettings = PowSettings()
