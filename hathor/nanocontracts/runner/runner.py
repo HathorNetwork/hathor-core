@@ -310,6 +310,7 @@ class Runner:
         actions: Sequence[NCAction],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
+        forbid_fallback: bool,
     ) -> Any:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         if method_name == NC_INITIALIZE_METHOD:
@@ -329,6 +330,7 @@ class Runner:
             method_name=method_name,
             actions=actions,
             nc_args=nc_args,
+            forbid_fallback=forbid_fallback,
         )
 
     @_forbid_syscall_from_view('proxy_call_public_method')
@@ -385,6 +387,7 @@ class Runner:
         actions: Sequence[NCAction],
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
+        forbid_fallback: bool = False,
     ) -> Any:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
@@ -425,6 +428,7 @@ class Runner:
             ctx=ctx,
             nc_args=nc_args,
             skip_reentrancy_validation=skip_reentrancy_validation,
+            forbid_fallback=forbid_fallback,
         )
 
     def _reset_all_change_trackers(self) -> None:
@@ -534,6 +538,7 @@ class Runner:
         ctx: Context,
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
+        forbid_fallback: bool = False,
     ) -> Any:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
@@ -551,6 +556,8 @@ class Runner:
         args: tuple[Any, ...]
         if method is None:
             assert method_name != NC_INITIALIZE_METHOD
+            if forbid_fallback:
+                raise NCMethodNotFound(f'method `{method_name}` not found and fallback is forbidden')
             fallback_method = getattr(blueprint, NC_FALLBACK_METHOD, None)
             if fallback_method is None:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
@@ -705,7 +712,7 @@ class Runner:
         if method is None:
             raise NCMethodNotFound(method_name)
         if not is_nc_view_method(method):
-            raise NCInvalidMethodCall('not a view method')
+            raise NCInvalidMethodCall(f'`{method_name}` is not a view method')
 
         parser = Method.from_callable(method)
         args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
