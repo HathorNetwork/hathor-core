@@ -5,8 +5,10 @@ from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Context
+from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.lazy_import import LazyImport
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
@@ -37,9 +39,19 @@ class BlueprintTestCase(unittest.TestCase):
 
         self._token_index = 1
 
+        self._prepare_lazy_imports()
+
     def build_manager(self) -> HathorManager:
         """Create a HathorManager instance."""
         return self.create_peer('unittests', nc_indexes=True, nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+
+    def _prepare_lazy_imports(self) -> None:
+        """Setup lazy imports, instantiating them with the test runner."""
+        for imports in ALLOWED_IMPORTS.values():
+            for import_value in imports.values():
+                if isinstance(import_value, LazyImport):
+                    # We set the internal attribute here because this attribute is supposed to be used only by tests.
+                    import_value._LazyImport__runner = self.runner  # type: ignore[attr-defined]
 
     def get_readonly_contract(self, contract_id: ContractId) -> Blueprint:
         """ Returns a read-only instance of a given contract to help testing it.
@@ -117,7 +129,7 @@ class BlueprintTestCase(unittest.TestCase):
             verifier = OnChainBlueprintVerifier(settings=self._settings)
             verifier.verify_code(ocb)
 
-        blueprint_class = ocb.get_blueprint_class()
+        blueprint_class = ocb.get_blueprint_class(runner=self.runner)
         if inject_in_class is not None:
             for key, value in inject_in_class.items():
                 setattr(blueprint_class, key, value)

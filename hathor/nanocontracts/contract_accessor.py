@@ -14,13 +14,37 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Collection, Sequence, final
+from typing import TYPE_CHECKING, Any, Collection, Protocol, Sequence, final
 
 from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__
+from hathor.nanocontracts.lazy_import import LazyImport
 from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
 
 if TYPE_CHECKING:
     from hathor.nanocontracts import Runner
+
+
+class GetContractCallable(Protocol):
+    def __call__(self, contract_id: ContractId, *, blueprint_id: BlueprintId | Collection[BlueprintId] | None) -> Any:
+        ...
+
+
+def create_get_contract(runner: Runner) -> GetContractCallable:
+    def get_contract(contract_id: ContractId, *, blueprint_id: BlueprintId | Collection[BlueprintId] | None) -> Any:
+        """
+        Get a contract accessor for the given contract ID.
+
+        Args:
+            contract_id: the ID of the contract.
+            blueprint_id: the expected blueprint ID of the contract, or a collection of accepted blueprints,
+                or None if any blueprint is accepted.
+
+        """
+        return ContractAccessor(runner=runner, contract_id=contract_id, blueprint_id=blueprint_id)
+    return get_contract
+
+
+get_contract = LazyImport('get_contract', create_get_contract)
 
 
 @final

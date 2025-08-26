@@ -53,7 +53,7 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
-    from hathor.nanocontracts import OnChainBlueprint
+    from hathor.nanocontracts import OnChainBlueprint, Runner
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
@@ -1184,7 +1184,7 @@ class TransactionStorage(ABC):
             assert module is not None
             return inspect.getsource(module)
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+    def get_blueprint_class(self, blueprint_id: BlueprintId, *, runner: Runner | None = None) -> type[Blueprint]:
         """Returns the blueprint class associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
@@ -1192,7 +1192,7 @@ class TransactionStorage(ABC):
         from hathor.nanocontracts import OnChainBlueprint
         blueprint = self._get_blueprint(blueprint_id)
         if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
+            return blueprint.get_blueprint_class(runner=runner)
         else:
             return blueprint
 

@@ -36,6 +36,7 @@ from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpac
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts import Runner
     from hathor.nanocontracts.storage import NCContractStorage  # noqa: F401
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
@@ -193,14 +194,14 @@ class OnChainBlueprint(Transaction):
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
         return blueprint_id_from_bytes(self.hash)
 
-    def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
+    def _load_blueprint_code_exec(self, *, runner: Runner | None) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
         from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
         fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
         memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
         metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
         try:
-            env = metered_executor.exec(self.code.text)
+            env = metered_executor.exec(self.code.text, runner=runner)
         except OutOfFuelError as e:
             self.log.error('loading blueprint module failed, fuel limit exceeded')
             raise OCBOutOfFuelDuringLoading from e
@@ -210,10 +211,11 @@ class OnChainBlueprint(Transaction):
         blueprint_class = env[BLUEPRINT_CLASS_NAME]
         return blueprint_class, env
 
-    def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
+    def _load_blueprint_code(self, *, runner: Runner | None) -> tuple[type[Blueprint], dict[str, object]]:
         """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
-        if self._blueprint_loaded_env is None:
-            blueprint_class, env = self._load_blueprint_code_exec()
+        # We need to reload the env when a runner is used, because it means we're executing on a new runtime.
+        if self._blueprint_loaded_env is None or runner is not None:
+            blueprint_class, env = self._load_blueprint_code_exec(runner=runner)
             assert isinstance(blueprint_class, type)
             assert issubclass(blueprint_class, Blueprint)
             self._blueprint_loaded_env = blueprint_class, env
@@ -221,12 +223,12 @@ class OnChainBlueprint(Transaction):
 
     def get_blueprint_object_bypass(self) -> object:
         """Loads the code and returns the object defined in __blueprint__"""
-        blueprint_class, _ = self._load_blueprint_code_exec()
+        blueprint_class, _ = self._load_blueprint_code_exec(runner=None)
         return blueprint_class
 
-    def get_blueprint_class(self) -> type[Blueprint]:
+    def get_blueprint_class(self, *, runner: Runner | None = None) -> type[Blueprint]:
         """Returns the blueprint class, loads and executes the code as needed."""
-        blueprint_class, _ = self._load_blueprint_code()
+        blueprint_class, _ = self._load_blueprint_code(runner=runner)
         return blueprint_class
 
     def serialize_code(self) -> bytes:
