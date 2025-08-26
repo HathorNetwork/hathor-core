@@ -137,7 +137,7 @@ class TestExecutionOrder(BlueprintTestCase):
         self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(action), self.token_a)
 
     def _get_context(self, *actions: NCAction) -> Context:
-        return Context(
+        return self.create_context(
             actions=list(actions),
             vertex=self.tx,
             caller_id=self.address,

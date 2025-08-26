@@ -181,7 +181,7 @@ class Runner:
         assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
 
         context = nano_header.get_context()
-        assert context.vertex.block.hash == vertex_metadata.first_block
+        assert context.block.hash == vertex_metadata.first_block
 
         nc_args = NCRawArgs(nano_header.nc_args_bytes)
         if nano_header.is_creating_a_new_contract():
@@ -413,10 +413,10 @@ class Runner:
 
         # Call the other contract method.
         ctx = Context(
-            actions=actions,
-            vertex=first_ctx.vertex,
             caller_id=last_call_record.contract_id,
-            timestamp=first_ctx.timestamp,
+            vertex_data=first_ctx.vertex,
+            block_data=first_ctx.block,
+            actions=Context.__group_actions__(actions),
         )
         return self._execute_public_method_call(
             contract_id=contract_id,
