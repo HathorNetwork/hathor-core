@@ -150,6 +150,14 @@ class Context:
                 assert_never(self.caller_id)
 
     @property
+    def timestamp(self) -> int:
+        """
+        Get the timestamp of the block executing the nano transaction.
+        DEPRECATED: Use `ctx.block.timestamp` instead.
+        """
+        return self.block.timestamp
+
+    @property
     def actions(self) -> MappingProxyType[TokenUid, tuple[NCAction, ...]]:
         """Get a mapping of actions per token."""
         return self.__actions
@@ -189,6 +197,7 @@ class Context:
         return {
             'actions': [action.to_json() for action in self.__all_actions__],
             'caller_id': caller_id,
+            'timestamp': self.__block.timestamp if self.__block is not None else None,
             # XXX: Deprecated attribute
             'address': caller_id,
         }
