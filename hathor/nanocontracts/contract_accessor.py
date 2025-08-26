@@ -29,7 +29,7 @@ class ContractAccessor(FauxImmutable):
     This class represents a "proxy contract instance", or a contract accessor, during a blueprint method execution.
     Calling custom blueprint methods on this class will forward the call to the actual wrapped blueprint via syscalls.
     """
-    __slots__ = ('__runner', '__contract_id', '__blueprint_id')
+    __slots__ = ('__runner', '__contract_id', '__blueprint_ids')
 
     def __init__(
         self,
@@ -40,24 +40,33 @@ class ContractAccessor(FauxImmutable):
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
-        self.__blueprint_id: BlueprintId | Collection[BlueprintId] | None
+        self.__blueprint_ids: frozenset[BlueprintId] | None
+
+        blueprint_ids: frozenset[BlueprintId] | None
+        match blueprint_id:
+            case None:
+                blueprint_ids = None
+            case bytes():
+                blueprint_ids = frozenset({blueprint_id})
+            case _:
+                blueprint_ids = frozenset(blueprint_id)
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
-        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+        __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
 
     def prepare_view_call(self) -> Any:
         return PreparedViewCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
-            blueprint_id=self.__blueprint_id,
+            blueprint_ids=self.__blueprint_ids,
         )
 
     def prepare_public_call(self, *actions: NCAction, forbid_fallback: bool = False) -> Any:
         return PreparedPublicCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
-            blueprint_id=self.__blueprint_id,
+            blueprint_ids=self.__blueprint_ids,
             actions=actions,
             forbid_fallback=forbid_fallback,
         )
@@ -65,7 +74,7 @@ class ContractAccessor(FauxImmutable):
 
 @final
 class PreparedViewCall(FauxImmutable):
-    __slots__ = ('__runner', '__contract_id', '__blueprint_id')
+    __slots__ = ('__runner', '__contract_id', '__blueprint_ids')
     __skip_faux_immutability_validation__ = True  # Needed to implement __getattr__
 
     def __init__(
@@ -73,28 +82,28 @@ class PreparedViewCall(FauxImmutable):
         *,
         runner: Runner,
         contract_id: ContractId,
-        blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+        blueprint_ids: frozenset[BlueprintId] | None,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
-        self.__blueprint_id: BlueprintId
+        self.__blueprint_ids: frozenset[BlueprintId] | None
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
-        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+        __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
 
     def __getattr__(self, method_name: str) -> ViewMethodAccessor:
         return ViewMethodAccessor(
             runner=self.__runner,
             contract_id=self.__contract_id,
-            blueprint_id=self.__blueprint_id,
+            blueprint_ids=self.__blueprint_ids,
             method_name=method_name,
         )
 
 
 @final
 class PreparedPublicCall(FauxImmutable):
-    __slots__ = ('__runner', '__contract_id', '__blueprint_id', '__actions', '__forbid_fallback', '__is_dirty')
+    __slots__ = ('__runner', '__contract_id', '__blueprint_ids', '__actions', '__forbid_fallback', '__is_dirty')
     __skip_faux_immutability_validation__ = True  # Needed to implement __getattr__
 
     def __init__(
@@ -102,20 +111,20 @@ class PreparedPublicCall(FauxImmutable):
         *,
         runner: Runner,
         contract_id: ContractId,
-        blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+        blueprint_ids: frozenset[BlueprintId] | None,
         actions: Sequence[NCAction],
         forbid_fallback: bool,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
-        self.__blueprint_id: BlueprintId
+        self.__blueprint_ids: frozenset[BlueprintId] | None
         self.__actions: Sequence[NCAction]
         self.__forbid_fallback: bool
         self.__is_dirty: bool
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
-        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+        __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
         __set_faux_immutable__(self, '__actions', actions)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
@@ -133,7 +142,7 @@ class PreparedPublicCall(FauxImmutable):
         return PublicMethodAccessor(
             runner=self.__runner,
             contract_id=self.__contract_id,
-            blueprint_id=self.__blueprint_id,
+            blueprint_ids=self.__blueprint_ids,
             method_name=method_name,
             actions=self.__actions,
             forbid_fallback=self.__forbid_fallback,
@@ -147,31 +156,31 @@ class ViewMethodAccessor(FauxImmutable):
     It's a callable that will forward the call to the actual wrapped blueprint via syscall.
     It may be used multiple times to call the same method with different arguments.
     """
-    __slots__ = ('__runner', '__contract_id', '__blueprint_id', '__method_name')
+    __slots__ = ('__runner', '__contract_id', '__blueprint_ids', '__method_name')
 
     def __init__(
         self,
         *,
         runner: Runner,
         contract_id: ContractId,
-        blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+        blueprint_ids: frozenset[BlueprintId] | None,
         method_name: str,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
-        self.__blueprint_id: BlueprintId
+        self.__blueprint_ids: frozenset[BlueprintId] | None
         self.__method_name: str
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
-        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+        __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
         __set_faux_immutable__(self, '__method_name', method_name)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         validate_blueprint_id(
             runner=self.__runner,
             contract_id=self.__contract_id,
-            expected_blueprint_id=self.__blueprint_id,
+            blueprint_ids=self.__blueprint_ids,
         )
 
         return self.__runner.syscall_call_another_contract_view_method(
@@ -192,7 +201,7 @@ class PublicMethodAccessor(FauxImmutable):
     __slots__ = (
         '__runner',
         '__contract_id',
-        '__blueprint_id',
+        '__blueprint_ids',
         '__method_name',
         '__actions',
         '__forbid_fallback',
@@ -204,14 +213,14 @@ class PublicMethodAccessor(FauxImmutable):
         *,
         runner: Runner,
         contract_id: ContractId,
-        blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+        blueprint_ids: frozenset[BlueprintId] | None,
         method_name: str,
         actions: Sequence[NCAction],
         forbid_fallback: bool,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
-        self.__blueprint_id: BlueprintId
+        self.__blueprint_ids: frozenset[BlueprintId] | None
         self.__method_name: str
         self.__actions: Sequence[NCAction]
         self.__forbid_fallback: bool
@@ -219,7 +228,7 @@ class PublicMethodAccessor(FauxImmutable):
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
-        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+        __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
         __set_faux_immutable__(self, '__method_name', method_name)
         __set_faux_immutable__(self, '__actions', actions)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
@@ -238,7 +247,7 @@ class PublicMethodAccessor(FauxImmutable):
         validate_blueprint_id(
             runner=self.__runner,
             contract_id=self.__contract_id,
-            expected_blueprint_id=self.__blueprint_id,
+            blueprint_ids=self.__blueprint_ids,
         )
 
         return self.__runner.syscall_call_another_contract_public_method(
@@ -255,25 +264,16 @@ def validate_blueprint_id(
     *,
     runner: Runner,
     contract_id: ContractId,
-    expected_blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+    blueprint_ids: frozenset[BlueprintId] | None,
 ) -> None:
     """Check whether the blueprint id of a contract matches the expected id(s), raise an exception otherwise."""
-    if expected_blueprint_id is None:
+    if blueprint_ids is None:
         return
 
-    from hathor.nanocontracts import NCFail
     blueprint_id = runner.get_blueprint_id(contract_id)
-
-    if isinstance(expected_blueprint_id, bytes):
-        if blueprint_id != expected_blueprint_id:
-            raise NCFail(
-                f'expected blueprint `{expected_blueprint_id.hex()}`, '
-                f'got `{blueprint_id.hex()}` for contract `{contract_id.hex()}`'
-            )
-
-    if blueprint_id not in expected_blueprint_id:
-        # not sure why mypy thinks bp may be an int
-        expected = tuple(bp.hex() for bp in expected_blueprint_id)  # type: ignore[union-attr]
+    if blueprint_id not in blueprint_ids:
+        from hathor.nanocontracts import NCFail
+        expected = tuple(sorted(bp.hex() for bp in blueprint_ids))
         raise NCFail(
             f'expected blueprint to be one of `{expected}`, '
             f'got `{blueprint_id.hex()}` for contract `{contract_id.hex()}`'

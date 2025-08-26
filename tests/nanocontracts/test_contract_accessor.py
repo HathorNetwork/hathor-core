@@ -139,7 +139,7 @@ class TestContractAccessor(BlueprintTestCase):
     def test_view_allow_single_blueprint_invalid(self) -> None:
         blueprint_id = b'\x11' * 32
         msg = (
-            f'expected blueprint `{blueprint_id.hex()}`, '
+            f"expected blueprint to be one of `('{blueprint_id.hex()}',)`, "
             f'got `{self.blueprint_id.hex()}` for contract `{self.contract_id2.hex()}`'
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
@@ -181,7 +181,7 @@ class TestContractAccessor(BlueprintTestCase):
     def test_public_allow_single_blueprint_invalid(self) -> None:
         blueprint_id = b'\x11' * 32
         msg = (
-            f'expected blueprint `{blueprint_id.hex()}`, '
+            f"expected blueprint to be one of `('{blueprint_id.hex()}',)`, "
             f'got `{self.blueprint_id.hex()}` for contract `{self.contract_id2.hex()}`'
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
