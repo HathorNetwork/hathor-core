@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.nanocontracts import Blueprint, Context, NCFail, public
+from hathor.nanocontracts import Blueprint, Context, NCFail, get_contract, public
 from hathor.nanocontracts.types import ContractId, NCArgs, fallback, view
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
@@ -42,37 +42,37 @@ class MyBlueprint(Blueprint):
 
     @public
     def call_public_wrong_arg_type(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_public_call() \
             .public_method('abc')
 
     @public
     def call_public_wrong_kwarg_type(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_public_call() \
             .public_method(a='abc')
 
     @public
     def call_public_wrong_return_type(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_public_call() \
             .public_method_wrong_return_type()
 
     @view
     def call_view_wrong_arg_type(self, other_id: ContractId) -> None:
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_view_call() \
             .view_method('abc')
 
     @view
     def call_view_wrong_kwarg_type(self, other_id: ContractId) -> None:
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_view_call() \
             .view_method(a='abc')
 
     @view
     def call_view_wrong_return_type(self, other_id: ContractId) -> None:
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_view_call() \
             .view_method_wrong_return_type()
 
@@ -83,7 +83,7 @@ class MyBlueprint(Blueprint):
     @public
     def call_mutate_list(self, ctx: Context, other_id: ContractId) -> None:
         items = [1, 2, 3]
-        self.syscall.get_contract(other_id, blueprint_id=None) \
+        get_contract(other_id, blueprint_id=None) \
             .prepare_public_call() \
             .mutate_list(items)
         assert items == [1, 2, 3]

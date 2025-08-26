@@ -1015,7 +1015,7 @@ class Runner:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id, runner=self)
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_token')

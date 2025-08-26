@@ -19,7 +19,12 @@ import pytest
 
 from hathor.nanocontracts import HATHOR_TOKEN_UID, NCFail
 from hathor.nanocontracts.types import NCDepositAction
+from hathor.transaction import Transaction
+from hathor.transaction.nc_execution_state import NCExecutionState
+from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.test_blueprint import STR_NC_TYPE
 from tests.nanocontracts.test_blueprints import contract_accessor_blueprint
 
 
@@ -218,3 +223,202 @@ class TestContractAccessor(BlueprintTestCase):
                 other_id=self.contract_id2,
                 name='alice',
             )
+
+    def test_accessor_on_ocb(self) -> None:
+        """
+        We have to make a test for OCB with the DagBuilder because the `get_contract` lazy import
+        is instantiated through different paths for test blueprints, builtin blueprints, and OCBs.
+        """
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..13]
+            b10 < dummy
+
+            ocb.ocb_private_key = "{private_key}"
+            ocb.ocb_password = "{password}"
+            ocb.ocb_code = contract_accessor_blueprint.py, MyBlueprint
+
+            nc1.nc_id = ocb
+            nc1.nc_method = initialize()
+            nc1.nc_deposit = 1000 HTR
+
+            nc2.nc_id = ocb
+            nc2.nc_method = initialize()
+
+            nc3.nc_id = nc1
+            nc3.nc_method = test_simple_public_method(`nc2`, "alice")
+
+            ocb <-- b11
+            nc1 <-- nc2 <-- b12
+            nc2 <-- nc3 <-- b13
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(('nc1', 'nc2', 'nc3'), Transaction)
+
+        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc3.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        storage1 = self.manager.get_best_block_nc_storage(nc1.hash)
+        storage2 = self.manager.get_best_block_nc_storage(nc2.hash)
+
+        assert storage1.get_obj(b'message', STR_NC_TYPE) == 'initialize called'
+        assert storage2.get_obj(b'message', STR_NC_TYPE) == (
+            "hello \"alice\" from simple public method with actions: "
+            "(NCDepositAction(token_uid=b'\\x00', amount=123),)"
+        )
+
+    @pytest.mark.xfail(strict=True, reason='''
+        Support for builtin blueprints with lazy functions is currently not implemented, since it's not a priority
+        while we don't have any builtin blueprints. In order to support it, we must change the NCCatalog to hold
+        blueprint files instead of classes, because the class has to be loaded in runtime, just like OCBs, so we can
+        inject the runner for the lazy imports.
+        This means we have to update the `TransactionStorage.get_blueprint_class` method to pass the Runner to the
+        builtin blueprint class (just like it already does for OCBs). Currently, it jus returns the preloaded class.
+    ''')
+    def test_accessor_on_builtin(self) -> None:
+        """
+        We have to make a test for a builtin blueprint with the DagBuilder because the `get_contract` lazy import
+        is instantiated through different paths for test blueprints, builtin blueprints, and OCBs.
+        """
+        builtin_blueprint_id = self._register_blueprint_class(contract_accessor_blueprint.MyBlueprint)
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..12]
+            b10 < dummy
+
+            nc1.nc_id = "{builtin_blueprint_id.hex()}"
+            nc1.nc_method = initialize()
+            nc1.nc_deposit = 1000 HTR
+
+            nc2.nc_id = "{builtin_blueprint_id.hex()}"
+            nc2.nc_method = initialize()
+
+            nc3.nc_id = nc1
+            nc3.nc_method = test_simple_public_method(`nc2`, "alice")
+
+            nc1 <-- nc2 <-- b11
+            nc2 <-- nc3 <-- b12
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(('nc1', 'nc2', 'nc3'), Transaction)
+
+        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc3.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        storage1 = self.manager.get_best_block_nc_storage(nc1.hash)
+        storage2 = self.manager.get_best_block_nc_storage(nc2.hash)
+
+        assert storage1.get_obj(b'message', STR_NC_TYPE) == 'initialize called'
+        assert storage2.get_obj(b'message', STR_NC_TYPE) == (
+            "hello \"alice\" from simple public method with actions: "
+            "(NCDepositAction(token_uid=b'\\x00', amount=123),)"
+        )
+
+    def test_import_during_runtime(self) -> None:
+        """
+        Make sure that importing `get_contract` during a method call is also supported,
+        that is, not at module-level.
+        """
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..13]
+            b10 < dummy
+
+            ocb.ocb_private_key = "{private_key}"
+            ocb.ocb_password = "{password}"
+
+            nc1.nc_id = ocb
+            nc1.nc_method = initialize(null)
+
+            nc2.nc_id = ocb
+            nc2.nc_method = initialize(`nc1`)
+
+            ocb <-- b11
+            nc1 <-- b12
+            nc1 <-- nc2 <-- b13
+
+            ocb.ocb_code = ```
+                from hathor.nanocontracts import Blueprint
+                from hathor.nanocontracts.context import Context
+                from hathor.nanocontracts.types import public, ContractId
+
+                class MyBlueprint(Blueprint):
+                    message: str
+
+                    @public
+                    def initialize(self, ctx: Context, other_id: ContractId | None) -> None:
+                        self.message = 'initialize called'
+                        if other_id is not None:
+                            from hathor.nanocontracts import get_contract
+                            other = get_contract(other_id, blueprint_id=None)
+                            other.prepare_public_call().public_method()
+
+                    @public
+                    def public_method(self, ctx: Context) -> None:
+                        self.message = 'public_method called'
+
+                __blueprint__ = MyBlueprint
+            ```
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        nc1, nc2 = artifacts.get_typed_vertices(('nc1', 'nc2'), Transaction)
+
+        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        storage1 = self.manager.get_best_block_nc_storage(nc1.hash)
+        storage2 = self.manager.get_best_block_nc_storage(nc2.hash)
+
+        assert storage1.get_obj(b'message', STR_NC_TYPE) == 'public_method called'
+        assert storage2.get_obj(b'message', STR_NC_TYPE) == 'initialize called'
+
+    def test_get_contract_at_module_level(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..12]
+            b10 < dummy
+
+            ocb.ocb_private_key = "{private_key}"
+            ocb.ocb_password = "{password}"
+            tx1 <-- ocb <-- b11
+
+            ocb.ocb_code = ```
+                from hathor.nanocontracts import Blueprint
+                from hathor.nanocontracts.context import Context
+                from hathor.nanocontracts.types import public, ContractId
+                from hathor.nanocontracts import get_contract
+
+                x = get_contract()
+
+                class MyBlueprint(Blueprint):
+                    @public
+                    def initialize(self, ctx: Context) -> None:
+                        pass
+
+                __blueprint__ = MyBlueprint
+            ```
+        ''')
+
+        artifacts.propagate_with(self.manager, up_to='tx1')
+
+        with pytest.raises(Exception) as e:
+            artifacts.propagate_with(self.manager)
+
+        assert isinstance(e.value.__cause__, ImportError)
+        assert e.value.__cause__.args[0] == (
+            '`get_contract` cannot be called without a runtime, probably outside a method call'
+        )
