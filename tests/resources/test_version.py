@@ -1,7 +1,7 @@
 import shutil
 import subprocess
 import tempfile
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -14,7 +14,7 @@ from tests.resources.base_resource import StubSite, _BaseResourceTest
 class VersionTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(VersionResource(self.manager))
+        self.web = StubSite(VersionResource(self.manager, Mock()))
         self.tmp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
