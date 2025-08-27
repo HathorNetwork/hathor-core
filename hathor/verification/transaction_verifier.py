@@ -117,8 +117,6 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
         spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in tx.inputs:
             if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
@@ -126,13 +124,8 @@ class TransactionVerifier:
                     len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
                 ))
 
-            try:
-                spent_tx = tx.get_spent_tx(input_tx)
-                if input_tx.index >= len(spent_tx.outputs):
-                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
-                        input_tx.tx_id.hex(), input_tx.index))
-            except TransactionDoesNotExist:
-                raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
+            spent_tx = tx.get_spent_tx(input_tx)
+            assert input_tx.index < len(spent_tx.outputs)
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
