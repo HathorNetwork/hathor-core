@@ -14,10 +14,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
@@ -274,22 +273,14 @@ class TransactionVerifier:
 
     def verify_version(self, tx: Transaction) -> None:
         """Verify that the vertex version is valid."""
-        from hathor.conf.settings import NanoContractsSetting
+        from hathor.nanocontracts.utils import is_nano_active
         allowed_tx_versions = {
             TxVersion.REGULAR_TRANSACTION,
             TxVersion.TOKEN_CREATION_TRANSACTION,
         }
 
-        match self._settings.ENABLE_NANO_CONTRACTS:
-            case NanoContractsSetting.DISABLED:
-                pass
-            case NanoContractsSetting.ENABLED:
-                allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
-            case NanoContractsSetting.FEATURE_ACTIVATION:
-                if self._feature_service.is_feature_active(vertex=tx, feature=Feature.NANO_CONTRACTS):
-                    allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
-            case _ as unreachable:
-                assert_never(unreachable)
+        if is_nano_active(self._settings, tx, self._feature_service):
+            allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
