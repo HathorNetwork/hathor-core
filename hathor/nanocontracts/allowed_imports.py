@@ -33,7 +33,10 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
     ),
     'collections': dict(OrderedDict=collections.OrderedDict),
     # hathor
-    'hathor.nanocontracts': dict(Blueprint=nc.Blueprint),
+    'hathor.nanocontracts': dict(
+        Blueprint=nc.Blueprint,
+        HATHOR_TOKEN_UID=nc.HATHOR_TOKEN_UID,
+    ),
     'hathor.nanocontracts.blueprint': dict(Blueprint=nc.Blueprint),
     'hathor.nanocontracts.context': dict(Context=nc.Context),
     'hathor.nanocontracts.exception': dict(NCFail=nc.NCFail),

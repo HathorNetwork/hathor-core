@@ -14,12 +14,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence, final
+from typing import TYPE_CHECKING, Any, Collection, Optional, Sequence, final
 
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.contract_accessor import ContractAccessor
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
@@ -171,7 +172,14 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Call a public method of another contract."""
-        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_call_another_contract_public_method(
+            nc_id,
+            method_name,
+            actions,
+            args,
+            kwargs,
+            forbid_fallback=False,
+        )
 
     @final
     def proxy_call_public_method(
@@ -255,3 +263,22 @@ class BlueprintEnvironment:
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:
         """Change the blueprint of this contract."""
         self.__runner.syscall_change_blueprint(blueprint_id)
+
+    @final
+    def get_contract(
+        self,
+        contract_id: ContractId,
+        *,
+        blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+    ) -> ContractAccessor:
+        """
+        Get a contract accessor for the given contract ID.
+
+        Args:
+            contract_id: the ID of the contract.
+            blueprint_id: the expected blueprint ID of the contract, or a collection of accepted blueprints,
+                or None if any blueprint is accepted.
+
+        """
+        from hathor.nanocontracts.contract_accessor import ContractAccessor
+        return ContractAccessor(runner=self.__runner, contract_id=contract_id, blueprint_id=blueprint_id)

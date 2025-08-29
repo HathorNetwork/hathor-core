@@ -1,5 +1,4 @@
 from io import TextIOWrapper
-from os import PathLike
 from typing import Sequence
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
@@ -87,7 +86,7 @@ class BlueprintTestCase(unittest.TestCase):
         self.nc_catalog.blueprints[blueprint_id] = blueprint_class
         return blueprint_id
 
-    def register_blueprint_file(self, path: PathLike[str], blueprint_id: BlueprintId | None = None) -> BlueprintId:
+    def register_blueprint_file(self, path: str, blueprint_id: BlueprintId | None = None) -> BlueprintId:
         """Register a blueprint file with an optional id, allowing contracts to be created from it."""
         with open(path, 'r') as f:
             return self._register_blueprint_contents(f, blueprint_id)
