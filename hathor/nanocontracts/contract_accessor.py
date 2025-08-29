@@ -55,14 +55,14 @@ class ContractAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__contract_id', contract_id)
         __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
 
-    def prepare_view_call(self) -> Any:
+    def view(self) -> Any:
         return PreparedViewCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
             blueprint_ids=self.__blueprint_ids,
         )
 
-    def prepare_public_call(self, *actions: NCAction, forbid_fallback: bool = False) -> Any:
+    def public(self, *actions: NCAction, forbid_fallback: bool = False) -> Any:
         return PreparedPublicCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
@@ -134,7 +134,7 @@ class PreparedPublicCall(FauxImmutable):
         if self.__is_dirty:
             raise NCFail(
                 f'prepared public method for contract `{self.__contract_id.hex()}` was already used, '
-                f'you must use `prepare_public_call` on the contract to call it again'
+                f'you must use `public` on the contract to call it again'
             )
 
         __set_faux_immutable__(self, '__is_dirty', True)
@@ -239,7 +239,7 @@ class PublicMethodAccessor(FauxImmutable):
         if self.__is_dirty:
             raise NCFail(
                 f'accessor for public method `{self.__method_name}` was already used, '
-                f'you must use `prepare_public_call` on the contract to call it again'
+                f'you must use `public` on the contract to call it again'
             )
 
         __set_faux_immutable__(self, '__is_dirty', True)

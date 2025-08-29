@@ -86,7 +86,7 @@ class TestContractAccessor(BlueprintTestCase):
     def test_multiple_public_calls_on_prepared_call(self) -> None:
         msg = (
             f'prepared public method for contract `{self.contract_id2.hex()}` was already used, '
-            f'you must use `prepare_public_call` on the contract to call it again'
+            f'you must use `public` on the contract to call it again'
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
             self.runner.call_public_method(
@@ -100,7 +100,7 @@ class TestContractAccessor(BlueprintTestCase):
     def test_multiple_public_calls_on_method(self) -> None:
         msg = (
             'accessor for public method `simple_public_method` was already used, '
-            'you must use `prepare_public_call` on the contract to call it again'
+            'you must use `public` on the contract to call it again'
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
             self.runner.call_public_method(

@@ -43,37 +43,37 @@ class MyBlueprint(Blueprint):
     @public
     def call_public_wrong_arg_type(self, ctx: Context, other_id: ContractId) -> None:
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_public_call() \
+            .public() \
             .public_method('abc')
 
     @public
     def call_public_wrong_kwarg_type(self, ctx: Context, other_id: ContractId) -> None:
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_public_call() \
+            .public() \
             .public_method(a='abc')
 
     @public
     def call_public_wrong_return_type(self, ctx: Context, other_id: ContractId) -> None:
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_public_call() \
+            .public() \
             .public_method_wrong_return_type()
 
     @view
     def call_view_wrong_arg_type(self, other_id: ContractId) -> None:
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_view_call() \
+            .view() \
             .view_method('abc')
 
     @view
     def call_view_wrong_kwarg_type(self, other_id: ContractId) -> None:
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_view_call() \
+            .view() \
             .view_method(a='abc')
 
     @view
     def call_view_wrong_return_type(self, other_id: ContractId) -> None:
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_view_call() \
+            .view() \
             .view_method_wrong_return_type()
 
     @fallback
@@ -84,7 +84,7 @@ class MyBlueprint(Blueprint):
     def call_mutate_list(self, ctx: Context, other_id: ContractId) -> None:
         items = [1, 2, 3]
         self.syscall.get_contract(other_id, blueprint_id=None) \
-            .prepare_public_call() \
+            .public() \
             .mutate_list(items)
         assert items == [1, 2, 3]
 
