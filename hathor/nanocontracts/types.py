@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, NewType, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, TypeAlias, TypeVar
 
 from typing_extensions import override
 
@@ -28,28 +28,60 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_method_types,
 )
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
+from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
+# XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
+#
+# Metaclass conflict: the metaclass of a derived class must be a (non-strict) subclass of the metaclasses of all its
+# bases
+#
+# However `bytes` metaclass appears to be `type` (just like `int`'s) and `FauxImmutableMeta` correctly inherits from
+# `type`, so it seems like it's a mypy error.
+
 
 # Types to be used by blueprints.
-class Address(bytes):
+class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+    __allow_faux_inheritance__ = True
     __slots__ = ()
 
 
-class VertexId(bytes):
+class VertexId(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
     __slots__ = ()
+    __allow_faux_inheritance__ = True
 
 
-class ContractId(VertexId):
+class BlueprintId(VertexId):  # type: ignore[misc]
     __slots__ = ()
+    __allow_faux_inheritance__ = True
 
 
-Amount = NewType('Amount', int)
-Timestamp = NewType('Timestamp', int)
-TokenUid = NewType('TokenUid', bytes)
-TxOutputScript = NewType('TxOutputScript', bytes)
-BlueprintId = NewType('BlueprintId', VertexId)
+class ContractId(VertexId):  # type: ignore[misc]
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class TokenUid(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class TxOutputScript(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class Amount(int, metaclass=FauxImmutableMeta):
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class Timestamp(int, metaclass=FauxImmutableMeta):
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
 CallerId: TypeAlias = Address | ContractId
 
 T = TypeVar('T')

@@ -43,7 +43,7 @@ def test_invalid_inheritance() -> None:
     class Super:
         pass
 
-    with pytest.raises(TypeError, match='faux-immutable class `Foo` must inherit from `FauxImmutable` only'):
+    with pytest.raises(TypeError, match='faux-immutable only allows one base'):
         class Foo(FauxImmutable, Super):
             __slots__ = ()
 
@@ -145,80 +145,80 @@ def test_immutability_success() -> None:
     # Existing attribute on class
     #
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `attr` on faux-immutable class'):
         Foo.attr = 'bar'
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `attr` on faux-immutable class'):
         setattr(Foo, 'attr', 'bar')
 
     # protected by Python itself
-    with pytest.raises(TypeError, match="can't apply this __setattr__ to _FauxImmutableMeta object"):
+    with pytest.raises(TypeError, match="can't apply this __setattr__ to FauxImmutableMeta object"):
         object.__setattr__(Foo, 'attr', 'bar')
 
     #
     # Existing class attribute on class
     #
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `class_attr` on faux-immutable class'):
         Foo.class_attr = 'bar'
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `class_attr` on faux-immutable class'):
         setattr(Foo, 'class_attr', 'bar')
 
     # protected by Python itself
-    with pytest.raises(TypeError, match="can't apply this __setattr__ to _FauxImmutableMeta object"):
+    with pytest.raises(TypeError, match="can't apply this __setattr__ to FauxImmutableMeta object"):
         object.__setattr__(Foo, 'class_attr', 'bar')
 
     #
     # Existing method on class
     #
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `method` on faux-immutable class'):
         Foo.method = lambda self: None  # type: ignore[method-assign]
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `method` on faux-immutable class'):
         setattr(Foo, 'method', lambda self: None)
 
     # protected by Python itself
-    with pytest.raises(TypeError, match="can't apply this __setattr__ to _FauxImmutableMeta object"):
+    with pytest.raises(TypeError, match="can't apply this __setattr__ to FauxImmutableMeta object"):
         object.__setattr__(Foo, 'method', lambda self: None)
 
     #
     # Existing class method on class
     #
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `class_method` on faux-immutable class'):
         Foo.class_method = lambda: None  # type: ignore[method-assign]
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `class_method` on faux-immutable class'):
         setattr(Foo, 'class_method', lambda self: None)
 
     # protected by Python itself
-    with pytest.raises(TypeError, match="can't apply this __setattr__ to _FauxImmutableMeta object"):
+    with pytest.raises(TypeError, match="can't apply this __setattr__ to FauxImmutableMeta object"):
         object.__setattr__(Foo, 'class_method', lambda self: None)
 
     #
     # New attribute on class
     #
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `new_class_attr` on faux-immutable class'):
         Foo.new_class_attr = 'bar'
 
-    # protected by _FauxImmutableMeta.__setattr__
+    # protected by FauxImmutableMeta.__setattr__
     with pytest.raises(AttributeError, match='cannot set attribute `new_class_attr` on faux-immutable class'):
         setattr(Foo, 'new_class_attr', 'bar')
 
     # protected by Python itself
-    with pytest.raises(TypeError, match="can't apply this __setattr__ to _FauxImmutableMeta object"):
+    with pytest.raises(TypeError, match="can't apply this __setattr__ to FauxImmutableMeta object"):
         object.__setattr__(Foo, 'new_class_attr', 'bar')
 
 
