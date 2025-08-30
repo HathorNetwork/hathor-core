@@ -49,6 +49,8 @@ if TYPE_CHECKING:
 
 cpu = get_cpu_profiler()
 
+MAX_TOKENS_LENGTH: int = 16
+
 
 class TransactionVerifier:
     __slots__ = ('_settings', '_daa', '_feature_service')
@@ -277,3 +279,30 @@ class TransactionVerifier:
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
+
+    def verify_tokens(self, tx: Transaction) -> None:
+        if len(tx.tokens) > MAX_TOKENS_LENGTH:
+            raise InvalidNewTransaction('too many tokens')
+
+        if len(tx.tokens) != len(set(tx.tokens)):
+            raise InvalidNewTransaction('repeated tokens are not allowed')
+
+        seen_token_indexes = set()
+        for txout in tx.outputs:
+            seen_token_indexes.add(txout.get_token_index())
+        for action in nano_header.actions:
+            seen_token_indexes.add(action.token_index)
+        seen_token_indexes.discard(0)
+        if len(seen_token_indexes) != len(tx.tokens):
+            raise InvalidNewTransaction('unused tokens are not allowed')
+
+    def verify_conflict(self, tx: Transaction) -> None:
+        for txin in tx.inputs:
+            spent_tx = tx.get_spent_tx(txin)
+            spent_tx_meta = spent_tx.get_metadata()
+            if spent_tx_meta.first_block is None:
+                # mempool conflicts are allowed
+                continue
+            is_utxo = bool(not spent_tx_meta.spent_outputs[txin.index])
+            if not is_utxo:
+                raise InvalidNewTransaction('transaction has a conflict with a confirmed transaction')

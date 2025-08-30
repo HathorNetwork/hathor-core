@@ -45,6 +45,8 @@ _TX_PARENTS_BLOCKS = 0
 _BLOCK_PARENTS_TXS = 2
 _BLOCK_PARENTS_BLOCKS = 1
 
+MAX_PAST_TIMESTAMP_ALLOWED: int = 3600 * 36  # 36 hours
+
 
 class VertexVerifier:
     __slots__ = ('_settings', '_feature_service',)
@@ -233,3 +235,8 @@ class VertexVerifier:
                 raise HeaderNotSupported(
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
+
+    def verify_old_timestamp(self, vertex: BaseTransaction):
+        t_diff = self._reactor.seconds() - vertex.timestamp
+        if t_diff > MAX_PAST_TIMESTAMP_ALLOWED:
+            raise InvalidNewTransaction(f'transaction is too old ({t_diff})')

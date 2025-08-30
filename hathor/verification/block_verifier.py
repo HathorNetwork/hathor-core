@@ -28,6 +28,8 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 
+MAX_BLOCK_DIFF_HEIGHT: int = 30  # 15 minutes, on average
+
 
 class BlockVerifier:
     __slots__ = ('_settings', '_daa', '_feature_service')
@@ -96,3 +98,10 @@ class BlockVerifier:
                 )
             case _:
                 assert_never(signaling_state)
+
+    def verify_old_block(self, block: Block) -> None:
+        best_block = self._tx_storage.get_best_block()
+        parent = block.get_block_parent()
+        h_diff = best_block.get_height() - parent.get_height()
+        if h_diff > MAX_BLOCK_DIFF_HEIGHT:
+            raise InvalidNewTransaction(f'block is too old ({h_diff})')
