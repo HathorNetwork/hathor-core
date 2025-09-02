@@ -222,6 +222,24 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
         return sizes
 
+    def get_estimate_num_keys_by_cf(
+        self,
+        cfs: Optional[list['rocksdb.ColumnFamilyHandle']] = None
+    ) -> dict[bytes, int]:
+        """Get the estimated number of keys for each Column Family
+
+        :param cfs: The list of column families, defaults to None, in which case all of them are returned
+        :return: A dict containing the names of the cfs and their estimated number of keys
+        """
+        column_families = self._db.column_families if cfs is None else cfs
+
+        estimates: dict[bytes, int] = {}
+
+        for cf in column_families:
+            estimates[cf.name] = int(self._db.get_property(b'rocksdb.estimate-num-keys', cf))
+
+        return estimates
+
     def add_value(self, key: str, value: str) -> None:
         self._db.put((self._cf_attr, key.encode('utf-8')), value.encode('utf-8'))
 

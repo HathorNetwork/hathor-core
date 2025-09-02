@@ -101,6 +101,7 @@ class Metrics:
     send_token_timeouts: int = 0
     # Dict that stores the sizes of each column-family in RocksDB, in bytes
     rocksdb_cfs_sizes: dict[bytes, float] = field(default_factory=dict)
+    rocksdb_cfs_estimate_num_keys: dict[bytes, int] = field(default_factory=dict)
     # TxCache Data
     transaction_cache_hits: int = 0
     transaction_cache_misses: int = 0
@@ -300,6 +301,7 @@ class Metrics:
         self.last_txstorage_data_block = best_block_count
 
         self.rocksdb_cfs_sizes = store.get_sst_files_sizes_by_cf()
+        self.rocksdb_cfs_estimate_num_keys = store.get_estimate_num_keys_by_cf()
 
     def _collect_data(self) -> None:
         """ Call methods that collect data to metrics

@@ -59,7 +59,8 @@ PEER_CONNECTION_METRICS = {
 }
 
 TX_STORAGE_METRICS = {
-    'total_sst_files_size': 'Storage size in bytes of all SST files of a certain column-family in RocksDB'
+    'total_sst_files_size': 'Storage size in bytes of all SST files of a certain column-family in RocksDB',
+    'estimate_num_keys': 'Estimated number of keys in a certain column-family in RocksDB'
 }
 
 GC_METRICS = {
@@ -196,6 +197,11 @@ class PrometheusMetricsExporter:
             self.tx_storage_metrics['total_sst_files_size'].labels(
                 column_family=cf
             ).set(size)
+
+        for cf, num_keys in self.metrics.rocksdb_cfs_estimate_num_keys.items():
+            self.tx_storage_metrics['estimate_num_keys'].labels(
+                column_family=cf
+            ).set(num_keys)
 
     def _set_new_peer_connection_metrics(self) -> None:
         for name, metric in self.peer_connection_metrics.items():
