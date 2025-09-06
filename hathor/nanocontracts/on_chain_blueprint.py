@@ -30,7 +30,7 @@ from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method import Method
-from hathor.nanocontracts.types import BlueprintId, blueprint_id_from_bytes
+from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME, BlueprintId, blueprint_id_from_bytes
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -43,9 +43,6 @@ logger = get_logger()
 
 # used to allow new versions of the serialization format in the future
 ON_CHAIN_BLUEPRINT_VERSION: int = 1
-
-# this is the name we expect the source code to expose for the Blueprint class
-BLUEPRINT_CLASS_NAME: str = '__blueprint__'
 
 # source compatibility with Python 3.11
 PYTHON_CODE_COMPAT_VERSION = (3, 11)
@@ -207,7 +204,7 @@ class OnChainBlueprint(Transaction):
         except OutOfMemoryError as e:
             self.log.error('loading blueprint module failed, memory limit exceeded')
             raise OCBOutOfMemoryDuringLoading from e
-        blueprint_class = env[BLUEPRINT_CLASS_NAME]
+        blueprint_class = env[BLUEPRINT_EXPORT_NAME]
         return blueprint_class, env
 
     def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
@@ -220,7 +217,7 @@ class OnChainBlueprint(Transaction):
         return self._blueprint_loaded_env
 
     def get_blueprint_object_bypass(self) -> object:
-        """Loads the code and returns the object defined in __blueprint__"""
+        """Loads the code and returns the object exported with @export"""
         blueprint_class, _ = self._load_blueprint_code_exec()
         return blueprint_class
 

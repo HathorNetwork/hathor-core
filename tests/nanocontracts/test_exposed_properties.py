@@ -116,6 +116,7 @@ KNOWN_CASES = [
     'hathor.nanocontracts.types.SignedData.checksig',
     'hathor.nanocontracts.types.SignedData.get_data_bytes',
     'hathor.nanocontracts.types.SignedData.some_new_attribute',
+    'hathor.nanocontracts.types.export.some_new_attribute',
     'hathor.nanocontracts.types.fallback.some_new_attribute',
     'hathor.nanocontracts.types.public.some_new_attribute',
     'hathor.nanocontracts.types.view.some_new_attribute',

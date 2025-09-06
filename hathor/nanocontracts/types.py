@@ -102,6 +102,7 @@ class Timestamp(int, metaclass=FauxImmutableMeta):
 CallerId: TypeAlias = Address | ContractId
 
 T = TypeVar('T')
+B = TypeVar('B', bound=type)
 
 NC_INITIALIZE_METHOD: str = 'initialize'
 NC_FALLBACK_METHOD: str = 'fallback'
@@ -109,6 +110,9 @@ NC_FALLBACK_METHOD: str = 'fallback'
 NC_ALLOWED_ACTIONS_ATTR = '__nc_allowed_actions'
 NC_ALLOW_REENTRANCY = '__nc_allow_reentrancy'
 NC_METHOD_TYPE_ATTR: str = '__nc_method_type'
+
+# this is the name we use internally to store the blueprint that is exported by a module
+BLUEPRINT_EXPORT_NAME: str = '__blueprint__'
 
 
 class NCMethodType(Enum):
@@ -289,6 +293,19 @@ def view(fn: Callable) -> Callable:
     validate_has_not_ctx_arg(fn, annotation_name)
     validate_method_types(fn)
     return fn
+
+
+def export(cls: B) -> B:
+    """Decorator to export the main Blueprint of a Python module."""
+    current_frame = inspect.currentframe()
+    assert current_frame is not None
+    module_frame = current_frame.f_back
+    assert module_frame is not None
+    module_globals = module_frame.f_globals
+    if BLUEPRINT_EXPORT_NAME in module_globals:
+        raise TypeError('A Blueprint has already been registered')
+    module_globals[BLUEPRINT_EXPORT_NAME] = cls
+    return cls
 
 
 def fallback(
