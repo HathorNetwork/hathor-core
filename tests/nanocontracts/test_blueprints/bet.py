@@ -154,7 +154,7 @@ class Bet(Blueprint):
         assert isinstance(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
-        if ctx.timestamp > self.date_last_bet:
+        if ctx.block.timestamp > self.date_last_bet:
             raise TooLate(f'cannot place bets after {self.date_last_bet}')
         amount = Amount(action.amount)
         self.total = Amount(self.total + amount)
@@ -191,7 +191,9 @@ class Bet(Blueprint):
         assert isinstance(action, NCWithdrawalAction)
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
-        address = Address(ctx.address)
+        caller_address = ctx.get_caller_address()
+        assert caller_address is not None
+        address = Address(caller_address)
         allowed = self.get_max_withdrawal(address)
         if action.amount > allowed:
             raise InsufficientBalance(f'withdrawal amount is greater than available (max: {allowed})')

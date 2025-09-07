@@ -143,18 +143,44 @@ def test_minimum_activation_height(minimum_activation_height: int, error: str) -
     assert errors[0]['msg'] == error
 
 
+_invalid_version_msg = r'string does not match regex "^(\d+\.\d+\.\d+(-(rc|alpha|beta)\.\d+)?|nightly-[a-f0-9]{7,8})$"'
+
+
 @pytest.mark.parametrize(
-    ['version', 'error'],
+    ['version'],
     [
-        ('0', 'string does not match regex "^(\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?|nightly-[a-f0-9]{7,8})$"'),
-        ('alpha', 'string does not match regex "^(\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?|nightly-[a-f0-9]{7,8})$"'),
-        ('0.0', 'string does not match regex "^(\\d+\\.\\d+\\.\\d+(-rc\\.\\d+)?|nightly-[a-f0-9]{7,8})$"')
+        ('0',),
+        ('alpha',),
+        ('0.0',),
+        ('0.0.0-',),
+        ('0.1.0-alpha',),
+        ('0.1.0-alpha.x',),
+        ('0.1.0-gamma.1',),
+        ('0.1.0-RC.1',),
     ]
 )
-def test_version(version: str, error: str) -> None:
+def test_invalid_version(version: str) -> None:
     criteria = VALID_CRITERIA | dict(version=version)
     with pytest.raises(ValidationError) as e:
         Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]
 
     errors = e.value.errors()
-    assert errors[0]['msg'] == error
+    assert errors[0]['msg'] == _invalid_version_msg
+
+
+@pytest.mark.parametrize(
+    ['version'],
+    [
+        ('1.0.0',),
+        ('1.2.3',),
+        ('1.22222.30000',),
+        ('1.2.3-alpha.1',),
+        ('1.2.3-alpha.2',),
+        ('1.2.3-rc.2',),
+        ('1.2.3-beta.2',),
+        ('1.2.3-alpha.299',),
+    ]
+)
+def test_valid_version(version: str) -> None:
+    criteria = VALID_CRITERIA | dict(version=version)
+    Criteria(**criteria).to_validated(evaluation_interval=1000, max_signal_bits=2)  # type: ignore[arg-type]

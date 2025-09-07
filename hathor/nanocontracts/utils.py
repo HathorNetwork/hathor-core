@@ -16,14 +16,18 @@ from __future__ import annotations
 
 import hashlib
 from types import ModuleType
-from typing import Callable
+from typing import Callable, assert_never
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
 
+from hathor.conf.settings import HathorSettings, NanoContractsSetting
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes, get_public_key_bytes_compressed
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, BlueprintId, ContractId, NCMethodType, TokenUid, VertexId
+from hathor.transaction import Vertex
 from hathor.transaction.headers import NanoHeader
 from hathor.util import not_none
 
@@ -39,6 +43,11 @@ def is_nc_public_method(method: Callable) -> bool:
 def is_nc_view_method(method: Callable) -> bool:
     """Return True if the method is nc_view."""
     return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.VIEW
+
+
+def is_nc_fallback_method(method: Callable) -> bool:
+    """Return True if the method is nc_fallback."""
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.FALLBACK
 
 
 def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: ModuleType | None = None) -> str:
@@ -134,3 +143,16 @@ def sign_openssl_multisig(
     signatures = [privkey.sign(data, ec.ECDSA(hashes.SHA256())) for privkey in sign_privkeys]
 
     nano_header.nc_script = MultiSig.create_input_data(redeem_script, signatures)
+
+
+def is_nano_active(settings: HathorSettings, vertex: Vertex, feature_service: FeatureService) -> bool:
+    """Return whether the Nano Contracts feature is active according to the provided settings and vertex."""
+    match settings.ENABLE_NANO_CONTRACTS:
+        case NanoContractsSetting.DISABLED:
+            return False
+        case NanoContractsSetting.ENABLED:
+            return True
+        case NanoContractsSetting.FEATURE_ACTIVATION:
+            return feature_service.is_feature_active(vertex=vertex, feature=Feature.NANO_CONTRACTS)
+        case _:  # pragma: no cover
+            assert_never(settings.ENABLE_NANO_CONTRACTS)

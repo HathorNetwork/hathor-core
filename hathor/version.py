@@ -19,13 +19,13 @@ from typing import Optional
 
 from structlog import get_logger
 
-BASE_VERSION = '0.64.0'
+BASE_VERSION = '0.66.0'
 
 DEFAULT_VERSION_SUFFIX = "local"
 BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
 
 # Valid formats: 1.2.3, 1.2.3-rc.1 and nightly-ab49c20f
-BUILD_VERSION_REGEX = r"^(\d+\.\d+\.\d+(-rc\.\d+)?|nightly-[a-f0-9]{7,8})$"
+BUILD_VERSION_REGEX = r"^(\d+\.\d+\.\d+(-(rc|alpha|beta)\.\d+)?|nightly-[a-f0-9]{7,8})$"
 
 
 logger = get_logger()

@@ -18,7 +18,6 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 
 from structlog import get_logger
 
-from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
 
 logger = get_logger()
@@ -59,6 +58,7 @@ class MeteredExecutor:
     def exec(self, source: str, /) -> dict[str, Any]:
         """ This is equivalent to `exec(source)` but with execution metering and memory limiting.
         """
+        from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
         }
@@ -77,19 +77,19 @@ class MeteredExecutor:
         del env['__builtins__']
         return env
 
-    def call(self, func: Callable[_P, _T], /, *args: _P.args, **kwargs: _P.kwargs) -> _T:
+    def call(self, func: Callable[_P, _T], /, *, args: _P.args) -> _T:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
+        from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
             '__func__': func,
             '__args__': args,
-            '__kwargs__': kwargs,
             '__result__': None,
         }
         # XXX: calling compile now makes the exec step consume less fuel
         code = compile(
-            source='__result__ = __func__(*__args__, **__kwargs__)',
+            source='__result__ = __func__(*__args__)',
             filename='<blueprint>',
             mode='exec',
             flags=0,

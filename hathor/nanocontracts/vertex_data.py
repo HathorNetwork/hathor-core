@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum, unique
 from typing import TYPE_CHECKING
 
 from typing_extensions import Self
 
+from hathor.transaction.scripts import P2PKH, MultiSig, parse_address_script
 from hathor.types import TokenUid, VertexId
 
 if TYPE_CHECKING:
@@ -55,7 +57,6 @@ class VertexData:
     outputs: tuple[TxOutputData, ...]
     tokens: tuple[TokenUid, ...]
     parents: tuple[VertexId, ...]
-    block: BlockData
     headers: tuple[HeaderData, ...]
 
     @classmethod
@@ -70,15 +71,6 @@ class VertexData:
         outputs = tuple(TxOutputData.create_from_txout(txout) for txout in vertex.outputs)
         parents = tuple(vertex.parents)
         tokens: tuple[TokenUid, ...] = tuple()
-        vertex_meta = vertex.get_metadata()
-        if vertex_meta.first_block is not None:
-            assert vertex.storage is not None
-            assert vertex_meta.first_block is not None
-            block = vertex.storage.get_block(vertex_meta.first_block)
-            block_data = BlockData.create_from_block(block)
-        else:
-            # XXX: use dummy data instead
-            block_data = BlockData(hash=VertexId(b''), timestamp=0, height=0)
 
         assert isinstance(vertex, Transaction)
         headers_data: list[HeaderData] = []
@@ -104,7 +96,6 @@ class VertexData:
             outputs=outputs,
             tokens=tokens,
             parents=parents,
-            block=block_data,
             headers=tuple(headers_data),
         )
 
@@ -126,17 +117,41 @@ class TxInputData:
         )
 
 
+@unique
+class ScriptType(StrEnum):
+    P2PKH = 'P2PKH'
+    MULTI_SIG = 'MultiSig'
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ScriptInfo:
+    type: ScriptType
+    address: str
+    timelock: int | None
+
+    @classmethod
+    def from_script(cls, script: P2PKH | MultiSig) -> Self:
+        return cls(
+            type=ScriptType(script.get_type()),
+            address=script.get_address(),
+            timelock=script.get_timelock(),
+        )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TxOutputData:
     value: int
-    script: bytes
+    raw_script: bytes
+    parsed_script: ScriptInfo | None
     token_data: int
 
     @classmethod
     def create_from_txout(cls, txout: TxOutput) -> Self:
+        parsed = parse_address_script(txout.script)
         return cls(
             value=txout.value,
-            script=txout.script,
+            raw_script=txout.script,
+            parsed_script=ScriptInfo.from_script(parsed) if parsed is not None else None,
             token_data=txout.token_data,
         )
 

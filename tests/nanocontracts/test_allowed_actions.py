@@ -18,11 +18,11 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCForbiddenAction
-from hathor.nanocontracts.runner.types import NCArgs
 from hathor.nanocontracts.types import (
     NCAcquireAuthorityAction,
     NCAction,
     NCActionType,
+    NCArgs,
     NCDepositAction,
     NCGrantAuthorityAction,
     NCWithdrawalAction,
@@ -85,10 +85,10 @@ class TestAllowedActions(BlueprintTestCase):
             assert action_type in all_actions_types, f'missing {action_type.name}'
 
     def _get_context(self, *actions: NCAction) -> Context:
-        return Context(
+        return self.create_context(
             actions=list(actions),
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now,
         )
 

@@ -3,13 +3,15 @@ import copy
 from hathor.nanocontracts import Blueprint, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.vertex_data import NanoHeaderData, VertexData
+from hathor.nanocontracts.vertex_data import BlockData, NanoHeaderData, VertexData
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import TxVersion
+from hathor.transaction.scripts import parse_address_script
+from hathor.util import not_none
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
-GLOBAL_VERTEX_DATA: VertexData | None = None
+GLOBAL_CTX_DATA: tuple[VertexData, BlockData] | None = None
 
 
 class RememberVertexDataBlueprint(Blueprint):
@@ -19,13 +21,13 @@ class RememberVertexDataBlueprint(Blueprint):
 
     @public
     def remember_context(self, ctx: Context) -> None:
-        global GLOBAL_VERTEX_DATA
-        GLOBAL_VERTEX_DATA = copy.deepcopy(ctx.vertex)
+        global GLOBAL_CTX_DATA
+        GLOBAL_CTX_DATA = copy.deepcopy((ctx.vertex, ctx.block))
 
 
 class ContextTestCase(BlueprintTestCase):
     def setUp(self) -> None:
-        global GLOBAL_VERTEX_DATA
+        global GLOBAL_CTX_DATA
 
         super().setUp()
 
@@ -36,17 +38,17 @@ class ContextTestCase(BlueprintTestCase):
         self.address = self.gen_random_address()
 
         # clear vertex-data before and after
-        GLOBAL_VERTEX_DATA = None
+        GLOBAL_CTX_DATA = None
 
     def tearDown(self) -> None:
-        global GLOBAL_VERTEX_DATA
+        global GLOBAL_CTX_DATA
 
         super().tearDown()
         # clear vertex-data before and after
-        GLOBAL_VERTEX_DATA = None
+        GLOBAL_CTX_DATA = None
 
     def test_vertex_data(self) -> None:
-        global GLOBAL_VERTEX_DATA
+        global GLOBAL_CTX_DATA
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
@@ -64,20 +66,35 @@ class ContextTestCase(BlueprintTestCase):
         nc1, nc2 = artifacts.get_typed_vertices(['nc1', 'nc2'], Transaction)
 
         # this is the vertex data that was observed by nc2 when remember_context was called
-        assert GLOBAL_VERTEX_DATA is not None
-        vertex_data = copy.deepcopy(GLOBAL_VERTEX_DATA)
-
-        # XXX: nonce varies, even for a weight of 1.0
-        # XXX: inptus/outputs/parents ignored since the dag builder will pick whatever to fill it in
+        assert GLOBAL_CTX_DATA is not None
+        vertex_data, block_data = copy.deepcopy(GLOBAL_CTX_DATA)
 
         self.assertEqual(vertex_data.version, TxVersion.REGULAR_TRANSACTION)
         self.assertEqual(vertex_data.hash, nc2.hash)
         self.assertEqual(vertex_data.signal_bits, 0)
         self.assertEqual(vertex_data.weight, 1.0)
         self.assertEqual(vertex_data.tokens, ())
-        self.assertEqual(vertex_data.block.hash, b12.hash)
-        self.assertEqual(vertex_data.block.timestamp, b12.timestamp)
-        self.assertEqual(vertex_data.block.height, b12.get_height())
+        self.assertEqual(block_data.hash, b12.hash)
+        self.assertEqual(block_data.timestamp, b12.timestamp)
+        self.assertEqual(block_data.height, b12.get_height())
+        self.assertEqual(vertex_data.nonce, nc2.nonce)
+        self.assertEqual(vertex_data.parents, tuple(nc2.parents))
+
+        for i, input_tx in enumerate(nc2.inputs):
+            assert vertex_data.inputs[i].tx_id == input_tx.tx_id
+            assert vertex_data.inputs[i].index == input_tx.index
+            assert vertex_data.inputs[i].data == input_tx.data
+
+        for i, output in enumerate(nc2.outputs):
+            parsed = not_none(parse_address_script(output.script))
+            assert vertex_data.outputs[i].value == output.value
+            assert vertex_data.outputs[i].raw_script == output.script
+            assert not_none(vertex_data.outputs[i].parsed_script).type == parsed.get_type()
+            assert not_none(vertex_data.outputs[i].parsed_script).address == parsed.get_address()
+            assert not_none(vertex_data.outputs[i].parsed_script).timelock == parsed.get_timelock()
+            assert vertex_data.outputs[i].token_data == output.token_data
+
+        self.assertEqual(set(vertex_data.parents), set(nc2.parents))
         nano_header_data, = vertex_data.headers
         assert isinstance(nano_header_data, NanoHeaderData)
         self.assertEqual(nano_header_data.nc_id, nc1.hash)

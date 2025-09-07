@@ -419,6 +419,9 @@ class HathorSettings(NamedTuple):
     # List of soft voided transaction.
     SOFT_VOIDED_TX_IDS: list[bytes] = []
 
+    # List of transactions to skip verification.
+    SKIP_VERIFICATION: list[bytes] = []
+
     # Identifier used in metadata's voided_by to mark a tx as soft-voided.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
 
@@ -470,7 +473,7 @@ class HathorSettings(NamedTuple):
     ENABLE_NANO_CONTRACTS: NanoContractsSetting = NanoContractsSetting.DISABLED
 
     # List of enabled blueprints.
-    BLUEPRINTS: dict[bytes, 'str'] = {}
+    BLUEPRINTS: dict[bytes, str] = {}
 
     # The consensus algorithm protocol settings.
     CONSENSUS_ALGORITHM: ConsensusSettings = PowSettings()
@@ -592,6 +595,12 @@ _VALIDATORS = dict(
     )(parse_hex_str),
     _parse_soft_voided_tx_id=pydantic.validator(
         'SOFT_VOIDED_TX_IDS',
+        pre=True,
+        allow_reuse=True,
+        each_item=True
+    )(parse_hex_str),
+    _parse_skipped_verification_tx_id=pydantic.validator(
+        'SKIP_VERIFICATION',
         pre=True,
         allow_reuse=True,
         each_item=True

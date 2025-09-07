@@ -1,4 +1,5 @@
-from os import PathLike
+from io import TextIOWrapper
+from typing import Sequence
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.crypto.util import decode_address
@@ -12,8 +13,8 @@ from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
-from hathor.nanocontracts.vertex_data import VertexData
-from hathor.transaction import BaseTransaction, Transaction
+from hathor.nanocontracts.vertex_data import BlockData, VertexData
+from hathor.transaction import Transaction, Vertex
 from hathor.util import not_none
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.wallet import KeyPair
@@ -85,16 +86,43 @@ class BlueprintTestCase(unittest.TestCase):
         self.nc_catalog.blueprints[blueprint_id] = blueprint_class
         return blueprint_id
 
-    def register_blueprint_file(self, path: PathLike[str], blueprint_id: BlueprintId | None = None) -> BlueprintId:
+    def register_blueprint_file(self, path: str, blueprint_id: BlueprintId | None = None) -> BlueprintId:
         """Register a blueprint file with an optional id, allowing contracts to be created from it."""
         with open(path, 'r') as f:
-            code = Code.from_python_code(f.read(), self._settings)
+            return self._register_blueprint_contents(f, blueprint_id)
 
-        verifier = OnChainBlueprintVerifier(settings=self._settings)
+    def _register_blueprint_contents(
+        self,
+        contents: TextIOWrapper,
+        blueprint_id: BlueprintId | None = None,
+        *,
+        skip_verification: bool = False,
+        inject_in_class: dict[str, object] | None = None,
+    ) -> BlueprintId:
+        """
+        Register blueprint contents with an optional id, allowing contracts to be created from it.
+
+        Args:
+            contents: the blueprint source code, usually a file or StringIO
+            blueprint_id: optional ID for the blueprint
+            skip_verification: skip verifying the blueprint with restrictions such as AST verification
+            inject_in_class: objects to inject in the blueprint class, accessible in contract runtime
+
+        Returns: the blueprint_id
+        """
+        code = Code.from_python_code(contents.read(), self._settings)
         ocb = OnChainBlueprint(hash=b'', code=code)
-        verifier.verify_code(ocb)
 
-        return self._register_blueprint_class(ocb.get_blueprint_class(), blueprint_id)
+        if not skip_verification:
+            verifier = OnChainBlueprintVerifier(settings=self._settings)
+            verifier.verify_code(ocb)
+
+        blueprint_class = ocb.get_blueprint_class()
+        if inject_in_class is not None:
+            for key, value in inject_in_class.items():
+                setattr(blueprint_class, key, value)
+
+        return self._register_blueprint_class(blueprint_class, blueprint_id)
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
@@ -135,21 +163,21 @@ class BlueprintTestCase(unittest.TestCase):
 
     def get_genesis_tx(self) -> Transaction:
         """Return a genesis transaction."""
-        genesis = self.manager.tx_storage.get_all_genesis()
-        tx = list(tx for tx in genesis if isinstance(tx, Transaction))[0]
+        tx = self.manager.tx_storage.get_genesis(self._settings.GENESIS_TX1_HASH)
+        assert isinstance(tx, Transaction)
         return tx
 
     def create_context(
         self,
-        actions: list[NCAction] | None = None,
-        vertex: BaseTransaction | VertexData | None = None,
-        address: Address | None = None,
+        actions: Sequence[NCAction] | None = None,
+        vertex: Vertex | None = None,
+        caller_id: Address | None = None,
         timestamp: int | None = None,
     ) -> Context:
         """Create a Context instance with optional values or defaults."""
         return Context(
-            actions=actions if actions is not None else [],
-            vertex=vertex or self.get_genesis_tx(),
-            address=address or self.gen_random_address(),
-            timestamp=timestamp or self.now,
+            caller_id=caller_id or self.gen_random_address(),
+            vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
+            block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
+            actions=Context.__group_actions__(actions or ()),
         )

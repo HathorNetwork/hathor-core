@@ -1,8 +1,8 @@
 P2PKH_VERSION_BYTE: x49
 MULTISIG_VERSION_BYTE: x87
-NETWORK_NAME: testnet-golf
+NETWORK_NAME: testnet-hotel
 BOOTSTRAP_DNS:
-  - golf.testnet.hathor.network
+  - hotel.testnet.hathor.network
 
 # Genesis stuff
 GENESIS_OUTPUT_SCRIPT: 76a914a584cf48b161e4a49223ed220df30037ab740e0088ac
@@ -63,6 +63,12 @@ CHECKPOINTS:
   4_200_000: 00000000010a8dae043c84fcb2cef6a2b42a28279b95af20ab5a098acf2a3565
   4_300_000: 000000000019da781ef75fa5f59c5537d8ed18b64c589c3e036109cfb1d84f7d
 
+SKIP_VERIFICATION:
+  - 00000000af8c95ca9aabf5fd90ac44bd4f16d182618c357b301370ad0430c4a3
+
+SOFT_VOIDED_TX_IDS:
+  - 00000000af8c95ca9aabf5fd90ac44bd4f16d182618c357b301370ad0430c4a3
+
 FEATURE_ACTIVATION:
   default_threshold: 15_120 # 15120 = 75% of evaluation_interval (20160)
   features:
@@ -90,3 +96,32 @@ FEATURE_ACTIVATION:
       lock_in_on_timeout: false
       version: 0.63.0
       signal_support_by_default: true
+
+    NANO_CONTRACTS:
+      bit: 0
+      # N = 5_040_000
+      # Expected to be reached around Friday, 2025-07-18.
+      # Right now the best block is 5_033_266 on testnet-hotel (2025-07-16).
+      start_height: 5_040_000  # N
+      timeout_height: 5_080_320  # N + 2 * 20160 (2 weeks after the start)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.64.0
+      signal_support_by_default: true
+
+    COUNT_CHECKDATASIG_OP:
+      bit: 1
+      # N = 5_100_480
+      # Expected to be reached around Saturday, 2025-08-09 09:31:28 GMT
+      # Right now the best block is 5_092_661 at Wednesday, 2025-08-06 16:21:58 GMT
+      start_height: 5_100_480
+      timeout_height: 5_221_440  # N + 6 * 20160 (6 weeks after the start)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.64.0
+      signal_support_by_default: true
+
+ENABLE_NANO_CONTRACTS: feature_activation
+NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
+  - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
+  - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY

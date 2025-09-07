@@ -18,8 +18,7 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.exception import BlueprintSyntaxError
-from hathor.nanocontracts.runner.types import NCArgs
-from hathor.nanocontracts.types import Address, fallback
+from hathor.nanocontracts.types import Address, NCArgs, fallback
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -29,10 +28,10 @@ class TestBlueprintSyntax(BlueprintTestCase):
 
         self.blueprint_id = self.gen_random_blueprint_id()
         self.contract_id = self.gen_random_contract_id()
-        self.ctx = Context(
+        self.ctx = self.create_context(
             actions=[],
             vertex=self.get_genesis_tx(),
-            address=Address(self.gen_random_address()),
+            caller_id=Address(self.gen_random_address()),
             timestamp=self.now,
         )
 

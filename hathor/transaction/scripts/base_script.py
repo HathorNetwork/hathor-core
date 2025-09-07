@@ -37,8 +37,8 @@ class BaseScript(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_address(self) -> Optional[str]:
-        """Get address for this script, not all valid recognizable scripts have addresses."""
+    def get_address(self) -> str:
+        """Get address for this script."""
         raise NotImplementedError
 
     @abstractmethod

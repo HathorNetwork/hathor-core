@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
@@ -27,6 +26,8 @@ from hathor.transaction import BaseTransaction, Transaction, TxInput, TxVersion
 from hathor.transaction.exceptions import (
     ConflictingInputs,
     DuplicatedParents,
+    ForbiddenMelt,
+    ForbiddenMint,
     IncorrectParents,
     InexistentInput,
     InputOutputMismatch,
@@ -34,8 +35,6 @@ from hathor.transaction.exceptions import (
     InvalidInputDataSize,
     InvalidToken,
     InvalidVersionError,
-    MeltedWithoutAuthorityInputs,
-    MintedWithoutAuthorityInputs,
     RewardLocked,
     ScriptError,
     TimestampError,
@@ -92,11 +91,17 @@ class TransactionVerifier:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 
-    def verify_sigops_input(self, tx: Transaction) -> None:
+    def verify_sigops_input(self, tx: Transaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
-        from hathor.transaction.scripts import get_sigops_count
+        from hathor.transaction.scripts import SigopCounter
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        counter = SigopCounter(
+            max_multisig_pubkeys=self._settings.MAX_MULTISIG_PUBKEYS,
+            enable_checkdatasig_count=enable_checkdatasig_count,
+        )
+
         n_txops = 0
         for tx_input in tx.inputs:
             try:
@@ -106,7 +111,7 @@ class TransactionVerifier:
             if tx_input.index >= len(spent_tx.outputs):
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
@@ -114,8 +119,6 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-
         spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in tx.inputs:
             if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
@@ -123,13 +126,8 @@ class TransactionVerifier:
                     len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
                 ))
 
-            try:
-                spent_tx = tx.get_spent_tx(input_tx)
-                if input_tx.index >= len(spent_tx.outputs):
-                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
-                        input_tx.tx_id.hex(), input_tx.index))
-            except TransactionDoesNotExist:
-                raise InexistentInput('Input tx does not exist: {}'.format(input_tx.tx_id.hex()))
+            spent_tx = tx.get_spent_tx(input_tx)
+            assert input_tx.index < len(spent_tx.outputs)
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
@@ -259,7 +257,7 @@ class TransactionVerifier:
 
         is_melting_without_authority = withdraw_without_authority - fee > 0
         if is_melting_without_authority:
-            raise InputOutputMismatch('Melting tokens without a melt authority is forbidden')
+            raise ForbiddenMelt('Melting tokens without a melt authority is forbidden')
 
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw + withdraw_without_authority - deposit - fee
@@ -271,12 +269,14 @@ class TransactionVerifier:
             ))
 
     def _verify_fee_token(self, token_uid: TokenUid, token_info: TokenInfo) -> None:
+        """Verify fee token can be minted/melted based on its authority."""
         if token_info.has_been_melted() and not token_info.can_melt:
-            raise MeltedWithoutAuthorityInputs(token_info.amount, token_uid)
+            raise ForbiddenMelt.from_token(token_info.amount, token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
-            raise MintedWithoutAuthorityInputs(token_info.amount, token_uid)
+            raise ForbiddenMint(token_info.amount, token_uid)
 
     def _verify_deposit_token(self, fee: int, token_uid: TokenUid, token_info: TokenInfo) -> DepositTokenVerifyResult:
+        """Verify deposit token operations and calculate withdrawal/deposit amounts."""
         result = DepositTokenVerifyResult()
         if token_info.has_been_melted():
             withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
@@ -287,16 +287,20 @@ class TransactionVerifier:
                 # It includes trying to pay fee with non-integer amounts.
                 # For example (DBT - Deposit based token)
                 # 1.99 DBT results in 0.01 HTR and (0.99 DBT melted) => this one is forbidden
+                if fee == 0:
+                    raise ForbiddenMelt.from_token(token_info.amount, token_uid)
                 is_integer_amount = (
                     token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer()
-                if fee == 0 or not is_integer_amount:
-                    raise MeltedWithoutAuthorityInputs(token_info.amount, token_uid)
+                if not is_integer_amount:
+                    raise ForbiddenMelt(
+                        "Paying fees with non integer amount is forbidden"
+                    )
 
                 result.withdraw_without_authority += withdraw_amount
 
         if token_info.has_been_minted():
             if not token_info.can_mint:
-                raise MintedWithoutAuthorityInputs(token_info.amount, token_uid)
+                raise ForbiddenMint(token_info.amount, token_uid)
 
             result.deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
 
@@ -304,28 +308,20 @@ class TransactionVerifier:
 
     def verify_version(self, tx: Transaction) -> None:
         """Verify that the vertex version is valid."""
-        from hathor.conf.settings import NanoContractsSetting
+        from hathor.nanocontracts.utils import is_nano_active
         allowed_tx_versions = {
             TxVersion.REGULAR_TRANSACTION,
             TxVersion.TOKEN_CREATION_TRANSACTION,
         }
 
-        match self._settings.ENABLE_NANO_CONTRACTS:
-            case NanoContractsSetting.DISABLED:
-                pass
-            case NanoContractsSetting.ENABLED:
-                allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
-            case NanoContractsSetting.FEATURE_ACTIVATION:
-                if self._feature_service.is_feature_active(vertex=tx, feature=Feature.NANO_CONTRACTS):
-                    allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
-            case _ as unreachable:
-                assert_never(unreachable)
+        if is_nano_active(self._settings, tx, self._feature_service):
+            allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class DepositTokenVerifyResult:
     deposit: int = 0
     withdraw_without_authority: int = 0

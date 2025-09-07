@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import re
+
 import pytest
 
 from hathor.nanocontracts import Blueprint, Context, public
@@ -22,7 +24,7 @@ from hathor.nanocontracts.exception import (
     NCUninitializedContractError,
 )
 from hathor.nanocontracts.method import ArgsOnly
-from hathor.nanocontracts.runner.types import NCRawArgs
+from hathor.nanocontracts.types import NCRawArgs
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -53,21 +55,18 @@ class TestExecutionVerification(BlueprintTestCase):
             self.runner.call_public_method(self.contract_id, 'not_found', self.create_context())
 
     def test_empty_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(NCFail, match=re.escape("initialize() missing required argument: 'a'")):
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
-        assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == "MyBlueprint.initialize() missing 1 required positional argument: 'a'"
 
     def test_too_many_args(self) -> None:
-        with pytest.raises(NCFail) as e:
+        with pytest.raises(NCFail, match='too many arguments'):
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 123, 456)
-        assert isinstance(e.value.__cause__, TypeError)
-        assert e.value.__cause__.args[0] == "MyBlueprint.initialize() takes 3 positional arguments but 4 were given"
 
-    @pytest.mark.xfail(strict=True, reason='not implemented yet')
     def test_wrong_arg_type_parsed(self) -> None:
-        with pytest.raises(NCFail):
+        with pytest.raises(NCFail) as e:
             self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context(), 'abc')
+        assert isinstance(e.value.__cause__, TypeError)
+        assert e.value.__cause__.args[0] == 'expected integer'
 
     def test_wrong_arg_type_raw(self) -> None:
         args_parser = ArgsOnly.from_arg_types((str,))

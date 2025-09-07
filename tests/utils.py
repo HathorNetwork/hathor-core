@@ -27,6 +27,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
+from hathor.verification.verification_params import VerificationParams
 
 settings = HathorSettings()
 
@@ -586,7 +587,7 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
     # fee
     fee = settings.FEE_PER_OUTPUT
 
-    # deposit output
+    # fee output
     outputs.append(TxOutput(genesis_block.outputs[0].value - fee - (genesis_output_amount or 0), script, 0))
     if genesis_output_amount:
         outputs.append(TxOutput(genesis_output_amount, script, 0))
@@ -719,7 +720,8 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     manager.cpu_mining_service.resolve(tx)
 
     if propagate:
-        manager.verification_service.verify(tx)
+        params = VerificationParams.default_for_mempool()
+        manager.verification_service.verify(tx, params)
         manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)

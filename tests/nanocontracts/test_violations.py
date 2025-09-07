@@ -40,10 +40,10 @@ class ViolationsTestCase(BlueprintTestCase):
         self.address = self.gen_random_address()
 
     def test_modify_actions(self) -> None:
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
@@ -54,10 +54,10 @@ class ViolationsTestCase(BlueprintTestCase):
         self.assertIsInstance(exc.__cause__, TypeError)
 
     def test_modify_vertex(self) -> None:
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)
@@ -67,10 +67,10 @@ class ViolationsTestCase(BlueprintTestCase):
         self.assertIsInstance(exc.__cause__, TypeError)
 
     def test_assign_non_declared_attribute(self) -> None:
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now
         )
         self.runner.create_contract(self.contract_id, self.blueprint_id, context)

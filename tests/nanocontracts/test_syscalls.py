@@ -98,9 +98,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         nc1_id = self.gen_random_contract_id()
         nc2_id = self.gen_random_contract_id()
 
-        tx = self.get_genesis_tx()
-
-        ctx = Context([], tx, self.gen_random_address(), timestamp=0)
+        ctx = self.create_context()
         self.runner.create_contract(nc1_id, self.other_blueprint_id, ctx)
         self.runner.create_contract(nc2_id, self.my_blueprint_id, ctx, nc1_id)
 
@@ -118,31 +116,31 @@ class NCNanoContractTestCase(BlueprintTestCase):
         htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
         tka_balance_key = BalanceKey(nc_id=nc_id, token_uid=token_a_uid)
 
-        ctx_initialize = Context(
+        ctx_initialize = self.create_context(
             actions=[
                 NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1000),
                 NCDepositAction(token_uid=token_a_uid, amount=1000),
             ],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=0,
         )
 
         self.runner.create_contract(nc_id, self.other_blueprint_id, ctx_initialize)
         storage = self.runner.get_storage(nc_id)
 
-        ctx_grant = Context(
+        ctx_grant = self.create_context(
             actions=[NCGrantAuthorityAction(token_uid=token_a_uid, mint=True, melt=True)],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx_grant)
 
-        ctx = Context(
+        ctx = self.create_context(
             actions=[],
             vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
+            caller_id=self.gen_random_address(),
             timestamp=0,
         )
 

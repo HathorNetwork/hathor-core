@@ -55,7 +55,7 @@ class AttrKey(TrieKey):
     key: bytes
 
     def __bytes__(self) -> bytes:
-        return _Tag.ATTR.value + hashlib.sha1(self.key).digest()
+        return _Tag.ATTR.value + hashlib.sha256(self.key).digest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +128,7 @@ class MetadataKey(TrieKey):
     key: bytes
 
     def __bytes__(self) -> bytes:
-        return _Tag.METADATA.value + hashlib.sha1(self.key).digest()
+        return _Tag.METADATA.value + hashlib.sha256(self.key).digest()
 
 
 _BLUEPRINT_ID_KEY = b'blueprint_id'

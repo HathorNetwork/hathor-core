@@ -5,7 +5,6 @@ from typing import NamedTuple, Optional
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address
-from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.types import (
     Address,
@@ -19,7 +18,6 @@ from hathor.nanocontracts.types import (
     TxOutputScript,
     VertexId,
 )
-from hathor.transaction import BaseTransaction
 from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
@@ -50,11 +48,6 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         self.initialize_contract()
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
-    def _get_any_tx(self) -> BaseTransaction:
-        genesis = self.manager.tx_storage.get_all_genesis()
-        tx = [t for t in genesis if t.is_transaction][0]
-        return tx
-
     def _get_any_address(self) -> tuple[Address, KeyPair]:
         password = os.urandom(12)
         key = KeyPair.create(password)
@@ -67,11 +60,8 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
 
     def _make_a_bet(self, amount: int, score: str, *, timestamp: Optional[int] = None) -> BetInfo:
         (address_bytes, key) = self._get_any_address()
-        tx = self._get_any_tx()
         action = NCDepositAction(token_uid=self.token_uid, amount=amount)
-        if timestamp is None:
-            timestamp = self.get_current_timestamp()
-        context = Context([action], tx, address_bytes, timestamp=timestamp)
+        context = self.create_context(caller_id=address_bytes, actions=[action], timestamp=timestamp)
         self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
         return BetInfo(key=key, address=Address(address_bytes), amount=Amount(amount), score=score)
 
@@ -84,16 +74,14 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         result_bytes = signed_result.get_data_bytes(self.nc_id)
         signed_result.script_input = oracle_key.p2pkh_create_input_data(b'123', result_bytes)
 
-        tx = self._get_any_tx()
-        context = Context([], tx, Address(b''), timestamp=self.get_current_timestamp())
+        context = self.create_context()
         self.runner.call_public_method(self.nc_id, 'set_result', context, signed_result)
         final_result = self.nc_storage.get_obj(b'final_result', RESULT_NC_TYPE)
         self.assertEqual(final_result, '2x2')
 
     def _withdraw(self, address: Address, amount: int) -> None:
-        tx = self._get_any_tx()
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
-        context = Context([action], tx, address, timestamp=self.get_current_timestamp())
+        context = self.create_context(caller_id=address, actions=[action])
         self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def initialize_contract(self) -> None:
@@ -104,7 +92,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         self.runner.create_contract(
             self.nc_id,
             self.blueprint_id,
-            Context([], self._get_any_tx(), Address(b''), timestamp=self.get_current_timestamp()),
+            self.create_context(),
             self.oracle_script,
             self.token_uid,
             self.date_last_bet,
@@ -118,8 +106,6 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
 
     def test_basic_flow(self) -> None:
         runner = self.runner
-
-        tx = self._get_any_tx()
 
         ###
         # Make some bets.
@@ -148,7 +134,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         # Out of funds! Any withdrawal must fail from now on...
         amount = 1
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
-        context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
+        context = self.create_context(caller_id=bet1.address, actions=[action])
         with self.assertNCFail('InsufficientBalance', 'withdrawal amount is greater than available (max: 0)'):
             runner.call_public_method(self.nc_id, 'withdraw', context)
 
@@ -156,9 +142,8 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         self._make_a_bet(100, '1x1')
 
         (address_bytes, _) = self._get_any_address()
-        tx = self._get_any_tx()
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
-        context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
+        context = self.create_context(caller_id=address_bytes, actions=[action])
         score = '1x1'
         with self.assertNCFail('NCForbiddenAction', 'action WITHDRAWAL is forbidden on method `bet`'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
@@ -190,20 +175,17 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
 
     def test_withdraw_with_deposits(self) -> None:
         (address_bytes, _) = self._get_any_address()
-        tx = self._get_any_tx()
         action = NCDepositAction(token_uid=self.token_uid, amount=1)
-        context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
+        context = self.create_context(caller_id=address_bytes, actions=[action])
         with self.assertNCFail('NCForbiddenAction', 'action DEPOSIT is forbidden on method `withdraw`'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
 
     def test_make_a_bet_wrong_token(self) -> None:
-
         (address_bytes, _) = self._get_any_address()
-        tx = self._get_any_tx()
         token_uid = TokenUid(b'xxx')
         self.assertNotEqual(token_uid, self.token_uid)
         action = NCDepositAction(token_uid=token_uid, amount=1)
-        context = Context([action], tx, address_bytes, timestamp=self.get_current_timestamp())
+        context = self.create_context(caller_id=address_bytes, actions=[action])
         score = '1x1'
         with self.assertNCFail('InvalidToken', 'token different from 00'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
@@ -211,10 +193,9 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
     def test_withdraw_wrong_token(self) -> None:
         bet1 = self._make_a_bet(100, '1x1')
 
-        tx = self._get_any_tx()
         token_uid = TokenUid(b'xxx')
         self.assertNotEqual(token_uid, self.token_uid)
         action = NCWithdrawalAction(token_uid=token_uid, amount=1)
-        context = Context([action], tx, bet1.address, timestamp=self.get_current_timestamp())
+        context = self.create_context(caller_id=bet1.address, actions=[action])
         with self.assertNCFail('InvalidToken', 'token different from 00'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)

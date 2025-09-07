@@ -1,7 +1,8 @@
+import pytest
+
 from hathor.nanocontracts import Blueprint, Context, fallback, public
 from hathor.nanocontracts.exception import BlueprintDoesNotExist, NCFail, NCInvalidSyscall, NCMethodNotFound
-from hathor.nanocontracts.runner.types import NCArgs
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCArgs
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -87,7 +88,7 @@ class CodeBlueprint3(Blueprint):
     def inc(self, ctx: Context) -> None:
         self.counter += 3
 
-    @public
+    @public(allow_reentrancy=True)
     def on_upgrade_inc(self, ctx: Context) -> None:
         self.counter += 100
 
@@ -112,7 +113,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
 
         tx = self.get_genesis_tx()
         address = self.gen_random_address()
-        ctx = Context(actions=[], vertex=tx, address=address, timestamp=0)
+        ctx = self.create_context(actions=[], vertex=tx, caller_id=address)
 
         self.runner.create_contract(code1_id, self.code1_bp_id, ctx)
         self.runner.create_contract(code2_id, self.code2_bp_id, ctx)
@@ -128,7 +129,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert isinstance(proxy_contract, ProxyBlueprint)
 
         self.runner.call_public_method(proxy_id, 'set_contract', ctx, proxy_id)
-        with self.assertRaises(NCInvalidSyscall, match='cannot call the same blueprint'):
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint'):
             self.runner.call_public_method(proxy_id, 'inc', ctx)
 
         self.runner.call_public_method(proxy_id, 'set_contract', ctx, code1_id)
@@ -155,7 +156,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert code2_contract.counter == 0
         assert proxy_contract.counter == 1
 
-        with self.assertRaises(NCFail):
+        with pytest.raises(NCFail):
             self.runner.call_public_method(proxy_id, 'upgrade', ctx, self.code3_bp_id, 'on_upgrade_fail')
         assert proxy_storage.get_blueprint_id() == self.proxy_bp_id
         assert proxy_contract.counter == 1
@@ -169,7 +170,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert proxy_contract.counter == 3
 
         # it should invoke the fallback method which will fail calling `dec()` from code2's blueprint.
-        with self.assertRaises(NCMethodNotFound, match='method `dec` not found and no fallback is provided'):
+        with pytest.raises(NCMethodNotFound, match='method `dec` not found and no fallback is provided'):
             self.runner.call_public_method(proxy_id, 'dec', ctx)
         assert proxy_storage.get_blueprint_id() == self.proxy_bp_id
         assert proxy_contract.contract == code2_id
@@ -178,7 +179,7 @@ class NCDelegateCallTestCase(BlueprintTestCase):
         assert proxy_contract.counter == 3
 
         unknown_bp_id = self.gen_random_blueprint_id()
-        with self.assertRaises(BlueprintDoesNotExist):
+        with pytest.raises(BlueprintDoesNotExist):
             self.runner.call_public_method(proxy_id, 'upgrade_no_cb', ctx, unknown_bp_id)
 
         self.runner.call_public_method(proxy_id, 'upgrade', ctx, self.code3_bp_id, 'on_upgrade_inc')

@@ -76,7 +76,7 @@ class TokenDescription:
     token_id: bytes
     token_name: str
     token_symbol: str
-    token_version: int  # TODO: back to TokenVersion enum after allowing it in nano types map
+    token_version: int  # TODO-RAUL: back to TokenVersion enum after allowing it in nano types map
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):

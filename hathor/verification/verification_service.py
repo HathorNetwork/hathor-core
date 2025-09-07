@@ -23,6 +23,7 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.validation_state import ValidationState
+from hathor.verification.verification_params import VerificationParams
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
 cpu = get_cpu_profiler()
@@ -42,7 +43,7 @@ class VerificationService:
         self.verifiers = verifiers
         self._tx_storage = tx_storage
 
-    def validate_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> bool:
+    def validate_basic(self, vertex: BaseTransaction, params: VerificationParams) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
 
         If no exception is raised, the ValidationState will end up as `BASIC` and return `True`.
@@ -51,7 +52,7 @@ class VerificationService:
         if vertex.get_metadata().validation.is_at_least_basic():
             return True
 
-        self.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
+        self.verify_basic(vertex, params)
         vertex.set_validation(ValidationState.BASIC)
 
         return True
@@ -59,10 +60,9 @@ class VerificationService:
     def validate_full(
         self,
         vertex: BaseTransaction,
+        params: VerificationParams,
         *,
-        skip_block_weight_verification: bool = False,
         sync_checkpoints: bool = False,
-        reject_locked_reward: bool = True,
         init_static_metadata: bool = True,
     ) -> bool:
         """ Run full validations (these need access to all dependencies) and update the validation state.
@@ -86,61 +86,68 @@ class VerificationService:
         #      ends up being CHECKPOINT_FULL instead of FULL
         if not meta.validation.is_at_least_basic():
             # run basic validation if we haven't already
-            self.verify_basic(vertex, skip_block_weight_verification=skip_block_weight_verification)
+            self.verify_basic(vertex, params)
 
-        self.verify(vertex, reject_locked_reward=reject_locked_reward)
+        self.verify(vertex, params)
         validation = ValidationState.CHECKPOINT_FULL if sync_checkpoints else ValidationState.FULL
         vertex.set_validation(validation)
         return True
 
-    def verify_basic(self, vertex: BaseTransaction, *, skip_block_weight_verification: bool = False) -> None:
+    def verify_basic(
+        self,
+        vertex: BaseTransaction,
+        params: VerificationParams,
+    ) -> None:
         """Basic verifications (the ones without access to dependencies: parents+inputs). Raises on error.
 
         Used by `self.validate_basic`. Should not modify the validation state."""
+        if vertex.hash in self._settings.SKIP_VERIFICATION:
+            return
+
         self.verifiers.vertex.verify_version_basic(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 assert type(vertex) is Block
-                self._verify_basic_block(vertex, skip_weight_verification=skip_block_weight_verification)
+                self._verify_basic_block(vertex, params)
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
-                self._verify_basic_merge_mined_block(vertex, skip_weight_verification=skip_block_weight_verification)
+                self._verify_basic_merge_mined_block(vertex, params)
             case TxVersion.POA_BLOCK:
                 assert type(vertex) is PoaBlock
                 self._verify_basic_poa_block(vertex)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                self._verify_basic_tx(vertex)
+                self._verify_basic_tx(vertex, params)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
-                self._verify_basic_token_creation_tx(vertex)
+                self._verify_basic_token_creation_tx(vertex, params)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
                 assert self._settings.ENABLE_NANO_CONTRACTS
-                self._verify_basic_on_chain_blueprint(vertex)
-            case _:
+                self._verify_basic_on_chain_blueprint(vertex, params)
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
             # nothing to do
 
-    def _verify_basic_block(self, block: Block, *, skip_weight_verification: bool) -> None:
+    def _verify_basic_block(self, block: Block, params: VerificationParams) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
-        if not skip_weight_verification:
+        if not params.skip_block_weight_verification:
             self.verifiers.block.verify_weight(block)
         self.verifiers.block.verify_reward(block)
 
-    def _verify_basic_merge_mined_block(self, block: MergeMinedBlock, *, skip_weight_verification: bool) -> None:
-        self._verify_basic_block(block, skip_weight_verification=skip_weight_verification)
+    def _verify_basic_merge_mined_block(self, block: MergeMinedBlock, params: VerificationParams) -> None:
+        self._verify_basic_block(block, params)
 
     def _verify_basic_poa_block(self, block: PoaBlock) -> None:
         self.verifiers.poa_block.verify_poa(block)
         self.verifiers.block.verify_reward(block)
 
-    def _verify_basic_tx(self, tx: Transaction) -> None:
+    def _verify_basic_tx(self, tx: Transaction, params: VerificationParams) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
         if tx.is_genesis:
             # TODO do genesis validation?
@@ -148,42 +155,44 @@ class VerificationService:
         self.verifiers.tx.verify_parents_basic(tx)
         if self._settings.CONSENSUS_ALGORITHM.is_pow():
             self.verifiers.tx.verify_weight(tx)
-        self.verify_without_storage(tx)
+        self.verify_without_storage(tx, params)
 
-    def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
-        self._verify_basic_tx(tx)
+    def _verify_basic_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
+        self._verify_basic_tx(tx, params)
 
-    def _verify_basic_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
-        self._verify_basic_tx(tx)
+    def _verify_basic_on_chain_blueprint(self, tx: OnChainBlueprint, params: VerificationParams) -> None:
+        self._verify_basic_tx(tx, params)
 
-    def verify(self, vertex: BaseTransaction, *, reject_locked_reward: bool = True) -> None:
+    def verify(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Run all verifications. Raises on error.
 
         Used by `self.validate_full`. Should not modify the validation state."""
+        if vertex.hash in self._settings.SKIP_VERIFICATION:
+            return
+
         self.verifiers.vertex.verify_headers(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 assert type(vertex) is Block
-                self._verify_block(vertex)
+                self._verify_block(vertex, params)
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
-                self._verify_merge_mined_block(vertex)
+                self._verify_merge_mined_block(vertex, params)
             case TxVersion.POA_BLOCK:
                 assert type(vertex) is PoaBlock
-                self._verify_poa_block(vertex)
+                self._verify_poa_block(vertex, params)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
+                self._verify_tx(vertex, params)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
-                self._verify_token_creation_tx(vertex, reject_locked_reward=reject_locked_reward)
+                self._verify_token_creation_tx(vertex, params)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
-                # TODO: on-chain blueprint verifications
-                self._verify_tx(vertex, reject_locked_reward=reject_locked_reward)
-            case _:
+                self._verify_tx(vertex, params)
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
@@ -191,7 +200,7 @@ class VerificationService:
             # nothing to do
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
-    def _verify_block(self, block: Block) -> None:
+    def _verify_block(self, block: Block, params: VerificationParams) -> None:
         """
             (1) confirms at least two pending transactions and references last block
             (2) solves the pow with the correct weight (done in HathorManager)
@@ -205,7 +214,7 @@ class VerificationService:
             # TODO do genesis validation
             return
 
-        self.verify_without_storage(block)
+        self.verify_without_storage(block, params)
 
         # (1) and (4)
         self.verifiers.vertex.verify_parents(block)
@@ -214,19 +223,19 @@ class VerificationService:
 
         self.verifiers.block.verify_mandatory_signaling(block)
 
-    def _verify_merge_mined_block(self, block: MergeMinedBlock) -> None:
+    def _verify_merge_mined_block(self, block: MergeMinedBlock, params: VerificationParams) -> None:
         self.verifiers.merge_mined_block.verify_aux_pow(block)
-        self._verify_block(block)
+        self._verify_block(block, params)
 
-    def _verify_poa_block(self, block: PoaBlock) -> None:
-        self._verify_block(block)
+    def _verify_poa_block(self, block: PoaBlock, params: VerificationParams) -> None:
+        self._verify_block(block, params)
 
     @cpu.profiler(key=lambda _, tx: 'tx-verify!{}'.format(tx.hash.hex()))
     def _verify_tx(
         self,
         tx: Transaction,
+        params: VerificationParams,
         *,
-        reject_locked_reward: bool,
         token_dict: TokenInfoDict | None = None
     ) -> None:
         """ Common verification for all transactions:
@@ -243,16 +252,16 @@ class VerificationService:
         if tx.is_genesis:
             # TODO do genesis validation
             return
-        self.verify_without_storage(tx)
-        self.verifiers.tx.verify_sigops_input(tx)
+        self.verify_without_storage(tx, params)
+        self.verifiers.tx.verify_sigops_input(tx, params.enable_checkdatasig_count)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
         self.verifiers.tx.verify_version(tx)
         self.verifiers.vertex.verify_parents(tx)
-        if reject_locked_reward:
+        if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
 
-    def _verify_token_creation_tx(self, tx: TokenCreationTransaction, *, reject_locked_reward: bool) -> None:
+    def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
 
         We also overload verify_sum to make some different checks
@@ -260,57 +269,60 @@ class VerificationService:
         # we should validate the token info before verifying the tx
         self.verifiers.token_creation_tx.verify_token_info(tx)
         token_dict = tx.get_complete_token_info()
-        self._verify_tx(tx, reject_locked_reward=reject_locked_reward, token_dict=token_dict)
+        self._verify_tx(tx, params, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
 
-    def verify_without_storage(self, vertex: BaseTransaction) -> None:
+    def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
+        if vertex.hash in self._settings.SKIP_VERIFICATION:
+            return
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 assert type(vertex) is Block
-                self._verify_without_storage_block(vertex)
+                self._verify_without_storage_block(vertex, params)
             case TxVersion.MERGE_MINED_BLOCK:
                 assert type(vertex) is MergeMinedBlock
-                self._verify_without_storage_merge_mined_block(vertex)
+                self._verify_without_storage_merge_mined_block(vertex, params)
             case TxVersion.POA_BLOCK:
                 assert type(vertex) is PoaBlock
-                self._verify_without_storage_poa_block(vertex)
+                self._verify_without_storage_poa_block(vertex, params)
             case TxVersion.REGULAR_TRANSACTION:
                 assert type(vertex) is Transaction
-                self._verify_without_storage_tx(vertex)
+                self._verify_without_storage_tx(vertex, params)
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 assert type(vertex) is TokenCreationTransaction
-                self._verify_without_storage_token_creation_tx(vertex)
+                self._verify_without_storage_token_creation_tx(vertex, params)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
-                self._verify_without_storage_on_chain_blueprint(vertex)
-            case _:
+                self._verify_without_storage_on_chain_blueprint(vertex, params)
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
-            self._verify_without_storage_nano_header(vertex)
+            self._verify_without_storage_nano_header(vertex, params)
 
-    def _verify_without_storage_base_block(self, block: Block) -> None:
+    def _verify_without_storage_base_block(self, block: Block, params: VerificationParams) -> None:
         self.verifiers.block.verify_no_inputs(block)
         self.verifiers.vertex.verify_outputs(block)
         self.verifiers.block.verify_output_token_indexes(block)
         self.verifiers.block.verify_data(block)
-        self.verifiers.vertex.verify_sigops_output(block)
+        self.verifiers.vertex.verify_sigops_output(block, params.enable_checkdatasig_count)
 
-    def _verify_without_storage_block(self, block: Block) -> None:
+    def _verify_without_storage_block(self, block: Block, params: VerificationParams) -> None:
         """ Run all verifications that do not need a storage.
         """
         self.verifiers.vertex.verify_pow(block)
-        self._verify_without_storage_base_block(block)
+        self._verify_without_storage_base_block(block, params)
 
-    def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock) -> None:
-        self._verify_without_storage_block(block)
+    def _verify_without_storage_merge_mined_block(self, block: MergeMinedBlock, params: VerificationParams) -> None:
+        self._verify_without_storage_block(block, params)
 
-    def _verify_without_storage_poa_block(self, block: PoaBlock) -> None:
-        self._verify_without_storage_base_block(block)
+    def _verify_without_storage_poa_block(self, block: PoaBlock, params: VerificationParams) -> None:
+        self._verify_without_storage_base_block(block, params)
 
-    def _verify_without_storage_tx(self, tx: Transaction) -> None:
+    def _verify_without_storage_tx(self, tx: Transaction, params: VerificationParams) -> None:
         """ Run all verifications that do not need a storage.
         """
         if self._settings.CONSENSUS_ALGORITHM.is_pow():
@@ -318,18 +330,26 @@ class VerificationService:
         self.verifiers.tx.verify_number_of_inputs(tx)
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)
-        self.verifiers.vertex.verify_sigops_output(tx)
+        self.verifiers.vertex.verify_sigops_output(tx, params.enable_checkdatasig_count)
 
-    def _verify_without_storage_token_creation_tx(self, tx: TokenCreationTransaction) -> None:
-        self._verify_without_storage_tx(tx)
+    def _verify_without_storage_token_creation_tx(
+        self,
+        tx: TokenCreationTransaction,
+        params: VerificationParams,
+    ) -> None:
+        self._verify_without_storage_tx(tx, params)
 
-    def _verify_without_storage_nano_header(self, tx: BaseTransaction) -> None:
+    def _verify_without_storage_nano_header(self, tx: BaseTransaction, params: VerificationParams) -> None:
         assert tx.is_nano_contract()
         self.verifiers.nano_header.verify_nc_signature(tx)
         self.verifiers.nano_header.verify_actions(tx)
 
-    def _verify_without_storage_on_chain_blueprint(self, tx: OnChainBlueprint) -> None:
-        self._verify_without_storage_tx(tx)
+    def _verify_without_storage_on_chain_blueprint(
+        self,
+        tx: OnChainBlueprint,
+        params: VerificationParams,
+    ) -> None:
+        self._verify_without_storage_tx(tx, params)
         self.verifiers.on_chain_blueprint.verify_pubkey_is_allowed(tx)
         self.verifiers.on_chain_blueprint.verify_nc_signature(tx)
         self.verifiers.on_chain_blueprint.verify_code(tx)

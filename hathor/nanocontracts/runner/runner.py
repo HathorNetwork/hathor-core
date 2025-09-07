@@ -28,6 +28,7 @@ from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
     NCFail,
     NCForbiddenAction,
+    NCForbiddenReentrancy,
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
@@ -38,17 +39,15 @@ from hathor.nanocontracts.exception import (
     NCUninitializedContractError,
     NCViewMethodError,
 )
+from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
-from hathor.nanocontracts.method import Method
+from hathor.nanocontracts.method import Method, ReturnOnly
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.types import (
     CallInfo,
     CallRecord,
     CallType,
     IndexUpdateRecordType,
-    NCArgs,
-    NCParsedArgs,
-    NCRawArgs,
     SyscallCreateContractRecord,
     SyscallUpdateTokensRecord,
     UpdateAuthoritiesRecord,
@@ -57,6 +56,7 @@ from hathor.nanocontracts.runner.types import (
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
+    NC_ALLOW_REENTRANCY,
     NC_ALLOWED_ACTIONS_ATTR,
     NC_FALLBACK_METHOD,
     NC_INITIALIZE_METHOD,
@@ -67,8 +67,11 @@ from hathor.nanocontracts.types import (
     NCAcquireAuthorityAction,
     NCAction,
     NCActionType,
+    NCArgs,
     NCDepositAction,
     NCGrantAuthorityAction,
+    NCParsedArgs,
+    NCRawArgs,
     NCWithdrawalAction,
     TokenUid,
     VertexId,
@@ -76,6 +79,7 @@ from hathor.nanocontracts.types import (
 from hathor.nanocontracts.utils import (
     derive_child_contract_id,
     derive_child_token_id,
+    is_nc_fallback_method,
     is_nc_public_method,
     is_nc_view_method,
 )
@@ -178,7 +182,7 @@ class Runner:
         assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
 
         context = nano_header.get_context()
-        assert context.vertex.block.hash == vertex_metadata.first_block
+        assert context.block.hash == vertex_metadata.first_block
 
         nc_args = NCRawArgs(nano_header.nc_args_bytes)
         if nano_header.is_creating_a_new_contract():
@@ -307,6 +311,7 @@ class Runner:
         actions: Sequence[NCAction],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
+        forbid_fallback: bool,
     ) -> Any:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         if method_name == NC_INITIALIZE_METHOD:
@@ -326,6 +331,7 @@ class Runner:
             method_name=method_name,
             actions=actions,
             nc_args=nc_args,
+            forbid_fallback=forbid_fallback,
         )
 
     @_forbid_syscall_from_view('proxy_call_public_method')
@@ -370,15 +376,19 @@ class Runner:
             method_name=method_name,
             actions=actions,
             nc_args=nc_args,
+            skip_reentrancy_validation=True,
         )
 
     def _unsafe_call_another_contract_public_method(
         self,
+        *,
         contract_id: ContractId,
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
         nc_args: NCArgs,
+        skip_reentrancy_validation: bool = False,
+        forbid_fallback: bool = False,
     ) -> Any:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
@@ -407,10 +417,10 @@ class Runner:
 
         # Call the other contract method.
         ctx = Context(
-            actions=actions,
-            vertex=first_ctx.vertex,
-            address=last_call_record.contract_id,
-            timestamp=first_ctx.timestamp,
+            caller_id=last_call_record.contract_id,
+            vertex_data=first_ctx.vertex,
+            block_data=first_ctx.block,
+            actions=Context.__group_actions__(actions),
         )
         return self._execute_public_method_call(
             contract_id=contract_id,
@@ -418,6 +428,8 @@ class Runner:
             method_name=method_name,
             ctx=ctx,
             nc_args=nc_args,
+            skip_reentrancy_validation=skip_reentrancy_validation,
+            forbid_fallback=forbid_fallback,
         )
 
     def _reset_all_change_trackers(self) -> None:
@@ -526,6 +538,8 @@ class Runner:
         method_name: str,
         ctx: Context,
         nc_args: NCArgs,
+        skip_reentrancy_validation: bool = False,
+        forbid_fallback: bool = False,
     ) -> Any:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
@@ -539,30 +553,28 @@ class Runner:
         method = getattr(blueprint, method_name, None)
 
         called_method_name: str = method_name
+        parser: Method | ReturnOnly
         args: tuple[Any, ...]
-        kwargs: dict[str, Any]
         if method is None:
             assert method_name != NC_INITIALIZE_METHOD
+            if forbid_fallback:
+                raise NCMethodNotFound(f'method `{method_name}` not found and fallback is forbidden')
             fallback_method = getattr(blueprint, NC_FALLBACK_METHOD, None)
             if fallback_method is None:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
             method = fallback_method
+            assert is_nc_fallback_method(method)
+            parser = ReturnOnly.from_callable(method)
             called_method_name = NC_FALLBACK_METHOD
             args = method_name, nc_args
-            kwargs = {}
         else:
             if not is_nc_public_method(method):
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
-            match nc_args:
-                case NCRawArgs(args_bytes):
-                    parser = Method.from_callable(method)
-                    args = parser.deserialize_args_bytes(args_bytes)
-                    kwargs = {}
-                case NCParsedArgs():
-                    args = nc_args.args
-                    kwargs = nc_args.kwargs
-                case _:
-                    assert_never(nc_args)
+            parser = Method.from_callable(method)
+            args = self._validate_nc_args_for_method(parser, nc_args)
+
+        if not skip_reentrancy_validation:
+            self._validate_reentrancy(contract_id, called_method_name, method)
 
         call_record = CallRecord(
             type=CallType.PUBLIC,
@@ -572,7 +584,6 @@ class Runner:
             method_name=called_method_name,
             ctx=ctx,
             args=args,
-            kwargs=kwargs,
             changes_tracker=changes_tracker,
             index_updates=[],
         )
@@ -589,7 +600,7 @@ class Runner:
             # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
             # impact the original context. Since the runner relies on the context for other critical checks, any
             # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, ctx.copy(), *args, **kwargs)
+            ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
         except NCFail:
             raise
         except Exception as e:
@@ -600,7 +611,37 @@ class Runner:
             call_record.changes_tracker.commit()
 
         self._call_info.post_call(call_record)
-        return ret
+        return self._validate_return_type_for_method(parser, ret)
+
+    @staticmethod
+    def _validate_nc_args_for_method(method: Method, nc_args: NCArgs) -> tuple[Any, ...]:
+        """
+        Given a method and its NCArgs, return the merged args and kwargs,
+        while validating their types and cloning the objects.
+        """
+        args_bytes: bytes
+        match nc_args:
+            case NCParsedArgs():
+                # Even though we could simply validate the type with `check_value/isinstance` and return the args,
+                # we do a round-trip to create a new instance and secure mutation of objects across contracts.
+                args_bytes = method.serialize_args_bytes(nc_args.args, nc_args.kwargs)
+            case NCRawArgs(args_bytes):
+                # Nothing to do, we can just deserialize the bytes directly.
+                pass
+            case _:
+                assert_never(nc_args)
+
+        return method.deserialize_args_bytes(args_bytes)
+
+    @staticmethod
+    def _validate_return_type_for_method(method: Method | ReturnOnly, return_value: Any) -> Any:
+        """
+        Given a method and its return value, return that value, while validating its type and cloning the object.
+        """
+        # Even though we could simply validate the type with `check_value/isinstance` and return the value,
+        # we do a round-trip to create a new instance and secure mutation of objects across contracts.
+        return_bytes = method.serialize_return_bytes(return_value)
+        return method.deserialize_return_bytes(return_bytes)
 
     def call_view_method(self, contract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
         """Call a contract view method."""
@@ -666,6 +707,16 @@ class Runner:
 
         changes_tracker = self._create_changes_tracker(contract_id)
         blueprint_id = self.get_blueprint_id(contract_id)
+        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        method = getattr(blueprint, method_name, None)
+
+        if method is None:
+            raise NCMethodNotFound(method_name)
+        if not is_nc_view_method(method):
+            raise NCInvalidMethodCall(f'`{method_name}` is not a view method')
+
+        parser = Method.from_callable(method)
+        args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
 
         call_record = CallRecord(
             type=CallType.VIEW,
@@ -675,27 +726,18 @@ class Runner:
             method_name=method_name,
             ctx=None,
             args=args,
-            kwargs=kwargs,
             changes_tracker=changes_tracker,
             index_updates=None,
         )
         self._call_info.pre_call(call_record)
 
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
-        method = getattr(blueprint, method_name)
-
-        if method is None:
-            raise NCMethodNotFound(method_name)
-        if not is_nc_view_method(method):
-            raise NCInvalidMethodCall('not a view method')
-
-        ret = self._metered_executor.call(method, *args, **kwargs)
+        ret = self._metered_executor.call(method, args=args)
 
         if not changes_tracker.is_empty():
             raise NCViewMethodError('view methods cannot change the state')
 
         self._call_info.post_call(call_record)
-        return ret
+        return self._validate_return_type_for_method(parser, ret)
 
     def get_balance_before_current_call(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
         """
@@ -766,7 +808,7 @@ class Runner:
             raise ValueError('no seed was provided')
         contract_id = self.get_current_contract_id()
         if contract_id not in self._rng_per_contract:
-            self._rng_per_contract[contract_id] = NanoRNG.create_with_shell(seed=self._rng.randbytes(32))
+            self._rng_per_contract[contract_id] = create_with_shell(NanoRNG, seed=self._rng.randbytes(32))
         return self._rng_per_contract[contract_id]
 
     def _internal_create_contract(self, contract_id: ContractId, blueprint_id: BlueprintId) -> None:
@@ -831,11 +873,11 @@ class Runner:
         self._internal_create_contract(child_id, blueprint_id)
         nc_args = NCParsedArgs(args, kwargs)
         ret = self._unsafe_call_another_contract_public_method(
-            child_id,
-            blueprint_id,
-            NC_INITIALIZE_METHOD,
-            actions,
-            nc_args,
+            contract_id=child_id,
+            blueprint_id=blueprint_id,
+            method_name=NC_INITIALIZE_METHOD,
+            actions=actions,
+            nc_args=nc_args,
         )
 
         assert last_call_record.index_updates is not None
@@ -949,6 +991,17 @@ class Runner:
                 if isinstance(action, BaseTokenAction) and action.amount < 0:
                     raise NCInvalidContext('amount must be positive')
 
+    def _validate_reentrancy(self, contract_id: ContractId, method_name: str, method: Any) -> None:
+        """Check whether a reentrancy is happening and whether it is allowed."""
+        assert self._call_info is not None
+        allow_reentrancy = getattr(method, NC_ALLOW_REENTRANCY, False)
+        if allow_reentrancy:
+            return
+
+        for call_record in self._call_info.stack:
+            if call_record.contract_id == contract_id:
+                raise NCForbiddenReentrancy(f'reentrancy is forbidden on method `{method_name}`')
+
     def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> None:
         """Check whether actions are allowed."""
         allowed_actions: set[NCActionType] = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
@@ -990,7 +1043,7 @@ class Runner:
         htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
-        changes_tracker.create_token(token_id, token_name, token_symbol, TokenVersion.DEPOSIT)
+        changes_tracker.create_token(token_id, token_name, token_symbol)
         changes_tracker.grant_authorities(
             token_id,
             grant_mint=mint_authority,

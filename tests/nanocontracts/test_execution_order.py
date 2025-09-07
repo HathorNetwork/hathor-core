@@ -96,7 +96,7 @@ class MyBlueprint(Blueprint):
         self.syscall.call_public_method(contract_id,  'accept_deposit_from_another_callback', [action])
         self.assert_token_balance(before=0, current=4)
 
-    @public(allow_deposit=True)
+    @public(allow_deposit=True, allow_reentrancy=True)
     def accept_deposit_from_another_callback(self, ctx: Context) -> None:
         self.assert_token_balance(before=3, current=6)
 
@@ -116,7 +116,7 @@ class MyBlueprint(Blueprint):
         self.syscall.call_public_method(contract_id, 'accept_withdrawal_from_another_callback', [action])
         self.assert_token_balance(before=4, current=3)
 
-    @public(allow_withdrawal=True)
+    @public(allow_withdrawal=True, allow_reentrancy=True)
     def accept_withdrawal_from_another_callback(self, ctx: Context) -> None:
         self.assert_token_balance(before=7, current=6)
 
@@ -137,10 +137,10 @@ class TestExecutionOrder(BlueprintTestCase):
         self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(action), self.token_a)
 
     def _get_context(self, *actions: NCAction) -> Context:
-        return Context(
+        return self.create_context(
             actions=list(actions),
             vertex=self.tx,
-            address=self.address,
+            caller_id=self.address,
             timestamp=self.now,
         )
 
