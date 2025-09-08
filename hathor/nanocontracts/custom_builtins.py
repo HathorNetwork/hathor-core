@@ -356,6 +356,11 @@ DISABLED_BUILTINS: frozenset[str] = frozenset({
     # XXX: used to raise SystemExit exception to close the process, we could make it raise a NCFail
     'exit',
 
+    # XXX: floats are not allowed in runtime
+    # O(1)
+    # type float
+    'float',
+
     # XXX: used to dynamically get an attribute, must not be allowed
     'getattr',
 
@@ -580,10 +585,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # (function: Callable[[S], TypeIs[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
     # (function: Callable[[T], Any], iterable: Iterable[T], /) -> filter(Iterator[T])
     'filter': builtins.filter,
-
-    # O(1)
-    # type float
-    'float': builtins.float,
 
     # O(N) for N=len(value)
     # (value: object, format_spec: str = "", /) -> str
