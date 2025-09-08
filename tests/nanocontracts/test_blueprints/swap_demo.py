@@ -15,9 +15,10 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid, public, view
+from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid, export, public, view
 
 
+@export
 class SwapDemo(Blueprint):
     """Blueprint to execute swaps between tokens.
     This blueprint is here just as a reference for blueprint developers, not for real use.
