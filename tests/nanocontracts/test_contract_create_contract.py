@@ -62,7 +62,7 @@ class MyBlueprint1(Blueprint):
     @public(allow_deposit=True)
     def mint(self, ctx: Context, amount: int) -> None:
         assert self.token_uid is not None
-        self.syscall.mint_tokens(self.token_uid, amount)
+        self.syscall.mint_deposit_tokens(self.token_uid, amount)
 
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:

@@ -215,9 +215,14 @@ class BlueprintEnvironment:
         self.__runner.syscall_revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
 
     @final
-    def mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def mint_deposit_tokens(self, token_uid: TokenUid, amount: int) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
-        self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_mint_deposit_tokens(token_uid=token_uid, amount=amount)
+
+    @final
+    def mint_fee_tokens(self, token_uid: TokenUid, amount: int) -> None:
+        """Mint tokens and add them to the balance of this nano contract."""
+        self.__runner.syscall_mint_fee_tokens(token_uid=token_uid, amount=amount)
 
     @final
     def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:

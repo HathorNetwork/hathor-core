@@ -41,3 +41,7 @@ class TokenProxy:
     ) -> None:
         """Proxy to block_storage.create_token()."""
         self.__block_storage.create_token(token_id, token_name, token_symbol, token_version)
+
+    def get_token(self, token_id: TokenUid) -> TokenDescription:
+        """Proxy to block_storage.get_token()."""
+        return self.__block_storage.get_token_description(token_id)

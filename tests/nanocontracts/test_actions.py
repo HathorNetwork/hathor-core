@@ -57,7 +57,7 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
-        self.syscall.mint_tokens(token_uid, amount)
+        self.syscall.mint_deposit_tokens(token_uid, amount)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def melt(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:

@@ -55,7 +55,7 @@ class OtherBlueprint(Blueprint):
 
     @public
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
-        self.syscall.mint_tokens(token_uid, amount)
+        self.syscall.mint_deposit_tokens(token_uid, amount)
 
     @public
     def melt(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
@@ -71,11 +71,12 @@ class FeeTokenBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def create_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
-        return self.syscall.create_fee_token(name, symbol, amount)
+        self.created_fee_token_uid = self.syscall.create_fee_token(name, symbol, amount)
+        return self.created_fee_token_uid
 
     @public
     def mint(self, ctx: Context, amount: int) -> None:
-        self.syscall.mint_tokens(self.created_fee_token_uid, amount)
+        self.syscall.mint_deposit_tokens(self.created_fee_token_uid, amount)
 
     @public
     def melt(self, ctx: Context, amount: int) -> None:
@@ -216,24 +217,17 @@ class NCNanoContractTestCase(BlueprintTestCase):
             tka_balance_key: Balance(value=667, can_mint=False, can_melt=False),
         }
 
-    def test_fee_tokens(self) -> None:
+    def test_fee_token_creation(self) -> None:
         nc_id = self.gen_random_contract_id()
 
-        ctx_initialize = Context(
-            actions=[],
-            vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
-            timestamp=0,
-        )
+        ctx_initialize = self.create_context([], self.get_genesis_tx())
 
         self.runner.create_contract(nc_id, self.fee_blueprint_id, ctx_initialize)
         storage = self.runner.get_storage(nc_id)
 
-        ctx_create_token = Context(
-            actions=[NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1000)],
-            vertex=self.get_genesis_tx(),
-            address=self.gen_random_address(),
-            timestamp=0,
+        ctx_create_token =self.create_context(
+            [NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1000)],
+            self.get_genesis_tx()
         )
 
         token_uid = self.runner.call_public_method(nc_id, 'create_token', ctx_create_token, 'FeeToken', 'FBT', 1000000)
@@ -244,3 +238,24 @@ class NCNanoContractTestCase(BlueprintTestCase):
         assert token_balance.value == 1000000
         assert token_balance.can_mint and token_balance.can_melt
         assert htr_balance.value == 999
+
+    def test_fee_token_mint(self):
+        nc_id = self.gen_random_contract_id()
+        htr_deposit = NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)
+
+        ctx_initialize = self.create_context([], self.get_genesis_tx())
+        self.runner.create_contract(nc_id, self.fee_blueprint_id, ctx_initialize)
+
+        storage = self.runner.get_storage(nc_id)
+
+        ctx_create_token =self.create_context([htr_deposit],self.get_genesis_tx())
+        token_uid = self.runner.call_public_method(nc_id, 'create_token', ctx_create_token, 'FeeToken', 'FBT', 1)
+
+        token_balance = storage.get_balance(token_uid)
+        htr_balance = storage.get_balance(TokenUid(HATHOR_TOKEN_UID))
+
+        assert token_balance.value == 1
+        assert htr_balance.value == 0
+
+        ctx_mint = self.create_context([htr_deposit], self.get_genesis_tx())
+        token_uid = self.runner.call_public_method(nc_id, 'mint', ctx_mint, 1)
