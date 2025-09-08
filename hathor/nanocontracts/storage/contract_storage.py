@@ -165,6 +165,9 @@ class NCContractStorage:
         """Create a new token in the current block."""
         self._token_proxy.create_token(token_id, token_name, token_symbol, token_version)
 
+    def get_token(self, token_id: TokenUid) -> TokenDescription:
+        return self._token_proxy.get_token(token_id)
+
     def lock(self) -> None:
         """Lock the storage for changes or commits."""
         self.is_locked = True

@@ -49,9 +49,11 @@ from hathor.nanocontracts.runner.types import (
     CallType,
     IndexUpdateRecordType,
     SyscallCreateContractRecord,
-    SyscallUpdateTokensRecord,
+    SyscallUpdateDepositTokensRecord,
     UpdateAuthoritiesRecord,
     UpdateAuthoritiesRecordType,
+    SyscallUpdateDepositTokensRecord,
+    SyscallUpdateFeeTokensRecord,
 )
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
@@ -474,9 +476,12 @@ class Runner:
                     case SyscallCreateContractRecord() | UpdateAuthoritiesRecord():
                         # Nothing to do here.
                         pass
-                    case SyscallUpdateTokensRecord():
+                    case SyscallUpdateDepositTokensRecord():
                         calculated_tokens_totals[record.token_uid] += record.token_amount
                         calculated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] += record.htr_amount
+                    case SyscallUpdateFeeTokensRecord():
+                        calculated_tokens_totals[record.token_uid] += record.token_amount
+                        calculated_tokens_totals[record.fee_payment_token_uid] += record.fee_payment_amount
                     case _:
                         assert_never(record)
 
@@ -918,10 +923,13 @@ class Runner:
         )
         call_record.index_updates.append(syscall_record)
 
-    @_forbid_syscall_from_view('mint_tokens')
-    def syscall_mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
-        """Mint tokens and add them to the balance of this nano contract."""
+    @_forbid_syscall_from_view('mint_deposit_tokens')
+    def syscall_mint_deposit_tokens(self, token_uid: TokenUid, amount: int) -> None:
+        """Mint tokens and adds them to the balance of this nano contract.
+        The tokens should be already created otherwise it will raise.
+        """
         call_record = self.get_current_call_record()
+
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint HTR tokens')
 
@@ -942,11 +950,53 @@ class Runner:
         self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
 
         assert call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
+        syscall_record = SyscallUpdateDepositTokensRecord(
             type=IndexUpdateRecordType.MINT_TOKENS,
             token_uid=token_uid,
             token_amount=token_amount,
             htr_amount=htr_amount,
+        )
+        call_record.index_updates.append(syscall_record)
+
+    @_forbid_syscall_from_view('mint_fee_tokens')
+    def syscall_mint_fee_tokens(self, token_uid: TokenUid, amount: int, fee_payment_token: TokenUid = HATHOR_TOKEN_UID) -> None:
+        """Mint tokens and adds them to the balance of this nano contract.
+        The tokens should be already created otherwise it will raise.
+        """
+        call_record = self.get_current_call_record()
+
+        if token_uid == HATHOR_TOKEN_UID:
+            raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint HTR tokens')
+
+        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        assert changes_tracker.nc_id == call_record.contract_id
+
+        balance = changes_tracker.get_balance(token_uid)
+
+        if not balance.can_mint:
+            raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
+
+        if fee_payment_token == HATHOR_TOKEN_UID:
+            # TODO-RAUL: rename fee per output or create another const with a better name
+            fee = self._settings.FEE_PER_OUTPUT
+        else:
+            fee = self._settings.FEE_PER_OUTPUT / self._settings.TOKEN_DEPOSIT_PERCENTAGE
+        # get the negative value to be used in the sums
+        fee = fee * -1
+
+        changes_tracker.add_balance(token_uid, amount)
+        changes_tracker.add_balance(fee_payment_token, fee)
+
+        self._updated_tokens_totals[token_uid] += amount
+        self._updated_tokens_totals[TokenUid(fee_payment_token)] += fee
+
+        assert call_record.index_updates is not None
+        syscall_record = SyscallUpdateFeeTokensRecord(
+            type=IndexUpdateRecordType.MINT_TOKENS,
+            token_uid=token_uid,
+            token_amount=amount,
+            fee_payment_token_uid=fee_payment_token,
+            fee_payment_amount=fee,
         )
         call_record.index_updates.append(syscall_record)
 
@@ -974,7 +1024,7 @@ class Runner:
         self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
 
         assert call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
+        syscall_record = SyscallUpdateDepositTokensRecord(
             type=IndexUpdateRecordType.MELT_TOKENS,
             token_uid=token_uid,
             token_amount=token_amount,
@@ -1055,7 +1105,7 @@ class Runner:
         self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] -= htr_amount
 
         assert last_call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
+        syscall_record = SyscallUpdateDepositTokensRecord(
             type=IndexUpdateRecordType.CREATE_TOKEN,
             token_uid=token_id,
             token_amount=token_amount,
@@ -1076,6 +1126,7 @@ class Runner:
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
+        fee_payment_token: TokenUid = HATHOR_TOKEN_UID
     ) -> TokenUid:
         """Create a child fee token from a contract."""
         try:
@@ -1090,7 +1141,12 @@ class Runner:
 
         token_amount = amount
         # For fee tokens, we only need to pay the transaction fee, not deposit HTR
-        fee_amount = self._settings.FEE_PER_OUTPUT
+        if fee_payment_token == TokenUid(HATHOR_TOKEN_UID):
+            fee_amount = self._settings.FEE_PER_OUTPUT
+        else:
+            fee_amount = self._settings.FEE_PER_OUTPUT / self._settings.TOKEN_DEPOSIT_PERCENTAGE
+
+        fee_amount = fee_amount * -1
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
         changes_tracker.create_token(token_id, token_name, token_symbol, TokenVersion.FEE)
@@ -1100,19 +1156,20 @@ class Runner:
             grant_melt=melt_authority,
         )
         changes_tracker.add_balance(token_id, amount)
-        changes_tracker.add_balance(HATHOR_TOKEN_UID, -fee_amount)
+        changes_tracker.add_balance(fee_payment_token, fee_amount)
+
         self._updated_tokens_totals[token_id] += amount
-        self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] -= fee_amount
+        self._updated_tokens_totals[TokenUid(fee_payment_token)] += fee_amount
 
         assert last_call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
+        syscall_record = SyscallUpdateFeeTokensRecord(
             type=IndexUpdateRecordType.CREATE_TOKEN,
             token_uid=token_id,
             token_amount=token_amount,
-            htr_amount=-fee_amount,
             token_symbol=token_symbol,
             token_name=token_name,
-            token_version=TokenVersion.FEE
+            fee_payment_token_uid=fee_payment_token,
+            fee_payment_amount=fee_amount,
         )
         last_call_record.index_updates.append(syscall_record)
 

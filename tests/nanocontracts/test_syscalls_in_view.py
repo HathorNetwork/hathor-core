@@ -83,7 +83,7 @@ class MyBlueprint(Blueprint):
 
     @view
     def mint_tokens(self) -> None:
-        self.syscall.mint_tokens(TokenUid(b''), 0)
+        self.syscall.mint_deposit_tokens(TokenUid(b''), 0)
 
     @view
     def melt_tokens(self) -> None:
