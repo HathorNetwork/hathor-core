@@ -387,12 +387,12 @@ if foo:
             ocb3.ocb_code = ```
                 from hathor.nanocontracts import Blueprint
                 from hathor.nanocontracts.context import Context
-                from hathor.nanocontracts.types import public
+                from hathor.nanocontracts.types import export, public
+                @export
                 class MyBlueprint(Blueprint):
                     @public
                     def initialize(self, ctx: Context) -> None:
                         pass
-                __blueprint__ = MyBlueprint
             ```
         """)
 

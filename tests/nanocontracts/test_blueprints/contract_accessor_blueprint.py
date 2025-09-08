@@ -20,12 +20,14 @@ from hathor.nanocontracts.types import (
     NCArgs,
     NCDepositAction,
     VertexId,
+    export,
     fallback,
     public,
     view,
 )
 
 
+@export
 class MyBlueprint(Blueprint):
     message: str
 
@@ -200,6 +202,3 @@ class MyBlueprint(Blueprint):
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
         return f'fallback called for method `{method_name}`'
-
-
-__blueprint__ = MyBlueprint
