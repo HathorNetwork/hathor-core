@@ -62,9 +62,10 @@ class BuiltinBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
 
     blueprint_source = r'''from hathor.nanocontracts import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public
+from hathor.nanocontracts.types import export, public
 
 
+@export
 class TestBlueprint(Blueprint):
     """ This class is used by the test for the blueprint source code resource
         It must be in a separate file for the assert in the test
@@ -92,9 +93,10 @@ class OCBBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
 
     blueprint_source = r'''from hathor.nanocontracts import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public
+from hathor.nanocontracts.types import export, public
 
 
+@export
 class TestBlueprint(Blueprint):
     """ This class is used by the test for the blueprint source code resource
         It must be in a separate file for the assert in the test
@@ -108,7 +110,6 @@ class TestBlueprint(Blueprint):
     @public
     def sum(self, ctx: Context, arg1: int) -> None:
         self.int_attribute += arg1
-__blueprint__ = TestBlueprint
 '''
 
     def setUp(self):

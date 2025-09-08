@@ -26,7 +26,6 @@ from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import AST_NAME_BLACKLIST
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
-from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME
 
 
 class _RestrictionsVisitor(ast.NodeVisitor):
@@ -57,8 +56,7 @@ class _RestrictionsVisitor(ast.NodeVisitor):
         assert isinstance(node.id, str)
         if node.id in AST_NAME_BLACKLIST:
             raise SyntaxError(f'Usage or reference to {node.id} is not allowed.')
-        assert BLUEPRINT_EXPORT_NAME == '__blueprint__', 'sanity check for the rule below'
-        if '__' in node.id and node.id != BLUEPRINT_EXPORT_NAME:
+        if '__' in node.id:
             raise SyntaxError('Using dunder names is not allowed.')
         self.generic_visit(node)
 
@@ -112,18 +110,6 @@ class _RestrictionsVisitor(ast.NodeVisitor):
 
     def visit_Div(self, node: ast.Div) -> None:
         raise SyntaxError('Simple / division results in float, use // instead.')
-
-
-class _SearchName(ast.NodeVisitor):
-    def __init__(self, name: str) -> None:
-        self.search_name = name
-        self.found = False
-
-    def visit_Name(self, node: ast.Name) -> None:
-        if node.id == self.search_name:
-            self.found = True
-            return
-        self.generic_visit(node)
 
 
 class _SearchDecorator(ast.NodeVisitor):
@@ -258,8 +244,7 @@ class OnChainBlueprintVerifier:
 
     def _verify_raw_text(self, tx: OnChainBlueprint) -> None:
         """Verify that the script does not use any forbidden text."""
-        assert BLUEPRINT_EXPORT_NAME == '__blueprint__', 'sanity check for the rule below'
-        if '__' in tx.code.text.replace(BLUEPRINT_EXPORT_NAME, ''):
+        if '__' in tx.code.text:
             raise SyntaxError('script contains dunder text')
 
     def _verify_script_restrictions(self, tx: OnChainBlueprint) -> None:
@@ -267,21 +252,18 @@ class OnChainBlueprintVerifier:
         _RestrictionsVisitor().visit(self._get_python_code_ast(tx))
 
     def _verify_has_blueprint_attr(self, tx: OnChainBlueprint) -> None:
-        """Verify that the script defines a __blueprint__ attribute."""
+        """Verify that the script seemingly exports a blueprint."""
         blueprint_ast = self._get_python_code_ast(tx)
-        search_name = _SearchName(BLUEPRINT_EXPORT_NAME)
-        search_name.visit(blueprint_ast)
         search_decorator = _SearchDecorator('export')
         search_decorator.visit(blueprint_ast)
-        either_found = search_name.found or search_decorator.found
-        if not either_found:
+        if not search_decorator.found:
             raise OCBInvalidScript('Could not find a main Blueprint definition')
 
     def _verify_blueprint_type(self, tx: OnChainBlueprint) -> None:
-        """Verify that the __blueprint__ is a Blueprint, this will load and execute the blueprint code."""
+        """Verify that the exported blueprint is a Blueprint, this will load and execute the code."""
         from hathor.nanocontracts.blueprint import Blueprint
         blueprint_class = tx.get_blueprint_object_bypass()
         if not isinstance(blueprint_class, type):
-            raise OCBInvalidScript(f'{BLUEPRINT_EXPORT_NAME} is not a class')
+            raise OCBInvalidScript('exported Blueprint is not a class')
         if not issubclass(blueprint_class, Blueprint):
-            raise OCBInvalidScript(f'{BLUEPRINT_EXPORT_NAME} is not a Blueprint subclass')
+            raise OCBInvalidScript('exported Blueprint is not a Blueprint subclass')

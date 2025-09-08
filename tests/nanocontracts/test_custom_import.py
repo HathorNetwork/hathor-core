@@ -28,8 +28,9 @@ class TestCustomImport(BlueprintTestCase):
         blueprint = '''
             from hathor.nanocontracts import Blueprint
             from hathor.nanocontracts.context import Context
-            from hathor.nanocontracts.types import public
+            from hathor.nanocontracts.types import export, public
 
+            @export
             class MyBlueprint(Blueprint):
                 @public
                 def initialize(self, ctx: Context) -> None:
@@ -37,8 +38,6 @@ class TestCustomImport(BlueprintTestCase):
                     from collections import OrderedDict
                     from hathor.nanocontracts.exception import NCFail
                     from hathor.nanocontracts.types import NCAction, NCActionType
-
-            __blueprint__ = MyBlueprint
         '''
 
         # Wrap our custom builtin so we can spy its calls
@@ -54,7 +53,7 @@ class TestCustomImport(BlueprintTestCase):
         module_level_calls = [
             call('hathor.nanocontracts', ANY, ANY, ('Blueprint',), 0),
             call('hathor.nanocontracts.context', ANY, ANY, ('Context',), 0),
-            call('hathor.nanocontracts.types', ANY, ANY, ('public',), 0),
+            call('hathor.nanocontracts.types', ANY, ANY, ('export', 'public'), 0),
         ]
         assert wrapped_import_function.call_count == 2 * len(module_level_calls)
         wrapped_import_function.assert_has_calls(2 * module_level_calls)
@@ -83,8 +82,9 @@ class TestCustomImport(BlueprintTestCase):
         blueprint = '''
             from hathor.nanocontracts import Blueprint
             from hathor.nanocontracts.context import Context
-            from hathor.nanocontracts.types import public
+            from hathor.nanocontracts.types import export, public
 
+            @export
             class MyBlueprint(Blueprint):
                 @public
                 def initialize(self, ctx: Context) -> None:
@@ -98,8 +98,6 @@ class TestCustomImport(BlueprintTestCase):
                         from hathor.nanocontracts.types import NCAction, NCActionType
 
                     wrapped_builtin_import.assert_not_called()
-
-            __blueprint__ = MyBlueprint
         '''
 
         blueprint_id = self._register_blueprint_contents(
