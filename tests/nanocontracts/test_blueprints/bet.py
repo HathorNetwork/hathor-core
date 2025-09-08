@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from math import floor
 from typing import Optional, TypeAlias
 
 from hathor.nanocontracts.blueprint import Blueprint
@@ -219,8 +218,8 @@ class Bet(Blueprint):
         if result_total == 0:
             return Amount(0)
         address_total = self.bets_address.get((self.final_result, address), 0)
-        percentage = address_total / result_total
-        return Amount(floor(percentage * self.total))
+        winner_amount = Amount(address_total * self.total // result_total)
+        return winner_amount
 
 
 __blueprint__ = Bet
