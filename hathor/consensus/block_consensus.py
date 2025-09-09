@@ -112,8 +112,19 @@ class BlockConsensusAlgorithm:
                 to_be_executed.append(cur)
                 cur = cur.get_block_parent()
         else:
-            # no reorg occurred, so simply execute this new block.
-            to_be_executed = [block]
+            # No reorg occurred, so we execute all unexecuted blocks.
+            # Normally it's just the current block, but it's possible to have
+            # voided and therefore unexecuted blocks connected to the best chain,
+            # for example when a block is voided by a transaction.
+            cur = block
+            while True:
+                cur_meta = cur.get_metadata()
+                if cur_meta.nc_block_root_id is not None:
+                    break
+                to_be_executed.append(cur)
+                if cur.is_genesis:
+                    break
+                cur = cur.get_block_parent()
 
         for current in to_be_executed[::-1]:
             self._nc_execute_calls(current, is_reorg=is_reorg)
@@ -126,15 +137,17 @@ class BlockConsensusAlgorithm:
 
         assert self._settings.ENABLE_NANO_CONTRACTS
 
+        if block.is_genesis:
+            # XXX We can remove this call after the full node initialization is refactored and
+            #     the genesis block goes through the consensus protocol.
+            self._nc_initialize_genesis(block)
+            return
+
         meta = block.get_metadata()
         assert not meta.voided_by
         assert meta.nc_block_root_id is None
 
         parent = block.get_block_parent()
-        if parent.is_genesis:
-            # XXX We can remove this call after the full node initialization is refactored and
-            #     the genesis block goes through the consensus protocol.
-            self._nc_initialize_genesis(parent)
         parent_meta = parent.get_metadata()
         block_root_id = parent_meta.nc_block_root_id
         assert block_root_id is not None
