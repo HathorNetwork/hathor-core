@@ -28,8 +28,8 @@ from hathor.utils.named_tuple import validated_named_tuple_from_dict
 
 DECIMAL_PLACES = 2
 
-GENESIS_TOKEN_UNITS = 1 * (10**9)  # 1B
-GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10**DECIMAL_PLACES)  # 100B
+GENESIS_TOKEN_UNITS = 1 * (10 ** 9)  # 1B
+GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10 ** DECIMAL_PLACES)  # 100B
 
 HATHOR_TOKEN_UID: bytes = b'\x00'
 
@@ -86,6 +86,10 @@ class HathorSettings(NamedTuple):
 
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
+    # Fee rate settings
+    ENABLE_FEE_TOKEN: bool = False
+    FEE_PER_OUTPUT: int = 1
+
     # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to
     # MINIMUM_TOKEN_UNITS_PER_BLOCK.
     BLOCKS_PER_HALVING: Optional[int] = 2 * 60 * 24 * 365  # 1051200, every 365 days
@@ -95,11 +99,11 @@ class HathorSettings(NamedTuple):
 
     @property
     def INITIAL_TOKENS_PER_BLOCK(self) -> int:
-        return self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
+        return self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10 ** DECIMAL_PLACES)
 
     @property
     def MINIMUM_TOKENS_PER_BLOCK(self) -> int:
-        return self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10**DECIMAL_PLACES)
+        return self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10 ** DECIMAL_PLACES)
 
     # Assume that: amount < minimum
     # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
@@ -364,17 +368,17 @@ class HathorSettings(NamedTuple):
 
     # Maximum number of sig operations of all inputs on a given tx
     # including the redeemScript in case of MultiSig
-    MAX_TX_SIGOPS_INPUT: int = 255*5
+    MAX_TX_SIGOPS_INPUT: int = 255 * 5
 
     # Maximum number of sig operations of all outputs on a given tx
-    MAX_TX_SIGOPS_OUTPUT: int = 255*5
+    MAX_TX_SIGOPS_OUTPUT: int = 255 * 5
 
     # Maximum number of transactions returned on addresses history API
     MAX_TX_ADDRESSES_HISTORY: int = 150
 
     # Maximum number of elements (inputs and outputs) to be returned on address history API
     # As a normal tx has ~2-4 inputs and 2 outputs, I would say the maximum should be 150*6 = 900 elements
-    MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY: int = 6*MAX_TX_ADDRESSES_HISTORY
+    MAX_INPUTS_OUTPUTS_ADDRESS_HISTORY: int = 6 * MAX_TX_ADDRESSES_HISTORY
 
     # Maximum number of TXs that will be sent by the Mempool API.
     MEMPOOL_API_TX_LIMIT: int = 100
@@ -569,7 +573,7 @@ def _validate_tokens(genesis_tokens: int, values: dict[str, Any]) -> int:
     assert genesis_token_units is not None, 'GENESIS_TOKEN_UNITS must be set'
     assert decimal_places is not None, 'DECIMAL_PLACES must be set'
 
-    if genesis_tokens != genesis_token_units * (10**decimal_places):
+    if genesis_tokens != genesis_token_units * (10 ** decimal_places):
         raise ValueError(
             f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, GENESIS_TOKEN_UNITS={genesis_token_units}, '
             f'DECIMAL_PLACES={decimal_places}',

@@ -24,7 +24,8 @@ from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.util import get_deposit_amount
+from hathor.transaction.token_info import TokenVersion
+from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
 from hathor.verification.verification_params import VerificationParams
 
@@ -448,7 +449,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     address = decode_address(address_b58)
     script = P2PKH.create_output_script(address)
 
-    deposit_amount = get_deposit_amount(manager._settings, mint_amount)
+    deposit_amount = get_deposit_token_deposit_amount(manager._settings, mint_amount)
     if nft_data:
         # NFT creation needs 0.01 HTR of fee
         deposit_amount += 1
@@ -527,6 +528,114 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)
     return tx
+
+
+def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
+                      token_name: str = 'TestFeeCoin', token_symbol: str = 'TFC',
+                      genesis_output_amount: Optional[int] = None) -> TokenCreationTransaction:
+    """Creates a new token and propagates a tx with the following UTXOs:
+    0. some tokens (already mint some tokens so they can be transferred);
+    1. mint authority;
+    2. melt authority;
+    3. fee change | genesis_output_amount;
+    4. genesis change; (only when genesis_output_amount is not None)
+
+    :param manager: hathor manager
+    :type manager: :class:`hathor.manager.HathorManager`
+
+    :param address_b58: address where tokens will be transferred to
+    :type address_b58: string
+
+    :param token_name: the token name for the new token
+    :type token_name: str
+
+    :param token_symbol: the token symbol for the new token
+    :type token_symbol: str
+
+    :return: the propagated transaction so others can spend their outputs
+    """
+    wallet = manager.wallet
+    assert wallet is not None
+
+    if address_b58 is None:
+        address_b58 = wallet.get_unused_address(mark_as_used=True)
+    address = decode_address(address_b58)
+    script = P2PKH.create_output_script(address)
+
+    genesis = manager.tx_storage.get_all_genesis()
+    genesis_blocks = [tx for tx in genesis if tx.is_block]
+    genesis_txs = [tx for tx in genesis if not tx.is_block]
+    genesis_block = genesis_blocks[0]
+    genesis_private_key = get_genesis_key()
+
+    parents = [tx.hash for tx in genesis_txs]
+
+    genesis_hash = genesis_block.hash
+    assert genesis_hash is not None
+
+    deposit_input = [TxInput(genesis_hash, 0, b'')]
+    timestamp = int(manager.reactor.seconds())
+
+    outputs = []
+    # mint output
+    outputs.append(TxOutput(mint_amount, script, 0b00000001))
+
+    # authority outputs
+    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+
+    # fee
+    fee = settings.FEE_PER_OUTPUT
+
+    # fee output
+    outputs.append(TxOutput(genesis_block.outputs[0].value - fee - (genesis_output_amount or 0), script, 0))
+    if genesis_output_amount:
+        outputs.append(TxOutput(genesis_output_amount, script, 0))
+
+    tx = TokenCreationTransaction(
+        weight=1,
+        parents=parents,
+        storage=manager.tx_storage,
+        inputs=deposit_input,
+        outputs=outputs,
+        token_name=token_name,
+        token_symbol=token_symbol,
+        timestamp=timestamp,
+        token_version=TokenVersion.FEE
+    )
+    data_to_sign = tx.get_sighash_all()
+
+    public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
+
+    for input_ in tx.inputs:
+        input_.data = P2PKH.create_input_data(public_bytes, signature)
+
+    manager.cpu_mining_service.resolve(tx)
+    manager.propagate_tx(tx)
+    assert isinstance(manager.reactor, Clock)
+    manager.reactor.advance(8)
+
+    return tx
+
+
+def get_deposit_token_amount_from_htr(htr_amount: int) -> int:
+    """
+    Calculate how many tokens correspond to a given HTR amount based on the
+    configured TOKEN_DEPOSIT_PERCENTAGE.
+
+    Returns
+    -------
+    int
+        The smallest integer number of tokens that covers the given HTR amount.
+    Raises
+    ------
+    AssertionError
+        If the computed token amount is not an integer (this should not occur
+        when TOKEN_DEPOSIT_PERCENTAGE is a positive divisor).
+    """
+    token_amount = abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE)
+    assert token_amount.is_integer()
+    return int(token_amount)
 
 
 def create_script_with_sigops(nops: int) -> bytes:
@@ -634,7 +743,6 @@ class EventMocker:
         inputs=[],
         outputs=[],
         parents=[],
-        headers=[],
         tokens=[],
         metadata=TxMetadata(
             hash='abc',

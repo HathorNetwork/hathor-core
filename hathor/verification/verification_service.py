@@ -21,9 +21,8 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.validation_state import ValidationState
-from hathor.types import TokenUid
 from hathor.verification.verification_params import VerificationParams
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -237,7 +236,7 @@ class VerificationService:
         tx: Transaction,
         params: VerificationParams,
         *,
-        token_dict: dict[TokenUid, TokenInfo] | None = None
+        token_dict: TokenInfoDict | None = None
     ) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
@@ -267,10 +266,11 @@ class VerificationService:
 
         We also overload verify_sum to make some different checks
         """
+        # we should validate the token info before verifying the tx
+        self.verifiers.token_creation_tx.verify_token_info(tx)
         token_dict = tx.get_complete_token_info()
         self._verify_tx(tx, params, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
-        self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         if vertex.hash in self._settings.SKIP_VERIFICATION:

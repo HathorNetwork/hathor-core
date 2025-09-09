@@ -87,10 +87,11 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import (
     clean_token_string,
-    get_deposit_amount,
-    get_withdraw_amount,
+    get_deposit_token_deposit_amount,
+    get_deposit_token_withdraw_amount,
     validate_token_name_and_symbol,
 )
 
@@ -932,7 +933,7 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
         token_amount = amount
-        htr_amount = -get_deposit_amount(self._settings, token_amount)
+        htr_amount = -get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker.add_balance(token_uid, token_amount)
         changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
@@ -964,7 +965,7 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
         token_amount = -amount
-        htr_amount = get_withdraw_amount(self._settings, token_amount)
+        htr_amount = get_deposit_token_withdraw_amount(self._settings, token_amount)
 
         changes_tracker.add_balance(token_uid, token_amount)
         changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
@@ -1018,8 +1019,8 @@ class Runner:
         blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
         return blueprint_class(env)
 
-    @_forbid_syscall_from_view('create_token')
-    def syscall_create_child_token(
+    @_forbid_syscall_from_view('create_deposit_token')
+    def syscall_create_child_deposit_token(
         self,
         token_name: str,
         token_symbol: str,
@@ -1027,11 +1028,11 @@ class Runner:
         mint_authority: bool,
         melt_authority: bool,
     ) -> TokenUid:
-        """Create a child token from a contract."""
+        """Create a child deposit token from a contract."""
         try:
             validate_token_name_and_symbol(self._settings, token_name, token_symbol)
         except TransactionDataError as e:
-            raise NCInvalidSyscall('invalid token description') from e
+            raise NCInvalidSyscall(str(e)) from e
 
         last_call_record = self.get_current_call_record()
         parent_id = last_call_record.contract_id
@@ -1039,7 +1040,7 @@ class Runner:
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
 
         token_amount = amount
-        htr_amount = get_deposit_amount(self._settings, token_amount)
+        htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
         changes_tracker.create_token(token_id, token_name, token_symbol)
@@ -1061,10 +1062,23 @@ class Runner:
             htr_amount=-htr_amount,
             token_symbol=token_symbol,
             token_name=token_name,
+            token_version=TokenVersion.DEPOSIT
         )
         last_call_record.index_updates.append(syscall_record)
 
         return token_id
+
+    @_forbid_syscall_from_view('create_fee_token')
+    def syscall_create_child_fee_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool,
+        melt_authority: bool,
+    ) -> TokenUid:
+        """Create a child deposit token from a contract."""
+        raise NotImplementedError('syscall not implemented')
 
     @_forbid_syscall_from_view('emit_event')
     def syscall_emit_event(self, data: bytes) -> None:
