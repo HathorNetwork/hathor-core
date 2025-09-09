@@ -1022,6 +1022,8 @@ class Runner:
     @_forbid_syscall_from_view('create_deposit_token')
     def syscall_create_child_deposit_token(
         self,
+        *,
+        salt: bytes,
         token_name: str,
         token_symbol: str,
         amount: int,
@@ -1037,7 +1039,7 @@ class Runner:
         last_call_record = self.get_current_call_record()
         parent_id = last_call_record.contract_id
         cleaned_token_symbol = clean_token_string(token_symbol)
-        token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
+        token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
 
         token_amount = amount
         htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
@@ -1071,6 +1073,8 @@ class Runner:
     @_forbid_syscall_from_view('create_fee_token')
     def syscall_create_child_fee_token(
         self,
+        *,
+        salt: bytes,
         token_name: str,
         token_symbol: str,
         amount: int,

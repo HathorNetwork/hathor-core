@@ -80,11 +80,12 @@ def derive_child_contract_id(parent_id: ContractId, salt: bytes, blueprint_id: B
     return ContractId(VertexId(h.digest()))
 
 
-def derive_child_token_id(parent_id: ContractId, token_symbol: str) -> TokenUid:
+def derive_child_token_id(parent_id: ContractId, token_symbol: str, *, salt: bytes = b'') -> TokenUid:
     """Derive the token id for a token created by a (parent) contract."""
     h = hashlib.sha256()
     h.update(CHILD_TOKEN_ID_PREFIX)
     h.update(parent_id)
+    h.update(salt)
     h.update(token_symbol.encode('utf-8'))
     return TokenUid(VertexId(h.digest()))
 

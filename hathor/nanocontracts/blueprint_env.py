@@ -249,14 +249,17 @@ class BlueprintEnvironment:
         amount: int,
         mint_authority: bool = True,
         melt_authority: bool = True,
+        *,
+        salt: bytes = b'',
     ) -> TokenUid:
         """Create a new deposit-based token."""
         return self.__runner.syscall_create_child_deposit_token(
-            token_name,
-            token_symbol,
-            amount,
-            mint_authority,
-            melt_authority
+            salt=salt,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            amount=amount,
+            mint_authority=mint_authority,
+            melt_authority=melt_authority,
         )
 
     # XXX: temporary alias
@@ -270,14 +273,17 @@ class BlueprintEnvironment:
         amount: int,
         mint_authority: bool = True,
         melt_authority: bool = True,
+        *,
+        salt: bytes = b'',
     ) -> TokenUid:
         """Create a new fee-based token."""
         return self.__runner.syscall_create_child_fee_token(
-            token_name,
-            token_symbol,
-            amount,
-            mint_authority,
-            melt_authority
+            salt=salt,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            amount=amount,
+            mint_authority=mint_authority,
+            melt_authority=melt_authority,
         )
 
     @final
