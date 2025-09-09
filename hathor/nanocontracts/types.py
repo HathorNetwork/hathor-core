@@ -17,10 +17,11 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
+from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
     validate_has_not_ctx_arg,
@@ -44,7 +45,23 @@ from hathor.utils.typing import InnerTypeMixin
 # Types to be used by blueprints.
 class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
     __allow_faux_inheritance__ = True
+    __allow_faux_dunder__ = ('__str__', '__repr__')
     __slots__ = ()
+
+    @classmethod
+    def from_str(cls, /, encoded_address: str) -> Self:
+        if not isinstance(encoded_address, str):
+            raise TypeError(f'expected `str` instance, got `{type(encoded_address)}` instance')
+        return cls(decode_address(encoded_address))
+
+    def __str__(self) -> str:
+        encoded_address = get_address_b58_from_bytes(self)
+        return encoded_address
+
+    def __repr__(self) -> str:
+        encoded_address = str(self)  # uses __str__
+        # XXX: should we support `Address(encoded_address)` constructor?
+        return f"Address.from_str({encoded_address!r})"
 
 
 class VertexId(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]

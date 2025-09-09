@@ -21,6 +21,7 @@ from typing_extensions import ParamSpec
 # special attrs:
 SKIP_VALIDATION_ATTR: str = '__skip_faux_immutability_validation__'
 ALLOW_INHERITANCE_ATTR: str = '__allow_faux_inheritance__'
+ALLOW_DUNDER_ATTR: str = '__allow_faux_dunder__'
 
 
 def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dict[str, object]) -> None:
@@ -33,13 +34,15 @@ def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dic
         if attr not in attrs:
             raise TypeError(f'faux-immutable class `{name}` must define `{attr}`')
 
+    custom_allowed_dunder_value: tuple[str, ...] = attrs.pop(ALLOW_DUNDER_ATTR, ())  # type: ignore[assignment]
+    custom_allowed_dunder = frozenset(custom_allowed_dunder_value)
     allowed_dunder = frozenset({
         '__module__',
         '__qualname__',
         '__doc__',
         '__init__',
         '__call__',
-    })
+    }) | custom_allowed_dunder
 
     # pop the attribute so the created class doesn't have it and it isn't inherited
     allow_inheritance = attrs.pop(ALLOW_INHERITANCE_ATTR, False)
