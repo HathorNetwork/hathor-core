@@ -341,7 +341,7 @@ class SendTokensResource(Resource):
 
 SendTokensResource.openapi = {
     '/thin_wallet/send_tokens': {
-        'x-visibility': 'public',
+        'x-visibility': 'private',
         'x-rate-limit': {
             'global': [
                 {
