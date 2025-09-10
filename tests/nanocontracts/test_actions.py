@@ -57,11 +57,11 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
-        self.syscall.mint_tokens(token_uid, amount)
+        self.syscall.mint_tokens(token_uid, amount=amount)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def melt(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
-        self.syscall.melt_tokens(token_uid, amount)
+        self.syscall.melt_tokens(token_uid, amount=amount)
 
 
 class TestActions(unittest.TestCase):
@@ -525,7 +525,7 @@ class TestActions(unittest.TestCase):
                 NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
             ],
             nc_method='mint',
-            nc_args=(self.tka.hash, 200)
+            nc_args=(self.tka.hash, 1)
         )
 
         # Execute tx1
@@ -536,8 +536,8 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the mint authority.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=998, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1200, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(value=999, can_mint=False, can_melt=False),
+            self.tka_balance_key: Balance(value=1001, can_mint=True, can_melt=False),
         }
 
     def test_mint_tokens_keep_in_contract_success(self) -> None:
