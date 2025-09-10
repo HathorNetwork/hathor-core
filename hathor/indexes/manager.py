@@ -216,11 +216,10 @@ class IndexesManager(ABC):
         Update indexes according to a Nano Contract execution.
         Must be called only once for each time a contract is executed.
         """
-        from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
             NCIndexUpdateRecord,
             SyscallCreateContractRecord,
-            SyscallUpdateTokensRecord,
+            SyscallUpdateTokenRecord,
             UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import ContractId
@@ -260,7 +259,7 @@ class IndexesManager(ABC):
                     if self.blueprint_history:
                         self.blueprint_history.add_single_key(blueprint_id, tx)
 
-                case SyscallUpdateTokensRecord():
+                case SyscallUpdateTokenRecord():
                     # Minted/melted tokens are added/removed to/from the tokens index,
                     # and the respective destroyed/created HTR too.
                     if self.tokens:
@@ -280,8 +279,7 @@ class IndexesManager(ABC):
                                 version=record.token_version
                             )
 
-                        self.tokens.add_to_total(record.token_uid, record.token_amount)
-                        self.tokens.add_to_total(HATHOR_TOKEN_UID, record.htr_amount)
+                        self.tokens.add_to_total(record.token_uid, record.amount)
 
                 case UpdateAuthoritiesRecord():
                     if self.tokens:
@@ -295,11 +293,10 @@ class IndexesManager(ABC):
         Update indexes according to a Nano Contract unexecution, which happens when a reorg unconfirms a nano tx.
         Must be called only once for each time a contract is unexecuted.
         """
-        from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
             NCIndexUpdateRecord,
             SyscallCreateContractRecord,
-            SyscallUpdateTokensRecord,
+            SyscallUpdateTokenRecord,
             UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import NC_INITIALIZE_METHOD, ContractId
@@ -341,11 +338,9 @@ class IndexesManager(ABC):
                         if self.blueprint_history:
                             self.blueprint_history.remove_single_key(blueprint_id, tx)
 
-                case SyscallUpdateTokensRecord():
-                    # Undo the tokens update.
+                case SyscallUpdateTokenRecord():
                     if self.tokens:
-                        self.tokens.add_to_total(record.token_uid, -record.token_amount)
-                        self.tokens.add_to_total(HATHOR_TOKEN_UID, -record.htr_amount)
+                        self.tokens.add_to_total(record.token_uid, -record.amount)
 
                         from hathor.nanocontracts.runner.types import IndexUpdateRecordType
                         if record.type is IndexUpdateRecordType.CREATE_TOKEN:
