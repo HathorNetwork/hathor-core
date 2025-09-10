@@ -19,7 +19,7 @@ from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.types import TokenUid, VertexId, fallback, public, view
+from hathor.nanocontracts.types import TokenUid, VertexId, export, fallback, public, view
 
 # Identifier used in metadata's voided_by when a Nano Contract method fails.
 NC_EXECUTION_FAIL_ID: bytes = b'nc-fail'
@@ -38,6 +38,7 @@ __all__ = [
     'public',
     'fallback',
     'view',
+    'export',
     'NC_EXECUTION_FAIL_ID',
     'HATHOR_TOKEN_UID',
 ]

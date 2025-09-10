@@ -36,7 +36,7 @@ from typing_extensions import Self, TypeVarTuple
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
 from hathor.nanocontracts.faux_immutable import FauxImmutable
-from hathor.nanocontracts.on_chain_blueprint import BLUEPRINT_CLASS_NAME
+from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME
 
 T = TypeVar('T')
 Ts = TypeVarTuple('Ts')
@@ -503,7 +503,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name otherwise,
     # since the blueprint code is adhoc, we could as well expose something else, like '__blueprint__'
     # constant
-    '__name__': BLUEPRINT_CLASS_NAME,
+    '__name__': BLUEPRINT_EXPORT_NAME,
 
     # make it always True, which is how we'll normally run anyway
     '__debug__': True,

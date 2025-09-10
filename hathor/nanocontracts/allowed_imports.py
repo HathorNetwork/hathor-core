@@ -46,6 +46,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         SignedData=nc.types.SignedData,
         public=nc.public,
         view=nc.view,
+        export=nc.export,
         fallback=nc.fallback,
         Address=nc.types.Address,
         Amount=nc.types.Amount,
