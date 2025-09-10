@@ -517,7 +517,7 @@ class TokenTest(unittest.TestCase):
         tx.token_version = TokenVersion.NATIVE
         update_tx(tx)
         with pytest.raises(TransactionDataError, match=f'Invalid token version \\({tx.token_version}\\)'):
-            self.manager.verification_service.verify(tx)
+            self.manager.verification_service.verify(tx, self.verification_params)
 
     def test_token_mint_zero(self):
         # try to mint 0 tokens

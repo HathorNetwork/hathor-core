@@ -155,6 +155,9 @@ class NCContractStorage:
         """Return True if token_id exists in the current block."""
         return self._token_proxy.has_token(token_id)
 
+    def get_token(self, token_id: TokenUid) -> TokenDescription:
+        return self._token_proxy.get_token(token_id)
+
     def create_token(
         self,
         token_id: TokenUid,
@@ -164,9 +167,6 @@ class NCContractStorage:
     ) -> None:
         """Create a new token in the current block."""
         self._token_proxy.create_token(token_id, token_name, token_symbol, token_version)
-
-    def get_token(self, token_id: TokenUid) -> TokenDescription:
-        return self._token_proxy.get_token(token_id)
 
     def lock(self) -> None:
         """Lock the storage for changes or commits."""

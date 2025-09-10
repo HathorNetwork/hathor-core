@@ -62,7 +62,7 @@ class MyBlueprint1(Blueprint):
     @public(allow_deposit=True)
     def mint(self, ctx: Context, amount: int) -> None:
         assert self.token_uid is not None
-        self.syscall.mint_deposit_tokens(self.token_uid, amount)
+        self.syscall.mint_tokens(self.token_uid, amount=amount)
 
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
@@ -83,7 +83,7 @@ class MyBlueprint2(Blueprint):
         assert self.token_uid is not None
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
         self.syscall.call_public_method(contract_id, 'withdraw', [action])
-        self.syscall.melt_tokens(self.token_uid, amount)
+        self.syscall.melt_tokens(self.token_uid, amount=amount)
 
 
 class NCBlueprintTestCase(BlueprintTestCase):

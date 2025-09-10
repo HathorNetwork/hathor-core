@@ -216,12 +216,10 @@ class IndexesManager(ABC):
         Update indexes according to a Nano Contract execution.
         Must be called only once for each time a contract is executed.
         """
-        from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
+            BaseSyscallUpdateTokensRecord,
             NCIndexUpdateRecord,
             SyscallCreateContractRecord,
-            SyscallUpdateDepositTokensRecord,
-            SyscallUpdateFeeTokensRecord,
             UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import ContractId
@@ -261,7 +259,7 @@ class IndexesManager(ABC):
                     if self.blueprint_history:
                         self.blueprint_history.add_single_key(blueprint_id, tx)
 
-                case SyscallUpdateDepositTokensRecord():
+                case BaseSyscallUpdateTokensRecord():
                     # Minted/melted tokens are added/removed to/from the tokens index,
                     # and the respective destroyed/created HTR too.
                     if self.tokens:
@@ -273,6 +271,8 @@ class IndexesManager(ABC):
                             assert record.type is IndexUpdateRecordType.CREATE_TOKEN, record.type
                             assert record.token_name is not None and record.token_symbol is not None
                             assert record.token_version is not None
+                            assert record.payment_token_uid is not None
+                            assert record.payment_token_amount is not None
 
                             self.tokens.create_token_info_from_contract(
                                 token_uid=record.token_uid,
@@ -282,30 +282,9 @@ class IndexesManager(ABC):
                             )
 
                         self.tokens.add_to_total(record.token_uid, record.token_amount)
-                        self.tokens.add_to_total(HATHOR_TOKEN_UID, record.htr_amount)
-
-                case SyscallUpdateFeeTokensRecord():
-                    # Fee tokens are added/removed to/from the tokens index,
-                    # and the respective fee payment too.
-                    if self.tokens:
-                        try:
-                            self.tokens.get_token_info(record.token_uid)
-                        except KeyError:
-                            # If the token doesn't exist in the index yet, it must be a token creation syscall.
-                            from hathor.nanocontracts.runner.types import IndexUpdateRecordType
-                            assert record.type is IndexUpdateRecordType.CREATE_TOKEN, record.type
-                            assert record.token_name is not None and record.token_symbol is not None
-                            assert record.token_version is not None
-
-                            self.tokens.create_token_info_from_contract(
-                                token_uid=record.token_uid,
-                                name=record.token_name,
-                                symbol=record.token_symbol,
-                                version=record.token_version
-                            )
-
-                        self.tokens.add_to_total(record.token_uid, record.token_amount)
-                        self.tokens.add_to_total(record.fee_payment_token_uid, record.fee_payment_amount)
+                        assert record.payment_token_uid is not None
+                        assert record.payment_token_amount is not None
+                        self.tokens.add_to_total(record.payment_token_uid, record.payment_token_amount)
 
                 case UpdateAuthoritiesRecord():
                     if self.tokens:
@@ -319,12 +298,10 @@ class IndexesManager(ABC):
         Update indexes according to a Nano Contract unexecution, which happens when a reorg unconfirms a nano tx.
         Must be called only once for each time a contract is unexecuted.
         """
-        from hathor.conf.settings import HATHOR_TOKEN_UID
         from hathor.nanocontracts.runner.types import (
+            BaseSyscallUpdateTokensRecord,
             NCIndexUpdateRecord,
             SyscallCreateContractRecord,
-            SyscallUpdateDepositTokensRecord,
-            SyscallUpdateFeeTokensRecord,
             UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import NC_INITIALIZE_METHOD, ContractId
@@ -366,21 +343,13 @@ class IndexesManager(ABC):
                         if self.blueprint_history:
                             self.blueprint_history.remove_single_key(blueprint_id, tx)
 
-                case SyscallUpdateDepositTokensRecord():
+                case BaseSyscallUpdateTokensRecord():
                     # Undo the tokens update.
                     if self.tokens:
+                        assert record.payment_token_uid is not None
+                        assert record.payment_token_amount is not None
                         self.tokens.add_to_total(record.token_uid, -record.token_amount)
-                        self.tokens.add_to_total(HATHOR_TOKEN_UID, -record.htr_amount)
-
-                        from hathor.nanocontracts.runner.types import IndexUpdateRecordType
-                        if record.type is IndexUpdateRecordType.CREATE_TOKEN:
-                            self.tokens.destroy_token(record.token_uid)
-
-                case SyscallUpdateFeeTokensRecord():
-                    # Undo the tokens update.
-                    if self.tokens:
-                        self.tokens.add_to_total(record.token_uid, -record.token_amount)
-                        self.tokens.add_to_total(record.fee_payment_token_uid, -record.fee_payment_amount)
+                        self.tokens.add_to_total(record.payment_token_uid, -record.payment_token_amount)
 
                         from hathor.nanocontracts.runner.types import IndexUpdateRecordType
                         if record.type is IndexUpdateRecordType.CREATE_TOKEN:

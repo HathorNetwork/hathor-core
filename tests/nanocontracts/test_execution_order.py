@@ -56,7 +56,7 @@ class MyBlueprint(Blueprint):
     def mint(self, ctx: Context) -> None:
         self.assert_htr_balance(before=10, current=10)
         self.assert_token_balance(before=0, current=0)
-        self.syscall.mint_deposit_tokens(self.token_uid, amount=300)
+        self.syscall.mint_tokens(self.token_uid, amount=300)
         self.assert_htr_balance(before=10, current=7)
         self.assert_token_balance(before=0, current=300)
 

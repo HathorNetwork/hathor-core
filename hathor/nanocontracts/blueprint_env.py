@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Collection, Optional, Sequence, final
 
+from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
@@ -215,19 +216,26 @@ class BlueprintEnvironment:
         self.__runner.syscall_revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
 
     @final
-    def mint_deposit_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def mint_tokens(
+        self,
+        token_uid: TokenUid,
+        *,
+        amount: int,
+        fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
+    ) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
-        self.__runner.syscall_mint_deposit_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount, fee_payment_token=fee_payment_token)
 
     @final
-    def mint_fee_tokens(self, token_uid: TokenUid, amount: int) -> None:
-        """Mint tokens and add them to the balance of this nano contract."""
-        self.__runner.syscall_mint_fee_tokens(token_uid=token_uid, amount=amount)
-
-    @final
-    def melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
+    def melt_tokens(
+        self,
+        token_uid: TokenUid,
+        *,
+        amount: int,
+        fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
+    ) -> None:
         """Melt tokens by removing them from the balance of this nano contract."""
-        self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount)
+        self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount, fee_payment_token=fee_payment_token)
 
     @final
     def create_contract(
@@ -272,14 +280,17 @@ class BlueprintEnvironment:
         amount: int,
         mint_authority: bool = True,
         melt_authority: bool = True,
+        fee_payment_token: TokenUid | None = None
     ) -> TokenUid:
         """Create a new fee-based token."""
+        fee_token = fee_payment_token if fee_payment_token is not None else TokenUid(HATHOR_TOKEN_UID)
         return self.__runner.syscall_create_child_fee_token(
             token_name,
             token_symbol,
             amount,
             mint_authority,
-            melt_authority
+            melt_authority,
+            fee_token
         )
 
     @final

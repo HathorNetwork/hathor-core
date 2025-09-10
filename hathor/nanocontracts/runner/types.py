@@ -73,6 +73,8 @@ class BaseSyscallUpdateTokensRecord:
     token_symbol: str | None = None
     token_name: str | None = None
     token_version: TokenVersion | None = None
+    payment_token_uid: TokenUid | None = None
+    payment_token_amount: int | None = None
 
     type: (
         Literal[IndexUpdateRecordType.MINT_TOKENS]
@@ -80,33 +82,20 @@ class BaseSyscallUpdateTokensRecord:
         | Literal[IndexUpdateRecordType.CREATE_TOKEN]
     )
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class SyscallUpdateDepositTokensRecord(BaseSyscallUpdateTokensRecord):
-    htr_amount: int
-    token_version: TokenVersion = TokenVersion.DEPOSIT
-
-    def __post_init__(self) -> None:
-        match self.type:
-            case IndexUpdateRecordType.MINT_TOKENS | IndexUpdateRecordType.CREATE_TOKEN:
-                assert self.token_amount > 0 and self.htr_amount < 0
-            case IndexUpdateRecordType.MELT_TOKENS:
-                assert self.token_amount < 0 and self.htr_amount > 0
-            case _:
-                assert_never(self.type)
-
     def to_json(self) -> dict[str, Any]:
         return dict(
             type=self.type,
             token_uid=self.token_uid.hex(),
             token_amount=self.token_amount,
             token_version=self.token_version,
-            htr_amount=self.htr_amount,
+            payment_token_uid=self.payment_token_uid.hex() if self.payment_token_uid else None,
+            payment_token_amount=self.payment_token_amount
         )
 
     @classmethod
     def from_json(cls, json_dict: dict[str, Any]) -> Self:
         valid_types = (
-            IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.CREATE_TOKEN
+            IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.MELT_TOKENS, IndexUpdateRecordType.CREATE_TOKEN
         )
         assert json_dict['type'] in valid_types
         return cls(
@@ -114,17 +103,32 @@ class SyscallUpdateDepositTokensRecord(BaseSyscallUpdateTokensRecord):
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
             token_amount=json_dict['token_amount'],
             token_version=json_dict['token_version'],
-            htr_amount=json_dict['htr_amount'],
+            payment_token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['payment_token_uid']))),
+            payment_token_amount=json_dict['payment_token_amount']
         )
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class SyscallUpdateDepositTokensRecord(BaseSyscallUpdateTokensRecord):
+
+    def __post_init__(self) -> None:
+        assert self.payment_token_uid is not None
+        assert self.payment_token_amount is not None
+        match self.type:
+            case IndexUpdateRecordType.MINT_TOKENS | IndexUpdateRecordType.CREATE_TOKEN:
+                assert self.token_amount > 0 and self.payment_token_amount < 0
+            case IndexUpdateRecordType.MELT_TOKENS:
+                assert self.token_amount < 0 and self.payment_token_amount > 0
+            case _:
+                assert_never(self.type)
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class SyscallUpdateFeeTokensRecord(BaseSyscallUpdateTokensRecord):
-    fee_payment_token_uid: TokenUid
-    fee_payment_amount: int
-    token_version: TokenVersion = TokenVersion.FEE
-
     def __post_init__(self) -> None:
-        assert self.fee_payment_amount < 0;
+        assert self.payment_token_uid is not None
+        assert self.payment_token_amount is not None
+        assert self.payment_token_amount < 0
 
         match self.type:
             case IndexUpdateRecordType.MINT_TOKENS | IndexUpdateRecordType.CREATE_TOKEN:
@@ -134,30 +138,6 @@ class SyscallUpdateFeeTokensRecord(BaseSyscallUpdateTokensRecord):
             case _:
                 assert_never(self.type)
 
-    def to_json(self) -> dict[str, Any]:
-        return dict(
-            type=self.type,
-            token_uid=self.token_uid.hex(),
-            token_amount=self.token_amount,
-            token_version=self.token_version,
-            fee_payment_token_uid=self.fee_payment_token_uid.hex(),
-            fee_payment_amount=self.fee_payment_amount,
-        )
-
-    @classmethod
-    def from_json(cls, json_dict: dict[str, Any]) -> Self:
-        valid_types = (
-            IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.CREATE_TOKEN
-        )
-        assert json_dict['type'] in valid_types
-        return cls(
-            type=json_dict['type'],
-            token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            token_amount=json_dict['token_amount'],
-            token_version=json_dict['token_version'],
-            fee_payment_token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['fee_payment_token_uid']))),
-            fee_payment_amount=json_dict['fee_payment_amount'],
-        )
 
 @unique
 class UpdateAuthoritiesRecordType(StrEnum):
@@ -212,11 +192,7 @@ def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdate
             | IndexUpdateRecordType.MELT_TOKENS
             | IndexUpdateRecordType.CREATE_TOKEN
         ):
-            # Check if this is a fee token record or deposit token record
-            if 'fee_payment_token_uid' in json_dict:
-                return SyscallUpdateFeeTokensRecord.from_json(json_dict)
-            else:
-                return SyscallUpdateDepositTokensRecord.from_json(json_dict)
+            return SyscallUpdateDepositTokensRecord.from_json(json_dict)
         case IndexUpdateRecordType.UPDATE_AUTHORITIES:
             return UpdateAuthoritiesRecord.from_json(json_dict)
         case _:
