@@ -64,5 +64,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         NCArgs=nc.types.NCArgs,
         NCRawArgs=nc.types.NCRawArgs,
         NCParsedArgs=nc.types.NCParsedArgs,
+        sha3=nc.types.sha3,
+        verify_ecdsa=nc.types.verify_ecdsa,
     ),
 }

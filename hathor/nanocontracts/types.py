@@ -14,14 +14,23 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
 from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 from typing_extensions import override
 
-from hathor.crypto.util import decode_address, get_address_b58_from_bytes
+from hathor.crypto.util import (
+    decode_address,
+    get_address_b58_from_bytes,
+    get_public_key_from_bytes_compressed,
+    is_pubkey_compressed,
+)
 from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
     validate_has_not_ctx_arg,
@@ -516,3 +525,26 @@ class NCParsedArgs:
 
 
 NCArgs: TypeAlias = NCRawArgs | NCParsedArgs
+
+
+def sha3(data: bytes) -> bytes:
+    """Calculate the SHA3-256 of some data."""
+    return hashlib.sha3_256(data).digest()
+
+
+def verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
+    """Verify a cryptographic signature using a compressed public key for a SECP256K1 curve."""
+    from hathor.nanocontracts import NCFail
+    if not is_pubkey_compressed(public_key):
+        raise NCFail('public_key is not compressed')
+
+    try:
+        pubkey = get_public_key_from_bytes_compressed(public_key)
+    except ValueError as e:
+        raise NCFail('public_key is invalid') from e
+
+    try:
+        pubkey.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+        return True
+    except InvalidSignature:
+        return False
