@@ -219,8 +219,8 @@ class BlueprintEnvironment:
     def mint_tokens(
         self,
         token_uid: TokenUid,
-        *,
         amount: int,
+        *,
         fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
     ) -> None:
         """Mint tokens and add them to the balance of this nano contract."""

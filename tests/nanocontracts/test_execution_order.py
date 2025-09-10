@@ -161,7 +161,7 @@ class TestExecutionOrder(BlueprintTestCase):
             token_symbol="TST",
             token_version=TokenVersion.DEPOSIT
         )
-        
+
         action: NCAction = NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)
         self.runner.call_public_method(self.contract_id1, 'mint', self._get_context(action))
 

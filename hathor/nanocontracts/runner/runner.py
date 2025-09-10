@@ -919,6 +919,7 @@ class Runner:
     @_forbid_syscall_from_view('mint_tokens')
     def syscall_mint_tokens(
         self,
+        *,
         token_uid: TokenUid,
         amount: int,
         fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
@@ -947,7 +948,7 @@ class Runner:
         syscall_rules.update_tokens_amount(syscall_balance, self._updated_tokens_totals, call_record, changes_tracker)
 
     @_forbid_syscall_from_view('melt_tokens')
-    def syscall_melt_tokens(self, token_uid: TokenUid, amount: int,
+    def syscall_melt_tokens(self, *, token_uid: TokenUid, amount: int,
                             fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> None:
         """Melt tokens by removing them from the balance of this nano contract.
         The tokens should be already created otherwise it will raise.
@@ -1031,7 +1032,9 @@ class Runner:
         token_version = TokenVersion.DEPOSIT
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
-        changes_tracker.create_token(token_id, token_name, token_symbol, token_version)
+        changes_tracker.create_token(
+            token_id=token_id, token_name=token_name, token_symbol=token_symbol, token_version=token_version
+        )
         changes_tracker.grant_authorities(
             token_id,
             grant_mint=mint_authority,
@@ -1069,7 +1072,9 @@ class Runner:
         token_version = TokenVersion.FEE
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
-        changes_tracker.create_token(token_id, token_name, token_symbol, token_version)
+        changes_tracker.create_token(
+            token_id=token_id, token_name=token_name, token_symbol=token_symbol, token_version=token_version
+        )
         changes_tracker.grant_authorities(
             token_id,
             grant_mint=mint_authority,
