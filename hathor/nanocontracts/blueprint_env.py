@@ -259,6 +259,9 @@ class BlueprintEnvironment:
             melt_authority
         )
 
+    # XXX: temporary alias
+    create_token = create_deposit_token
+
     @final
     def create_fee_token(
         self,
