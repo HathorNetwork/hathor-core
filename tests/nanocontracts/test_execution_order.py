@@ -152,6 +152,16 @@ class TestExecutionOrder(BlueprintTestCase):
         self.runner.call_public_method(self.contract_id1, 'withdrawal', self._get_context(action))
 
     def test_mint_and_melt(self) -> None:
+        # First create the token so it exists in the system
+        from hathor.transaction.token_info import TokenVersion
+        changes_tracker = self.runner.get_storage(self.contract_id1)
+        changes_tracker.create_token(
+            token_id=self.token_a,
+            token_name="Test Token",
+            token_symbol="TST",
+            token_version=TokenVersion.DEPOSIT
+        )
+
         action: NCAction = NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)
         self.runner.call_public_method(self.contract_id1, 'mint', self._get_context(action))
 
