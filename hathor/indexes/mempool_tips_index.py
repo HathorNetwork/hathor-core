@@ -56,7 +56,7 @@ class MempoolTipsIndex(BaseIndex):
         return SCOPE
 
     @abstractmethod
-    def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
         """
         This should be called when a new `tx/block` is added to the best chain.
 
@@ -129,74 +129,62 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
     # PROVIDES:
 
-    def update(self, tx: BaseTransaction, *, remove: Optional[bool] = None) -> None:
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
         assert tx.storage is not None
         tx_meta = tx.get_metadata()
         to_remove: set[bytes] = set()
-        to_remove_parents: set[bytes] = set()
+        deps_to_check: set[bytes] = set()
         tx_storage = tx.storage
         for tip_tx in self.iter(tx_storage):
             meta = tip_tx.get_metadata()
-            # a new tx/block added might cause a tx in the tips to become voided. For instance, there might be a tx1 a
+            # a new tx/block added might cause a tx in the tips to become voided. For instance, there might be a tx1
             # double spending tx2, where tx1 is valid and tx2 voided. A new block confirming tx2 will make it valid
             # while tx1 becomes voided, so it has to be removed from the tips. The txs confirmed by tx1 need to be
-            # double checked, as they might themselves become tips (hence we use to_remove_parents)
+            # double checked, as they might themselves become tips (hence we use deps_to_check)
             if meta.voided_by or meta.validation.is_invalid():
                 to_remove.add(tip_tx.hash)
-                to_remove_parents.update(tip_tx.parents)
+                deps_to_check.update(tip_tx.get_all_dependencies())
                 continue
 
-            # might also happen that a tip has a child that became valid, so it's not a tip anymore
-            confirmed = False
-            for child_meta in filter(None, map(tx_storage.get_metadata, meta.children)):
-                if not child_meta.voided_by:
-                    confirmed = True
-                    break
-            if confirmed:
+            # might also happen that a tip has a child or a spender that became valid, so it's not a tip anymore
+            has_non_voided_child = lambda: any_non_voided(tx_storage, meta.children)
+            has_non_voided_spender = lambda: any_non_voided(tx_storage, chain(*meta.spent_outputs.values()))
+            if has_non_voided_child() or has_non_voided_spender():
                 to_remove.add(tip_tx.hash)
 
         if to_remove:
             self._discard_many(to_remove)
-            self.log.debug('removed voided txs from tips', txs=[tx.hex() for tx in to_remove])
+            self.log.debug('removed txs from tips', txs=[tx.hex() for tx in to_remove])
 
-        # Check if any of the txs being confirmed by the voided txs is a tip again. This happens
-        # if it doesn't have any other valid child.
+        # Check if any of the txs pointed by the removed tips is a tip again. This happens
+        # if it doesn't have any other valid child or spender.
         to_add = set()
-        for tx_hash in to_remove_parents:
-            confirmed = False
-            # check if it has any valid children
+        for tx_hash in deps_to_check:
             meta = not_none(tx_storage.get_metadata(tx_hash))
             if meta.voided_by:
                 continue
-            children = meta.children
-            for child_meta in filter(None, map(tx_storage.get_metadata, children)):
-                if not child_meta.voided_by:
-                    confirmed = True
-                    break
-            if not confirmed:
+            # check if it has any valid children or spenders
+            has_non_voided_child = lambda: any_non_voided(tx_storage, meta.children)
+            has_non_voided_spender = lambda: any_non_voided(tx_storage, chain(*meta.spent_outputs.values()))
+            if not has_non_voided_child() and not has_non_voided_spender():
                 to_add.add(tx_hash)
 
         if to_add:
             self._add_many(to_add)
             self.log.debug('added txs to tips', txs=[tx.hex() for tx in to_add])
 
-        actually_remove: bool
         voided_or_invalid = bool(tx_meta.voided_by) or tx_meta.validation.is_invalid()
-        if remove is None:
-            actually_remove = voided_or_invalid
-        else:
-            actually_remove = remove
-            if remove and not voided_or_invalid:
-                self.log.warn('removing tx even though it isn\'t voided or invalid, some tests can do this')
-            if not remove and voided_or_invalid:
-                raise ValueError('cannot add voided or invalid tx to mempool')
+        remove = force_remove or voided_or_invalid
 
-        if actually_remove:
+        if force_remove and not voided_or_invalid:
+            self.log.warn('removing tx even though it isn\'t voided or invalid, some tests can do this')
+
+        if remove:
             self.log.debug('remove from mempool', tx=tx.hash_hex, validation=tx_meta.validation,
                            is_voided=bool(tx_meta.voided_by))
             return
 
-        self._discard_many(set(tx.parents))
+        self._discard_many(tx.get_all_dependencies())
 
         if tx.is_transaction and tx_meta.first_block is None:
             self._add(tx.hash)
@@ -209,9 +197,10 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
     def iter_all(self, tx_storage: 'TransactionStorage') -> Iterator[Transaction]:
         from hathor.transaction.storage.traversal import BFSTimestampWalk
-        bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_left_to_right=False)
+        bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
-            assert isinstance(tx, Transaction)
+            if not isinstance(tx, Transaction):
+                continue
             if tx.get_metadata().first_block is not None:
                 bfs.skip_neighbors(tx)
             else:

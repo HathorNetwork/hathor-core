@@ -206,8 +206,8 @@ class IndexesManager(ABC):
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
         """
-        # XXX: this _should_ be here, but it breaks some tests, for now this is done explicitly in hathor.manager
-        # self.mempool_tips.update(tx)
+        if self.mempool_tips:
+            self.mempool_tips.update(tx)
         if self.utxo:
             self.utxo.update(tx)
 
@@ -434,7 +434,7 @@ class IndexesManager(ABC):
         # mempool will pick-up if the transaction is voided/invalid and remove it
         if self.mempool_tips is not None and tx.storage.transaction_exists(tx.hash):
             logger.debug('remove from mempool tips', tx=tx.hash_hex)
-            self.mempool_tips.update(tx, remove=True)
+            self.mempool_tips.update(tx, force_remove=True)
 
         if tx.is_block:
             self.block_tips.del_tx(tx, relax_assert=relax_assert)
