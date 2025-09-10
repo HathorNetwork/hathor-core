@@ -42,18 +42,6 @@ class MyBlueprint(Blueprint):
     ) -> None:
         self.syscall.create_deposit_token(token_name, token_symbol, amount, mint_authority, melt_authority)
 
-    @public(allow_deposit=True)
-    def create_fee_token(
-        self,
-        ctx: Context,
-        token_name: str,
-        token_symbol: str,
-        amount: int,
-        mint_authority: bool,
-        melt_authority: bool,
-    ) -> None:
-        self.syscall.create_fee_token(token_name, token_symbol, amount, mint_authority, melt_authority)
-
 
 class NCNanoContractTestCase(unittest.TestCase):
     def setUp(self):

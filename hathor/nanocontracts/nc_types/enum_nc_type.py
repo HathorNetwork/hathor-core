@@ -31,6 +31,7 @@ class IntEnumNCType(NCType[T]):
     """NC Type for IntEnum subclasses."""
 
     _is_hashable = True
+    SERIALIZATION_LENGTH = 1  # Single byte for enum values (0-255 range)
 
     def __init__(self, enum_class: type[T]) -> None:
         self.enum_class = enum_class
@@ -45,38 +46,34 @@ class IntEnumNCType(NCType[T]):
     @override
     def _check_value(self, value: T, /, *, deep: bool) -> None:
         if not isinstance(value, self.enum_class):
-            raise TypeError(f'expected {self.enum_class.__name__}')
+            raise TypeError(f'expected {self.enum_class.__name__}, got {type(value)}')
 
     @override
     def _serialize(self, serializer: Serializer, value: T, /) -> None:
-        # Serialize as 1-byte unsigned integer (same as TokenVersion range)
-        encode_int(serializer, int(value), length=1, signed=False)
+        # Serialize as single-byte unsigned integer
+        encode_int(serializer, int(value), length=self.SERIALIZATION_LENGTH, signed=False)
 
     @override
     def _deserialize(self, deserializer: Deserializer, /) -> T:
-        int_value = decode_int(deserializer, length=1, signed=False)
+        int_value = decode_int(deserializer, length=self.SERIALIZATION_LENGTH, signed=False)
         try:
             return self.enum_class(int_value)
         except ValueError as e:
-            raise ValueError(f'invalid {self.enum_class.__name__} value: {int_value}') from e
+            raise ValueError('invalid', 'value', int_value) from e
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> T:
-        if isinstance(json_value, str):
-            # Try to parse by name
-            try:
+        try:
+            if isinstance(json_value, str):
                 return self.enum_class[json_value]
-            except KeyError:
-                raise ValueError(f'invalid {self.enum_class.__name__} name: {json_value}')
-        elif isinstance(json_value, int):
-            # Try to parse by value
-            try:
-                return self.enum_class(json_value)
-            except ValueError:
-                raise ValueError(f'invalid {self.enum_class.__name__} value: {json_value}')
-        else:
-            raise ValueError(f'expected str or int for {self.enum_class.__name__}')
+            elif isinstance(json_value, (int, float)):
+                return self.enum_class(int(json_value))
+            else:
+                raise ValueError(f'expected str or int for {self.enum_class.__name__}')
+        except (ValueError, KeyError) as e:
+            raise ValueError(f'expected str or int for {self.enum_class.__name__}') from e
 
     @override
     def _value_to_json(self, value: T, /) -> NCType.Json:
+        """Convert enum value to JSON representation."""
         return int(value)
