@@ -15,13 +15,13 @@
 from math import floor
 from typing import Optional, TypeAlias
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
     Address,
+    Blueprint,
+    Context,
     NCAction,
     NCDepositAction,
+    NCFail,
     NCWithdrawalAction,
     SignedData,
     Timestamp,
