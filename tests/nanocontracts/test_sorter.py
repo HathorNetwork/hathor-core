@@ -171,9 +171,7 @@ class NCBlockSorterTestCase(unittest.TestCase):
             ocb1.ocb_private_key = "{private_key}"
             ocb1.ocb_password = "{password}"
             ocb1.ocb_code = ```
-                from hathor.nanocontracts import Blueprint
-                from hathor.nanocontracts.context import Context
-                from hathor.nanocontracts.types import export, public
+                from hathor import Blueprint, Context, export, public
 
                 @export
                 class MyBlueprint(Blueprint):

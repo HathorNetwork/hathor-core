@@ -60,9 +60,7 @@ class BaseBlueprintSourceCodeTest(GenericNanoResourceTest):
 class BuiltinBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
     __test__ = True
 
-    blueprint_source = r'''from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import export, public
+    blueprint_source = r'''from hathor import Blueprint, Context, export, public
 
 
 @export
@@ -91,9 +89,7 @@ class TestBlueprint(Blueprint):
 class OCBBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
     __test__ = True
 
-    blueprint_source = r'''from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import export, public
+    blueprint_source = r'''from hathor import Blueprint, Context, export, public
 
 
 @export

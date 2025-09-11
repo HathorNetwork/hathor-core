@@ -1,10 +1,10 @@
 from typing import Optional
 
-from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import (
+from hathor import (
     Address,
     Amount,
+    Blueprint,
+    Context,
     SignedData,
     Timestamp,
     TokenUid,
