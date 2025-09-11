@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid, public, view
+from hathor.contracts import Blueprint, Context, NCDepositAction, NCFail, NCWithdrawalAction, TokenUid, public, view
 
 
 class SwapDemo(Blueprint):
