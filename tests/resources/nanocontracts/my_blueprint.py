@@ -1,8 +1,6 @@
 from typing import Optional
 
-from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import Address, Amount, SignedData, Timestamp, TokenUid, TxOutputScript, public, view
+from hathor import Address, Amount, Blueprint, Context, SignedData, Timestamp, TokenUid, TxOutputScript, public, view
 
 
 class MyBlueprint(Blueprint):

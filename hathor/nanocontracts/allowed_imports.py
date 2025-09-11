@@ -16,8 +16,7 @@ import collections
 import math
 import typing
 
-import hathor.nanocontracts as nc
-import hathor.nanocontracts.utils as nc_utils
+import hathor
 
 # this is what's allowed to be imported in blueprints, to be checked in the AST and in runtime
 ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
@@ -34,38 +33,35 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
     ),
     'collections': dict(OrderedDict=collections.OrderedDict),
     # hathor
-    'hathor.nanocontracts': dict(
-        Blueprint=nc.Blueprint,
-        HATHOR_TOKEN_UID=nc.HATHOR_TOKEN_UID,
-    ),
-    'hathor.nanocontracts.blueprint': dict(Blueprint=nc.Blueprint),
-    'hathor.nanocontracts.context': dict(Context=nc.Context),
-    'hathor.nanocontracts.exception': dict(NCFail=nc.NCFail),
-    'hathor.nanocontracts.types': dict(
-        NCAction=nc.types.NCAction,
-        NCActionType=nc.types.NCActionType,
-        SignedData=nc.types.SignedData,
-        public=nc.public,
-        view=nc.view,
-        export=nc.export,
-        fallback=nc.fallback,
-        Address=nc.types.Address,
-        Amount=nc.types.Amount,
-        Timestamp=nc.types.Timestamp,
-        TokenUid=nc.types.TokenUid,
-        TxOutputScript=nc.types.TxOutputScript,
-        BlueprintId=nc.types.BlueprintId,
-        ContractId=nc.types.ContractId,
-        VertexId=nc.types.VertexId,
-        CallerId=nc.types.CallerId,
-        NCDepositAction=nc.types.NCDepositAction,
-        NCWithdrawalAction=nc.types.NCWithdrawalAction,
-        NCGrantAuthorityAction=nc.types.NCGrantAuthorityAction,
-        NCAcquireAuthorityAction=nc.types.NCAcquireAuthorityAction,
-        NCArgs=nc.types.NCArgs,
-        NCRawArgs=nc.types.NCRawArgs,
-        NCParsedArgs=nc.types.NCParsedArgs,
-        sha3=nc_utils.sha3,
-        verify_ecdsa=nc_utils.verify_ecdsa,
+    'hathor': dict(
+        Blueprint=hathor.Blueprint,
+        HATHOR_TOKEN_UID=hathor.HATHOR_TOKEN_UID,
+        Context=hathor.Context,
+        NCFail=hathor.NCFail,
+        NCAction=hathor.NCAction,
+        NCActionType=hathor.NCActionType,
+        SignedData=hathor.SignedData,
+        public=hathor.public,
+        view=hathor.view,
+        export=hathor.export,
+        fallback=hathor.fallback,
+        Address=hathor.Address,
+        Amount=hathor.Amount,
+        Timestamp=hathor.Timestamp,
+        TokenUid=hathor.TokenUid,
+        TxOutputScript=hathor.TxOutputScript,
+        BlueprintId=hathor.BlueprintId,
+        ContractId=hathor.ContractId,
+        VertexId=hathor.VertexId,
+        CallerId=hathor.CallerId,
+        NCDepositAction=hathor.NCDepositAction,
+        NCWithdrawalAction=hathor.NCWithdrawalAction,
+        NCGrantAuthorityAction=hathor.NCGrantAuthorityAction,
+        NCAcquireAuthorityAction=hathor.NCAcquireAuthorityAction,
+        NCArgs=hathor.NCArgs,
+        NCRawArgs=hathor.NCRawArgs,
+        NCParsedArgs=hathor.NCParsedArgs,
+        sha3=hathor.sha3,
+        verify_ecdsa=hathor.verify_ecdsa,
     ),
 }

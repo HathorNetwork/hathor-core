@@ -15,12 +15,12 @@
 from collections import OrderedDict
 from typing import NamedTuple, Optional, Union
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import (
+from hathor import (
     Address,
     Amount,
+    Blueprint,
     BlueprintId,
+    Context,
     ContractId,
     SignedData,
     Timestamp,
