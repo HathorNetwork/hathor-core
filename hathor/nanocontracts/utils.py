@@ -18,12 +18,19 @@ import hashlib
 from types import ModuleType
 from typing import Callable, assert_never
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
 
 from hathor.conf.settings import HathorSettings, NanoContractsSetting
-from hathor.crypto.util import decode_address, get_address_from_public_key_bytes, get_public_key_bytes_compressed
+from hathor.crypto.util import (
+    decode_address,
+    get_address_from_public_key_bytes,
+    get_public_key_bytes_compressed,
+    get_public_key_from_bytes_compressed,
+    is_pubkey_compressed,
+)
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, BlueprintId, ContractId, NCMethodType, TokenUid, VertexId
@@ -157,3 +164,26 @@ def is_nano_active(settings: HathorSettings, vertex: Vertex, feature_service: Fe
             return feature_service.is_feature_active(vertex=vertex, feature=Feature.NANO_CONTRACTS)
         case _:  # pragma: no cover
             assert_never(settings.ENABLE_NANO_CONTRACTS)
+
+
+def sha3(data: bytes) -> bytes:
+    """Calculate the SHA3-256 of some data."""
+    return hashlib.sha3_256(data).digest()
+
+
+def verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
+    """Verify a cryptographic signature using a compressed public key for a SECP256K1 curve."""
+    from hathor.nanocontracts import NCFail
+    if not is_pubkey_compressed(public_key):
+        raise NCFail('public_key is not compressed')
+
+    try:
+        pubkey = get_public_key_from_bytes_compressed(public_key)
+    except ValueError as e:
+        raise NCFail('public_key is invalid') from e
+
+    try:
+        pubkey.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+        return True
+    except InvalidSignature:
+        return False

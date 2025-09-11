@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.crypto.util import get_public_key_bytes_compressed
-from hathor.nanocontracts import Blueprint, Context, NCFail, public, types as nc, view
+from hathor.nanocontracts import Blueprint, Context, NCFail, public, utils as nc_utils, view
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -31,11 +31,11 @@ class MyBlueprint(Blueprint):
 
     @view
     def test_sha3(self, data: bytes) -> bytes:
-        return nc.sha3(data)
+        return nc_utils.sha3(data)
 
     @view
     def test_verify_ecdsa(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
-        return nc.verify_ecdsa(public_key, data, signature)
+        return nc_utils.verify_ecdsa(public_key, data, signature)
 
 
 class TestCryptoFunctions(BlueprintTestCase):

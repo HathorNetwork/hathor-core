@@ -17,6 +17,7 @@ import math
 import typing
 
 import hathor.nanocontracts as nc
+import hathor.nanocontracts.utils as nc_utils
 
 # this is what's allowed to be imported in blueprints, to be checked in the AST and in runtime
 ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
@@ -64,7 +65,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         NCArgs=nc.types.NCArgs,
         NCRawArgs=nc.types.NCRawArgs,
         NCParsedArgs=nc.types.NCParsedArgs,
-        sha3=nc.types.sha3,
-        verify_ecdsa=nc.types.verify_ecdsa,
+        sha3=nc_utils.sha3,
+        verify_ecdsa=nc_utils.verify_ecdsa,
     ),
 }
