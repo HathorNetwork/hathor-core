@@ -32,7 +32,7 @@ from hathor.nanocontracts.storage.contract_storage import (
 )
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid
-from hathor.transaction.token_info import TokenDescription
+from hathor.transaction.token_info import TokenDescription, TokenVersion
 
 T = TypeVar('T')
 D = TypeVar('D')
@@ -86,7 +86,14 @@ class NCChangesTracker(NCContractStorage):
         self.has_been_commited = False
         self.has_been_blocked = False
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def create_token(
+        self,
+        *,
+        token_id: TokenUid,
+        token_name: str,
+        token_symbol: str,
+        token_version: TokenVersion
+    ) -> None:
         """Create a new token in this changes tracker."""
         if self.has_token(token_id):
             raise NCTokenAlreadyExists
@@ -94,6 +101,7 @@ class NCChangesTracker(NCContractStorage):
             token_id=token_id,
             token_name=token_name,
             token_symbol=token_symbol,
+            token_version=token_version,
         )
 
     def has_token(self, token_id: TokenUid) -> bool:
@@ -101,6 +109,13 @@ class NCChangesTracker(NCContractStorage):
         if token_id in self._created_tokens:
             return True
         return self.storage.has_token(token_id)
+
+    def get_token(self, token_id: TokenUid) -> TokenDescription:
+        """Get token description for a given token ID."""
+        token_description = self._created_tokens.get(token_id)
+        if token_description is not None:
+            return token_description
+        return self.storage.get_token(token_id)
 
     def get_balance_diff(self) -> MappingProxyType[BalanceKey, int]:
         """Return the balance diff of this change tracker."""
@@ -183,7 +198,12 @@ class NCChangesTracker(NCContractStorage):
             )
 
         for td in self._created_tokens.values():
-            self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol)
+            self.storage.create_token(
+                token_id=TokenUid(td.token_id),
+                token_name=td.token_name,
+                token_symbol=td.token_symbol,
+                token_version=TokenVersion(td.token_version)
+            )
 
         if self._blueprint_id is not None:
             self.storage.set_blueprint_id(self._blueprint_id)

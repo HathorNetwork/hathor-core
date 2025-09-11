@@ -76,6 +76,7 @@ class TokenDescription:
     token_id: bytes
     token_name: str
     token_symbol: str
+    token_version: TokenVersion
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):
