@@ -16,7 +16,7 @@ import collections
 import math
 import typing
 
-import hathor.nanocontracts as nc
+from hathor import contracts
 
 # this is what's allowed to be imported in blueprints, to be checked in the AST and in runtime
 ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
@@ -33,36 +33,33 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
     ),
     'collections': dict(OrderedDict=collections.OrderedDict),
     # hathor
-    'hathor.nanocontracts': dict(
-        Blueprint=nc.Blueprint,
-        HATHOR_TOKEN_UID=nc.HATHOR_TOKEN_UID,
-    ),
-    'hathor.nanocontracts.blueprint': dict(Blueprint=nc.Blueprint),
-    'hathor.nanocontracts.context': dict(Context=nc.Context),
-    'hathor.nanocontracts.exception': dict(NCFail=nc.NCFail),
-    'hathor.nanocontracts.types': dict(
-        NCAction=nc.types.NCAction,
-        NCActionType=nc.types.NCActionType,
-        SignedData=nc.types.SignedData,
-        public=nc.public,
-        view=nc.view,
-        export=nc.export,
-        fallback=nc.fallback,
-        Address=nc.types.Address,
-        Amount=nc.types.Amount,
-        Timestamp=nc.types.Timestamp,
-        TokenUid=nc.types.TokenUid,
-        TxOutputScript=nc.types.TxOutputScript,
-        BlueprintId=nc.types.BlueprintId,
-        ContractId=nc.types.ContractId,
-        VertexId=nc.types.VertexId,
-        CallerId=nc.types.CallerId,
-        NCDepositAction=nc.types.NCDepositAction,
-        NCWithdrawalAction=nc.types.NCWithdrawalAction,
-        NCGrantAuthorityAction=nc.types.NCGrantAuthorityAction,
-        NCAcquireAuthorityAction=nc.types.NCAcquireAuthorityAction,
-        NCArgs=nc.types.NCArgs,
-        NCRawArgs=nc.types.NCRawArgs,
-        NCParsedArgs=nc.types.NCParsedArgs,
+    'hathor.contracts': dict(
+        Blueprint=contracts.Blueprint,
+        HATHOR_TOKEN_UID=contracts.HATHOR_TOKEN_UID,
+        Context=contracts.Context,
+        NCFail=contracts.NCFail,
+        NCAction=contracts.NCAction,
+        NCActionType=contracts.NCActionType,
+        SignedData=contracts.SignedData,
+        public=contracts.public,
+        view=contracts.view,
+        export=contracts.export,
+        fallback=contracts.fallback,
+        Address=contracts.Address,
+        Amount=contracts.Amount,
+        Timestamp=contracts.Timestamp,
+        TokenUid=contracts.TokenUid,
+        TxOutputScript=contracts.TxOutputScript,
+        BlueprintId=contracts.BlueprintId,
+        ContractId=contracts.ContractId,
+        VertexId=contracts.VertexId,
+        CallerId=contracts.CallerId,
+        NCDepositAction=contracts.NCDepositAction,
+        NCWithdrawalAction=contracts.NCWithdrawalAction,
+        NCGrantAuthorityAction=contracts.NCGrantAuthorityAction,
+        NCAcquireAuthorityAction=contracts.NCAcquireAuthorityAction,
+        NCArgs=contracts.NCArgs,
+        NCRawArgs=contracts.NCRawArgs,
+        NCParsedArgs=contracts.NCParsedArgs,
     ),
 }
