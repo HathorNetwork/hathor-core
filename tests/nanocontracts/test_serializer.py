@@ -90,9 +90,10 @@ class NCSerializerTestCase(unittest.TestCase):
             self._run_test_nc_type(Int32NCType(), 2**31)
         # but this doesn't fail because int maps to VarInt32NCType
         self._run_test(int, 2**31)
+        self._run_test(int, 2**249 - 1)
         with self.assertRaises(ValueError):
             # which has a larger, but still limited range, so this will fail:
-            self._run_test(int, 2**223)
+            self._run_test(int, 2**249)
 
     def test_optional_str_none(self):
         self._run_test(Optional[str], None)
