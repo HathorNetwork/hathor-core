@@ -119,6 +119,8 @@ KNOWN_CASES = [
     'hathor.nanocontracts.types.export.some_new_attribute',
     'hathor.nanocontracts.types.fallback.some_new_attribute',
     'hathor.nanocontracts.types.public.some_new_attribute',
+    'hathor.nanocontracts.types.sha3.some_new_attribute',
+    'hathor.nanocontracts.types.verify_ecdsa.some_new_attribute',
     'hathor.nanocontracts.types.view.some_new_attribute',
     'range._getitem_int',
     'range._getitem_slice',

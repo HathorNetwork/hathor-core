@@ -163,7 +163,7 @@ class TestSyscallsInView(BlueprintTestCase):
             'can_melt',
             'can_melt_before_current_call',
             'call_view_method',
-            'get_contract'
+            'get_contract',
         }
 
         for method_name, method in BlueprintEnvironment.__dict__.items():
