@@ -194,6 +194,7 @@ SOFT_VOIDED_TX_IDS:
   - 00004305882eb3eef6b45f025ff58eb7baa5ca35f7d6f42c8b085482b00474e6
   - 000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e
 
+ENABLE_NANO_CONTRACTS: feature_activation
 FEATURE_ACTIVATION:
   features:
     INCREASE_MAX_MERKLE_PATH_LENGTH:
@@ -219,3 +220,13 @@ FEATURE_ACTIVATION:
       lock_in_on_timeout: false
       version: 0.64.0
       signal_support_by_default: true
+
+# TODO
+#    NANO_CONTRACTS:
+#      bit: 1
+#      start_height: ???
+#      timeout_height: ???
+#      minimum_activation_height: 0
+#      lock_in_on_timeout: false
+#      version: 0.65.0
+#      signal_support_by_default: true

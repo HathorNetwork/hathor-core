@@ -254,6 +254,7 @@ class CliBuilder:
             path=self.rocksdb_storage.path,
             config=self._args.nc_exec_logs,
         )
+        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
@@ -264,13 +265,12 @@ class CliBuilder:
             runner_factory=runner_factory,
             nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
+            feature_service=self.feature_service,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
             self.log.info('--enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
-
-        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         bit_signaling_service = BitSignalingService(
             settings=settings,
@@ -364,6 +364,7 @@ class CliBuilder:
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
             runner_factory=runner_factory,
+            feature_service=self.feature_service,
         )
 
         if self._args.x_ipython_kernel:
