@@ -1,11 +1,13 @@
 import math
+from typing import Any, Generator
 
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.transaction.token_info import TokenVersion
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -13,7 +15,7 @@ from hathor.wallet.resources.thin_wallet import (
     TokenResource,
 )
 from tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from tests.utils import add_blocks_unlock_reward, add_new_tx, create_tokens
+from tests.utils import add_blocks_unlock_reward, add_new_tx, create_fee_tokens, create_tokens
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -355,6 +357,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
+        token_info_version = TokenVersion.DEPOSIT
         amount = 150
         tx = create_tokens(
             self.manager,
@@ -378,6 +381,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['total'], amount)
         self.assertEqual(data['name'], token_name)
         self.assertEqual(data['symbol'], token_symbol)
+        self.assertEqual(data['version'], token_info_version)
 
         # test list of tokens with one token
         response_list2 = yield resource.get('thin_wallet/token')
@@ -387,6 +391,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data_list2['tokens'][0]['name'], token_name)
         self.assertEqual(data_list2['tokens'][0]['symbol'], token_symbol)
         self.assertEqual(data_list2['tokens'][0]['uid'], tx.hash.hex())
+        self.assertEqual(data_list2['tokens'][0]['version'], token_info_version)
 
         token_name2 = 'New Token'
         token_symbol2 = 'NTK'
@@ -413,9 +418,9 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data_list3 = response_list3.json_value()
         self.assertTrue(data_list3['success'])
         self.assertEqual(len(data_list3['tokens']), 3)
-        token1 = {'uid': tx.hash.hex(), 'name': token_name, 'symbol': token_symbol}
-        token2 = {'uid': tx2.hash.hex(), 'name': token_name2, 'symbol': token_symbol2}
-        token3 = {'uid': tx3.hash.hex(), 'name': token_name3, 'symbol': token_symbol3}
+        token1 = {'uid': tx.hash.hex(), 'name': token_name, 'symbol': token_symbol, 'version': token_info_version}
+        token2 = {'uid': tx2.hash.hex(), 'name': token_name2, 'symbol': token_symbol2, 'version': token_info_version}
+        token3 = {'uid': tx3.hash.hex(), 'name': token_name3, 'symbol': token_symbol3, 'version': token_info_version}
         self.assertIn(token1, data_list3['tokens'])
         self.assertIn(token2, data_list3['tokens'])
         self.assertIn(token3, data_list3['tokens'])
@@ -427,6 +432,30 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data2 = response2.json_value()
         self.assertEqual(response2.responseCode, 503)
         self.assertFalse(data2['success'])
+
+    @inlineCallbacks
+    def test_fee_token(self) -> Generator[Deferred[Any], Any, None]:
+        self.manager.wallet.unlock(b'MYPASS')
+        resource = StubSite(TokenResource(self.manager))
+
+        # test success case
+        add_new_blocks(self.manager, 1, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        token_name = 'MyTestToken'
+        token_symbol = 'MTT'
+        token_info_version = TokenVersion.FEE
+        amount = 150
+        tx = create_fee_tokens(
+            self.manager,
+            mint_amount=amount,
+            token_name=token_name,
+            token_symbol=token_symbol,
+        )
+        token_uid = tx.tokens[0]
+        response = yield resource.get('thin_wallet/token', {b'id': token_uid.hex().encode()})
+        data = response.json_value()
+
+        self.assertEqual(data['version'], token_info_version)
 
     @inlineCallbacks
     def test_token_history(self):

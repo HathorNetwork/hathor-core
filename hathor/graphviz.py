@@ -65,6 +65,8 @@ class GraphvizVisualizer:
         """
         if tx.hash in self.labels:
             parts = [self.labels[tx.hash]]
+        elif tx.name is not None:
+            parts = [tx.name]
         else:
             parts = [tx.hash.hex()[-4:]]
 

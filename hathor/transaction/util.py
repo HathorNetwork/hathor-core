@@ -55,11 +55,11 @@ def unpack_len(n: int, buf: bytes | memoryview) -> tuple[bytes, bytes | memoryvi
     return ret, buf[n:]
 
 
-def get_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
+def get_deposit_token_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
     return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
 
 
-def get_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
+def get_deposit_token_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
     return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 
@@ -103,7 +103,9 @@ def output_value_to_bytes(number: int) -> bytes:
     return bytes(serializer.finalize())
 
 
-def validate_token_name_and_symbol(settings: HathorSettings, token_name: str, token_symbol: str) -> None:
+def validate_token_name_and_symbol(settings: HathorSettings,
+                                   token_name: str,
+                                   token_symbol: str) -> None:
     """Validate token_name and token_symbol before creating a new token."""
     name_len = len(token_name)
     symbol_len = len(token_symbol)

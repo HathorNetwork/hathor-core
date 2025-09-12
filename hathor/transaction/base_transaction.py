@@ -225,6 +225,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         from collections import OrderedDict
         d = OrderedDict(
+            name=self.name or '',
             nonce='%d' % (self.nonce or 0),
             timestamp='%s' % self.timestamp,
             version='%s' % int(self.version),

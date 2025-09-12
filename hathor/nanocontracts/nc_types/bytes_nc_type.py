@@ -49,7 +49,7 @@ class BytesLikeNCType(NCType[B]):
     @override
     def _check_value(self, value: bytes, /, *, deep: bool) -> None:
         if isclass(self._actual_type):
-            if not isinstance(value, self._actual_type):
+            if not isinstance(value, (bytes, self._actual_type)):
                 raise TypeError('expected {self._actual_type} instance')
         else:
             if not isinstance(value, bytes):

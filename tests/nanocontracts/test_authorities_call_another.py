@@ -124,13 +124,13 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self.tx = self.get_genesis_tx()
 
     def _initialize(self, caller_actions: list[NCAction] | None = None) -> None:
-        caller_ctx = Context(
+        caller_ctx = self.create_context(
             actions=caller_actions or [],
             vertex=self.tx,
             caller_id=self.address,
             timestamp=self.now
         )
-        callee_ctx = Context(
+        callee_ctx = self.create_context(
             actions=[],
             vertex=self.tx,
             caller_id=self.address,
@@ -142,7 +142,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self.callee_storage = self.runner.get_storage(self.callee_id)
 
     def _grant_to_other(self, *, mint: bool, melt: bool) -> None:
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
             caller_id=self.address,
@@ -153,7 +153,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         )
 
     def _revoke_from_self(self, contract_id: ContractId, *, actions: list[NCAction], mint: bool, melt: bool) -> None:
-        context = Context(
+        context = self.create_context(
             actions=actions,
             vertex=self.tx,
             caller_id=self.address,
@@ -164,7 +164,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         )
 
     def _revoke_from_other(self, *, mint: bool, melt: bool) -> None:
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
             caller_id=self.address,
@@ -216,7 +216,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
 
     def test_acquire_mint(self) -> None:
         self._initialize()
-        context = Context(
+        context = self.create_context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)],
             vertex=self.tx,
             caller_id=self.address,
@@ -226,7 +226,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
         assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
 
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
             caller_id=self.address,
@@ -241,7 +241,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
 
     def test_acquire_melt(self) -> None:
         self._initialize()
-        context = Context(
+        context = self.create_context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=False, melt=True)],
             vertex=self.tx,
             caller_id=self.address,
@@ -251,7 +251,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)
         assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
 
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
             caller_id=self.address,
@@ -281,7 +281,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self._grant_to_other(mint=True, melt=True)
         assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=True)
         assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=True)
-        context = Context(
+        context = self.create_context(
             actions=[],
             vertex=self.tx,
             caller_id=self.address,
@@ -293,7 +293,7 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
 
     def test_grant_then_revoke_same_call_another_contract(self) -> None:
         self._initialize()
-        context = Context(
+        context = self.create_context(
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True)],
             vertex=self.tx,
             caller_id=self.address,

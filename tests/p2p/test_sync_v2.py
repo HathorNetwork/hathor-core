@@ -22,6 +22,7 @@ from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.traversal import DFSWalk
 from hathor.types import VertexId
 from hathor.util import not_none
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.simulation.base import SimulatorTestCase
 
 
@@ -234,52 +235,18 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertConsensusEqualSyncV2(manager1, manager2)
 
     def test_receiving_tips_limit(self) -> None:
-        from hathor.manager import HathorManager
-        from hathor.transaction import Transaction
-        from hathor.wallet.base_wallet import WalletOutputInfo
-        from tests.utils import BURN_ADDRESS
-
         manager1 = self.create_peer()
-        manager1.allow_mining_without_peers()
+        dag_builder = TestDAGBuilder.from_manager(manager1)
 
-        # Find 100 blocks.
-        miner1 = self.simulator.create_miner(manager1, hashpower=10e6)
-        miner1.start()
-        trigger: Trigger = StopAfterNMinedBlocks(miner1, quantity=100)
-        self.assertTrue(self.simulator.run(3 * 3600, trigger=trigger))
-        miner1.stop()
+        generated_tips = '\n'.join(f'dummy <-- tx{i}' for i in range(100))
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..100]
+            b10 < dummy
 
-        # Custom tx generator that generates tips
-        parents = manager1.get_new_tx_parents(manager1.tx_storage.latest_timestamp)
+            {generated_tips}
+        ''')
+        artifacts.propagate_with(manager1)
 
-        def custom_gen_new_tx(manager: HathorManager, _address: str, value: int) -> Transaction:
-            outputs = []
-            # XXX: burn address guarantees that this output will not be used as input for any following transactions
-            # XXX: reduce value to make sure we can generate more transactions, otherwise it will spend a linear random
-            #      percent from 1 to 100 of the available balance, this way it spends from 0.1% to 10%
-            outputs.append(WalletOutputInfo(address=BURN_ADDRESS, value=max(1, int(value / 10)), timelock=None))
-
-            assert manager.wallet is not None
-            tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
-            tx.storage = manager.tx_storage
-
-            max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-            tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
-
-            tx.weight = 1
-            # XXX: fixed parents is the final requirement to make all the generated new tips
-            tx.parents = parents
-            manager.cpu_mining_service.resolve(tx)
-            return tx
-
-        # Generate 100 tx-tips in mempool.
-        gen_tx1 = self.simulator.create_tx_generator(manager1, rate=3., hashpower=10e9, ignore_no_funds=True)
-        gen_tx1.gen_new_tx = custom_gen_new_tx
-        gen_tx1.start()
-        trigger = StopAfterNTransactions(gen_tx1, quantity=100)
-        self.simulator.run(3600, trigger=trigger)
-        self.assertGreater(manager1.tx_storage.get_vertices_count(), 100)
-        gen_tx1.stop()
         assert manager1.tx_storage.indexes is not None
         assert manager1.tx_storage.indexes.mempool_tips is not None
         mempool_tips_count = len(manager1.tx_storage.indexes.mempool_tips.get())
@@ -313,7 +280,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(300)
         # we should expect only the tips to be missing from the second node
         self.assertEqual(manager1.tx_storage.get_vertices_count(),
-                         manager2.tx_storage.get_vertices_count() + mempool_tips_count)
+                         manager2.tx_storage.get_vertices_count() + mempool_tips_count + 1)
         # and also the second node should have aborted the connection
         self.assertTrue(conn12.proto2.aborting)
 

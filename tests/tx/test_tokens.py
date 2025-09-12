@@ -9,7 +9,8 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.util import get_deposit_amount, get_withdraw_amount, int_to_bytes
+from hathor.transaction.token_info import TokenVersion
+from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
 from tests import unittest
 from tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
@@ -120,6 +121,7 @@ class TokenTest(unittest.TestCase):
         data_to_sign = tx3.get_sighash_all()
         public_bytes, signature = wallet.get_input_aux_data(data_to_sign, wallet.get_private_key(self.address_b58))
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
+        tx3.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.cpu_mining_service.resolve(tx3)
         tx3.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         with self.assertRaises(InputOutputMismatch):
@@ -134,7 +136,7 @@ class TokenTest(unittest.TestCase):
 
         # mint tokens and transfer mint authority
         mint_amount = 10000000
-        deposit_amount = get_deposit_amount(self._settings, mint_amount)
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount)
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(mint_amount, script, 1)
@@ -194,7 +196,7 @@ class TokenTest(unittest.TestCase):
 
         # try to mint and deposit less tokens than necessary
         mint_amount = 10000000
-        deposit_amount = get_deposit_amount(self._settings, mint_amount) - 1
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount) - 1
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(mint_amount, script, 1)
@@ -240,7 +242,7 @@ class TokenTest(unittest.TestCase):
         # melt tokens and transfer melt authority
         melt_amount = 100
         new_amount = tx.outputs[0].value - melt_amount
-        withdraw_amount = get_withdraw_amount(self._settings, melt_amount)
+        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(new_amount, script, 1)
@@ -278,7 +280,7 @@ class TokenTest(unittest.TestCase):
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
-        withdraw_amount = get_withdraw_amount(self._settings, melt_amount)
+        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
@@ -313,6 +315,7 @@ class TokenTest(unittest.TestCase):
         data = P2PKH.create_input_data(public_bytes, signature)
         tx4.inputs[0].data = data
         tx4.inputs[1].data = data
+        tx4.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.cpu_mining_service.resolve(tx4)
         with self.assertRaises(InputOutputMismatch):
             self.manager.verification_service.verify(tx4, self.verification_params)
@@ -370,7 +373,7 @@ class TokenTest(unittest.TestCase):
 
         # new tx minting tokens
         mint_amount = 300
-        deposit_amount = get_deposit_amount(self._settings, mint_amount)
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount)
         script = P2PKH.create_output_script(self.address)
         # inputs
         mint_input = TxInput(tx.hash, 1, b'')
@@ -500,6 +503,14 @@ class TokenTest(unittest.TestCase):
         update_tx(tx)
         self.manager.verification_service.verify(tx, self.verification_params)
 
+        # Hathor token version
+        tx.token_name = 'Test'
+        tx.token_symbol = 'tst'
+        tx.token_version = TokenVersion.NATIVE
+        update_tx(tx)
+        with pytest.raises(TransactionDataError, match=f'Invalid token version \\({tx.token_version}\\)'):
+            self.manager.verification_service.verify(tx, self.verification_params)
+
     def test_token_mint_zero(self):
         # try to mint 0 tokens
         with pytest.raises(InvalidNewTransaction) as e:
@@ -544,26 +555,31 @@ class TokenTest(unittest.TestCase):
     def test_token_info_serialization(self):
         tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
         info = tx.serialize_token_info()
-        # try with version 2
-        info2 = bytes([0x02]) + info[1:]
+
+        # try with a version outsite the enum
+        invalid_version = 100
+        info2 = bytes(int_to_bytes(invalid_version, 1)) + info[1:]
+
         with self.assertRaises(ValueError):
             TokenCreationTransaction.deserialize_token_info(info2)
 
     def test_token_info_not_utf8(self):
         token_name = 'TestCoin'
         token_symbol = 'TST'
+        token_info_version = 1
 
         # Token version 1; Name length; Name; Symbol length; Symbol
-        bytes1 = (bytes([0x01]) + int_to_bytes(len(token_name), 1) + token_name.encode('utf-8')
+        bytes1 = (int_to_bytes(token_info_version, 1) + int_to_bytes(len(token_name), 1) + token_name.encode('utf-8')
                   + int_to_bytes(len(token_symbol), 1) + token_symbol.encode('utf-8'))
 
-        name, symbol, _ = TokenCreationTransaction.deserialize_token_info(bytes1)
+        name, symbol, info_version, _ = TokenCreationTransaction.deserialize_token_info(bytes1)
 
         self.assertEqual(name, token_name)
         self.assertEqual(symbol, token_symbol)
+        self.assertEqual(token_info_version, info_version)
 
         encoded_name = token_name.encode('utf-16')
-        bytes2 = (bytes([0x01]) + int_to_bytes(len(encoded_name), 1) + encoded_name
+        bytes2 = (int_to_bytes(token_info_version, 1) + int_to_bytes(len(encoded_name), 1) + encoded_name
                   + int_to_bytes(len(token_symbol), 1) + token_symbol.encode('utf-8'))
 
         with self.assertRaises(StructError):

@@ -1,5 +1,5 @@
 from io import TextIOWrapper
-from os import PathLike
+from typing import Sequence
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.crypto.util import decode_address
@@ -13,8 +13,8 @@ from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
-from hathor.nanocontracts.vertex_data import VertexData
-from hathor.transaction import BaseTransaction, Transaction
+from hathor.nanocontracts.vertex_data import BlockData, VertexData
+from hathor.transaction import Transaction, Vertex
 from hathor.util import not_none
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.wallet import KeyPair
@@ -86,7 +86,7 @@ class BlueprintTestCase(unittest.TestCase):
         self.nc_catalog.blueprints[blueprint_id] = blueprint_class
         return blueprint_id
 
-    def register_blueprint_file(self, path: PathLike[str], blueprint_id: BlueprintId | None = None) -> BlueprintId:
+    def register_blueprint_file(self, path: str, blueprint_id: BlueprintId | None = None) -> BlueprintId:
         """Register a blueprint file with an optional id, allowing contracts to be created from it."""
         with open(path, 'r') as f:
             return self._register_blueprint_contents(f, blueprint_id)
@@ -163,21 +163,21 @@ class BlueprintTestCase(unittest.TestCase):
 
     def get_genesis_tx(self) -> Transaction:
         """Return a genesis transaction."""
-        genesis = self.manager.tx_storage.get_all_genesis()
-        tx = list(tx for tx in genesis if isinstance(tx, Transaction))[0]
+        tx = self.manager.tx_storage.get_genesis(self._settings.GENESIS_TX1_HASH)
+        assert isinstance(tx, Transaction)
         return tx
 
     def create_context(
         self,
-        actions: list[NCAction] | None = None,
-        vertex: BaseTransaction | VertexData | None = None,
-        address: Address | None = None,
+        actions: Sequence[NCAction] | None = None,
+        vertex: Vertex | None = None,
+        caller_id: Address | None = None,
         timestamp: int | None = None,
     ) -> Context:
         """Create a Context instance with optional values or defaults."""
         return Context(
-            actions=actions if actions is not None else [],
-            vertex=vertex or self.get_genesis_tx(),
-            caller_id=address or self.gen_random_address(),
-            timestamp=timestamp or self.now,
+            caller_id=caller_id or self.gen_random_address(),
+            vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
+            block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
+            actions=Context.__group_actions__(actions or ()),
         )

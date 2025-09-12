@@ -246,14 +246,20 @@ class Method:
 
         # XXX: bound methods don't expose the self argument
         if not is_bound_method:
-            self_param = next(iter_params)
+            try:
+                self_param = next(iter_params)
+            except StopIteration:
+                raise TypeError('missing self argument')
             if self_param.name != 'self':
                 # XXX: self_param is not technically required to be named 'self', it can be named anything, but it
                 #      should at least be a warning because it's possible the author forgot the 'self' argument
                 raise TypeError('first argument should be self')
 
         if is_nc_public_method(method):
-            ctx_param = next(iter_params)
+            try:
+                ctx_param = next(iter_params)
+            except StopIteration:
+                raise TypeError('missing ctx argument')
             if ctx_param.annotation is not Context:
                 raise TypeError('context argument must be annotated as `ctx: Context`')
 

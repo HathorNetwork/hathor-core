@@ -218,14 +218,9 @@ class VertexHandler:
             init_static_metadata=False,
         )
         self._tx_storage.indexes.update(vertex)
-        if self._tx_storage.indexes.mempool_tips:
-            self._tx_storage.indexes.mempool_tips.update(vertex)  # XXX: move to indexes.update
 
         # Publish to pubsub manager the new tx accepted, now that it's full validated
         self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
-
-        if self._tx_storage.indexes.mempool_tips:
-            self._tx_storage.indexes.mempool_tips.update(vertex)
 
         if self._wallet:
             # TODO Remove it and use pubsub instead.

@@ -151,7 +151,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         data = {}
         for v_int in range(20_000):
             v = str(v_int).encode('ascii')
-            k = hashlib.sha1(v).digest()
+            k = hashlib.sha256(v).digest()
             data[k] = v
             trie.update(k, v)
 
@@ -175,7 +175,7 @@ class PatriciaTrieTestCase(unittest.TestCase):
         data = {}
         for v_int in range(20_000):
             v = str(v_int).encode('ascii')
-            k = hashlib.sha1(v).digest()
+            k = hashlib.sha256(v).digest()
             data[k] = v
             trie.update(k, v)
         trie.commit()

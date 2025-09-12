@@ -27,6 +27,7 @@ from hathor.nanocontracts.types import (
     Timestamp,
     TokenUid,
     TxOutputScript,
+    export,
     public,
     view,
 )
@@ -63,6 +64,7 @@ class InvalidOracleSignature(NCFail):
     pass
 
 
+@export
 class Bet(Blueprint):
     """Bet blueprint with final result provided by an oracle.
 
@@ -154,7 +156,7 @@ class Bet(Blueprint):
         assert isinstance(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
-        if ctx.timestamp > self.date_last_bet:
+        if ctx.block.timestamp > self.date_last_bet:
             raise TooLate(f'cannot place bets after {self.date_last_bet}')
         amount = Amount(action.amount)
         self.total = Amount(self.total + amount)
@@ -221,6 +223,3 @@ class Bet(Blueprint):
         address_total = self.bets_address.get((self.final_result, address), 0)
         percentage = address_total / result_total
         return Amount(floor(percentage * self.total))
-
-
-__blueprint__ = Bet

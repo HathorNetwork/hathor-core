@@ -200,7 +200,7 @@ class ResourcesBuilder:
 
         resources = [
             (b'status', StatusResource(self.manager), root),
-            (b'version', VersionResource(self.manager), root),
+            (b'version', VersionResource(self.manager, self._feature_service), root),
             (b'create_tx', CreateTxResource(self.manager), root),
             (b'decode_tx', DecodeTxResource(self.manager), root),
             (b'validate_address', ValidateAddressResource(self.manager), root),

@@ -16,6 +16,9 @@ import hathor
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
+from hathor.feature_activation.feature_service import FeatureService
+from hathor.manager import HathorManager
+from hathor.nanocontracts.utils import is_nano_active
 from hathor.util import json_dumpb
 
 
@@ -27,10 +30,12 @@ class VersionResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager, feature_service: FeatureService) -> None:
         # Important to have the manager so we can have access to min_tx_weight_coefficient
+        super().__init__()
         self._settings = get_global_settings()
         self.manager = manager
+        self.feature_service = feature_service
 
     def render_GET(self, request):
         """ GET request for /version/ that returns the API version
@@ -40,10 +45,13 @@ class VersionResource(Resource):
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
+        best_block = self.manager.tx_storage.get_best_block()
+        nano_contracts_enabled = is_nano_active(self._settings, best_block, self.feature_service)
+
         data = {
             'version': hathor.__version__,
             'network': self.manager.network,
-            'nano_contracts_enabled': self._settings.ENABLE_NANO_CONTRACTS,
+            'nano_contracts_enabled': nano_contracts_enabled,
             'min_weight': self._settings.MIN_TX_WEIGHT,  # DEPRECATED
             'min_tx_weight': self._settings.MIN_TX_WEIGHT,
             'min_tx_weight_coefficient': self._settings.MIN_TX_WEIGHT_COEFFICIENT,

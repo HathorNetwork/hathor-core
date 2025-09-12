@@ -38,7 +38,7 @@ class StrNCType(NCType[str]):
     @override
     def _check_value(self, value: str, /, *, deep: bool) -> None:
         if not isinstance(value, str):
-            raise TypeError('excpected str type')
+            raise TypeError('expected str type')
 
     @override
     def _serialize(self, serializer: Serializer, value: str, /) -> None:

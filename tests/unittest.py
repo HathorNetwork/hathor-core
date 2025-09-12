@@ -207,9 +207,10 @@ class TestCase(unittest.TestCase):
         disable_ipv4: bool = False,
         nc_indexes: bool = False,
         nc_log_config: NCLogConfig | None = None,
+        settings: HathorSettings | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
-        settings = self._settings._replace(NETWORK_NAME=network)
+        settings = (settings or self._settings)._replace(NETWORK_NAME=network)
         builder = self.get_builder() \
             .set_settings(settings)
 
