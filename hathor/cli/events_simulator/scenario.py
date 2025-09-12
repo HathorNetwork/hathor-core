@@ -136,26 +136,12 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
-    # Print initial balance
-    print(f"\n=== Unvoided Transaction Scenario ===")
-    balance_per_address = manager.wallet.get_balance_per_address(
-        settings.HATHOR_TOKEN_UID)
-    for addr, balance in balance_per_address.items():
-        print(f"Initial balance for address {addr}: {balance}")
-
     # A tx is created with weight 19.0005
     tx = gen_new_tx(manager, address, 1000)
     tx.weight = 19.0005
     tx.update_hash()
     assert manager.propagate_tx(tx)
     simulator.run(60)
-
-    # Print balance after first transaction
-    balance_per_address = manager.wallet.get_balance_per_address(
-        settings.HATHOR_TOKEN_UID)
-    for addr, balance in balance_per_address.items():
-        print(f"Balance after first transaction (tx1: {
-              tx.hash_hex}) for address {addr}: {balance}")
 
     # A clone is created with a greater timestamp and a lower weight. It's a voided twin tx.
     tx2 = tx.clone(include_metadata=False)
@@ -165,18 +151,9 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     assert manager.propagate_tx(tx2)
     simulator.run(60)
 
-    # Print balance after second transaction (clone)
-    balance_per_address = manager.wallet.get_balance_per_address(
-        settings.HATHOR_TOKEN_UID)
-    for addr, balance in balance_per_address.items():
-        print(f"Balance after second transaction (tx2: {
-              tx2.hash_hex}) for address {addr}: {balance}")
-
     # Only the second tx is voided
     assert not tx.get_metadata().voided_by
     assert tx2.get_metadata().voided_by
-    print(f"Transaction status: tx1 voided={bool(
-        tx.get_metadata().voided_by)}, tx2 voided={bool(tx2.get_metadata().voided_by)}")
 
     # We add a block confirming the second tx, increasing its acc weight
     block = add_new_block(manager, propagate=False)
@@ -192,15 +169,6 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     # The first tx gets voided and the second gets unvoided
     assert tx.get_metadata().voided_by
     assert not tx2.get_metadata().voided_by
-    print(f"Final transaction status: tx1 voided={bool(
-        tx.get_metadata().voided_by)}, tx2 voided={bool(tx2.get_metadata().voided_by)}")
-
-    # Print final balances
-    balance_per_address = manager.wallet.get_balance_per_address(
-        settings.HATHOR_TOKEN_UID)
-    for addr, balance in balance_per_address.items():
-        print(f"Final balance for address {addr}: {balance}")
-    print("=== End Unvoided Transaction Scenario ===\n")
 
     return None
 
@@ -447,6 +415,7 @@ def simulate_transaction_voiding_chain(
     from hathor.conf.get_settings import get_global_settings
     from hathor.crypto.util import decode_address
     from hathor.simulator.utils import add_new_blocks, gen_new_tx
+    from hathor.wallet import HDWallet
 
     # Constants
     SIMULATION_STEP_DURATION = 60
@@ -458,6 +427,7 @@ def simulate_transaction_voiding_chain(
 
     settings = get_global_settings()
     assert manager.wallet is not None
+    assert isinstance(manager.wallet, HDWallet)
 
     wallet = manager.wallet
     address = wallet.get_address(wallet.get_key_at_index(0))
@@ -546,6 +516,7 @@ def simulate_voided_token_authority(
     from hathor.transaction import Transaction, TxInput, TxOutput
     from hathor.transaction.scripts import P2PKH
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
+    from hathor.wallet import HDWallet
 
     # Constants
     SIMULATION_STEP_DURATION = 60
@@ -562,6 +533,7 @@ def simulate_voided_token_authority(
 
     settings = get_global_settings()
     assert manager.wallet is not None
+    assert isinstance(manager.wallet, HDWallet)
 
     wallet = manager.wallet
 
