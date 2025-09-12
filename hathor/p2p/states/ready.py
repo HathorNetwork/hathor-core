@@ -26,6 +26,8 @@ from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.utils import to_height_info, to_serializable_best_blockchain
 from hathor.transaction import BaseTransaction
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.types import VertexId
 from hathor.util import json_dumps, json_loads
 
 if TYPE_CHECKING:
@@ -98,6 +100,16 @@ class ReadyState(BaseState):
 
         # whether to relay IPV6 entrypoints
         self.should_relay_ipv6_entrypoints: bool = self._settings.CAPABILITY_IPV6 in common_capabilities
+
+        # whether to enable nano-state commands
+        enable_nano_state_commands = self._settings.CAPABILITY_NANO_STATE in common_capabilities
+        if enable_nano_state_commands:
+            self.cmd_map.update({
+                ProtocolMessages.GET_BLOCK_NC_ROOT_ID: self.handle_get_block_nc_root_id,
+                ProtocolMessages.BLOCK_NC_ROOT_ID: self.handle_block_nc_root_id,
+                ProtocolMessages.GET_NC_DB_NODE: self.handle_get_nc_db_node,
+                ProtocolMessages.NC_DB_NODE: self.handle_nc_db_node,
+            })
 
         # Initialize sync manager and add its commands to the list of available commands.
         connections = self.protocol.connections
@@ -288,3 +300,76 @@ class ReadyState(BaseState):
             )
             return
         self.peer_best_blockchain = best_blockchain
+
+    def handle_get_block_nc_root_id(self, payload: str) -> None:
+        """ Handle a GET-BLOCK-NC-ROOT-ID command by returning the root_id of a given block hash.
+        """
+        try:
+            block_hash = bytes.fromhex(payload)
+        except ValueError:
+            self.protocol.send_error_and_close_connection('Invalid block-hash received (not hex).')
+            return
+        if len(block_hash) != 32:
+            self.protocol.send_error_and_close_connection('Invalid block-hash received (bad size).')
+            return
+        block_id = VertexId(block_hash)
+        try:
+            block = self.protocol.node.tx_storage.get_block(block_id)
+        except TransactionDoesNotExist:
+            self.protocol.send_error_and_close_connection('Invalid block-hash received (not found).')
+            return
+        block_meta = block.get_metadata()
+        if block_meta.nc_block_root_id is None:
+            self.protocol.send_error_and_close_connection('Invalid block-hash received (no root-id).')
+            return
+        self.send_message(ProtocolMessages.BLOCK_NC_ROOT_ID, block_meta.nc_block_root_id.hex())
+
+    def handle_block_nc_root_id(self, payload: str) -> None:
+        """ Handle a BLOCK-NC-ROOT-ID command, to be implemented in the future, for now just logs the response.
+        """
+        try:
+            nc_root_id = bytes.fromhex(payload)
+        except ValueError:
+            raw_payload = payload.encode('utf-8').hex()  # avoid logging arbitrary data
+            self.log.debug('invalid root-id received (not hex)', payload=raw_payload)
+            return
+        if len(nc_root_id) != 32:
+            self.log.debug('invalid root-id received (wrong length)', length=len(nc_root_id))
+            return
+        self.log.info('response received', nc_root_id=nc_root_id.hex())
+
+    def handle_get_nc_db_node(self, payload: str) -> None:
+        """ Handle a GET-NC-DB-NODE command by returning the storage Node of a given NodeId.
+        """
+        try:
+            nc_node_id = bytes.fromhex(payload)
+        except ValueError:
+            raw_payload = payload.encode('utf-8').hex()  # avoid logging arbitrary data
+            self.log.debug('invalid node-id received (not hex)', payload=raw_payload)
+            return
+        if len(nc_node_id) != 32:
+            self.log.debug('invalid node-id received (wrong length)', length=len(nc_node_id))
+            return
+        # XXX: _get_trie is private and expects a "root node", technically it's a normal node and we just need the node
+        #      itself anyway, but ideally we could have a shortcut to just get the node directly
+        node = self.protocol.node.consensus_algorithm.nc_storage_factory._get_trie(nc_node_id).root
+        data = {
+            'key': node.key.hex(),
+            'length': node.length,
+        }
+        if node.content is not None:
+            data['content'] = node.content.hex()
+        if node.children:
+            data['children'] = [child_node_id.hex() for child_node_id in node.children.values()]
+        self.send_message(ProtocolMessages.NC_DB_NODE, json_dumps(data))
+
+    def handle_nc_db_node(self, payload: str) -> None:
+        """ Handle a NC-DB-NODE command, to be implemented in the future, for now just logs the response.
+        """
+        try:
+            nc_db_node_data = json_loads(payload)
+        except ValueError:  # works for JSONDecodeError too
+            raw_payload = payload.encode('utf-8').hex()  # avoid logging arbitrary data
+            self.log.debug('invalid nc-db-node received (not a json)', payload=raw_payload)
+            return
+        self.log.info('response received', nc_node=nc_db_node_data)
