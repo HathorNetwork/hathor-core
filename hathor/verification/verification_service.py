@@ -106,6 +106,9 @@ class VerificationService:
 
         self.verifiers.vertex.verify_version_basic(vertex)
 
+        if params.reject_too_old_vertices:
+            self.verifiers.vertex.verify_old_timestamp(vertex)
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
@@ -139,6 +142,7 @@ class VerificationService:
         if not params.skip_block_weight_verification:
             self.verifiers.block.verify_weight(block)
         self.verifiers.block.verify_reward(block)
+        self.verifiers.block.verify_checkpoints(block)
 
     def _verify_basic_merge_mined_block(self, block: MergeMinedBlock, params: VerificationParams) -> None:
         self._verify_basic_block(block, params)
@@ -197,7 +201,9 @@ class VerificationService:
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
-            # nothing to do
+            if params.harden_nano_restrictions:
+                self.verifiers.nanocontracts.verify_method_call(vertex)
+                self.verifiers.nanocontracts.verify_seqnum(vertex)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block, params: VerificationParams) -> None:
@@ -260,6 +266,8 @@ class VerificationService:
         self.verifiers.vertex.verify_parents(tx)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
+        if params.reject_conflicts_with_confirmed_txs:
+            self.verifiers.tx.verify_conflict(tx)
 
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
@@ -331,6 +339,10 @@ class VerificationService:
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)
         self.verifiers.vertex.verify_sigops_output(tx, params.enable_checkdatasig_count)
+        if params.harden_token_restrictions:
+            self.verifiers.tx.verify_tokens(tx)
+        if params.standard_scripts_only:
+            self.verifiers.tx.verify_standard_scripts(tx)
 
     def _verify_without_storage_token_creation_tx(
         self,
