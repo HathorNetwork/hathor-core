@@ -32,7 +32,6 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
 from hathor.transaction.block import Block
-from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.storage.exceptions import (
     TokenCreationTransactionDoesNotExist,
     TransactionDoesNotExist,
@@ -51,7 +50,6 @@ from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_con
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.types import VertexId
-from hathor.verification.transaction_verifier import TransactionVerifier
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -1056,23 +1054,6 @@ class TransactionStorage(ABC):
             yield from self.indexes.mempool_tips.iter_all(self)
         else:
             yield from self.iter_mempool_from_tx_tips()
-
-    def compute_transactions_that_became_invalid(self, new_best_height: int) -> list[BaseTransaction]:
-        """ This method will look for transactions in the mempool that have become invalid due to the reward lock.
-        It compares each tx's `min_height` to the `new_best_height`, accounting for the fact that the tx can be
-        confirmed by the next block.
-        """
-        from hathor.transaction.validation_state import ValidationState
-        to_remove: list[BaseTransaction] = []
-        for tx in self.iter_mempool_from_best_index():
-            try:
-                TransactionVerifier.verify_reward_locked_for_height(
-                    self._settings, tx, new_best_height, assert_min_height_verification=False
-                )
-            except RewardLocked:
-                tx.set_validation(ValidationState.INVALID)
-                to_remove.append(tx)
-        return to_remove
 
     def _construct_genesis_block(self) -> Block:
         """Return the genesis block."""

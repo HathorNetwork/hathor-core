@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from structlog import get_logger
 
@@ -24,7 +24,8 @@ from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
+from hathor.transaction.exceptions import RewardLocked
 from hathor.util import not_none
 
 if TYPE_CHECKING:
@@ -118,6 +119,9 @@ class ConsensusAlgorithm:
         assert storage.indexes is not None
         best_height, best_tip = storage.indexes.height.get_height_tip()
 
+        # This has to be called before the removal of vertices, otherwise this call may fail.
+        old_best_block = base.storage.get_transaction(best_tip)
+
         if isinstance(base, Transaction):
             context.transaction_algorithm.update_consensus(base)
         elif isinstance(base, Block):
@@ -125,34 +129,24 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
+        # signal a mempool tips index update for all affected transactions,
+        # because that index is used on compute_vertices_that_became_invalid below.
+        for tx_affected in _sorted_affected_txs(context.txs_affected):
+            if storage.indexes.mempool_tips is not None:
+                storage.indexes.mempool_tips.update(tx_affected)
+
         txs_to_remove: list[BaseTransaction] = []
-
-        from hathor.nanocontracts.exception import NanoContractDoesNotExist
-        for tx_affected in context.txs_affected:
-            if not tx_affected.is_nano_contract():
-                # Not a nano tx? Skip!
-                continue
-            if tx_affected.get_metadata().first_block:
-                # Not in mempool? Skip!
-                continue
-            assert isinstance(tx_affected, Transaction)
-            nano_header = tx_affected.get_nano_header()
-            try:
-                # TODO: We use this call to check whether the contract ID still exists after the reorg, as it may
-                #  have been a contract created by another contract that became "unexecuted" after the reorg. We
-                #  could use a more explicit check here instead of relying on this method.
-                nano_header.get_blueprint_id()
-            except NanoContractDoesNotExist:
-                from hathor.transaction.validation_state import ValidationState
-                tx_affected.set_validation(ValidationState.INVALID)
-
         new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
-        if new_best_height < best_height:
-            self.log.warn('height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
-                          prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex())
-            # XXX: this method will mark as INVALID all transactions in the mempool that became invalid because of a
-            #      reward lock
-            txs_to_remove.extend(storage.compute_transactions_that_became_invalid(new_best_height))
+
+        if context.reorg_common_block is not None:
+            if new_best_height < best_height:
+                self.log.warn(
+                    'height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
+                    prev_block_tip=best_tip.hex(), new_block_tip=new_best_tip.hex(),
+                )
+
+            # XXX: this method will mark as INVALID all transactions in the mempool that became invalid after the reorg
+            txs_to_remove.extend(compute_vertices_that_became_invalid(self._settings, storage, new_best_height))
 
         if txs_to_remove:
             self.log.warn('some transactions on the mempool became invalid and will be removed',
@@ -164,7 +158,6 @@ class ConsensusAlgorithm:
 
         # emit the reorg started event if needed
         if context.reorg_common_block is not None:
-            old_best_block = base.storage.get_transaction(best_tip)
             assert isinstance(old_best_block, Block)
             new_best_block = base.storage.get_transaction(new_best_tip)
             reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
@@ -304,6 +297,100 @@ class ConsensusAlgorithm:
         for tx in txs:
             self.log.debug('remove transaction', tx=tx.hash_hex)
             storage.remove_transaction(tx)
+
+
+def compute_vertices_that_became_invalid(
+    settings: HathorSettings,
+    storage: TransactionStorage,
+    new_best_height: int,
+) -> list[BaseTransaction]:
+    """This method will look for transactions in the mempool that have become invalid after a reorg."""
+    from hathor.transaction.storage.traversal import BFSTimestampWalk
+    from hathor.transaction.validation_state import ValidationState
+    assert storage.indexes is not None
+    assert storage.indexes.mempool_tips is not None
+
+    mempool_tips = list(storage.indexes.mempool_tips.iter(storage))
+    if not mempool_tips:
+        # Mempool is empty, nothing to remove.
+        return []
+
+    # Find "mempool origin" txs, that is, a set of txs that when used as roots
+    # of a left-to-right BFS guarantees it'll reach all mempool txs.
+    mempool_origin: set[Transaction] = set()
+    mempool_origin_bfs = BFSTimestampWalk(
+        storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False
+    )
+    for tx in mempool_origin_bfs.run(mempool_tips, skip_root=True):
+        if not isinstance(tx, Transaction):
+            continue
+        if tx.get_metadata().first_block is not None:
+            mempool_origin.add(tx)
+            mempool_origin_bfs.skip_neighbors(tx)
+
+    mempool_rules: tuple[Callable[[Transaction], bool], ...] = (
+        lambda tx: reward_lock_mempool_rule(settings, tx, new_best_height),
+        lambda tx: unknown_contract_mempool_rule(tx),
+    )
+
+    # From the mempool origin, find the leftmost mempool txs that are invalid.
+    leftmost_invalid_txs: set[BaseTransaction] = set()
+    find_invalid_bfs = BFSTimestampWalk(storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+    for vertex in find_invalid_bfs.run(mempool_origin, skip_root=True):
+        if not isinstance(vertex, Transaction):
+            continue
+        if vertex.get_metadata().first_block is not None:
+            # We may reach other confirmed txs from the mempool origin, so we just skip them.
+            continue
+        # At this point, it's a mempool tx, so we have to re-verify it.
+        if not all(rule(vertex) for rule in mempool_rules):
+            leftmost_invalid_txs.add(vertex)
+            find_invalid_bfs.skip_neighbors(vertex)
+
+    # From the leftmost invalid txs, mark all vertices to the right as invalid.
+    to_remove: list[BaseTransaction] = []
+    find_to_remove_bfs = BFSTimestampWalk(storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True)
+    for vertex in find_to_remove_bfs.run(leftmost_invalid_txs, skip_root=False):
+        vertex.set_validation(ValidationState.INVALID)
+        to_remove.append(vertex)
+
+    to_remove.reverse()
+    return to_remove
+
+
+def reward_lock_mempool_rule(settings: HathorSettings, tx: Transaction, new_best_height: int) -> bool:
+    """
+    Check whether a tx became invalid after a reorg because the new best height is not enough to unlock a reward.
+    Return True if it's valid, False otherwise.
+    """
+    from hathor.verification.transaction_verifier import TransactionVerifier
+    try:
+        TransactionVerifier.verify_reward_locked_for_height(
+            settings, tx, new_best_height, assert_min_height_verification=False
+        )
+    except RewardLocked:
+        return False
+    return True
+
+
+def unknown_contract_mempool_rule(tx: Transaction) -> bool:
+    """
+    Check whether a tx became invalid after a reorg because the NC used in nc_id was unexecuted.
+    Return True if it's valid, False otherwise.
+    """
+    if not tx.is_nano_contract():
+        return True
+
+    from hathor.nanocontracts.exception import NanoContractDoesNotExist
+    nano_header = tx.get_nano_header()
+    try:
+        # TODO: We use this call to check whether the contract ID still exists after the reorg, as it may
+        #  have been a contract created by another contract that became "unexecuted" after the reorg. We
+        #  could use a more explicit check here instead of relying on this method.
+        nano_header.get_blueprint_id()
+    except NanoContractDoesNotExist:
+        return False
+    return True
 
 
 def _sorted_affected_txs(affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:
