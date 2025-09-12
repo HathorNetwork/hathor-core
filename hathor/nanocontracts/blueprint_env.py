@@ -219,8 +219,8 @@ class BlueprintEnvironment:
     def mint_tokens(
         self,
         token_uid: TokenUid,
-        *,
         amount: int,
+        *,
         fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
     ) -> None:
         """Mint tokens and add them to the balance of this nano contract."""
@@ -230,8 +230,8 @@ class BlueprintEnvironment:
     def melt_tokens(
         self,
         token_uid: TokenUid,
-        *,
         amount: int,
+        *,
         fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
     ) -> None:
         """Melt tokens by removing them from the balance of this nano contract."""
@@ -283,14 +283,13 @@ class BlueprintEnvironment:
         fee_payment_token: TokenUid | None = None
     ) -> TokenUid:
         """Create a new fee-based token."""
-        fee_token = fee_payment_token if fee_payment_token is not None else TokenUid(HATHOR_TOKEN_UID)
         return self.__runner.syscall_create_child_fee_token(
             token_name,
             token_symbol,
             amount,
             mint_authority,
             melt_authority,
-            fee_token
+            fee_payment_token
         )
 
     @final

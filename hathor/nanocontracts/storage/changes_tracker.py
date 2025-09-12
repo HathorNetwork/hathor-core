@@ -88,6 +88,7 @@ class NCChangesTracker(NCContractStorage):
 
     def create_token(
         self,
+        *,
         token_id: TokenUid,
         token_name: str,
         token_symbol: str,
@@ -110,10 +111,11 @@ class NCChangesTracker(NCContractStorage):
         return self.storage.has_token(token_id)
 
     def get_token(self, token_id: TokenUid) -> TokenDescription:
-        try:
-            return self._created_tokens[token_id]
-        except KeyError:
-            return self.storage.get_token(token_id)
+        """Get token description for a given token ID."""
+        token_description = self._created_tokens.get(token_id)
+        if token_description is not None:
+            return token_description
+        return self.storage.get_token(token_id)
 
     def get_balance_diff(self) -> MappingProxyType[BalanceKey, int]:
         """Return the balance diff of this change tracker."""
@@ -197,7 +199,10 @@ class NCChangesTracker(NCContractStorage):
 
         for td in self._created_tokens.values():
             self.storage.create_token(
-                TokenUid(td.token_id), td.token_name, td.token_symbol, TokenVersion(td.token_version)
+                token_id=TokenUid(td.token_id),
+                token_name=td.token_name,
+                token_symbol=td.token_symbol,
+                token_version=TokenVersion(td.token_version)
             )
 
         if self._blueprint_id is not None:

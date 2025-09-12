@@ -38,10 +38,16 @@ class TokenProxy:
 
     def create_token(
         self,
+        *,
         token_id: TokenUid,
         token_name: str,
         token_symbol: str,
         token_version: TokenVersion
     ) -> None:
         """Proxy to block_storage.create_token()."""
-        self.__block_storage.create_token(token_id, token_name, token_symbol, token_version)
+        self.__block_storage.create_token(
+            token_id=token_id,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
+        )
