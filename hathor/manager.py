@@ -42,6 +42,7 @@ from hathor.exception import (
 )
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
+from hathor.feature_activation.feature_service import FeatureService
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
@@ -112,6 +113,7 @@ class HathorManager:
         vertex_handler: VertexHandler,
         vertex_parser: VertexParser,
         runner_factory: RunnerFactory,
+        feature_service: FeatureService,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -200,6 +202,7 @@ class HathorManager:
         self.vertex_handler = vertex_handler
         self.vertex_parser = vertex_parser
         self.runner_factory = runner_factory
+        self.feature_service = feature_service
 
         self.websocket_factory = websocket_factory
 
@@ -820,10 +823,9 @@ class HathorManager:
         :param quiet: if True will not log when a new tx is accepted
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        from hathor.verification.verification_params import VerificationParams
-
-        params = VerificationParams(enable_checkdatasig_count=True, reject_locked_reward=reject_locked_reward)
-        success = self.vertex_handler._old_on_new_vertex(vertex, params, quiet=quiet)
+        success = self.vertex_handler.on_new_relayed_vertex(
+            vertex, quiet=quiet, reject_locked_reward=reject_locked_reward
+        )
 
         if propagate_to_peers and success:
             self.connections.send_tx_to_peers(vertex)

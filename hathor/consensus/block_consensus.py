@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 from structlog import get_logger
 from typing_extensions import assert_never
 
+from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.types import MetaNCCallRecord
@@ -31,6 +32,7 @@ from hathor.utils.weight import weight_to_work
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.consensus.context import ConsensusAlgorithmContext
+    from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
@@ -49,11 +51,13 @@ class BlockConsensusAlgorithm:
         context: 'ConsensusAlgorithmContext',
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
+        feature_service: FeatureService,
     ) -> None:
         self._settings = settings
         self.context = context
         self._runner_factory = runner_factory
         self._nc_log_storage = nc_log_storage
+        self.feature_service = feature_service
 
     @classproperty
     def log(cls) -> Any:
@@ -70,9 +74,8 @@ class BlockConsensusAlgorithm:
         if self._settings.ENABLE_NANO_CONTRACTS:
             self.execute_nano_contracts(block)
 
-    def _nc_initialize_genesis(self, block: Block) -> None:
-        """Initialize the genesis block with an empty contract trie."""
-        assert block.is_genesis
+    def _nc_initialize_empty(self, block: Block) -> None:
+        """Initialize a block with an empty contract trie."""
         meta = block.get_metadata()
         block_storage = self.context.consensus.nc_storage_factory.get_empty_block_storage()
         block_storage.commit()
@@ -129,6 +132,50 @@ class BlockConsensusAlgorithm:
         for current in to_be_executed[::-1]:
             self._nc_execute_calls(current, is_reorg=is_reorg)
 
+    def _should_execute_nano(self, block: Block) -> bool:
+        """
+        Determine whether we should proceed to execute Nano transactions while making the necessary initializations.
+        """
+        from hathor.conf.settings import NanoContractsSetting
+        assert not block.is_genesis
+
+        match self._settings.ENABLE_NANO_CONTRACTS:
+            case NanoContractsSetting.ENABLED:
+                return True
+
+            case NanoContractsSetting.FEATURE_ACTIVATION:
+                parent = block.get_block_parent()
+                is_active_on_parent = self.feature_service.is_feature_active(
+                    vertex=parent,
+                    feature=Feature.NANO_CONTRACTS,
+                )
+                is_active_on_block = self.feature_service.is_feature_active(
+                    vertex=block,
+                    feature=Feature.NANO_CONTRACTS,
+                )
+                match is_active_on_parent, is_active_on_block:
+                    case False, False:
+                        # Nano is not active, nothing to execute.
+                        return False
+                    case False, True:
+                        # This is the first active block, so we initialize it and return False
+                        # because there's nothing to execute on the first active block.
+                        self._nc_initialize_empty(block)
+                        return False
+                    case True, False:  # pragma: no cover
+                        raise AssertionError('unreachable')
+                    case True, True:
+                        # All set, proceed with execution.
+                        return True
+                    case _:  # pragma: no cover
+                        raise AssertionError('unreachable')
+
+            case NanoContractsSetting.DISABLED:  # pragma: no cover
+                raise AssertionError('unreachable')
+
+            case _:  # pragma: no cover
+                assert_never(self._settings.ENABLE_NANO_CONTRACTS)
+
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
         """
@@ -140,7 +187,10 @@ class BlockConsensusAlgorithm:
         if block.is_genesis:
             # XXX We can remove this call after the full node initialization is refactored and
             #     the genesis block goes through the consensus protocol.
-            self._nc_initialize_genesis(block)
+            self._nc_initialize_empty(block)
+            return
+
+        if not self._should_execute_nano(block):
             return
 
         meta = block.get_metadata()
@@ -791,17 +841,25 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
-    __slots__ = ('settings', 'nc_log_storage', '_runner_factory')
+    __slots__ = ('settings', 'nc_log_storage', '_runner_factory', 'feature_service')
 
     def __init__(
         self,
         settings: HathorSettings,
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
+        feature_service: FeatureService,
     ) -> None:
         self.settings = settings
         self._runner_factory = runner_factory
         self.nc_log_storage = nc_log_storage
+        self.feature_service = feature_service
 
     def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
-        return BlockConsensusAlgorithm(self.settings, context, self._runner_factory, self.nc_log_storage)
+        return BlockConsensusAlgorithm(
+            self.settings,
+            context,
+            self._runner_factory,
+            self.nc_log_storage,
+            self.feature_service,
+        )

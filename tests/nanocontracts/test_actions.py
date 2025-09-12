@@ -31,6 +31,7 @@ from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.util import not_none
 from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
+from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import HDWallet
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
@@ -76,6 +77,7 @@ class TestActions(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        self.verification_params = VerificationParams.default_for_mempool(enable_nano=True)
 
         self.bp_id = b'1' * 32
         self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
