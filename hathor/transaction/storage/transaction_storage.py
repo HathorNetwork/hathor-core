@@ -1168,9 +1168,6 @@ class TransactionStorage(ABC):
         """Returns the source code associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
-
-        A point of difference is that an OCB will have a `__blueprint__ = BlueprintName` line, where a built-in
-        blueprint will not.
         """
         import inspect
 
