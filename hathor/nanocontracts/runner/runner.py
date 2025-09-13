@@ -171,12 +171,12 @@ class Runner:
         assert nano_header.nc_seqnum >= 0
         current_seqnum = self.block_storage.get_address_seqnum(Address(nano_header.nc_address))
         diff = nano_header.nc_seqnum - current_seqnum
+        next_seqnum = min(nano_header.nc_seqnum, current_seqnum + MAX_SEQNUM_JUMP_SIZE)
+        self.block_storage.set_address_seqnum(Address(nano_header.nc_address), next_seqnum)
         if diff <= 0 or diff > MAX_SEQNUM_JUMP_SIZE:
             # Fail execution if seqnum is invalid.
             self._last_call_info = self._build_call_info(contract_id)
-            # TODO: Set the seqnum in this case?
             raise NCFail(f'invalid seqnum (diff={diff})')
-        self.block_storage.set_address_seqnum(Address(nano_header.nc_address), nano_header.nc_seqnum)
 
         vertex_metadata = tx.get_metadata()
         assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
