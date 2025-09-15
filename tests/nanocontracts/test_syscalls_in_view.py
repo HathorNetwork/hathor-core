@@ -91,7 +91,7 @@ class MyBlueprint(Blueprint):
 
     @view
     def create_contract(self) -> None:
-        self.syscall.create_contract(BlueprintId(VertexId(b'')), b'', [])
+        self.syscall.create_contract(BlueprintId(VertexId(b'')), b'', [], [])
 
     @view
     def emit_event(self) -> None:
