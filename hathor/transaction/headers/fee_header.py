@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.output_value import decode_output_value
-from hathor.transaction.exceptions import FeeHeaderInvalidAmount
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import (
@@ -47,17 +46,6 @@ class FeeEntry:
     token_uid: TokenUid
     amount: int
 
-    def __post_init__(self) -> None:
-        """Validate the amount."""
-        from hathor.conf.settings import HATHOR_TOKEN_UID
-
-        if self.amount <= 0:
-            raise FeeHeaderInvalidAmount(f'fees should be a positive integer, got {self.amount}')
-
-        if self.token_uid != HATHOR_TOKEN_UID and self.amount % 100 != 0:
-            raise FeeHeaderInvalidAmount(f'fees using deposit custom tokens should be a multiple of 100,'
-                                         f' got {self.amount}')
-
 
 @dataclass(slots=True, kw_only=True)
 class FeeHeader(VertexBaseHeader):
@@ -65,12 +53,12 @@ class FeeHeader(VertexBaseHeader):
     tx: 'Transaction'
     # list of tokens and amounts that will be used to pay fees in the transaction
     fees: list[FeeHeaderEntry]
-    _settings: HathorSettings
+    settings: HathorSettings
 
     def __init__(self, settings: HathorSettings, tx: 'Transaction', fees: list[FeeHeaderEntry]):
         self.tx = tx
         self.fees = fees
-        self._settings = settings
+        self.settings = settings
 
     @classmethod
     def deserialize(
@@ -135,8 +123,8 @@ class FeeHeader(VertexBaseHeader):
         """Sum fees amounts in this header and return as HTR"""
         total_fee = 0
         for fee in self.get_fees():
-            if fee.token_uid == self._settings.HATHOR_TOKEN_UID:
+            if fee.token_uid == self.settings.HATHOR_TOKEN_UID:
                 total_fee += fee.amount
             else:
-                total_fee += get_deposit_token_withdraw_amount(self._settings, fee.amount)
+                total_fee += get_deposit_token_withdraw_amount(self.settings, fee.amount)
         return total_fee

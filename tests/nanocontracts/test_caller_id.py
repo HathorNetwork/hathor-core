@@ -37,7 +37,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def create_another(self, ctx: Context, blueprint_id: BlueprintId) -> ContractId:
-        contract_id, _ = self.syscall.create_contract(blueprint_id, b'1', [])
+        contract_id, _ = self.syscall.create_contract(blueprint_id, salt=b'1', actions=[], fees=[])
         return contract_id
 
     @public

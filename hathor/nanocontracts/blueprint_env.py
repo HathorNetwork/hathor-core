@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Collection, Optional, Sequence, TypeAlias
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.storage import NCContractStorage
-from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
+from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.contract_accessor import ContractAccessor
@@ -172,6 +172,7 @@ class BlueprintEnvironment:
         nc_id: ContractId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> Any:
@@ -183,6 +184,7 @@ class BlueprintEnvironment:
             args,
             kwargs,
             forbid_fallback=False,
+            fees=fees or []
         )
 
     @final
@@ -191,11 +193,19 @@ class BlueprintEnvironment:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_proxy_call_public_method(
+            blueprint_id=blueprint_id,
+            method_name=method_name,
+            actions=actions,
+            fees=fees,
+            args=args,
+            kwargs=kwargs
+        )
 
     @final
     def proxy_call_public_method_nc_args(
@@ -203,10 +213,17 @@ class BlueprintEnvironment:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         nc_args: NCArgs,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
+        return self.__runner.syscall_proxy_call_public_method_nc_args(
+            blueprint_id=blueprint_id,
+            method_name=method_name,
+            actions=actions,
+            fees=fees,
+            nc_args=nc_args
+        )
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -246,11 +263,12 @@ class BlueprintEnvironment:
         blueprint_id: BlueprintId,
         salt: bytes,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee] | None,
         *args: Any,
         **kwargs: Any,
     ) -> tuple[ContractId, Any]:
         """Create a new contract."""
-        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs)
+        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs, fees or [])
 
     @final
     def emit_event(self, data: bytes) -> None:

@@ -22,6 +22,7 @@ from hathor.nanocontracts.types import (
     NCWithdrawalAction,
     TokenUid,
 )
+from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -85,7 +86,11 @@ class MyBlueprint(Blueprint):
         self.assert_token_balance(before=0, current=10)
         action = NCDepositAction(token_uid=self.token_uid, amount=7)
         self.syscall.call_public_method(
-            contract_id, 'accept_deposit_from_another', [action], self.syscall.get_contract_id()
+            contract_id,
+            'accept_deposit_from_another',
+            [action],
+            [],
+            self.syscall.get_contract_id()
         )
         self.assert_token_balance(before=0, current=6)
 
@@ -105,7 +110,11 @@ class MyBlueprint(Blueprint):
         self.assert_token_balance(before=6, current=5)
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=2)
         self.syscall.call_public_method(
-            contract_id, 'accept_withdrawal_from_another', [action], self.syscall.get_contract_id()
+            contract_id,
+            'accept_withdrawal_from_another',
+            [action],
+            [],
+            self.syscall.get_contract_id()
         )
         self.assert_token_balance(before=6, current=6)
 
@@ -136,6 +145,13 @@ class TestExecutionOrder(BlueprintTestCase):
         self.runner.create_contract(self.contract_id1, self.blueprint_id, self._get_context(action), self.token_a)
         self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(action), self.token_a)
 
+        self.create_token(
+            token_uid=self.token_a,
+            token_name='TKA',
+            token_symbol='TKA',
+            token_version=TokenVersion.DEPOSIT,
+        )
+
     def _get_context(self, *actions: NCAction) -> Context:
         return self.create_context(
             actions=list(actions),
@@ -152,16 +168,6 @@ class TestExecutionOrder(BlueprintTestCase):
         self.runner.call_public_method(self.contract_id1, 'withdrawal', self._get_context(action))
 
     def test_mint_and_melt(self) -> None:
-        # First create the token so it exists in the system
-        from hathor.transaction.token_info import TokenVersion
-        changes_tracker = self.runner.get_storage(self.contract_id1)
-        changes_tracker.create_token(
-            token_id=self.token_a,
-            token_name="Test Token",
-            token_symbol="TST",
-            token_version=TokenVersion.DEPOSIT
-        )
-
         action: NCAction = NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)
         self.runner.call_public_method(self.contract_id1, 'mint', self._get_context(action))
 

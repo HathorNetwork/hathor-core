@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection, Sequence, final
 
 from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCFee
 
 if TYPE_CHECKING:
     from hathor.nanocontracts import Runner
@@ -62,12 +62,13 @@ class ContractAccessor(FauxImmutable):
             blueprint_ids=self.__blueprint_ids,
         )
 
-    def public(self, *actions: NCAction, forbid_fallback: bool = False) -> Any:
+    def public(self, *actions: NCAction, fees: Sequence[NCFee] | None = None, forbid_fallback: bool = False) -> Any:
         return PreparedPublicCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
             blueprint_ids=self.__blueprint_ids,
             actions=actions,
+            fees=fees,
             forbid_fallback=forbid_fallback,
         )
 
@@ -103,7 +104,15 @@ class PreparedViewCall(FauxImmutable):
 
 @final
 class PreparedPublicCall(FauxImmutable):
-    __slots__ = ('__runner', '__contract_id', '__blueprint_ids', '__actions', '__forbid_fallback', '__is_dirty')
+    __slots__ = (
+        '__runner',
+        '__contract_id',
+        '__blueprint_ids',
+        '__actions',
+        '__forbid_fallback',
+        '__is_dirty',
+        '__fees'
+    )
     __skip_faux_immutability_validation__ = True  # Needed to implement __getattr__
 
     def __init__(
@@ -113,6 +122,7 @@ class PreparedPublicCall(FauxImmutable):
         contract_id: ContractId,
         blueprint_ids: frozenset[BlueprintId] | None,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee] | None,
         forbid_fallback: bool,
     ) -> None:
         self.__runner: Runner
@@ -121,6 +131,7 @@ class PreparedPublicCall(FauxImmutable):
         self.__actions: Sequence[NCAction]
         self.__forbid_fallback: bool
         self.__is_dirty: bool
+        self.__fees: Sequence[NCFee]
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
@@ -128,6 +139,7 @@ class PreparedPublicCall(FauxImmutable):
         __set_faux_immutable__(self, '__actions', actions)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
+        __set_faux_immutable__(self, '__fees', fees)
 
     def __getattr__(self, method_name: str) -> PublicMethodAccessor:
         from hathor.nanocontracts import NCFail
@@ -146,6 +158,7 @@ class PreparedPublicCall(FauxImmutable):
             method_name=method_name,
             actions=self.__actions,
             forbid_fallback=self.__forbid_fallback,
+            fees=self.__fees,
         )
 
 
@@ -206,6 +219,7 @@ class PublicMethodAccessor(FauxImmutable):
         '__actions',
         '__forbid_fallback',
         '__is_dirty',
+        '__fees'
     )
 
     def __init__(
@@ -217,6 +231,7 @@ class PublicMethodAccessor(FauxImmutable):
         method_name: str,
         actions: Sequence[NCAction],
         forbid_fallback: bool,
+        fees: Sequence[NCFee] | None,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
@@ -225,6 +240,7 @@ class PublicMethodAccessor(FauxImmutable):
         self.__actions: Sequence[NCAction]
         self.__forbid_fallback: bool
         self.__is_dirty: bool
+        self.__fees: Sequence[NCFee]
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
@@ -233,6 +249,7 @@ class PublicMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__actions', actions)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
+        __set_faux_immutable__(self, '__fees', fees)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         from hathor.nanocontracts import NCFail
@@ -254,6 +271,7 @@ class PublicMethodAccessor(FauxImmutable):
             contract_id=self.__contract_id,
             method_name=self.__method_name,
             actions=self.__actions,
+            fees=self.__fees or [],
             args=args,
             kwargs=kwargs,
             forbid_fallback=self.__forbid_fallback,

@@ -131,6 +131,11 @@ class NCInvalidAction(NCFail):
     pass
 
 
+class NCInvalidFee(NCFail):
+    """Raised when a fee is invalid."""
+    pass
+
+
 class NCInvalidSyscall(NCFail):
     """Raised when a syscall is invalid."""
     pass

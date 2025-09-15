@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from hathor.transaction import Transaction
 from hathor.transaction.exceptions import FeeHeaderTokenNotFound, InvalidFeeHeader
 from hathor.transaction.headers import FeeHeader
 
@@ -25,7 +26,7 @@ MAX_FEES_LEN: int = 16
 class FeeHeaderVerifier:
 
     @staticmethod
-    def verify_fee_list(fee_header: 'FeeHeader', tx_tokens_len: int) -> None:
+    def verify_fee_list(fee_header: 'FeeHeader', tx: Transaction) -> None:
         """Perform FeeHeader verifications that do not depend on the tx storage."""
         fees = fee_header.fees
         FeeHeaderVerifier._verify_fee_list_size('fees', len(fees))
@@ -34,8 +35,10 @@ class FeeHeaderVerifier:
         token_indices = [fee.token_index for fee in fees]
         FeeHeaderVerifier._verify_duplicate_indexes('fees', token_indices)
 
+        from hathor.transaction.util import validate_fee_amount
         for fee in fees:
-            FeeHeaderVerifier._verify_token_index('fees', fee.token_index, tx_tokens_len)
+            FeeHeaderVerifier._verify_token_index('fees', fee.token_index, len(tx.tokens))
+            validate_fee_amount(fee_header.settings, tx.get_token_uid(fee.token_index), fee.amount)
 
     @staticmethod
     def _verify_token_index(prop: str, token_index: int, tx_token_len: int) -> None:

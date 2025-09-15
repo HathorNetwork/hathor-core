@@ -15,6 +15,7 @@ from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction import Transaction, Vertex
+from hathor.transaction.token_info import TokenVersion
 from hathor.util import not_none
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.wallet import KeyPair
@@ -180,4 +181,20 @@ class BlueprintTestCase(unittest.TestCase):
             vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
             block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
             actions=Context.__group_actions__(actions or ()),
+        )
+
+    def create_token(
+        self,
+        token_uid: TokenUid,
+        token_name: str,
+        token_symbol:
+        str,
+        token_version: TokenVersion
+    ) -> None:
+        """Create a token in the runner block storage"""
+        self.runner.block_storage.create_token(
+            token_id=token_uid,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
         )
