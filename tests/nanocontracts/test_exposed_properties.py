@@ -37,7 +37,6 @@ KNOWN_CASES = [
     'hathor.nanocontracts.context.Context.get_caller_contract_id',
     'hathor.nanocontracts.context.Context.get_single_action',
     'hathor.nanocontracts.context.Context.some_new_attribute',
-    'hathor.nanocontracts.context.Context.timestamp',
     'hathor.nanocontracts.context.Context.to_json',
     'hathor.nanocontracts.context.Context.vertex',
     'hathor.nanocontracts.exception.NCFail.add_note',
