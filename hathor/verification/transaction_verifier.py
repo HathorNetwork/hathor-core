@@ -46,6 +46,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
+from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -306,15 +307,14 @@ class TransactionVerifier:
 
         return result
 
-    def verify_version(self, tx: Transaction) -> None:
+    def verify_version(self, tx: Transaction, params: VerificationParams) -> None:
         """Verify that the vertex version is valid."""
-        from hathor.nanocontracts.utils import is_nano_active
         allowed_tx_versions = {
             TxVersion.REGULAR_TRANSACTION,
             TxVersion.TOKEN_CREATION_TRANSACTION,
         }
 
-        if is_nano_active(self._settings, tx, self._feature_service):
+        if params.enable_nano:
             allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         if tx.version not in allowed_tx_versions:

@@ -170,7 +170,7 @@ class VerificationService:
         if vertex.hash in self._settings.SKIP_VERIFICATION:
             return
 
-        self.verifiers.vertex.verify_headers(vertex)
+        self.verifiers.vertex.verify_headers(vertex, params)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -256,7 +256,7 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx, params.enable_checkdatasig_count)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
-        self.verifiers.tx.verify_version(tx)
+        self.verifiers.tx.verify_version(tx, params)
         self.verifiers.vertex.verify_parents(tx)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
