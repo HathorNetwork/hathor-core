@@ -62,7 +62,7 @@ class MyBlueprint1(Blueprint):
     def call_another_public(self, ctx: Context, contract_id: ContractId) -> None:
         self.log.debug('call_another_public() called on MyBlueprint1', contract_id=contract_id)
         actions = [NCDepositAction(token_uid=TokenUid(b'\x00'), amount=5)]
-        result1 = self.syscall.call_public_method(contract_id, 'sum', actions, 1, 2)
+        result1 = self.syscall.call_public_method(contract_id, 'sum', actions, [], 1, 2)
         result2 = self.syscall.call_view_method(contract_id, 'hello_world')
         self.log.debug('results on MyBlueprint1', result1=result1, result2=result2)
 

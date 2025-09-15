@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Sequence, assert_never, final
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts.exception import NCFail, NCInvalidContext
-from hathor.nanocontracts.types import Address, CallerId, ContractId, NCAction, TokenUid
+from hathor.nanocontracts.types import Address, CallerId, ContractId, NCAction, NCFee, TokenUid
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction.exceptions import TxValidationError
 
@@ -39,11 +39,12 @@ class Context:
     Deposits and withdrawals are grouped by token. Note that it is impossible
     to have both a deposit and a withdrawal for the same token.
     """
-    __slots__ = ('__actions', '__caller_id', '__vertex', '__block', '__all_actions__')
+    __slots__ = ('__actions', '__caller_id', '__vertex', '__block', '__all_actions__', '__fees')
     __caller_id: CallerId
     __vertex: VertexData
     __block: BlockData | None
     __actions: MappingProxyType[TokenUid, tuple[NCAction, ...]]
+    __fees: MappingProxyType[TokenUid, tuple[NCFee, ...]]
 
     @staticmethod
     def __group_actions__(actions: Sequence[NCAction]) -> MappingProxyType[TokenUid, tuple[NCAction, ...]]:
@@ -51,6 +52,13 @@ class Context:
         for action in actions:
             actions_map[action.token_uid] = (*actions_map[action.token_uid], action)
         return MappingProxyType(actions_map)
+
+    @staticmethod
+    def __group_fees__(fees: Sequence[NCFee]) -> MappingProxyType[TokenUid, tuple[NCFee, ...]]:
+        fees_map: defaultdict[TokenUid, tuple[NCFee, ...]] = defaultdict(tuple)
+        for fee in fees:
+            fees_map[fee.token_uid] = (*fees_map[fee.token_uid], fee)
+        return MappingProxyType(fees_map)
 
     @classmethod
     def create_from_vertex(
@@ -90,6 +98,7 @@ class Context:
             vertex_data=vertex_data,
             block_data=block_data,
             actions=actions_map,
+            fees=MappingProxyType({})
         )
 
     def __init__(
@@ -99,10 +108,15 @@ class Context:
         vertex_data: VertexData,
         block_data: BlockData | None,
         actions: MappingProxyType[TokenUid, tuple[NCAction, ...]],
+        fees: MappingProxyType[TokenUid, tuple[NCFee, ...]],
     ) -> None:
         # Dict of action where the key is the token_uid.
         # If empty, it is a method call without any actions.
         self.__actions = actions
+
+        # Dict of fees where the key is the token_uid.
+        # If empty, it is a method call without any fees.
+        self.__fees = fees
 
         self.__all_actions__: tuple[NCAction, ...] = tuple(chain(*self.__actions.values()))
 
@@ -163,6 +177,11 @@ class Context:
         return self.__actions
 
     @property
+    def fees(self) -> MappingProxyType[TokenUid, tuple[NCFee, ...]]:
+        """Get a mapping of fees per token."""
+        return self.__fees
+
+    @property
     def actions_list(self) -> Sequence[NCAction]:
         """Get a list of all actions."""
         return tuple(self.__all_actions__)
@@ -181,6 +200,7 @@ class Context:
             vertex_data=self.vertex,
             block_data=self.block,  # We only copy during execution, so we know the block must not be `None`.
             actions=self.actions,
+            fees=self.fees,
         )
 
     def to_json(self) -> dict[str, Any]:

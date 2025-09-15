@@ -42,6 +42,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
     'hathor.nanocontracts.exception': dict(NCFail=nc.NCFail),
     'hathor.nanocontracts.types': dict(
         NCAction=nc.types.NCAction,
+        NCFee=nc.types.NCFee,
         NCActionType=nc.types.NCActionType,
         SignedData=nc.types.SignedData,
         public=nc.public,

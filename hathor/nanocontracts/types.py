@@ -21,6 +21,7 @@ from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
+from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
@@ -28,9 +29,9 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_self_arg,
     validate_method_types,
 )
-from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
+from hathor.nanocontracts.exception import BlueprintSyntaxError, NCInvalidFee, NCSerializationError
 from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
-from hathor.transaction.util import bytes_to_int, int_to_bytes
+from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
 # XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
@@ -499,3 +500,29 @@ class NCParsedArgs:
 
 
 NCArgs: TypeAlias = NCRawArgs | NCParsedArgs
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCFee:
+    """The dataclass for all NC actions fee"""
+    token_uid: TokenUid
+    amount: int
+
+    def __post_init__(self) -> None:
+        # the fee payment values should be always positive
+        if self.amount <= 0:
+            raise NCInvalidFee('amount must be positive')
+
+    def get_htr_value(self, settings: HathorSettings) -> int:
+        """
+        Get the amount converted to HTR
+
+        Raises:
+            NCInvalidFee() when the amount is not an integer multiple of 100 when using deposit tokens
+        """
+        if self.token_uid == HATHOR_TOKEN_UID:
+            return self.amount
+        else:
+            if not (self.amount * settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer():
+                raise NCInvalidFee('fee amount must be an integer and multiple of 100 when using deposit tokens')
+            return get_deposit_token_withdraw_amount(settings, self.amount)

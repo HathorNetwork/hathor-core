@@ -27,7 +27,7 @@ class ProxyBlueprint(Blueprint):
     def upgrade(self, ctx: Context, blueprint_id: BlueprintId, method_name: str) -> None:
         contract_id = self.syscall.get_contract_id()
         self.syscall.change_blueprint(blueprint_id)
-        self.syscall.call_public_method(self.contract, 'on_upgrade', [], contract_id, method_name)
+        self.syscall.call_public_method(self.contract, 'on_upgrade', [], [], contract_id, method_name)
 
     @public
     def on_upgrade(self, ctx: Context) -> None:

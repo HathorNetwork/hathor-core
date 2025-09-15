@@ -12,7 +12,7 @@ from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
 from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
+from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, NCFee, TokenUid, VertexId
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction import Transaction, Vertex
 from hathor.util import not_none
@@ -173,6 +173,7 @@ class BlueprintTestCase(unittest.TestCase):
         vertex: Vertex | None = None,
         caller_id: Address | None = None,
         timestamp: int | None = None,
+        fees: Sequence[NCFee] | None = None,
     ) -> Context:
         """Create a Context instance with optional values or defaults."""
         return Context(
@@ -180,4 +181,5 @@ class BlueprintTestCase(unittest.TestCase):
             vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
             block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
             actions=Context.__group_actions__(actions or ()),
+            fees=Context.__group_fees__(fees or ())
         )
