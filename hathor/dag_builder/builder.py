@@ -45,6 +45,9 @@ logger = get_logger()
 
 NC_DEPOSIT_KEY = 'nc_deposit'
 NC_WITHDRAWAL_KEY = 'nc_withdrawal'
+TOKEN_VERSION_KEY = 'token_version'
+FEE_KEY = 'fee'
+FEE_TOKEN_KEY = 'fee_token'
 
 
 class DAGBuilder:
@@ -150,17 +153,15 @@ class DAGBuilder:
         from_node.deps.add(_to)
         return self
 
-    def set_balance(self, name: str, token: str, value: int) -> Self:
-        """Set the expected balance for a given token, where balance = sum(outputs) - sum(inputs).
+    def update_balance(self, name: str, token: str, value: int) -> Self:
+        """Update the expected balance for a given token, where balance = sum(outputs) - sum(inputs).
 
         =0 means sum(txouts) = sum(txins)
         >0 means sum(txouts) > sum(txins), e.g., withdrawal
         <0 means sum(txouts) < sum(txins), e.g., deposit
         """
         node = self._get_or_create_node(name)
-        if token in node.balances:
-            raise SyntaxError(f'{name}: balance set more than once for {token}')
-        node.balances[token] = value
+        node.balances[token] = node.balances.get(token, 0) + value
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             self.add_deps(name, token)
@@ -235,7 +236,7 @@ class DAGBuilder:
             if amount < 0:
                 raise SyntaxError(f'unexpected negative action in `{value}`')
             multiplier = 1 if key == NC_WITHDRAWAL_KEY else -1
-            self.set_balance(name, token, amount * multiplier)
+            self.update_balance(name, token, amount * multiplier)
             actions = node.get_attr_list(key, default=[])
             actions.append((token, amount))
             node.attrs[key] = actions
@@ -263,6 +264,31 @@ class DAGBuilder:
         else:
             node.attrs[key] = value
 
+    def _append_fee(self, name: str, key: str, value: str) -> None:
+        """Add a fee payment."""
+        assert key == FEE_KEY
+        node = self._get_or_create_node(name)
+        fees = node.get_attr_list(key, default=[])
+        token, amount, args = parse_amount_token(value)
+        if args:
+            raise SyntaxError(f'unexpected args in `{value}`')
+        if amount < 0:
+            raise SyntaxError(f'unexpected negative fee in `{value}`')
+        self.update_balance(name, token, -amount)
+        fees.append((token, amount))
+        node.attrs[key] = fees
+
+    def _append_fee_token(self, name: str, key: str, value: str) -> None:
+        """Add a fee token marker."""
+        assert key == FEE_TOKEN_KEY
+        if value != 'HTR':
+            self._get_or_create_node(value, default_type=DAGNodeType.Token)
+            self.add_deps(name, value)
+        node = self._get_or_create_node(name)
+        fee_tokens = node.get_attr_list(key, default=[])
+        fee_tokens.append(value)
+        node.attrs[key] = fee_tokens
+
     def add_attribute(self, name: str, key: str, value: str) -> Self:
         """Add an attribute to a node."""
         if key.startswith('nc_'):
@@ -273,9 +299,17 @@ class DAGBuilder:
             self._add_ocb_attribute(name, key, value)
             return self
 
+        if key == FEE_KEY:
+            self._append_fee(name, key, value)
+            return self
+
+        if key == FEE_TOKEN_KEY:
+            self._append_fee_token(name, key, value)
+            return self
+
         if key.startswith('balance_'):
             token = key[len('balance_'):]
-            self.set_balance(name, token, int(value))
+            self.update_balance(name, token, int(value))
             return self
 
         node = self._get_or_create_node(name)

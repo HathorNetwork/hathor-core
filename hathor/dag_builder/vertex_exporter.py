@@ -23,7 +23,7 @@ from typing_extensions import assert_never
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.dag_builder.builder import NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY, DAGBuilder, DAGNode
+from hathor.dag_builder.builder import FEE_KEY, FEE_TOKEN_KEY, NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY, DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
 from hathor.dag_builder.utils import get_literal, is_literal
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
@@ -33,6 +33,7 @@ from hathor.nanocontracts.types import BlueprintId, ContractId, NCActionType, Ve
 from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
+from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -227,8 +228,9 @@ class VertexExporter:
         vertex = TokenCreationTransaction(parents=txs_parents, inputs=inputs, outputs=outputs)
         vertex.token_name = node.name
         vertex.token_symbol = node.name
+        vertex.token_version = node.get_attr_token_version()
         vertex.timestamp = self.get_min_timestamp(node)
-        self.add_nano_header_if_needed(node, vertex)
+        self.add_headers_if_needed(node, vertex)
         self.sign_all_inputs(vertex, node=node)
         if 'weight' in node.attrs:
             vertex.weight = float(node.attrs['weight'])
@@ -252,7 +254,7 @@ class VertexExporter:
         parents = block_parents + txs_parents
 
         blk = Block(parents=parents, outputs=outputs)
-        self.add_nano_header_if_needed(node, blk)
+        self.add_headers_if_needed(node, blk)
         blk.timestamp = self.get_min_timestamp(node) + self._settings.AVG_TIME_BETWEEN_BLOCKS
         blk.get_height = lambda: height  # type: ignore[method-assign]
         blk.update_hash()  # the next call fails is blk.hash is None
@@ -301,6 +303,11 @@ class VertexExporter:
         cur = self._next_nc_seqnum[address]
         self._next_nc_seqnum[address] = cur + 1
         return cur
+
+    def add_headers_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Add the configured headers."""
+        self.add_nano_header_if_needed(node, vertex)
+        self.add_fee_header_if_needed(node, vertex)
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
@@ -396,6 +403,45 @@ class VertexExporter:
         else:
             nano_header.nc_seqnum = self._get_next_nc_seqnum(nano_header.nc_address)
 
+    def add_fee_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Add a FeeHeader if one is configured."""
+        if FEE_KEY not in node.attrs:
+            return
+        assert isinstance(vertex, Transaction)
+
+        fees = node.get_attr_list(FEE_KEY)
+        fee_tokens_names = node.get_attr_list(FEE_TOKEN_KEY, default=[])
+
+        entries = []
+        for token_name, fee_amount in fees:
+            assert isinstance(token_name, str)
+            assert isinstance(fee_amount, int)
+            token_index = 0
+            if token_name != 'HTR':
+                token_creation_tx = self._vertices[token_name]
+                if token_creation_tx.hash not in vertex.tokens:
+                    # when paying fees, the token uid must be added to the tokens list
+                    # because it's possible that there are no outputs with this token.
+                    vertex.tokens.append(token_creation_tx.hash)
+                token_index = 1 + vertex.tokens.index(token_creation_tx.hash)
+
+            entry = FeeHeaderEntry(token_index=token_index, amount=fee_amount)
+            entries.append(entry)
+
+        fee_token_indices = []
+        for fee_token in fee_tokens_names:
+            assert isinstance(fee_token, str)
+            token_creation_tx = self._vertices[fee_token]
+            token_index = 1 + vertex.tokens.index(token_creation_tx.hash)
+            fee_token_indices.append(token_index)
+
+        fee_header = FeeHeader(
+            settings=vertex._settings,
+            tx=vertex,
+            fees=entries,
+        )
+        vertex.headers.append(fee_header)
+
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""
         block_parents, txs_parents = self._create_vertex_parents(node)
@@ -404,7 +450,7 @@ class VertexExporter:
 
         assert len(block_parents) == 0
         ocb = OnChainBlueprint(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
-        self.add_nano_header_if_needed(node, ocb)
+        self.add_headers_if_needed(node, ocb)
         code_attr = node.get_attr_str('ocb_code')
 
         if is_literal(code_attr):
@@ -452,7 +498,7 @@ class VertexExporter:
         assert len(block_parents) == 0
         tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         tx.timestamp = self.get_min_timestamp(node)
-        self.add_nano_header_if_needed(node, tx)
+        self.add_headers_if_needed(node, tx)
         self.sign_all_inputs(tx, node=node)
         if 'weight' in node.attrs:
             tx.weight = float(node.attrs['weight'])
