@@ -61,6 +61,9 @@ class ContainerFields(Blueprint):
 
     @public
     def initialize(self, ctx: Context, items: list[tuple[str, str, bytes, int]]) -> None:
+        self.a = {}
+        self.b = {}
+        self.c = {}
         for key, va, vb, vc in items:
             self._set(self.a, key, va)
             self._set(self.b, key, vb)
