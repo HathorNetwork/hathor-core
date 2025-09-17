@@ -759,11 +759,8 @@ def simulate_single_voided_create_token_transaction(
     TOKEN_MINT_AMOUNT = 1000
     TOKEN_NAME = 'TKA'
     TOKEN_SYMBOL = 'TKA'
-    AUTHORITY_TRANSFER_WEIGHT = 19.0
-    VOIDING_TRANSACTION_WEIGHT = 25.0
     TOKEN_INDEX = 1
     INITIAL_CONFIRMATION_BLOCKS = 3
-    AUTHORITY_CONFIRMATION_BLOCKS = 3
     FINAL_CONFIRMATION_BLOCKS = 7
 
     settings = get_global_settings()
