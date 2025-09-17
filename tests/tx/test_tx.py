@@ -79,7 +79,9 @@ class TransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            best_block = self.tx_storage.get_best_block()
+            block_storage = self._verifiers.tx._nc_storage_factory.get_block_storage_from_block(best_block)
+            self._verifiers.tx.verify_sum(tx.get_complete_token_info(block_storage))
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -98,7 +100,9 @@ class TransactionTest(unittest.TestCase):
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            best_block = self.tx_storage.get_best_block()
+            block_storage = self._verifiers.tx._nc_storage_factory.get_block_storage_from_block(best_block)
+            self._verifiers.tx.verify_sum(tx.get_complete_token_info(block_storage))
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks

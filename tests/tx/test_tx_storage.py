@@ -37,7 +37,8 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.manager = artifacts.manager
         self.tx_storage = artifacts.tx_storage
         self._settings = artifacts.settings
-        self.verification_params = VerificationParams.default_for_mempool()
+        best_block = self.tx_storage.get_best_block()
+        self.verification_params = VerificationParams.default_for_mempool(block_or_block_storage=best_block)
 
         assert artifacts.wallet is not None
 

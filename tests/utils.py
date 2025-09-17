@@ -22,6 +22,8 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double_spending, gen_new_tx
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
+from hathor.transaction.headers import FeeHeader
+from hathor.transaction.headers.fee_header import FeeHeaderEntry
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
@@ -603,6 +605,12 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
         timestamp=timestamp,
         token_version=TokenVersion.FEE
     )
+
+    tx.headers.append(FeeHeader(
+        settings=manager._settings,
+        tx=tx,
+        fees=[FeeHeaderEntry(token_index=0, amount=fee)])
+    )
     data_to_sign = tx.get_sighash_all()
 
     public_bytes, signature = wallet.get_input_aux_data(data_to_sign, genesis_private_key)
@@ -720,7 +728,8 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     manager.cpu_mining_service.resolve(tx)
 
     if propagate:
-        params = VerificationParams.default_for_mempool()
+        best_block = manager.tx_storage.get_best_block()
+        params = VerificationParams.default_for_mempool(block_or_block_storage=best_block)
         manager.verification_service.verify(tx, params)
         manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)

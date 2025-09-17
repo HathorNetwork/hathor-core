@@ -134,7 +134,9 @@ class SendTokensResource(Resource):
         tx.weight = weight
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(tx, self.params)
+        best_block = self.manager.tx_storage.get_best_block()
+        params = VerificationParams.default_for_mempool(block_or_block_storage=best_block)
+        self.manager.verification_service.verify(tx, params)
         return tx
 
     def _cb_tx_resolve(self, tx, request):

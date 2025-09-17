@@ -61,7 +61,8 @@ class SendTokensResource(Resource):
         self.sleep_seconds = 0
         self.log = logger.new()
         self.reactor = get_global_reactor()
-        self.params = VerificationParams.default_for_mempool()
+        best_block = self.manager.tx_storage.get_best_block()
+        self.params = VerificationParams.default_for_mempool(block_or_block_storage=best_block)
 
     def render_POST(self, request: Request) -> Any:
         """ POST request for /thin_wallet/send_tokens/
@@ -273,7 +274,9 @@ class SendTokensResource(Resource):
             raise CancelledError()
         context.tx.update_hash()
         context.tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(context.tx, self.params)
+        best_block = self.manager.tx_storage.get_best_block()
+        params = VerificationParams.default_for_mempool(block_or_block_storage=best_block)
+        self.manager.verification_service.verify(context.tx, params)
         return context
 
     def _cb_tx_resolve(self, context: _Context) -> None:

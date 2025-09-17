@@ -140,7 +140,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             Balance(value=7, can_mint=False, can_melt=False)
         )
 
-        jkl_token_info = JKL._get_token_info_from_inputs()
+        jkl_token_info = JKL._get_token_info_from_inputs(nc_storage)
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 

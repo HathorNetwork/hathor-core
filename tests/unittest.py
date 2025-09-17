@@ -119,7 +119,15 @@ class TestCase(unittest.TestCase):
         self.rng = Random(self.seed)
         self._pending_cleanups: list[Callable[..., Any]] = []
         self._settings = get_global_settings()
-        self.verification_params = VerificationParams.default_for_mempool()
+        # Create a genesis block for tests that need a previous_block
+        from hathor.transaction import Block
+        genesis_block = Block(
+            timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
+            nonce=self._settings.GENESIS_BLOCK_NONCE,
+            hash=self._settings.GENESIS_BLOCK_HASH,
+            settings=self._settings,
+        )
+        self.verification_params = VerificationParams.default_for_mempool(block_or_block_storage=genesis_block)
 
     def tearDown(self) -> None:
         self.clean_tmpdirs()

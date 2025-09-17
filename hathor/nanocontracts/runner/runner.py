@@ -188,6 +188,8 @@ class Runner:
         else:
             self.call_public_method_with_nc_args(contract_id, nano_header.nc_method, context, nc_args)
 
+        # TODO-RAUL: add the fee header validation here
+
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""
         self._enable_call_trace = False
