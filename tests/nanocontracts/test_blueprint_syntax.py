@@ -41,6 +41,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
 
             @public
             def initialize(self, ctx: Context, a: int) -> int:
+                self.a = ''
                 return a
 
             @view

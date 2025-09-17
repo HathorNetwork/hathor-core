@@ -24,7 +24,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        self.a = ''
+        self.b = 0
 
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:

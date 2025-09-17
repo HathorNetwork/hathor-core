@@ -75,7 +75,7 @@ class Container(Generic[T], ABC):
         """Containers should use this to initialize metadata/length values."""
         raise NotImplementedError
 
-    def __try_init_storage__(self) -> None:
+    def __is_initialized__(self) -> bool:
         """Used to initialize the container if it's not already initialized.
 
         When a Blueprint class is built, the initialize() method is patched by the metaclass to call this method on
@@ -83,9 +83,7 @@ class Container(Generic[T], ABC):
         have been initialized.
         """
         is_init_key = KEY_SEPARATOR.join([self.__prefix__, INIT_KEY])
-        is_init = self.__storage__.get_obj(is_init_key, INIT_NC_TYPE, default=False)
-        if not is_init:
-            self.__init_storage__()
+        return self.__storage__.get_obj(is_init_key, INIT_NC_TYPE, default=False)
 
 
 TypeToContainerMap: TypeAlias = Mapping[type[ContainerAbc], type[Container]]
@@ -95,10 +93,9 @@ P = TypeVar('P', bound=Container)
 
 
 class ContainerNodeFactory(Generic[T]):
-    __slots__ = ('type_', 'type_map', 'is_container')
+    __slots__ = ('type_', 'type_map')
     type_: type[T]
     type_map: Field.TypeMap
-    is_container: bool
 
     @classmethod
     def check_is_container(cls, type_: type[T], type_map: Field.TypeMap) -> bool:
@@ -118,7 +115,7 @@ class ContainerNodeFactory(Generic[T]):
     def __init__(self, type_: type[T], type_map: Field.TypeMap) -> None:
         self.type_ = type_
         self.type_map = type_map
-        self.is_container = self.check_is_container(type_, type_map)
+        self.check_is_container(type_, type_map)
 
     def build(self, instance: Blueprint) -> ContainerNode:
         return ContainerNode.from_type(
@@ -243,8 +240,7 @@ class ContainerProxy(ContainerNode[P]):
         is_init_key = KEY_SEPARATOR.join([prefix, INIT_KEY])
         is_init = self.storage.get_obj(is_init_key, INIT_NC_TYPE, default=False)
         if not is_init:
-            container.__init_storage__()
-            self.storage.put_obj(is_init_key, INIT_NC_TYPE, True)
+            raise ValueError('not initialized')
 
         if self.cache is not None:
             self.cache[prefix] = container
@@ -264,9 +260,7 @@ class ContainerProxy(ContainerNode[P]):
         is_init_key = KEY_SEPARATOR.join([prefix, INIT_KEY])
         is_init = self.storage.get_obj(is_init_key, INIT_NC_TYPE, default=False)
         if is_init:
-            # XXX: don't fail here for compatibility reasons
-            # raise ValueError('already initialized')
-            pass
+            raise ValueError('already initialized')
         # XXX: ignore arg-type, it is correct but hard to typ
         container.__init_storage__(value)
         self.storage.put_obj(is_init_key, INIT_NC_TYPE, True)
