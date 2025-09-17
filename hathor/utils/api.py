@@ -12,8 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import cgi
-from typing import Type, TypeVar, Union
+from email.message import Message
+from typing import Type, TypeVar, Union, cast
 
 from pydantic import Field, ValidationError
 from twisted.web.http import Request
@@ -38,8 +38,9 @@ class QueryParams(BaseModel):
         encoding = 'utf8'
 
         if content_type_header := request.requestHeaders.getRawHeaders('content-type'):
-            _, options = cgi.parse_header(content_type_header[0])
-            encoding = options.get('charset', encoding)
+            m = Message()
+            m['content-type'] = content_type_header[0]
+            encoding = cast(str, m.get_param('charset', encoding))
 
         raw_args = get_args(request).items()
         args: dict[str, str | None | list[str]] = {}
