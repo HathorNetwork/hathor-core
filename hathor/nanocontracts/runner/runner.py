@@ -296,12 +296,29 @@ class Runner:
             nc_args=nc_args,
         )
 
+        if method_name == NC_INITIALIZE_METHOD:
+            self._unsafe_post_initialize(
+                contract_id=contract_id,
+                blueprint_id=blueprint_id,
+                ctx=ctx,
+            )
+
         self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(int)
         return ret
+
+    def _unsafe_post_initialize(
+        self,
+        contract_id: ContractId,
+        ctx: Context,
+    ) -> None:
+        """ Invoked after the initialize method is called to initialize uninitialized containers.
+        """
+        # TODO
+        pass
 
     @_forbid_syscall_from_view('call_public_method')
     def syscall_call_another_contract_public_method(
