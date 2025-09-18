@@ -394,6 +394,7 @@ class HathorSettings(NamedTuple):
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
     CAPABILITY_GET_BEST_BLOCKCHAIN: str = 'get-best-blockchain'
     CAPABILITY_IPV6: str = 'ipv6'  # peers announcing this capability will be relayed ipv6 entrypoints from other peers
+    CAPABILITY_NANO_STATE: str = 'nano-state'  # indicates support for nano-state commands
 
     # Where to download whitelist from
     WHITELIST_URL: Optional[str] = None

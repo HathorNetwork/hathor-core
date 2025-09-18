@@ -250,12 +250,16 @@ class HathorManager:
 
     def get_default_capabilities(self) -> list[str]:
         """Return the default capabilities for this manager."""
-        return [
+        default_capabilities = [
             self._settings.CAPABILITY_WHITELIST,
             self._settings.CAPABILITY_SYNC_VERSION,
             self._settings.CAPABILITY_GET_BEST_BLOCKCHAIN,
             self._settings.CAPABILITY_IPV6,
         ]
+        # only include nano-state if ENABLE_NANO_CONTRACTS is true (enabled/feature_activation)
+        if self._settings.ENABLE_NANO_CONTRACTS:
+            default_capabilities.append(self._settings.CAPABILITY_NANO_STATE)
+        return default_capabilities
 
     def start(self) -> None:
         """ A factory must be started only once. And it is usually automatically started.
