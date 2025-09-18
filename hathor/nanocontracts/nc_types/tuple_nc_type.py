@@ -56,7 +56,7 @@ class TupleNCType(NCType[tuple]):
         args = list(get_args(type_))
         if args is None:
             raise TypeError('expected tuple[<args...>]')
-        if issubclass(type_, list):
+        if issubclass(origin_type, list):
             args.append(Ellipsis)
         if args and args[-1] == Ellipsis:
             if len(args) != 2:

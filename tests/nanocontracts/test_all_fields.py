@@ -12,8 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import re
-
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
@@ -99,10 +97,7 @@ class TestAllFields(unittest.TestCase):
         assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: NamedTuple`'
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
-        assert re.match(
-            r'type <function NamedTuple at 0x[0-9a-f]+> is not supported by any Field class',
-            context_exception.args[0]
-        )
+        assert context_exception.args[0] == 'issubclass() arg 1 must be a class'
 
     def test_no_bytearray(self) -> None:
         with self.assertRaises(BlueprintSyntaxError) as cm:
@@ -116,7 +111,7 @@ class TestAllFields(unittest.TestCase):
         assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: bytearray`'
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
-        assert context_exception.args[0] == r"type <class 'bytearray'> is not supported by any Field class"
+        assert context_exception.args[0] == r"type <class 'bytearray'> is not supported by any NCType class"
 
     def test_no_typing_union(self) -> None:
         from typing import Union
@@ -132,7 +127,7 @@ class TestAllFields(unittest.TestCase):
         assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: typing.Union[str, int]`'
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
-        assert context_exception.args[0] == r"type typing.Union[str, int] is not supported by any Field class"
+        assert context_exception.args[0] == r"type typing.Union[str, int] is not supported by any NCType class"
 
     def test_no_union_type(self) -> None:
         with self.assertRaises(BlueprintSyntaxError) as cm:
@@ -146,7 +141,7 @@ class TestAllFields(unittest.TestCase):
         assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: str | int`'
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
-        assert context_exception.args[0] == r"type str | int is not supported by any Field class"
+        assert context_exception.args[0] == r"type str | int is not supported by any NCType class"
 
     def test_no_none(self) -> None:
         with self.assertRaises(BlueprintSyntaxError) as cm:
@@ -160,4 +155,4 @@ class TestAllFields(unittest.TestCase):
         assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: None`'
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
-        assert context_exception.args[0] == r"type None is not supported by any Field class"
+        assert context_exception.args[0] == r"type None is not supported by any NCType class"

@@ -17,10 +17,11 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, NewType, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
+from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
     validate_has_not_ctx_arg,
@@ -28,31 +29,80 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_method_types,
 )
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
+from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
+# XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
+#
+# Metaclass conflict: the metaclass of a derived class must be a (non-strict) subclass of the metaclasses of all its
+# bases
+#
+# However `bytes` metaclass appears to be `type` (just like `int`'s) and `FauxImmutableMeta` correctly inherits from
+# `type`, so it seems like it's a mypy error.
+
 
 # Types to be used by blueprints.
-class Address(bytes):
+class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+    __allow_faux_inheritance__ = True
+    __allow_faux_dunder__ = ('__str__', '__repr__')
     __slots__ = ()
 
+    @classmethod
+    def from_str(cls, /, encoded_address: str) -> Self:
+        if not isinstance(encoded_address, str):
+            raise TypeError(f'expected `str` instance, got `{type(encoded_address)}` instance')
+        return cls(decode_address(encoded_address))
 
-class VertexId(bytes):
+    def __str__(self) -> str:
+        encoded_address = get_address_b58_from_bytes(self)
+        return encoded_address
+
+    def __repr__(self) -> str:
+        encoded_address = str(self)  # uses __str__
+        # XXX: should we support `Address(encoded_address)` constructor?
+        return f"Address.from_str({encoded_address!r})"
+
+
+class VertexId(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
     __slots__ = ()
+    __allow_faux_inheritance__ = True
 
 
-class ContractId(VertexId):
+class BlueprintId(VertexId):  # type: ignore[misc]
     __slots__ = ()
+    __allow_faux_inheritance__ = True
 
 
-Amount = NewType('Amount', int)
-Timestamp = NewType('Timestamp', int)
-TokenUid = NewType('TokenUid', bytes)
-TxOutputScript = NewType('TxOutputScript', bytes)
-BlueprintId = NewType('BlueprintId', VertexId)
+class ContractId(VertexId):  # type: ignore[misc]
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class TokenUid(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class TxOutputScript(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class Amount(int, metaclass=FauxImmutableMeta):
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
+class Timestamp(int, metaclass=FauxImmutableMeta):
+    __slots__ = ()
+    __allow_faux_inheritance__ = True
+
+
 CallerId: TypeAlias = Address | ContractId
 
 T = TypeVar('T')
+B = TypeVar('B', bound=type)
 
 NC_INITIALIZE_METHOD: str = 'initialize'
 NC_FALLBACK_METHOD: str = 'fallback'
@@ -60,6 +110,9 @@ NC_FALLBACK_METHOD: str = 'fallback'
 NC_ALLOWED_ACTIONS_ATTR = '__nc_allowed_actions'
 NC_ALLOW_REENTRANCY = '__nc_allow_reentrancy'
 NC_METHOD_TYPE_ATTR: str = '__nc_method_type'
+
+# this is the name we use internally to store the blueprint that is exported by a module
+BLUEPRINT_EXPORT_NAME: str = '__blueprint__'
 
 
 class NCMethodType(Enum):
@@ -240,6 +293,19 @@ def view(fn: Callable) -> Callable:
     validate_has_not_ctx_arg(fn, annotation_name)
     validate_method_types(fn)
     return fn
+
+
+def export(cls: B) -> B:
+    """Decorator to export the main Blueprint of a Python module."""
+    current_frame = inspect.currentframe()
+    assert current_frame is not None
+    module_frame = current_frame.f_back
+    assert module_frame is not None
+    module_globals = module_frame.f_globals
+    if BLUEPRINT_EXPORT_NAME in module_globals:
+        raise TypeError('A Blueprint has already been registered')
+    module_globals[BLUEPRINT_EXPORT_NAME] = cls
+    return cls
 
 
 def fallback(

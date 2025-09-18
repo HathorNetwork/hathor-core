@@ -18,6 +18,11 @@ from typing import Callable, TypeVar
 
 from typing_extensions import ParamSpec
 
+# special attrs:
+SKIP_VALIDATION_ATTR: str = '__skip_faux_immutability_validation__'
+ALLOW_INHERITANCE_ATTR: str = '__allow_faux_inheritance__'
+ALLOW_DUNDER_ATTR: str = '__allow_faux_dunder__'
+
 
 def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dict[str, object]) -> None:
     """Run validations during faux-immutable class creation."""
@@ -29,12 +34,18 @@ def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dic
         if attr not in attrs:
             raise TypeError(f'faux-immutable class `{name}` must define `{attr}`')
 
+    custom_allowed_dunder_value: tuple[str, ...] = attrs.pop(ALLOW_DUNDER_ATTR, ())  # type: ignore[assignment]
+    custom_allowed_dunder = frozenset(custom_allowed_dunder_value)
     allowed_dunder = frozenset({
         '__module__',
         '__qualname__',
         '__doc__',
         '__init__',
-    })
+        '__call__',
+    }) | custom_allowed_dunder
+
+    # pop the attribute so the created class doesn't have it and it isn't inherited
+    allow_inheritance = attrs.pop(ALLOW_INHERITANCE_ATTR, False)
 
     # Prohibit all other dunder attributes/methods.
     for attr in attrs:
@@ -42,12 +53,16 @@ def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dic
             raise TypeError(f'faux-immutable class `{name}` must not define `{attr}`')
 
     # Prohibit inheritance on faux-immutable classes, this may be less strict in the future,
-    # but we may only allow bases where `type(base) is _FauxImmutableMeta`.
-    if len(bases) != 1 or not bases[0] is FauxImmutable:
+    # but we may only allow bases where `type(base) is FauxImmutableMeta`.
+    if len(bases) != 1:
+        raise TypeError('faux-immutable only allows one base')
+
+    base, = bases
+    if base is not FauxImmutable and not allow_inheritance:
         raise TypeError(f'faux-immutable class `{name}` must inherit from `FauxImmutable` only')
 
 
-class _FauxImmutableMeta(type):
+class FauxImmutableMeta(type):
     """
     A metaclass for faux-immutable classes.
     This means the class objects themselves are immutable, that is, `__setattr__` always raises AttributeError.
@@ -59,7 +74,7 @@ class _FauxImmutableMeta(type):
         # validations are just a sanity check to make sure we only apply this metaclass to classes
         # that will actually become immutable, for example, using this metaclass doesn't provide
         # complete faux-immutability if the class doesn't define `__slots__`.
-        if not attrs.get('__skip_faux_immutability_validation__', False):
+        if not attrs.get(SKIP_VALIDATION_ATTR, False):
             _validate_faux_immutable_meta(name, bases, attrs)
         return super().__new__(cls, name, bases, attrs, **kwargs)
 
@@ -67,7 +82,7 @@ class _FauxImmutableMeta(type):
         raise AttributeError(f'cannot set attribute `{name}` on faux-immutable class')
 
 
-class FauxImmutable(metaclass=_FauxImmutableMeta):
+class FauxImmutable(metaclass=FauxImmutableMeta):
     """
     Utility superclass for creating faux-immutable classes.
     Simply inherit from it to define a faux-immutable class.

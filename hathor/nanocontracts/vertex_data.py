@@ -57,7 +57,6 @@ class VertexData:
     outputs: tuple[TxOutputData, ...]
     tokens: tuple[TokenUid, ...]
     parents: tuple[VertexId, ...]
-    block: BlockData
     headers: tuple[HeaderData, ...]
 
     @classmethod
@@ -72,15 +71,6 @@ class VertexData:
         outputs = tuple(TxOutputData.create_from_txout(txout) for txout in vertex.outputs)
         parents = tuple(vertex.parents)
         tokens: tuple[TokenUid, ...] = tuple()
-        vertex_meta = vertex.get_metadata()
-        if vertex_meta.first_block is not None:
-            assert vertex.storage is not None
-            assert vertex_meta.first_block is not None
-            block = vertex.storage.get_block(vertex_meta.first_block)
-            block_data = BlockData.create_from_block(block)
-        else:
-            # XXX: use dummy data instead
-            block_data = BlockData(hash=VertexId(b''), timestamp=0, height=0)
 
         assert isinstance(vertex, Transaction)
         headers_data: list[HeaderData] = []
@@ -106,7 +96,6 @@ class VertexData:
             outputs=outputs,
             tokens=tokens,
             parents=parents,
-            block=block_data,
             headers=tuple(headers_data),
         )
 

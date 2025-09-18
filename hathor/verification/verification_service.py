@@ -21,9 +21,8 @@ from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transact
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.transaction import TokenInfo
+from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.validation_state import ValidationState
-from hathor.types import TokenUid
 from hathor.verification.verification_params import VerificationParams
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -128,7 +127,7 @@ class VerificationService:
                 assert type(vertex) is OnChainBlueprint
                 assert self._settings.ENABLE_NANO_CONTRACTS
                 self._verify_basic_on_chain_blueprint(vertex, params)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
@@ -171,7 +170,7 @@ class VerificationService:
         if vertex.hash in self._settings.SKIP_VERIFICATION:
             return
 
-        self.verifiers.vertex.verify_headers(vertex)
+        self.verifiers.vertex.verify_headers(vertex, params)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -192,9 +191,8 @@ class VerificationService:
                 self._verify_token_creation_tx(vertex, params)
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
-                # TODO: on-chain blueprint verifications
                 self._verify_tx(vertex, params)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():
@@ -238,7 +236,7 @@ class VerificationService:
         tx: Transaction,
         params: VerificationParams,
         *,
-        token_dict: dict[TokenUid, TokenInfo] | None = None
+        token_dict: TokenInfoDict | None = None
     ) -> None:
         """ Common verification for all transactions:
            (i) number of inputs is at most 256
@@ -258,7 +256,7 @@ class VerificationService:
         self.verifiers.tx.verify_sigops_input(tx, params.enable_checkdatasig_count)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_sum(token_dict or tx.get_complete_token_info())
-        self.verifiers.tx.verify_version(tx)
+        self.verifiers.tx.verify_version(tx, params)
         self.verifiers.vertex.verify_parents(tx)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
@@ -268,10 +266,11 @@ class VerificationService:
 
         We also overload verify_sum to make some different checks
         """
+        # we should validate the token info before verifying the tx
+        self.verifiers.token_creation_tx.verify_token_info(tx)
         token_dict = tx.get_complete_token_info()
         self._verify_tx(tx, params, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
-        self.verifiers.token_creation_tx.verify_token_info(tx)
 
     def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         if vertex.hash in self._settings.SKIP_VERIFICATION:
@@ -297,7 +296,7 @@ class VerificationService:
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 assert type(vertex) is OnChainBlueprint
                 self._verify_without_storage_on_chain_blueprint(vertex, params)
-            case _:
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
 
         if vertex.is_nano_contract():

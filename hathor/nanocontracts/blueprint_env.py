@@ -14,16 +14,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence, final
+from typing import TYPE_CHECKING, Any, Collection, Optional, Sequence, TypeAlias, final
 
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
+    from hathor.nanocontracts.contract_accessor import ContractAccessor
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.types import NCArgs
+
+
+NCAttrCache: TypeAlias = dict[bytes, Any] | None
 
 
 class BlueprintEnvironment:
@@ -42,8 +46,8 @@ class BlueprintEnvironment:
         self.__log__ = nc_logger
         self.__runner = runner
         self.__storage__ = storage
-        # XXX: we could replace dict|None with a Cache that can be disabled, cleared, limited, etc
-        self.__cache__: dict[str, Any] | None = None if disable_cache else {}
+        # XXX: we could replace dict|None with a cache class that can be disabled, cleared, limited, etc
+        self.__cache__: NCAttrCache = None if disable_cache else {}
 
     @final
     @property
@@ -171,7 +175,14 @@ class BlueprintEnvironment:
         **kwargs: Any,
     ) -> Any:
         """Call a public method of another contract."""
-        return self.__runner.syscall_call_another_contract_public_method(nc_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_call_another_contract_public_method(
+            nc_id,
+            method_name,
+            actions,
+            args,
+            kwargs,
+            forbid_fallback=False,
+        )
 
     @final
     def proxy_call_public_method(
@@ -234,24 +245,70 @@ class BlueprintEnvironment:
         self.__runner.syscall_emit_event(data)
 
     @final
-    def create_token(
+    def create_deposit_token(
         self,
         token_name: str,
         token_symbol: str,
         amount: int,
         mint_authority: bool = True,
         melt_authority: bool = True,
+        *,
+        salt: bytes = b'',
     ) -> TokenUid:
-        """Create a new token."""
-        return self.__runner.syscall_create_child_token(
-            token_name,
-            token_symbol,
-            amount,
-            mint_authority,
-            melt_authority,
+        """Create a new deposit-based token."""
+        return self.__runner.syscall_create_child_deposit_token(
+            salt=salt,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            amount=amount,
+            mint_authority=mint_authority,
+            melt_authority=melt_authority,
+        )
+
+    # XXX: temporary alias
+    create_token = create_deposit_token
+
+    @final
+    def create_fee_token(
+        self,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool = True,
+        melt_authority: bool = True,
+        *,
+        salt: bytes = b'',
+    ) -> TokenUid:
+        """Create a new fee-based token."""
+        return self.__runner.syscall_create_child_fee_token(
+            salt=salt,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            amount=amount,
+            mint_authority=mint_authority,
+            melt_authority=melt_authority,
         )
 
     @final
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:
         """Change the blueprint of this contract."""
         self.__runner.syscall_change_blueprint(blueprint_id)
+
+    @final
+    def get_contract(
+        self,
+        contract_id: ContractId,
+        *,
+        blueprint_id: BlueprintId | Collection[BlueprintId] | None,
+    ) -> ContractAccessor:
+        """
+        Get a contract accessor for the given contract ID.
+
+        Args:
+            contract_id: the ID of the contract.
+            blueprint_id: the expected blueprint ID of the contract, or a collection of accepted blueprints,
+                or None if any blueprint is accepted.
+
+        """
+        from hathor.nanocontracts.contract_accessor import ContractAccessor
+        return ContractAccessor(runner=self.__runner, contract_id=contract_id, blueprint_id=blueprint_id)

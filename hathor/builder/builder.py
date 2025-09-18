@@ -271,6 +271,7 @@ class Builder:
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
             runner_factory=runner_factory,
+            feature_service=feature_service,
             **kwargs
         )
 
@@ -414,6 +415,7 @@ class Builder:
                 runner_factory=self._get_or_create_runner_factory(),
                 nc_log_storage=self._get_or_create_nc_log_storage(),
                 nc_calls_sorter=nc_calls_sorter,
+                feature_service=self._get_or_create_feature_service(),
             )
 
         return self._consensus

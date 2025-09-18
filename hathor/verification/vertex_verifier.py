@@ -16,8 +16,7 @@ from typing import Optional
 
 from typing_extensions import assert_never
 
-from hathor.conf.settings import HathorSettings, NanoContractsSetting
-from hathor.feature_activation.feature import Feature
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import BaseTransaction, TxVersion
 from hathor.transaction.exceptions import (
@@ -36,6 +35,7 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
 )
 from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -195,7 +195,7 @@ class VertexVerifier:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
 
-    def get_allowed_headers(self, vertex: BaseTransaction) -> set[type[VertexBaseHeader]]:
+    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[VertexBaseHeader]]:
         """Return a set of allowed headers for the vertex."""
         allowed_headers: set[type[VertexBaseHeader]] = set()
         match vertex.version:
@@ -208,26 +208,18 @@ class VertexVerifier:
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
-                match self._settings.ENABLE_NANO_CONTRACTS:
-                    case NanoContractsSetting.DISABLED:
-                        pass
-                    case NanoContractsSetting.ENABLED:
-                        allowed_headers.add(NanoHeader)
-                    case NanoContractsSetting.FEATURE_ACTIVATION:
-                        if self._feature_service.is_feature_active(vertex=vertex, feature=Feature.NANO_CONTRACTS):
-                            allowed_headers.add(NanoHeader)
-                    case _ as unreachable:
-                        assert_never(unreachable)
-            case _:
+                if params.enable_nano:
+                    allowed_headers.add(NanoHeader)
+            case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
 
-    def verify_headers(self, vertex: BaseTransaction) -> None:
+    def verify_headers(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify the headers."""
         if len(vertex.headers) > vertex.get_maximum_number_of_headers():
             raise TooManyHeaders('Maximum number of headers exceeded')
 
-        allowed_headers = self.get_allowed_headers(vertex)
+        allowed_headers = self.get_allowed_headers(vertex, params)
         for header in vertex.headers:
             if type(header) not in allowed_headers:
                 raise HeaderNotSupported(

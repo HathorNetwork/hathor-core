@@ -45,11 +45,6 @@ class NanoRNG(FauxImmutable):
         cipher = Cipher(algorithm, mode=None)
         __set_faux_immutable__(self, '__encryptor', cipher.encryptor())
 
-    @property
-    def seed(self) -> Hash:
-        """Return the seed used to create the RNG."""
-        return self.__seed
-
     def randbytes(self, size: int) -> bytes:
         """Return a random string of bytes."""
         assert size >= 1

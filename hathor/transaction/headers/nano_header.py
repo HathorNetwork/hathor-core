@@ -307,24 +307,10 @@ class NanoHeader(VertexBaseHeader):
 
     def get_context(self) -> Context:
         """Return a context to be used in a method call."""
-        action_list = self.get_actions()
-
-        meta = self.tx.get_metadata()
-        timestamp: int
-        if meta.first_block is None:
-            # XXX Which timestamp to use when it is on mempool?
-            timestamp = self.tx.timestamp
-        else:
-            assert self.tx.storage is not None
-            first_block = self.tx.storage.get_transaction(meta.first_block)
-            timestamp = first_block.timestamp
-
         from hathor.nanocontracts.context import Context
         from hathor.nanocontracts.types import Address
-        context = Context(
-            actions=action_list,
-            vertex=self.tx,
+        return Context.create_from_vertex(
             caller_id=Address(self.nc_address),
-            timestamp=timestamp,
+            vertex=self.tx,
+            actions=self.get_actions(),
         )
-        return context

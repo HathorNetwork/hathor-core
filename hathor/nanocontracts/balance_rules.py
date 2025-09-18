@@ -30,8 +30,8 @@ from hathor.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCWithdrawalAction,
 )
+from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.transaction import TokenInfo
-from hathor.types import TokenUid
 
 T = TypeVar('T', bound=BaseAction)
 
@@ -51,7 +51,7 @@ class BalanceRules(ABC, Generic[T]):
         self.action = action
 
     @abstractmethod
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict) -> None:
         """
         Define how the respective action interacts with the transaction's
         token_dict during the verification phase, updating it.
@@ -100,7 +100,7 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict) -> None:
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         token_info.amount = token_info.amount + self.action.amount
         token_dict[self.action.token_uid] = token_info
@@ -124,7 +124,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict) -> None:
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         token_info.amount = token_info.amount - self.action.amount
         token_dict[self.action.token_uid] = token_info
@@ -148,7 +148,7 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict) -> None:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         if self.action.mint and not token_info.can_mint:
@@ -200,7 +200,7 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: dict[TokenUid, TokenInfo]) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict) -> None:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         token_info = token_dict.get(self.action.token_uid, TokenInfo.get_default())
         token_info.can_mint = token_info.can_mint or self.action.mint
