@@ -71,8 +71,11 @@ class BlockConsensusAlgorithm:
         assert self.context.nc_events is None
         self.context.nc_events = []
         self.update_voided_info(block)
-        if self._settings.ENABLE_NANO_CONTRACTS:
+
+        if self._should_execute_nano(block):
             self.execute_nano_contracts(block)
+        else:
+            self._nc_initialize_empty(block)
 
     def _nc_initialize_empty(self, block: Block) -> None:
         """Initialize a block with an empty contract trie."""
@@ -149,29 +152,10 @@ class BlockConsensusAlgorithm:
                     vertex=parent,
                     feature=Feature.NANO_CONTRACTS,
                 )
-                is_active_on_block = self.feature_service.is_feature_active(
-                    vertex=block,
-                    feature=Feature.NANO_CONTRACTS,
-                )
-                match is_active_on_parent, is_active_on_block:
-                    case False, False:
-                        # Nano is not active, nothing to execute.
-                        return False
-                    case False, True:
-                        # This is the first active block, so we initialize it and return False
-                        # because there's nothing to execute on the first active block.
-                        self._nc_initialize_empty(block)
-                        return False
-                    case True, False:  # pragma: no cover
-                        raise AssertionError('unreachable')
-                    case True, True:
-                        # All set, proceed with execution.
-                        return True
-                    case _:  # pragma: no cover
-                        raise AssertionError('unreachable')
+                return is_active_on_parent
 
-            case NanoContractsSetting.DISABLED:  # pragma: no cover
-                raise AssertionError('unreachable')
+            case NanoContractsSetting.DISABLED:
+                return False
 
             case _:  # pragma: no cover
                 assert_never(self._settings.ENABLE_NANO_CONTRACTS)
@@ -188,9 +172,6 @@ class BlockConsensusAlgorithm:
             # XXX We can remove this call after the full node initialization is refactored and
             #     the genesis block goes through the consensus protocol.
             self._nc_initialize_empty(block)
-            return
-
-        if not self._should_execute_nano(block):
             return
 
         meta = block.get_metadata()
