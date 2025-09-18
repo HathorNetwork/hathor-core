@@ -36,6 +36,7 @@ class Scenario(Enum):
     TRANSACTION_VOIDING_CHAIN = 'TRANSACTION_VOIDING_CHAIN'
     VOIDED_TOKEN_AUTHORITY = 'VOIDED_TOKEN_AUTHORITY'
     SINGLE_VOIDED_CREATE_TOKEN_TRANSACTION = 'SINGLE_VOIDED_CREATE_TOKEN_TRANSACTION'
+    SINGLE_VOIDED_REGULAR_TRANSACTION = 'SINGLE_VOIDED_REGULAR_TRANSACTION'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
@@ -52,6 +53,7 @@ class Scenario(Enum):
             Scenario.TRANSACTION_VOIDING_CHAIN: simulate_transaction_voiding_chain,
             Scenario.VOIDED_TOKEN_AUTHORITY: simulate_voided_token_authority,
             Scenario.SINGLE_VOIDED_CREATE_TOKEN_TRANSACTION: simulate_single_voided_create_token_transaction,
+            Scenario.SINGLE_VOIDED_REGULAR_TRANSACTION: simulate_single_voided_regular_transaction,
         }
 
         simulate_fn = simulate_fns[self]
@@ -931,6 +933,196 @@ def simulate_single_voided_create_token_transaction(
     confirmation_blocks = add_new_blocks(
         manager, FINAL_CONFIRMATION_BLOCKS,
         address=decode_address(address1)
+    )
+    for block in confirmation_blocks:
+        wallet.on_new_tx(block)
+    simulator.run(SIMULATION_STEP_DURATION)
+
+    return None
+
+
+def simulate_single_voided_regular_transaction(
+    simulator: 'Simulator',
+    manager: 'HathorManager',
+) -> Optional['DAGArtifacts']:
+    """
+    Demonstrates regular transaction voiding through conflicting transactions.
+
+    Steps:
+    1. Create a regular transaction sending HTR to address1
+    2. Propagate and confirm the transaction
+    3. Create a conflicting regular transaction using the same inputs but sending HTR to address2
+    4. Propagate the higher-weight voiding transaction
+    5. Confirm that the previously confirmed transaction was voided by the conflicting transaction
+    """
+    from hathor.conf.get_settings import get_global_settings
+    from hathor.crypto.util import decode_address
+    from hathor.simulator.utils import add_new_blocks
+    from hathor.transaction import Transaction, TxInput, TxOutput
+    from hathor.transaction.scripts import P2PKH
+    from hathor.wallet import HDWallet
+
+    # Constants
+    SIMULATION_STEP_DURATION = 60
+    TRANSFER_AMOUNT = 1000
+    INITIAL_CONFIRMATION_BLOCKS = 3
+    FINAL_CONFIRMATION_BLOCKS = 7
+
+    settings = get_global_settings()
+    assert manager.wallet is not None
+    assert isinstance(manager.wallet, HDWallet)
+
+    wallet = manager.wallet
+
+    # Get wallet addresses for different roles
+    address0 = wallet.get_address(wallet.get_key_at_index(0))  # Source address
+    address1 = wallet.get_address(wallet.get_key_at_index(1))  # First target
+    address2 = wallet.get_address(wallet.get_key_at_index(2))  # Voiding target
+
+    # Setup funding blocks
+    funding_blocks = add_new_blocks(
+        manager,
+        settings.REWARD_SPEND_MIN_BLOCKS + 1,
+        address=decode_address(address0)
+    )
+
+    for block in funding_blocks:
+        wallet.on_new_tx(block)
+    simulator.run(SIMULATION_STEP_DURATION)
+
+    # Get inputs for the transfer
+    inputs_info, total_input_amount = wallet.get_inputs_from_amount(
+        TRANSFER_AMOUNT,
+        manager.tx_storage,
+        settings.HATHOR_TOKEN_UID
+    )
+
+    transfer_inputs = [
+        TxInput(
+            tx_id=input_info.tx_id,
+            index=input_info.index,
+            data=b''
+        ) for input_info in inputs_info
+    ]
+
+    # Create outputs for first transaction (to address1)
+    address1_bytes = decode_address(address1)
+    address1_script = P2PKH.create_output_script(address1_bytes)
+
+    address0_bytes = decode_address(address0)
+    address0_script = P2PKH.create_output_script(address0_bytes)
+
+    # Calculate change
+    change_value = total_input_amount - TRANSFER_AMOUNT
+    transfer_outputs = [
+        TxOutput(
+            value=TRANSFER_AMOUNT,
+            script=address1_script,
+            token_data=0  # HTR
+        )
+    ]
+
+    # Add change output if necessary
+    if change_value > 0:
+        transfer_outputs.append(TxOutput(
+            value=change_value,
+            script=address0_script,
+            token_data=0  # HTR
+        ))
+
+    # Create and sign first transaction
+    original_tx = Transaction(
+        inputs=transfer_inputs,
+        outputs=transfer_outputs,
+        parents=manager.get_new_tx_parents(),
+        storage=manager.tx_storage,
+        timestamp=int(manager.reactor.seconds())
+    )
+
+    # Sign original transaction
+    data_to_sign = original_tx.get_sighash_all()
+    private_key = wallet.get_private_key(address0)
+
+    for i, _ in enumerate(original_tx.inputs):
+        public_key_bytes, signature = wallet.get_input_aux_data(
+            data_to_sign, private_key)
+        original_tx.inputs[i].data = P2PKH.create_input_data(
+            public_key_bytes, signature)
+
+    # Set weight and hash
+    original_tx.weight = manager.daa.minimum_tx_weight(original_tx)
+    original_tx.update_hash()
+
+    # Create conflicting voiding transaction (to address2)
+    address2_bytes = decode_address(address2)
+    address2_script = P2PKH.create_output_script(address2_bytes)
+
+    # Create new inputs with same tx_id and index but unsigned
+    voiding_inputs = []
+    for input_obj in original_tx.inputs:
+        voiding_inputs.append(TxInput(
+            tx_id=input_obj.tx_id,
+            index=input_obj.index,
+            data=b''  # Unsigned initially
+        ))
+
+    # Create outputs for voiding transaction (to address2)
+    voiding_outputs = [
+        TxOutput(
+            value=total_input_amount,  # Send all to address2
+            script=address2_script,
+            token_data=0  # HTR
+        )
+    ]
+
+    # Create voiding transaction
+    voiding_tx = Transaction(
+        inputs=voiding_inputs,
+        outputs=voiding_outputs,
+        parents=manager.get_new_tx_parents(),
+        storage=manager.tx_storage,
+        timestamp=int(manager.reactor.seconds()) + 1  # Later timestamp
+    )
+
+    # Sign the voiding transaction
+    data_to_sign_voiding = voiding_tx.get_sighash_all()
+    for i, _ in enumerate(voiding_tx.inputs):
+        public_key_bytes, signature = wallet.get_input_aux_data(
+            data_to_sign_voiding, private_key)
+        voiding_tx.inputs[i].data = P2PKH.create_input_data(
+            public_key_bytes, signature)
+
+    # Set higher weight to ensure it wins the conflict
+    voiding_tx.weight = original_tx.weight + 5.0
+    voiding_tx.update_hash()
+
+    # First, propagate and confirm the original transaction
+    assert manager.propagate_tx(original_tx)
+    wallet.on_new_tx(original_tx)
+    simulator.run(SIMULATION_STEP_DURATION)
+
+    # Add some confirmation blocks for the original transaction
+    initial_confirmation_blocks = add_new_blocks(
+        manager, INITIAL_CONFIRMATION_BLOCKS,
+        address=decode_address(address0)
+    )
+    for block in initial_confirmation_blocks:
+        wallet.on_new_tx(block)
+    simulator.run(SIMULATION_STEP_DURATION)
+
+    # Now propagate the higher-weight voiding transaction
+    # Increase weight significantly to ensure it voids the confirmed transaction
+    voiding_tx.weight = original_tx.weight + 15.0
+    voiding_tx.update_hash()
+
+    assert manager.propagate_tx(voiding_tx)
+    wallet.on_new_tx(voiding_tx)
+    simulator.run(SIMULATION_STEP_DURATION)
+
+    # Confirm both transactions to see final result
+    confirmation_blocks = add_new_blocks(
+        manager, FINAL_CONFIRMATION_BLOCKS,
+        address=decode_address(address2)
     )
     for block in confirmation_blocks:
         wallet.on_new_tx(block)
