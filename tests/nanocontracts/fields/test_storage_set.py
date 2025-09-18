@@ -16,24 +16,27 @@ from typing import Any
 
 import pytest
 
-from hathor.nanocontracts.fields.set_field import SetStorageContainer
+from hathor.nanocontracts.fields.container import ContainerLeaf
+from hathor.nanocontracts.fields.set_container import SetContainer
 from hathor.nanocontracts.nc_types import Int32NCType
 from tests.nanocontracts.fields.utils import MockNCStorage
 
-_INT_NC_TYPE = Int32NCType()
+INT_NC_TYPE = Int32NCType()
 
 
 def test_basic() -> None:
     storage = MockNCStorage()
-    my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
+    my_set = SetContainer(storage, b'my_set', ContainerLeaf(storage, INT_NC_TYPE))
+    my_set.__init_storage__()
 
+    assert storage.store == {b'my_set:__length__': 0}
     assert len(my_set) == 0
-    assert storage.store == {}
 
 
 def test_add_remove_discard() -> None:
     storage = MockNCStorage()
-    my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
+    my_set = SetContainer(storage, b'my_set', ContainerLeaf(storage, INT_NC_TYPE))
+    my_set.__init_storage__()
 
     my_set.add(1)
     my_set.add(1)
@@ -56,7 +59,8 @@ def test_add_remove_discard() -> None:
 
 def test_updates_and_contains() -> None:
     storage = MockNCStorage()
-    my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
+    my_set = SetContainer(storage, b'my_set', ContainerLeaf(storage, INT_NC_TYPE))
+    my_set.__init_storage__()
 
     my_set.update({1, 2, 3}, [2, 3, 4])
     assert _get_values(storage) == {1, 2, 3, 4}
@@ -75,8 +79,8 @@ def test_updates_and_contains() -> None:
 
 def test_isdisjoint() -> None:
     storage = MockNCStorage()
-    my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
-    my_set.update({1, 2, 3})
+    my_set = SetContainer(storage, b'my_set', ContainerLeaf(storage, INT_NC_TYPE))
+    my_set.__init_storage__({1, 2, 3})
 
     assert my_set.isdisjoint(set())
     assert my_set.isdisjoint({4, 5, 6})
@@ -87,8 +91,8 @@ def test_isdisjoint() -> None:
 
 def test_issuperset() -> None:
     storage = MockNCStorage()
-    my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
-    my_set.update({1, 2, 3})
+    my_set = SetContainer(storage, b'my_set', ContainerLeaf(storage, INT_NC_TYPE))
+    my_set.__init_storage__({1, 2, 3})
 
     assert my_set.issuperset({})
     assert my_set.issuperset({1})
@@ -99,8 +103,8 @@ def test_issuperset() -> None:
 
 def test_intersection() -> None:
     storage = MockNCStorage()
-    my_set = SetStorageContainer(storage, 'my_set', _INT_NC_TYPE)
-    my_set.update({1, 2, 3})
+    my_set = SetContainer(storage, b'my_set', ContainerLeaf(storage, INT_NC_TYPE))
+    my_set.__init_storage__({1, 2, 3})
 
     assert my_set.intersection(set()) == set()
     assert my_set.intersection({1}) == {1}

@@ -14,12 +14,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import wraps
 from typing import TYPE_CHECKING, Any, final
 
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import BlueprintSyntaxError
+from hathor.nanocontracts.fields.container import Container
 from hathor.nanocontracts.nc_types.utils import pretty_type
-from hathor.nanocontracts.types import NC_FALLBACK_METHOD, NC_INITIALIZE_METHOD, NC_METHOD_TYPE_ATTR, NCMethodType
+from hathor.nanocontracts.types import (
+    NC_ALLOWED_ACTIONS_ATTR,
+    NC_FALLBACK_METHOD,
+    NC_INITIALIZE_METHOD,
+    NC_METHOD_TYPE_ATTR,
+    NCMethodType,
+)
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -38,7 +47,14 @@ class _BlueprintBase(type):
     This metaclass will modify the attributes and set Fields to them according to their types.
     """
 
-    def __new__(cls, name, bases, attrs, **kwargs):
+    def __new__(
+        cls: type[_BlueprintBase],
+        name: str,
+        bases: tuple[type, ...],
+        attrs: dict[str, Any],
+        /,
+        **kwargs: Any
+    ) -> _BlueprintBase:
         from hathor.nanocontracts.fields import make_field_for_type
 
         # Initialize only subclasses of Blueprint.
@@ -68,6 +84,8 @@ class _BlueprintBase(type):
         # Finally, create class!
         new_class = super().__new__(cls, name, bases, attrs, **kwargs)
 
+        container_fields: list[str] = []
+
         # Create the Field instance according to each type.
         for field_name, field_type in attrs[NC_FIELDS_ATTR].items():
             value = getattr(new_class, field_name, None)
@@ -83,6 +101,8 @@ class _BlueprintBase(type):
                         f'unsupported field type: `{field_name}: {pretty_type(field_type)}`'
                     )
                 setattr(new_class, field_name, field)
+                if field.is_container:
+                    container_fields.append(field_name)
             else:
                 # This is the case when a value is specified.
                 # Example:
@@ -90,6 +110,27 @@ class _BlueprintBase(type):
                 #
                 # This was not implemented yet and will be extended later.
                 raise BlueprintSyntaxError(f'fields with default values are currently not supported: `{field_name}`')
+
+        # validation makes sure we already have it
+        original_init_fn = getattr(new_class, NC_INITIALIZE_METHOD)
+        init_containers_fn = _make_initialize_uninitialized_container_fields_fn(container_fields)
+
+        # patch initialize method so it initializes containers fields implicitly
+        @wraps(original_init_fn)
+        def patched_init_fn(self: Blueprint, *args: Any, **kwargs: Any) -> Any:
+            ret = original_init_fn(self, *args, **kwargs)
+            init_containers_fn(self)
+            return ret
+
+        # copy important attributes
+        important_attrs = [NC_METHOD_TYPE_ATTR, NC_ALLOWED_ACTIONS_ATTR, '__annotations__']
+        for attr in important_attrs:
+            setattr(patched_init_fn, attr, getattr(original_init_fn, attr))
+        # XXX: this attribute is important for resolving the original method's signature
+        setattr(patched_init_fn, '__wrapped__', original_init_fn)
+
+        # replace the original init method
+        setattr(new_class, NC_INITIALIZE_METHOD, patched_init_fn)
 
         return new_class
 
@@ -142,3 +183,12 @@ class Blueprint(metaclass=_BlueprintBase):
     def log(self) -> NCLogger:
         """Return the logger for the current contract."""
         return self.syscall.__log__
+
+
+def _make_initialize_uninitialized_container_fields_fn(container_fields: list[str]) -> Callable[['Blueprint'], None]:
+    def _initialize_uninitialized_container_fields(self: Blueprint) -> None:
+        for field in container_fields:
+            container: Container = getattr(self, field)
+            assert isinstance(container, Container)
+            container.__try_init_storage__()
+    return _initialize_uninitialized_container_fields
