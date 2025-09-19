@@ -98,6 +98,10 @@ class NCInvalidContractId(NCFail):
     """Raised when a contract call is invalid."""
 
 
+class NCInvalidPaymentToken(NCFail):
+    """Raised when a payment token is invalid."""
+
+
 class NCInvalidMethodCall(NCFail):
     """Raised when a contract calls another contract's invalid method."""
 
@@ -120,6 +124,11 @@ class NCUninitializedContractError(NCFail):
 
 class NCInvalidAction(NCFail):
     """Raised when an action is invalid."""
+    pass
+
+
+class NCInvalidFee(NCFail):
+    """Raised when a fee is invalid."""
     pass
 
 
