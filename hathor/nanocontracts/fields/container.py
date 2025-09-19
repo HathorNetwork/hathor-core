@@ -264,7 +264,9 @@ class ContainerProxy(ContainerNode[P]):
         is_init_key = KEY_SEPARATOR.join([prefix, INIT_KEY])
         is_init = self.storage.get_obj(is_init_key, INIT_NC_TYPE, default=False)
         if is_init:
-            raise ValueError('already initialized')
+            # XXX: don't fail here for compatibility reasons
+            # raise ValueError('already initialized')
+            pass
         # XXX: ignore arg-type, it is correct but hard to typ
         container.__init_storage__(value)
         self.storage.put_obj(is_init_key, INIT_NC_TYPE, True)
