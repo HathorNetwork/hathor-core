@@ -1059,7 +1059,7 @@ class Runner:
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
-        fee_payment_token: TokenUid | None = TokenUid(HATHOR_TOKEN_UID)
+        fee_payment_token: TokenUid
     ) -> TokenUid:
         """Create a child fee token from a contract."""
         try:
@@ -1067,13 +1067,11 @@ class Runner:
         except TransactionDataError as e:
             raise NCInvalidSyscall(str(e)) from e
 
-        fee_payment_token = fee_payment_token if fee_payment_token is not None else TokenUid(HATHOR_TOKEN_UID)
-
         call_record = self.get_current_call_record()
         parent_id = call_record.contract_id
         cleaned_token_symbol = clean_token_string(token_symbol)
 
-        token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
+        token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
         token_version = TokenVersion.FEE
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
