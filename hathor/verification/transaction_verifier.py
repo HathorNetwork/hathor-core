@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts import NCStorageFactory
+from hathor.nanocontracts.storage import NCBlockStorage
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.reward_lock.reward_lock import get_minimum_best_height
@@ -41,9 +43,10 @@ from hathor.transaction.exceptions import (
     TooFewInputs,
     TooManyInputs,
     TooManySigOps,
+    TxValidationError,
     WeightError,
 )
-from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.verification.verification_params import VerificationParams
@@ -55,7 +58,7 @@ cpu = get_cpu_profiler()
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa', '_feature_service', '_nc_storage_factory')
 
     def __init__(
         self,
@@ -63,10 +66,12 @@ class TransactionVerifier:
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
+        nc_storage_factory: NCStorageFactory,
     ) -> None:
         self._settings = settings
         self._daa = daa
         self._feature_service = feature_service
+        self._nc_storage_factory = nc_storage_factory
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -226,9 +231,16 @@ class TransactionVerifier:
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
-    def verify_sum(self, token_dict: TokenInfoDict) -> None:
+    def verify_sum(
+        self,
+        token_dict: TokenInfoDict,
+        enforce_htr_check: bool = True
+    ) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
+
+        In case a token without version is provided, this method will return without raising when the
+        `enforce_htr_check` flag is set to `False`.
 
         token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
         amount = outputs - inputs, thus:
@@ -239,29 +251,41 @@ class TransactionVerifier:
         """
         deposit = 0
         withdraw = 0
-        withdraw_without_authority = 0
-        fee = token_dict.calculate_fee(self._settings)
+        has_not_found_tokens = False
 
         for token_uid, token_info in token_dict.items():
             match token_info.version:
+                case None:
+                    # when a token is not found, we can't assert the HTR value, since we don't know its version
+                    if enforce_htr_check:
+                        raise InputOutputMismatch(f'token uid {token_uid.hex()} not found.')
+                    has_not_found_tokens = True
+                    self.validate_token_permissions(token_uid, token_info)
+                    continue
                 case TokenVersion.NATIVE:
                     continue
                 case TokenVersion.DEPOSIT:
-                    result = self._verify_deposit_token(fee, token_uid, token_info)
+                    result = self._verify_deposit_token(token_uid, token_info)
                     deposit += result.deposit
                     withdraw += result.withdraw
-                    withdraw_without_authority += result.withdraw_without_authority
                 case TokenVersion.FEE:
-                    self._verify_fee_token(token_uid, token_info)
+                    self.validate_token_permissions(token_uid, token_info)
                 case _:
                     assert_never(token_info)
 
-        is_melting_without_authority = withdraw_without_authority - fee > 0
-        if is_melting_without_authority:
-            raise ForbiddenMelt('Melting tokens without a melt authority is forbidden')
+        # in a partial validation, is not possible to check fees and
+        # htr amounts since its depends on full verification with all token versions
+        if has_not_found_tokens:
+            return
+
+        # when a token is not found, we can't assert the HTR value, since we don't know its version
+        expected_fee = token_dict.calculate_fee(self._settings)
+        if expected_fee != token_dict.fees_from_fee_header:
+            raise InputOutputMismatch(f"Fee amount is different than expected. "
+                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
         # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw + withdraw_without_authority - deposit - fee
+        htr_expected_amount = withdraw - deposit
         htr_info = token_dict[self._settings.HATHOR_TOKEN_UID]
         if htr_info.amount != htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
@@ -269,42 +293,27 @@ class TransactionVerifier:
                 htr_expected_amount,
             ))
 
-    def _verify_fee_token(self, token_uid: TokenUid, token_info: TokenInfo) -> None:
+    def validate_token_permissions(self, token_uid: TokenUid, token_info: TokenInfo) -> None:
         """Verify fee token can be minted/melted based on its authority."""
         if token_info.has_been_melted() and not token_info.can_melt:
             raise ForbiddenMelt.from_token(token_info.amount, token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
             raise ForbiddenMint(token_info.amount, token_uid)
 
-    def _verify_deposit_token(self, fee: int, token_uid: TokenUid, token_info: TokenInfo) -> DepositTokenVerifyResult:
+    def _verify_deposit_token(self, token_uid: TokenUid, token_info: TokenInfo) -> DepositTokenVerifyResult:
         """Verify deposit token operations and calculate withdrawal/deposit amounts."""
         result = DepositTokenVerifyResult()
         if token_info.has_been_melted():
-            withdraw_amount = get_deposit_token_withdraw_amount(self._settings, token_info.amount)
             if token_info.can_melt:
-                result.withdraw += withdraw_amount
+                result.withdraw += get_deposit_token_withdraw_amount(self._settings, token_info.amount)
             else:
-                # Any melting operation without authority is forbidden.
-                # It includes trying to pay fee with non-integer amounts.
-                # For example (DBT - Deposit based token)
-                # 1.99 DBT results in 0.01 HTR and (0.99 DBT melted) => this one is forbidden
-                if fee == 0:
-                    raise ForbiddenMelt.from_token(token_info.amount, token_uid)
-                is_integer_amount = (
-                    token_info.amount * self._settings.TOKEN_DEPOSIT_PERCENTAGE).is_integer()
-                if not is_integer_amount:
-                    raise ForbiddenMelt(
-                        "Paying fees with non integer amount is forbidden"
-                    )
-
-                result.withdraw_without_authority += withdraw_amount
+                raise ForbiddenMelt.from_token(token_info.amount, token_uid)
 
         if token_info.has_been_minted():
             if not token_info.can_mint:
                 raise ForbiddenMint(token_info.amount, token_uid)
 
             result.deposit += get_deposit_token_deposit_amount(self._settings, token_info.amount)
-
         return result
 
     def verify_version(self, tx: Transaction, params: VerificationParams) -> None:
@@ -320,9 +329,21 @@ class TransactionVerifier:
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
 
+    def verify_tokens(self, tx: Transaction, nc_block_storage: NCBlockStorage) -> None:
+        """
+        Verify that all the tokens in the transaction aren't fee ones.
+        It should run only if a fee header isn't present.
+        """
+        assert not tx.has_fees()
+
+        for token_uid in tx.tokens:
+            assert tx.storage is not None
+            token_version = get_token_version(tx.storage, nc_block_storage, token_uid)
+            if token_version == TokenVersion.FEE:
+                raise TxValidationError("All fee tokens should be declared in the fee header.")
+
 
 @dataclass(kw_only=True, slots=True)
 class DepositTokenVerifyResult:
     deposit: int = 0
-    withdraw_without_authority: int = 0
     withdraw: int = 0

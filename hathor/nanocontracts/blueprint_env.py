@@ -17,7 +17,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection, Optional, Sequence, final
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, TokenUid
 
 if TYPE_CHECKING:
@@ -25,6 +24,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
+    from hathor.nanocontracts.storage import NCContractStorage
     from hathor.nanocontracts.types import NCArgs
 
 

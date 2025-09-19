@@ -16,6 +16,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from hathor.nanocontracts.storage import NCBlockStorage
+from hathor.transaction import Block
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class VerificationParams:
@@ -25,9 +28,15 @@ class VerificationParams:
     reject_locked_reward: bool = True
     skip_block_weight_verification: bool = False
     enable_nano: bool = False
+    block_or_block_storage: Block | NCBlockStorage | None = None
 
     @classmethod
-    def default_for_mempool(cls, *, enable_nano: bool = False) -> VerificationParams:
+    def default_for_mempool(
+        cls,
+        *,
+        block_or_block_storage: Block | NCBlockStorage | None = None,
+        enable_nano: bool = False
+    ) -> VerificationParams:
         """This is the appropriate parameters for verifying mempool transactions, realtime blocks and API pushes.
 
         Other cases should instantiate `VerificationParams` manually with the appropriate parameter values.
@@ -35,4 +44,5 @@ class VerificationParams:
         return cls(
             enable_checkdatasig_count=True,
             enable_nano=enable_nano,
+            block_or_block_storage=block_or_block_storage,
         )

@@ -18,6 +18,7 @@ from typing import Any, Optional
 from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
+from hathor.nanocontracts.storage import NCBlockStorage
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
@@ -250,8 +251,8 @@ class TokenCreationTransaction(Transaction):
         return json
 
     @override
-    def _get_token_info_from_inputs(self) -> TokenInfoDict:
-        token_dict = super()._get_token_info_from_inputs()
+    def _get_token_info_from_inputs(self, block_storage: NCBlockStorage) -> TokenInfoDict:
+        token_dict = super()._get_token_info_from_inputs(block_storage)
 
         # we add the created token's info to token_dict, as the creation tx allows for mint/melt
         token_dict[self.hash] = TokenInfo.get_default(version=self.token_version, can_mint=True, can_melt=True)

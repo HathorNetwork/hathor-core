@@ -256,6 +256,22 @@ class CliBuilder:
         )
         self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
+        # Determine test mode before creating DAA
+        test_mode = TestMode.DISABLED
+        if self._args.test_mode_tx_weight:
+            test_mode = TestMode.TEST_TX_WEIGHT
+            if self.wallet:
+                self.wallet.test_mode = True
+
+        # Create DAA and vertex verifiers before consensus algorithm
+        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
+        vertex_verifiers = VertexVerifiers.create_defaults(
+            settings=settings,
+            daa=daa,
+            feature_service=self.feature_service,
+            nc_storage_factory=self.nc_storage_factory,
+        )
+
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
             self.nc_storage_factory,
@@ -266,6 +282,7 @@ class CliBuilder:
             nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
             feature_service=self.feature_service,
+            vertex_verifiers=vertex_verifiers,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -281,19 +298,6 @@ class CliBuilder:
             feature_storage=feature_storage,
         )
 
-        test_mode = TestMode.DISABLED
-        if self._args.test_mode_tx_weight:
-            test_mode = TestMode.TEST_TX_WEIGHT
-            if self.wallet:
-                self.wallet.test_mode = True
-
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
-
-        vertex_verifiers = VertexVerifiers.create_defaults(
-            settings=settings,
-            daa=daa,
-            feature_service=self.feature_service
-        )
         verification_service = VerificationService(
             settings=settings,
             verifiers=vertex_verifiers,
