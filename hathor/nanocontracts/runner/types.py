@@ -87,6 +87,8 @@ class BaseSyscallUpdateTokensRecord:
             type=self.type,
             token_uid=self.token_uid.hex(),
             token_amount=self.token_amount,
+            token_name=self.token_name,
+            token_symbol=self.token_symbol,
             token_version=self.token_version,
             payment_token_uid=self.payment_token_uid.hex() if self.payment_token_uid else None,
             payment_token_amount=self.payment_token_amount
@@ -102,9 +104,19 @@ class BaseSyscallUpdateTokensRecord:
             type=json_dict['type'],
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
             token_amount=json_dict['token_amount'],
-            token_version=json_dict['token_version'],
-            payment_token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['payment_token_uid']))),
-            payment_token_amount=json_dict['payment_token_amount']
+            token_version=json_dict['token_version'] if json_dict['token_version'] is not None else None,
+            token_name=json_dict['token_name'] if json_dict['token_name'] is not None else None,
+            token_symbol=json_dict['token_symbol'] if json_dict['token_symbol'] is not None else None,
+            payment_token_uid=(
+                TokenUid(VertexId(bytes.fromhex(json_dict['payment_token_uid'])))
+                if json_dict['payment_token_uid'] is not None
+                else None
+            ),
+            payment_token_amount=(
+                json_dict['payment_token_amount']
+                if json_dict['payment_token_amount'] is not None
+                else None
+            )
         )
 
 
@@ -175,11 +187,11 @@ class UpdateAuthoritiesRecord:
         )
 
 
-NCIndexUpdateRecord: TypeAlias = (SyscallCreateContractRecord |
-                                  SyscallUpdateDepositTokensRecord |
-                                  SyscallUpdateFeeTokensRecord |
-                                  UpdateAuthoritiesRecord
-                                  )
+NCIndexUpdateRecord: TypeAlias = (
+    SyscallCreateContractRecord |
+    BaseSyscallUpdateTokensRecord |
+    UpdateAuthoritiesRecord
+)
 
 
 def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdateRecord:
@@ -192,7 +204,7 @@ def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdate
             | IndexUpdateRecordType.MELT_TOKENS
             | IndexUpdateRecordType.CREATE_TOKEN
         ):
-            return SyscallUpdateDepositTokensRecord.from_json(json_dict)
+            return BaseSyscallUpdateTokensRecord.from_json(json_dict)
         case IndexUpdateRecordType.UPDATE_AUTHORITIES:
             return UpdateAuthoritiesRecord.from_json(json_dict)
         case _:

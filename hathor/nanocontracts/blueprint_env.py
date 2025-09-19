@@ -288,7 +288,7 @@ class BlueprintEnvironment:
         melt_authority: bool = True,
         *,
         salt: bytes = b'',
-        fee_payment_token: TokenUid | None = None
+        fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
     ) -> TokenUid:
         """Create a new fee-based token."""
         return self.__runner.syscall_create_child_fee_token(

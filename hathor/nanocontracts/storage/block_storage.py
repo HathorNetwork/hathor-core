@@ -138,7 +138,12 @@ class NCBlockStorage:
             return True
 
     def create_token(
-        self, *, token_id: TokenUid, token_name: str, token_symbol: str, token_version: TokenVersion
+        self,
+        *,
+        token_id: TokenUid,
+        token_name: str,
+        token_symbol: str,
+        token_version: TokenVersion
     ) -> None:
         """Create a new token in this block's nano state."""
         from hathor.transaction.token_info import TokenDescription
