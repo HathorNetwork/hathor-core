@@ -441,18 +441,28 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
         assert cm.exception.args[0] == 'full validation failed: Could not correctly parse the script'
 
     def test_blueprint_type_not_a_class(self) -> None:
-        blueprint = self._create_on_chain_blueprint('''__blueprint__ = "Bet"''')
+        blueprint = self._create_on_chain_blueprint(r'''
+from hathor.nanocontracts.types import export
+@export
+def Foo():
+    pass
+''')
         with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
-        assert cm.exception.args[0] == 'full validation failed: __blueprint__ is not a class'
+        assert cm.exception.args[0] == 'full validation failed: Could not find a main Blueprint definition'
 
     def test_blueprint_type_not_blueprint_subclass(self) -> None:
-        blueprint = self._create_on_chain_blueprint('''class Foo:\n    ...\n__blueprint__ = Foo''')
+        blueprint = self._create_on_chain_blueprint(r'''
+from hathor.nanocontracts.types import export
+@export
+class Foo():
+    pass
+''')
         with self.assertRaises(InvalidNewTransaction) as cm:
             self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
-        assert cm.exception.args[0] == 'full validation failed: __blueprint__ is not a Blueprint subclass'
+        assert cm.exception.args[0] == 'full validation failed: exported Blueprint is not a Blueprint subclass'
 
     def test_zlib_bomb(self) -> None:
         from struct import error as StructError
