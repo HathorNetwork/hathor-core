@@ -56,22 +56,13 @@ class IntEnumNCType(NCType[T]):
     @override
     def _deserialize(self, deserializer: Deserializer, /) -> T:
         int_value = decode_int(deserializer, length=self.SERIALIZATION_LENGTH, signed=False)
-        try:
-            return self.enum_class(int_value)
-        except ValueError as e:
-            raise ValueError('invalid', 'value', int_value) from e
+        return self.enum_class(int_value)
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> T:
-        try:
-            if isinstance(json_value, str):
-                return self.enum_class[json_value]
-            elif isinstance(json_value, (int, float)):
-                return self.enum_class(int(json_value))
-            else:
-                raise ValueError(f'expected str or int for {self.enum_class.__name__}')
-        except (ValueError, KeyError) as e:
-            raise ValueError(f'expected str or int for {self.enum_class.__name__}') from e
+        if not isinstance(json_value, (int, str)):
+            raise TypeError(f'expected int or str for enum conversion, got {type(json_value)}')
+        return self.enum_class(int(json_value))
 
     @override
     def _value_to_json(self, value: T, /) -> NCType.Json:

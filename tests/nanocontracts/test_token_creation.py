@@ -41,7 +41,14 @@ class MyBlueprint(Blueprint):
         mint_authority: bool,
         melt_authority: bool,
     ) -> None:
-        self.syscall.create_deposit_token(token_name, token_symbol, amount, mint_authority, melt_authority, salt=salt)
+        self.syscall.create_deposit_token(
+            token_name,
+            token_symbol,
+            amount,
+            mint_authority=mint_authority,
+            melt_authority=melt_authority,
+            salt=salt
+        )
 
 
 class NCNanoContractTestCase(unittest.TestCase):

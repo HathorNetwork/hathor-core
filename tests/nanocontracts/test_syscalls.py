@@ -73,7 +73,6 @@ class OtherBlueprint(Blueprint):
 
 
 class FeeTokenBlueprint(Blueprint):
-    created_fee_token_uid: TokenUid
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
@@ -86,10 +85,9 @@ class FeeTokenBlueprint(Blueprint):
             name,
             symbol,
             amount,
-            True,
-            True,
+            mint_authority=True,
+            melt_authority=True,
             fee_payment_token=fee_payment_token)
-        self.created_fee_token_uid = token_uid
         return token_uid
 
     @public(allow_deposit=True, allow_grant_authority=True)
@@ -97,12 +95,12 @@ class FeeTokenBlueprint(Blueprint):
         return self.syscall.create_deposit_token(name, symbol, amount)
 
     @public(allow_deposit=True)
-    def mint(self, ctx: Context, amount: int, fee_payment_token: TokenUid) -> None:
-        self.syscall.mint_tokens(self.created_fee_token_uid, amount=amount, fee_payment_token=fee_payment_token)
+    def mint(self, ctx: Context, token: TokenUid, amount: int, fee_payment_token: TokenUid) -> None:
+        self.syscall.mint_tokens(token, amount=amount, fee_payment_token=fee_payment_token)
 
     @public(allow_deposit=True)
-    def melt(self, ctx: Context, amount: int, fee_payment_token: TokenUid) -> None:
-        self.syscall.melt_tokens(self.created_fee_token_uid, amount=amount, fee_payment_token=fee_payment_token)
+    def melt(self, ctx: Context, token: TokenUid, amount: int, fee_payment_token: TokenUid) -> None:
+        self.syscall.melt_tokens(token, amount=amount, fee_payment_token=fee_payment_token)
 
 
 class NCNanoContractTestCase(BlueprintTestCase):
@@ -349,7 +347,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Successfully melt some tokens - don't deposit, melt from existing balance using deposit token
-        self.runner.call_public_method(nc_id, 'melt', self.create_context(), 500000, dbt_token_uid)
+        self.runner.call_public_method(nc_id, 'melt', self.create_context(), token_uid,  500000, dbt_token_uid)
 
         # Balance should decrease by melted amount, HTR consumed for fee
         assert storage.get_all_balances() == {
@@ -361,7 +359,14 @@ class NCNanoContractTestCase(BlueprintTestCase):
         # Try to melt more tokens - should fail due to insufficient HTR for fee payment
         msg = f'negative balance for contract {nc_id.hex()}'
         with pytest.raises(NCInsufficientFunds, match=msg):
-            self.runner.call_public_method(nc_id, 'melt', self.create_context(), 1, TokenUid(HATHOR_TOKEN_UID))
+            self.runner.call_public_method(
+                nc_id,
+                'melt',
+                self.create_context(),
+                token_uid,
+                1,
+                TokenUid(HATHOR_TOKEN_UID)
+            )
 
         # Balance should remain unchanged after failed melt attempt
         assert storage.get_all_balances() == {
@@ -369,6 +374,12 @@ class NCNanoContractTestCase(BlueprintTestCase):
             fbt_balance_key: Balance(value=500000, can_mint=True, can_melt=True),
             dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
         }
+
+        # Try to melt a deposit token paying with another deposit token
+        from hathor.nanocontracts.exception import NCInvalidPaymentToken
+        msg = 'Only HTR is allowed to be used with deposit based token syscalls'
+        with pytest.raises(NCInvalidPaymentToken, match=msg):
+            self.runner.call_public_method(nc_id, 'melt', self.create_context(), dbt_token_uid, 1, dbt_token_uid)
 
     def test_fee_token_mint(self) -> None:
         nc_id = self.gen_random_contract_id()
@@ -406,7 +417,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Successfully mint tokens using deposit token as fee payment (no HTR left)
-        self.runner.call_public_method(nc_id, 'mint', self.create_context(), 100000, dbt_token_uid)
+        self.runner.call_public_method(nc_id, 'mint', self.create_context(), token_uid, 100000, dbt_token_uid)
 
         # Balance should increase by minted amount, deposit token consumed for fee
         assert storage.get_all_balances() == {
@@ -416,7 +427,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Successfully mint more tokens using deposit token as fee payment
-        self.runner.call_public_method(nc_id, 'mint', self.create_context(), 200000, dbt_token_uid)
+        self.runner.call_public_method(nc_id, 'mint', self.create_context(), token_uid, 200000, dbt_token_uid)
 
         # Balance should increase, deposit token consumed for fee
         assert storage.get_all_balances() == {
@@ -426,9 +437,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Drain remaining deposit tokens
-        self.runner.call_public_method(nc_id, 'mint', self.create_context(), 50000, dbt_token_uid)
-        self.runner.call_public_method(nc_id, 'mint', self.create_context(), 50000, dbt_token_uid)
-        self.runner.call_public_method(nc_id, 'mint', self.create_context(), 50000, dbt_token_uid)
+        self.runner.call_public_method(nc_id, 'mint', self.create_context(), token_uid, 50000, dbt_token_uid)
+        self.runner.call_public_method(nc_id, 'mint', self.create_context(), token_uid, 50000, dbt_token_uid)
+        self.runner.call_public_method(nc_id, 'mint', self.create_context(), token_uid, 50000, dbt_token_uid)
 
         # All deposit tokens should be consumed
         assert storage.get_all_balances() == {
@@ -440,15 +451,81 @@ class NCNanoContractTestCase(BlueprintTestCase):
         # Try to mint with insufficient deposit tokens for fee payment - should fail
         msg = f'negative balance for contract {nc_id.hex()}'
         with pytest.raises(NCInsufficientFunds, match=msg):
-            self.runner.call_public_method(nc_id, 'mint', self.create_context(), 1, dbt_token_uid)
+            self.runner.call_public_method(nc_id, 'mint', self.create_context(), token_uid, 1, dbt_token_uid)
 
         # Try to mint with insufficient HTR for fee payment - should also fail
         with pytest.raises(NCInsufficientFunds, match=msg):
-            self.runner.call_public_method(nc_id, 'mint', self.create_context(), 1, TokenUid(HATHOR_TOKEN_UID))
+            self.runner.call_public_method(
+                nc_id,
+                'mint',
+                self.create_context(),
+                token_uid,
+                1,
+                TokenUid(HATHOR_TOKEN_UID)
+            )
 
         # Balance should remain unchanged after failed mint attempts
         assert storage.get_all_balances() == {
             htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
             fbt_balance_key: Balance(value=1450000, can_mint=True, can_melt=True),
             dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
+        }
+
+        # Try to mint a deposit token paying with another deposit token
+        from hathor.nanocontracts.exception import NCInvalidPaymentToken
+        msg = 'Only HTR is allowed to be used with deposit based token syscalls'
+        with pytest.raises(NCInvalidPaymentToken, match=msg):
+            self.runner.call_public_method(nc_id, 'mint', self.create_context(), dbt_token_uid, 1, dbt_token_uid)
+
+    def test_fee_token_as_payment_rejected(self) -> None:
+        """Test that fee tokens cannot be used as payment tokens for fee operations."""
+        nc_id = self.gen_random_contract_id()
+
+        # Initialize contract with HTR deposit to create the first fee token
+        ctx_initialize = self.create_context(
+            [NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=10)],
+            self.get_genesis_tx()
+        )
+        self.runner.create_contract(nc_id, self.fee_blueprint_id, ctx_initialize)
+        storage = self.runner.get_storage(nc_id)
+
+        # Create a fee token using HTR as payment
+        fee_token_uid = self.runner.call_public_method(
+            nc_id, 'create_fee_token', self.create_context(),
+            'FeeToken1', 'FT1', 1000000, TokenUid(HATHOR_TOKEN_UID)
+        )
+
+        htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
+        ft1_balance_key = BalanceKey(nc_id=nc_id, token_uid=fee_token_uid)
+
+        # After first fee token creation
+        assert storage.get_all_balances() == {
+            htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
+            ft1_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+        }
+
+        # Try to create another fee token using the first fee token as payment - should be rejected
+        from hathor.nanocontracts.exception import NCInvalidPaymentToken
+        with pytest.raises(NCInvalidPaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+            self.runner.call_public_method(
+                nc_id, 'create_fee_token', self.create_context(),
+                'FeeToken2', 'FT2', 500000, fee_token_uid
+            )
+
+        # Also test that fee tokens cannot be used as payment for minting
+        with pytest.raises(NCInvalidPaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+            self.runner.call_public_method(
+                nc_id, 'mint', self.create_context(), fee_token_uid, 100, fee_token_uid
+            )
+
+        # Also test that fee tokens cannot be used as payment for melting
+        with pytest.raises(NCInvalidPaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+            self.runner.call_public_method(
+                nc_id, 'melt', self.create_context(), fee_token_uid, 100, fee_token_uid
+            )
+
+        # Balance should remain unchanged after failed attempts
+        assert storage.get_all_balances() == {
+            htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
+            ft1_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
         }
