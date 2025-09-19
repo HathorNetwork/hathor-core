@@ -85,6 +85,7 @@ class VertexHandler:
     @cpu.profiler('on_new_block')
     @inlineCallbacks
     def on_new_block(self, block: Block, *, deps: list[Transaction]) -> Generator[Any, Any, bool]:
+        """Called by block sync."""
         parent_block_hash = block.get_block_parent_hash()
         parent_block = self._tx_storage.get_block(parent_block_hash)
 
@@ -113,6 +114,7 @@ class VertexHandler:
 
     @cpu.profiler('on_new_mempool_transaction')
     def on_new_mempool_transaction(self, tx: Transaction) -> bool:
+        """Called by mempool sync."""
         best_block = self._tx_storage.get_best_block()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
         params = VerificationParams.default_for_mempool(enable_nano=enable_nano)
@@ -126,6 +128,7 @@ class VertexHandler:
         quiet: bool = False,
         reject_locked_reward: bool = True,
     ) -> bool:
+        """Called for unsolicited vertex received, usually due to real time relay."""
         best_block = self._tx_storage.get_best_block()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
         # XXX: checkdatasig enabled for relayed vertices
