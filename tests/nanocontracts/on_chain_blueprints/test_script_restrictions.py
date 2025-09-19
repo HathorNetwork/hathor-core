@@ -378,6 +378,32 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             syntax_errors=('Async functions are not allowed.',)
         )
 
+    def test_forbid_float_literal(self) -> None:
+        self._test_forbid_syntax(
+            'a = 3.14',
+            syntax_errors=('Float literals are not allowed.',)
+        )
+        self._test_forbid_syntax(
+            'a = 3.',
+            syntax_errors=('Float literals are not allowed.',)
+        )
+        self._test_forbid_syntax(
+            'a = .14',
+            syntax_errors=('Float literals are not allowed.',)
+        )
+
+    def test_forbid_complex_literal(self) -> None:
+        self._test_forbid_syntax(
+            'a = 1j',
+            syntax_errors=('Complex literals are not allowed.',)
+        )
+
+    def test_forbid_float_division(self) -> None:
+        self._test_forbid_syntax(
+            'a = 1 / 2',
+            syntax_errors=('Simple / division results in float, use // instead.',)
+        )
+
     def test_forbid_await_syntax(self) -> None:
         # XXX: it is normally forbidden to use await outside an async context, and since async functions cannot be
         #      defined, it isn't possible to make a realistic code that will fail with await (also applies to other
