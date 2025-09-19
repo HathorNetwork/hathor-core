@@ -101,6 +101,18 @@ class _RestrictionsVisitor(ast.NodeVisitor):
     def visit_AsyncWith(self, node: ast.AsyncWith) -> None:
         raise SyntaxError('Async contexts are not allowed.')
 
+    def visit_Constant(self, node: ast.Constant) -> None:
+        match node.value:
+            case float():
+                raise SyntaxError('Float literals are not allowed.')
+            case complex():
+                raise SyntaxError('Complex literals are not allowed.')
+            case _:
+                self.generic_visit(node)
+
+    def visit_Div(self, node: ast.Div) -> None:
+        raise SyntaxError('Simple / division results in float, use // instead.')
+
 
 class _SearchName(ast.NodeVisitor):
     def __init__(self, name: str) -> None:
