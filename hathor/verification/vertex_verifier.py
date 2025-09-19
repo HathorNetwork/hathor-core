@@ -34,7 +34,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -210,6 +210,7 @@ class VertexVerifier:
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.enable_nano:
                     allowed_headers.add(NanoHeader)
+                    allowed_headers.add(FeeHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
@@ -219,9 +220,15 @@ class VertexVerifier:
         if len(vertex.headers) > vertex.get_maximum_number_of_headers():
             raise TooManyHeaders('Maximum number of headers exceeded')
 
+        seen_header_types: set[type] = set()
         allowed_headers = self.get_allowed_headers(vertex, params)
         for header in vertex.headers:
+            if type(header) in seen_header_types:
+                raise HeaderNotSupported(
+                    f'only one instance of `{type(header).__name__}` is allowed'
+                )
             if type(header) not in allowed_headers:
                 raise HeaderNotSupported(
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
+            seen_header_types.add(type(header))

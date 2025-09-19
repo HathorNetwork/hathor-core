@@ -22,6 +22,7 @@ from typing import Any, Iterator, NamedTuple, TypeAlias
 
 from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
+from hathor.transaction.token_info import TokenVersion
 from hathor.wallet import BaseWallet
 
 AttributeType: TypeAlias = dict[str, str | int]
@@ -82,6 +83,11 @@ class DAGNode:
         if default is not None:
             return default
         raise SyntaxError(f'missing required attribute: {self.name}.{attr}')
+
+    def get_attr_token_version(self) -> TokenVersion:
+        """Return the token version for this node."""
+        from hathor.dag_builder.builder import TOKEN_VERSION_KEY
+        return TokenVersion[self.attrs.get(TOKEN_VERSION_KEY, TokenVersion.DEPOSIT.name).upper()]
 
     def get_required_literal(self, attr: str) -> str:
         """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""
