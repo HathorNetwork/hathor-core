@@ -29,6 +29,7 @@ from hathor.nanocontracts.storage.token_proxy import TokenProxy
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.nanocontracts.types import BlueprintId, TokenUid, VertexId
 from hathor.serialization import Deserializer, Serializer
+from hathor.transaction.token_info import TokenDescription, TokenVersion
 
 T = TypeVar('T')
 D = TypeVar('D')
@@ -154,9 +155,25 @@ class NCContractStorage:
         """Return True if token_id exists in the current block."""
         return self._token_proxy.has_token(token_id)
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def get_token(self, token_id: TokenUid) -> TokenDescription:
+        """Get token description for a given token ID."""
+        return self._token_proxy.get_token(token_id)
+
+    def create_token(
+        self,
+        *,
+        token_id: TokenUid,
+        token_name: str,
+        token_symbol: str,
+        token_version: TokenVersion
+    ) -> None:
         """Create a new token in the current block."""
-        self._token_proxy.create_token(token_id, token_name, token_symbol)
+        self._token_proxy.create_token(
+            token_id=token_id,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
+        )
 
     def lock(self) -> None:
         """Lock the storage for changes or commits."""
