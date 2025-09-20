@@ -16,6 +16,7 @@ import os
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
 from hathor.sysctl.exception import SysctlException
@@ -39,8 +40,6 @@ def parse_text(text: str) -> list[str]:
 
 def parse_sync_version(name: str) -> SyncVersion:
     match name.strip():
-        case 'v1':
-            return SyncVersion.V1_1
         case 'v2':
             return SyncVersion.V2
         case _:
@@ -49,12 +48,26 @@ def parse_sync_version(name: str) -> SyncVersion:
 
 def pretty_sync_version(sync_version: SyncVersion) -> str:
     match sync_version:
-        case SyncVersion.V1_1:
-            return 'v1'
         case SyncVersion.V2:
             return 'v2'
         case _:
             raise ValueError('unknown or not implemented')
+
+
+def get_whitelist_msg(wl_object: PeersWhitelist) -> str:
+    from hathor.p2p.peers_whitelist import FilePeersWhitelist, URLPeersWhitelist
+
+    if isinstance(wl_object, FilePeersWhitelist):
+        return f'{wl_object.path()}'
+
+    elif isinstance(wl_object, URLPeersWhitelist):
+        return f'{wl_object.url()}'
+
+    elif wl_object is None:
+        return 'none'
+
+    else:
+        raise SysctlException('Invalid whitelist')
 
 
 class ConnectionsManagerSysctl(Sysctl):
@@ -121,6 +134,17 @@ class ConnectionsManagerSysctl(Sysctl):
             'reload_entrypoints_and_connections',
             None,
             self.reload_entrypoints_and_connections,
+        )
+        self.register(
+            'whitelist',
+            self.get_whitelist,
+            self.set_whitelist,
+        )
+
+        self.register(
+            'whitelist.status',
+            self.whitelist_status,
+            None,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -269,3 +293,65 @@ class ConnectionsManagerSysctl(Sysctl):
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
+
+    def get_whitelist(self) -> str:
+        """Get status of current whitelist."""
+        if self.connections.peers_whitelist:
+            wl_object = self.connections.peers_whitelist
+            return get_whitelist_msg(wl_object)
+
+        return 'none'
+
+    def set_whitelist(self, new_whitelist: str) -> None:
+        """Set the whitelist-only mode. If 'on' or 'off', simply changes the
+        following status of current whitelist. If an URL of Filepath, changes
+        the whitelist object, following it by default.
+        It does not support eliminating the whitelist (passing None)."""
+
+        wl_object: PeersWhitelist | None
+        option: str = new_whitelist.lower().strip()
+        if option in ('on', 'off'):
+            # Set the whitelist tracking ON or OFF for the currently given whitelist.
+            if option == "on":
+                # Turning the whitelist on immediately blocks all connections.
+                if self.connections.peers_whitelist:
+                    self.connections.peers_whitelist.follow_wl()
+                self.connections.whitelist_toggle(True)
+                return
+            else:
+                # Turning the whitelist off will update in the next refresh cycle
+                if self.connections.peers_whitelist:
+                    self.connections.peers_whitelist.unfollow_wl()
+                self.connections.whitelist_toggle(False)
+                return
+
+        else:
+            wl_object = PeersWhitelist.create_from_cmdline(
+                self.connections.reactor,
+                new_whitelist,
+                self.connections._settings,
+            )
+
+        if wl_object is None:
+            raise SysctlException('Sysctl does not allow whitelist swap to None. Use "off" to disable it.')
+
+        wl_object.start(self.connections.drop_connection_by_peer_id)
+        self.connections.whitelist_swap(wl_object)
+
+        # Notes: We need the object to get its LC started when passing it to ConnManag.
+        # The connections not within the wl must be dropped. (dropped by id, done in wl_toggle)
+
+    def whitelist_status(self) -> str:
+        """Return the number of peers in the whitelist."""
+        if self.connections.peers_whitelist is None:
+            return 'disabled'
+
+        wl_object = self.connections.peers_whitelist
+        if not wl_object.following_wl():
+            return 'off'
+
+        current_wl = wl_object.current_whitelist()
+        if not current_wl:
+            return 'none'
+
+        return 'on'

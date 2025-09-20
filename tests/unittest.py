@@ -205,6 +205,7 @@ class TestCase(unittest.TestCase):
         enable_event_queue: bool | None = None,
         enable_ipv6: bool = False,
         disable_ipv4: bool = False,
+        url_whitelist: str = '',
         nc_indexes: bool = False,
         nc_log_config: NCLogConfig | None = None,
         settings: HathorSettings | None = None,
@@ -260,6 +261,9 @@ class TestCase(unittest.TestCase):
 
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder.set_daa(daa)
+
+        if url_whitelist:
+            builder.set_url_whitelist(self.reactor, url=url_whitelist)
 
         if nc_indexes:
             builder.enable_nc_indexes()
