@@ -26,17 +26,14 @@ class TestCustomImport(BlueprintTestCase):
         """Guarantee our custom import function is being called, instead of the builtin one."""
         contract_id = self.gen_random_contract_id()
         blueprint = '''
-            from hathor.nanocontracts import Blueprint
-            from hathor.nanocontracts.context import Context
-            from hathor.nanocontracts.types import public
+            from hathor import Blueprint, Context, public
 
             class MyBlueprint(Blueprint):
                 @public
                 def initialize(self, ctx: Context) -> None:
                     from math import ceil, floor
                     from collections import OrderedDict
-                    from hathor.nanocontracts.exception import NCFail
-                    from hathor.nanocontracts.types import NCAction, NCActionType
+                    from hathor import NCFail, NCAction, NCActionType
 
             __blueprint__ = MyBlueprint
         '''
@@ -52,9 +49,7 @@ class TestCustomImport(BlueprintTestCase):
         # This happens twice, once during verification and once during the actual registration.
         blueprint_id = self._register_blueprint_contents(StringIO(dedent(blueprint)))
         module_level_calls = [
-            call('hathor.nanocontracts', ANY, ANY, ('Blueprint',), 0),
-            call('hathor.nanocontracts.context', ANY, ANY, ('Context',), 0),
-            call('hathor.nanocontracts.types', ANY, ANY, ('public',), 0),
+            call('hathor', ANY, ANY, ('Blueprint', 'Context', 'public'), 0),
         ]
         assert wrapped_import_function.call_count == 2 * len(module_level_calls)
         wrapped_import_function.assert_has_calls(2 * module_level_calls)
@@ -65,8 +60,7 @@ class TestCustomImport(BlueprintTestCase):
         method_level_imports = [
             call('math', ANY, ANY, ('ceil', 'floor'), 0),
             call('collections', ANY, ANY, ('OrderedDict',), 0),
-            call('hathor.nanocontracts.exception', ANY, ANY, ('NCFail',), 0),
-            call('hathor.nanocontracts.types', ANY, ANY, ('NCAction', 'NCActionType'), 0),
+            call('hathor', ANY, ANY, ('NCFail', 'NCAction', 'NCActionType'), 0),
         ]
         assert wrapped_import_function.call_count == len(method_level_imports)
         wrapped_import_function.assert_has_calls(method_level_imports)
@@ -81,9 +75,7 @@ class TestCustomImport(BlueprintTestCase):
         """
         contract_id = self.gen_random_contract_id()
         blueprint = '''
-            from hathor.nanocontracts import Blueprint
-            from hathor.nanocontracts.context import Context
-            from hathor.nanocontracts.types import public
+            from hathor import Blueprint, Context, public
 
             class MyBlueprint(Blueprint):
                 @public
@@ -94,8 +86,7 @@ class TestCustomImport(BlueprintTestCase):
                     with self.patch.object(self.builtins, '__import__', wrapped_builtin_import):
                         from math import ceil, floor
                         from collections import OrderedDict
-                        from hathor.nanocontracts.exception import NCFail
-                        from hathor.nanocontracts.types import NCAction, NCActionType
+                        from hathor import NCFail, NCAction, NCActionType
 
                     wrapped_builtin_import.assert_not_called()
 
