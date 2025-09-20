@@ -101,7 +101,7 @@ class SyscallUpdateTokensRecord:
     @classmethod
     def from_json(cls, json_dict: dict[str, Any]) -> Self:
         valid_types = (
-            IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.CREATE_TOKEN
+            IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.MELT_TOKENS, IndexUpdateRecordType.CREATE_TOKEN
         )
         assert json_dict['type'] in valid_types
         return cls(
