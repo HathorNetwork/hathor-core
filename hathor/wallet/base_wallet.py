@@ -145,9 +145,24 @@ class BaseWallet:
     def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, Amount]:
         """Return balance per address for a given token. This method ignores locks."""
         balances: defaultdict[AddressB58, Amount] = defaultdict(Amount)
-        for utxo_info, unspent_tx in self.unspent_txs[token_uid].items():
-            balances[unspent_tx.address] += unspent_tx.value
+        for _, unspent_tx in self.unspent_txs[token_uid].items():
+            if (unspent_tx.token_data & TxOutput.TOKEN_AUTHORITY_MASK) == 0:
+                balances[unspent_tx.address] += unspent_tx.value
         return dict(balances)
+
+    def get_authorities_per_address(self, token_uid: TokenUid) -> dict[AddressB58, dict[str, int]]:
+        """Return authorities per address for a given token. This method ignores locks."""
+        authorities: defaultdict[AddressB58, defaultdict[str, int]] = defaultdict(lambda: defaultdict(int))
+        for _, unspent_tx in self.unspent_txs[token_uid].items():
+            if (unspent_tx.token_data & TxOutput.TOKEN_AUTHORITY_MASK) != 0:
+                if unspent_tx.value & TxOutput.TOKEN_MINT_MASK != 0:
+                    key = 'mint'
+                elif unspent_tx.value & TxOutput.TOKEN_MELT_MASK != 0:
+                    key = 'melt'
+                else:
+                    raise AssertionError
+                authorities[unspent_tx.address][key] += 1
+        return {address: dict(value) for address, value in authorities.items()}
 
     def start(self) -> None:
         """ Start the pubsub subscription if wallet has a pubsub
