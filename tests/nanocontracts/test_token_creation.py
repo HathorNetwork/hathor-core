@@ -260,3 +260,50 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
         assert tokens_index.get_token_info(child_token_id0).get_total() == 100
         assert tokens_index.get_token_info(child_token_id1).get_total() == 30
+
+    def test_token_creation_withdrawal_and_transfer(self) -> None:
+        """Test that creates token via nanocontract, withdraws it and transfers to another wallet."""
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        vertices = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..40]
+            b30 < dummy
+
+            # 1. Create initial contract
+            tx1.nc_id = "{self.myblueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            # 2. Create TKA token through contract and send to wallet2
+            tx2.nc_id = tx1
+            tx2.nc_method = create_deposit_token("00", "MyToken", "TKA", 500, false, false)
+            tx2.nc_deposit = 5 HTR
+            tx2.out[0] = 500 TKA [wallet2]
+
+            # 3. Transfer some TKA tokens to another wallet
+            tx2.out[0] <<< tx3
+            tx3.out[0] = 50 TKA [wallet2]
+
+            # Temporal ordering
+            tx1 < tx2 < tx3
+
+            b31 --> tx1
+            b32 --> tx2
+            b33 --> tx3
+        ''')
+
+        vertices.propagate_with(self.manager)
+
+        # Get all vertices to validate
+        tx1, tx2, tx3 = vertices.get_typed_vertices(['tx1', 'tx2', 'tx3'], Transaction)
+        b40, = vertices.get_typed_vertices(['b40'], Block)
+
+        # Assert that all transactions were successfully executed
+        assert tx1.get_metadata().voided_by is None
+        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        assert tx2.get_metadata().voided_by is None
+        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        assert tx3.get_metadata().voided_by is None
+
+        # Assert that b40 is the best block
+        assert b40.hash in self.manager.tx_storage.get_best_block_tips()

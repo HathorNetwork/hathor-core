@@ -362,9 +362,10 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 assert self.storage is not None
                 try:
                     token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
+                    token_version = token_creation_tx.token_version
                 except TransactionDoesNotExist:
-                    raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
-                token_version = token_creation_tx.token_version
+                    # For nano contracts, assume deposit token if creation transaction not found
+                    token_version = TokenVersion.DEPOSIT
 
             token_info = token_dict.get(
                 token_uid,
