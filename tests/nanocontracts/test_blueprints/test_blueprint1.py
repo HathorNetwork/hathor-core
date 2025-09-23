@@ -25,3 +25,8 @@ class TestBlueprint1(Blueprint):
     @public
     def nop(self, ctx: Context) -> None:
         pass
+
+    @public
+    def create_child_contract(self, ctx: Context) -> None:
+        blueprint_id = self.syscall.get_blueprint_id()
+        self.syscall.create_contract(blueprint_id, b'', [], 0)
