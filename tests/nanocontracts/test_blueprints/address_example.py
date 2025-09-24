@@ -15,9 +15,10 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import Address, public, view
+from hathor.nanocontracts.types import Address, export, public, view
 
 
+@export
 class AddressExample(Blueprint):
     """Dummy blueprint to test the exposed API.
 
@@ -40,6 +41,3 @@ class AddressExample(Blueprint):
     @public
     def set_last_address_from_str(self, ctx: Context, address: str) -> None:
         self.last_address = Address.from_str(address)
-
-
-__blueprint__ = AddressExample

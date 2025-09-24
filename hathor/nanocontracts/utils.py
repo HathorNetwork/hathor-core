@@ -71,7 +71,6 @@ def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: M
     with open(filepath, 'r') as nc_file:
         for line in nc_file.readlines():
             code_text.write(line)
-    code_text.write(f'__blueprint__ = {blueprint_name}\n')
     res = code_text.getvalue()
     code_text.close()
     return res

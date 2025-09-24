@@ -27,6 +27,7 @@ from hathor.nanocontracts.types import (
     TokenUid,
     TxOutputScript,
     VertexId,
+    export,
     public,
 )
 
@@ -36,6 +37,7 @@ class MyTuple(NamedTuple):
     b: str
 
 
+@export
 class AllFieldsBlueprint(Blueprint):
     attribute1: OrderedDict[str, int]
     attribute2: list[int]
