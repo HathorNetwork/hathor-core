@@ -25,6 +25,7 @@ from hathor.reward_lock.reward_lock import get_minimum_best_height
 from hathor.transaction import BaseTransaction, Transaction, TxInput, TxVersion
 from hathor.transaction.exceptions import (
     ConflictingInputs,
+    ConflictWithConfirmedTxError,
     DuplicatedParents,
     ForbiddenMelt,
     ForbiddenMint,
@@ -41,6 +42,8 @@ from hathor.transaction.exceptions import (
     TooFewInputs,
     TooManyInputs,
     TooManySigOps,
+    TooManyTokens,
+    UnusedTokensError,
     WeightError,
 )
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
@@ -52,6 +55,8 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
 
 cpu = get_cpu_profiler()
+
+MAX_TOKENS_LENGTH: int = 16
 
 
 class TransactionVerifier:
@@ -319,6 +324,52 @@ class TransactionVerifier:
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
+
+    def verify_tokens(self, tx: Transaction, params: VerificationParams) -> None:
+        """Verify that all tokens are used and unique."""
+        if not params.harden_token_restrictions:
+            return
+
+        if len(tx.tokens) > MAX_TOKENS_LENGTH:
+            raise TooManyTokens('too many tokens')
+
+        if len(tx.tokens) != len(set(tx.tokens)):
+            raise InvalidToken('repeated tokens are not allowed')
+
+        seen_token_indexes = set()
+        for txout in tx.outputs:
+            seen_token_indexes.add(txout.get_token_index())
+
+        if tx.is_nano_contract():
+            nano_header = tx.get_nano_header()
+            for action in nano_header.nc_actions:
+                seen_token_indexes.add(action.token_index)
+
+        seen_token_indexes.discard(0)
+        if sorted(seen_token_indexes) != list(range(1, len(tx.tokens) + 1)):
+            raise UnusedTokensError('unused tokens are not allowed')
+
+    def verify_conflict(self, tx: Transaction, params: VerificationParams) -> None:
+        """Verify that this transaction has no conflicts with confirmed transactions."""
+        assert tx.storage is not None
+
+        if not params.reject_conflicts_with_confirmed_txs:
+            return
+
+        for txin in tx.inputs:
+            spent_tx = tx.get_spent_tx(txin)
+            spent_tx_meta = spent_tx.get_metadata()
+            if txin.index not in spent_tx_meta.spent_outputs:
+                continue
+            spent_by_list = spent_tx_meta.spent_outputs[txin.index]
+            for h in spent_by_list:
+                if h == tx.hash:
+                    # Skip tx itself.
+                    continue
+                conflict_tx = tx.storage.get_transaction(h)
+                if conflict_tx.get_metadata().first_block is not None:
+                    # only mempool conflicts are allowed
+                    raise ConflictWithConfirmedTxError('transaction has a conflict with a confirmed transaction')
 
 
 @dataclass(kw_only=True, slots=True)

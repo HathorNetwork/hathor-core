@@ -34,6 +34,10 @@ class TimestampError(TxValidationError):
     """Transaction timestamp is smaller or equal to one parent's timestamp"""
 
 
+class BlockHeightError(TxValidationError):
+    """Block height is invalid."""
+
+
 class DoubleSpend(TxValidationError):
     """Some input has already been spent"""
 
@@ -106,6 +110,10 @@ class ConflictingInputs(TxValidationError):
     """Inputs in the tx are spending the same output"""
 
 
+class ConflictWithConfirmedTxError(TxValidationError):
+    """Input has a conflict with a confirmed transaction."""
+
+
 class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
 
@@ -156,6 +164,14 @@ class DuplicatedParents(TxValidationError):
 
 class InvalidToken(TxValidationError):
     """Token is not valid"""
+
+
+class TooManyTokens(TxValidationError):
+    """Too many tokens."""
+
+
+class UnusedTokensError(TxValidationError):
+    """There are unused tokens in the transaction."""
 
 
 class BlockError(TxValidationError):

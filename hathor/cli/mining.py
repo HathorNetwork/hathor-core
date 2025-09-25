@@ -143,7 +143,13 @@ def execute(args: Namespace) -> None:
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
             verification_params = VerificationParams.default_for_mempool()
-            verifiers = VertexVerifiers.create_defaults(settings=settings, daa=daa, feature_service=Mock())
+            verifiers = VertexVerifiers.create_defaults(
+                reactor=Mock(),
+                settings=settings,
+                daa=daa,
+                feature_service=Mock(),
+                tx_storage=Mock(),
+            )
             verification_service = VerificationService(settings=settings, verifiers=verifiers)
             verification_service.verify_without_storage(block, verification_params)
         except HathorError:

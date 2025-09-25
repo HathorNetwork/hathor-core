@@ -836,8 +836,9 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=2, amount=1),
         ])
 
+        params = dataclasses.replace(self.verification_params, harden_token_restrictions=False)
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1, self.verification_params)
+            self.manager.verification_service.verify(self.tx1, params)
         assert str(e.value) == 'DEPOSIT token index 2 not found'
 
     def test_token_uid_not_in_list(self) -> None:

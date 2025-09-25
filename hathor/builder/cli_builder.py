@@ -290,9 +290,11 @@ class CliBuilder:
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 
         vertex_verifiers = VertexVerifiers.create_defaults(
+            reactor=reactor,
             settings=settings,
             daa=daa,
-            feature_service=self.feature_service
+            feature_service=self.feature_service,
+            tx_storage=tx_storage,
         )
         verification_service = VerificationService(
             settings=settings,

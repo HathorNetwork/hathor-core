@@ -20,8 +20,10 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
+from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.resources.on_chain import SortOrder
 from hathor.nanocontracts.types import BlueprintId, VertexId
+from hathor.transaction import Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import bytes_from_hex, collect_n, not_none
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -136,8 +138,13 @@ class NCCreationResource(Resource):
                     )
                 iter_nc_ids = iter_getter2(tx_start=ref_tx)
 
-        iter_ncs = map(self._get_nc_creation_item_strict, iter_nc_ids)
-        nc_txs, has_more = collect_n(iter_ncs, params.count)
+        nc_id_txs, has_more = collect_n(iter_nc_ids, params.count)
+        nc_txs = []
+        for nc_id in nc_id_txs:
+            item = self._get_nc_creation_item(nc_id)
+            if item is not None:
+                nc_txs.append(item)
+
         response = NCCreationResponse(
             nc_creation_txs=nc_txs,
             before=params.before,
@@ -147,7 +154,9 @@ class NCCreationResource(Resource):
         )
         return response.json_dumpb()
 
-    def _get_nc_creation_item(self, nc_id: bytes) -> NCCreationItem | None:
+    def _try_get_contract_creation_vertex(self, nc_id: bytes) -> Transaction | None:
+        """Return a contract creation vertex if it exists. Otherwise, return None.
+        """
         try:
             tx = self.tx_storage.get_transaction(nc_id)
         except TransactionDoesNotExist:
@@ -156,7 +165,6 @@ class NCCreationResource(Resource):
         if not tx.is_nano_contract():
             return None
 
-        from hathor.transaction import Transaction
         if not isinstance(tx, Transaction):
             return None
 
@@ -164,8 +172,25 @@ class NCCreationResource(Resource):
         if not nano_header.is_creating_a_new_contract():
             return None
 
-        blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+        return tx
+
+    def _get_nc_creation_item(self, nc_id: bytes) -> NCCreationItem | None:
+        tx = self._try_get_contract_creation_vertex(nc_id)
+        if tx is not None:
+            nano_header = tx.get_nano_header()
+            blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
+            blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+            created_at = tx.timestamp
+
+        else:
+            try:
+                nc_storage = self.manager.get_best_block_nc_storage(nc_id)
+            except NanoContractDoesNotExist:
+                return None
+
+            blueprint_id = nc_storage.get_blueprint_id()
+            blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+            created_at = 0
 
         assert self.nc_history_index is not None
         return NCCreationItem(
@@ -174,7 +199,7 @@ class NCCreationResource(Resource):
             blueprint_name=blueprint_class.__name__,
             last_tx_timestamp=not_none(self.nc_history_index.get_last_tx_timestamp(nc_id)),
             total_txs=self.nc_history_index.get_transaction_count(nc_id),
-            created_at=tx.timestamp,
+            created_at=created_at,
         )
 
     def _get_nc_creation_item_strict(self, nc_id: bytes) -> NCCreationItem:
