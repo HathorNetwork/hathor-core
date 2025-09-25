@@ -105,6 +105,9 @@ class TestRunner:
     def get_storage(self, contract_id: ContractId) -> NCContractStorage:
         return self._runner.get_storage(contract_id)
 
+    def get_block_storage(self) -> NCBlockStorage:
+        return self._runner.block_storage
+
     def has_contract_been_initialized(self, contract_id: ContractId) -> bool:
         return self._runner.has_contract_been_initialized(contract_id)
 

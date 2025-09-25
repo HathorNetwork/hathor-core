@@ -15,3 +15,8 @@
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.storage.token_proxy import *  # noqa: F401,F403
 from hathorlib.nanocontracts.storage.token_proxy import TokenProxy  # noqa: F401
+
+
+class RestrictedBlockProxy(TokenProxy):
+    """Backward-compatible alias for the block-storage proxy."""
+    pass
