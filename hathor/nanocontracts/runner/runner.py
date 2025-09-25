@@ -65,6 +65,7 @@ from hathor.nanocontracts.types import (
     NC_FALLBACK_METHOD,
     NC_INITIALIZE_METHOD,
     Address,
+    Amount,
     BaseTokenAction,
     BlueprintId,
     ContractId,
@@ -91,6 +92,7 @@ from hathor.nanocontracts.utils import (
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import InvalidFeeAmount
+from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_info import TokenDescription, TokenVersion
@@ -585,6 +587,7 @@ class Runner:
     def _commit_all_changes_to_storage(self) -> None:
         """Commit all change trackers."""
         assert self._call_info is not None
+
         for nc_id, change_trackers in self._call_info.change_trackers.items():
             assert len(change_trackers) == 1
             change_tracker = change_trackers[0]
@@ -1433,6 +1436,24 @@ class Runner:
         current_call_record = self.get_current_call_record()
         if current_call_record.type == CallType.VIEW:
             raise NCViewMethodError(f'@view method cannot call `syscall.{name}`')
+
+    @_forbid_syscall_from_view('transfer_to_address')
+    def syscall_transfer_to_address(self, address: Address, amount: Amount, token: TokenUid) -> None:
+        if amount < 0:
+            raise NCInvalidSyscall('amount cannot be negative')
+
+        if amount == 0:
+            # XXX Should we fail?
+            return
+
+        if not isinstance(address, Address) or len(address) != ADDRESS_LEN_BYTES:
+            raise NCInvalidSyscall(f'only addresses with {ADDRESS_LEN_BYTES} bytes are allowed')
+
+        # XXX: this makes sure the token exists
+        self._get_token(token)
+
+        changes_tracker = self.get_current_changes_tracker()
+        changes_tracker.add_address_balance(address, amount, token)
 
 
 class RunnerFactory:

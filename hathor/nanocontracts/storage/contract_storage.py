@@ -25,9 +25,9 @@ from hathor.nanocontracts.nc_types import BytesNCType, NCType
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathor.nanocontracts.storage.maybedeleted_nc_type import MaybeDeletedNCType
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.storage.token_proxy import TokenProxy
+from hathor.nanocontracts.storage.restricted_block_proxy import RestrictedBlockProxy
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathor.nanocontracts.types import BlueprintId, TokenUid, VertexId
+from hathor.nanocontracts.types import Address, Amount, BlueprintId, TokenUid, VertexId
 from hathor.serialization import Deserializer, Serializer
 from hathor.transaction.token_info import TokenDescription, TokenVersion
 
@@ -139,7 +139,7 @@ class NCContractStorage:
 
     This implementation works for both memory and rocksdb backends."""
 
-    def __init__(self, *, trie: PatriciaTrie, nc_id: VertexId, token_proxy: TokenProxy) -> None:
+    def __init__(self, *, trie: PatriciaTrie, nc_id: VertexId, block_proxy: RestrictedBlockProxy) -> None:
         # State (balances, metadata and attributes)
         self._trie: PatriciaTrie = trie
 
@@ -149,15 +149,15 @@ class NCContractStorage:
         # Flag to check whether any change or commit can be executed.
         self.is_locked = False
 
-        self._token_proxy = token_proxy
+        self._block_proxy = block_proxy
 
     def has_token(self, token_id: TokenUid) -> bool:
         """Return True if token_id exists in the current block."""
-        return self._token_proxy.has_token(token_id)
+        return self._block_proxy.has_token(token_id)
 
     def get_token(self, token_id: TokenUid) -> TokenDescription:
         """Get token description for a given token ID."""
-        return self._token_proxy.get_token(token_id)
+        return self._block_proxy.get_token(token_id)
 
     def create_token(
         self,
@@ -168,12 +168,15 @@ class NCContractStorage:
         token_version: TokenVersion
     ) -> None:
         """Create a new token in the current block."""
-        self._token_proxy.create_token(
+        self._block_proxy.create_token(
             token_id=token_id,
             token_name=token_name,
             token_symbol=token_symbol,
             token_version=token_version
         )
+
+    def add_address_balance(self, address: Address, amount: Amount, token_id: TokenUid) -> None:
+        self._block_proxy.add_address_balance(address, amount, token_id)
 
     def lock(self) -> None:
         """Lock the storage for changes or commits."""
