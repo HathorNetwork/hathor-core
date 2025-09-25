@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.storage import NCContractStorage
+    from hathor.nanocontracts.types import Address
 
 
 NCAttrCache: TypeAlias = dict[bytes, Any] | None
@@ -274,3 +275,7 @@ class BlueprintEnvironment:
         Settings are not constant, they may be changed over time.
         """
         return self.__runner.syscall_get_nano_settings()
+
+    def transfer_to_address(self, address: Address, amount: Amount, token: TokenUid) -> None:
+        """Transfer a given amount of token to an address balance."""
+        self.__runner.syscall_transfer_to_address(address, amount, token)

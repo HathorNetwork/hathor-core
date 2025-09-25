@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from hathorlib.nanocontracts.storage.block_storage import NCBlockStorage
-    from hathorlib.nanocontracts.types import TokenUid
+    from hathorlib.nanocontracts.types import Address, Amount, TokenUid
     from hathorlib.token_info import TokenDescription, TokenVersion
 
 
@@ -51,3 +51,7 @@ class TokenProxy:
             token_symbol=token_symbol,
             token_version=token_version
         )
+
+    def add_address_balance(self, address: Address, amount: Amount, token_id: TokenUid) -> None:
+        """Proxy to block_storage.add_address_balance()."""
+        self.__block_storage.add_address_balance(address, amount, token_id)

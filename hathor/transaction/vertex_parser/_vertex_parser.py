@@ -18,7 +18,7 @@ from struct import error as StructError
 from typing import TYPE_CHECKING, Type
 
 from hathor.serialization.exceptions import SerializationError
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
+from hathor.transaction.headers import FeeHeader, NanoHeader, TransferHeader, VertexBaseHeader, VertexHeaderId
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -34,13 +34,15 @@ class VertexParser:
 
     @staticmethod
     def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[VertexBaseHeader]]:
-        """Return a dict of supported headers."""
-        supported_headers: dict[VertexHeaderId, Type[VertexBaseHeader]] = {}
-        if settings.ENABLE_NANO_CONTRACTS:
-            supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
-        if settings.ENABLE_FEE_BASED_TOKENS:
-            supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
-        return supported_headers
+        """Return a dict of headers understood by the parser.
+
+        Runtime feature flags are enforced later during verification, not during raw byte parsing.
+        """
+        return {
+            VertexHeaderId.NANO_HEADER: NanoHeader,
+            VertexHeaderId.FEE_HEADER: FeeHeader,
+            VertexHeaderId.TRANSFER_HEADER: TransferHeader,
+        }
 
     @staticmethod
     def get_header_parser(header_id_bytes: bytes, settings: HathorSettings) -> Type[VertexBaseHeader]:
