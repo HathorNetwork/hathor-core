@@ -385,9 +385,7 @@ if foo:
             ocb1.ocb_code = "{bet_code.encode().hex()}"
             ocb2.ocb_code = test_blueprint1.py, TestBlueprint1
             ocb3.ocb_code = ```
-                from hathor.nanocontracts import Blueprint
-                from hathor.nanocontracts.context import Context
-                from hathor.nanocontracts.types import export, public
+                from hathor import Blueprint, Context, export, public
                 @export
                 class MyBlueprint(Blueprint):
                     @public

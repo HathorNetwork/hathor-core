@@ -96,7 +96,10 @@ class BlueprintInfoResource(Resource):
             return error_response.json_dumpb()
         except OCBBlueprintNotConfirmed:
             request.setResponseCode(404)
-            error_response = ErrorResponse(success=False, error=f'Blueprint found but not confirmed: {params.blueprint_id}')
+            error_response = ErrorResponse(
+                success=False,
+                error=f'Blueprint found but not confirmed: {params.blueprint_id}',
+            )
             return error_response.json_dumpb()
 
         attributes: dict[str, str] = {}

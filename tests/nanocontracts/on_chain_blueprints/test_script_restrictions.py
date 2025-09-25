@@ -442,7 +442,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
 
     def test_blueprint_type_not_a_class(self) -> None:
         blueprint = self._create_on_chain_blueprint(r'''
-from hathor.nanocontracts.types import export
+from hathor import export
 @export
 def Foo():
     pass
@@ -454,7 +454,7 @@ def Foo():
 
     def test_blueprint_type_not_blueprint_subclass(self) -> None:
         blueprint = self._create_on_chain_blueprint(r'''
-from hathor.nanocontracts.types import export
+from hathor import export
 @export
 class Foo():
     pass
