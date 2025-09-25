@@ -35,7 +35,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, TransferHeader, VertexBaseHeader
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -214,6 +214,7 @@ class VertexVerifier:
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.enable_nano:
                     allowed_headers.add(NanoHeader)
+                    allowed_headers.add(TransferHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
