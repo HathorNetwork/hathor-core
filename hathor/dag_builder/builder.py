@@ -47,6 +47,8 @@ NC_DEPOSIT_KEY = 'nc_deposit'
 NC_WITHDRAWAL_KEY = 'nc_withdrawal'
 TOKEN_VERSION_KEY = 'token_version'
 FEE_KEY = 'fee'
+NC_TRANSFER_INPUT_KEY = 'nc_transfer_input'
+NC_TRANSFER_OUTPUT_KEY = 'nc_transfer_output'
 
 
 class DAGBuilder:
@@ -239,6 +241,22 @@ class DAGBuilder:
             actions = node.get_attr_list(key, default=[])
             actions.append((token, amount))
             node.attrs[key] = actions
+
+        elif key == NC_TRANSFER_INPUT_KEY:
+            transfer_inputs = node.get_attr_list(key, default=[])
+            token, amount, (wallet,) = parse_amount_token(value)
+            if amount < 0:
+                raise SyntaxError(f'unexpected negative amount in `{key}`')
+            transfer_inputs.append((wallet, token, amount))
+            node.attrs[key] = transfer_inputs
+
+        elif key == NC_TRANSFER_OUTPUT_KEY:
+            transfer_outputs = node.get_attr_list(key, default=[])
+            token, amount, (wallet,) = parse_amount_token(value)
+            if amount < 0:
+                raise SyntaxError(f'unexpected negative amount in `{key}`')
+            transfer_outputs.append((wallet, token, amount))
+            node.attrs[key] = transfer_outputs
 
         else:
             node.attrs[key] = value
