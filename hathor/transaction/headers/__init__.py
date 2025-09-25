@@ -14,10 +14,12 @@
 
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.nano_header import NanoHeader
+from hathor.transaction.headers.transfer_header import TransferHeader
 from hathor.transaction.headers.types import VertexHeaderId
 
 __all__ = [
     'VertexBaseHeader',
     'VertexHeaderId',
     'NanoHeader',
+    'TransferHeader',
 ]

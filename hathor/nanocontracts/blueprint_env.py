@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
-    from hathor.nanocontracts.types import NCArgs
+    from hathor.nanocontracts.types import Address, NCArgs
 
 
 NCAttrCache: TypeAlias = dict[bytes, Any] | None
@@ -309,3 +309,7 @@ class BlueprintEnvironment:
         """
         from hathor.nanocontracts.contract_accessor import ContractAccessor
         return ContractAccessor(runner=self.__runner, contract_id=contract_id, blueprint_id=blueprint_id)
+
+    def transfer_to_address(self, address: Address, amount: Amount) -> None:
+        """Transfer a given amount to an address balance."""
+        self.__runner.syscall_transfer_to_address(address, amount)

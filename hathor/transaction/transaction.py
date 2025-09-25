@@ -26,7 +26,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers import NanoHeader, TransferHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
@@ -118,6 +118,13 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             if isinstance(header, NanoHeader):
                 return header
         raise ValueError('nano header not found')
+
+    def get_transfer_header(self) -> TransferHeader:
+        """Return the TransferHeader or raise ValueError."""
+        for header in self.headers:
+            if isinstance(header, TransferHeader):
+                return header
+        raise ValueError('transfer header not found')
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
@@ -316,6 +323,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """
         token_dict = self._get_token_info_from_inputs()
         self._update_token_info_from_nano_actions(token_dict=token_dict)
+        self._update_token_info_from_transfer_header(token_dict=token_dict)
         # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
 
@@ -327,6 +335,17 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         if self.is_nano_contract():
             return 0
         return 1
+
+    def _update_token_info_from_transfer_header(self, *, token_dict: TokenInfoDict) -> None:
+        transfer_header = self.get_transfer_header()
+
+        for input_ in transfer_header.inputs:
+            token_uid = self.get_token_uid(input_.token_index)
+            token_dict[token_uid] += input_.amount
+
+        for output_ in transfer_header.outputs:
+            token_uid = self.get_token_uid(output_.token_index)
+            token_dict[token_uid] -= output_.amount
 
     def _update_token_info_from_nano_actions(self, *, token_dict: TokenInfoDict) -> None:
         """Update token_dict with nano actions."""
