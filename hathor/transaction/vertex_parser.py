@@ -17,7 +17,7 @@ from __future__ import annotations
 from struct import error as StructError
 from typing import TYPE_CHECKING, Type
 
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
+from hathor.transaction.headers import FeeHeader, NanoHeader, TransferHeader, VertexBaseHeader, VertexHeaderId
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -39,6 +39,8 @@ class VertexParser:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
         if settings.ENABLE_FEE_BASED_TOKENS:
             supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
+        if settings.ENABLE_TRANSFER_HEADER:
+            supported_headers[VertexHeaderId.TRANSFER_HEADER] = TransferHeader
         return supported_headers
 
     @staticmethod

@@ -18,10 +18,11 @@ from __future__ import annotations
 
 import hashlib
 import traceback
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterator
 
-from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds
 from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.runner.runner import RunnerFactory
     from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
+    from hathor.nanocontracts.types import Address, TokenUid
 
 
 # Transaction execution result types (also used as block execution effects)
@@ -233,19 +235,23 @@ class NCBlockExecutor:
                 block_storage.set_address_seqnum(nc_address, nc_header.nc_seqnum)
             return NCTxExecutionSkipped(tx=tx)
 
+        transfer_header_diffs = self._get_transfer_header_diffs(tx)
         runner = self._runner_factory.create(
             block_storage=block_storage,
             seed=rng_seed,
         )
 
         try:
+            self._verify_transfer_header_balances(block_storage, transfer_header_diffs)
             runner.execute_from_tx(tx)
 
             # after the execution we have the latest state in the storage
             # and at this point no tokens pending creation
             self._verify_sum_after_execution(tx, block_storage)
+            self._apply_transfer_header_diffs(block_storage, transfer_header_diffs)
 
         except NCFail as e:
+            self._ensure_runner_has_last_call_info(tx, runner)
             return NCTxExecutionFailure(
                 tx=tx,
                 runner=runner,
@@ -254,6 +260,65 @@ class NCBlockExecutor:
             )
 
         return NCTxExecutionSuccess(tx=tx, runner=runner)
+
+    def _get_transfer_header_diffs(self, tx: Transaction) -> dict[tuple['Address', 'TokenUid'], int]:
+        from hathor.nanocontracts.types import Address, TokenUid
+
+        diffs: defaultdict[tuple[Address, TokenUid], int] = defaultdict(int)
+        if not tx.has_transfer_header():
+            return dict(diffs)
+
+        transfer_header = tx.get_transfer_header()
+        for txin in transfer_header.inputs:
+            token_uid = TokenUid(tx.get_token_uid(txin.token_index))
+            diffs[(Address(txin.address), token_uid)] -= txin.amount
+
+        for txout in transfer_header.outputs:
+            token_uid = TokenUid(tx.get_token_uid(txout.token_index))
+            diffs[(Address(txout.address), token_uid)] += txout.amount
+
+        return dict(diffs)
+
+    def _verify_transfer_header_balances(
+        self,
+        block_storage: 'NCBlockStorage',
+        transfer_header_diffs: dict[tuple['Address', 'TokenUid'], int],
+    ) -> None:
+        for (address, token_uid), diff in transfer_header_diffs.items():
+            if diff >= 0:
+                continue
+
+            balance = block_storage.get_address_balance(address, token_uid)
+            if balance + diff < 0:
+                raise NCInsufficientFunds(
+                    f'insufficient transfer-header balance for address={address.hex()} '
+                    f'token={token_uid.hex()}: available={balance} required={-diff}'
+                )
+
+    def _apply_transfer_header_diffs(
+        self,
+        block_storage: 'NCBlockStorage',
+        transfer_header_diffs: dict[tuple['Address', 'TokenUid'], int],
+    ) -> None:
+        from hathor.nanocontracts.types import Amount
+
+        for (address, token_uid), diff in transfer_header_diffs.items():
+            if diff == 0:
+                continue
+            block_storage.add_address_balance(address, Amount(diff), token_uid)
+
+    def _ensure_runner_has_last_call_info(self, tx: Transaction, runner: 'Runner') -> None:
+        from hathor.nanocontracts.types import ContractId, VertexId
+
+        if runner._last_call_info is not None:
+            return
+
+        nano_header = tx.get_nano_header()
+        if nano_header.is_creating_a_new_contract():
+            contract_id = ContractId(VertexId(tx.hash))
+        else:
+            contract_id = ContractId(VertexId(nano_header.nc_id))
+        runner._last_call_info = runner._build_call_info(contract_id)
 
     def _verify_sum_after_execution(self, tx: Transaction, block_storage: 'NCBlockStorage') -> None:
         """Verify token sums after execution for dynamically created tokens."""

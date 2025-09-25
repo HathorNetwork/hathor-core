@@ -22,9 +22,9 @@ from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_ty
 from hathor.nanocontracts.nc_types.token_version_nc_type import TokenVersionNCType
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
-from hathor.nanocontracts.storage.token_proxy import TokenProxy
-from hathor.nanocontracts.types import Address, ContractId, TokenUid
-from hathor.transaction.headers.nano_header import ADDRESS_SEQNUM_SIZE
+from hathor.nanocontracts.storage.restricted_block_proxy import RestrictedBlockProxy
+from hathor.nanocontracts.types import Address, Amount, ContractId, TokenUid
+from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES, ADDRESS_SEQNUM_SIZE
 from hathor.transaction.token_info import TokenVersion
 from hathor.utils import leb128
 
@@ -32,7 +32,8 @@ from hathor.utils import leb128
 class _Tag(Enum):
     CONTRACT = b'\0'
     TOKEN = b'\1'
-    ADDRESS = b'\2'
+    ADDRESS_SEQNUM = b'\2'
+    ADDRESS_BALANCE = b'\3'
 
 
 class ContractKey(NamedTuple):
@@ -49,11 +50,19 @@ class TokenKey(NamedTuple):
         return _Tag.TOKEN.value + self.token_id
 
 
-class AddressKey(NamedTuple):
+class AddressSeqnumKey(NamedTuple):
     address: Address
 
     def __bytes__(self):
-        return _Tag.ADDRESS.value + self.address
+        return _Tag.ADDRESS_SEQNUM.value + self.address
+
+
+class AddressBalanceKey(NamedTuple):
+    address: Address
+    token_id: TokenUid
+
+    def __bytes__(self):
+        return _Tag.ADDRESS_BALANCE.value + self.address + self.token_id
 
 
 class NCBlockStorage:
@@ -115,14 +124,14 @@ class NCBlockStorage:
             trie = self._get_trie(nc_root_id)
         except KeyError:
             raise NanoContractDoesNotExist(contract_id.hex())
-        token_proxy = TokenProxy(self)
-        return NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy)
+        block_proxy = RestrictedBlockProxy(self)
+        return NCContractStorage(trie=trie, nc_id=contract_id, block_proxy=block_proxy)
 
     def get_empty_contract_storage(self, contract_id: ContractId) -> NCContractStorage:
         """Create a new contract storage instance for a given contract."""
         trie = self._get_trie(None)
-        token_proxy = TokenProxy(self)
-        return NCContractStorage(trie=trie, nc_id=contract_id, token_proxy=token_proxy)
+        block_proxy = RestrictedBlockProxy(self)
+        return NCContractStorage(trie=trie, nc_id=contract_id, block_proxy=block_proxy)
 
     def get_token_description(self, token_id: TokenUid) -> TokenDescription:
         """Return the token description for a given token_id."""
@@ -161,11 +170,32 @@ class NCBlockStorage:
         token_description_bytes = self._TOKEN_DESCRIPTION_NC_TYPE.to_bytes(token_description)
         self._block_trie.update(bytes(key), token_description_bytes)
 
+    def get_address_balance(self, address: Address, token_id: TokenUid) -> Amount:
+        key = AddressBalanceKey(address, token_id)
+        try:
+            balance_bytes = self._block_trie.get(bytes(key))
+        except KeyError:
+            return Amount(0)
+        else:
+            balance, buf = leb128.decode_unsigned(balance_bytes)
+            assert len(buf) == 0
+            return Amount(balance)
+
+    def add_address_balance(self, address: Address, amount: Amount, token_id: TokenUid) -> None:
+        if not isinstance(address, Address) or len(address) != ADDRESS_LEN_BYTES:
+            raise ValueError(f'address must be Address with {ADDRESS_LEN_BYTES} bytes')
+
+        key = AddressBalanceKey(address, token_id)
+        balance = Amount(self.get_address_balance(address, token_id) + amount)
+        assert balance >= 0
+        balance_bytes = leb128.encode_unsigned(balance)
+        self._block_trie.update(bytes(key), balance_bytes)
+
     def get_address_seqnum(self, address: Address) -> int:
         """Get the latest seqnum for an address.
 
         For clarity, new transactions must have a GREATER seqnum to be able to be executed."""
-        key = AddressKey(address)
+        key = AddressSeqnumKey(address)
         try:
             seqnum_bytes = self._block_trie.get(bytes(key))
         except KeyError:
@@ -180,6 +210,6 @@ class NCBlockStorage:
         assert seqnum >= 0
         old_seqnum = self.get_address_seqnum(address)
         assert seqnum > old_seqnum
-        key = AddressKey(address)
+        key = AddressSeqnumKey(address)
         seqnum_bytes = leb128.encode_unsigned(seqnum, max_bytes=ADDRESS_SEQNUM_SIZE)
         self._block_trie.update(bytes(key), seqnum_bytes)

@@ -35,7 +35,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import FeeHeader, NanoHeader, TransferHeader, VertexBaseHeader
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -230,6 +230,8 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                if params.features.transfer_headers:
+                    allowed_headers.add(TransferHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
