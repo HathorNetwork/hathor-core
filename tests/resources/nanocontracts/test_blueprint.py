@@ -74,7 +74,10 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
         })
         self.assertEqual(data['public_methods'], {
             'initialize': {
-                'args': [],
+                'args': [{
+                    'name': 'arg1',
+                    'type': 'int',
+                }],
                 'return_type': 'null',
                 'docstring': None,
             },

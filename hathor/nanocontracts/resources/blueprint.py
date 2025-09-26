@@ -119,17 +119,21 @@ class BlueprintInfoResource(Resource):
                 continue
 
             method_args = []
-            argspec = inspect.getfullargspec(method)
-            for arg_name in argspec.args[1:]:
-                arg_type = argspec.annotations[arg_name]
+            signature = inspect.signature(method)
+            for parameter in signature.parameters.values():
+                if parameter.name == 'self':
+                    continue
+                arg_type = parameter.annotation
                 if arg_type is Context:
                     continue
                 method_args.append(MethodArgInfo(
-                    name=arg_name,
+                    name=parameter.name,
                     type=self.get_type_name(arg_type),
                 ))
 
-            return_type = argspec.annotations.get('return', None)
+            return_type = signature.return_annotation
+            if return_type is inspect._empty:
+                return_type = None
 
             method_info = MethodInfo(
                 args=method_args,
