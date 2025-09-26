@@ -8,7 +8,7 @@
 
 ## Operation and usage
 
-To know how to operate and use Hathor core, see [Hathor full node at Hathor docs — official technical documentation of Hathor](https://docs.hathor.network/pathways/components/full-node).
+To know how to operate and use Hathor core, see [Hathor core (full node) at Hathor docs — official technical documentation of Hathor](https://docs.hathor.network/pathways/components/core).
 
 ## Support
 
