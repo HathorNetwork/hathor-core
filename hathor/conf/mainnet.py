@@ -213,7 +213,7 @@ SETTINGS = HathorSettings(
         '00004305882eb3eef6b45f025ff58eb7baa5ca35f7d6f42c8b085482b00474e6',
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
-    ENABLE_NANO_CONTRACTS=NanoContractsSetting.FEATURE_ACTIVATION,
+    ENABLE_NANO_CONTRACTS=NanoContractsSetting.DISABLED,
     FEATURE_ACTIVATION=FeatureActivationSettings(
         features={
             Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: Criteria(
