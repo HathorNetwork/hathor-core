@@ -33,7 +33,6 @@ from hathor.nanocontracts.exception import (
     NCInvalidContractId,
     NCInvalidInitializeMethodCall,
     NCInvalidMethodCall,
-    NCInvalidPaymentToken,
     NCInvalidPublicMethodCallFromView,
     NCInvalidSyscall,
     NCMethodNotFound,
@@ -937,19 +936,23 @@ class Runner:
         if not balance.can_mint:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
-        self._validate_payment_token(fee_payment_token)
-
+        fee_payment_token_info = self._get_token(fee_payment_token)
         token_info = self._get_token(token_uid)
 
         syscall_rules = TokenSyscallBalanceRules.get_rules(token_uid, token_info.token_version, self._settings)
-        syscall_balance = syscall_rules.mint(amount, fee_payment_token=fee_payment_token)
+        syscall_balance = syscall_rules.mint(amount, fee_payment_token=fee_payment_token_info)
         record = syscall_rules.get_syscall_update_token_record(syscall_balance)
 
         self._update_tokens_amount(record)
 
     @_forbid_syscall_from_view('melt_tokens')
-    def syscall_melt_tokens(self, *, token_uid: TokenUid, amount: int,
-                            fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> None:
+    def syscall_melt_tokens(
+        self,
+        *,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
+    ) -> None:
         """Melt tokens by removing them from the balance of this nano contract.
         The tokens should be already created otherwise it will raise.
         """
@@ -964,12 +967,11 @@ class Runner:
         if not balance.can_melt:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
-        self._validate_payment_token(fee_payment_token)
-
         token_info = self._get_token(token_uid)
+        fee_payment_token_info = self._get_token(fee_payment_token)
 
         syscall_rules = TokenSyscallBalanceRules.get_rules(token_uid, token_info.token_version, self._settings)
-        syscall_balance = syscall_rules.melt(amount, fee_payment_token=fee_payment_token)
+        syscall_balance = syscall_rules.melt(amount, fee_payment_token=fee_payment_token_info)
         record = syscall_rules.get_syscall_update_token_record(syscall_balance)
 
         self._update_tokens_amount(record)
@@ -1049,7 +1051,13 @@ class Runner:
         )
 
         syscall_rules = TokenSyscallBalanceRules.get_rules(token_id, token_version, self._settings)
-        syscall_balance = syscall_rules.create_token(token_id, token_symbol, token_name, amount)
+        syscall_balance = syscall_rules.create_token(
+            token_uid=token_id,
+            token_symbol=token_symbol,
+            token_name=token_name,
+            amount=amount,
+            fee_payment_token=self._get_token(TokenUid(HATHOR_TOKEN_UID))
+        )
         record = syscall_rules.get_syscall_update_token_record(syscall_balance)
 
         self._update_tokens_amount(record)
@@ -1074,12 +1082,11 @@ class Runner:
         except TransactionDataError as e:
             raise NCInvalidSyscall(str(e)) from e
 
-        self._validate_payment_token(fee_payment_token)
-
         call_record = self.get_current_call_record()
         parent_id = call_record.contract_id
         cleaned_token_symbol = clean_token_string(token_symbol)
 
+        fee_payment_token_info = self._get_token(fee_payment_token)
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
         token_version = TokenVersion.FEE
 
@@ -1096,7 +1103,13 @@ class Runner:
             grant_melt=melt_authority,
         )
         syscall_rules = TokenSyscallBalanceRules.get_rules(token_id, token_version, self._settings)
-        syscall_balance = syscall_rules.create_token(token_id, token_symbol, token_name, amount, fee_payment_token)
+        syscall_balance = syscall_rules.create_token(
+            token_uid=token_id,
+            token_symbol=token_symbol,
+            token_name=token_name,
+            amount=amount,
+            fee_payment_token=fee_payment_token_info
+        )
         record = syscall_rules.get_syscall_update_token_record(syscall_balance)
 
         self._update_tokens_amount(record)
@@ -1150,16 +1163,17 @@ class Runner:
         # Check the transaction storage for existing tokens
         try:
             token_creation_tx = self.tx_storage.get_token_creation_transaction(token_uid)
-            return TokenDescription(
-                token_version=token_creation_tx.token_version,
-                token_name=token_creation_tx.token_name,
-                token_symbol=token_creation_tx.token_symbol,
-                token_id=token_creation_tx.hash
-            )
         except TransactionDoesNotExist:
             raise NCInvalidSyscall(
                 f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
             )
+
+        return TokenDescription(
+            token_version=token_creation_tx.token_version,
+            token_name=token_creation_tx.token_name,
+            token_symbol=token_creation_tx.token_symbol,
+            token_id=token_creation_tx.hash
+        )
 
     def _update_tokens_amount(
         self,
@@ -1182,6 +1196,7 @@ class Runner:
         call_record = self.get_current_call_record()
         changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
 
+        assert changes_tracker.nc_id == call_record.contract_id
         assert record.payment_token_uid is not None
         assert record.payment_token_amount is not None
         assert call_record.index_updates is not None
@@ -1193,11 +1208,6 @@ class Runner:
         self._updated_tokens_totals[record.payment_token_uid] += record.payment_token_amount
 
         call_record.index_updates.append(record)
-
-    def _validate_payment_token(self, token_uid: TokenUid) -> None:
-        payment_token_version = self._get_token(token_uid)
-        if payment_token_version == TokenVersion.FEE:
-            raise NCInvalidPaymentToken("fee-based tokens aren't allowed for paying fees")
 
 
 class RunnerFactory:

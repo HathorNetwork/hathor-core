@@ -22,6 +22,7 @@ from typing import Type, TypeAlias, TypeVar
 from typing_extensions import Literal, assert_never, cast
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.nanocontracts.exception import NCInvalidPaymentToken
 from hathor.nanocontracts.runner.types import (
     BaseSyscallUpdateTokensRecord,
     IndexUpdateRecordType,
@@ -29,7 +30,7 @@ from hathor.nanocontracts.runner.types import (
     SyscallUpdateFeeTokensRecord,
 )
 from hathor.nanocontracts.types import TokenUid
-from hathor.transaction.token_info import TokenVersion
+from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 
 TokenSyscallType = TypeVar('TokenSyscallType', bound=BaseSyscallUpdateTokensRecord)
@@ -130,13 +131,15 @@ class TokenSyscallBalanceRules(ABC):
         assert token_version is not TokenVersion.NATIVE
 
     @abstractmethod
-    def create_token(self,
-                     token_uid: TokenUid,
-                     token_symbol: str,
-                     token_name: str,
-                     amount: int,
-                     fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
-                     ) -> TokenSyscallBalance:
+    def create_token(
+        self,
+        *,
+        token_uid: TokenUid,
+        token_symbol: str,
+        token_name: str,
+        amount: int,
+        fee_payment_token: TokenDescription
+    ) -> TokenSyscallBalance:
         """
         Calculate and return the token amounts needed for token creation syscalls.
 
@@ -146,7 +149,7 @@ class TokenSyscallBalanceRules(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def mint(self, amount: int, *, fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> TokenSyscallBalance:
+    def mint(self, amount: int, *, fee_payment_token: TokenDescription) -> TokenSyscallBalance:
         """
         Calculate and return the token amounts needed for minting operations.
 
@@ -161,7 +164,7 @@ class TokenSyscallBalanceRules(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def melt(self, amount: int, *, fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> TokenSyscallBalance:
+    def melt(self, amount: int, *, fee_payment_token: TokenDescription) -> TokenSyscallBalance:
         """
         Calculate and return the token amounts needed for melting operations.
 
@@ -224,13 +227,16 @@ class TokenSyscallBalanceRules(ABC):
 
 class _DepositTokenRules(TokenSyscallBalanceRules):
 
-    def create_token(self,
-                     token_uid: TokenUid,
-                     token_symbol: str,
-                     token_name: str,
-                     amount: int,
-                     fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID),
-                     ) -> TokenSyscallBalance:
+    def create_token(
+        self,
+        *,
+        token_uid: TokenUid,
+        token_symbol: str,
+        token_name: str,
+        amount: int,
+        fee_payment_token: TokenDescription
+    ) -> TokenSyscallBalance:
+        self._validate_payment_token(fee_payment_token)
         htr_amount = -get_deposit_token_deposit_amount(self._settings, amount)
 
         return TokenSyscallBalance(
@@ -239,51 +245,62 @@ class _DepositTokenRules(TokenSyscallBalanceRules):
             token_name=token_name,
             token_symbol=token_symbol,
             token=TokenSyscallBalanceEntry(token_uid=self.token_uid, amount=amount),
-            fee_payment=TokenSyscallBalanceEntry(token_uid=fee_payment_token, amount=htr_amount)
+            fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=htr_amount)
         )
 
-    def mint(self, amount: int, *, fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> TokenSyscallBalance:
+    def mint(self, amount: int, *, fee_payment_token: TokenDescription) -> TokenSyscallBalance:
+        self._validate_payment_token(fee_payment_token)
         htr_amount = -get_deposit_token_deposit_amount(self._settings, amount)
 
         return TokenSyscallBalance(
             type=TokenOperationType.MINT,
             token=TokenSyscallBalanceEntry(token_uid=self.token_uid, amount=amount),
-            fee_payment=TokenSyscallBalanceEntry(token_uid=fee_payment_token, amount=htr_amount)
+            fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=htr_amount)
         )
 
-    def melt(self, amount: int, *, fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> TokenSyscallBalance:
+    def melt(self, amount: int, *, fee_payment_token: TokenDescription) -> TokenSyscallBalance:
+        self._validate_payment_token(fee_payment_token)
         htr_amount = +get_deposit_token_withdraw_amount(self._settings, amount)
 
         return TokenSyscallBalance(
             type=TokenOperationType.MELT,
             token=TokenSyscallBalanceEntry(token_uid=self.token_uid, amount=-amount),
-            fee_payment=TokenSyscallBalanceEntry(token_uid=fee_payment_token, amount=htr_amount)
+            fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=htr_amount)
         )
 
     def get_syscall_update_token_record(self, operation: TokenSyscallBalance) -> SyscallUpdateDepositTokensRecord:
         return operation.to_syscall_record(SyscallUpdateDepositTokensRecord)
 
+    def _validate_payment_token(self, token:  TokenDescription) -> bool:
+        if token.token_id == TokenUid(HATHOR_TOKEN_UID):
+            return True
+        raise NCInvalidPaymentToken("Only HTR is allowed to be used with deposit based token syscalls")
+
 
 class _FeeTokenRules(TokenSyscallBalanceRules):
 
-    def _get_fee_value(self, fee_payment_token: TokenUid) -> int:
+    def _get_fee_amount(self, fee_payment_token: TokenUid) -> int:
         # For fee tokens, we only need to pay the transaction fee, not deposit HTR
         if fee_payment_token == TokenUid(HATHOR_TOKEN_UID):
-            fee_amount = self._settings.FEE_PER_OUTPUT
+            fee_amount = -self._settings.FEE_PER_OUTPUT
         else:
-            fee_amount = int(self._settings.FEE_PER_OUTPUT / self._settings.TOKEN_DEPOSIT_PERCENTAGE)
+            fee_amount = -int(self._settings.FEE_PER_OUTPUT / self._settings.TOKEN_DEPOSIT_PERCENTAGE)
 
-        return fee_amount * -1
+        assert fee_amount < 0
+        return fee_amount
 
-    def create_token(self,
-                     token_uid: TokenUid,
-                     token_symbol: str,
-                     token_name: str,
-                     amount: int,
-                     fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID),
-                     ) -> TokenSyscallBalance:
+    def create_token(
+        self,
+        *,
+        token_uid: TokenUid,
+        token_symbol: str,
+        token_name: str,
+        amount: int,
+        fee_payment_token: TokenDescription
+    ) -> TokenSyscallBalance:
+        self._validate_payment_token(fee_payment_token)
         # For fee tokens, we only need to pay the transaction fee, not deposit HTR
-        fee_amount = self._get_fee_value(fee_payment_token)
+        fee_amount = self._get_fee_amount(TokenUid(fee_payment_token.token_id))
 
         return TokenSyscallBalance(
             type=TokenOperationType.CREATE,
@@ -291,24 +308,30 @@ class _FeeTokenRules(TokenSyscallBalanceRules):
             token_name=token_name,
             token_symbol=token_symbol,
             token=TokenSyscallBalanceEntry(token_uid=self.token_uid, amount=amount),
-            fee_payment=TokenSyscallBalanceEntry(token_uid=fee_payment_token, amount=fee_amount)
+            fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=fee_amount)
         )
 
-    def mint(self, amount: int, *, fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> TokenSyscallBalance:
-        fee_amount = self._get_fee_value(fee_payment_token)
+    def mint(self, amount: int, *, fee_payment_token: TokenDescription) -> TokenSyscallBalance:
+        self._validate_payment_token(fee_payment_token)
+        fee_amount = self._get_fee_amount(TokenUid(fee_payment_token.token_id))
         return TokenSyscallBalance(
             type=TokenOperationType.MINT,
             token=TokenSyscallBalanceEntry(token_uid=self.token_uid, amount=amount),
-            fee_payment=TokenSyscallBalanceEntry(token_uid=fee_payment_token, amount=fee_amount)
+            fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=fee_amount)
         )
 
-    def melt(self, amount: int, *, fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)) -> TokenSyscallBalance:
-        fee_amount = self._get_fee_value(fee_payment_token)
+    def melt(self, amount: int, *, fee_payment_token: TokenDescription) -> TokenSyscallBalance:
+        self._validate_payment_token(fee_payment_token)
+        fee_amount = self._get_fee_amount(TokenUid(fee_payment_token.token_id))
         return TokenSyscallBalance(
             type=TokenOperationType.MELT,
             token=TokenSyscallBalanceEntry(token_uid=self.token_uid, amount=-amount),
-            fee_payment=TokenSyscallBalanceEntry(token_uid=fee_payment_token, amount=fee_amount)
+            fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=fee_amount)
         )
 
     def get_syscall_update_token_record(self, operation: TokenSyscallBalance) -> SyscallUpdateFeeTokensRecord:
         return operation.to_syscall_record(SyscallUpdateFeeTokensRecord)
+
+    def _validate_payment_token(self, token_uid: TokenDescription) -> None:
+        if token_uid.token_version == TokenVersion.FEE:
+            raise NCInvalidPaymentToken("fee-based tokens aren't allowed for paying fees")
