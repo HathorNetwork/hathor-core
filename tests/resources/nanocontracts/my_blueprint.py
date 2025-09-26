@@ -21,7 +21,7 @@ class MyBlueprint(Blueprint):
     a_optional_int: Optional[int]
 
     @public
-    def initialize(self, ctx: Context) -> None:
+    def initialize(self, ctx: Context, arg1: int) -> None:
         pass
 
     @public
