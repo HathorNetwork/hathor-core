@@ -12,20 +12,23 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.nanocontracts import HATHOR_TOKEN_UID, Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import (
+from hathor import (
+    HATHOR_TOKEN_UID,
+    Blueprint,
     BlueprintId,
+    Context,
     ContractId,
     NCArgs,
     NCDepositAction,
     VertexId,
+    export,
     fallback,
     public,
     view,
 )
 
 
+@export
 class MyBlueprint(Blueprint):
     message: str
 
@@ -200,6 +203,3 @@ class MyBlueprint(Blueprint):
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
         return f'fallback called for method `{method_name}`'
-
-
-__blueprint__ = MyBlueprint

@@ -104,6 +104,7 @@ class TransactionStorage(ABC):
         change_score_acc_weight_metadata.Migration,
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
+        nc_storage_compat1.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -152,10 +153,7 @@ class TransactionStorage(ABC):
         self._saving_genesis = False
 
         # Migrations instances
-        migration_factories = self._migration_factories[:]
-        if settings.ENABLE_NANO_CONTRACTS:
-            migration_factories.append(nc_storage_compat1.Migration)
-        self._migrations = [cls() for cls in migration_factories]
+        self._migrations = [cls() for cls in self._migration_factories]
 
         # XXX: sanity check
         migration_names = set()
@@ -1170,9 +1168,6 @@ class TransactionStorage(ABC):
         """Returns the source code associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
-
-        A point of difference is that an OCB will have a `__blueprint__ = BlueprintName` line, where a built-in
-        blueprint will not.
         """
         import inspect
 
