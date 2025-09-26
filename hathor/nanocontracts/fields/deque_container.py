@@ -13,21 +13,22 @@
 #  limitations under the License.
 
 from collections import deque
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Container as ContainerAbc, Iterable, Iterator, Sequence, Sized
 from dataclasses import dataclass, replace
 from typing import ClassVar, SupportsIndex, TypeVar, get_args, get_origin
 
 from typing_extensions import Self, override
 
-from hathor.nanocontracts.fields.container_field import KEY_SEPARATOR, ContainerField, StorageContainer
+from hathor.nanocontracts.blueprint_env import NCAttrCache
+from hathor.nanocontracts.fields.container import KEY_SEPARATOR, Container, ContainerNode, ContainerNodeFactory
 from hathor.nanocontracts.fields.field import Field
-from hathor.nanocontracts.nc_types import NCType, VarInt32NCType
-from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_opt_nc_type
+from hathor.nanocontracts.nc_types import VarInt32NCType
+from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathor.nanocontracts.storage import NCContractStorage
 from hathor.util import not_none
 
 T = TypeVar('T')
-_METADATA_KEY: str = '__metadata__'
+_METADATA_KEY: bytes = b'__metadata__'
 _INDEX_NC_TYPE = VarInt32NCType()
 
 # TODO: support maxlen (will require support for initialization values)
@@ -44,79 +45,77 @@ class _DequeMetadata:
         return self.first_index + self.length - 1
 
 
-_METADATA_NC_TYPE = make_dataclass_opt_nc_type(_DequeMetadata)
+_METADATA_NC_TYPE = make_dataclass_nc_type(_DequeMetadata)
 
 
-class DequeStorageContainer(StorageContainer[Sequence[T]]):
+class DequeContainer(Container[T]):
     # from https://github.com/python/typeshed/blob/main/stdlib/collections/__init__.pyi
-    __slots__ = ('__storage', '__name', '__value', '__metadata_key')
-    __storage: NCContractStorage
-    __name: str
-    __value: NCType[T]
+    __slots__ = ('__storage__', '__prefix__', '__value_node', '__metadata_key')
+    __value_node: ContainerNode[T]
     __metadata_key: bytes
 
-    def __init__(self, storage: NCContractStorage, name: str, value: NCType[T]) -> None:
-        self.__storage = storage
-        self.__name = name
-        self.__value = value
-        self.__metadata_key = f'{name}{KEY_SEPARATOR}{_METADATA_KEY}'.encode()
+    def __init__(self, storage: NCContractStorage, prefix: bytes, value_node: ContainerNode[T]) -> None:
+        self.__storage__ = storage
+        self.__prefix__ = prefix
+        self.__value_node = value_node
+        self.__metadata_key = KEY_SEPARATOR.join([self.__prefix__, _METADATA_KEY])
 
-    # Methods needed by StorageContainer:
+    # Methods needed by Container:
 
     @override
     @classmethod
-    def __check_name_and_type__(cls, name: str, type_: type[Sequence[T]]) -> None:
-        if not name.isidentifier():
-            raise TypeError('field name must be a valid identifier')
-        origin_type: type[Sequence[T]] = not_none(get_origin(type_))
+    def __check_type__(cls, type_: type[ContainerAbc[T]], type_map: Field.TypeMap) -> None:
+        origin_type: type[ContainerAbc[T]] = not_none(get_origin(type_))
         if not issubclass(origin_type, Sequence):
             raise TypeError('expected Sequence type')
         args = get_args(type_)
         if not args or len(args) != 1:
-            raise TypeError(f'expected {type_.__name__}[<item type>]')
+            raise TypeError('expected exactly 1 type argument')
+        value_type, = args
+        _ = ContainerNodeFactory.check_is_container(value_type, type_map)
 
     @override
     @classmethod
-    def __from_name_and_type__(
+    def __from_prefix_and_type__(
         cls,
         storage: NCContractStorage,
-        name: str,
-        type_: type[Sequence[T]],
+        prefix: bytes,
+        type_: type[ContainerAbc[T]],
         /,
         *,
+        cache: NCAttrCache,
         type_map: Field.TypeMap,
     ) -> 'Self':
         item_type, = get_args(type_)
-        item_nc_type = NCType.from_type(item_type, type_map=type_map.to_nc_type_map())
-        return cls(storage, name, item_nc_type)
+        item_node = ContainerNode.from_type(storage, item_type, cache=cache, type_map=type_map)
+        return cls(storage, prefix, item_node)
+
+    @override
+    def __init_storage__(self, initial_value: ContainerAbc[T] | None = None) -> None:
+        self.__storage__.put_obj(self.__metadata_key, _METADATA_NC_TYPE, _DequeMetadata())
+        if initial_value is not None:
+            if not isinstance(initial_value, Sequence):
+                raise TypeError('expected initial_value to be a Sequence')
+            self.extend(initial_value)
 
     # INTERNAL METHODS: all of these must be __dunder_methods so they aren't accessible from an OCB
 
     def __to_db_key(self, index: SupportsIndex) -> bytes:
-        return f'{self.__name}{KEY_SEPARATOR}'.encode() + _INDEX_NC_TYPE.to_bytes(index.__index__())
+        return KEY_SEPARATOR.join([self.__prefix__, _INDEX_NC_TYPE.to_bytes(index.__index__())])
 
     def __get_metadata(self) -> _DequeMetadata:
-        metadata = self.__storage.get_obj(self.__metadata_key, _METADATA_NC_TYPE, default=None)
-
-        if metadata is None:
-            metadata = _DequeMetadata()
-            self.__storage.put_obj(self.__metadata_key, _METADATA_NC_TYPE, metadata)
-
-        assert isinstance(metadata, _DequeMetadata)
+        metadata = self.__storage__.get_obj(self.__metadata_key, _METADATA_NC_TYPE)
         return metadata
 
     def __update_metadata(self, new_metadata: _DequeMetadata) -> None:
-        assert new_metadata.length >= 0
-        if new_metadata.length == 0:
-            return self.__storage.del_obj(self.__metadata_key)
-        self.__storage.put_obj(self.__metadata_key, _METADATA_NC_TYPE, new_metadata)
+        self.__storage__.put_obj(self.__metadata_key, _METADATA_NC_TYPE, new_metadata)
 
     def __extend(self, *, items: Iterable[T], metadata: _DequeMetadata) -> None:
         new_last_index = metadata.last_index
         for item in items:
             new_last_index += 1
-            key = self.__to_db_key(new_last_index)
-            self.__storage.put_obj(key, self.__value, item)
+            db_key = self.__to_db_key(new_last_index)
+            self.__value_node.set_value(db_key, item)
         new_metadata = replace(metadata, length=new_last_index - metadata.first_index + 1)
         self.__update_metadata(new_metadata)
 
@@ -124,8 +123,8 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
         new_first_index = metadata.first_index
         for item in items:
             new_first_index -= 1
-            key = self.__to_db_key(new_first_index)
-            self.__storage.put_obj(key, self.__value, item)
+            db_key = self.__to_db_key(new_first_index)
+            self.__value_node.set_value(db_key, item)
         new_metadata = replace(
             metadata,
             first_index=new_first_index,
@@ -138,9 +137,9 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
             raise IndexError
 
         index = metadata.first_index if left else metadata.last_index
-        key = self.__to_db_key(index)
-        item = self.__storage.get_obj(key, self.__value)
-        self.__storage.del_obj(key)
+        db_key = self.__to_db_key(index)
+        item = self.__value_node.get_value(db_key)
+        self.__value_node.del_value(db_key)
         new_metadata = replace(
             metadata,
             first_index=metadata.first_index + 1 if left else metadata.first_index,
@@ -165,16 +164,16 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
 
     def __getitem__(self, index: SupportsIndex, /) -> T:
         internal_index = self.__to_internal_index(index=index)
-        key = self.__to_db_key(internal_index)
-        return self.__storage.get_obj(key, self.__value)
+        db_key = self.__to_db_key(internal_index)
+        return self.__value_node.get_value(db_key)
 
     def __len__(self) -> int:
         return self.__get_metadata().length
 
-    def __setitem__(self, index: SupportsIndex, value: T, /) -> None:
+    def __setitem__(self, index: SupportsIndex, item: T, /) -> None:
         internal_index = self.__to_internal_index(index=index)
-        key = self.__to_db_key(internal_index)
-        self.__storage.put_obj(key, self.__value, value)
+        db_key = self.__to_db_key(internal_index)
+        self.__value_node.set_value(db_key, item)
 
     def __delitem__(self, key: SupportsIndex, /) -> None:
         raise NotImplementedError
@@ -228,8 +227,8 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
             indexes = range(metadata.last_index, metadata.first_index - 1, -1)
 
         for i in indexes:
-            key = self.__to_db_key(i)
-            yield self.__storage.get_obj(key, self.__value)
+            db_key = self.__to_db_key(i)
+            yield self.__value_node.get_value(db_key)
 
     # Other deque methods that we implement to look like a deque:
 
@@ -286,7 +285,15 @@ class DequeStorageContainer(StorageContainer[Sequence[T]]):
         raise NotImplementedError
 
     def __eq__(self, value: object, /) -> bool:
-        raise NotImplementedError
-
-
-DequeField = ContainerField[DequeStorageContainer[T]]
+        # XXX: return True if they point to the same data
+        if isinstance(value, DequeContainer) and self.__prefix__ == value.__prefix__:
+            return True
+        if isinstance(value, Iterable) and isinstance(value, Sized):
+            if len(value) != len(self):
+                return False
+            for i, j in zip(value, self):
+                if i != j:
+                    return False
+            return True
+        else:
+            raise TypeError(f'cannot compare with value of type {type(value)}')

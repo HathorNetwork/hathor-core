@@ -38,6 +38,10 @@ class NCInvalidPubKey(NCTxValidationError):
     pass
 
 
+class NCInvalidSeqnum(NCTxValidationError):
+    pass
+
+
 class NCFail(NCError):
     """Raised by Blueprint's methods to fail execution."""
 
@@ -67,7 +71,7 @@ class NCViewMethodError(NCFail):
     pass
 
 
-class NCMethodNotFound(NCFail):
+class NCMethodNotFound(NCFail, NCTxValidationError):
     """Raised when a method is not found in a nano contract."""
     pass
 
@@ -98,7 +102,7 @@ class NCInvalidContractId(NCFail):
     """Raised when a contract call is invalid."""
 
 
-class NCInvalidMethodCall(NCFail):
+class NCInvalidMethodCall(NCFail, NCTxValidationError):
     """Raised when a contract calls another contract's invalid method."""
 
 

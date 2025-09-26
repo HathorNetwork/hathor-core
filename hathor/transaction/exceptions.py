@@ -34,12 +34,40 @@ class TimestampError(TxValidationError):
     """Transaction timestamp is smaller or equal to one parent's timestamp"""
 
 
+class BlockHeightError(TxValidationError):
+    """Block height is invalid."""
+
+
 class DoubleSpend(TxValidationError):
     """Some input has already been spent"""
 
 
 class InputOutputMismatch(TxValidationError):
     """Input and output amounts are not equal"""
+
+
+class ForbiddenMint(InputOutputMismatch):
+    """Tokens were minted without authority inputs"""
+
+    from hathor.types import TokenUid
+
+    def __init__(self, amount: int, token_uid: TokenUid) -> None:
+        super().__init__('{} {} tokens minted, but there is no mint authority input'.format(
+            (-1) * amount, token_uid.hex()))
+
+
+class ForbiddenMelt(InputOutputMismatch):
+    """Tokens were melted without authority inputs"""
+
+    from hathor.types import TokenUid
+
+    def __init__(self, msg: str) -> None:
+        super().__init__(msg)
+
+    @classmethod
+    def from_token(cls, amount: int, token_uid: TokenUid) -> 'ForbiddenMelt':
+        return cls('{} {} tokens melted, but there is no melt authority input'.format(
+            (-1) * amount, token_uid.hex()))
 
 
 class InvalidInputData(TxValidationError):
@@ -80,6 +108,10 @@ class InexistentInput(TxValidationError):
 
 class ConflictingInputs(TxValidationError):
     """Inputs in the tx are spending the same output"""
+
+
+class ConflictWithConfirmedTxError(TxValidationError):
+    """Input has a conflict with a confirmed transaction."""
 
 
 class TooManyOutputs(TxValidationError):
@@ -132,6 +164,14 @@ class DuplicatedParents(TxValidationError):
 
 class InvalidToken(TxValidationError):
     """Token is not valid"""
+
+
+class TooManyTokens(TxValidationError):
+    """Too many tokens."""
+
+
+class UnusedTokensError(TxValidationError):
+    """There are unused tokens in the transaction."""
 
 
 class BlockError(TxValidationError):

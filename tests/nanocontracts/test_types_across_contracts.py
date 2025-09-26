@@ -42,27 +42,39 @@ class MyBlueprint(Blueprint):
 
     @public
     def call_public_wrong_arg_type(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.call_public_method(other_id, 'public_method', [], 'abc')
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .public() \
+            .public_method('abc')
 
     @public
     def call_public_wrong_kwarg_type(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.call_public_method(other_id, 'public_method', [], a='abc')
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .public() \
+            .public_method(a='abc')
 
     @public
     def call_public_wrong_return_type(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.call_public_method(other_id, 'public_method_wrong_return_type', [])
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .public() \
+            .public_method_wrong_return_type()
 
     @view
     def call_view_wrong_arg_type(self, other_id: ContractId) -> None:
-        self.syscall.call_view_method(other_id, 'view_method', 'abc')
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .view() \
+            .view_method('abc')
 
     @view
     def call_view_wrong_kwarg_type(self, other_id: ContractId) -> None:
-        self.syscall.call_view_method(other_id, 'view_method', a='abc')
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .view() \
+            .view_method(a='abc')
 
     @view
     def call_view_wrong_return_type(self, other_id: ContractId) -> None:
-        self.syscall.call_view_method(other_id, 'view_method_wrong_return_type')
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .view() \
+            .view_method_wrong_return_type()
 
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> int:
@@ -71,7 +83,9 @@ class MyBlueprint(Blueprint):
     @public
     def call_mutate_list(self, ctx: Context, other_id: ContractId) -> None:
         items = [1, 2, 3]
-        self.syscall.call_public_method(other_id, 'mutate_list', [], items)
+        self.syscall.get_contract(other_id, blueprint_id=None) \
+            .public() \
+            .mutate_list(items)
         assert items == [1, 2, 3]
 
     @public

@@ -24,13 +24,24 @@ class VerificationParams:
     enable_checkdatasig_count: bool
     reject_locked_reward: bool = True
     skip_block_weight_verification: bool = False
+    enable_nano: bool = False
+
+    reject_too_old_vertices: bool = False
+    harden_token_restrictions: bool = False
+    harden_nano_restrictions: bool = False
+    reject_conflicts_with_confirmed_txs: bool = False
 
     @classmethod
-    def default_for_mempool(cls) -> VerificationParams:
-        """This is the appropriate parameters for veriyfing mempool transactions, realtime blocks and API pushes.
+    def default_for_mempool(cls, *, enable_nano: bool = False) -> VerificationParams:
+        """This is the appropriate parameters for verifying mempool transactions, realtime blocks and API pushes.
 
         Other cases should instantiate `VerificationParams` manually with the appropriate parameter values.
         """
         return cls(
             enable_checkdatasig_count=True,
+            enable_nano=enable_nano,
+            reject_too_old_vertices=True,
+            harden_token_restrictions=True,
+            harden_nano_restrictions=True,
+            reject_conflicts_with_confirmed_txs=True,
         )

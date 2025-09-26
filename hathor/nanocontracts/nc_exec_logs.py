@@ -36,7 +36,7 @@ from hathor.utils.pydantic import BaseModel
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
 
-MAX_EVENT_SIZE: int = 100 * 1024  # 100KiB
+MAX_EVENT_SIZE: int = 1024  # 1KiB
 
 
 @unique

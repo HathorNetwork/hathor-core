@@ -1,11 +1,13 @@
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
-from hathor.nanocontracts.nc_types import TupleNCType, VarInt32NCType
+from hathor.nanocontracts.fields.container import INIT_NC_TYPE
+from hathor.nanocontracts.fields.deque_container import _METADATA_NC_TYPE as METADATA_NC_TYPE
+from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
 
-INT_VARTUPLE_NC_TYPE = TupleNCType(VarInt32NCType())
+INT_NC_TYPE = VarInt32NCType()
 
 
 class BlueprintWithCompoundField(Blueprint):
@@ -13,18 +15,34 @@ class BlueprintWithCompoundField(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
-        assert self.dc.get('foo', []) == []
-        self.dc['foo'] = [1, 2, 3]
+        self.dc['foo'] = [1, 2]
+        assert len(self.dc) == 1
+        foo = self.dc['foo']
+        foo.append(3)
+        assert len(foo) == 3
         self.dc['bar'] = [4, 5, 6, 7]
+        assert len(self.dc) == 2
         assert self.dc['foo'] == [1, 2, 3]
         assert self.dc['bar'] == [4, 5, 6, 7]
-        del self.dc['foo']
-        try:
-            self.dc['foo']
-        except KeyError as e:
-            assert e.args[0] == b'dc:\x03foo'
-        assert 'foo' not in self.dc
+        foo = self.dc['foo']
+        foo.pop()
+        assert len(foo) == 2
+        foo.pop()
+        assert len(foo) == 1
+        foo.pop()
+        assert len(foo) == 0
+        assert len(self.dc['foo']) == 0
         assert 'bar' in self.dc
+        assert len(self.dc) == 2
+        del self.dc['foo']
+        assert len(self.dc) == 1
+        assert 'bar' in self.dc
+        assert 'foo' not in self.dc
+        # XXX: implicit creation:
+        assert self.dc['foo'] == []
+        assert len(self.dc) == 2
+        # remove foo, test will check it was removed from the storage
+        del self.dc['foo']
 
 
 class TestDictField(unittest.TestCase):
@@ -60,12 +78,23 @@ class TestDictField(unittest.TestCase):
         b11_storage = self.manager.get_nc_storage(b11, nc1.hash)
 
         with self.assertRaises(KeyError):
-            b11_storage.get_obj(b'dc:\x03foo', INT_VARTUPLE_NC_TYPE)
-        assert b11_storage.get_obj(b'dc:\x03bar', INT_VARTUPLE_NC_TYPE) == (4, 5, 6, 7)
+            b11_storage.get_obj(b'dc:\x03foo:__init__', INIT_NC_TYPE)
+        assert b11_storage.get_obj(b'dc:\x03bar:__init__', INIT_NC_TYPE) is True
 
         assert b12.get_metadata().voided_by is None
         b12_storage = self.manager.get_nc_storage(b12, nc1.hash)
 
         with self.assertRaises(KeyError):
-            b12_storage.get_obj(b'dc:\x03foo', INT_VARTUPLE_NC_TYPE)
-        assert b12_storage.get_obj(b'dc:\x03bar', INT_VARTUPLE_NC_TYPE) == (4, 5, 6, 7)
+            b12_storage.get_obj(b'dc:\x03foo:__init__', INIT_NC_TYPE)
+        assert b12_storage.get_obj(b'dc:\x03bar:__init__', INIT_NC_TYPE) is True
+        assert b12_storage.get_obj(b'dc:\x03bar:\x00', INT_NC_TYPE) == 4
+        assert b12_storage.get_obj(b'dc:\x03bar:\x01', INT_NC_TYPE) == 5
+        assert b12_storage.get_obj(b'dc:\x03bar:\x02', INT_NC_TYPE) == 6
+        assert b12_storage.get_obj(b'dc:\x03bar:\x03', INT_NC_TYPE) == 7
+        with self.assertRaises(KeyError):
+            b12_storage.get_obj(b'dc:\x03bar:\x04', INT_NC_TYPE)
+        metadata = b12_storage.get_obj(b'dc:\x03bar:__metadata__', METADATA_NC_TYPE)
+        assert metadata.first_index == 0
+        assert metadata.last_index == 3
+        assert metadata.length == 4
+        assert not metadata.reversed

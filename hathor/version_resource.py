@@ -46,7 +46,9 @@ class VersionResource(Resource):
         set_cors(request, 'GET')
 
         best_block = self.manager.tx_storage.get_best_block()
-        nano_contracts_enabled = is_nano_active(self._settings, best_block, self.feature_service)
+        nano_contracts_enabled = is_nano_active(
+            settings=self._settings, block=best_block, feature_service=self.feature_service
+        )
 
         data = {
             'version': hathor.__version__,

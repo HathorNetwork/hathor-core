@@ -10,7 +10,7 @@ from hathor.nanocontracts.types import ContractId, NCWithdrawalAction, TokenUid,
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.transaction.token_creation_tx import TokenDescription
+from hathor.transaction.token_info import TokenDescription
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.utils import assert_nc_failure_reason
@@ -31,16 +31,17 @@ class MyBlueprint(Blueprint):
         pass
 
     @public(allow_deposit=True)
-    def create_token(
+    def create_deposit_token(
         self,
         ctx: Context,
+        salt: bytes,
         token_name: str,
         token_symbol: str,
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
     ) -> None:
-        self.syscall.create_token(token_name, token_symbol, amount, mint_authority, melt_authority)
+        self.syscall.create_deposit_token(token_name, token_symbol, amount, mint_authority, melt_authority, salt=salt)
 
 
 class NCNanoContractTestCase(unittest.TestCase):
@@ -164,6 +165,8 @@ class NCNanoContractTestCase(unittest.TestCase):
 
     def test_token_creation_by_contract(self) -> None:
         token_symbol = 'TKA'
+        salt0 = b'\0'
+        salt1 = b'\1'
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         vertices = dag_builder.build_from_str(f'''
@@ -174,23 +177,28 @@ class NCNanoContractTestCase(unittest.TestCase):
             tx1.nc_method = initialize()
 
             tx2.nc_id = tx1
-            tx2.nc_method = create_token("MyToken", "{token_symbol}", 100, false, false)
+            tx2.nc_method = create_deposit_token("{salt0.hex()}", "MyToken", "{token_symbol}", 100, false, false)
             tx2.nc_deposit = 3 HTR
 
             tx3.nc_id = tx1
-            tx3.nc_method = create_token("MyToken (2)", "{token_symbol}", 50, true, false)
+            tx3.nc_method = create_deposit_token("{salt0.hex()}", "MyToken (2)", "{token_symbol}", 50, true, false)
             tx3.nc_deposit = 1 HTR
 
-            tx2 < tx3
+            tx4.nc_id = tx1
+            tx4.nc_method = create_deposit_token("{salt1.hex()}", "MyToken", "{token_symbol}", 30, true, false)
+            tx4.nc_deposit = 1 HTR
+
+            tx2 < tx3 < tx4
 
             b31 --> tx1
             b31 --> tx2
             b32 --> tx3
+            b32 --> tx4
         ''')
 
         vertices.propagate_with(self.manager)
 
-        tx1, tx2, tx3 = vertices.get_typed_vertices(['tx1', 'tx2', 'tx3'], Transaction)
+        tx1, tx2, tx3, tx4 = vertices.get_typed_vertices(['tx1', 'tx2', 'tx3', 'tx4'], Transaction)
         b31, b32 = vertices.get_typed_vertices(['b31', 'b32'], Block)
 
         # Uncomment for debugging:
@@ -207,6 +215,9 @@ class NCNanoContractTestCase(unittest.TestCase):
         assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
         assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
 
+        assert tx4.get_metadata().voided_by is None
+        assert tx4.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
         assert b31.get_metadata().voided_by is None
         assert b32.get_metadata().voided_by is None
 
@@ -217,26 +228,82 @@ class NCNanoContractTestCase(unittest.TestCase):
             reason='NCTokenAlreadyExists',
         )
 
-        child_token_id = derive_child_token_id(ContractId(VertexId(tx1.hash)), token_symbol)
-        child_token_balance_key = BalanceKey(nc_id=tx1.hash, token_uid=child_token_id)
+        child_token_id0 = derive_child_token_id(ContractId(VertexId(tx1.hash)), token_symbol, salt=salt0)
+        child_token_id1 = derive_child_token_id(ContractId(VertexId(tx1.hash)), token_symbol, salt=salt1)
+
+        child_token_balance_key0 = BalanceKey(nc_id=tx1.hash, token_uid=child_token_id0)
+        child_token_balance_key1 = BalanceKey(nc_id=tx1.hash, token_uid=child_token_id1)
         htr_balance_key = BalanceKey(nc_id=tx1.hash, token_uid=settings.HATHOR_TOKEN_UID)
 
-        block_storage = self.manager.get_nc_block_storage(b31)
-        expected_token_info = TokenDescription(
-            token_id=child_token_id,
+        block_storage = self.manager.get_nc_block_storage(b32)
+        assert block_storage.get_token_description(child_token_id0) == TokenDescription(
+            token_id=child_token_id0,
             token_name='MyToken',
             token_symbol=token_symbol,
         )
-        assert block_storage.get_token_description(child_token_id) == expected_token_info
+        assert block_storage.get_token_description(child_token_id1) == TokenDescription(
+            token_id=child_token_id1,
+            token_name='MyToken',
+            token_symbol=token_symbol,
+        )
 
         nc_storage = block_storage.get_contract_storage(tx1.hash)
         assert nc_storage.get_all_balances() == {
-            child_token_balance_key: Balance(value=100, can_mint=False, can_melt=False),
+            child_token_balance_key0: Balance(value=100, can_mint=False, can_melt=False),
+            child_token_balance_key1: Balance(value=30, can_mint=True, can_melt=False),
             htr_balance_key: Balance(value=2, can_mint=False, can_melt=False),
         }
 
         tokens_index = self.manager.tx_storage.indexes.tokens
         assert tokens_index.get_token_info(settings.HATHOR_TOKEN_UID).get_total() == (
-            settings.GENESIS_TOKENS + 40 * settings.INITIAL_TOKENS_PER_BLOCK - 1
+            settings.GENESIS_TOKENS + 40 * settings.INITIAL_TOKENS_PER_BLOCK - 2
         )
-        assert tokens_index.get_token_info(child_token_id).get_total() == 100
+        assert tokens_index.get_token_info(child_token_id0).get_total() == 100
+        assert tokens_index.get_token_info(child_token_id1).get_total() == 30
+
+    def test_token_creation_withdrawal_and_transfer(self) -> None:
+        """Test that creates token via nanocontract, withdraws it and transfers to another wallet."""
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        vertices = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..40]
+            b30 < dummy
+
+            # 1. Create initial contract
+            tx1.nc_id = "{self.myblueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            # 2. Create TKA token through contract and send to wallet2
+            tx2.nc_id = tx1
+            tx2.nc_method = create_deposit_token("00", "MyToken", "TKA", 500, false, false)
+            tx2.nc_deposit = 5 HTR
+            tx2.out[0] = 500 TKA [wallet2]
+
+            # 3. Transfer some TKA tokens to another wallet
+            tx2.out[0] <<< tx3
+            tx3.out[0] = 50 TKA [wallet2]
+
+            # Temporal ordering
+            tx1 < tx2 < tx3
+
+            b31 --> tx1
+            b32 --> tx2
+            b33 --> tx3
+        ''')
+
+        vertices.propagate_with(self.manager)
+
+        # Get all vertices to validate
+        tx1, tx2, tx3 = vertices.get_typed_vertices(['tx1', 'tx2', 'tx3'], Transaction)
+        b40, = vertices.get_typed_vertices(['b40'], Block)
+
+        # Assert that all transactions were successfully executed
+        assert tx1.get_metadata().voided_by is None
+        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        assert tx2.get_metadata().voided_by is None
+        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+
+        assert tx3.get_metadata().voided_by is None
+
+        # Assert that b40 is the best block
+        assert b40.hash in self.manager.tx_storage.get_best_block_tips()

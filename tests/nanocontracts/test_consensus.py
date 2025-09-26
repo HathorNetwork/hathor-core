@@ -1417,3 +1417,59 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(b33.get_metadata().voided_by)
         self.assertIsNone(b34.get_metadata().voided_by)
         self.assertIsNone(b50.get_metadata().voided_by)
+
+    def test_reorg_nc_with_conflict(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            blockchain b31 a[32..34]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            # nc2 will fail because nc1.counter is 0
+            nc2.nc_id = nc1
+            nc2.nc_method = fail_on_zero()
+
+            # nc2 has a conflict with tx2
+            tx1.out[0] <<< nc2
+            tx1.out[0] <<< tx2
+
+            nc1 <-- b31
+            nc2 <-- b32
+
+            # we want to include tx2, but it can't be confirmed by b32
+            # otherwise that block would be confirming conflicts
+            tx2 < b32
+
+            # a34 will generate a reorg, reexecuting nc2.
+            b33 < a32
+            nc2 <-- a33
+        ''')
+
+        b31, b32, b33 = artifacts.get_typed_vertices(['b31', 'b32', 'b33'], Block)
+        a32, a33, a34 = artifacts.get_typed_vertices(['a32', 'a33', 'a34'], Block)
+        nc2, tx2 = artifacts.get_typed_vertices(['nc2', 'tx2'], Transaction)
+
+        artifacts.propagate_with(self.manager, up_to='b33')
+
+        assert nc2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().conflict_with == [tx2.hash]
+        assert nc2.get_metadata().first_block == b32.hash
+
+        assert tx2.get_metadata().voided_by == {tx2.hash}
+        assert tx2.get_metadata().conflict_with == [nc2.hash]
+        assert tx2.get_metadata().first_block is None
+
+        artifacts.propagate_with(self.manager)
+
+        assert nc2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().conflict_with == [tx2.hash]
+        assert nc2.get_metadata().first_block == a33.hash
+
+        assert tx2.get_metadata().voided_by == {tx2.hash}
+        assert tx2.get_metadata().conflict_with == [nc2.hash]
+        assert tx2.get_metadata().first_block is None

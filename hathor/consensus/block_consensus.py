@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 from structlog import get_logger
 from typing_extensions import assert_never
 
+from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.types import MetaNCCallRecord
@@ -31,6 +32,7 @@ from hathor.utils.weight import weight_to_work
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.consensus.context import ConsensusAlgorithmContext
+    from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
@@ -49,11 +51,13 @@ class BlockConsensusAlgorithm:
         context: 'ConsensusAlgorithmContext',
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
+        feature_service: FeatureService,
     ) -> None:
         self._settings = settings
         self.context = context
         self._runner_factory = runner_factory
         self._nc_log_storage = nc_log_storage
+        self.feature_service = feature_service
 
     @classproperty
     def log(cls) -> Any:
@@ -67,12 +71,14 @@ class BlockConsensusAlgorithm:
         assert self.context.nc_events is None
         self.context.nc_events = []
         self.update_voided_info(block)
-        if self._settings.ENABLE_NANO_CONTRACTS:
-            self.execute_nano_contracts(block)
 
-    def _nc_initialize_genesis(self, block: Block) -> None:
-        """Initialize the genesis block with an empty contract trie."""
-        assert block.is_genesis
+        if self._should_execute_nano(block):
+            self.execute_nano_contracts(block)
+        else:
+            self._nc_initialize_empty(block)
+
+    def _nc_initialize_empty(self, block: Block) -> None:
+        """Initialize a block with an empty contract trie."""
         meta = block.get_metadata()
         block_storage = self.context.consensus.nc_storage_factory.get_empty_block_storage()
         block_storage.commit()
@@ -86,13 +92,9 @@ class BlockConsensusAlgorithm:
         """Execute the method calls for transactions confirmed by this block handling reorgs."""
         # If we reach this point, Nano Contracts must be enabled.
         assert self._settings.ENABLE_NANO_CONTRACTS
+        assert not block.is_genesis
 
         meta = block.get_metadata()
-
-        if block.is_genesis:
-            self._nc_initialize_genesis(block)
-            return
-
         if meta.voided_by:
             # If the block is voided, skip execution.
             return
@@ -116,11 +118,47 @@ class BlockConsensusAlgorithm:
                 to_be_executed.append(cur)
                 cur = cur.get_block_parent()
         else:
-            # no reorg occurred, so simply execute this new block.
-            to_be_executed = [block]
+            # No reorg occurred, so we execute all unexecuted blocks.
+            # Normally it's just the current block, but it's possible to have
+            # voided and therefore unexecuted blocks connected to the best chain,
+            # for example when a block is voided by a transaction.
+            cur = block
+            while True:
+                cur_meta = cur.get_metadata()
+                if cur_meta.nc_block_root_id is not None:
+                    break
+                to_be_executed.append(cur)
+                if cur.is_genesis:
+                    break
+                cur = cur.get_block_parent()
 
         for current in to_be_executed[::-1]:
             self._nc_execute_calls(current, is_reorg=is_reorg)
+
+    def _should_execute_nano(self, block: Block) -> bool:
+        """
+        Determine whether we should proceed to execute Nano transactions while making the necessary initializations.
+        """
+        from hathor.conf.settings import NanoContractsSetting
+        assert not block.is_genesis
+
+        match self._settings.ENABLE_NANO_CONTRACTS:
+            case NanoContractsSetting.ENABLED:
+                return True
+
+            case NanoContractsSetting.FEATURE_ACTIVATION:
+                parent = block.get_block_parent()
+                is_active_on_parent = self.feature_service.is_feature_active(
+                    vertex=parent,
+                    feature=Feature.NANO_CONTRACTS,
+                )
+                return is_active_on_parent
+
+            case NanoContractsSetting.DISABLED:
+                return False
+
+            case _:  # pragma: no cover
+                assert_never(self._settings.ENABLE_NANO_CONTRACTS)
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
@@ -130,15 +168,17 @@ class BlockConsensusAlgorithm:
 
         assert self._settings.ENABLE_NANO_CONTRACTS
 
+        if block.is_genesis:
+            # XXX We can remove this call after the full node initialization is refactored and
+            #     the genesis block goes through the consensus protocol.
+            self._nc_initialize_empty(block)
+            return
+
         meta = block.get_metadata()
         assert not meta.voided_by
         assert meta.nc_block_root_id is None
 
         parent = block.get_block_parent()
-        if parent.is_genesis:
-            # XXX We can remove this call after the full node initialization is refactored and
-            #     the genesis block goes through the consensus protocol.
-            self._nc_initialize_genesis(parent)
         parent_meta = parent.get_metadata()
         block_root_id = parent_meta.nc_block_root_id
         assert block_root_id is not None
@@ -248,8 +288,8 @@ class BlockConsensusAlgorithm:
                           tx=tx.hash.hex(),
                           execution=tx_meta.nc_execution.value)
             match tx_meta.nc_execution:
-                case NCExecutionState.PENDING:
-                    assert False  # should never happen
+                case NCExecutionState.PENDING:  # pragma: no cover
+                    assert False, 'unexpected pending state'  # should never happen
                 case NCExecutionState.SUCCESS:
                     assert tx_meta.voided_by is None
                 case NCExecutionState.FAILURE:
@@ -257,7 +297,7 @@ class BlockConsensusAlgorithm:
                 case NCExecutionState.SKIPPED:
                     assert tx_meta.voided_by
                     assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
-                case _:
+                case _:  # pragma: no cover
                     assert_never(tx_meta.nc_execution)
 
     def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
@@ -423,7 +463,7 @@ class BlockConsensusAlgorithm:
                 self.update_voided_by_from_parents(block)
 
             else:
-                # Either eveyone has the same score or there is a winner.
+                # Either everyone has the same score or there is a winner.
 
                 valid_heads = []
                 for head in heads:
@@ -782,17 +822,25 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
-    __slots__ = ('settings', 'nc_log_storage', '_runner_factory')
+    __slots__ = ('settings', 'nc_log_storage', '_runner_factory', 'feature_service')
 
     def __init__(
         self,
         settings: HathorSettings,
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
+        feature_service: FeatureService,
     ) -> None:
         self.settings = settings
         self._runner_factory = runner_factory
         self.nc_log_storage = nc_log_storage
+        self.feature_service = feature_service
 
     def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
-        return BlockConsensusAlgorithm(self.settings, context, self._runner_factory, self.nc_log_storage)
+        return BlockConsensusAlgorithm(
+            self.settings,
+            context,
+            self._runner_factory,
+            self.nc_log_storage,
+            self.feature_service,
+        )

@@ -17,6 +17,8 @@ from typing import NamedTuple
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.reactor import ReactorProtocol as Reactor
+from hathor.transaction.storage import TransactionStorage
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
 from hathor.verification.nano_header_verifier import NanoHeaderVerifier
@@ -42,41 +44,52 @@ class VertexVerifiers(NamedTuple):
     def create_defaults(
         cls,
         *,
+        reactor: Reactor,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
+        tx_storage: TransactionStorage,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
-        vertex_verifier = VertexVerifier(settings=settings, feature_service=feature_service)
+        vertex_verifier = VertexVerifier(reactor=reactor, settings=settings, feature_service=feature_service)
 
         return cls.create(
+            reactor=reactor,
             settings=settings,
             vertex_verifier=vertex_verifier,
             daa=daa,
-            feature_service=feature_service
+            feature_service=feature_service,
+            tx_storage=tx_storage,
         )
 
     @classmethod
     def create(
         cls,
         *,
+        reactor: Reactor,
         settings: HathorSettings,
         vertex_verifier: VertexVerifier,
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
+        tx_storage: TransactionStorage,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using a custom vertex_verifier.
         """
-        block_verifier = BlockVerifier(settings=settings, daa=daa, feature_service=feature_service)
+        block_verifier = BlockVerifier(
+            settings=settings,
+            daa=daa,
+            feature_service=feature_service,
+            tx_storage=tx_storage,
+        )
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         poa_block_verifier = PoaBlockVerifier(settings=settings)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
-        nano_header_verifier = NanoHeaderVerifier(settings=settings)
+        nano_header_verifier = NanoHeaderVerifier(settings=settings, tx_storage=tx_storage)
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)
 
         return VertexVerifiers(

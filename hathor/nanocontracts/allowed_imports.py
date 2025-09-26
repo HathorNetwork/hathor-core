@@ -17,6 +17,7 @@ import math
 import typing
 
 import hathor.nanocontracts as nc
+import hathor.nanocontracts.utils as nc_utils
 
 # this is what's allowed to be imported in blueprints, to be checked in the AST and in runtime
 ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
@@ -33,7 +34,10 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
     ),
     'collections': dict(OrderedDict=collections.OrderedDict),
     # hathor
-    'hathor.nanocontracts': dict(Blueprint=nc.Blueprint),
+    'hathor.nanocontracts': dict(
+        Blueprint=nc.Blueprint,
+        HATHOR_TOKEN_UID=nc.HATHOR_TOKEN_UID,
+    ),
     'hathor.nanocontracts.blueprint': dict(Blueprint=nc.Blueprint),
     'hathor.nanocontracts.context': dict(Context=nc.Context),
     'hathor.nanocontracts.exception': dict(NCFail=nc.NCFail),
@@ -43,6 +47,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         SignedData=nc.types.SignedData,
         public=nc.public,
         view=nc.view,
+        export=nc.export,
         fallback=nc.fallback,
         Address=nc.types.Address,
         Amount=nc.types.Amount,
@@ -60,5 +65,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         NCArgs=nc.types.NCArgs,
         NCRawArgs=nc.types.NCRawArgs,
         NCParsedArgs=nc.types.NCParsedArgs,
+        sha3=nc_utils.sha3,
+        verify_ecdsa=nc_utils.verify_ecdsa,
     ),
 }

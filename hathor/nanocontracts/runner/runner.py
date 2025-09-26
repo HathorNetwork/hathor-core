@@ -87,10 +87,11 @@ from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import (
     clean_token_string,
-    get_deposit_amount,
-    get_withdraw_amount,
+    get_deposit_token_deposit_amount,
+    get_deposit_token_withdraw_amount,
     validate_token_name_and_symbol,
 )
 
@@ -181,7 +182,7 @@ class Runner:
         assert vertex_metadata.first_block is not None, 'execute must only be called after first_block is updated'
 
         context = nano_header.get_context()
-        assert context.vertex.block.hash == vertex_metadata.first_block
+        assert context.block.hash == vertex_metadata.first_block
 
         nc_args = NCRawArgs(nano_header.nc_args_bytes)
         if nano_header.is_creating_a_new_contract():
@@ -310,6 +311,7 @@ class Runner:
         actions: Sequence[NCAction],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
+        forbid_fallback: bool,
     ) -> Any:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         if method_name == NC_INITIALIZE_METHOD:
@@ -329,6 +331,7 @@ class Runner:
             method_name=method_name,
             actions=actions,
             nc_args=nc_args,
+            forbid_fallback=forbid_fallback,
         )
 
     @_forbid_syscall_from_view('proxy_call_public_method')
@@ -385,6 +388,7 @@ class Runner:
         actions: Sequence[NCAction],
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
+        forbid_fallback: bool = False,
     ) -> Any:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
@@ -413,10 +417,10 @@ class Runner:
 
         # Call the other contract method.
         ctx = Context(
-            actions=actions,
-            vertex=first_ctx.vertex,
             caller_id=last_call_record.contract_id,
-            timestamp=first_ctx.timestamp,
+            vertex_data=first_ctx.vertex,
+            block_data=first_ctx.block,
+            actions=Context.__group_actions__(actions),
         )
         return self._execute_public_method_call(
             contract_id=contract_id,
@@ -425,6 +429,7 @@ class Runner:
             ctx=ctx,
             nc_args=nc_args,
             skip_reentrancy_validation=skip_reentrancy_validation,
+            forbid_fallback=forbid_fallback,
         )
 
     def _reset_all_change_trackers(self) -> None:
@@ -534,6 +539,7 @@ class Runner:
         ctx: Context,
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
+        forbid_fallback: bool = False,
     ) -> Any:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
@@ -551,6 +557,8 @@ class Runner:
         args: tuple[Any, ...]
         if method is None:
             assert method_name != NC_INITIALIZE_METHOD
+            if forbid_fallback:
+                raise NCMethodNotFound(f'method `{method_name}` not found and fallback is forbidden')
             fallback_method = getattr(blueprint, NC_FALLBACK_METHOD, None)
             if fallback_method is None:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
@@ -705,7 +713,7 @@ class Runner:
         if method is None:
             raise NCMethodNotFound(method_name)
         if not is_nc_view_method(method):
-            raise NCInvalidMethodCall('not a view method')
+            raise NCInvalidMethodCall(f'`{method_name}` is not a view method')
 
         parser = Method.from_callable(method)
         args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
@@ -925,7 +933,7 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
         token_amount = amount
-        htr_amount = -get_deposit_amount(self._settings, token_amount)
+        htr_amount = -get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker.add_balance(token_uid, token_amount)
         changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
@@ -957,7 +965,7 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
         token_amount = -amount
-        htr_amount = get_withdraw_amount(self._settings, token_amount)
+        htr_amount = get_deposit_token_withdraw_amount(self._settings, token_amount)
 
         changes_tracker.add_balance(token_uid, token_amount)
         changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
@@ -1011,28 +1019,30 @@ class Runner:
         blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
         return blueprint_class(env)
 
-    @_forbid_syscall_from_view('create_token')
-    def syscall_create_child_token(
+    @_forbid_syscall_from_view('create_deposit_token')
+    def syscall_create_child_deposit_token(
         self,
+        *,
+        salt: bytes,
         token_name: str,
         token_symbol: str,
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
     ) -> TokenUid:
-        """Create a child token from a contract."""
+        """Create a child deposit token from a contract."""
         try:
             validate_token_name_and_symbol(self._settings, token_name, token_symbol)
         except TransactionDataError as e:
-            raise NCInvalidSyscall('invalid token description') from e
+            raise NCInvalidSyscall(str(e)) from e
 
         last_call_record = self.get_current_call_record()
         parent_id = last_call_record.contract_id
         cleaned_token_symbol = clean_token_string(token_symbol)
-        token_id = derive_child_token_id(parent_id, cleaned_token_symbol)
+        token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
 
         token_amount = amount
-        htr_amount = get_deposit_amount(self._settings, token_amount)
+        htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
 
         changes_tracker = self.get_current_changes_tracker(parent_id)
         changes_tracker.create_token(token_id, token_name, token_symbol)
@@ -1054,10 +1064,25 @@ class Runner:
             htr_amount=-htr_amount,
             token_symbol=token_symbol,
             token_name=token_name,
+            token_version=TokenVersion.DEPOSIT
         )
         last_call_record.index_updates.append(syscall_record)
 
         return token_id
+
+    @_forbid_syscall_from_view('create_fee_token')
+    def syscall_create_child_fee_token(
+        self,
+        *,
+        salt: bytes,
+        token_name: str,
+        token_symbol: str,
+        amount: int,
+        mint_authority: bool,
+        melt_authority: bool,
+    ) -> TokenUid:
+        """Create a child deposit token from a contract."""
+        raise NotImplementedError('syscall not implemented')
 
     @_forbid_syscall_from_view('emit_event')
     def syscall_emit_event(self, data: bytes) -> None:

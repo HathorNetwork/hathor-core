@@ -32,7 +32,7 @@ from hathor.nanocontracts.storage.contract_storage import (
 )
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid
-from hathor.transaction.token_creation_tx import TokenDescription
+from hathor.transaction.token_info import TokenDescription
 
 T = TypeVar('T')
 D = TypeVar('D')
@@ -129,8 +129,11 @@ class NCChangesTracker(NCContractStorage):
             obj_td = self.storage.get_obj(key, nc_type, default=default)
             obj = obj_td
         if obj is DeletedKey:
+            if default is not _NOT_PROVIDED:
+                return default
             raise KeyError(key)
         assert not isinstance(obj, DeletedKeyType)
+        assert obj is not _NOT_PROVIDED
         return obj
 
     @override
