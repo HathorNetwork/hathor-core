@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import itertools
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
@@ -31,7 +32,7 @@ from hathor.nanocontracts.storage.contract_storage import (
     NCContractStorage,
 )
 from hathor.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid
+from hathor.nanocontracts.types import Address, Amount, BlueprintId, ContractId, TokenUid
 from hathor.transaction.token_info import TokenDescription
 
 T = TypeVar('T')
@@ -81,6 +82,7 @@ class NCChangesTracker(NCContractStorage):
         self._balance_diff: dict[BalanceKey, int] = {}
         self._authorities_diff: dict[BalanceKey, _NCAuthorityDiff] = {}
         self._created_tokens: dict[TokenUid, TokenDescription] = {}
+        self._transfers: defaultdict[Address, int] = defaultdict(int)
         self._blueprint_id: BlueprintId | None = None
 
         self.has_been_commited = False
@@ -101,6 +103,10 @@ class NCChangesTracker(NCContractStorage):
         if token_id in self._created_tokens:
             return True
         return self.storage.has_token(token_id)
+
+    def add_address_balance(self, address: Address, amount: Amount) -> None:
+        assert amount >= 0
+        self._transfers[address] += amount
 
     def get_balance_diff(self) -> MappingProxyType[BalanceKey, int]:
         """Return the balance diff of this change tracker."""
@@ -187,6 +193,9 @@ class NCChangesTracker(NCContractStorage):
 
         for td in self._created_tokens.values():
             self.storage.create_token(TokenUid(td.token_id), td.token_name, td.token_symbol)
+
+        for address, amount in self._transfers.items():
+            self.stoarge.add_address_balance(address, amount)
 
         if self._blueprint_id is not None:
             self.storage.set_blueprint_id(self._blueprint_id)

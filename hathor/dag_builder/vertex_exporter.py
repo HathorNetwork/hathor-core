@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import ast
+import hashlib
 import re
 from collections import defaultdict
 from types import ModuleType
@@ -23,7 +24,14 @@ from typing_extensions import assert_never
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.dag_builder.builder import NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY, DAGBuilder, DAGNode
+from hathor.dag_builder.builder import (
+    NC_DEPOSIT_KEY,
+    NC_TRANSFER_INPUT_KEY,
+    NC_TRANSFER_OUTPUT_KEY,
+    NC_WITHDRAWAL_KEY,
+    DAGBuilder,
+    DAGNode,
+)
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
 from hathor.dag_builder.utils import get_literal, is_literal
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
@@ -34,6 +42,7 @@ from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_bl
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
+from hathor.transaction.headers.transfer_header import TxTransferInput, TxTransferOutput
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
@@ -229,6 +238,7 @@ class VertexExporter:
         vertex.token_symbol = node.name
         vertex.timestamp = self.get_min_timestamp(node)
         self.add_nano_header_if_needed(node, vertex)
+        self.add_transfer_header_if_needed(node, vertex)
         self.sign_all_inputs(vertex, node=node)
         if 'weight' in node.attrs:
             vertex.weight = float(node.attrs['weight'])
@@ -253,6 +263,7 @@ class VertexExporter:
 
         blk = Block(parents=parents, outputs=outputs)
         self.add_nano_header_if_needed(node, blk)
+        self.add_transfer_header_if_needed(node, blk)
         blk.timestamp = self.get_min_timestamp(node) + self._settings.AVG_TIME_BETWEEN_BLOCKS
         blk.get_height = lambda: height  # type: ignore[method-assign]
         blk.update_hash()  # the next call fails is blk.hash is None
@@ -301,6 +312,65 @@ class VertexExporter:
         cur = self._next_nc_seqnum[address]
         self._next_nc_seqnum[address] = cur + 1
         return cur
+
+    def _get_token_index(self, token_name: str, node: DAGNode, vertex: BaseTransaction) -> None:
+        token_index = 0
+        if token_name != 'HTR':
+            assert isinstance(vertex, Transaction)
+            token_creation_tx = self._vertices[token_name]
+            if token_creation_tx.hash not in vertex.tokens:
+                vertex.tokens.append(token_creation_tx.hash)
+            token_index = 1 + vertex.tokens.index(token_creation_tx.hash)
+        return token_index
+
+    def add_transfer_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        inputs = node.get_attr_list(NC_TRANSFER_INPUT_KEY)
+        outputs = node.get_attr_list(NC_TRANSFER_OUTPUT_KEY)
+
+        if not inputs and not outputs:
+            return
+
+        transfer_inputs: list[TxTransferInput] = []
+        for wallet_name, token_name, amount in inputs:
+            wallet = self.get_wallet(wallet_name)
+            assert isinstance(wallet, HDWallet)
+            privkey = wallet.get_key_at_index(0)
+            pubkey_bytes = privkey.sec()
+            address = get_address_from_public_key_bytes(pubkey_bytes)
+            token_index = self._get_token_index(token_name, node, vertex)
+
+            sighash_data = vertex.get_sighash_all_data()
+            sighash_data_hash = hashlib.sha256(sighash_data).digest()
+            signature = privkey.sign(sighash_data_hash)
+            script = P2PKH.create_input_data(public_key_bytes=pubkey_bytes, signature=signature)
+
+            transfer_inputs.append(TxTransferInput(
+                address=address,
+                amount=amount,
+                token_index=token_index,
+                script=script,
+            ))
+
+        transfer_outputs: list[TxTransferOutput] = []
+        for wallet_name, token_name, amount in outputs:
+            wallet = self.get_wallet(wallet_name)
+            assert isinstance(wallet, HDWallet)
+            privkey = wallet.get_key_at_index(0)
+            pubkey_bytes = privkey.sec()
+            address = get_address_from_public_key_bytes(pubkey_bytes)
+            token_index = self._get_token_index(token_name, node, vertex)
+            transfer_outputs.append(TxTransferOutput(
+                address=address,
+                amount=amount,
+                token_index=token_index,
+            ))
+
+        from hathor.transaction.headers import TransferHeader
+        transfer_header = TransferHeader(
+            inputs=transfer_inputs,
+            outputs=transfer_outputs,
+        )
+        vertex.headers.append(transfer_header)
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
@@ -405,6 +475,7 @@ class VertexExporter:
         assert len(block_parents) == 0
         ocb = OnChainBlueprint(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         self.add_nano_header_if_needed(node, ocb)
+        self.add_transfer_header_if_needed(node, ocb)
         code_attr = node.get_attr_str('ocb_code')
 
         if is_literal(code_attr):
@@ -453,6 +524,7 @@ class VertexExporter:
         tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
         tx.timestamp = self.get_min_timestamp(node)
         self.add_nano_header_if_needed(node, tx)
+        self.add_transfer_header_if_needed(node, tx)
         self.sign_all_inputs(tx, node=node)
         if 'weight' in node.attrs:
             tx.weight = float(node.attrs['weight'])
