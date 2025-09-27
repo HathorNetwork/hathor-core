@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 from struct import pack
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar
 
 from typing_extensions import Self, override
 
@@ -26,11 +26,14 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader
+from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
+
+T = TypeVar('T', bound=VertexBaseHeader)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -112,12 +115,28 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         else:
             return True
 
+    def has_fees(self) -> bool:
+        try:
+            self.get_fee_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
     def get_nano_header(self) -> NanoHeader:
         """Return the NanoHeader or raise ValueError."""
+        return self._get_header(NanoHeader)
+
+    def get_fee_header(self) -> FeeHeader:
+        """Return the FeeHeader or raise ValueError."""
+        return self._get_header(FeeHeader)
+
+    def _get_header(self, header_type: type[T]) -> T:
+        """Return the header of the given type or raise ValueError."""
         for header in self.headers:
-            if isinstance(header, NanoHeader):
+            if isinstance(header, header_type):
                 return header
-        raise ValueError('nano header not found')
+        raise ValueError(f'{header_type.__name__.lower()} not found')
 
     @classmethod
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
