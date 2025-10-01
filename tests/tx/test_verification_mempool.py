@@ -22,12 +22,15 @@ from hathor.transaction.exceptions import (
     ConflictWithConfirmedTxError,
     InvalidToken,
     TimestampError,
+    TooManyBetweenConflicts,
     TooManyTokens,
+    TooManyWithinConflicts,
     UnusedTokensError,
 )
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.verification.nano_header_verifier import MAX_SEQNUM_DIFF_MEMPOOL
+from hathor.verification.transaction_verifier import MAX_BETWEEN_CONFLICTS, MAX_WITHIN_CONFLICTS
 from hathor.verification.vertex_verifier import MAX_PAST_TIMESTAMP_ALLOWED
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
@@ -175,6 +178,49 @@ class VertexHeadersTest(unittest.TestCase):
         with self.assertRaises(InvalidNewTransaction) as e:
             self.manager.vertex_handler.on_new_mempool_transaction(tx3)
         assert isinstance(e.exception.__cause__, ConflictWithConfirmedTxError)
+
+    def test_too_many_between_conflicts(self) -> None:
+        lines = [f'tx0.out[{i}] <<< txN tx{i + 1}' for i in range(0, MAX_BETWEEN_CONFLICTS + 1)]
+        orders = [f'tx{i + 1} < txN' for i in range(0, MAX_BETWEEN_CONFLICTS + 1)]
+        newline = '\n'
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..30]
+            b10 < dummy
+
+            {newline.join(lines)}
+            {newline.join(orders)}
+        ''')
+        artifacts.propagate_with(self.manager, up_to_before='txN')
+        txN = artifacts.get_typed_vertex('txN', Transaction)
+
+        # need to fix the timestamp to pass the old vertices mempool verification
+        txN.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(txN)
+
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(txN)
+        assert isinstance(e.exception.__cause__, TooManyBetweenConflicts)
+
+    def test_too_many_within_conflicts(self) -> None:
+        tx_list = [f'tx{i + 1}' for i in range(0, MAX_WITHIN_CONFLICTS + 1)]
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..30]
+            b10 < dummy
+
+            tx0.out[0] <<< {' '.join(tx_list)}
+
+            {' < '.join(tx_list)}
+        ''')
+        artifacts.propagate_with(self.manager, up_to_before=tx_list[-1])
+        txN = artifacts.get_typed_vertex(tx_list[-1], Transaction)
+
+        # need to fix the timestamp to pass the old vertices mempool verification
+        txN.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(txN)
+
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(txN)
+        assert isinstance(e.exception.__cause__, TooManyWithinConflicts)
 
     @inlineCallbacks
     def test_checkpoints(self) -> Generator:

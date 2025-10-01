@@ -114,6 +114,14 @@ class ConflictWithConfirmedTxError(TxValidationError):
     """Input has a conflict with a confirmed transaction."""
 
 
+class TooManyWithinConflicts(TxValidationError):
+    """Input has too many within conflicts already."""
+
+
+class TooManyBetweenConflicts(TxValidationError):
+    """Input has too many between conflicts already."""
+
+
 class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
 

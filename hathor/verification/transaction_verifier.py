@@ -40,9 +40,11 @@ from hathor.transaction.exceptions import (
     ScriptError,
     TimestampError,
     TooFewInputs,
+    TooManyBetweenConflicts,
     TooManyInputs,
     TooManySigOps,
     TooManyTokens,
+    TooManyWithinConflicts,
     UnusedTokensError,
     WeightError,
 )
@@ -57,6 +59,8 @@ if TYPE_CHECKING:
 cpu = get_cpu_profiler()
 
 MAX_TOKENS_LENGTH: int = 16
+MAX_WITHIN_CONFLICTS: int = 8
+MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
@@ -356,12 +360,14 @@ class TransactionVerifier:
         if not params.reject_conflicts_with_confirmed_txs:
             return
 
+        between_counter = 0
         for txin in tx.inputs:
             spent_tx = tx.get_spent_tx(txin)
             spent_tx_meta = spent_tx.get_metadata()
             if txin.index not in spent_tx_meta.spent_outputs:
                 continue
             spent_by_list = spent_tx_meta.spent_outputs[txin.index]
+            within_counter = 0
             for h in spent_by_list:
                 if h == tx.hash:
                     # Skip tx itself.
@@ -370,6 +376,16 @@ class TransactionVerifier:
                 if conflict_tx.get_metadata().first_block is not None:
                     # only mempool conflicts are allowed
                     raise ConflictWithConfirmedTxError('transaction has a conflict with a confirmed transaction')
+                if within_counter == 0:
+                    # Only increment once per input.
+                    between_counter += 1
+                within_counter += 1
+
+            if within_counter >= MAX_WITHIN_CONFLICTS:
+                raise TooManyWithinConflicts
+
+        if between_counter > MAX_BETWEEN_CONFLICTS:
+            raise TooManyBetweenConflicts
 
 
 @dataclass(kw_only=True, slots=True)
