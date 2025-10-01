@@ -22,7 +22,6 @@ from hathor.nanocontracts.nc_types.bytes_nc_type import BytesLikeNCType, BytesNC
 from hathor.nanocontracts.nc_types.caller_id_nc_type import CallerIdNCType
 from hathor.nanocontracts.nc_types.collection_nc_type import DequeNCType, FrozenSetNCType, ListNCType, SetNCType
 from hathor.nanocontracts.nc_types.dataclass_nc_type import DataclassNCType
-from hathor.nanocontracts.nc_types.enum_nc_type import IntEnumNCType
 from hathor.nanocontracts.nc_types.fixed_size_bytes_nc_type import Bytes32NCType
 from hathor.nanocontracts.nc_types.map_nc_type import DictNCType
 from hathor.nanocontracts.nc_types.namedtuple_nc_type import NamedTupleNCType
@@ -30,7 +29,7 @@ from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.nanocontracts.nc_types.null_nc_type import NullNCType
 from hathor.nanocontracts.nc_types.optional_nc_type import OptionalNCType
 from hathor.nanocontracts.nc_types.signed_data_nc_type import SignedDataNCType
-from hathor.nanocontracts.nc_types.sized_int_nc_type import Int32NCType, Uint32NCType
+from hathor.nanocontracts.nc_types.sized_int_nc_type import Int32NCType, Uint8NCType, Uint32NCType
 from hathor.nanocontracts.nc_types.str_nc_type import StrNCType
 from hathor.nanocontracts.nc_types.token_uid_nc_type import TokenUidNCType
 from hathor.nanocontracts.nc_types.tuple_nc_type import TupleNCType
@@ -65,7 +64,6 @@ __all__ = [
     'DictNCType',
     'FrozenSetNCType',
     'Int32NCType',
-    'IntEnumNCType',
     'ListNCType',
     'NCType',
     'NamedTupleNCType',
@@ -126,7 +124,7 @@ FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     ContractId: Bytes32NCType,
     Timestamp: Uint32NCType,
     TokenUid: TokenUidNCType,
-    TokenVersion: IntEnumNCType[TokenVersion],
+    TokenVersion: Uint8NCType,
     TxOutputScript: BytesLikeNCType[TxOutputScript],
     VertexId: Bytes32NCType,
     SignedData: SignedDataNCType,
