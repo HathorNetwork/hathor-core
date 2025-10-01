@@ -280,6 +280,7 @@ class IndexesManager(ABC):
                             )
 
                         self.tokens.add_to_total(record.token_uid, record.amount)
+                        self.tokens.add_to_total(record.fee_token_uid, record.fee_amount)
 
                 case UpdateAuthoritiesRecord():
                     if self.tokens:
@@ -341,6 +342,7 @@ class IndexesManager(ABC):
                 case SyscallUpdateTokenRecord():
                     if self.tokens:
                         self.tokens.add_to_total(record.token_uid, -record.amount)
+                        self.tokens.add_to_total(record.fee_token_uid, -record.fee_amount)
 
                         from hathor.nanocontracts.runner.types import IndexUpdateRecordType
                         if record.type is IndexUpdateRecordType.CREATE_TOKEN:

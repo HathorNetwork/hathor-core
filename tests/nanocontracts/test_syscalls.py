@@ -289,19 +289,19 @@ class NCNanoContractTestCase(BlueprintTestCase):
             fbt2_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
         }
 
-        # Try to create fee tokens without enough dbt balances
+        # Try to create fee tokens without enough dbt balance
         msg = f'negative balance for contract {nc_id.hex()}'
         with pytest.raises(NCInsufficientFunds, match=msg):
             self.runner.call_public_method(nc_id, 'create_fee_token', self.create_context(),
                                            'FeeToken3', 'FB3', 1000000, dbt_token_uid)
 
-        # Try to create fee tokens without enough dbt balances
+        # Try to create fee tokens without enough htr balance
         msg = f'negative balance for contract {nc_id.hex()}'
         with pytest.raises(NCInsufficientFunds, match=msg):
             self.runner.call_public_method(nc_id, 'create_fee_token', self.create_context(),
                                            'FeeToken3', 'FB3', 1000000, TokenUid(HATHOR_TOKEN_UID))
 
-        # created fee token paying with deposit token
+        # Balance should remain unchanged after failed melt attempt
         assert storage.get_all_balances() == {
             htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
             fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
@@ -348,7 +348,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
         # Successfully melt some tokens - don't deposit, melt from existing balance using deposit token
         self.runner.call_public_method(nc_id, 'melt', self.create_context(), token_uid,  500000, dbt_token_uid)
 
-        # Balance should decrease by melted amount, HTR consumed for fee
+        # Balance should decrease by melted amount, DBT consumed for fee
         assert storage.get_all_balances() == {
             htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
             fbt_balance_key: Balance(value=500000, can_mint=True, can_melt=True),

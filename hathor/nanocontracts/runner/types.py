@@ -75,6 +75,8 @@ class SyscallUpdateTokenRecord:
     """
     token_uid: TokenUid
     amount: int
+    fee_token_uid: TokenUid
+    fee_amount: int
     type: (
         Literal[IndexUpdateRecordType.MINT_TOKENS]
         | Literal[IndexUpdateRecordType.MELT_TOKENS]
@@ -90,6 +92,8 @@ class SyscallUpdateTokenRecord:
             type=self.type,
             token_uid=self.token_uid.hex(),
             amount=self.amount,
+            fee_token_uid=self.fee_token_uid.hex(),
+            fee_amount=self.fee_amount,
             token_name=self.token_name,
             token_symbol=self.token_symbol,
             token_version=self.token_version,
@@ -105,6 +109,8 @@ class SyscallUpdateTokenRecord:
             type=json_dict['type'],
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
             amount=json_dict['amount'],
+            fee_token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['fee_token_uid']))),
+            fee_amount=json_dict['fee_amount'],
             token_version=json_dict.get('token_version'),
             token_name=json_dict.get('token_name'),
             token_symbol=json_dict.get('token_symbol'),
