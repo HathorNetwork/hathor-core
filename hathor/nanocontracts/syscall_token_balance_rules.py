@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import Literal, assert_never
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
-from hathor.nanocontracts.exception import NCInvalidPaymentToken
+from hathor.nanocontracts.exception import NCInvalidFeePaymentToken
 from hathor.nanocontracts.runner.types import IndexUpdateRecordType
 from hathor.nanocontracts.types import TokenUid
 from hathor.transaction.token_info import TokenDescription, TokenVersion
@@ -281,7 +281,7 @@ class _DepositTokenRules(TokenSyscallBalanceRules):
     def _validate_payment_token(self, token:  TokenDescription) -> bool:
         if token.token_id == TokenUid(HATHOR_TOKEN_UID):
             return True
-        raise NCInvalidPaymentToken("Only HTR is allowed to be used with deposit based token syscalls")
+        raise NCInvalidFeePaymentToken("Only HTR is allowed to be used with deposit based token syscalls")
 
 
 class _FeeTokenRules(TokenSyscallBalanceRules):
@@ -353,7 +353,7 @@ class _FeeTokenRules(TokenSyscallBalanceRules):
     def _validate_payment_token(self, token_info: TokenDescription) -> None:
         match token_info.token_version:
             case TokenVersion.FEE:
-                raise NCInvalidPaymentToken("fee-based tokens aren't allowed for paying fees")
+                raise NCInvalidFeePaymentToken("fee-based tokens aren't allowed for paying fees")
             case TokenVersion.DEPOSIT:
                 pass
             case TokenVersion.NATIVE:

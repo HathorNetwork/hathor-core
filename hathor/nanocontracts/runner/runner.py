@@ -1162,15 +1162,15 @@ class Runner:
         # Check the transaction storage for existing tokens
         try:
             token_creation_tx = self.tx_storage.get_token_creation_transaction(token_uid)
-            if token_creation_tx.get_metadata().first_block is None:
-                raise NCInvalidSyscall(
-                    f'The {token_uid.hex()} token is not confirmed by any block '
-                    f'for contract {call_record.contract_id.hex()}'
-                )
-
         except TransactionDoesNotExist:
             raise NCInvalidSyscall(
                 f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
+            )
+
+        if token_creation_tx.get_metadata().first_block is None:
+            raise NCInvalidSyscall(
+                f'The {token_uid.hex()} token is not confirmed by any block '
+                f'for contract {call_record.contract_id.hex()}'
             )
 
         return TokenDescription(

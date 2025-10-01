@@ -106,7 +106,7 @@ class NCInvalidMethodCall(NCFail, NCTxValidationError):
     """Raised when a contract calls another contract's invalid method."""
 
 
-class NCInvalidPaymentToken(NCFail):
+class NCInvalidFeePaymentToken(NCFail):
     """Raised when a payment token is invalid."""
 
 

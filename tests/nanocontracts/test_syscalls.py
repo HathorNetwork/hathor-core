@@ -376,9 +376,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Try to melt a deposit token paying with another deposit token
-        from hathor.nanocontracts.exception import NCInvalidPaymentToken
+        from hathor.nanocontracts.exception import NCInvalidFeePaymentToken
         msg = 'Only HTR is allowed to be used with deposit based token syscalls'
-        with pytest.raises(NCInvalidPaymentToken, match=msg):
+        with pytest.raises(NCInvalidFeePaymentToken, match=msg):
             self.runner.call_public_method(nc_id, 'melt', self.create_context(), dbt_token_uid, 1, dbt_token_uid)
 
     def test_fee_token_mint(self) -> None:
@@ -472,9 +472,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Try to mint a deposit token paying with another deposit token
-        from hathor.nanocontracts.exception import NCInvalidPaymentToken
+        from hathor.nanocontracts.exception import NCInvalidFeePaymentToken
         msg = 'Only HTR is allowed to be used with deposit based token syscalls'
-        with pytest.raises(NCInvalidPaymentToken, match=msg):
+        with pytest.raises(NCInvalidFeePaymentToken, match=msg):
             self.runner.call_public_method(nc_id, 'mint', self.create_context(), dbt_token_uid, 1, dbt_token_uid)
 
     def test_fee_token_as_payment_rejected(self) -> None:
@@ -505,21 +505,21 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         # Try to create another fee token using the first fee token as payment - should be rejected
-        from hathor.nanocontracts.exception import NCInvalidPaymentToken
-        with pytest.raises(NCInvalidPaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+        from hathor.nanocontracts.exception import NCInvalidFeePaymentToken
+        with pytest.raises(NCInvalidFeePaymentToken, match="fee-based tokens aren't allowed for paying fees"):
             self.runner.call_public_method(
                 nc_id, 'create_fee_token', self.create_context(),
                 'FeeToken2', 'FT2', 500000, fee_token_uid
             )
 
         # Also test that fee tokens cannot be used as payment for minting
-        with pytest.raises(NCInvalidPaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+        with pytest.raises(NCInvalidFeePaymentToken, match="fee-based tokens aren't allowed for paying fees"):
             self.runner.call_public_method(
                 nc_id, 'mint', self.create_context(), fee_token_uid, 100, fee_token_uid
             )
 
         # Also test that fee tokens cannot be used as payment for melting
-        with pytest.raises(NCInvalidPaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+        with pytest.raises(NCInvalidFeePaymentToken, match="fee-based tokens aren't allowed for paying fees"):
             self.runner.call_public_method(
                 nc_id, 'melt', self.create_context(), fee_token_uid, 100, fee_token_uid
             )
