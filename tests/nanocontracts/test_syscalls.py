@@ -16,6 +16,7 @@ from hathor.nanocontracts.types import (
     TokenUid,
     public,
 )
+from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 CONTRACT_NC_TYPE = make_nc_type(ContractId)
@@ -60,16 +61,6 @@ class OtherBlueprint(Blueprint):
     @public
     def melt(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
         self.syscall.melt_tokens(token_uid, amount=amount)
-
-    @public(allow_deposit=True, allow_grant_authority=True)
-    def create_tokens(self, ctx: Context, amount: int) -> TokenUid:
-        return self.syscall.create_deposit_token(
-            token_name='Dbt',
-            token_symbol='Dbt',
-            amount=amount,
-            melt_authority=False,
-            mint_authority=False
-        )
 
 
 class FeeTokenBlueprint(Blueprint):
@@ -132,23 +123,31 @@ class NCNanoContractTestCase(BlueprintTestCase):
         assert storage2.get_obj(b'other_blueprint_id', OPT_BLUEPRINT_NC_TYPE) == self.other_blueprint_id
 
     def test_authorities(self) -> None:
+        # Dummy contract just to create the token before it's used below
+        aux_nc_id = self.gen_random_contract_id()
+        self.runner.create_contract(aux_nc_id, self.other_blueprint_id, self.create_context())
+        dbt_token_uid = self.gen_random_token_uid()
+        storage = self.runner.get_storage(aux_nc_id)
+        storage.create_token(
+            token_id=dbt_token_uid,
+            token_name="Test Token",
+            token_symbol="TST",
+            token_version=TokenVersion.DEPOSIT
+        )
+
         nc_id = self.gen_random_contract_id()
+        htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
+        dbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=dbt_token_uid)
 
         ctx_initialize = self.create_context(
             actions=[
                 NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1000),
+                NCDepositAction(token_uid=dbt_token_uid, amount=1000),
             ],
         )
+
         self.runner.create_contract(nc_id, self.other_blueprint_id, ctx_initialize)
-
         storage = self.runner.get_storage(nc_id)
-
-        ctx_create = self.create_context(
-            actions=[NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=10),],
-        )
-        dbt_token_uid = self.runner.call_public_method(nc_id, 'create_tokens', ctx_create, 1000)
-        htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
-        dbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=dbt_token_uid)
 
         ctx_grant = self.create_context(
             actions=[NCGrantAuthorityAction(token_uid=dbt_token_uid, mint=True, melt=True)],
