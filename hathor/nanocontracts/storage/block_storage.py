@@ -15,18 +15,17 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, NamedTuple, Optional
-
-if TYPE_CHECKING:
-    from hathor.transaction.token_info import TokenVersion
+from typing import NamedTuple, Optional
 
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
+from hathor.nanocontracts.nc_types.sized_int_nc_type import Uint8NCType
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
 from hathor.nanocontracts.storage.token_proxy import TokenProxy
 from hathor.nanocontracts.types import Address, ContractId, TokenUid
 from hathor.transaction.headers.nano_header import ADDRESS_SEQNUM_SIZE
+from hathor.transaction.token_info import TokenVersion
 from hathor.utils import leb128
 
 
@@ -62,7 +61,12 @@ class NCBlockStorage:
 
     This implementation works for both memory and rocksdb backends."""
     from hathor.transaction.token_info import TokenDescription
-    _TOKEN_DESCRIPTION_NC_TYPE = make_dataclass_nc_type(TokenDescription)
+    _TOKEN_DESCRIPTION_NC_TYPE = make_dataclass_nc_type(
+        TokenDescription,
+        extra_nc_types_map={
+            TokenVersion: Uint8NCType,
+        },
+    )
 
     def __init__(self, block_trie: PatriciaTrie) -> None:
         self._block_trie: PatriciaTrie = block_trie
