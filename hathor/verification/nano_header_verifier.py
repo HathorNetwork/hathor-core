@@ -189,6 +189,13 @@ class NanoHeaderVerifier:
             except NCFail as e:
                 raise NCTxValidationError from e
 
+            allowed_actions: set[NCActionType] = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
+            assert isinstance(allowed_actions, set)
+
+            for action in nano_header.nc_actions:
+                if action.type not in allowed_actions:
+                    raise NCTxValidationError(f'action {action.type} is forbidden on method `{method_name}`')
+
     def verify_seqnum(self, tx: BaseTransaction, params: VerificationParams) -> None:
         if not params.harden_nano_restrictions:
             return
