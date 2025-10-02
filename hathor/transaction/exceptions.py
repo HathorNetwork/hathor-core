@@ -258,3 +258,15 @@ class VerifyFailed(ScriptError):
 
 class TimeLocked(ScriptError):
     """Transaction is invalid because it is time locked"""
+
+
+class InvalidFeeHeader(TxValidationError):
+    """Invalid fee header"""
+
+
+class FeeHeaderTokenNotFound(InvalidFeeHeader):
+    """Token not found in the transaction tokens list"""
+
+
+class FeeHeaderInvalidAmount(InvalidFeeHeader):
+    """Invalid fee amount"""
