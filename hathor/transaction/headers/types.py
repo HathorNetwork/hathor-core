@@ -18,3 +18,4 @@ from enum import Enum, unique
 @unique
 class VertexHeaderId(Enum):
     NANO_HEADER = b'\x10'
+    FEE_HEADER = b'\x11'
