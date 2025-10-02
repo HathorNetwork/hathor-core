@@ -67,35 +67,32 @@ class SyscallCreateContractRecord:
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
-class SyscallUpdateTokensRecord:
+class SyscallUpdateTokenRecord:
+    """Record for token balance updates in syscalls.
+
+    This record represents a single token operation (mint, melt, or create).
+    Each syscall may generate multiple records (e.g., main token + fee payment token).
+    """
+    token_uid: TokenUid
+    amount: int
     type: (
         Literal[IndexUpdateRecordType.MINT_TOKENS]
         | Literal[IndexUpdateRecordType.MELT_TOKENS]
         | Literal[IndexUpdateRecordType.CREATE_TOKEN]
     )
-    token_uid: TokenUid
-    token_amount: int
-    htr_amount: int
+    # Optional fields used for CREATE_TOKEN operations
     token_symbol: str | None = None
     token_name: str | None = None
     token_version: TokenVersion | None = None
-
-    def __post_init__(self) -> None:
-        match self.type:
-            case IndexUpdateRecordType.MINT_TOKENS | IndexUpdateRecordType.CREATE_TOKEN:
-                assert self.token_amount > 0 and self.htr_amount < 0
-            case IndexUpdateRecordType.MELT_TOKENS:
-                assert self.token_amount < 0 and self.htr_amount > 0
-            case _:
-                assert_never(self.type)
 
     def to_json(self) -> dict[str, Any]:
         return dict(
             type=self.type,
             token_uid=self.token_uid.hex(),
-            token_amount=self.token_amount,
+            amount=self.amount,
+            token_name=self.token_name,
+            token_symbol=self.token_symbol,
             token_version=self.token_version,
-            htr_amount=self.htr_amount,
         )
 
     @classmethod
@@ -107,9 +104,10 @@ class SyscallUpdateTokensRecord:
         return cls(
             type=json_dict['type'],
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            token_amount=json_dict['token_amount'],
-            token_version=json_dict['token_version'],
-            htr_amount=json_dict['htr_amount'],
+            amount=json_dict['amount'],
+            token_version=json_dict.get('token_version'),
+            token_name=json_dict.get('token_name'),
+            token_symbol=json_dict.get('token_symbol'),
         )
 
 
@@ -149,7 +147,11 @@ class UpdateAuthoritiesRecord:
         )
 
 
-NCIndexUpdateRecord: TypeAlias = SyscallCreateContractRecord | SyscallUpdateTokensRecord | UpdateAuthoritiesRecord
+NCIndexUpdateRecord: TypeAlias = (
+    SyscallCreateContractRecord |
+    SyscallUpdateTokenRecord |
+    UpdateAuthoritiesRecord
+)
 
 
 def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdateRecord:
@@ -162,7 +164,7 @@ def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdate
             | IndexUpdateRecordType.MELT_TOKENS
             | IndexUpdateRecordType.CREATE_TOKEN
         ):
-            return SyscallUpdateTokensRecord.from_json(json_dict)
+            return SyscallUpdateTokenRecord.from_json(json_dict)
         case IndexUpdateRecordType.UPDATE_AUTHORITIES:
             return UpdateAuthoritiesRecord.from_json(json_dict)
         case _:

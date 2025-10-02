@@ -10,7 +10,7 @@ from hathor.nanocontracts.types import ContractId, NCWithdrawalAction, TokenUid,
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.transaction.token_info import TokenDescription
+from hathor.transaction.token_info import TokenDescription, TokenVersion
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.utils import assert_nc_failure_reason
@@ -41,7 +41,14 @@ class MyBlueprint(Blueprint):
         mint_authority: bool,
         melt_authority: bool,
     ) -> None:
-        self.syscall.create_deposit_token(token_name, token_symbol, amount, mint_authority, melt_authority, salt=salt)
+        self.syscall.create_deposit_token(
+            token_name,
+            token_symbol,
+            amount,
+            mint_authority=mint_authority,
+            melt_authority=melt_authority,
+            salt=salt
+        )
 
 
 class NCNanoContractTestCase(unittest.TestCase):
@@ -240,11 +247,13 @@ class NCNanoContractTestCase(unittest.TestCase):
             token_id=child_token_id0,
             token_name='MyToken',
             token_symbol=token_symbol,
+            token_version=TokenVersion.DEPOSIT,
         )
         assert block_storage.get_token_description(child_token_id1) == TokenDescription(
             token_id=child_token_id1,
             token_name='MyToken',
             token_symbol=token_symbol,
+            token_version=TokenVersion.DEPOSIT,
         )
 
         nc_storage = block_storage.get_contract_storage(tx1.hash)
