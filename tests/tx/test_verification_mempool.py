@@ -9,6 +9,7 @@ from hathor.nanocontracts.exception import (
     BlueprintDoesNotExist,
     NanoContractDoesNotExist,
     NCFail,
+    NCForbiddenAction,
     NCInvalidMethodCall,
     NCInvalidSeqnum,
     NCMethodNotFound,
@@ -56,7 +57,11 @@ class MyOtherTestBlueprint(Blueprint):
     def initialize(self, ctx: Context) -> None:
         pass
 
-    @fallback
+    @public(allow_withdrawal=True)
+    def nop(self, ctx: Context) -> None:
+        pass
+
+    @fallback(allow_withdrawal=True)
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> None:
         assert method_name == 'unknown'
 
@@ -468,3 +473,71 @@ class VertexHeadersTest(unittest.TestCase):
         with self.assertRaises(InvalidNewTransaction) as e:
             self.manager.vertex_handler.on_new_mempool_transaction(tx3)
         assert isinstance(e.exception.__cause__, InputVoidedAndConfirmed)
+
+    def test_allowed_actions(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            b10 < dummy
+
+            tx1.nc_id = "{self.other_blueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            tx2.nc_id = tx1
+            tx2.nc_method = nop()
+            tx2.nc_deposit = 1 HTR
+
+            tx3.nc_id = tx1
+            tx3.nc_method = unknown
+            tx3.nc_args_bytes = "00"
+            tx3.nc_deposit = 1 HTR
+
+            tx4.nc_id = tx1
+            tx4.nc_method = nop()
+            tx4.nc_withdrawal = 1 HTR
+
+            tx5.nc_id = tx1
+            tx5.nc_method = unknown
+            tx5.nc_args_bytes = "00"
+            tx5.nc_withdrawal = 1 HTR
+
+            tx1 <-- b30
+
+            b30 < tx2 < tx3
+        ''')
+        artifacts.propagate_with(self.manager, up_to='b30')
+
+        b30 = artifacts.get_typed_vertex('b30', Block)
+        assert b30.get_metadata().voided_by is None
+
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        assert tx1.get_metadata().first_block == b30.hash
+        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().voided_by is None
+
+        tx2 = artifacts.get_typed_vertex('tx2', Transaction)
+        tx2.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx2)
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(tx2)
+        assert isinstance(e.exception.__cause__, NCTxValidationError)
+        assert isinstance(e.exception.__cause__.__cause__, NCForbiddenAction)
+        assert 'nop' in str(e.exception.__cause__.__cause__)
+
+        tx3 = artifacts.get_typed_vertex('tx3', Transaction)
+        tx3.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx3)
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(tx3)
+        assert isinstance(e.exception.__cause__, NCTxValidationError)
+        assert isinstance(e.exception.__cause__.__cause__, NCForbiddenAction)
+        assert 'fallback' in str(e.exception.__cause__.__cause__)
+
+        tx4 = artifacts.get_typed_vertex('tx4', Transaction)
+        tx4.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx4)
+        self.manager.vertex_handler.on_new_mempool_transaction(tx4)
+
+        tx5 = artifacts.get_typed_vertex('tx5', Transaction)
+        tx5.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx5)
+        self.manager.vertex_handler.on_new_mempool_transaction(tx5)
