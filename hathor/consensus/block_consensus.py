@@ -53,12 +53,15 @@ class BlockConsensusAlgorithm:
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
+        *,
+        nc_exec_fail_trace: bool = False,
     ) -> None:
         self._settings = settings
         self.context = context
         self._runner_factory = runner_factory
         self._nc_log_storage = nc_log_storage
         self.feature_service = feature_service
+        self.nc_exec_fail_trace = nc_exec_fail_trace
 
     @classproperty
     def log(cls) -> Any:
@@ -242,6 +245,8 @@ class BlockConsensusAlgorithm:
                 kwargs: dict[str, Any] = {}
                 if tx.name:
                     kwargs['__name'] = tx.name
+                if self.nc_exec_fail_trace:
+                    kwargs['exc_info'] = True
                 self.log.info(
                     'nc execution failed',
                     tx=tx.hash.hex(),
@@ -845,7 +850,7 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
-    __slots__ = ('settings', 'nc_log_storage', '_runner_factory', 'feature_service')
+    __slots__ = ('settings', 'nc_log_storage', '_runner_factory', 'feature_service', 'nc_exec_fail_trace')
 
     def __init__(
         self,
@@ -853,11 +858,14 @@ class BlockConsensusAlgorithmFactory:
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
+        *,
+        nc_exec_fail_trace: bool = False,
     ) -> None:
         self.settings = settings
         self._runner_factory = runner_factory
         self.nc_log_storage = nc_log_storage
         self.feature_service = feature_service
+        self.nc_exec_fail_trace = nc_exec_fail_trace
 
     def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
         return BlockConsensusAlgorithm(

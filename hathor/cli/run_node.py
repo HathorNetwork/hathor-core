@@ -174,6 +174,7 @@ class RunNode:
         possible_nc_exec_logs = [config.value for config in NCLogConfig]
         parser.add_argument('--nc-exec-logs', default=NCLogConfig.NONE, choices=possible_nc_exec_logs,
                             help=f'Enable saving Nano Contracts execution logs. One of {possible_nc_exec_logs}')
+        parser.add_argument('--nc-exec-fail-trace', action='store_true', help=SUPPRESS)
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
