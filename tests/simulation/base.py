@@ -15,6 +15,8 @@ class SimulatorTestCase(unittest.TestCase):
         self.simulator = Simulator(self.seed_config)
         self.simulator.start()
 
+        self.reactor = self.simulator._clock
+
         print('-'*30)
         print('Simulation seed config:', self.simulator.seed)
         print('-'*30)
