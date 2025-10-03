@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional, cast
 from structlog import get_logger
 from typing_extensions import assert_never
 
+from hathor.consensus.context import ReorgInfo
 from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -103,14 +104,14 @@ class BlockConsensusAlgorithm:
 
         to_be_executed: list[Block] = []
         is_reorg: bool = False
-        if self.context.reorg_common_block:
+        if self.context.reorg_info:
             # handle reorgs
             is_reorg = True
             cur = block
             # XXX We could stop when `cur_meta.nc_block_root_id is not None` but
             #     first we need to refactor meta.first_block and meta.voided_by to
             #     have different values per block.
-            while cur != self.context.reorg_common_block:
+            while cur != self.context.reorg_info.common_block:
                 cur_meta = cur.get_metadata()
                 if cur_meta.nc_block_root_id is not None:
                     # Reset nc_block_root_id to force re-execution.
@@ -190,7 +191,7 @@ class BlockConsensusAlgorithm:
                 continue
             tx_meta = tx.get_metadata()
             if is_reorg:
-                assert self.context.reorg_common_block is not None
+                assert self.context.reorg_info is not None
                 # Clear the NC_EXECUTION_FAIL_ID flag if this is the only reason the transaction was voided.
                 # This case might only happen when handling reorgs.
                 assert tx.storage is not None
@@ -464,7 +465,6 @@ class BlockConsensusAlgorithm:
 
             else:
                 # Either everyone has the same score or there is a winner.
-
                 valid_heads = []
                 for head in heads:
                     meta = head.get_metadata()
@@ -487,19 +487,42 @@ class BlockConsensusAlgorithm:
                     meta = block.get_metadata()
                     height = block.get_height()
                     if not meta.voided_by:
+                        # It is only a re-org if common_block not in heads
+                        # This must run before updating the indexes.
+                        if common_block not in heads:
+                            self.mark_as_reorg_if_needed(common_block, block)
                         self.log.debug('index new winner block', height=height, block=block.hash_hex)
                         # We update the height cache index with the new winner chain
                         storage.indexes.height.update_new_chain(height, block)
                         storage.update_best_block_tips_cache([block.hash])
-                        # It is only a re-org if common_block not in heads
-                        if common_block not in heads:
-                            self.context.mark_as_reorg(common_block)
                 else:
+                    # This must run before updating the indexes.
+                    meta = block.get_metadata()
+                    if not meta.voided_by:
+                        self.mark_as_reorg_if_needed(common_block, block)
                     best_block_tips = [blk.hash for blk in heads]
                     best_block_tips.append(block.hash)
                     storage.update_best_block_tips_cache(best_block_tips)
-                    if not meta.voided_by:
-                        self.context.mark_as_reorg(common_block)
+
+    def mark_as_reorg_if_needed(self, common_block: Block, new_best_block: Block) -> None:
+        """Mark as reorg only if reorg size > 0."""
+        assert new_best_block.storage is not None
+        storage = new_best_block.storage
+        assert storage.indexes is not None
+        _, old_best_block_hash = storage.indexes.height.get_height_tip()
+        old_best_block = storage.get_transaction(old_best_block_hash)
+        assert isinstance(old_best_block, Block)
+
+        reorg_size = old_best_block.get_height() - common_block.get_height()
+        if reorg_size == 0:
+            assert old_best_block.hash == common_block.hash
+            return
+
+        self.context.mark_as_reorg(ReorgInfo(
+            common_block=common_block,
+            old_best_block=old_best_block,
+            new_best_block=new_best_block,
+        ))
 
     def union_voided_by_from_parents(self, block: Block) -> set[bytes]:
         """Return the union of the voided_by of block's parents.

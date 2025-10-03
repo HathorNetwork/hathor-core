@@ -19,6 +19,7 @@ from collections import defaultdict
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
+from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 
 
@@ -240,7 +241,17 @@ class DefaultFiller:
             balance = self.calculate_balance(node)
             assert set(balance.keys()).issubset({'HTR', token})
 
-            htr_deposit = get_deposit_token_deposit_amount(self._settings, balance[token])
+            token_version = node.get_attr_token_version()
+            htr_deposit: int
+
+            match token_version:
+                case TokenVersion.NATIVE:
+                    raise AssertionError
+                case TokenVersion.DEPOSIT:
+                    htr_deposit = get_deposit_token_deposit_amount(self._settings, balance[token])
+                case TokenVersion.FEE:
+                    htr_deposit = 0
+
             htr_balance = balance.get('HTR', 0)
 
             # target = sum(outputs) - sum(inputs)

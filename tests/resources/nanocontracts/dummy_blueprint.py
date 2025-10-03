@@ -1,8 +1,7 @@
-from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public
+from hathor import Blueprint, Context, export, public
 
 
+@export
 class TestBlueprint(Blueprint):
     """ This class is used by the test for the blueprint source code resource
         It must be in a separate file for the assert in the test

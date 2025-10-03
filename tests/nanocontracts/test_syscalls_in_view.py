@@ -83,11 +83,11 @@ class MyBlueprint(Blueprint):
 
     @view
     def mint_tokens(self) -> None:
-        self.syscall.mint_tokens(TokenUid(b''), 0)
+        self.syscall.mint_tokens(TokenUid(b''), amount=0)
 
     @view
     def melt_tokens(self) -> None:
-        self.syscall.melt_tokens(TokenUid(b''), 0)
+        self.syscall.melt_tokens(TokenUid(b''), amount=0)
 
     @view
     def create_contract(self) -> None:
@@ -100,10 +100,6 @@ class MyBlueprint(Blueprint):
     @view
     def create_deposit_token(self) -> None:
         self.syscall.create_deposit_token('', '', 0)
-
-    @view
-    def create_token(self) -> None:
-        self.syscall.create_token('', '', 0)
 
     @view
     def create_fee_token(self) -> None:
@@ -176,6 +172,5 @@ class TestSyscallsInView(BlueprintTestCase):
             if method_name in allowed_view_syscalls:
                 self.runner.call_view_method(contract_id, method_name)
             else:
-                method_name_err = method_name if method_name != 'create_token' else 'create_deposit_token'
-                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name_err}`'):
+                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name}`'):
                     self.runner.call_view_method(contract_id, method_name)
