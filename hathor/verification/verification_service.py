@@ -271,7 +271,7 @@ class VerificationService:
         We also overload verify_sum to make some different checks
         """
         # we should validate the token info before verifying the tx
-        self.verifiers.token_creation_tx.verify_token_info(tx)
+        self.verifiers.token_creation_tx.verify_token_info(tx, params)
         token_dict = tx.get_complete_token_info()
         self._verify_tx(tx, params, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
