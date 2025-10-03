@@ -20,6 +20,7 @@ from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import (
     CheckpointError,
     ConflictWithConfirmedTxError,
+    InputVoidedAndConfirmed,
     InvalidToken,
     TimestampError,
     TooManyBetweenConflicts,
@@ -44,6 +45,10 @@ class MyTestBlueprint(Blueprint):
     @public
     def nop(self, ctx: Context) -> None:
         pass
+
+    @public
+    def fail(self, ctx: Context) -> None:
+        raise NCFail('fail')
 
 
 class MyOtherTestBlueprint(Blueprint):
@@ -427,3 +432,39 @@ class VertexHeadersTest(unittest.TestCase):
         tx2_copy.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(tx2_copy)
         self.manager.vertex_handler.on_new_mempool_transaction(tx2_copy)
+
+    def test_spending_utxo_confirmed_and_voided(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            b10 < dummy
+
+            tx1.nc_id = "{self.blueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            tx2.nc_id = tx1
+            tx2.nc_method = fail()
+            tx2.out[0] <<< tx3
+
+            tx1 <-- b30
+            tx2 <-- b31
+
+            b31 < tx3
+        ''')
+        artifacts.propagate_with(self.manager, up_to='b31')
+
+        b31 = artifacts.get_typed_vertex('b31', Block)
+        assert b31.get_metadata().voided_by is None
+
+        tx2 = artifacts.get_typed_vertex('tx2', Transaction)
+        assert tx2.get_metadata().first_block == b31.hash
+        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().voided_by is not None
+
+        tx3 = artifacts.get_typed_vertex('tx3', Transaction)
+        assert tx3.inputs[0].tx_id == tx2.hash
+
+        tx3.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx3)
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(tx3)
+        assert isinstance(e.exception.__cause__, InputVoidedAndConfirmed)

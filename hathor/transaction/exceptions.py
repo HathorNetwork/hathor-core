@@ -122,6 +122,10 @@ class TooManyBetweenConflicts(TxValidationError):
     """Input has too many between conflicts already."""
 
 
+class InputVoidedAndConfirmed(TxValidationError):
+    """Input is spending from a voided transaction that has been confirmed by a block."""
+
+
 class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
 
