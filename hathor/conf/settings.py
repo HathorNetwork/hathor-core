@@ -25,6 +25,7 @@ from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathor.utils import yaml
 from hathor.utils.named_tuple import validated_named_tuple_from_dict
+from enum import Enum
 
 DECIMAL_PLACES = 2
 
@@ -314,11 +315,40 @@ class HathorSettings(NamedTuple):
     # Number max of connections in the p2p network
     PEER_MAX_CONNECTIONS: int = 125
 
+    # Percentages to each connection slot (int):
+    PERCENTAGE_MAX_INCOMING_CONNECTIONS: int = 30
+    PERCENTAGE_MAX_OUTGOING_CONNECTIONS: int = 30
+    PERCENTAGE_MAX_DISCOVERED_CONNECTIONS: int = 30
+    PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS: int = 10
+
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 
     # Maximum number of entrypoints that we accept that a peer broadcasts
-    PEER_MAX_ENTRYPOINTS: int = 30
+    PEER_MAX_ENTRYPOINTS: int = PERCENTAGE_MAX_INCOMING_CONNECTIONS*PEER_MAX_CONNECTIONS
+
+    # Maximum number of other peers's entrypoints a given node may connect to.
+    # It does not include the discovered peers connections nor the check trust slots.
+    PEER_MAX_OUTGOING_CONNECTIONS: int = PERCENTAGE_MAX_OUTGOING_CONNECTIONS*PEER_MAX_CONNECTIONS
+
+    # Maximum number of other entrypoints a peer may connect to for checking other peers' trustworthiness.
+    # The discovered peers slot is left bound by PEER_MAX_CONNECTIONS.
+    PEER_MAX_CHECK_PEER_CONNECTIONS: int = PERCENTAGE_MAX_CHECK_ENTRYPOINTS_CONNECTIONS*PEER_MAX_CONNECTIONS
+
+    # Maximum number of connections for discovered peers after bootstrap.
+    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = PEER_MAX_CONNECTIONS - PEER_MAX_ENTRYPOINTS 
+    - PEER_MAX_OUTGOING_CONNECTIONS - PEER_MAX_OUTGOING_CONNECTIONS 
+    
+    # Safeguard check
+    if PEER_MAX_DISCOVERED_PEERS_CONNECTIONS <= 0:
+        raise Exception("PEER_MAX_DISCOVERED_PEERS_CONNECTIONS must be bigger than zero.")
+
+    class ConnectionType(Enum):
+        # Types of Connection as inputs for an instance of the Hathor Protocol
+        OUTGOING = 0
+        INCOMING = 1
+        DISCOVERED = 2
+        CHECK_ENTRYPOINTS = 3
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
