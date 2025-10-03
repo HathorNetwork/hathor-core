@@ -292,7 +292,10 @@ class DAGBuilder:
             return self
 
         if key.startswith('balance_'):
+            node = self._get_or_create_node(name)
             token = key[len('balance_'):]
+            if token in node.balances:
+                raise SyntaxError(f'{name}: balance set more than once for {token}')
             self.update_balance(name, token, int(value))
             return self
 

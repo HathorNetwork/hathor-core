@@ -512,3 +512,13 @@ if foo:
 
         assert isinstance(nano_header, NanoHeader)
         assert isinstance(fee_header, FeeHeader)
+
+    def test_duplicate_balance(self) -> None:
+        with pytest.raises(SyntaxError, match='tx1: balance set more than once for HTR'):
+            self.dag_builder.build_from_str('''
+                blockchain genesis b[1..10]
+                b10 < dummy
+
+                tx1.balance_HTR = 1
+                tx1.balance_HTR = 2
+            ''')
