@@ -274,3 +274,7 @@ class FeeHeaderTokenNotFound(InvalidFeeHeader):
 
 class InvalidFeeAmount(InvalidFeeHeader):
     """Invalid fee amount"""
+
+
+class TokenNotFound(TxValidationError):
+    """Token not found."""

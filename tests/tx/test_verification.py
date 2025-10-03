@@ -124,7 +124,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.verify_basic(block, self.verification_params)
+            self.manager.verification_service.verify_basic(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -154,7 +154,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block, self.verification_params)
+            self.manager.verification_service.verify_without_storage(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -196,7 +196,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -226,7 +226,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.validate_basic(block, self.verification_params)
+            self.manager.verification_service.validate_basic(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -239,7 +239,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(block, self.verification_params)
+        self.manager.verification_service.validate_full(block, self.get_verification_params(self.manager))
         self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -250,7 +250,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(block, self.verification_params)
+            self.manager.verification_service.validate_basic(block, self.get_verification_params(self.manager))
 
         # Block methods
         verify_weight_wrapped2.assert_not_called()
@@ -294,7 +294,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
-            self.manager.verification_service.validate_full(block, self.verification_params)
+            self.manager.verification_service.validate_full(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -327,7 +327,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.verify_basic(block, self.verification_params)
+            self.manager.verification_service.verify_basic(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -357,7 +357,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block, self.verification_params)
+            self.manager.verification_service.verify_without_storage(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -402,7 +402,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -435,7 +435,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
         ):
-            self.manager.verification_service.validate_basic(block, self.verification_params)
+            self.manager.verification_service.validate_basic(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -448,7 +448,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(block, self.verification_params)
+        self.manager.verification_service.validate_full(block, self.get_verification_params(self.manager))
         self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -459,7 +459,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(block, self.verification_params)
+            self.manager.verification_service.validate_basic(block, self.get_verification_params(self.manager))
 
         # Block methods
         verify_weight_wrapped2.assert_not_called()
@@ -506,7 +506,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(MergeMinedBlockVerifier, 'verify_aux_pow', verify_aux_pow_wrapped),
         ):
-            self.manager.verification_service.validate_full(block, self.verification_params)
+            self.manager.verification_service.validate_full(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -554,7 +554,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_basic(tx, self.verification_params)
+            self.manager.verification_service.verify_basic(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -588,7 +588,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(tx, self.verification_params)
+            self.manager.verification_service.verify_without_storage(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -636,7 +636,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
         ):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -683,7 +683,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.validate_basic(tx, self.verification_params)
+            self.manager.verification_service.validate_basic(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -702,7 +702,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual(tx.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(tx, self.verification_params)
+        self.manager.verification_service.validate_full(tx, self.get_verification_params(self.manager))
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -723,7 +723,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(tx, self.verification_params)
+            self.manager.verification_service.validate_basic(tx, self.get_verification_params(self.manager))
 
         # Transaction methods
         verify_parents_basic_wrapped2.assert_not_called()
@@ -779,7 +779,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
         ):
-            self.manager.verification_service.validate_full(tx, self.verification_params)
+            self.manager.verification_service.validate_full(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -823,7 +823,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(tx, self.verification_params)
+            self.manager.verification_service.validate_basic(tx, self.get_verification_params(self.manager))
 
         # Transaction methods
         verify_parents_basic_wrapped2.assert_not_called()
@@ -862,7 +862,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_basic(tx, self.verification_params)
+            self.manager.verification_service.verify_basic(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -896,7 +896,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(tx, self.verification_params)
+            self.manager.verification_service.verify_without_storage(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -948,7 +948,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_minted_tokens', verify_minted_tokens_wrapped),
         ):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -998,7 +998,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.validate_basic(tx, self.verification_params)
+            self.manager.verification_service.validate_basic(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -1018,7 +1018,7 @@ class VerificationTest(unittest.TestCase):
 
         # full validation should still pass and the validation updated to FULL
         with tx_allow_context(self.manager.tx_storage, allow_scope=TxAllowScope.PARTIAL | TxAllowScope.VALID):
-            self.manager.verification_service.validate_full(tx, self.verification_params)
+            self.manager.verification_service.validate_full(tx, self.get_verification_params(self.manager))
         self.assertEqual(tx.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -1039,7 +1039,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(VertexVerifier, 'verify_number_of_outputs', verify_number_of_outputs_wrapped2),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(tx, self.verification_params)
+            self.manager.verification_service.validate_basic(tx, self.get_verification_params(self.manager))
 
         # Transaction methods
         verify_parents_basic_wrapped2.assert_not_called()
@@ -1100,7 +1100,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_minted_tokens', verify_minted_tokens_wrapped),
         ):
-            self.manager.verification_service.validate_full(tx, self.verification_params)
+            self.manager.verification_service.validate_full(tx, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()

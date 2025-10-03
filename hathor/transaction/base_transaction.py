@@ -261,7 +261,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         raise NotImplementedError
 
     def is_nano_contract(self) -> bool:
-        """Return True if this transaction is a nano contract or not."""
+        """Return whether this transaction is a nano contract."""
         return False
 
     def has_fees(self) -> bool:

@@ -80,7 +80,7 @@ class PoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(PoaBlockVerifier, 'verify_poa', verify_poa_wrapped),
         ):
-            self.manager.verification_service.verify_basic(block, self.verification_params)
+            self.manager.verification_service.verify_basic(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -111,7 +111,7 @@ class PoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_data', verify_data_wrapped),
             patch.object(VertexVerifier, 'verify_sigops_output', verify_sigops_output_wrapped),
         ):
-            self.manager.verification_service.verify_without_storage(block, self.verification_params)
+            self.manager.verification_service.verify_without_storage(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -153,7 +153,7 @@ class PoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_height', verify_height_wrapped),
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
         ):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_outputs_wrapped.assert_called_once()
@@ -185,7 +185,7 @@ class PoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped),
             patch.object(PoaBlockVerifier, 'verify_poa', verify_poa_wrapped),
         ):
-            self.manager.verification_service.validate_basic(block, self.verification_params)
+            self.manager.verification_service.validate_basic(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
@@ -199,7 +199,7 @@ class PoaVerificationTest(unittest.TestCase):
         self.assertEqual(block.get_metadata().validation, ValidationState.BASIC)
 
         # full validation should still pass and the validation updated to FULL
-        self.manager.verification_service.validate_full(block, self.verification_params)
+        self.manager.verification_service.validate_full(block, self.get_verification_params(self.manager))
         self.assertEqual(block.get_metadata().validation, ValidationState.FULL)
 
         # and if running basic validation again it shouldn't validate or change the validation state
@@ -210,7 +210,7 @@ class PoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_weight', verify_weight_wrapped2),
             patch.object(BlockVerifier, 'verify_reward', verify_reward_wrapped2),
         ):
-            self.manager.verification_service.validate_basic(block, self.verification_params)
+            self.manager.verification_service.validate_basic(block, self.get_verification_params(self.manager))
 
         # Block methods
         verify_weight_wrapped2.assert_not_called()
@@ -256,7 +256,7 @@ class PoaVerificationTest(unittest.TestCase):
             patch.object(BlockVerifier, 'verify_mandatory_signaling', verify_mandatory_signaling_wrapped),
             patch.object(PoaBlockVerifier, 'verify_poa', verify_poa_wrapped),
         ):
-            self.manager.verification_service.validate_full(block, self.verification_params)
+            self.manager.verification_service.validate_full(block, self.get_verification_params(self.manager))
 
         # Vertex methods
         verify_version_basic_wrapped.assert_called_once()
