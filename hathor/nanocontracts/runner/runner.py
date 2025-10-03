@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from inspect import getattr_static
 from typing import Any, Callable, Concatenate, ParamSpec, Sequence, TypeVar
 
 from typing_extensions import assert_never
@@ -298,6 +299,18 @@ class Runner:
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(int)
         return ret
+
+    def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
+        """ Invoked after the initialize method is called to initialize uninitialized containers.
+        """
+        field_names = getattr_static(blueprint, '__fields').keys()
+        uninit_field_names = []
+        for field_name in field_names:
+            field = getattr_static(blueprint, field_name)
+            if not field._is_initialized(blueprint):
+                uninit_field_names.append(field_name)
+        if uninit_field_names:
+            raise NCFail(f"Some fields were not initialized: {', '.join(uninit_field_names)}")
 
     @_forbid_syscall_from_view('call_public_method')
     def syscall_call_another_contract_public_method(
@@ -601,6 +614,9 @@ class Runner:
         except Exception as e:
             # Convert any other exception to NCFail.
             raise NCFail from e
+
+        if method_name == NC_INITIALIZE_METHOD:
+            self._check_all_field_initialized(blueprint)
 
         if len(self._call_info.change_trackers[contract_id]) > 1:
             call_record.changes_tracker.commit()

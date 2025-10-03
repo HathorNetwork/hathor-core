@@ -112,6 +112,10 @@ class Bet(Blueprint):
                    date_last_bet: Timestamp) -> None:
         if len(ctx.actions) != 0:
             raise NCFail('must be a single call')
+        self.bets_total = {}
+        self.bets_address = {}
+        self.address_details = {}
+        self.withdrawals = {}
         self.oracle_script = oracle_script
         self.token_uid = token_uid
         self.date_last_bet = date_last_bet
@@ -170,12 +174,9 @@ class Bet(Blueprint):
             self.bets_address[key] += amount
 
         # Update dict indexed by address
-        partial = self.address_details.get(address, {})
-        partial.update({
-            score: self.bets_address[key]
-        })
-
-        self.address_details[address] = partial
+        if address not in self.address_details:
+            self.address_details[address] = {}
+        self.address_details[address][score] = self.bets_address[key]
 
     @public
     def set_result(self, ctx: Context, result: SignedData[Result]) -> None:

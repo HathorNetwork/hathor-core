@@ -15,6 +15,7 @@ class BlueprintWithCompoundField(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
+        self.dc = {}
         self.dc['foo'] = [1, 2]
         assert len(self.dc) == 1
         foo = self.dc['foo']
@@ -38,9 +39,14 @@ class BlueprintWithCompoundField(Blueprint):
         assert len(self.dc) == 1
         assert 'bar' in self.dc
         assert 'foo' not in self.dc
-        # XXX: implicit creation:
-        assert self.dc['foo'] == []
-        assert len(self.dc) == 2
+        # XXX: implicit creation fails:
+        try:
+            assert self.dc['foo'] == []
+        except ValueError as e:
+            assert e.args == ('not initialized',)
+        else:
+            assert False
+        assert len(self.dc) == 1
         # remove foo, test will check it was removed from the storage
         del self.dc['foo']
 

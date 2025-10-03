@@ -16,7 +16,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
-        pass
+        self.balances = {}
 
     @public(allow_deposit=True)
     def deposit(self, ctx: Context) -> None:
