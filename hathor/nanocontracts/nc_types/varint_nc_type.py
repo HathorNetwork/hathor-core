@@ -21,7 +21,7 @@ from typing_extensions import Self, override
 from hathor.nanocontracts.nc_types.nc_type import NCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.adapters import MaxBytesExceededError
-from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
+from hathor.serialization.encoding.ecv import decode_ecv, encode_ecv
 from hathor.utils.typing import is_subclass
 
 
@@ -32,22 +32,16 @@ class _VarIntNCType(NCType[int]):
     _max_byte_size: ClassVar[int | None]
 
     @classmethod
-    def _upper_bound_value(self) -> int | None:
-        if self._max_byte_size is None:
-            return None
-        if self._signed:
-            return 2**(self._max_byte_size * 7 - 1) - 1
+    def _inclusive_bounds(cls) -> tuple[int, int]:
+        """Return lowest and highest valid values, assumes _max_byte_size is not None."""
+        assert cls._max_byte_size is not None
+        byte_size = cls._max_byte_size
+        # the bit-length of the size coincides with how many continuation bits are needed
+        capacity_bits = byte_size * 8 - byte_size.bit_length()
+        if cls._signed:
+            return (-2**(capacity_bits - 1), 2**(capacity_bits - 1) - 1)
         else:
-            return 2**(self._max_byte_size * 7) - 1
-
-    @classmethod
-    def _lower_bound_value(self) -> int | None:
-        if not self._signed:
-            return 0
-        if self._max_byte_size is not None:
-            return -(2**(self._max_byte_size * 7))
-        else:
-            return None
+            return (0, 2**capacity_bits - 1)
 
     @override
     @classmethod
@@ -63,8 +57,9 @@ class _VarIntNCType(NCType[int]):
         self._check_range(value)
 
     def _check_range(self, value: int) -> None:
-        upper_bound = self._upper_bound_value()
-        lower_bound = self._lower_bound_value()
+        if self._max_byte_size is None:
+            return
+        lower_bound, upper_bound = self._inclusive_bounds()
         if upper_bound is not None and value > upper_bound:
             raise ValueError('above upper bound')
         if lower_bound is not None and value < lower_bound:
@@ -75,7 +70,7 @@ class _VarIntNCType(NCType[int]):
         if self._max_byte_size is not None:
             serializer = serializer.with_max_bytes(self._max_byte_size)
         try:
-            encode_leb128(serializer, value, signed=self._signed)
+            encode_ecv(serializer, value, signed=self._signed)
         except MaxBytesExceededError as e:
             raise ValueError('value too long') from e
 
@@ -84,7 +79,7 @@ class _VarIntNCType(NCType[int]):
         if self._max_byte_size is not None:
             deserializer = deserializer.with_max_bytes(self._max_byte_size)
         try:
-            value = decode_leb128(deserializer, signed=self._signed)
+            value = decode_ecv(deserializer, signed=self._signed)
         except MaxBytesExceededError as e:
             raise ValueError('value too long') from e
         return value
