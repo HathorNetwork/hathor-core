@@ -16,11 +16,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from hathor.transaction import Block
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class VerificationParams:
     """Contains every parameter/setting to run a single verification."""
 
+    best_block: Block | None
     enable_checkdatasig_count: bool
     reject_locked_reward: bool = True
     skip_block_weight_verification: bool = False
@@ -32,12 +35,18 @@ class VerificationParams:
     reject_conflicts_with_confirmed_txs: bool = False
 
     @classmethod
-    def default_for_mempool(cls, *, enable_nano: bool = False) -> VerificationParams:
+    def default_for_mempool(
+        cls,
+        *,
+        best_block: Block,
+        enable_nano: bool = False,
+    ) -> VerificationParams:
         """This is the appropriate parameters for verifying mempool transactions, realtime blocks and API pushes.
 
         Other cases should instantiate `VerificationParams` manually with the appropriate parameter values.
         """
         return cls(
+            best_block=best_block,
             enable_checkdatasig_count=True,
             enable_nano=enable_nano,
             reject_too_old_vertices=True,
