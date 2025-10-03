@@ -230,3 +230,17 @@ class VertexHeadersTest(unittest.TestCase):
         assert header1.nc_actions == header2.nc_actions
         assert header1.nc_address == header2.nc_address
         assert header1.nc_script == header2.nc_script
+
+    def test_duplicate_headers(self) -> None:
+        nc1 = self.artifacts.get_typed_vertex('nc1', Transaction)
+        assert len(nc1.headers) == 1
+        nano_header = nc1.headers[0]
+        assert isinstance(nano_header, NanoHeader)
+
+        nc1.headers.append(nano_header)
+
+        with pytest.raises(Exception) as e:
+            self.artifacts.propagate_with(self.manager, up_to='nc1')
+
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == 'full validation failed: only one instance of `NanoHeader` is allowed'

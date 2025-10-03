@@ -87,7 +87,6 @@ class HathorSettings(NamedTuple):
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
     # Fee rate settings
-    ENABLE_FEE_TOKEN: bool = False
     FEE_PER_OUTPUT: int = 1
 
     # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to
