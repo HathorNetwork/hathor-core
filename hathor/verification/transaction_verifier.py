@@ -32,6 +32,7 @@ from hathor.transaction.exceptions import (
     IncorrectParents,
     InexistentInput,
     InputOutputMismatch,
+    InputVoidedAndConfirmed,
     InvalidInputData,
     InvalidInputDataSize,
     InvalidToken,
@@ -364,6 +365,10 @@ class TransactionVerifier:
         for txin in tx.inputs:
             spent_tx = tx.get_spent_tx(txin)
             spent_tx_meta = spent_tx.get_metadata()
+            if spent_tx_meta.first_block is not None and spent_tx_meta.voided_by:
+                # spent_tx has been confirmed by a block and is voided, so its
+                # outputs cannot be spent.
+                raise InputVoidedAndConfirmed(spent_tx.hash.hex())
             if txin.index not in spent_tx_meta.spent_outputs:
                 continue
             spent_by_list = spent_tx_meta.spent_outputs[txin.index]

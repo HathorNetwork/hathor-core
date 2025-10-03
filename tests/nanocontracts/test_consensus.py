@@ -988,6 +988,9 @@ class NCConsensusTestCase(SimulatorTestCase):
             tx3.nc_id = tx1
             tx3.nc_method = nop(1)
 
+            tx1 < tx2 < tx3
+            b32 < tx3
+
             b31 --> tx1
             b32 --> tx2
             b33 --> tx3
