@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.runner.runner import RunnerFactory
     from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.transaction.storage import TransactionStorage
+    from hathor.verification.vertex_verifiers import VertexVerifiers
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -80,6 +81,7 @@ class ConsensusAlgorithm:
         nc_calls_sorter: NCSorterCallable,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
+        vertex_verifiers: VertexVerifiers,
     ) -> None:
         self._settings = settings
         self.log = logger.new()
@@ -87,7 +89,11 @@ class ConsensusAlgorithm:
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
-            settings, runner_factory, nc_log_storage, feature_service
+            settings,
+            runner_factory,
+            nc_log_storage,
+            feature_service,
+            vertex_verifiers
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
         self.nc_calls_sorter = nc_calls_sorter

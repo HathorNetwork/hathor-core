@@ -17,6 +17,7 @@ from typing import NamedTuple
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts import NCStorageFactory
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.block_verifier import BlockVerifier
@@ -49,6 +50,7 @@ class VertexVerifiers(NamedTuple):
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
+        nc_storage_factory: NCStorageFactory,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
@@ -63,6 +65,7 @@ class VertexVerifiers(NamedTuple):
             daa=daa,
             feature_service=feature_service,
             tx_storage=tx_storage,
+            nc_storage_factory=nc_storage_factory,
         )
 
     @classmethod
@@ -75,6 +78,7 @@ class VertexVerifiers(NamedTuple):
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
+        nc_storage_factory: NCStorageFactory,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using a custom vertex_verifier.
@@ -87,7 +91,12 @@ class VertexVerifiers(NamedTuple):
         )
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         poa_block_verifier = PoaBlockVerifier(settings=settings)
-        tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
+        tx_verifier = TransactionVerifier(
+            settings=settings,
+            daa=daa,
+            feature_service=feature_service,
+            nc_storage_factory=nc_storage_factory,
+        )
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
         nano_header_verifier = NanoHeaderVerifier(settings=settings, tx_storage=tx_storage)
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)

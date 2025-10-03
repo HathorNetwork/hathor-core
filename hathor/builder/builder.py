@@ -107,7 +107,7 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [Reactor, HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService, TransactionStorage],
+    [Reactor, HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService, TransactionStorage, NCStorageFactory],
     VertexVerifiers
 ]
 
@@ -407,6 +407,7 @@ class Builder:
             pubsub = self._get_or_create_pubsub()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
             nc_calls_sorter = self._get_nc_calls_sorter()
+            vertex_verifiers = self._get_or_create_vertex_verifiers()
             self._consensus = ConsensusAlgorithm(
                 nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
@@ -416,6 +417,7 @@ class Builder:
                 nc_log_storage=self._get_or_create_nc_log_storage(),
                 nc_calls_sorter=nc_calls_sorter,
                 feature_service=self._get_or_create_feature_service(),
+                vertex_verifiers=vertex_verifiers,
             )
 
         return self._consensus
@@ -590,10 +592,12 @@ class Builder:
             settings = self._get_or_create_settings()
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
+            nc_storage_factory = self._get_or_create_nc_storage_factory()
             self._verification_service = VerificationService(
                 settings=settings,
                 verifiers=verifiers,
                 tx_storage=storage,
+                nc_storage_factory=nc_storage_factory,
             )
 
         return self._verification_service
@@ -611,6 +615,7 @@ class Builder:
             feature_service = self._get_or_create_feature_service()
             daa = self._get_or_create_daa()
             tx_storage = self._get_or_create_tx_storage()
+            nc_storage_factory = self._get_or_create_nc_storage_factory()
 
             if self._vertex_verifiers_builder:
                 self._vertex_verifiers = self._vertex_verifiers_builder(
@@ -618,7 +623,8 @@ class Builder:
                     settings,
                     daa,
                     feature_service,
-                    tx_storage
+                    tx_storage,
+                    nc_storage_factory,
                 )
             else:
                 self._vertex_verifiers = VertexVerifiers.create_defaults(
@@ -627,6 +633,7 @@ class Builder:
                     daa=daa,
                     feature_service=feature_service,
                     tx_storage=tx_storage,
+                    nc_storage_factory=nc_storage_factory,
                 )
 
         return self._vertex_verifiers

@@ -20,6 +20,8 @@ from hathor.types import TokenUid
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.storage import NCBlockStorage
+    from hathor.transaction.storage import TransactionStorage
 
 
 class TokenVersion(IntEnum):
@@ -34,7 +36,7 @@ class TokenInfo:
     amount: int
     can_mint: bool
     can_melt: bool
-    version: TokenVersion
+    version: TokenVersion | None
     # count of non-authority outputs that is used to calculate the fee
     chargeable_outputs: int = 0
     # count of non-authority inputs that is used to calculate the fee
@@ -42,7 +44,7 @@ class TokenInfo:
 
     @classmethod
     def get_default(cls,
-                    version: TokenVersion = TokenVersion.NATIVE,
+                    version: TokenVersion | None = TokenVersion.NATIVE,
                     can_mint: bool = False,
                     can_melt: bool = False) -> 'TokenInfo':
         """
@@ -80,6 +82,8 @@ class TokenDescription:
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):
+    fees_from_fee_header: int = 0
+
     def calculate_fee(self, settings: 'HathorSettings') -> int:
         """
          Calculate the total fee based on the number of chargeable
@@ -109,3 +113,23 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
                 if token_info.chargeable_inputs > 0:
                     fee += settings.FEE_PER_OUTPUT
         return fee
+
+
+def get_token_version(
+    tx_storage: 'TransactionStorage',
+    nc_block_storage: 'NCBlockStorage',
+    token_uid: TokenUid | bytes
+) -> TokenVersion | None:
+    """
+    Get the token version for a given token uid.
+    It searches first in the tx storage and then in the block storage if provided.
+    """
+    from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+    try:
+        token_creation_tx = tx_storage.get_token_creation_transaction(token_uid)
+        return token_creation_tx.token_version
+    except TransactionDoesNotExist:
+        from hathor.nanocontracts.types import TokenUid
+        if nc_block_storage.has_token(TokenUid(token_uid)):
+            return nc_block_storage.get_token_description(TokenUid(token_uid)).token_version
+    return None
