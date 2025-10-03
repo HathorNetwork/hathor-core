@@ -51,7 +51,7 @@ class TokenTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(BlockWithTokensError):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
     def test_tx_token_outputs(self):
         genesis_block = self.genesis_blocks[0]
@@ -71,7 +71,7 @@ class TokenTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # with 1 token uid in list
         tx.tokens = [bytes.fromhex('0023be91834c973d6a6ddd1a0ae411807b7c8ef2a015afb5177ee64b666ce602')]
@@ -81,7 +81,7 @@ class TokenTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # try hathor authority UTXO
         output = TxOutput(value, script, 0b10000000)
@@ -91,7 +91,7 @@ class TokenTest(unittest.TestCase):
         tx.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_token_transfer(self):
         wallet = self.manager.wallet
@@ -112,7 +112,7 @@ class TokenTest(unittest.TestCase):
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx2)
         tx2.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(tx2, self.verification_params)
+        self.manager.verification_service.verify(tx2, self.get_verification_params(self.manager))
 
         # missing tokens
         token_output = TxOutput(utxo.value - 1, script, 1)
@@ -125,7 +125,7 @@ class TokenTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx3)
         tx3.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx3, self.verification_params)
+            self.manager.verification_service.verify(tx3, self.get_verification_params(self.manager))
 
     def test_token_mint(self):
         wallet = self.manager.wallet
@@ -192,7 +192,7 @@ class TokenTest(unittest.TestCase):
         tx3.inputs[0].data = data
         self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx3, self.verification_params)
+            self.manager.verification_service.verify(tx3, self.get_verification_params(self.manager))
 
         # try to mint and deposit less tokens than necessary
         mint_amount = 10000000
@@ -218,7 +218,7 @@ class TokenTest(unittest.TestCase):
         tx4.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx4)
         with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx4, self.verification_params)
+            self.manager.verification_service.verify(tx4, self.get_verification_params(self.manager))
 
         # try to mint using melt authority UTXO
         _input1 = TxInput(tx.hash, 2, b'')
@@ -230,7 +230,7 @@ class TokenTest(unittest.TestCase):
         tx5.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx5)
         with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx5, self.verification_params)
+            self.manager.verification_service.verify(tx5, self.get_verification_params(self.manager))
 
     def test_token_melt(self):
         wallet = self.manager.wallet
@@ -302,7 +302,7 @@ class TokenTest(unittest.TestCase):
         tx3.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx3, self.verification_params)
+            self.manager.verification_service.verify(tx3, self.get_verification_params(self.manager))
 
         # try to melt using mint authority UTXO
         _input1 = TxInput(tx.hash, 0, b'')
@@ -318,7 +318,7 @@ class TokenTest(unittest.TestCase):
         tx4.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         self.manager.cpu_mining_service.resolve(tx4)
         with self.assertRaises(InputOutputMismatch):
-            self.manager.verification_service.verify(tx4, self.verification_params)
+            self.manager.verification_service.verify(tx4, self.get_verification_params(self.manager))
 
     def test_token_transfer_authority(self):
         wallet = self.manager.wallet
@@ -337,7 +337,7 @@ class TokenTest(unittest.TestCase):
         tx2.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx2)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx2, self.verification_params)
+            self.manager.verification_service.verify(tx2, self.get_verification_params(self.manager))
 
         # input with melt and output with mint
         _input1 = TxInput(tx.hash, 2, b'')
@@ -349,7 +349,7 @@ class TokenTest(unittest.TestCase):
         tx3.inputs[0].data = P2PKH.create_input_data(public_bytes, signature)
         self.manager.cpu_mining_service.resolve(tx3)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx3, self.verification_params)
+            self.manager.verification_service.verify(tx3, self.get_verification_params(self.manager))
 
     def test_token_index_with_conflict(self, mint_amount=0):
         # create a new token and have a mint operation done. The tx that mints the
@@ -453,39 +453,39 @@ class TokenTest(unittest.TestCase):
         # max token name length
         tx.token_name = 'a' * self._settings.MAX_LENGTH_TOKEN_NAME
         update_tx(tx)
-        self.manager.verification_service.verify(tx, self.verification_params)
+        self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # max token symbol length
         tx.token_symbol = 'a' * self._settings.MAX_LENGTH_TOKEN_SYMBOL
         update_tx(tx)
-        self.manager.verification_service.verify(tx, self.verification_params)
+        self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # long token name
         tx.token_name = 'a' * (self._settings.MAX_LENGTH_TOKEN_NAME + 1)
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # long token symbol
         tx.token_name = 'ValidName'
         tx.token_symbol = 'a' * (self._settings.MAX_LENGTH_TOKEN_SYMBOL + 1)
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Hathor token name
         tx.token_name = self._settings.HATHOR_TOKEN_NAME
         tx.token_symbol = 'TST'
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Hathor token symbol
         tx.token_name = 'Test'
         tx.token_symbol = self._settings.HATHOR_TOKEN_SYMBOL
         update_tx(tx)
         with self.assertRaises(TransactionDataError):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Token name unicode
         tx.token_name = 'Test ∞'
@@ -493,7 +493,7 @@ class TokenTest(unittest.TestCase):
         token_info = tx.serialize_token_info()
         TokenCreationTransaction.deserialize_token_info(token_info)
         update_tx(tx)
-        self.manager.verification_service.verify(tx, self.verification_params)
+        self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Token symbol unicode
         tx.token_name = 'Test Token'
@@ -501,7 +501,7 @@ class TokenTest(unittest.TestCase):
         token_info = tx.serialize_token_info()
         TokenCreationTransaction.deserialize_token_info(token_info)
         update_tx(tx)
-        self.manager.verification_service.verify(tx, self.verification_params)
+        self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Hathor token version
         tx.token_name = 'Test'
@@ -509,7 +509,7 @@ class TokenTest(unittest.TestCase):
         tx.token_version = TokenVersion.NATIVE
         update_tx(tx)
         with pytest.raises(TransactionDataError, match=f'Invalid token version \\({tx.token_version}\\)'):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_token_mint_zero(self):
         # try to mint 0 tokens
@@ -550,7 +550,7 @@ class TokenTest(unittest.TestCase):
         tx2.inputs[1].data = data
         self.manager.cpu_mining_service.resolve(tx2)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(tx2, self.verification_params)
+            self.manager.verification_service.verify(tx2, self.get_verification_params(self.manager))
 
     def test_token_info_serialization(self):
         tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
@@ -608,7 +608,7 @@ class TokenTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(InvalidToken):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
     def test_voided_token_creation(self):
         tx1 = create_tokens(self.manager, self.address_b58, mint_amount=500, use_genesis=False)

@@ -85,7 +85,13 @@ class DAGArtifacts:
                     if new_relayed_vertex:
                         assert manager.vertex_handler.on_new_relayed_vertex(vertex)
                     else:
-                        params = VerificationParams(enable_checkdatasig_count=True, enable_nano=True)
+                        best_block = manager.tx_storage.get_best_block()
+                        best_block_meta = best_block.get_metadata()
+                        params = VerificationParams(
+                            enable_checkdatasig_count=True,
+                            enable_nano=True,
+                            nc_block_root_id=best_block_meta.nc_block_root_id,
+                        )
                         assert manager.vertex_handler._old_on_new_vertex(vertex, params)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e

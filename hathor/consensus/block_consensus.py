@@ -25,6 +25,7 @@ from typing_extensions import assert_never
 from hathor.consensus.context import ReorgInfo
 from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.types import MetaNCCallRecord
 from hathor.util import classproperty
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
+    from hathor.nanocontracts.storage import NCBlockStorage
 
 logger = get_logger()
 
@@ -236,8 +238,17 @@ class BlockConsensusAlgorithm:
 
             runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
             exception_and_tb: tuple[NCFail, str] | None = None
+            token_dict = tx.get_complete_token_info(block_storage)
+            should_verify_sum_after_execution = any(token_info.version is None for token_info in token_dict.values())
+
             try:
                 runner.execute_from_tx(tx)
+
+                # after the execution we have the latest state in the storage
+                # and at this point no tokens pending creation
+                if should_verify_sum_after_execution:
+                    self._verify_sum_after_execution(tx, block_storage)
+
             except NCFail as e:
                 kwargs: dict[str, Any] = {}
                 if tx.name:
@@ -300,6 +311,19 @@ class BlockConsensusAlgorithm:
                     assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
                 case _:  # pragma: no cover
                     assert_never(tx_meta.nc_execution)
+
+    def _verify_sum_after_execution(self, tx: Transaction, block_storage: NCBlockStorage) -> None:
+        from hathor import NCFail
+        from hathor.verification.transaction_verifier import TransactionVerifier
+        try:
+            token_dict = tx.get_complete_token_info(block_storage)
+            TransactionVerifier.verify_sum(self._settings, token_dict)
+        except TokenNotFound as e:
+            # At this point, any nonexistent token would have made a prior validation fail. For example, if there
+            # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.
+            raise AssertionError from e
+        except Exception as e:
+            raise NCFail from e
 
     def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
         from hathor.nanocontracts.runner.types import CallType

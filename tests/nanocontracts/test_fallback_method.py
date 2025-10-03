@@ -17,8 +17,7 @@ from unittest.mock import ANY
 
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
+from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
 from hathor.nanocontracts.exception import NCError, NCInvalidMethodCall
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry

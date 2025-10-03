@@ -47,11 +47,17 @@ class TransactionStreamingClient:
         self.protocol = self.sync_agent.protocol
         self.tx_storage = self.sync_agent.tx_storage
         self.verification_service = self.protocol.node.verification_service
-        # XXX: since it's not straightforward to get the correct block, it's OK to just disable checkdatasig counting,
-        #      it will be correctly enabled when doing a full validation anyway.
-        self.verification_params = VerificationParams(enable_checkdatasig_count=False)
-        self.reactor = sync_agent.reactor
 
+        # XXX: Since it's not straightforward to get the correct block, it's OK to just disable checkdatasig counting,
+        #      it will be correctly enabled when doing a full validation anyway.
+        #      We can also set the `nc_block_root_id` to `None` because we only call `verify_basic`,
+        #      which doesn't need it.
+        self.verification_params = VerificationParams(
+            enable_checkdatasig_count=False,
+            nc_block_root_id=None,
+        )
+
+        self.reactor = sync_agent.reactor
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
 
         # List of blocks from which we will receive transactions.
