@@ -38,6 +38,7 @@ from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -304,13 +305,23 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
+        # Check whitelist pathing. Default values:
+        p2p_wl = self._args.x_p2p_whitelist or 'default'
+        p2p_wl = p2p_wl.strip()
+
+        p2p_whitelist = PeersWhitelist.create_from_cmdline(
+            reactor=reactor,
+            p2p_wl=p2p_wl,
+            settings=settings,
+        )
+
         p2p_manager = ConnectionsManager(
             settings=settings,
             reactor=reactor,
             my_peer=peer,
             pubsub=pubsub,
             ssl=True,
-            whitelist_only=False,
+            peers_whitelist=p2p_whitelist,
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,
