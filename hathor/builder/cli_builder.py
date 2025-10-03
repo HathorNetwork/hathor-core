@@ -258,6 +258,7 @@ class CliBuilder:
             nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
             feature_service=self.feature_service,
+            nc_exec_fail_trace=self._args.nc_exec_fail_trace,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
