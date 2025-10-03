@@ -1,3 +1,4 @@
+import pytest
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.nanocontracts.resources import BlueprintSourceCodeResource
@@ -86,6 +87,7 @@ class TestBlueprint(Blueprint):
         self.create_builtin_blueprint(self.manager, self.blueprint_id, dummy_blueprint.TestBlueprint)
 
 
+@pytest.mark.does_metered_call
 class OCBBlueprintSourceCodeTest(BaseBlueprintSourceCodeTest):
     __test__ = True
 
