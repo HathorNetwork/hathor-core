@@ -264,23 +264,17 @@ class VerificationService:
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
-        block_storage = self._get_block_storage(params.block_or_block_storage)
+        block_storage = self._get_block_storage(params)
         self.verifiers.tx.verify_sum(
+            self._settings,
             token_dict or tx.get_complete_token_info(block_storage),
             # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
-            enforce_htr_check=not tx.is_nano_contract()
+            allow_nonexistent_tokens=tx.is_nano_contract()
         )
         self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
-
-    def _get_block_storage(self, block: Block | NCBlockStorage | None) -> NCBlockStorage:
-        assert block is not None and isinstance(block, Block)
-        assert self._nc_storage_factory is not None
-        if block.get_metadata().nc_block_root_id is None:
-            return self._nc_storage_factory.get_empty_block_storage()
-        return self._nc_storage_factory.get_block_storage_from_block(block)
 
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
@@ -289,7 +283,7 @@ class VerificationService:
         """
         # we should validate the token info before verifying the tx
         self.verifiers.token_creation_tx.verify_token_info(tx, params)
-        token_dict = tx.get_complete_token_info(self._get_block_storage(params.block_or_block_storage))
+        token_dict = tx.get_complete_token_info(self._get_block_storage(params))
         self._verify_tx(tx, params, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
 
@@ -383,3 +377,13 @@ class VerificationService:
         self.verifiers.on_chain_blueprint.verify_pubkey_is_allowed(tx)
         self.verifiers.on_chain_blueprint.verify_nc_signature(tx)
         self.verifiers.on_chain_blueprint.verify_code(tx)
+
+    def _get_block_storage(self, params: VerificationParams) -> NCBlockStorage:
+        assert params.best_block is not None
+        assert self._nc_storage_factory is not None
+        meta = params.best_block.get_metadata()
+        if meta.nc_block_root_id is None:
+            # This case only happens for the genesis and during sync of a voided chain.
+            assert params.best_block.is_block or meta.voided_by
+            return self._nc_storage_factory.get_empty_block_storage()
+        return self._nc_storage_factory.get_block_storage_from_block(params.best_block)

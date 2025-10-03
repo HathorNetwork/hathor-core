@@ -331,14 +331,14 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
                                     'none of its children is checkpoint-valid')
 
-    def get_complete_token_info(self, block_storage: NCBlockStorage) -> TokenInfoDict:
+    def get_complete_token_info(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
         """
         Get a complete token info dict, including data from both inputs and outputs.
         It uses a block storage with the latest token changes in nano contracts
         """
 
-        token_dict = self._get_token_info_from_inputs(block_storage)
-        self._update_token_info_from_nano_actions(token_dict=token_dict, block_storage=block_storage)
+        token_dict = self._get_token_info_from_inputs(nc_block_storage)
+        self._update_token_info_from_nano_actions(token_dict=token_dict, nc_block_storage=nc_block_storage)
         # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
         self._update_token_info_from_fees(token_dict=token_dict)
@@ -356,7 +356,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self,
         *,
         token_dict: TokenInfoDict,
-        block_storage: NCBlockStorage
+        nc_block_storage: NCBlockStorage,
     ) -> None:
         """Update token_dict with nano actions."""
         if not self.is_nano_contract():
@@ -370,8 +370,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             rules = BalanceRules.get_rules(self._settings, action)
             if action.token_uid not in token_dict:
                 # we try to load this token version from storage in case it's not in the inputs
-                token_dict[action.token_uid] = TokenInfo.get_default(
-                    get_token_version(self.storage, block_storage, action.token_uid)
+                token_dict[action.token_uid] = TokenInfo(
+                    version=get_token_version(self.storage, nc_block_storage, action.token_uid)
                 )
             rules.verification_rule(token_dict)
 
@@ -397,7 +397,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_info.amount += fee.amount
             token_dict[fee.token_uid] = token_info
 
-    def _get_token_info_from_inputs(self, block_storage: NCBlockStorage) -> TokenInfoDict:
+    def _get_token_info_from_inputs(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
         assert self.storage is not None
@@ -406,19 +406,16 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo.get_default()
+        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(version=TokenVersion.NATIVE)
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            token_version = get_token_version(self.storage, block_storage, token_uid)
+            token_version = get_token_version(self.storage, nc_block_storage, token_uid)
 
-            token_info = token_dict.get(
-                token_uid,
-                TokenInfo.get_default(version=token_version)
-            )
+            token_info = token_dict.get(token_uid, TokenInfo(version=token_version))
 
             if spent_output.is_token_authority():
                 token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()

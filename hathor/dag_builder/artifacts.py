@@ -89,7 +89,7 @@ class DAGArtifacts:
                         params = VerificationParams(
                             enable_checkdatasig_count=True,
                             enable_nano=True,
-                            block_or_block_storage=best_block
+                            best_block=best_block,
                         )
                         assert manager.vertex_handler._old_on_new_vertex(vertex, params)
                 except Exception as e:

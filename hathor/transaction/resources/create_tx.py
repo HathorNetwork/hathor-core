@@ -119,10 +119,10 @@ class CreateTxResource(Resource):
         # need to run verify_inputs first to check if all inputs exist
         verifiers.tx.verify_inputs(tx, skip_script=True)
         verifiers.vertex.verify_parents(tx)
+
         best_block = self.manager.tx_storage.get_best_block()
-        assert self.manager.verification_service._nc_storage_factory is not None
-        block_storage = self.manager.verification_service._nc_storage_factory.get_block_storage_from_block(best_block)
-        verifiers.tx.verify_sum(tx.get_complete_token_info(block_storage))
+        block_storage = self.manager.get_nc_block_storage(best_block)
+        verifiers.tx.verify_sum(self.manager._settings, tx.get_complete_token_info(block_storage))
 
 
 CreateTxResource.openapi = {

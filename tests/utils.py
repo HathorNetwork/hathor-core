@@ -29,7 +29,6 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
-from hathor.verification.verification_params import VerificationParams
 
 settings = HathorSettings()
 
@@ -728,9 +727,6 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     manager.cpu_mining_service.resolve(tx)
 
     if propagate:
-        best_block = manager.tx_storage.get_best_block()
-        params = VerificationParams.default_for_mempool(block_or_block_storage=best_block)
-        manager.verification_service.verify(tx, params)
         manager.propagate_tx(tx)
         assert isinstance(manager.reactor, Clock)
         manager.reactor.advance(8)

@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Callable, Collection, Iterable, Iterator, Optional
 from unittest import main as ut_main
+from unittest.mock import Mock
 
 from structlog import get_logger
 from twisted.trial import unittest
@@ -119,15 +120,6 @@ class TestCase(unittest.TestCase):
         self.rng = Random(self.seed)
         self._pending_cleanups: list[Callable[..., Any]] = []
         self._settings = get_global_settings()
-        # Create a genesis block for tests that need a previous_block
-        from hathor.transaction import Block
-        genesis_block = Block(
-            timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
-            nonce=self._settings.GENESIS_BLOCK_NONCE,
-            hash=self._settings.GENESIS_BLOCK_HASH,
-            settings=self._settings,
-        )
-        self.verification_params = VerificationParams.default_for_mempool(block_or_block_storage=genesis_block)
 
     def tearDown(self) -> None:
         self.clean_tmpdirs()
@@ -529,3 +521,8 @@ class TestCase(unittest.TestCase):
             return None
 
         return list(hd.keys.keys())[index]
+
+    @staticmethod
+    def get_verification_params(manager: HathorManager | None = None) -> VerificationParams:
+        best_block = manager.tx_storage.get_best_block() if manager else None
+        return VerificationParams.default_for_mempool(best_block=best_block or Mock())

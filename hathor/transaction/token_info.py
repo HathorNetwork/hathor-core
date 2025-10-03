@@ -14,7 +14,7 @@
 
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from hathor.types import TokenUid
 
@@ -33,30 +33,14 @@ class TokenVersion(IntEnum):
 # used when (de)serializing token information
 @dataclass(slots=True, kw_only=True)
 class TokenInfo:
-    amount: int
-    can_mint: bool
-    can_melt: bool
     version: TokenVersion | None
+    amount: int = 0
+    can_mint: bool = False
+    can_melt: bool = False
     # count of non-authority outputs that is used to calculate the fee
     chargeable_outputs: int = 0
     # count of non-authority inputs that is used to calculate the fee
     chargeable_inputs: int = 0
-
-    @classmethod
-    def get_default(cls,
-                    version: TokenVersion | None = TokenVersion.NATIVE,
-                    can_mint: bool = False,
-                    can_melt: bool = False) -> 'TokenInfo':
-        """
-        Create default deposit token info with zero amount and optional mint/melt permissions.
-        """
-
-        return TokenInfo(
-            amount=0,
-            can_mint=can_mint,
-            can_melt=can_melt,
-            version=version,
-        )
 
     def has_been_melted(self) -> bool:
         """
@@ -82,7 +66,11 @@ class TokenDescription:
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):
-    fees_from_fee_header: int = 0
+    __slots__ = ('fees_from_fee_header',)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fees_from_fee_header: int = 0
 
     def calculate_fee(self, settings: 'HathorSettings') -> int:
         """
@@ -118,11 +106,11 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 def get_token_version(
     tx_storage: 'TransactionStorage',
     nc_block_storage: 'NCBlockStorage',
-    token_uid: TokenUid | bytes
+    token_uid: TokenUid
 ) -> TokenVersion | None:
     """
     Get the token version for a given token uid.
-    It searches first in the tx storage and then in the block storage if provided.
+    It searches first in the tx storage and then in the block storage.
     """
     from hathor.transaction.storage.exceptions import TransactionDoesNotExist
     try:

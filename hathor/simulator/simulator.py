@@ -26,7 +26,6 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
-from hathor.nanocontracts import NCStorageFactory
 from hathor.p2p.peer import PrivatePeer
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
@@ -247,7 +246,6 @@ def _build_vertex_verifiers(
     daa: DifficultyAdjustmentAlgorithm,
     feature_service: FeatureService,
     tx_storage: TransactionStorage,
-    nc_storage_factory: NCStorageFactory,
 ) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
@@ -259,5 +257,4 @@ def _build_vertex_verifiers(
         daa=daa,
         feature_service=feature_service,
         tx_storage=tx_storage,
-        nc_storage_factory=nc_storage_factory,
     )

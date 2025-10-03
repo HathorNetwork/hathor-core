@@ -26,6 +26,7 @@ from hathor.consensus.context import ReorgInfo
 from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.types import MetaNCCallRecord
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
@@ -37,7 +38,6 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
-    from hathor.verification.vertex_verifiers import VertexVerifiers
 
 logger = get_logger()
 
@@ -54,14 +54,12 @@ class BlockConsensusAlgorithm:
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
-        vertex_verifiers: VertexVerifiers,
     ) -> None:
         self._settings = settings
         self.context = context
         self._runner_factory = runner_factory
         self._nc_log_storage = nc_log_storage
         self.feature_service = feature_service
-        self.vertex_verifiers = vertex_verifiers
 
     @classproperty
     def log(cls) -> Any:
@@ -239,18 +237,17 @@ class BlockConsensusAlgorithm:
 
             runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
             exception_and_tb: tuple[NCFail, str] | None = None
-            try:
-                should_verify_after_execution = False
-                token_dict = tx.get_complete_token_info(block_storage)
-                for token_uid, token_info in token_dict.items():
-                    if token_info.version is None:
-                        should_verify_after_execution = True
+            token_dict = tx.get_complete_token_info(block_storage)
+            should_verify_sum_after_execution = any(token_info.version is None for token_info in token_dict.values())
 
+            try:
                 runner.execute_from_tx(tx)
+
                 # after the execution we have the latest state in the storage
                 # and at this point no tokens pending creation
-                if should_verify_after_execution:
-                    self.vertex_verifiers.tx.verify_sum(tx.get_complete_token_info(block_storage))
+                if should_verify_sum_after_execution:
+                    token_dict = tx.get_complete_token_info(block_storage)
+                    self._verify_sum_after_execution(token_dict)
 
             except NCFail as e:
                 kwargs: dict[str, Any] = {}
@@ -314,6 +311,14 @@ class BlockConsensusAlgorithm:
                     assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
                 case _:  # pragma: no cover
                     assert_never(tx_meta.nc_execution)
+
+    def _verify_sum_after_execution(self, token_dict: TokenInfoDict) -> None:
+        from hathor import NCFail
+        from hathor.verification.transaction_verifier import TransactionVerifier
+        try:
+            TransactionVerifier.verify_sum(self._settings, token_dict)
+        except Exception as e:
+            raise NCFail from e
 
     def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
         from hathor.nanocontracts.runner.types import CallType
@@ -859,7 +864,7 @@ class BlockConsensusAlgorithm:
 
 
 class BlockConsensusAlgorithmFactory:
-    __slots__ = ('settings', 'nc_log_storage', '_runner_factory', 'feature_service', 'vertex_verifiers')
+    __slots__ = ('settings', 'nc_log_storage', '_runner_factory', 'feature_service')
 
     def __init__(
         self,
@@ -867,13 +872,11 @@ class BlockConsensusAlgorithmFactory:
         runner_factory: RunnerFactory,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
-        vertex_verifiers: 'VertexVerifiers'
     ) -> None:
         self.settings = settings
         self._runner_factory = runner_factory
         self.nc_log_storage = nc_log_storage
         self.feature_service = feature_service
-        self.vertex_verifiers = vertex_verifiers
 
     def __call__(self, context: 'ConsensusAlgorithmContext') -> BlockConsensusAlgorithm:
         return BlockConsensusAlgorithm(
@@ -882,5 +885,4 @@ class BlockConsensusAlgorithmFactory:
             self._runner_factory,
             self.nc_log_storage,
             self.feature_service,
-            self.vertex_verifiers
         )

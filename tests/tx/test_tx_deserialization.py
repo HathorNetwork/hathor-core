@@ -19,7 +19,6 @@ class _BaseTest:
                 daa=daa,
                 feature_service=Mock(),
                 tx_storage=Mock(),
-                nc_storage_factory=Mock(),
             )
             self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 
@@ -36,7 +35,7 @@ class _BaseTest:
 
             cls = self.get_tx_class()
             tx = cls.create_from_struct(self.tx_bytes, verbose=verbose)
-            self._verification_service.verify_without_storage(tx, self.verification_params)
+            self._verification_service.verify_without_storage(tx, self.get_verification_params())
 
             key, version = v[1]
             self.assertEqual(key, 'version')

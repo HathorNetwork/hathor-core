@@ -49,11 +49,9 @@ class TransactionStreamingClient:
         self.verification_service = self.protocol.node.verification_service
         # XXX: since it's not straightforward to get the correct block, it's OK to just disable checkdatasig counting,
         #      it will be correctly enabled when doing a full validation anyway.
-        # TODO-RAUL: is correct to grab the best block here?
-        best_block = self.tx_storage.get_best_block()
         self.verification_params = VerificationParams(
             enable_checkdatasig_count=False,
-            block_or_block_storage=best_block
+            best_block=None,
         )
         self.reactor = sync_agent.reactor
 

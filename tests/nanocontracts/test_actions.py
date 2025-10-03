@@ -117,10 +117,10 @@ class TestActions(unittest.TestCase):
             ['tx0', 'tx1', 'tx2', 'TKA'],
             Transaction,
         )
-        self.manager.tx_storage.get_best_block()
+        best_block = self.manager.tx_storage.get_best_block()
         self.verification_params = VerificationParams.default_for_mempool(
             enable_nano=True,
-            block_or_block_storage=self.manager.tx_storage.get_best_block()
+            best_block=best_block,
         )
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.
