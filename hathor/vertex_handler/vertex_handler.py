@@ -97,8 +97,11 @@ class VertexHandler:
         enable_nano = is_nano_active(
             settings=self._settings, block=parent_block, feature_service=self._feature_service
         )
-
-        params = VerificationParams(enable_checkdatasig_count=enable_checkdatasig_count, enable_nano=enable_nano)
+        params = VerificationParams(
+            enable_checkdatasig_count=enable_checkdatasig_count,
+            enable_nano=enable_nano,
+            best_block=parent_block,
+        )
 
         for tx in deps:
             if not self._tx_storage.transaction_exists(tx.hash):
@@ -117,7 +120,10 @@ class VertexHandler:
         """Called by mempool sync."""
         best_block = self._tx_storage.get_best_block()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
-        params = VerificationParams.default_for_mempool(enable_nano=enable_nano)
+        params = VerificationParams.default_for_mempool(
+            enable_nano=enable_nano,
+            best_block=best_block,
+        )
         return self._old_on_new_vertex(tx, params)
 
     @cpu.profiler('on_new_relayed_vertex')
@@ -133,7 +139,10 @@ class VertexHandler:
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
         # XXX: checkdatasig enabled for relayed vertices
         params = VerificationParams(
-            enable_checkdatasig_count=True, reject_locked_reward=reject_locked_reward, enable_nano=enable_nano
+            enable_checkdatasig_count=True,
+            reject_locked_reward=reject_locked_reward,
+            enable_nano=enable_nano,
+            best_block=best_block,
         )
         return self._old_on_new_vertex(vertex, params, quiet=quiet)
 

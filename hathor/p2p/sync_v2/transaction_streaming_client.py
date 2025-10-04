@@ -49,7 +49,10 @@ class TransactionStreamingClient:
         self.verification_service = self.protocol.node.verification_service
         # XXX: since it's not straightforward to get the correct block, it's OK to just disable checkdatasig counting,
         #      it will be correctly enabled when doing a full validation anyway.
-        self.verification_params = VerificationParams(enable_checkdatasig_count=False)
+        self.verification_params = VerificationParams(
+            enable_checkdatasig_count=False,
+            best_block=None,
+        )
         self.reactor = sync_agent.reactor
 
         self.log = logger.new(peer=self.protocol.get_short_peer_id())

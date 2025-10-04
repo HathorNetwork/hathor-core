@@ -26,6 +26,7 @@ from hathor.consensus.context import ReorgInfo
 from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.types import MetaNCCallRecord
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
@@ -236,8 +237,18 @@ class BlockConsensusAlgorithm:
 
             runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
             exception_and_tb: tuple[NCFail, str] | None = None
+            token_dict = tx.get_complete_token_info(block_storage)
+            should_verify_sum_after_execution = any(token_info.version is None for token_info in token_dict.values())
+
             try:
                 runner.execute_from_tx(tx)
+
+                # after the execution we have the latest state in the storage
+                # and at this point no tokens pending creation
+                if should_verify_sum_after_execution:
+                    token_dict = tx.get_complete_token_info(block_storage)
+                    self._verify_sum_after_execution(token_dict)
+
             except NCFail as e:
                 kwargs: dict[str, Any] = {}
                 if tx.name:
@@ -300,6 +311,14 @@ class BlockConsensusAlgorithm:
                     assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
                 case _:  # pragma: no cover
                     assert_never(tx_meta.nc_execution)
+
+    def _verify_sum_after_execution(self, token_dict: TokenInfoDict) -> None:
+        from hathor import NCFail
+        from hathor.verification.transaction_verifier import TransactionVerifier
+        try:
+            TransactionVerifier.verify_sum(self._settings, token_dict)
+        except Exception as e:
+            raise NCFail from e
 
     def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
         from hathor.nanocontracts.runner.types import CallType

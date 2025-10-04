@@ -263,6 +263,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return True if this transaction is a nano contract or not."""
         return False
 
+    def has_fees(self) -> bool:
+        """Return True if this transaction has a fee header not."""
+        return False
+
     def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
