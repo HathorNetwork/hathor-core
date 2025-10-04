@@ -18,6 +18,7 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCAction, NCGrantAuthorityAction, TokenUid
+from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -41,7 +42,7 @@ class CalleeBlueprint(Blueprint):
 
     @public
     def revoke_all_from_other(self, ctx: Context, contract_id: ContractId, token_uid: TokenUid) -> None:
-        self.syscall.call_public_method(contract_id, 'revoke_from_self', [], token_uid, True, True)
+        self.syscall.call_public_method(contract_id, 'revoke_from_self', [], [], token_uid, True, True)
 
 
 class CallerBlueprint(Blueprint):
@@ -66,7 +67,7 @@ class CallerBlueprint(Blueprint):
 
     @public
     def revoke_from_other(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
-        self.syscall.call_public_method(self.other_id, 'revoke_from_self', [], token_uid, mint, melt)
+        self.syscall.call_public_method(self.other_id, 'revoke_from_self', [], [], token_uid, mint, melt)
 
     @public
     def acquire_another(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
@@ -140,6 +141,13 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self.runner.create_contract(self.callee_id, self.callee_blueprint_id, callee_ctx)
         self.caller_storage = self.runner.get_storage(self.caller_id)
         self.callee_storage = self.runner.get_storage(self.callee_id)
+
+        self.caller_storage.create_token(
+            token_id=self.token_a,
+            token_name='TKA',
+            token_symbol='TKA',
+            token_version=TokenVersion.DEPOSIT
+        )
 
     def _grant_to_other(self, *, mint: bool, melt: bool) -> None:
         context = self.create_context(

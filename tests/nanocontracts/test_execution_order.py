@@ -22,6 +22,7 @@ from hathor.nanocontracts.types import (
     NCWithdrawalAction,
     TokenUid,
 )
+from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -85,7 +86,11 @@ class MyBlueprint(Blueprint):
         self.assert_token_balance(before=0, current=10)
         action = NCDepositAction(token_uid=self.token_uid, amount=7)
         self.syscall.call_public_method(
-            contract_id, 'accept_deposit_from_another', [action], self.syscall.get_contract_id()
+            contract_id,
+            'accept_deposit_from_another',
+            [action],
+            [],
+            self.syscall.get_contract_id()
         )
         self.assert_token_balance(before=0, current=6)
 
@@ -105,7 +110,11 @@ class MyBlueprint(Blueprint):
         self.assert_token_balance(before=6, current=5)
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=2)
         self.syscall.call_public_method(
-            contract_id, 'accept_withdrawal_from_another', [action], self.syscall.get_contract_id()
+            contract_id,
+            'accept_withdrawal_from_another',
+            [action],
+            [],
+            self.syscall.get_contract_id()
         )
         self.assert_token_balance(before=6, current=6)
 
@@ -120,6 +129,10 @@ class MyBlueprint(Blueprint):
     def accept_withdrawal_from_another_callback(self, ctx: Context) -> None:
         self.assert_token_balance(before=7, current=6)
 
+    @public(allow_deposit=True)
+    def noop(self, ctx: Context) -> None:
+        pass
+
 
 class TestExecutionOrder(BlueprintTestCase):
     def setUp(self) -> None:
@@ -132,13 +145,23 @@ class TestExecutionOrder(BlueprintTestCase):
         self.tx = self.get_genesis_tx()
         self.address = self.gen_random_address()
 
+        self.runner.create_contract(self.contract_id1, self.blueprint_id, self._get_context(), self.token_a)
+        self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(), self.token_a)
         action = NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=10)
-        self.runner.create_contract(self.contract_id1, self.blueprint_id, self._get_context(action), self.token_a)
-        self.runner.create_contract(self.contract_id2, self.blueprint_id, self._get_context(action), self.token_a)
+        self.runner.call_public_method(self.contract_id1, 'noop', self._get_context(action))
+        self.runner.call_public_method(self.contract_id2, 'noop', self._get_context(action))
 
-    def _get_context(self, *actions: NCAction) -> Context:
+        nc1_storage = self.runner.get_storage(self.contract_id1)
+        nc1_storage.create_token(
+            token_id=self.token_a,
+            token_name='TKA',
+            token_symbol='TKA',
+            token_version=TokenVersion.DEPOSIT
+        )
+
+    def _get_context(self, *actions: NCAction | None) -> Context:
         return self.create_context(
-            actions=list(actions),
+            actions=[action for action in actions if action is not None],
             vertex=self.tx,
             caller_id=self.address,
             timestamp=self.now,

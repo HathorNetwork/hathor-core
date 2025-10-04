@@ -89,6 +89,10 @@ KNOWN_CASES = [
     'hathor.NCFail.args',
     'hathor.NCFail.some_new_attribute',
     'hathor.NCFail.with_traceback',
+    'hathor.NCFee.amount',
+    'hathor.NCFee.get_htr_value',
+    'hathor.NCFee.some_new_attribute',
+    'hathor.NCFee.token_uid',
     'hathor.NCGrantAuthorityAction.melt',
     'hathor.NCGrantAuthorityAction.mint',
     'hathor.NCGrantAuthorityAction.name',
@@ -271,7 +275,7 @@ class TestMutableAttributes(BlueprintTestCase):
     def test_search_mutable_properties(self) -> None:
         mutable_props = sorted(self.runner.call_public_method(self.contract_id, 'check', self.create_context()))
         sorted_known_cases = sorted(KNOWN_CASES)
-        debug = False
+        debug = True
         if debug:
             for prop in mutable_props:
                 print(f"    '{prop}',")

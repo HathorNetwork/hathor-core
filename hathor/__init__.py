@@ -28,6 +28,7 @@ from hathor.nanocontracts.types import (
     NCActionType,
     NCArgs,
     NCDepositAction,
+    NCFee,
     NCGrantAuthorityAction,
     NCParsedArgs,
     NCRawArgs,
