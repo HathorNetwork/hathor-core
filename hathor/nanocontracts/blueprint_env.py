@@ -193,11 +193,19 @@ class BlueprintEnvironment:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         *args: Any,
         **kwargs: Any,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method(blueprint_id, method_name, actions, args, kwargs)
+        return self.__runner.syscall_proxy_call_public_method(
+            blueprint_id=blueprint_id,
+            method_name=method_name,
+            actions=actions,
+            fees=fees,
+            args=args,
+            kwargs=kwargs
+        )
 
     @final
     def proxy_call_public_method_nc_args(
@@ -205,10 +213,17 @@ class BlueprintEnvironment:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         nc_args: NCArgs,
     ) -> Any:
         """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args, [])
+        return self.__runner.syscall_proxy_call_public_method_nc_args(
+            blueprint_id=blueprint_id,
+            method_name=method_name,
+            actions=actions,
+            fees=fees,
+            nc_args=nc_args
+        )
 
     @final
     def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:

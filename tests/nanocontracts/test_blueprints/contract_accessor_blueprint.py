@@ -64,14 +64,14 @@ class MyBlueprint(Blueprint):
     def test_simple_public_method(self, ctx: Context, other_id: ContractId, name: str) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
         return contract \
-            .public(NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)) \
+            .public(actions=[NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)], fees=[]) \
             .simple_public_method(name)
 
     @public
     def test_simple_public_method_no_actions(self, ctx: Context, other_id: ContractId, name: str) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
         return contract \
-            .public() \
+            .public(actions=[], fees=[]) \
             .simple_public_method(name)
 
     @view
@@ -99,7 +99,7 @@ class MyBlueprint(Blueprint):
         name: str,
     ) -> tuple[str, str]:
         prepared_call = self.syscall.get_contract(other_id, blueprint_id=None) \
-            .public(NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID))
+            .public(actions=[NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)], fees=[])
         ret1 = prepared_call.simple_public_method(name + '1')
         ret2 = prepared_call.simple_public_method(name + '2')
         return ret1, ret2
@@ -112,7 +112,7 @@ class MyBlueprint(Blueprint):
         name: str,
     ) -> tuple[str, str]:
         prepared_call = self.syscall.get_contract(other_id, blueprint_id=None) \
-            .public(NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID))
+            .public(actions=[NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)], fees=[])
         method = prepared_call.simple_public_method
         ret1 = method(name + '1')
         ret2 = method(name + '2')
@@ -122,14 +122,14 @@ class MyBlueprint(Blueprint):
     def test_fallback_allowed(self, ctx: Context, other_id: ContractId) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
         return contract \
-            .public() \
+            .public([], []) \
             .unknown()
 
     @public
     def test_fallback_forbidden(self, ctx: Context, other_id: ContractId) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
         return contract \
-            .public(forbid_fallback=True) \
+            .public([], [], forbid_fallback=True) \
             .unknown()
 
     @view
@@ -171,7 +171,7 @@ class MyBlueprint(Blueprint):
         my_blueprint_id = self.syscall.get_blueprint_id()
         contract = self.syscall.get_contract(other_id, blueprint_id=my_blueprint_id)
         return contract \
-            .public() \
+            .public([], []) \
             .simple_public_method(name)
 
     @public
@@ -179,7 +179,7 @@ class MyBlueprint(Blueprint):
         blueprint_id = BlueprintId(VertexId(b'\x11' * 32))
         contract = self.syscall.get_contract(other_id, blueprint_id=blueprint_id)
         return contract \
-            .public() \
+            .public([], []) \
             .simple_public_method(name)
 
     @public
@@ -188,7 +188,7 @@ class MyBlueprint(Blueprint):
         my_blueprint_id = self.syscall.get_blueprint_id()
         contract = self.syscall.get_contract(other_id, blueprint_id=(blueprint_id, my_blueprint_id))
         return contract \
-            .public() \
+            .public([], []) \
             .simple_public_method(name)
 
     @public
@@ -197,7 +197,7 @@ class MyBlueprint(Blueprint):
         blueprint_id2 = BlueprintId(VertexId(b'\x22' * 32))
         contract = self.syscall.get_contract(other_id, blueprint_id=(blueprint_id1, blueprint_id2))
         return contract \
-            .public() \
+            .public([], []) \
             .simple_public_method(name)
 
     @fallback

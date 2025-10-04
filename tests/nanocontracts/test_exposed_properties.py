@@ -30,7 +30,6 @@ KNOWN_CASES = [
     'hathor.Context.caller_id',
     'hathor.Context.copy',
     'hathor.Context.create_from_vertex',
-    'hathor.Context.fees',
     'hathor.Context.get_caller_address',
     'hathor.Context.get_caller_contract_id',
     'hathor.Context.get_single_action',
@@ -276,7 +275,7 @@ class TestMutableAttributes(BlueprintTestCase):
     def test_search_mutable_properties(self) -> None:
         mutable_props = sorted(self.runner.call_public_method(self.contract_id, 'check', self.create_context()))
         sorted_known_cases = sorted(KNOWN_CASES)
-        debug = False
+        debug = True
         if debug:
             for prop in mutable_props:
                 print(f"    '{prop}',")

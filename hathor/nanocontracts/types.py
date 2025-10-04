@@ -526,7 +526,7 @@ class NCFee:
     amount: int
 
     def __post_init__(self) -> None:
-        # the fee payment values should be always positive
+        # the fee payment values should always be positive
         if self.amount <= 0:
             raise NCInvalidFee('amount must be positive')
 

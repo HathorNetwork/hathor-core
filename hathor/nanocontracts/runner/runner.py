@@ -89,7 +89,6 @@ from hathor.nanocontracts.utils import (
 )
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
-from hathor.transaction.exceptions import TransactionDataError
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_info import TokenDescription, TokenVersion
@@ -159,7 +158,7 @@ class Runner:
         self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
 
         # Information about fees paid during execution (both syscalls and inter-contract calls).
-        self._paid_fees: defaultdict[TokenUid, int] = defaultdict(int)
+        self._paid_actions_fees: defaultdict[TokenUid, int] = defaultdict(int)
 
     def execute_from_tx(self, tx: Transaction) -> None:
         """Execute the contract's method call."""
@@ -304,7 +303,7 @@ class Runner:
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(int)
-        self._paid_fees = defaultdict(int)
+        self._paid_actions_fees = defaultdict(int)
         return ret
 
     @_forbid_syscall_from_view('call_public_method')
@@ -343,9 +342,11 @@ class Runner:
     @_forbid_syscall_from_view('proxy_call_public_method')
     def syscall_proxy_call_public_method(
         self,
+        *,
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> Any:
@@ -358,16 +359,23 @@ class Runner:
         - The storage context remains that of the calling contract
         """
         nc_args = NCParsedArgs(args, kwargs)
-        return self.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args, [])
+        return self.syscall_proxy_call_public_method_nc_args(
+            blueprint_id=blueprint_id,
+            method_name=method_name,
+            actions=actions,
+            fees=fees,
+            nc_args=nc_args
+        )
 
     @_forbid_syscall_from_view('proxy_call_public_method_nc_args')
     def syscall_proxy_call_public_method_nc_args(
         self,
+        *,
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
-        nc_args: NCArgs,
-        fees: Sequence[NCFee]
+        fees: Sequence[NCFee],
+        nc_args: NCArgs
     ) -> Any:
         if method_name == NC_INITIALIZE_METHOD:
             raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
@@ -429,19 +437,19 @@ class Runner:
             rules = BalanceRules.get_rules(self._settings, action)
             rules.nc_caller_execution_rule(previous_changes_tracker)
 
+        # Update the balances with the fee payment amount. Since some tokens could be created during contract
+        # execution, the verification of the tokens and amounts will be done after it
         for fee in fees:
             previous_changes_tracker.add_balance(fee.token_uid, -fee.amount)
             self._register_paid_fee(fee.token_uid, fee.amount)
 
         ctx_actions = Context.__group_actions__(actions)
-        ctx_fees = Context.__group_fees__(fees)
         # Call the other contract method.
         ctx = Context(
             caller_id=last_call_record.contract_id,
             vertex_data=first_ctx.vertex,
             block_data=first_ctx.block,
             actions=ctx_actions,
-            fees=ctx_fees
         )
         result = self._execute_public_method_call(
             contract_id=contract_id,
@@ -453,8 +461,7 @@ class Runner:
             forbid_fallback=forbid_fallback,
         )
 
-        self._verify_payment_tokens()
-        self._verify_fee_sum(ctx_actions, ctx_fees)
+        self._validate_actions_fees(ctx_actions=ctx_actions, fees=fees)
 
         return result
 
@@ -502,7 +509,7 @@ class Runner:
                         pass
                     case SyscallUpdateTokenRecord():
                         calculated_tokens_totals[record.token_uid] += record.amount
-                    case _:
+                    case _:  # pragma: no cover
                         assert_never(record)
 
         assert calculated_tokens_totals == self._updated_tokens_totals, (
@@ -527,11 +534,11 @@ class Runner:
                     # so no need to account for them.
                     pass
 
-                case _:
+                case _:  # pragma: no cover
                     assert_never(action)
 
         # Account for fees paid during execution
-        for fee_token_uid, amount in self._paid_fees.items():
+        for fee_token_uid, amount in self._paid_actions_fees.items():
             total_diffs[fee_token_uid] += amount
 
         assert all(diff == 0 for diff in total_diffs.values()), (
@@ -981,8 +988,6 @@ class Runner:
         syscall_balance = syscall_rules.mint(amount, fee_payment_token=fee_payment_token_info)
         records = syscall_rules.get_syscall_update_token_records(syscall_balance)
 
-        # Track payment token for fee validation (but not the amount, as that's handled by syscall rules)
-        self._register_paid_fee(fee_payment_token, 0)  # Just register the token, don't add amount
         self._update_tokens_amount(records)
 
     @_forbid_syscall_from_view('melt_tokens')
@@ -1017,8 +1022,6 @@ class Runner:
         syscall_balance = syscall_rules.melt(amount, fee_payment_token=fee_payment_token_info)
         records = syscall_rules.get_syscall_update_token_records(syscall_balance)
 
-        # Track payment token for fee validation (but not the amount, as that's handled by syscall rules)
-        self._register_paid_fee(fee_payment_token, 0)  # Just register the token, don't add amount
         self._update_tokens_amount(records)
 
     def _validate_context(self, ctx: Context) -> None:
@@ -1073,10 +1076,7 @@ class Runner:
         if amount <= 0:
             raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
 
-        try:
-            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
-        except TransactionDataError as e:
-            raise NCInvalidSyscall(str(e)) from e
+        validate_token_name_and_symbol(self._settings, token_name, token_symbol)
 
         call_record = self.get_current_call_record()
         parent_id = call_record.contract_id
@@ -1128,10 +1128,7 @@ class Runner:
         if amount <= 0:
             raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
 
-        try:
-            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
-        except TransactionDataError as e:
-            raise NCInvalidSyscall(str(e)) from e
+        validate_token_name_and_symbol(self._settings, token_name, token_symbol)
 
         call_record = self.get_current_call_record()
         parent_id = call_record.contract_id
@@ -1163,8 +1160,6 @@ class Runner:
         )
         records = syscall_rules.get_syscall_update_token_records(syscall_balance)
 
-        # Track payment token for fee validation (but not the amount, as that's handled by syscall rules)
-        self._register_paid_fee(fee_payment_token, 0)  # Just register the token, don't add amount
         self._update_tokens_amount(records)
 
         return token_id
@@ -1265,56 +1260,54 @@ class Runner:
 
     def _register_paid_fee(self, token_uid: TokenUid, amount: int) -> None:
         """ Register a fee payment in the current call."""
-        self._paid_fees[token_uid] += amount
+        self._paid_actions_fees[token_uid] += amount
 
-    def _verify_payment_tokens(self):
-        """Verify if all the payment tokens have the right token version"""
-        # check if the payment tokens are all deposit
-        for token_uid in self._paid_fees.keys():
-            token = self._get_token(token_uid)
-
-            # We don't accept payments using fee tokens
-            if token.token_version == TokenVersion.FEE:
-                raise NCInvalidFeePaymentToken("fee-based tokens aren't allowed for paying fees")
-
-    def _verify_fee_sum(
+    def _validate_actions_fees(
         self,
         ctx_actions: MappingProxyType[TokenUid, tuple[NCAction, ...]],
-        ctx_fees: MappingProxyType[TokenUid, tuple[NCFee, ...]],
+        fees: Sequence[NCFee],
     ) -> None:
         """
         Validate if the sum of fees is the same of the provided actions fees.
-        It should be called only after a nc method execution to ensure all tokens are already created.
+        It should be called only after a nano contract method execution to ensure all tokens are already created.
         """
-        payment_sum = 0
-        # now we add the payments provided by the context
-        for token_uid, fees in ctx_fees.items():
-            # because we register all fee tokens in the paid fees dict, it should contain at
-            # least the length of the ctx_fees (it could be more if syscalls were called during this execution)
-            assert token_uid in self._paid_fees
-            for fee in fees:
-                payment_sum += fee.get_htr_value(self._settings)
-
+        # sum of the fee provided by the caller
         fee_sum = 0
+
+        # sum of the expected fee calculated by this method
+        expected_fee = 0
+
+        # check if the payment tokens are all deposit
+        for token_uid in self._paid_actions_fees.keys():
+            token = self._get_token(token_uid)
+
+            allowed_token_versions = {TokenVersion.DEPOSIT, TokenVersion.NATIVE}
+            if token.token_version not in allowed_token_versions:
+                raise NCInvalidFeePaymentToken("fee-based tokens aren't allowed for paying fees")
+
+        for fee in fees:
+            # because we registered all fee tokens in the paid fees dict, it should contain at
+            # least the length of fees
+            assert fee.token_uid in self._paid_actions_fees
+            fee_sum += fee.get_htr_value(self._settings)
+
         for token_uid, actions in ctx_actions.items():
             # it is in the paid fees, so we assume this token is deposit-based or htr
-            if token_uid in self._paid_fees:
+            if token_uid in self._paid_actions_fees:
                 continue
 
-            # we still need to check here, other tokens that weren't used can be used so we need to fetch them
+            # we still need to check here, other tokens that weren't used to pay fees can be used
+            # so we need to fetch them
             token_info = self._get_token(token_uid)
-            if token_info is None:
-                # Token doesn't exist, skip fee verification for this token
-                continue
             if token_info.token_version == TokenVersion.FEE:
                 # filter actions to only include deposit and withdrawal actions
                 chargeable_actions = {NCActionType.DEPOSIT, NCActionType.WITHDRAWAL}
                 fee_actions = [action for action in actions if action.type in chargeable_actions]
-                fee_sum += len(fee_actions)
+                expected_fee += len(fee_actions)
 
-        if payment_sum != fee_sum:
+        if fee_sum != expected_fee:
             raise NCInvalidFee(
-                f'Fee payment balance is different than expected. (amount={payment_sum}, expected={fee_sum})'
+                f'Fee payment balance is different than expected. (amount={fee_sum}, expected={expected_fee})'
             )
 
 

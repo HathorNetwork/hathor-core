@@ -258,6 +258,34 @@ class NCActionsFeeTestCase(BlueprintTestCase):
                 -100  # fee_amount
             )
 
+        # paying attempt with deposit token zero amount is forbidden
+        msg = 'amount must be positive'
+        with pytest.raises(NCInvalidFee, match=msg):
+            self.runner.call_public_method(
+                self.nc1_id,
+                'move_tokens_to_nc',
+                self.create_context(),
+                self.nc2_id,
+                fbt_token_uid,  # token to move
+                1000,  # amount to move
+                dbt_token_uid,  # payment_token
+                0  # fee_amount
+            )
+
+        # paying attempt with zero amount HTR is forbidden
+        msg = 'amount must be positive'
+        with pytest.raises(NCInvalidFee, match=msg):
+            self.runner.call_public_method(
+                self.nc1_id,
+                'move_tokens_to_nc',
+                self.create_context(),
+                self.nc2_id,
+                fbt_token_uid,  # token to move
+                1000,  # amount to move
+                TokenUid(HATHOR_TOKEN_UID),  # payment_token
+                0  # fee_amount
+            )
+
         # paying attempt with negative value is forbidden
         msg = 'fee amount must be an integer and multiple of 100 when using deposit tokens'
         with pytest.raises(NCInvalidFee, match=msg):
@@ -322,7 +350,6 @@ class NCActionsFeeTestCase(BlueprintTestCase):
                 NCDepositAction(token_uid=htr_token_uid, amount=1),
                 NCWithdrawalAction(token_uid=fbt_token_uid, amount=100_000)
             ],
-            fees=[NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)]
         )
         self.runner.create_contract(self.nc3_id, self.my_other_blueprint_id, ctx)
 

@@ -37,12 +37,12 @@ class ProxyBlueprint(Blueprint):
     def inc(self, ctx: Context) -> None:
         actions: list[NCAction] = []
         blueprint_id = self.syscall.get_blueprint_id(self.contract)
-        self.syscall.proxy_call_public_method(blueprint_id, 'inc', actions)
+        self.syscall.proxy_call_public_method(blueprint_id, 'inc', actions, [])
 
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> None:
         blueprint_id = self.syscall.get_blueprint_id(self.contract)
-        self.syscall.proxy_call_public_method_nc_args(blueprint_id, method_name, ctx.actions_list, nc_args)
+        self.syscall.proxy_call_public_method_nc_args(blueprint_id, method_name, ctx.actions_list, [], nc_args)
 
 
 class CodeBlueprint1(Blueprint):
