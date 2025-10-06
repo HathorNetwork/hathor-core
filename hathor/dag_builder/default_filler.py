@@ -238,6 +238,10 @@ class DefaultFiller:
         for token in tokens:
             node = self._get_or_create_node(token)
 
+            if 'token_id' in node.attrs:
+                # Skip token creation when `token_id` is provided.
+                continue
+
             balance = self.calculate_balance(node)
             assert set(balance.keys()).issubset({'HTR', token})
 

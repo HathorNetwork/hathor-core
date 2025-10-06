@@ -522,3 +522,26 @@ if foo:
                 tx1.balance_HTR = 1
                 tx1.balance_HTR = 2
             ''')
+
+    def test_token_id(self) -> None:
+        token_id = b'y' * 32
+        blueprint_id = b'x' * 32
+        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            TKA.token_id = "{token_id.hex()}"
+
+            tx1.nc_id = "{blueprint_id.hex()}"
+            tx1.nc_method = initialize(0)
+            tx1.nc_withdrawal = 123 TKA
+
+            tx1 <-- b11
+        ''')
+        artifacts.propagate_with(self.manager)
+
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        assert set(tx1.tokens) == {token_id}
+        assert 'TKA' not in artifacts.by_name
+        assert tx1.get_metadata().nc_execution is NCExecutionState.FAILURE

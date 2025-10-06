@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, TypedDict, cast
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, cast
 
 from structlog import get_logger
 from typing_extensions import assert_never, override
@@ -57,7 +57,7 @@ class _Tag(Enum):
     TXS = 0x04
 
 
-@dataclass
+@dataclass(slots=True)
 class _KeyAny:
     token_uid_internal: InternalUid
     tag: _Tag
@@ -66,13 +66,23 @@ class _KeyAny:
     index: Optional[int] = None
 
 
-class _InfoDict(TypedDict):
-    name: str
-    symbol: str
+@dataclass(slots=True)
+class _InfoDict:
+    name: str | None
+    symbol: str | None
+    version: TokenVersion | None
     total: int
-    version: TokenVersion
     n_contracts_can_mint: int
     n_contracts_can_melt: int
+
+    def is_unknown(self) -> bool:
+        if self.name is None:
+            assert self.symbol is None
+            assert self.version is None
+            return True
+        assert self.symbol is not None
+        assert self.version is not None
+        return False
 
 
 class _TxIndex(NamedTuple):
@@ -176,7 +186,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             raise NotImplementedError('unreachable')
 
     def _to_value_info(self, info: _InfoDict) -> bytes:
-        return json_dumpb(info)
+        return json_dumpb(asdict(info))
 
     def _from_value_info(self, value: bytes, token_uid: TokenUid) -> _InfoDict:
         """Deserialize token info from JSON bytes and handle backward compatibility.
@@ -201,43 +211,57 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             info['n_contracts_can_mint'] = 0
             info['n_contracts_can_melt'] = 0
 
-        if info.get('version') is None:
-            if token_uid == self._settings.HATHOR_TOKEN_UID:
-                info['version'] = TokenVersion.NATIVE
-            else:
-                info['version'] = TokenVersion.DEPOSIT
+        if info.get('name') is None:
+            assert info.get('symbol') is None
+            assert info.get('version') is None
+        else:
+            assert info.get('symbol') is not None
+            if info.get('version') is None:
+                if token_uid == self._settings.HATHOR_TOKEN_UID:
+                    info['version'] = TokenVersion.NATIVE
+                else:
+                    info['version'] = TokenVersion.DEPOSIT
 
-        assert info.get('name') is not None
-        assert info.get('symbol') is not None
-        assert info.get('version') is not None
         assert info.get('total') is not None
         assert info.get('n_contracts_can_mint') is not None
         assert info.get('n_contracts_can_melt') is not None
 
-        return cast(_InfoDict, info)
+        return _InfoDict(**info)
 
     def create_token_info(
         self,
         *,
         token_uid: bytes,
-        name: str,
-        symbol: str,
-        version: TokenVersion,
+        name: str | None,
+        symbol: str | None,
+        version: TokenVersion | None,
         total: int = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
     ) -> None:
         key = self._to_key_info(token_uid)
         old_value = self._db.get((self._cf, key))
-        assert old_value is None
-        value = self._to_value_info({
-            'name': name,
-            'symbol': symbol,
-            'total': total,
-            'version': version,
-            'n_contracts_can_mint': n_contracts_can_mint,
-            'n_contracts_can_melt': n_contracts_can_melt,
-        })
+        if old_value is None:
+            value = self._to_value_info(_InfoDict(
+                name=name,
+                symbol=symbol,
+                total=total,
+                version=version,
+                n_contracts_can_mint=n_contracts_can_mint,
+                n_contracts_can_melt=n_contracts_can_melt,
+            ))
+        else:
+            info = self._from_value_info(old_value, token_uid)
+            assert info.name is None
+            assert info.symbol is None
+            assert info.version is None
+            info.name = name
+            info.symbol = symbol
+            info.version = version
+            info.total += total
+            info.n_contracts_can_mint += n_contracts_can_mint
+            info.n_contracts_can_melt += n_contracts_can_melt
+            value = self._to_value_info(info)
         self._db.put((self._cf, key), value)
 
     def create_token_info_from_contract(
@@ -296,6 +320,15 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         self.log.debug('remove authority utxo', token=token_uid.hex(), tx=tx_hash.hex(), index=index, is_mint=is_mint)
         self._db.delete((self._cf, self._to_key_authority(token_uid, TokenUtxoInfo(tx_hash, index), is_mint=is_mint)))
 
+    def _create_empty_info(self, token_uid: bytes) -> None:
+        self.create_token_info(
+            token_uid=token_uid,
+            name=None,
+            symbol=None,
+            version=None,
+            total=0,
+        )
+
     def _create_genesis_info(self) -> None:
         self.create_token_info(
             token_uid=self._settings.HATHOR_TOKEN_UID,
@@ -305,16 +338,24 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             total=self._settings.GENESIS_TOKENS,
         )
 
+    def _get_value_info(self, token_uid: bytes, *, create_default: bool = True) -> _InfoDict:
+        key_info = self._to_key_info(token_uid)
+        value_info = self._db.get((self._cf, key_info))
+        if token_uid == self._settings.HATHOR_TOKEN_UID and value_info is None:
+            self._create_genesis_info()
+            value_info = self._db.get((self._cf, key_info))
+        elif create_default and value_info is None:
+            self._create_empty_info(token_uid)
+            value_info = self._db.get((self._cf, key_info))
+        assert value_info is not None
+        dict_info = self._from_value_info(value_info, token_uid)
+        return dict_info
+
     @override
     def add_to_total(self, token_uid: bytes, amount: int) -> None:
+        dict_info = self._get_value_info(token_uid, create_default=True)
+        dict_info.total += amount
         key_info = self._to_key_info(token_uid)
-        old_value_info = self._db.get((self._cf, key_info))
-        if token_uid == self._settings.HATHOR_TOKEN_UID and old_value_info is None:
-            self._create_genesis_info()
-            old_value_info = self._db.get((self._cf, key_info))
-        assert old_value_info is not None
-        dict_info = self._from_value_info(old_value_info, token_uid)
-        dict_info['total'] += amount
         new_value_info = self._to_value_info(dict_info)
         self._db.put((self._cf, key_info), new_value_info)
 
@@ -451,6 +492,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self.log.debug('seek found', token=key_any.token_uid_internal.hex())
             token_uid = from_internal_token_uid(key_any.token_uid_internal)
             info = self._from_value_info(value, token_uid)
+            if info.is_unknown():
+                # Skip unknown tokens.
+                continue
             token_index_info = RocksDBTokenIndexInfo(self, token_uid, info)
             yield token_uid, token_index_info
         self.log.debug('seek end')
@@ -461,15 +505,14 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if value is None:
             raise KeyError('unknown token')
         info = self._from_value_info(value, token_uid)
+        if info.is_unknown():
+            raise KeyError('unknown token')
         return RocksDBTokenIndexInfo(self, token_uid, info)
 
     @override
     def update_authorities_from_contract(self, record: UpdateAuthoritiesRecord, undo: bool = False) -> None:
         assert record.token_uid != self._settings.HATHOR_TOKEN_UID
-        key_info = self._to_key_info(record.token_uid)
-        old_value_info = self._db.get((self._cf, key_info))
-        assert old_value_info is not None
-        dict_info = self._from_value_info(old_value_info, record.token_uid)
+        dict_info = self._get_value_info(record.token_uid)
 
         increment: int
         match record.sub_type:
@@ -484,12 +527,14 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             increment *= -1
 
         if record.mint:
-            dict_info['n_contracts_can_mint'] += increment
+            dict_info.n_contracts_can_mint += increment
         if record.melt:
-            dict_info['n_contracts_can_melt'] += increment
+            dict_info.n_contracts_can_melt += increment
 
-        assert dict_info['n_contracts_can_mint'] >= 0
-        assert dict_info['n_contracts_can_melt'] >= 0
+        assert dict_info.n_contracts_can_mint >= 0
+        assert dict_info.n_contracts_can_melt >= 0
+
+        key_info = self._to_key_info(record.token_uid)
         new_value_info = self._to_value_info(dict_info)
         self._db.put((self._cf, key_info), new_value_info)
 
@@ -556,16 +601,17 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
         self._info = info
 
     def get_name(self) -> Optional[str]:
-        return self._info['name']
+        return self._info.name
 
     def get_symbol(self) -> Optional[str]:
-        return self._info['symbol']
+        return self._info.symbol
 
     def get_version(self) -> TokenVersion:
-        return self._info['version']
+        assert self._info.version is not None
+        return self._info.version
 
     def get_total(self) -> int:
-        return self._info['total']
+        return self._info.total
 
     def _iter_authority_utxos(self, *, is_mint: bool) -> Iterator[TokenUtxoInfo]:
         it = self._index._db.iterkeys(self._index._cf)
@@ -589,8 +635,8 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
 
     @override
     def can_mint(self) -> bool:
-        return any(self.iter_mint_utxos()) or self._info['n_contracts_can_mint'] > 0
+        return any(self.iter_mint_utxos()) or self._info.n_contracts_can_mint > 0
 
     @override
     def can_melt(self) -> bool:
-        return any(self.iter_melt_utxos()) or self._info['n_contracts_can_melt'] > 0
+        return any(self.iter_melt_utxos()) or self._info.n_contracts_can_melt > 0
