@@ -34,10 +34,8 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertEqual(len(self.genesis_blocks), 1)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
-        # The initial score is the sum of the genesis
+        # The initial score is the genesis block
         score = weight_to_work(self.genesis_blocks[0].weight)
-        for tx in self.genesis_txs:
-            score += weight_to_work(tx.weight)
 
         # Mine 100 blocks in a row with no transaction but the genesis
         blocks = add_new_blocks(manager, 100, advance_clock=15)
@@ -47,9 +45,7 @@ class BlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 30, advance_clock=15)
-        for tx in txs:
-            score += weight_to_work(tx.weight)
+        add_new_transactions(manager, 30, advance_clock=15)
 
         # Mine 50 more blocks in a row with no transactions between them
         blocks = add_new_blocks(manager, 50)
@@ -62,9 +58,7 @@ class BlockchainTestCase(unittest.TestCase):
 
         # Mine 15 more blocks with 10 transactions between each block
         for _ in range(15):
-            txs = add_new_transactions(manager, 10, advance_clock=15)
-            for tx in txs:
-                score += weight_to_work(tx.weight)
+            add_new_transactions(manager, 10, advance_clock=15)
 
             blocks = add_new_blocks(manager, 1)
             for i, block in enumerate(blocks):
@@ -83,10 +77,8 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertEqual(len(self.genesis_blocks), 1)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
-        # The initial score is the sum of the genesis
+        # The initial score is the genesis block
         score = weight_to_work(self.genesis_blocks[0].weight)
-        for tx in self.genesis_txs:
-            score += weight_to_work(tx.weight)
 
         # Mine 30 blocks in a row with no transactions
         blocks = add_new_blocks(manager, 30, advance_clock=15)
@@ -96,9 +88,7 @@ class BlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
-        for tx in txs:
-            score += weight_to_work(tx.weight)
+        add_new_transactions(manager, 5, advance_clock=15)
 
         # Mine 1 blocks
         blocks = add_new_blocks(manager, 1, advance_clock=15)
@@ -127,9 +117,7 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertEqual(fork_meta1.voided_by, {fork_block1.hash})
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 5, advance_clock=15)
-        for tx in txs:
-            score += weight_to_work(tx.weight)
+        add_new_transactions(manager, 5, advance_clock=15)
 
         # Mine 5 blocks in a row
         # These blocks belong to case (i).
@@ -140,9 +128,7 @@ class BlockchainTestCase(unittest.TestCase):
             self.assertAlmostEqual(score, meta.score)
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 2, advance_clock=15)
-        for tx in txs:
-            score += weight_to_work(tx.weight)
+        add_new_transactions(manager, 2, advance_clock=15)
 
         # Propagate a block connected to the voided chain
         # These blocks belongs to case (iii).
@@ -152,9 +138,7 @@ class BlockchainTestCase(unittest.TestCase):
             self.assertEqual(meta.voided_by, {block.hash})
 
         # Add some transactions between blocks
-        txs = add_new_transactions(manager, 2, advance_clock=15)
-        for tx in txs:
-            score += weight_to_work(tx.weight)
+        add_new_transactions(manager, 2, advance_clock=15)
 
         # Propagate a block connected to the voided chain
         # This block belongs to case (iv).
@@ -170,10 +154,8 @@ class BlockchainTestCase(unittest.TestCase):
         self.assertEqual(len(self.genesis_blocks), 1)
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
 
-        # The initial score is the sum of the genesis
+        # The initial score is the genesis block
         score = weight_to_work(self.genesis_blocks[0].weight)
-        for tx in self.genesis_txs:
-            score += weight_to_work(tx.weight)
 
         # Mine 30 blocks in a row with no transactions, case (i).
         blocks = add_new_blocks(manager, 30, advance_clock=15)
@@ -184,8 +166,6 @@ class BlockchainTestCase(unittest.TestCase):
 
         # Add some transactions between blocks
         txs1 = add_new_transactions(manager, 5, advance_clock=15)
-        for tx in txs1:
-            score += weight_to_work(tx.weight)
 
         # Mine 1 blocks, case (i).
         blocks = add_new_blocks(manager, 1, advance_clock=15)
@@ -201,8 +181,6 @@ class BlockchainTestCase(unittest.TestCase):
 
         # Add some transactions between blocks
         txs2 = add_new_transactions(manager, 3, advance_clock=15)
-        for tx in txs2:
-            score += weight_to_work(tx.weight)
 
         # Mine 5 blocks in a row, case (i).
         blocks = add_new_blocks(manager, 5, advance_clock=15)
