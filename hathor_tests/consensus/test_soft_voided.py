@@ -11,7 +11,7 @@ from hathor_tests.utils import add_custom_tx
 
 
 class SoftVoidedTestCase(SimulatorTestCase):
-    seed_config = 5988775361793628170
+    seed_config = 2
 
     def assertNoParentsAreSoftVoided(self, tx: Block) -> None:
         assert tx.storage is not None

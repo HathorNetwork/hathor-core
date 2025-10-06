@@ -44,6 +44,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
 from hathor.util import collect_n
+from hathor.utils.weight import weight_to_work
 from hathor.vertex_handler import VertexHandler
 
 if TYPE_CHECKING:
@@ -56,6 +57,9 @@ MAX_GET_TRANSACTIONS_BFS_LEN: int = 8
 MAX_MEMPOOL_STATUS_TIPS: int = 20
 
 RUN_SYNC_MAIN_LOOP_INTERVAL = 1  # second(s)
+
+# This multiplier is used to calculate the minimum score of an orphan chain to add it to the storage.
+ORPHAN_CHAIN_THRESHOLD_MULTIPLIER = 0.95  # percentage
 
 
 class _HeightInfo(NamedTuple):
@@ -425,6 +429,27 @@ class NodeBlockSync(SyncAgent):
         assert self._blk_streaming_client is not None
         partial_blocks = self._blk_streaming_client._partial_blocks
         if partial_blocks:
+            score = self.get_partial_blocks_score(partial_blocks)
+            best_block = self.tx_storage.get_best_block()
+            best_block_score = best_block.get_metadata().score
+            threshold = best_block_score * ORPHAN_CHAIN_THRESHOLD_MULTIPLIER
+            if score < threshold:
+                self.log.info('block streaming did not reach re-org threshold',
+                              my_best_block=best_block.hash.hex(),
+                              my_best_block_score=best_block_score,
+                              orphan_chain_score=score,
+                              orphan_chain_size=len(partial_blocks),
+                              threshold=threshold)
+                return False
+
+            for i, blk in enumerate(partial_blocks):
+                if self.tx_storage.can_validate_full(blk):
+                    self.vertex_handler.on_new_block(blk, deps=[])
+                else:
+                    break
+            partial_blocks = partial_blocks[i:]
+
+        if partial_blocks:
             self.state = PeerState.SYNCING_TRANSACTIONS
             try:
                 reason = yield self.start_transactions_streaming(partial_blocks)
@@ -441,6 +466,13 @@ class NodeBlockSync(SyncAgent):
         self._blk_streaming_client = None
         self._tx_streaming_client = None
         return False
+
+    def get_partial_blocks_score(self, partial_blocks: list[Block]) -> int:
+        # XXX Handle when this block does not exist.
+        score = partial_blocks[0].get_block_parent().get_metadata().score
+        for blk in partial_blocks:
+            score += weight_to_work(blk.weight)
+        return score
 
     def get_tips(self) -> Deferred[list[bytes]]:
         """ Async method to request the remote peer's tips.

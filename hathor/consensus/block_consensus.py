@@ -844,8 +844,6 @@ class BlockConsensusAlgorithm:
                         meta.first_block = block.hash
                         self.context.save(tx)
 
-                    score += weight_to_work(tx.weight)
-
         # Always save the score when it is calculated.
         meta = block.get_metadata()
         if not meta.score:
