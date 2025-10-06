@@ -123,7 +123,6 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
 
         conn = FakeConnection(manager1, manager2)
-
         empty_counter = 0
         for i in range(1000):
             if conn.is_empty():
