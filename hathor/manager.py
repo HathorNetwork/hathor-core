@@ -15,10 +15,12 @@
 import sys
 import time
 from cProfile import Profile
+from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, Collection, Iterator, Optional, Union
 
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
+from intervaltree import Interval
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
@@ -561,25 +563,42 @@ class HathorManager:
         return list(parent_txs.get_random_parents(self.rng))
 
     def generate_parent_txs(self, timestamp: Optional[float]) -> 'ParentTxs':
-        """Select which transactions will be confirmed by a new block.
+        """Select which transactions will be confirmed by a new block or transaction.
 
         This method tries to return a stable result, such that for a given timestamp and storage state it will always
         return the same.
         """
         if timestamp is None:
             timestamp = self.reactor.seconds()
+
         can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
         assert can_include_intervals, 'tips cannot be empty'
-        max_timestamp = max(int(i.begin) for i in can_include_intervals)
-        must_include: list[VertexId] = []
-        assert len(can_include_intervals) > 0, f'invalid timestamp "{timestamp}", no tips found"'
-        if len(can_include_intervals) < 2:
-            # If there is only one tip, let's randomly choose one of its parents.
-            must_include_interval = can_include_intervals[0]
-            must_include = [must_include_interval.data]
-            can_include_intervals = sorted(self.tx_storage.get_tx_tips(must_include_interval.begin - 1))
-        can_include = [i.data for i in can_include_intervals]
-        return ParentTxs(max_timestamp, can_include, must_include)
+
+        unconfirmed_tips: list[Transaction] = []
+        for interval in can_include_intervals:
+            tx = self.tx_storage.get_transaction_strict(interval.data)
+            if tx.get_metadata().first_block is None:
+                unconfirmed_tips.append(tx)
+
+        if len(unconfirmed_tips) >= 2:
+            return ParentTxs.from_txs(can_include=set(unconfirmed_tips), must_include=())
+
+        must_include_tx: Transaction
+        if unconfirmed_tips:
+            assert len(unconfirmed_tips) == 1
+            must_include_tx = unconfirmed_tips[0]
+        else:
+            interval = can_include_intervals[0]
+            must_include_tx = self.tx_storage.get_transaction_strict(interval.data)
+
+        def get_txs(intervals: Collection[Interval]) -> set[Transaction]:
+            return set(self.tx_storage.get_transaction_strict(interval.data) for interval in intervals)
+
+        can_include_txs = get_txs(can_include_intervals) - {must_include_tx}
+        if len(can_include_txs) == 0:
+            can_include_txs = get_txs(self.tx_storage.get_tx_tips(must_include_tx.timestamp - 1))
+
+        return ParentTxs.from_txs(can_include=can_include_txs, must_include=(must_include_tx,))
 
     def allow_mining_without_peers(self) -> None:
         """Allow mining without being synced to at least one peer.
@@ -637,14 +656,12 @@ class HathorManager:
         """
         parent_block = self.tx_storage.get_transaction(parent_block_hash)
         assert isinstance(parent_block, Block)
-        # gather the actual txs to query their timestamps
-        parent_tx_list: list[Transaction] = []
+        parent_tx_set: set[Transaction] = set()
         for tx_hash in parent_tx_hashes:
             tx = self.tx_storage.get_transaction(tx_hash)
             assert isinstance(tx, Transaction)
-            parent_tx_list.append(tx)
-        max_timestamp = max(tx.timestamp for tx in parent_tx_list)
-        parent_txs = ParentTxs(max_timestamp, parent_tx_hashes, [])
+            parent_tx_set.add(tx)
+        parent_txs = ParentTxs.from_txs(can_include=parent_tx_set, must_include=())
         if timestamp is None:
             current_timestamp = int(max(self.tx_storage.latest_timestamp, self.reactor.seconds()))
         else:
@@ -698,8 +715,8 @@ class HathorManager:
             min_significant_weight
         )
         height = parent_block.get_height() + 1
-        parents = [parent_block.hash] + parent_txs.must_include
-        parents_any = parent_txs.can_include
+        parents = [parent_block.hash] + list(parent_txs.must_include)
+        parents_any = list(parent_txs.can_include)
         # simplify representation when you only have one to choose from
         if len(parents) + len(parents_any) == 3:
             parents.extend(sorted(parents_any))
@@ -913,25 +930,35 @@ class HathorManager:
         self.connections.disconnect_all_peers(force=True)
 
 
-class ParentTxs(NamedTuple):
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ParentTxs:
     """ Tuple where the `must_include` hash, when present (at most 1), must be included in a pair, and a list of hashes
     where any of them can be included. This is done in order to make sure that when there is only one tx tip, it is
     included.
     """
     max_timestamp: int
-    can_include: list[VertexId]
-    must_include: list[VertexId]
+    can_include: set[VertexId]
+    must_include: tuple[()] | tuple[VertexId]
+
+    def __post_init__(self) -> None:
+        assert len(self.must_include) <= 1
+        if self.must_include:
+            assert self.must_include[0] not in self.can_include
+
+    @staticmethod
+    def from_txs(*, can_include: set[Transaction], must_include: tuple[()] | tuple[Transaction]) -> 'ParentTxs':
+        assert len(can_include) + len(must_include) >= 2
+        return ParentTxs(
+            max_timestamp=max(tx.timestamp for tx in can_include | set(must_include)),
+            can_include=set(tx.hash for tx in can_include),
+            must_include=(must_include[0].hash,) if must_include else (),
+        )
 
     def get_random_parents(self, rng: Random) -> tuple[VertexId, VertexId]:
         """ Get parents from self.parents plus a random choice from self.parents_any to make it 3 in total.
 
         Using tuple as return type to make it explicit that the length is always 2.
         """
-        assert len(self.must_include) <= 1
-        fill = rng.ordered_sample(self.can_include, 2 - len(self.must_include))
-        p1, p2 = self.must_include[:] + fill
+        fill = rng.sample(tuple(self.can_include), 2 - len(self.must_include))
+        p1, p2 = self.must_include + tuple(fill)
         return p1, p2
-
-    def get_all_tips(self) -> list[VertexId]:
-        """All generated "tips", can_include + must_include."""
-        return self.must_include + self.can_include
