@@ -68,4 +68,29 @@ class AllFieldsBlueprint(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
-        pass
+        self.attribute1 = OrderedDict()
+        self.attribute2 = []
+        self.attribute3 = set()
+        self.attribute4 = False
+        self.attribute5 = b''
+        self.attribute6 = {}
+        self.attribute7 = frozenset()
+        self.attribute8 = 0
+        self.attribute9 = ''
+        self.attribute10 = {}
+        self.attribute11 = ('', 0)
+        self.attribute12 = ()
+        self.attribute13 = None
+        self.attribute14 = None
+        self.attribute15 = None
+        self.attribute16 = None
+        self.attribute17 = Address(b'\00' * 25)
+        self.attribute18 = Amount(0)
+        self.attribute19 = BlueprintId(b'\00' * 32)
+        self.attribute20 = ContractId(b'\00' * 32)
+        self.attribute21 = Timestamp(0)
+        self.attribute22 = TokenUid(b'\00' * 32)
+        self.attribute23 = TxOutputScript(b'')
+        self.attribute24 = VertexId(b'\00' * 32)
+        self.attribute25 = SignedData[str]('', b'')
+        self.attribute26 = MyTuple(0, '')

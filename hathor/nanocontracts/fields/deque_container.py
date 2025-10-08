@@ -165,7 +165,10 @@ class DequeContainer(Container[T]):
     def __getitem__(self, index: SupportsIndex, /) -> T:
         internal_index = self.__to_internal_index(index=index)
         db_key = self.__to_db_key(internal_index)
-        return self.__value_node.get_value(db_key)
+        try:
+            return self.__value_node.get_value(db_key)
+        except KeyError:
+            raise KeyError(index)
 
     def __len__(self) -> int:
         return self.__get_metadata().length

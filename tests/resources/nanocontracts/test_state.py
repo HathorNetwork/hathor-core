@@ -57,11 +57,15 @@ class MyBlueprint(Blueprint):
     @public
     def initialize(self, ctx: Context, token_uid: TokenUid, date_last_bet: Timestamp) -> None:
         self.token_uid = token_uid
-        self.date_last_bet = date_last_bet
         self.total = 0
+        self.date_last_bet = date_last_bet
+        self.address_details = {}
+        self.bytes_field = b''
+        self.dict_with_bytes = {}
         self.last_caller_id = ctx.caller_id
-        self.self_contract_id = ContractId(ctx.vertex.hash)
+        self.last_bet_address = Address(b'\00' * 25)
         self.last_vertex_id = VertexId(ctx.vertex.hash)
+        self.self_contract_id = ContractId(ctx.vertex.hash)
 
     @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:

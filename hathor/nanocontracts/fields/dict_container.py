@@ -119,12 +119,10 @@ class DictContainer(Container[K], Generic[K, V]):
     def __getitem__(self, key: K, /) -> V:
         # get the data from the storage
         db_key = self.__to_db_key(key)
-        has_item = self.__value_node.has_value(db_key)
-        item = self.__value_node.get_value(db_key)
-        if not has_item:
-            # XXX: this means the item was implicitly created by get_value
-            self.__increase_length()
-        return item
+        try:
+            return self.__value_node.get_value(db_key)
+        except (KeyError, ValueError):
+            raise KeyError(key)
 
     def __setitem__(self, key: K, value: V, /) -> None:
         db_key = self.__to_db_key(key)
@@ -137,9 +135,13 @@ class DictContainer(Container[K], Generic[K, V]):
         db_key = self.__to_db_key(key)
         if key not in self:
             return
-        self.__decrease_length()
-        # delete the key from the storage
-        self.__value_node.del_value(db_key)
+        try:
+            # delete the key from the storage
+            self.__value_node.del_value(db_key)
+        except KeyError:
+            raise KeyError(key)
+        else:
+            self.__decrease_length()
 
     def __eq__(self, value: object, /) -> bool:
         if isinstance(value, dict):
@@ -206,7 +208,17 @@ class DictContainer(Container[K], Generic[K, V]):
         # return the value for key if key is in the storage, else default
         if key in self:
             return self[key]
-        return default
+        # XXX: default is a special case because we have to return that the container-node would return if the key
+        #      existed and it was queried with the given key, the slight difference in behavior is that in case we are
+        #      returning a nested container (that is a ContainerProxy) the nested container will be added to the
+        #      storage (throug self), before being returned, so that writes to the nested container will be written
+        #      to the storage (and a later assignment to the key would not be necessary, but also not wrong)
+        if self.__value_node.is_leaf:
+            return default
+        db_key = self.__to_db_key(key)
+        self.__increase_length()
+        self.__value_node.set_value(db_key, default)  # type: ignore[arg-type]
+        return self.__value_node.get_value(db_key)
 
     # Now, add the methods in dicts but not in MutableMapping
 
