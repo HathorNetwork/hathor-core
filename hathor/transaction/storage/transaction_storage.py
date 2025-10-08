@@ -1084,7 +1084,8 @@ class TransactionStorage(ABC):
         )
         tx1.update_hash()
 
-        assert tx1.hash == self._settings.GENESIS_TX1_HASH
+        assert tx1.hash == self._settings.GENESIS_TX1_HASH, \
+               f'{tx1.hash.hex()} != {self._settings.GENESIS_TX1_HASH.hex()}'
         return tx1
 
     def _construct_genesis_tx2(self) -> Transaction:
@@ -1098,7 +1099,8 @@ class TransactionStorage(ABC):
         )
         tx2.update_hash()
 
-        assert tx2.hash == self._settings.GENESIS_TX2_HASH
+        assert tx2.hash == self._settings.GENESIS_TX2_HASH, \
+               f'{tx2.hash.hex()} != {self._settings.GENESIS_TX2_HASH.hex()}'
         return tx2
 
     def get_parent_block(self, block: Block) -> Block:

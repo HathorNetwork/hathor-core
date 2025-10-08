@@ -810,7 +810,7 @@ def get_environment_info(args: str, peer_id: Optional[str]) -> EnvironmentInfo:
         hathor_core_version=get_hathor_core_version(),
         peer_id=peer_id,
         network_full=settings.NETWORK_NAME,
-        # We want to ignore the testnet suffixes here. "testnet-golf" should be reported only as "testnet".
+        # We want to ignore the testnet suffixes here. "testnet-india" should be reported only as "testnet".
         network=settings.NETWORK_NAME.split("-")[0]
     )
 
