@@ -41,7 +41,7 @@ class MyBlueprint(Blueprint):
         self.my_blueprint_id = self.syscall.get_blueprint_id()
 
         self.other_nc_id = other_nc_id
-        self.other_blueprint_id = self.syscall.get_blueprint_id(other_nc_id)
+        self.other_blueprint_id = self.syscall.get_contract(other_nc_id, blueprint_id=None).get_blueprint_id()
 
 
 class OtherBlueprint(Blueprint):
@@ -76,9 +76,9 @@ class FeeTokenBlueprint(Blueprint):
     def create_fee_token(self, ctx: Context, name: str, symbol: str, amount: int,
                          fee_payment_token: TokenUid) -> TokenUid:
         token_uid = self.syscall.create_fee_token(
-            name,
-            symbol,
-            amount,
+            token_name=name,
+            token_symbol=symbol,
+            amount=amount,
             mint_authority=True,
             melt_authority=True,
             fee_payment_token=fee_payment_token)
@@ -86,7 +86,7 @@ class FeeTokenBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def create_deposit_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
-        return self.syscall.create_deposit_token(name, symbol, amount)
+        return self.syscall.create_deposit_token(token_name=name, token_symbol=symbol, amount=amount)
 
     @public(allow_deposit=True)
     def mint(self, ctx: Context, token: TokenUid, amount: int, fee_payment_token: TokenUid) -> None:
@@ -130,13 +130,11 @@ class TargetBlueprint(Blueprint):
         nc_args = NCRawArgs(args_bytes)
         # Pay 1 HTR as fee for the proxy call
         fees: list[NCFee] = [NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)]
-        result = self.syscall.proxy_call_public_method_nc_args(
-            blueprint_id=blueprint_id,
-            method_name='increment',
-            actions=ctx.actions_list,
-            fees=fees,
-            nc_args=nc_args
-        )
+        method = self.syscall.get_proxy(blueprint_id) \
+            .public(*ctx.actions_list, fees=fees) \
+            .increment
+        result = method.call_with_nc_args(nc_args)
+        assert isinstance(result, int)
         return result
 
 

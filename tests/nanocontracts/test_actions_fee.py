@@ -18,16 +18,16 @@ class MyBlueprint(Blueprint):
     @public(allow_deposit=True, allow_grant_authority=True, allow_withdrawal=True,)
     def create_fee_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
         return self.syscall.create_fee_token(
-            name,
-            symbol,
-            amount,
+            token_name=name,
+            token_symbol=symbol,
+            amount=amount,
             mint_authority=True,
             melt_authority=True,
         )
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def create_deposit_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
-        return self.syscall.create_deposit_token(name, symbol, amount)
+        return self.syscall.create_deposit_token(token_name=name, token_symbol=symbol, amount=amount)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def noop(self, ctx: Context) -> None:
@@ -43,9 +43,9 @@ class MyBlueprint(Blueprint):
         fee_payment_token: TokenUid,
         fee_amount: int
     ) -> None:
-        actions = [NCWithdrawalAction(token_uid=token_uid, amount=token_amount)]
+        action = NCWithdrawalAction(token_uid=token_uid, amount=token_amount)
         fees = [NCFee(token_uid=TokenUid(fee_payment_token), amount=fee_amount)]
-        self.syscall.call_public_method(nc_id, 'noop', actions, fees)
+        self.syscall.get_contract(nc_id, blueprint_id=None).public(action, fees=fees).noop()
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def move_tokens_to_nc(
@@ -57,9 +57,9 @@ class MyBlueprint(Blueprint):
         fee_payment_token: TokenUid,
         fee_amount: int
     ) -> None:
-        actions = [NCDepositAction(token_uid=token_uid, amount=token_amount)]
+        action = NCDepositAction(token_uid=token_uid, amount=token_amount)
         fees = [NCFee(token_uid=TokenUid(fee_payment_token), amount=fee_amount)]
-        self.syscall.call_public_method(nc_id, 'noop', actions, fees)
+        self.syscall.get_contract(nc_id, blueprint_id=None).public(action, fees=fees).noop()
 
 
 class MyOtherBlueprint(Blueprint):
@@ -67,9 +67,9 @@ class MyOtherBlueprint(Blueprint):
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
         self.syscall.create_fee_token(
-            'FBT',
-            'FBT',
-            1_000_000,
+            token_name='FBT',
+            token_symbol='FBT',
+            amount=1_000_000,
             mint_authority=True,
             melt_authority=True,
         )

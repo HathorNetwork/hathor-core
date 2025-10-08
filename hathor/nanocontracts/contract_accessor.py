@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection, Sequence, final
 
 from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCFee
+from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
 
 if TYPE_CHECKING:
     from hathor.nanocontracts import Runner
@@ -55,6 +55,46 @@ class ContractAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__contract_id', contract_id)
         __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
 
+    def get_contract_id(self) -> ContractId:
+        """Return the contract id of this nano contract."""
+        return self.__contract_id
+
+    def get_blueprint_id(self) -> BlueprintId:
+        """Return the blueprint id of this nano contract."""
+        return self.__runner.get_blueprint_id(self.__contract_id)
+
+    def get_current_balance(self, token_uid: TokenUid | None = None) -> Amount:
+        """
+        Return the current balance for a given token, which includes all actions and changes in the current call.
+
+        For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
+        then this method will return 47 HTR.
+        """
+        balance = self.__runner.get_current_balance(self.__contract_id, token_uid)
+        return Amount(balance.value)
+
+    def can_mint(self, token_uid: TokenUid) -> bool:
+        """
+        Return whether a given token can currently be minted,
+        which includes all actions and changes in the current call.
+
+        For instance, if a contract has a mint authority and a call is revoking it,
+        then this method will return `False`.
+        """
+        balance = self.__runner.get_current_balance(self.__contract_id, token_uid)
+        return balance.can_mint
+
+    def can_melt(self, token_uid: TokenUid) -> bool:
+        """
+        Return whether a given token can currently be melted,
+        which includes all actions and changes in the current call.
+
+        For instance, if a contract has a melt authority and a transaction is revoking it,
+        then this method will return `False`.
+        """
+        balance = self.__runner.get_current_balance(self.__contract_id, token_uid)
+        return balance.can_melt
+
     def view(self) -> Any:
         return PreparedViewCall(
             runner=self.__runner,
@@ -68,7 +108,32 @@ class ContractAccessor(FauxImmutable):
             contract_id=self.__contract_id,
             blueprint_ids=self.__blueprint_ids,
             actions=actions,
-            fees=fees,
+            fees=fees or [],
+            forbid_fallback=forbid_fallback,
+        )
+
+    def get_view_method(self, method_name: str) -> ViewMethodAccessor:
+        return ViewMethodAccessor(
+            runner=self.__runner,
+            contract_id=self.__contract_id,
+            blueprint_ids=self.__blueprint_ids,
+            method_name=method_name,
+        )
+
+    def get_public_method(
+        self,
+        method_name: str,
+        *actions: NCAction,
+        fees: Sequence[NCFee] | None = None,
+        forbid_fallback: bool = False,
+    ) -> PublicMethodAccessor:
+        return PublicMethodAccessor(
+            runner=self.__runner,
+            contract_id=self.__contract_id,
+            blueprint_ids=self.__blueprint_ids,
+            method_name=method_name,
+            actions=actions,
+            fees=fees or [],
             forbid_fallback=forbid_fallback,
         )
 
@@ -109,9 +174,9 @@ class PreparedPublicCall(FauxImmutable):
         '__contract_id',
         '__blueprint_ids',
         '__actions',
+        '__fees',
         '__forbid_fallback',
         '__is_dirty',
-        '__fees'
     )
     __skip_faux_immutability_validation__ = True  # Needed to implement __getattr__
 
@@ -122,24 +187,24 @@ class PreparedPublicCall(FauxImmutable):
         contract_id: ContractId,
         blueprint_ids: frozenset[BlueprintId] | None,
         actions: Sequence[NCAction],
-        fees: Sequence[NCFee] | None,
+        fees: Sequence[NCFee],
         forbid_fallback: bool,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
         self.__blueprint_ids: frozenset[BlueprintId] | None
         self.__actions: Sequence[NCAction]
+        self.__fees: Sequence[NCFee]
         self.__forbid_fallback: bool
         self.__is_dirty: bool
-        self.__fees: Sequence[NCFee]
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
         __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
         __set_faux_immutable__(self, '__actions', actions)
+        __set_faux_immutable__(self, '__fees', fees)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
-        __set_faux_immutable__(self, '__fees', fees)
 
     def __getattr__(self, method_name: str) -> PublicMethodAccessor:
         from hathor.nanocontracts import NCFail
@@ -157,8 +222,8 @@ class PreparedPublicCall(FauxImmutable):
             blueprint_ids=self.__blueprint_ids,
             method_name=method_name,
             actions=self.__actions,
-            forbid_fallback=self.__forbid_fallback,
             fees=self.__fees,
+            forbid_fallback=self.__forbid_fallback,
         )
 
 
@@ -217,9 +282,9 @@ class PublicMethodAccessor(FauxImmutable):
         '__blueprint_ids',
         '__method_name',
         '__actions',
+        '__fees',
         '__forbid_fallback',
         '__is_dirty',
-        '__fees'
     )
 
     def __init__(
@@ -230,33 +295,33 @@ class PublicMethodAccessor(FauxImmutable):
         blueprint_ids: frozenset[BlueprintId] | None,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         forbid_fallback: bool,
-        fees: Sequence[NCFee] | None,
     ) -> None:
         self.__runner: Runner
         self.__contract_id: ContractId
         self.__blueprint_ids: frozenset[BlueprintId] | None
         self.__method_name: str
         self.__actions: Sequence[NCAction]
+        self.__fees: Sequence[NCFee]
         self.__forbid_fallback: bool
         self.__is_dirty: bool
-        self.__fees: Sequence[NCFee]
 
         __set_faux_immutable__(self, '__runner', runner)
         __set_faux_immutable__(self, '__contract_id', contract_id)
         __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
         __set_faux_immutable__(self, '__method_name', method_name)
         __set_faux_immutable__(self, '__actions', actions)
+        __set_faux_immutable__(self, '__fees', fees)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
-        __set_faux_immutable__(self, '__fees', fees)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         from hathor.nanocontracts import NCFail
         if self.__is_dirty:
             raise NCFail(
                 f'accessor for public method `{self.__method_name}` was already used, '
-                f'you must use `public` on the contract to call it again'
+                f'you must use `public`/`public_method` on the contract to call it again'
             )
 
         __set_faux_immutable__(self, '__is_dirty', True)
@@ -271,7 +336,7 @@ class PublicMethodAccessor(FauxImmutable):
             contract_id=self.__contract_id,
             method_name=self.__method_name,
             actions=self.__actions,
-            fees=self.__fees or [],
+            fees=self.__fees,
             args=args,
             kwargs=kwargs,
             forbid_fallback=self.__forbid_fallback,

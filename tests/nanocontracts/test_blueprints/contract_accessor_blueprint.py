@@ -20,6 +20,7 @@ from hathor import (
     ContractId,
     NCArgs,
     NCDepositAction,
+    TokenUid,
     VertexId,
     export,
     fallback,
@@ -203,3 +204,13 @@ class MyBlueprint(Blueprint):
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
         return f'fallback called for method `{method_name}`'
+
+    @public
+    def test_other_syscalls(self, ctx: Context, other_id: ContractId, token_uid: TokenUid) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+
+        assert contract.get_contract_id() == other_id
+        assert contract.get_blueprint_id() == self.syscall.get_blueprint_id()
+        assert contract.get_current_balance() == 0
+        assert not contract.can_mint(token_uid)
+        assert not contract.can_melt(token_uid)

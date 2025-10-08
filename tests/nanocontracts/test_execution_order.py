@@ -85,20 +85,17 @@ class MyBlueprint(Blueprint):
     def deposit_into_another(self, ctx: Context, contract_id: ContractId) -> None:
         self.assert_token_balance(before=0, current=10)
         action = NCDepositAction(token_uid=self.token_uid, amount=7)
-        self.syscall.call_public_method(
-            contract_id,
-            'accept_deposit_from_another',
-            [action],
-            [],
-            self.syscall.get_contract_id()
-        )
+        self.syscall \
+            .get_contract(contract_id, blueprint_id=None) \
+            .public(action) \
+            .accept_deposit_from_another(self.syscall.get_contract_id())
         self.assert_token_balance(before=0, current=6)
 
     @public(allow_deposit=True)
     def accept_deposit_from_another(self, ctx: Context, contract_id: ContractId) -> None:
         self.assert_token_balance(before=0, current=7)
         action = NCDepositAction(token_uid=self.token_uid, amount=3)
-        self.syscall.call_public_method(contract_id,  'accept_deposit_from_another_callback', [action])
+        self.syscall.get_contract(contract_id, blueprint_id=None).public(action).accept_deposit_from_another_callback()
         self.assert_token_balance(before=0, current=4)
 
     @public(allow_deposit=True, allow_reentrancy=True)
@@ -109,11 +106,7 @@ class MyBlueprint(Blueprint):
     def withdraw_from_another(self, ctx: Context, contract_id: ContractId) -> None:
         self.assert_token_balance(before=6, current=5)
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=2)
-        self.syscall.call_public_method(
-            contract_id,
-            'accept_withdrawal_from_another',
-            [action],
-            [],
+        self.syscall.get_contract(contract_id, blueprint_id=None).public(action).accept_withdrawal_from_another(
             self.syscall.get_contract_id()
         )
         self.assert_token_balance(before=6, current=6)
@@ -122,7 +115,9 @@ class MyBlueprint(Blueprint):
     def accept_withdrawal_from_another(self, ctx: Context, contract_id: ContractId) -> None:
         self.assert_token_balance(before=4, current=2)
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
-        self.syscall.call_public_method(contract_id, 'accept_withdrawal_from_another_callback', [action])
+        self.syscall.get_contract(contract_id, blueprint_id=None) \
+            .public(action) \
+            .accept_withdrawal_from_another_callback()
         self.assert_token_balance(before=4, current=3)
 
     @public(allow_withdrawal=True, allow_reentrancy=True)

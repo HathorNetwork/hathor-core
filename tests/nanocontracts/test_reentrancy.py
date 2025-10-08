@@ -36,10 +36,11 @@ class MyBlueprint(Blueprint):
         if amount > self.balances.get(address, 0):
             raise InsufficientBalance('insufficient balance')
 
-        actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)]
+        action = NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)
         # This contract is vulnerable to reentrancy attack because it is transfering before reducing the balance.
         # Another issue is that it doesn't assert self.balances[address] >= 0.
-        self.syscall.call_public_method(contract, method, actions=actions)
+        _method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method, action)
+        _method()
         self.balances[address] -= amount
 
     @public(allow_reentrancy=True)
@@ -48,11 +49,12 @@ class MyBlueprint(Blueprint):
         if amount > self.balances.get(address, 0):
             raise InsufficientBalance('insufficient balance')
 
-        actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)]
+        action = NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)
         # This contract is not vulnerable to reentrancy attack. The only difference relies on the moment the balance is
         # updated.
         self.balances[address] -= amount
-        self.syscall.call_public_method(contract, method, actions=actions)
+        _method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method, action)
+        _method()
 
     @public
     def protected_transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
@@ -60,8 +62,9 @@ class MyBlueprint(Blueprint):
         if amount > self.balances.get(address, 0):
             raise InsufficientBalance('insufficient balance')
 
-        actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)]
-        self.syscall.call_public_method(contract, method, actions=actions)
+        action = NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)
+        _method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method, action)
+        _method()
         self.balances[address] -= amount
 
 
@@ -81,8 +84,8 @@ class AttackerBlueprint(Blueprint):
         assert isinstance(action, NCDepositAction)
         self.amount = Amount(action.amount)
 
-        actions: list[NCAction] = [NCDepositAction(token_uid=HTR_TOKEN_UID, amount=self.amount)]
-        self.syscall.call_public_method(target, 'deposit', actions=actions)
+        action = NCDepositAction(token_uid=HTR_TOKEN_UID, amount=self.amount)
+        self.syscall.get_contract(target, blueprint_id=None).public(action).deposit()
 
     @public(allow_deposit=True)
     def nop(self, ctx: Context) -> None:
@@ -105,10 +108,8 @@ class AttackerBlueprint(Blueprint):
             return
 
         self.counter += 1
-        self.syscall.call_public_method(
-            self.target,
-            method,
-            actions=[],
+        _method = self.syscall.get_contract(self.target, blueprint_id=None).get_public_method(method)
+        _method(
             amount=self.amount,
             contract=self.syscall.get_contract_id(),
             method=callback,

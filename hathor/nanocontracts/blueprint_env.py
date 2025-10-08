@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Collection, Optional, Sequence, TypeAlias, final
+from typing import TYPE_CHECKING, Any, Collection, Sequence, TypeAlias, final
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.storage import NCContractStorage
@@ -23,14 +23,15 @@ from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction
 if TYPE_CHECKING:
     from hathor.nanocontracts.contract_accessor import ContractAccessor
     from hathor.nanocontracts.nc_exec_logs import NCLogger
+    from hathor.nanocontracts.proxy_accessor import ProxyAccessor
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
-    from hathor.nanocontracts.types import NCArgs
 
 
 NCAttrCache: TypeAlias = dict[bytes, Any] | None
 
 
+@final
 class BlueprintEnvironment:
     """A class that holds all possible interactions a blueprint may have with the system."""
 
@@ -50,61 +51,43 @@ class BlueprintEnvironment:
         # XXX: we could replace dict|None with a cache class that can be disabled, cleared, limited, etc
         self.__cache__: NCAttrCache = None if disable_cache else {}
 
-    @final
     @property
     def rng(self) -> NanoRNG:
         """Return an RNG for the current contract."""
         return self.__runner.syscall_get_rng()
 
-    @final
     def get_contract_id(self) -> ContractId:
-        """Return the current contract id."""
+        """Return the contract id of this nano contract."""
         return self.__runner.get_current_contract_id()
 
-    @final
-    def get_blueprint_id(self, contract_id: Optional[ContractId] = None) -> BlueprintId:
-        """Return the blueprint id of a nano contract. By default, it returns for the current contract."""
-        if contract_id is None:
-            contract_id = self.get_contract_id()
+    def get_blueprint_id(self) -> BlueprintId:
+        """Return the blueprint id of this nano contract."""
+        contract_id = self.get_contract_id()
         return self.__runner.get_blueprint_id(contract_id)
 
-    def get_balance_before_current_call(
-        self,
-        token_uid: Optional[TokenUid] = None,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> Amount:
+    def get_balance_before_current_call(self, token_uid: TokenUid | None = None) -> Amount:
         """
         Return the balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
 
         For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
         then this method will return 50 HTR."""
+        contract_id = self.get_contract_id()
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
         return Amount(balance.value)
 
-    def get_current_balance(
-        self,
-        token_uid: Optional[TokenUid] = None,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> Amount:
+    def get_current_balance(self, token_uid: TokenUid | None = None) -> Amount:
         """
         Return the current balance for a given token, which includes all actions and changes in the current call.
 
         For instance, if a contract has 50 HTR and the call is requesting to withdraw 3 HTR,
         then this method will return 47 HTR.
         """
+        contract_id = self.get_contract_id()
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return Amount(balance.value)
 
-    @final
-    def can_mint_before_current_call(
-        self,
-        token_uid: TokenUid,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> bool:
+    def can_mint_before_current_call(self, token_uid: TokenUid) -> bool:
         """
         Return whether a given token could be minted before the current call, that is,
         excluding any actions and changes in the current call.
@@ -112,16 +95,11 @@ class BlueprintEnvironment:
         For instance, if a contract has a mint authority and a call is revoking it,
         then this method will return `True`.
         """
+        contract_id = self.get_contract_id()
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
         return balance.can_mint
 
-    @final
-    def can_mint(
-        self,
-        token_uid: TokenUid,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> bool:
+    def can_mint(self, token_uid: TokenUid) -> bool:
         """
         Return whether a given token can currently be minted,
         which includes all actions and changes in the current call.
@@ -129,16 +107,11 @@ class BlueprintEnvironment:
         For instance, if a contract has a mint authority and a call is revoking it,
         then this method will return `False`.
         """
+        contract_id = self.get_contract_id()
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return balance.can_mint
 
-    @final
-    def can_melt_before_current_call(
-        self,
-        token_uid: TokenUid,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> bool:
+    def can_melt_before_current_call(self, token_uid: TokenUid) -> bool:
         """
         Return whether a given token could be melted before the current call, that is,
         excluding any actions and changes in the current call.
@@ -146,16 +119,11 @@ class BlueprintEnvironment:
         For instance, if a contract has a melt authority and a call is revoking it,
         then this method will return `True`.
         """
+        contract_id = self.get_contract_id()
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
         return balance.can_melt
 
-    @final
-    def can_melt(
-        self,
-        token_uid: TokenUid,
-        *,
-        contract_id: Optional[ContractId] = None,
-    ) -> bool:
+    def can_melt(self, token_uid: TokenUid) -> bool:
         """
         Return whether a given token can currently be melted,
         which includes all actions and changes in the current call.
@@ -163,79 +131,14 @@ class BlueprintEnvironment:
         For instance, if a contract has a melt authority and a transaction is revoking it,
         then this method will return `False`.
         """
+        contract_id = self.get_contract_id()
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return balance.can_melt
 
-    @final
-    def call_public_method(
-        self,
-        nc_id: ContractId,
-        method_name: str,
-        actions: Sequence[NCAction],
-        fees: Sequence[NCFee] | None = None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
-        """Call a public method of another contract."""
-        return self.__runner.syscall_call_another_contract_public_method(
-            nc_id,
-            method_name,
-            actions,
-            args,
-            kwargs,
-            forbid_fallback=False,
-            fees=fees or []
-        )
-
-    @final
-    def proxy_call_public_method(
-        self,
-        blueprint_id: BlueprintId,
-        method_name: str,
-        actions: Sequence[NCAction],
-        fees: Sequence[NCFee],
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
-        """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method(
-            blueprint_id=blueprint_id,
-            method_name=method_name,
-            actions=actions,
-            fees=fees,
-            args=args,
-            kwargs=kwargs
-        )
-
-    @final
-    def proxy_call_public_method_nc_args(
-        self,
-        blueprint_id: BlueprintId,
-        method_name: str,
-        actions: Sequence[NCAction],
-        fees: Sequence[NCFee],
-        nc_args: NCArgs,
-    ) -> Any:
-        """Execute a proxy call to a public method of another blueprint."""
-        return self.__runner.syscall_proxy_call_public_method_nc_args(
-            blueprint_id=blueprint_id,
-            method_name=method_name,
-            actions=actions,
-            fees=fees,
-            nc_args=nc_args
-        )
-
-    @final
-    def call_view_method(self, nc_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        """Call a view method of another contract."""
-        return self.__runner.syscall_call_another_contract_view_method(nc_id, method_name, args, kwargs)
-
-    @final
     def revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
         self.__runner.syscall_revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
 
-    @final
     def mint_tokens(
         self,
         token_uid: TokenUid,
@@ -246,7 +149,6 @@ class BlueprintEnvironment:
         """Mint tokens and add them to the balance of this nano contract."""
         self.__runner.syscall_mint_tokens(token_uid=token_uid, amount=amount, fee_payment_token=fee_payment_token)
 
-    @final
     def melt_tokens(
         self,
         token_uid: TokenUid,
@@ -257,7 +159,7 @@ class BlueprintEnvironment:
         """Melt tokens by removing them from the balance of this nano contract."""
         self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount, fee_payment_token=fee_payment_token)
 
-    @final
+    # TODO: How to deal with arg collision in this method?
     def create_contract(
         self,
         blueprint_id: BlueprintId,
@@ -266,22 +168,27 @@ class BlueprintEnvironment:
         fees: Sequence[NCFee] | None,
         *args: Any,
         **kwargs: Any,
-    ) -> tuple[ContractId, Any]:
+    ) -> tuple[ContractId, object]:
         """Create a new contract."""
-        return self.__runner.syscall_create_another_contract(blueprint_id, salt, actions, args, kwargs, fees or [])
+        return self.__runner.syscall_create_another_contract(
+            blueprint_id=blueprint_id,
+            salt=salt,
+            actions=actions,
+            args=args,
+            kwargs=kwargs,
+            fees=fees or [],
+        )
 
-    @final
     def emit_event(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
         self.__runner.syscall_emit_event(data)
 
-    @final
     def create_deposit_token(
         self,
+        *,
         token_name: str,
         token_symbol: str,
         amount: int,
-        *,
         mint_authority: bool = True,
         melt_authority: bool = True,
         salt: bytes = b'',
@@ -296,13 +203,12 @@ class BlueprintEnvironment:
             melt_authority=melt_authority,
         )
 
-    @final
     def create_fee_token(
         self,
+        *,
         token_name: str,
         token_symbol: str,
         amount: int,
-        *,
         mint_authority: bool = True,
         melt_authority: bool = True,
         salt: bytes = b'',
@@ -319,12 +225,10 @@ class BlueprintEnvironment:
             fee_payment_token=fee_payment_token
         )
 
-    @final
     def change_blueprint(self, blueprint_id: BlueprintId) -> None:
         """Change the blueprint of this contract."""
         self.__runner.syscall_change_blueprint(blueprint_id)
 
-    @final
     def get_contract(
         self,
         contract_id: ContractId,
@@ -342,3 +246,7 @@ class BlueprintEnvironment:
         """
         from hathor.nanocontracts.contract_accessor import ContractAccessor
         return ContractAccessor(runner=self.__runner, contract_id=contract_id, blueprint_id=blueprint_id)
+
+    def get_proxy(self, blueprint_id: BlueprintId) -> ProxyAccessor:
+        from hathor.nanocontracts.proxy_accessor import ProxyAccessor
+        return ProxyAccessor(runner=self.__runner, blueprint_id=blueprint_id)

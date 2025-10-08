@@ -83,7 +83,7 @@ class MyBlueprint2(Blueprint):
     def melt(self, ctx: Context, amount: int, contract_id: ContractId) -> None:
         assert self.token_uid is not None
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
-        self.syscall.call_public_method(contract_id, 'withdraw', [action])
+        self.syscall.get_contract(contract_id, blueprint_id=None).public(action).withdraw()
         self.syscall.melt_tokens(self.token_uid, amount)
 
 

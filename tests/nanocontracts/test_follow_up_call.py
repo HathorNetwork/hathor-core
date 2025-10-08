@@ -32,15 +32,18 @@ class MyBlueprint1(Blueprint):
 
     @view
     def view_call_other_view(self, method_name: str) -> None:
-        self.syscall.call_view_method(self.other_id, method_name)
+        method = self.syscall.get_contract(self.other_id, blueprint_id=None).get_view_method(method_name)
+        method()
 
     @public
     def public_call_other_view(self, ctx: Context, method_name: str) -> None:
-        self.syscall.call_view_method(self.other_id, method_name)
+        method = self.syscall.get_contract(self.other_id, blueprint_id=None).get_view_method(method_name)
+        method()
 
     @public
     def public_call_other_public(self, ctx: Context, method_name: str) -> None:
-        self.syscall.call_public_method(self.other_id, method_name, [])
+        method = self.syscall.get_contract(self.other_id, blueprint_id=None).get_public_method(method_name)
+        method()
 
 
 class MyBlueprint2(Blueprint):

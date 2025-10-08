@@ -43,9 +43,9 @@ class MyBlueprint(Blueprint):
         melt_authority: bool,
     ) -> None:
         self.syscall.create_deposit_token(
-            token_name,
-            token_symbol,
-            amount,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            amount=amount,
             mint_authority=mint_authority,
             melt_authority=melt_authority,
             salt=salt
