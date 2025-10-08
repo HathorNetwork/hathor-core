@@ -227,7 +227,7 @@ class IndexesManager(ABC):
 
         meta = tx.get_metadata()
         assert tx.is_nano_contract()
-        assert meta.nc_execution is NCExecutionState.SUCCESS
+        assert meta.nc_execution == NCExecutionState.SUCCESS
         assert meta.nc_calls
         first_call = meta.nc_calls[0]
         index_records: list[NCIndexUpdateRecord] = []
@@ -268,7 +268,7 @@ class IndexesManager(ABC):
                         except KeyError:
                             # If the token doesn't exist in the index yet, it must be a token creation syscall.
                             from hathor.nanocontracts.runner.types import IndexUpdateRecordType
-                            assert record.type is IndexUpdateRecordType.CREATE_TOKEN, record.type
+                            assert record.type == IndexUpdateRecordType.CREATE_TOKEN, record.type
                             assert record.token_name is not None and record.token_symbol is not None
                             assert record.token_version is not None
 
@@ -303,7 +303,7 @@ class IndexesManager(ABC):
 
         meta = tx.get_metadata()
         assert tx.is_nano_contract()
-        assert meta.nc_execution is NCExecutionState.SUCCESS
+        assert meta.nc_execution == NCExecutionState.SUCCESS
         assert meta.nc_calls
         first_call = meta.nc_calls[0]
         records: list[NCIndexUpdateRecord] = []
@@ -343,7 +343,7 @@ class IndexesManager(ABC):
                         self.tokens.add_to_total(record.token_uid, -record.amount)
 
                         from hathor.nanocontracts.runner.types import IndexUpdateRecordType
-                        if record.type is IndexUpdateRecordType.CREATE_TOKEN:
+                        if record.type == IndexUpdateRecordType.CREATE_TOKEN:
                             self.tokens.destroy_token(record.token_uid)
 
                 case UpdateAuthoritiesRecord():

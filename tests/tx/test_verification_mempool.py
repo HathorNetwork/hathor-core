@@ -383,7 +383,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         assert tx1.get_metadata().first_block is not None
         assert tx1.get_metadata().voided_by is None
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         # ---
 
@@ -408,7 +408,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         assert tx2.get_metadata().first_block is not None
         assert tx2.get_metadata().voided_by is None
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
     def test_nano_header_method_call_fallback(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
@@ -462,7 +462,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         tx2 = artifacts.get_typed_vertex('tx2', Transaction)
         assert tx2.get_metadata().first_block == b31.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert tx2.get_metadata().voided_by is not None
 
         tx3 = artifacts.get_typed_vertex('tx3', Transaction)
@@ -511,7 +511,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
         assert tx1.get_metadata().first_block == b30.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         tx2 = artifacts.get_typed_vertex('tx2', Transaction)

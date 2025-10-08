@@ -132,7 +132,7 @@ class BlueprintInfoResource(Resource):
                 ))
 
             return_type = signature.return_annotation
-            if return_type is inspect._empty:
+            if return_type is inspect._empty:  # allow-is
                 return_type = None
 
             method_info = MethodInfo(

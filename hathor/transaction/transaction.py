@@ -397,7 +397,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             else:
                 token_info.amount -= spent_output.value
 
-                if token_version is TokenVersion.FEE:
+                if token_version == TokenVersion.FEE:
                     token_info.chargeable_inputs += 1
 
             token_dict[token_uid] = token_info
@@ -431,7 +431,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 # for regular outputs subtract from the total amount
                 token_info.amount += tx_output.value
 
-                if token_info.version is TokenVersion.FEE:
+                if token_info.version == TokenVersion.FEE:
                     token_info.chargeable_outputs += 1
 
     def is_double_spending(self) -> bool:

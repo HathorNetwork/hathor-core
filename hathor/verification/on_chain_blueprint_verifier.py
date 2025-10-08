@@ -165,7 +165,7 @@ class OnChainBlueprintVerifier:
 
     def _get_python_code_ast(self, tx: OnChainBlueprint) -> ast.Module:
         from hathor.nanocontracts.on_chain_blueprint import CodeKind
-        assert tx.code.kind is CodeKind.PYTHON_ZLIB, 'only Python+Gzip is supported'
+        assert tx.code.kind == CodeKind.PYTHON_ZLIB, 'only Python+Gzip is supported'
         if tx._ast_cache is not None:
             return tx._ast_cache
         # XXX: feature_version is a best-effort compatibility, some subtle cases could break, which is important to

@@ -305,7 +305,7 @@ class BlockConsensusAlgorithm:
         from hathor.nanocontracts.runner.types import CallType
 
         meta = tx.get_metadata()
-        assert meta.nc_execution is NCExecutionState.SUCCESS
+        assert meta.nc_execution == NCExecutionState.SUCCESS
         call_info = runner.get_last_call_info()
         assert call_info.calls is not None
         nc_calls = [
@@ -750,7 +750,7 @@ class BlockConsensusAlgorithm:
                 continue
 
             if tx.is_nano_contract():
-                if meta.nc_execution is NCExecutionState.SUCCESS:
+                if meta.nc_execution == NCExecutionState.SUCCESS:
                     assert tx.storage is not None
                     assert tx.storage.indexes is not None
                     tx.storage.indexes.handle_contract_unexecution(tx)

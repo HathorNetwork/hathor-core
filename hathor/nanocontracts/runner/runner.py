@@ -409,7 +409,7 @@ class Runner:
 
         last_call_record = self.get_current_call_record()
 
-        if last_call_record.type is CallType.VIEW:
+        if last_call_record.type == CallType.VIEW:
             raise NCInvalidPublicMethodCallFromView('cannot call a public method from a view method')
 
         # Validate actions.
@@ -497,7 +497,7 @@ class Runner:
         calculated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
         for call in self._call_info.calls:
             if call.index_updates is None:
-                assert call.type is CallType.VIEW
+                assert call.type == CallType.VIEW
                 continue
             for record in call.index_updates:
                 match record:
@@ -1192,7 +1192,7 @@ class Runner:
         """Change the blueprint of a contract."""
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()
-        if last_call_record.type is CallType.VIEW:
+        if last_call_record.type == CallType.VIEW:
             raise NCInvalidPublicMethodCallFromView('forbidden')
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist

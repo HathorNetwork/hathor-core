@@ -131,7 +131,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
             warn(f'Visibility not set for path `{path}`, falling back to {fallback_visibility}')
         if did_override:
             warn(f'Visibility overridden for path `{path}` to {visibility}')
-        if visibility is Visibility.PRIVATE:
+        if visibility == Visibility.PRIVATE:
             continue
 
         location_params: dict[str, Any] = {
@@ -145,7 +145,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
                 continue
             method_params = params[method]
             method_visibility, _, _ = _get_visibility(method_params, Visibility.PUBLIC, override)
-            if method_visibility is Visibility.PRIVATE:
+            if method_visibility == Visibility.PRIVATE:
                 continue
             allowed_methods.add(method.upper())
         location_params['allowed_methods'] = sorted(allowed_methods)

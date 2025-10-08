@@ -441,9 +441,9 @@ if foo:
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
         dbt, fbt1, fbt2 = artifacts.get_typed_vertices(('DBT', 'FBT1', 'FBT2'), TokenCreationTransaction)
 
-        assert dbt.token_version is TokenVersion.DEPOSIT
-        assert fbt1.token_version is TokenVersion.FEE
-        assert fbt2.token_version is TokenVersion.FEE
+        assert dbt.token_version == TokenVersion.DEPOSIT
+        assert fbt1.token_version == TokenVersion.FEE
+        assert fbt2.token_version == TokenVersion.FEE
 
         assert len(tx1.headers) == 1
         fee_header = tx1.headers[0]
@@ -504,7 +504,7 @@ if foo:
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
 
         assert tx1.get_metadata().validation.is_valid()
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         assert len(tx1.headers) == 2
@@ -544,4 +544,4 @@ if foo:
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
         assert set(tx1.tokens) == {token_id}
         assert 'TKA' not in artifacts.by_name
-        assert tx1.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx1.get_metadata().nc_execution == NCExecutionState.FAILURE

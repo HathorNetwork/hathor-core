@@ -234,17 +234,17 @@ class TransactionStorage(ABC):
             previous_migration_state = migration_state
 
             should_run_migration: bool
-            if migration_state is MigrationState.NOT_STARTED:
+            if migration_state == MigrationState.NOT_STARTED:
                 self.log.debug('migration is new, will run', migration=migration_name)
                 should_run_migration = True
-            elif migration_state is MigrationState.STARTED:
+            elif migration_state == MigrationState.STARTED:
                 self.log.warn('this migration was started before, but it is not marked as COMPLETED or ERROR, '
                               'it will run again but might fail', migration=migration_name)
                 should_run_migration = True
-            elif migration_state is MigrationState.COMPLETED:
+            elif migration_state == MigrationState.COMPLETED:
                 self.log.debug('migration is already complete', migration=migration_name)
                 should_run_migration = False
-            elif migration_state is MigrationState.ERROR:
+            elif migration_state == MigrationState.ERROR:
                 self.log.error('this migration was run before but resulted in an error, the database will need to be '
                                'either manually fixed or discarded', migration=migration_name)
                 raise PartialMigrationError(f'Migration error state previously: {migration_name}')
@@ -400,7 +400,7 @@ class TransactionStorage(ABC):
 
     def is_only_valid_allowed(self) -> bool:
         """Whether only valid transactions are allowed to be returned/accepted by the storage, the default state."""
-        return self.get_allow_scope() is TxAllowScope.VALID
+        return self.get_allow_scope() == TxAllowScope.VALID
 
     def is_partially_validated_allowed(self) -> bool:
         """Whether partially validated transactions are allowed to be returned/accepted by the storage."""

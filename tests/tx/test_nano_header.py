@@ -223,7 +223,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         assert len(buf) == 0
         assert header1_bytes == header2.serialize()
-        assert header1.tx is header2.tx
+        assert header1.tx is header2.tx  # allow-is
         assert header1.nc_id == header2.nc_id
         assert header1.nc_method == header2.nc_method
         assert header1.nc_args_bytes == header2.nc_args_bytes

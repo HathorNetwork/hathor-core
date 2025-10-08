@@ -114,10 +114,10 @@ class TestNanoFeatureActivation(unittest.TestCase):
         nc1, ocb1 = artifacts.get_typed_vertices(('nc1', 'ocb1'), Transaction)
 
         artifacts.propagate_with(self.manager, up_to='b3')
-        assert self.feature_service.get_state(block=b3, feature=Feature.NANO_CONTRACTS) is FeatureState.DEFINED
+        assert self.feature_service.get_state(block=b3, feature=Feature.NANO_CONTRACTS) == FeatureState.DEFINED
 
         artifacts.propagate_with(self.manager, up_to='b4')
-        assert self.feature_service.get_state(block=b4, feature=Feature.NANO_CONTRACTS) is FeatureState.STARTED
+        assert self.feature_service.get_state(block=b4, feature=Feature.NANO_CONTRACTS) == FeatureState.STARTED
 
         signaling_blocks = ('b5', 'b6', 'b7')
         for block_name in signaling_blocks:
@@ -127,13 +127,13 @@ class TestNanoFeatureActivation(unittest.TestCase):
             block.signal_bits = self.bit_signaling_service.generate_signal_bits(block=block.get_block_parent())
             artifacts.propagate_with(self.manager, up_to=block_name)
 
-        assert self.feature_service.get_state(block=b7, feature=Feature.NANO_CONTRACTS) is FeatureState.STARTED
+        assert self.feature_service.get_state(block=b7, feature=Feature.NANO_CONTRACTS) == FeatureState.STARTED
 
         artifacts.propagate_with(self.manager, up_to='b8')
-        assert self.feature_service.get_state(block=b8, feature=Feature.NANO_CONTRACTS) is FeatureState.LOCKED_IN
+        assert self.feature_service.get_state(block=b8, feature=Feature.NANO_CONTRACTS) == FeatureState.LOCKED_IN
 
         artifacts.propagate_with(self.manager, up_to='b11')
-        assert self.feature_service.get_state(block=b11, feature=Feature.NANO_CONTRACTS) is FeatureState.LOCKED_IN
+        assert self.feature_service.get_state(block=b11, feature=Feature.NANO_CONTRACTS) == FeatureState.LOCKED_IN
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
 
@@ -151,7 +151,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert ocb1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
-        assert self.feature_service.get_state(block=b12, feature=Feature.NANO_CONTRACTS) is FeatureState.ACTIVE
+        assert self.feature_service.get_state(block=b12, feature=Feature.NANO_CONTRACTS) == FeatureState.ACTIVE
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id
@@ -166,7 +166,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert ocb1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b13')
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id
@@ -194,7 +194,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
 
         # The nc txs are re-accepted on the mempool.
         artifacts.propagate_with(self.manager, up_to='a12')
-        assert self.feature_service.get_state(block=a12, feature=Feature.NANO_CONTRACTS) is FeatureState.ACTIVE
+        assert self.feature_service.get_state(block=a12, feature=Feature.NANO_CONTRACTS) == FeatureState.ACTIVE
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id

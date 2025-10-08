@@ -73,7 +73,7 @@ function check_do_not_use_builtin_random_in_tests() {
 }
 
 function check_deprecated_typing() {
-	if grep -RI '\<typing .*\<import .*\<\(Tuple\|List\|Dict\|Set\|FrozenSet\|AbstractSet\|DefaultDict\|OrderedDict\)\>' "${SOURCE_DIRS[@]}"; then
+	if grep -RIn '\<typing .*\<import .*\<\(Tuple\|List\|Dict\|Set\|FrozenSet\|AbstractSet\|DefaultDict\|OrderedDict\)\>' "${SOURCE_DIRS[@]}"; then
 		echo 'do not use typing.List/Tuple/Dict/... for type annotations use builtin list/tuple/dict/... instead'
 		echo 'for more info check the PEP 585 doc: https://peps.python.org/pep-0585/'
 		return 1
@@ -82,7 +82,7 @@ function check_deprecated_typing() {
 }
 
 function check_do_not_import_tests_in_hathor() {
-	if grep -R '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
+	if grep -Rn '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
 		echo 'do not import test definitions in the hathor module'
 		echo 'move them from tests to hathor instead'
 		echo 'alternatively, comment `# skip-import-tests-custom-check` to exclude a line.'
@@ -94,7 +94,7 @@ function check_do_not_import_tests_in_hathor() {
 function check_do_not_import_from_hathor_in_entrypoints() {
     PATTERN='^import .*hathor.*\|^from .*hathor.* import'
 
-    if grep -R "$PATTERN" "hathor/cli" | grep -v 'from hathor.cli.run_node import RunNode' | grep -v '# skip-cli-import-custom-check'; then
+    if grep -Rn "$PATTERN" "hathor/cli" | grep -v 'from hathor.cli.run_node import RunNode' | grep -v '# skip-cli-import-custom-check'; then
         echo 'do not import from `hathor` in the module-level of a CLI entrypoint.'
         echo 'instead, import locally inside the function that uses the import.'
         echo 'alternatively, comment `# skip-cli-import-custom-check` to exclude a line.'
@@ -107,9 +107,19 @@ function check_do_not_import_twisted_reactor_directly() {
     EXCLUDES="--exclude=reactor.py --exclude=conftest.py"
     PATTERN='\<.*from .*twisted.internet import .*reactor\>'
 
-    if grep -R $EXCLUDES "$PATTERN" "${SOURCE_DIRS[@]}"; then
+    if grep -Rn $EXCLUDES "$PATTERN" "${SOURCE_DIRS[@]}"; then
         echo 'do not use `from twisted.internet import reactor` directly.'
         echo 'instead, use `hathor.reactor.get_global_reactor()`.'
+        return 1
+    fi
+    return 0
+}
+
+function check_do_not_compare_enums_with_is() {
+    PATTERN=' is [a-zA-Z_]\w*\.[a-zA-Z_]\w*'
+
+    if grep -REIn "$PATTERN" "${SOURCE_DIRS[@]}" | grep -v '# allow-is'; then
+        echo 'do not use `is` for comparing with enums, use `==` instead'
         return 1
     fi
     return 0
@@ -123,6 +133,7 @@ checks=(
 	check_do_not_import_tests_in_hathor
 	check_do_not_import_from_hathor_in_entrypoints
 	check_do_not_import_twisted_reactor_directly
+	check_do_not_compare_enums_with_is
 )
 
 # Initialize a variable to track if any check fails

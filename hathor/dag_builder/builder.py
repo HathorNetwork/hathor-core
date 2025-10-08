@@ -138,7 +138,7 @@ class DAGBuilder:
             self._nodes[name] = node
         else:
             node = self._nodes[name]
-            if node.type is DAGNodeType.Unknown:
+            if node.type == DAGNodeType.Unknown:
                 node.type = default_type
             else:
                 if default_type != DAGNodeType.Unknown:

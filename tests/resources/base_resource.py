@@ -101,7 +101,7 @@ class StubSite(server.Site):
             request.write(result)
             request.finish()
             return succeed(request)
-        elif result is server.NOT_DONE_YET:
+        elif result == server.NOT_DONE_YET:
             if request.finished:
                 return succeed(request)
             else:

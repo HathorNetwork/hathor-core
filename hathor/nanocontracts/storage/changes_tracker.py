@@ -53,19 +53,19 @@ class _NCAuthorityDiff:
 
     def grant_mint(self) -> bool:
         """Return whether the final mint state of this diff in granted."""
-        return self.mint is _NCAuthorityState.GRANTED
+        return self.mint == _NCAuthorityState.GRANTED
 
     def grant_melt(self) -> bool:
         """Return whether the final melt state of this diff in granted."""
-        return self.melt is _NCAuthorityState.GRANTED
+        return self.melt == _NCAuthorityState.GRANTED
 
     def revoke_mint(self) -> bool:
         """Return whether the final mint state of this diff in revoked."""
-        return self.mint is _NCAuthorityState.REVOKED
+        return self.mint == _NCAuthorityState.REVOKED
 
     def revoke_melt(self) -> bool:
         """Return whether the final melt state of this diff in revoked."""
-        return self.melt is _NCAuthorityState.REVOKED
+        return self.melt == _NCAuthorityState.REVOKED
 
 
 class NCChangesTracker(NCContractStorage):
