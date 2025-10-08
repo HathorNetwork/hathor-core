@@ -115,7 +115,7 @@ class CliBuilder:
         )
 
         # XXX Remove this protection after Nano Contracts are launched.
-        if settings.NETWORK_NAME not in ('unittests', 'nano-testnet-bravo', 'testnet-hotel'):
+        if settings.NETWORK_NAME not in ('unittests', 'nano-testnet-bravo', 'testnet-india'):
             # Add protection to prevent enabling Nano Contracts due to misconfigurations.
             self.check_or_raise(
                 not settings.ENABLE_NANO_CONTRACTS,
