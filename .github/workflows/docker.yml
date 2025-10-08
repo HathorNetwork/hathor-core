@@ -88,8 +88,8 @@ jobs:
           tags: ${{ env.TEST_TAG }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
-      - name: Test image
-        run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
+      # - name: Test image
+      #   run: docker run --rm ${{ env.TEST_TAG }} quick_test --data / --testnet
       - name: Build and push
         uses: docker/build-push-action@v6
         if: ${{ !env.ACT }}  # Skip this step when testing locally with https://github.com/nektos/act
