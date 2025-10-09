@@ -551,6 +551,12 @@ class TransactionStorage(ABC):
         self.post_get_validation(tx)
         return tx
 
+    def get_tx(self, vertex_id: VertexId) -> Transaction:
+        """Return a Transaction."""
+        tx = self.get_transaction(vertex_id)
+        assert isinstance(tx, Transaction)
+        return tx
+
     def get_token_creation_transaction(self, hash_bytes: bytes) -> TokenCreationTransaction:
         """Acquire the lock and get the token creation transaction with hash `hash_bytes`.
 

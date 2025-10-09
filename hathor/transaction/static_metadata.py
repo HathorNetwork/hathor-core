@@ -122,7 +122,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
         """
         # maximum min-height of any parent tx
         min_height = 0
-        for tx_hash in block.get_tx_parents():
+        for tx_hash in block.get_tx_parents_ids():
             tx = vertex_getter(tx_hash)
             min_height = max(min_height, tx.static_metadata.min_height)
 
@@ -227,7 +227,7 @@ class TransactionStaticMetadata(VertexStaticMetadata):
     ) -> int:
         """ Calculates min height inherited from any input or parent"""
         min_height = 0
-        iter_parents = tx.get_tx_parents()
+        iter_parents = tx.get_tx_parents_ids()
         iter_inputs = (tx_input.tx_id for tx_input in tx.inputs)
         for vertex_id in chain(iter_parents, iter_inputs):
             vertex = vertex_getter(vertex_id)
