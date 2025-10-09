@@ -17,7 +17,6 @@ import pytest
 from hathor import Blueprint, Context, ContractId, NCActionType, public
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
-from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.headers import FeeHeader
