@@ -86,10 +86,11 @@ class DAGArtifacts:
                         assert manager.vertex_handler.on_new_relayed_vertex(vertex)
                     else:
                         best_block = manager.tx_storage.get_best_block()
+                        best_block_meta = best_block.get_metadata()
                         params = VerificationParams(
                             enable_checkdatasig_count=True,
                             enable_nano=True,
-                            best_block=best_block,
+                            nc_block_root_id=best_block_meta.nc_block_root_id,
                         )
                         assert manager.vertex_handler._old_on_new_vertex(vertex, params)
                 except Exception as e:

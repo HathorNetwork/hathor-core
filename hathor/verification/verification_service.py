@@ -379,11 +379,7 @@ class VerificationService:
         self.verifiers.on_chain_blueprint.verify_code(tx)
 
     def _get_block_storage(self, params: VerificationParams) -> NCBlockStorage:
-        assert params.best_block is not None
         assert self._nc_storage_factory is not None
-        meta = params.best_block.get_metadata()
-        if meta.nc_block_root_id is None:
-            # This case only happens for the genesis and during sync of a voided chain.
-            assert params.best_block.is_block or meta.voided_by
+        if params.nc_block_root_id is None:
             return self._nc_storage_factory.get_empty_block_storage()
-        return self._nc_storage_factory.get_block_storage_from_block(params.best_block)
+        return self._nc_storage_factory.get_block_storage(params.nc_block_root_id)

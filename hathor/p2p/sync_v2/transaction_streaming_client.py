@@ -51,7 +51,7 @@ class TransactionStreamingClient:
         #      it will be correctly enabled when doing a full validation anyway.
         self.verification_params = VerificationParams(
             enable_checkdatasig_count=False,
-            best_block=None,
+            nc_block_root_id=None,
         )
         self.reactor = sync_agent.reactor
 

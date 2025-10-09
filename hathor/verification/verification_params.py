@@ -23,7 +23,7 @@ from hathor.transaction import Block
 class VerificationParams:
     """Contains every parameter/setting to run a single verification."""
 
-    best_block: Block | None
+    nc_block_root_id: bytes | None
     enable_checkdatasig_count: bool
     reject_locked_reward: bool = True
     skip_block_weight_verification: bool = False
@@ -45,8 +45,11 @@ class VerificationParams:
 
         Other cases should instantiate `VerificationParams` manually with the appropriate parameter values.
         """
+        best_block_meta = best_block.get_metadata()
+        if best_block_meta.nc_block_root_id is None:
+            assert best_block.is_genesis
         return cls(
-            best_block=best_block,
+            nc_block_root_id=best_block_meta.nc_block_root_id,
             enable_checkdatasig_count=True,
             enable_nano=enable_nano,
             reject_too_old_vertices=True,
