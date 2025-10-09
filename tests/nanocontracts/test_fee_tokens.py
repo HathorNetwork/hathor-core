@@ -59,10 +59,7 @@ class MyBlueprint(Blueprint):
 class FeeTokensTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
-        # TODO
-        self.manager = self.create_peer('unittests', nc_indexes=True, nc_log_config=NCLogConfig.FAILED)
-        self.blueprint_id = self.gen_random_blueprint_id()
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_postponed_verification_success(self) -> None:
