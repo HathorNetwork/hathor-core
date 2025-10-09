@@ -39,6 +39,7 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         Context=hathor.Context,
         NCFail=hathor.NCFail,
         NCAction=hathor.NCAction,
+        NCFee=hathor.NCFee,
         NCActionType=hathor.NCActionType,
         SignedData=hathor.SignedData,
         public=hathor.public,

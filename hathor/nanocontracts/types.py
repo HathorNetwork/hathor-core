@@ -21,6 +21,7 @@ from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
+from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
@@ -30,7 +31,7 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
 )
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
-from hathor.transaction.util import bytes_to_int, int_to_bytes
+from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
 # XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
@@ -516,3 +517,19 @@ class NCParsedArgs:
 
 
 NCArgs: TypeAlias = NCRawArgs | NCParsedArgs
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NCFee:
+    """The dataclass for all NC actions fee"""
+    token_uid: TokenUid
+    amount: int
+
+    def get_htr_value(self, settings: HathorSettings) -> int:
+        """
+        Get the amount converted to HTR
+        """
+        if self.token_uid == HATHOR_TOKEN_UID:
+            return self.amount
+        else:
+            return get_deposit_token_withdraw_amount(settings, self.amount)

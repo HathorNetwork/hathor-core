@@ -268,5 +268,5 @@ class FeeHeaderTokenNotFound(InvalidFeeHeader):
     """Token not found in the transaction tokens list"""
 
 
-class FeeHeaderInvalidAmount(InvalidFeeHeader):
+class InvalidFeeAmount(InvalidFeeHeader):
     """Invalid fee amount"""

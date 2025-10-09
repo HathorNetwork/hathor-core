@@ -27,6 +27,7 @@ from hathor.nanocontracts.types import (
     TokenUid,
     VertexId,
 )
+from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.nanocontracts.utils import TestRunner
 
@@ -273,8 +274,16 @@ class NCBlueprintTestCase(BlueprintTestCase):
             NCDepositAction(token_uid=token2_uid, amount=12),
             NCDepositAction(token_uid=token3_uid, amount=13),
         ]
-        ctx = self.create_context(actions, self.tx, MOCK_ADDRESS)
-        self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 0)
+        self.runner.create_contract(
+            self.nc1_id,
+            self.blueprint_id,
+            self.create_context(actions, self.tx, MOCK_ADDRESS),
+            0
+        )
+
+        self.create_token(token2_uid, 'tk2', 'tk2', TokenVersion.DEPOSIT)
+        self.create_token(token3_uid, 'tk3', 'tk3', TokenVersion.DEPOSIT)
+
         self.assertEqual(
             Balance(value=11, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
@@ -388,6 +397,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         token1_uid = TokenUid(self._settings.HATHOR_TOKEN_UID)
         token2_uid = TokenUid(b'b' * 32)
         token3_uid = TokenUid(b'c' * 32)
+
+        self.create_token(token2_uid, 'tk2', 'tk2', TokenVersion.DEPOSIT)
+        self.create_token(token3_uid, 'tk3', 'tk3', TokenVersion.DEPOSIT)
 
         actions = [
             NCDepositAction(token_uid=token1_uid, amount=100),

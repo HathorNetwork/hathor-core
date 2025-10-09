@@ -6,13 +6,16 @@ from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInsufficientFunds, NCInvalidSyscall
+from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import (
     BlueprintId,
     ContractId,
     NCDepositAction,
+    NCFee,
     NCGrantAuthorityAction,
+    NCRawArgs,
     TokenUid,
     public,
 )
@@ -94,6 +97,49 @@ class FeeTokenBlueprint(Blueprint):
         self.syscall.melt_tokens(token, amount=amount, fee_payment_token=fee_payment_token)
 
 
+class ProxyCallerBlueprint(Blueprint):
+    counter: int
+
+    @public(allow_deposit=True)
+    def initialize(self, ctx: Context) -> None:
+        self.counter = 0
+
+    @public(allow_deposit=True)
+    def increment(self, ctx: Context, value: int) -> int:
+        self.counter += value
+        return self.counter
+
+
+class TargetBlueprint(Blueprint):
+    counter: int
+
+    @public(allow_deposit=True)
+    def initialize(self, ctx: Context) -> None:
+        self.counter = 0
+
+    @public(allow_deposit=True)
+    def increment(self, ctx: Context, value: int) -> int:
+        self.counter += value
+        return self.counter
+
+    @public(allow_deposit=True)
+    def proxy_increment(self, ctx: Context, blueprint_id: BlueprintId, value: int) -> int:
+        """Call the increment method of another blueprint using proxy_call_public_method_nc_args."""
+        args_parser = ArgsOnly.from_arg_types((int,))
+        args_bytes = args_parser.serialize_args_bytes((value,))
+        nc_args = NCRawArgs(args_bytes)
+        # Pay 1 HTR as fee for the proxy call
+        fees: list[NCFee] = [NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)]
+        result = self.syscall.proxy_call_public_method_nc_args(
+            blueprint_id=blueprint_id,
+            method_name='increment',
+            actions=ctx.actions_list,
+            fees=fees,
+            nc_args=nc_args
+        )
+        return result
+
+
 class NCNanoContractTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -101,10 +147,14 @@ class NCNanoContractTestCase(BlueprintTestCase):
         self.my_blueprint_id = self.gen_random_blueprint_id()
         self.other_blueprint_id = self.gen_random_blueprint_id()
         self.fee_blueprint_id = self.gen_random_blueprint_id()
+        self.proxy_caller_blueprint_id = self.gen_random_blueprint_id()
+        self.target_blueprint_id = self.gen_random_blueprint_id()
 
         self.nc_catalog.blueprints[self.my_blueprint_id] = MyBlueprint
         self.nc_catalog.blueprints[self.other_blueprint_id] = OtherBlueprint
         self.nc_catalog.blueprints[self.fee_blueprint_id] = FeeTokenBlueprint
+        self.nc_catalog.blueprints[self.proxy_caller_blueprint_id] = ProxyCallerBlueprint
+        self.nc_catalog.blueprints[self.target_blueprint_id] = TargetBlueprint
 
     def test_basics(self) -> None:
         nc1_id = self.gen_random_contract_id()
@@ -634,4 +684,44 @@ class NCNanoContractTestCase(BlueprintTestCase):
         assert storage.get_all_balances() == {
             htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
             ft1_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+        }
+
+    def test_proxy_call_public_method_nc_args(self) -> None:
+        """Test proxy_call_public_method_nc_args with fee-based token action charges 1 HTR fee."""
+        target_nc_id = self.gen_random_contract_id()
+
+        # Initialize contract with HTR to pay fees
+        ctx_initialize = self.create_context(
+            [NCDepositAction(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=10)],
+            self.get_genesis_tx()
+        )
+        self.runner.create_contract(target_nc_id, self.target_blueprint_id, ctx_initialize)
+
+        # Create fee-based token directly
+        fee_token_uid = self.gen_random_token_uid()
+        self.create_token(fee_token_uid, 'FeeToken', 'FBT', TokenVersion.FEE)
+
+        target_storage = self.runner.get_storage(target_nc_id)
+        htr_balance_key = BalanceKey(nc_id=target_nc_id, token_uid=HATHOR_TOKEN_UID)
+        fbt_balance_key = BalanceKey(nc_id=target_nc_id, token_uid=fee_token_uid)
+
+        # Initial state: 10 HTR, no fee tokens
+        assert target_storage.get_all_balances() == {
+            htr_balance_key: Balance(value=10, can_mint=False, can_melt=False),
+        }
+
+        # Proxy call with fee-based token deposit
+        ctx_with_deposit = self.create_context(
+            [NCDepositAction(token_uid=fee_token_uid, amount=20)],
+            self.get_genesis_tx()
+        )
+        result = self.runner.call_public_method(
+            target_nc_id, 'proxy_increment', ctx_with_deposit, self.proxy_caller_blueprint_id, 5
+        )
+        assert result == 5
+
+        # Verify: 20 FBT deposited, 1 HTR charged as fee
+        assert target_storage.get_all_balances() == {
+            htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=20, can_mint=False, can_melt=False),
         }

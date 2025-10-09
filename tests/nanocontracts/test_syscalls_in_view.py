@@ -91,7 +91,7 @@ class MyBlueprint(Blueprint):
 
     @view
     def create_contract(self) -> None:
-        self.syscall.create_contract(BlueprintId(VertexId(b'')), b'', [])
+        self.syscall.create_contract(BlueprintId(VertexId(b'')), salt=b'', actions=[], fees=[])
 
     @view
     def emit_event(self) -> None:
@@ -107,12 +107,18 @@ class MyBlueprint(Blueprint):
 
     @view
     def proxy_call_public_method(self) -> None:
-        self.syscall.proxy_call_public_method(BlueprintId(VertexId(b'')), '', [])
+        self.syscall.proxy_call_public_method(BlueprintId(VertexId(b'')), method_name='', actions=[], fees=[])
 
     @view
     def proxy_call_public_method_nc_args(self) -> None:
         nc_args = NCRawArgs(b'')
-        self.syscall.proxy_call_public_method_nc_args(BlueprintId(VertexId(b'')), '', [], nc_args)
+        self.syscall.proxy_call_public_method_nc_args(
+            BlueprintId(VertexId(b'')),
+            method_name='',
+            actions=[],
+            fees=[],
+            nc_args=nc_args
+        )
 
     @view
     def change_blueprint(self) -> None:
