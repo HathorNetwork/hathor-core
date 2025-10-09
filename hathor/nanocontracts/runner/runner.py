@@ -108,9 +108,7 @@ def _forbid_syscall_from_view(
     """Mark a syscall method as forbidden to be called from @view methods."""
     def decorator(fn: Callable[Concatenate['Runner', P], T]) -> Callable[Concatenate['Runner', P], T]:
         def wrapper(self: Runner, /, *args: P.args, **kwargs: P.kwargs) -> T:
-            current_call_record = self.get_current_call_record()
-            if current_call_record.type is CallType.VIEW:
-                raise NCViewMethodError(f'@view method cannot call `syscall.{display_name}`')
+            self.forbid_call_on_view(display_name)
             return fn(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -327,10 +325,10 @@ class Runner:
         contract_id: ContractId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         forbid_fallback: bool,
-        fees: Sequence[NCFee]
     ) -> Any:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         if method_name == NC_INITIALIZE_METHOD:
@@ -399,10 +397,10 @@ class Runner:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
         forbid_fallback: bool = False,
-        fees: Sequence[NCFee]
     ) -> Any:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
@@ -902,9 +900,9 @@ class Runner:
         blueprint_id: BlueprintId,
         salt: bytes,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-        fees: Sequence[NCFee],
     ) -> tuple[ContractId, Any]:
         """Create a contract from another contract."""
         if not salt:
@@ -1327,6 +1325,11 @@ class Runner:
             raise NCInvalidFee(
                 f'Fee payment balance is different than expected. (amount={fee_sum}, expected={expected_fee})'
             )
+
+    def forbid_call_on_view(self, name: str) -> None:
+        current_call_record = self.get_current_call_record()
+        if current_call_record.type == CallType.VIEW:
+            raise NCViewMethodError(f'@view method cannot call `syscall.{name}`')
 
 
 class RunnerFactory:

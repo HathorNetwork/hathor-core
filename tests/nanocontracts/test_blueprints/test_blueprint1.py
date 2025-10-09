@@ -32,4 +32,4 @@ class TestBlueprint1(Blueprint):
     @public
     def create_child_contract(self, ctx: Context) -> None:
         blueprint_id = self.syscall.get_blueprint_id()
-        self.syscall.create_contract(blueprint_id, salt=b'', actions=[], fees=[], args=[0])
+        self.syscall.setup_new_contract(blueprint_id, salt=b'').initialize(0)

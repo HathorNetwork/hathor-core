@@ -75,8 +75,10 @@ class CodeBlueprint2(Blueprint):
 
     @public
     def on_upgrade(self, ctx: Context, contract: ContractId, method_name: str) -> None:
-        method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method_name)
-        method()
+        self.syscall \
+            .get_contract(contract, blueprint_id=None) \
+            .get_public_method(method_name) \
+            .call()
 
 
 class CodeBlueprint3(Blueprint):

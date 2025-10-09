@@ -39,8 +39,9 @@ class MyBlueprint(Blueprint):
         action = NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)
         # This contract is vulnerable to reentrancy attack because it is transfering before reducing the balance.
         # Another issue is that it doesn't assert self.balances[address] >= 0.
-        _method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method, action)
-        _method()
+        self.syscall.get_contract(contract, blueprint_id=None) \
+            .get_public_method(method, action) \
+            .call()
         self.balances[address] -= amount
 
     @public(allow_reentrancy=True)
@@ -53,8 +54,9 @@ class MyBlueprint(Blueprint):
         # This contract is not vulnerable to reentrancy attack. The only difference relies on the moment the balance is
         # updated.
         self.balances[address] -= amount
-        _method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method, action)
-        _method()
+        self.syscall.get_contract(contract, blueprint_id=None) \
+            .get_public_method(method, action) \
+            .call()
 
     @public
     def protected_transfer_to(self, ctx: Context, amount: Amount, contract: ContractId, method: str) -> None:
@@ -63,8 +65,9 @@ class MyBlueprint(Blueprint):
             raise InsufficientBalance('insufficient balance')
 
         action = NCDepositAction(token_uid=HTR_TOKEN_UID, amount=amount)
-        _method = self.syscall.get_contract(contract, blueprint_id=None).get_public_method(method, action)
-        _method()
+        self.syscall.get_contract(contract, blueprint_id=None) \
+            .get_public_method(method, action) \
+            .call()
         self.balances[address] -= amount
 
 

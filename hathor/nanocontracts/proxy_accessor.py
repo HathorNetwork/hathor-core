@@ -46,7 +46,7 @@ class ProxyAccessor(FauxImmutable):
             runner=self.__runner,
             blueprint_id=self.__blueprint_id,
             actions=actions,
-            fees=fees or [],
+            fees=fees or (),
             forbid_fallback=forbid_fallback,
         )
 
@@ -62,7 +62,7 @@ class ProxyAccessor(FauxImmutable):
             blueprint_id=self.__blueprint_id,
             method_name=method_name,
             actions=actions,
-            fees=fees or [],
+            fees=fees or (),
             forbid_fallback=forbid_fallback,
         )
 
@@ -159,6 +159,9 @@ class ProxyPublicMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__fees', fees)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
+
+    def call(self, *args: Any, **kwargs: Any) -> object:
+        return self(*args, **kwargs)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         nc_args = NCParsedArgs(args, kwargs)

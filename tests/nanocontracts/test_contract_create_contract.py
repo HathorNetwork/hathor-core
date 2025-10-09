@@ -39,10 +39,9 @@ class MyBlueprint1(Blueprint):
             action = ctx.get_single_action(token_uid)
             salt = b'x'
             assert isinstance(action, NCDepositAction)
-            new_actions = [NCDepositAction(token_uid=token_uid, amount=action.amount - initial)]
-            self.contract, _ = self.syscall.create_contract(
-                blueprint_id, salt, new_actions, [], blueprint_id, initial - 1, self.token_uid
-            )
+            new_action = NCDepositAction(token_uid=token_uid, amount=action.amount - initial)
+            self.contract, _ = self.syscall.setup_new_contract(blueprint_id, new_action, salt=salt) \
+                .initialize(blueprint_id, initial - 1, self.token_uid)
         else:
             self.contract = None
         self.counter = initial
@@ -52,9 +51,15 @@ class MyBlueprint1(Blueprint):
         new_actions = []
         if self.token_uid and self.syscall.can_mint(self.token_uid):
             new_actions.append(NCGrantAuthorityAction(token_uid=self.token_uid, mint=True, melt=True))
-        self.syscall.create_contract(blueprint_id, salt + b'1', new_actions, [], blueprint_id, 0, self.token_uid)
-        self.syscall.create_contract(blueprint_id, salt + b'2', new_actions, [], blueprint_id, 0, self.token_uid)
-        self.syscall.create_contract(blueprint_id, salt + b'3', new_actions, [], blueprint_id, 0, self.token_uid)
+
+        self.syscall.setup_new_contract(blueprint_id, *new_actions, salt=salt + b'1') \
+            .initialize(blueprint_id, 0, self.token_uid)
+
+        self.syscall.setup_new_contract(blueprint_id, *new_actions, salt=salt + b'2') \
+            .initialize(blueprint_id, 0, self.token_uid)
+
+        self.syscall.setup_new_contract(blueprint_id, *new_actions, salt=salt + b'3') \
+            .initialize(blueprint_id, 0, self.token_uid)
 
     @public
     def nop(self, ctx: Context) -> None:

@@ -91,7 +91,7 @@ class MyBlueprint(Blueprint):
 
     @view
     def create_contract(self) -> None:
-        self.syscall.create_contract(BlueprintId(VertexId(b'')), salt=b'', actions=[], fees=[])
+        self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'').initialize()
 
     @view
     def emit_event(self) -> None:
@@ -125,6 +125,10 @@ class MyBlueprint(Blueprint):
     @view
     def get_proxy(self) -> None:
         self.syscall.get_proxy(BlueprintId(VertexId(b'')))
+
+    @view
+    def setup_new_contract(self) -> None:
+        self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'')
 
 
 class TestSyscallsInView(BlueprintTestCase):
@@ -164,7 +168,6 @@ class TestSyscallsInView(BlueprintTestCase):
             'can_melt_before_current_call',
             'call_view_method',
             'get_contract',
-            'get_proxy',
         }
 
         for method_name, method in BlueprintEnvironment.__dict__.items():

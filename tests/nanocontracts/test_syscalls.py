@@ -130,10 +130,10 @@ class TargetBlueprint(Blueprint):
         nc_args = NCRawArgs(args_bytes)
         # Pay 1 HTR as fee for the proxy call
         fees: list[NCFee] = [NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)]
-        method = self.syscall.get_proxy(blueprint_id) \
+        result = self.syscall.get_proxy(blueprint_id) \
             .public(*ctx.actions_list, fees=fees) \
-            .increment
-        result = method.call_with_nc_args(nc_args)
+            .increment \
+            .call_with_nc_args(nc_args)
         assert isinstance(result, int)
         return result
 

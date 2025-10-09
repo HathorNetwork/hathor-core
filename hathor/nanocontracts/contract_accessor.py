@@ -108,7 +108,7 @@ class ContractAccessor(FauxImmutable):
             contract_id=self.__contract_id,
             blueprint_ids=self.__blueprint_ids,
             actions=actions,
-            fees=fees or [],
+            fees=fees or (),
             forbid_fallback=forbid_fallback,
         )
 
@@ -133,7 +133,7 @@ class ContractAccessor(FauxImmutable):
             blueprint_ids=self.__blueprint_ids,
             method_name=method_name,
             actions=actions,
-            fees=fees or [],
+            fees=fees or (),
             forbid_fallback=forbid_fallback,
         )
 
@@ -254,6 +254,9 @@ class ViewMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__blueprint_ids', blueprint_ids)
         __set_faux_immutable__(self, '__method_name', method_name)
 
+    def call(self, *args: Any, **kwargs: Any) -> object:
+        return self(*args, **kwargs)
+
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         validate_blueprint_id(
             runner=self.__runner,
@@ -315,6 +318,9 @@ class PublicMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__fees', fees)
         __set_faux_immutable__(self, '__forbid_fallback', forbid_fallback)
         __set_faux_immutable__(self, '__is_dirty', False)
+
+    def call(self, *args: Any, **kwargs: Any) -> object:
+        return self(*args, **kwargs)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         from hathor.nanocontracts import NCFail

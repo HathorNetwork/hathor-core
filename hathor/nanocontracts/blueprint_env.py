@@ -22,6 +22,7 @@ from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.contract_accessor import ContractAccessor
+    from hathor.nanocontracts.initialize_method_accessor import InitializeMethodAccessor
     from hathor.nanocontracts.nc_exec_logs import NCLogger
     from hathor.nanocontracts.proxy_accessor import ProxyAccessor
     from hathor.nanocontracts.rng import NanoRNG
@@ -159,26 +160,6 @@ class BlueprintEnvironment:
         """Melt tokens by removing them from the balance of this nano contract."""
         self.__runner.syscall_melt_tokens(token_uid=token_uid, amount=amount, fee_payment_token=fee_payment_token)
 
-    # TODO: How to deal with arg collision in this method?
-    def create_contract(
-        self,
-        blueprint_id: BlueprintId,
-        salt: bytes,
-        actions: Sequence[NCAction],
-        fees: Sequence[NCFee] | None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> tuple[ContractId, object]:
-        """Create a new contract."""
-        return self.__runner.syscall_create_another_contract(
-            blueprint_id=blueprint_id,
-            salt=salt,
-            actions=actions,
-            args=args,
-            kwargs=kwargs,
-            fees=fees or [],
-        )
-
     def emit_event(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
         self.__runner.syscall_emit_event(data)
@@ -249,4 +230,22 @@ class BlueprintEnvironment:
 
     def get_proxy(self, blueprint_id: BlueprintId) -> ProxyAccessor:
         from hathor.nanocontracts.proxy_accessor import ProxyAccessor
+        self.__runner.forbid_call_on_view('get_proxy')
         return ProxyAccessor(runner=self.__runner, blueprint_id=blueprint_id)
+
+    def setup_new_contract(
+        self,
+        blueprint_id: BlueprintId,
+        *actions: NCAction,
+        fees: Sequence[NCFee] | None = None,
+        salt: bytes,
+    ) -> InitializeMethodAccessor:
+        from hathor.nanocontracts.initialize_method_accessor import InitializeMethodAccessor
+        self.__runner.forbid_call_on_view('setup_new_contract')
+        return InitializeMethodAccessor(
+            runner=self.__runner,
+            blueprint_id=blueprint_id,
+            salt=salt,
+            actions=actions,
+            fees=fees or (),
+        )
