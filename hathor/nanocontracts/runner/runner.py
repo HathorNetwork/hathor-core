@@ -816,17 +816,27 @@ class Runner:
         before_current_call: bool,
     ) -> Balance:
         """Internal implementation of get_balance."""
-        if contract_id is None:
-            contract_id = self.get_current_contract_id()
         if token_uid is None:
             token_uid = TokenUid(HATHOR_TOKEN_UID)
 
         storage: NCContractStorage
-        if self._call_info is None:
-            storage = self.get_storage(contract_id)
-        else:
-            changes_tracker = self.get_current_changes_tracker(contract_id)
+        if contract_id is None:
+            # In this case we're getting the balance of the currently executing contract,
+            # so it's guaranteed that a changes tracker exists.
+            # Depending on `before_current_call`, we get the current changes tracker or its storage.
+
+            changes_tracker = self.get_current_changes_tracker()
             storage = changes_tracker.storage if before_current_call else changes_tracker
+        else:
+            # In this case we're getting the balance of another contract,
+            # so a changes tracker may not yet exist if the contract is not in the call chain.
+            # We cannot retrieve the balance before the current call because we don't know whether the latest
+            # changes tracker was created during the current call or not.
+
+            if before_current_call:
+                raise NCFail('getting the balance of another contract before the current call is not supported.')
+
+            storage = self.get_current_changes_tracker_or_storage(contract_id)
 
         return storage.get_balance(bytes(token_uid))
 
@@ -840,9 +850,10 @@ class Runner:
         call_record = self.get_current_call_record()
         return call_record.contract_id
 
-    def get_current_changes_tracker(self, contract_id: ContractId) -> NCChangesTracker:
+    def get_current_changes_tracker(self) -> NCChangesTracker:
         """Return the NCChangesTracker for the current method being executed."""
         assert self._call_info is not None
+        contract_id = self.get_current_contract_id()
         change_trackers = self._call_info.change_trackers[contract_id]
         assert len(change_trackers) > 0
         return change_trackers[-1]
@@ -950,7 +961,7 @@ class Runner:
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot revoke authorities from HTR token')
 
-        changes_tracker = self.get_current_changes_tracker(contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert changes_tracker.nc_id == call_record.contract_id
         balance = changes_tracker.get_balance(token_uid)
 
@@ -993,7 +1004,7 @@ class Runner:
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint HTR tokens')
 
-        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert changes_tracker.nc_id == call_record.contract_id
 
         balance = changes_tracker.get_balance(token_uid)
@@ -1027,7 +1038,7 @@ class Runner:
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt HTR tokens')
 
-        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert changes_tracker.nc_id == call_record.contract_id
 
         balance = changes_tracker.get_balance(token_uid)
@@ -1108,7 +1119,7 @@ class Runner:
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
         token_version = TokenVersion.DEPOSIT
 
-        changes_tracker = self.get_current_changes_tracker(parent_id)
+        changes_tracker = self.get_current_changes_tracker()
         changes_tracker.create_token(
             token_id=token_id,
             token_name=token_name,
@@ -1165,7 +1176,7 @@ class Runner:
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
         token_version = TokenVersion.FEE
 
-        changes_tracker = self.get_current_changes_tracker(parent_id)
+        changes_tracker = self.get_current_changes_tracker()
         changes_tracker.create_token(
             token_id=token_id,
             token_name=token_name,
@@ -1209,7 +1220,7 @@ class Runner:
         # exception.
         self.tx_storage.get_blueprint_class(blueprint_id)
 
-        nc_storage = self.get_current_changes_tracker(last_call_record.contract_id)
+        nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
 
     def _get_token(self, token_uid: TokenUid) -> TokenDescription:
@@ -1220,7 +1231,7 @@ class Runner:
             NCInvalidSyscall when the token isn't found.
         """
         call_record = self.get_current_call_record()
-        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert call_record.contract_id == changes_tracker.nc_id
 
         if changes_tracker.has_token(token_uid):
@@ -1275,7 +1286,7 @@ class Runner:
             AssertionError: If call_record.index_updates is None
         """
         call_record = self.get_current_call_record()
-        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        changes_tracker = self.get_current_changes_tracker()
 
         assert changes_tracker.nc_id == call_record.contract_id
         assert call_record.index_updates is not None
