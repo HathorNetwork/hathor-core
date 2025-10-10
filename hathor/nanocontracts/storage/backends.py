@@ -43,23 +43,6 @@ class NodeTrieStore(ABC):
         raise NotImplementedError
 
 
-class MemoryNodeTrieStore(NodeTrieStore):
-    def __init__(self) -> None:
-        self._db: dict[bytes, Node] = {}
-
-    def __getitem__(self, key: bytes) -> Node:
-        return self._db[key]
-
-    def __setitem__(self, key: bytes, item: Node) -> None:
-        self._db[key] = item
-
-    def __len__(self) -> int:
-        return len(self._db)
-
-    def __contains__(self, key: bytes) -> bool:
-        return key in self._db
-
-
 class RocksDBNodeTrieStore(NodeTrieStore):
     _CF_NAME = b'nc-state'
     _KEY_LENGTH = b'length'

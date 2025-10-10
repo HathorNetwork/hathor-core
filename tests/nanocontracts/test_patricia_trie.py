@@ -3,7 +3,7 @@ import tempfile
 from math import log
 from typing import Optional
 
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, RocksDBNodeTrieStore
+from hathor.nanocontracts.storage.backends import RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from tests import unittest
@@ -208,14 +208,6 @@ class PatriciaTrieTestCase(unittest.TestCase):
 
         for k, v in data.items():
             self.assertEqual(trie.get(k), v)
-
-
-class MemoryPatriciaTrieTest(PatriciaTrieTestCase):
-    __test__ = True
-
-    def create_trie(self) -> PatriciaTrie:
-        store = MemoryNodeTrieStore()
-        return PatriciaTrie(store)
 
 
 class RocksDBPatriciaTrieTest(PatriciaTrieTestCase):
