@@ -95,12 +95,12 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx2.get_metadata().voided_by is None
 
     def test_postponed_verification_fail_nonexistent(self) -> None:
@@ -136,12 +136,12 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
 
         # It fails with a balance error caused by the withdrawal,
@@ -186,12 +186,12 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
 
         assert_nc_failure_reason(
@@ -238,7 +238,7 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         # Verification of minting HTR is not postponed, so it fails in verification-time.
@@ -285,12 +285,12 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
 
         assert_nc_failure_reason(
@@ -336,12 +336,12 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
 
         assert_nc_failure_reason(
@@ -391,7 +391,7 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         with pytest.raises(Exception) as e:
@@ -402,7 +402,7 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         assert self.manager.vertex_handler.on_new_relayed_vertex(b12)
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx2.get_metadata().voided_by is None
 
         # Now, it's valid and accepted.
