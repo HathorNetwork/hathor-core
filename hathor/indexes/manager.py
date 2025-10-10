@@ -218,8 +218,8 @@ class IndexesManager(ABC):
         """
         from hathor.nanocontracts.runner.types import (
             NCIndexUpdateRecord,
-            SyscallCreateContractRecord,
-            SyscallUpdateTokenRecord,
+            CreateContractRecord,
+            UpdateTokenRecord,
             UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import ContractId
@@ -244,7 +244,7 @@ class IndexesManager(ABC):
         created_contracts: set[ContractId] = set()
         for record in index_records:
             match record:
-                case SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
+                case CreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
                     assert contract_id not in created_contracts, f'contract {contract_id.hex()} created multiple times'
                     assert contract_id != first_call.contract_id, (
                         f'contract {contract_id.hex()} cannot make a syscall to create itself'
@@ -259,7 +259,7 @@ class IndexesManager(ABC):
                     if self.blueprint_history:
                         self.blueprint_history.add_single_key(blueprint_id, tx)
 
-                case SyscallUpdateTokenRecord():
+                case UpdateTokenRecord():
                     # Minted/melted tokens are added/removed to/from the tokens index,
                     # and the respective destroyed/created HTR too.
                     if self.tokens:
@@ -295,8 +295,8 @@ class IndexesManager(ABC):
         """
         from hathor.nanocontracts.runner.types import (
             NCIndexUpdateRecord,
-            SyscallCreateContractRecord,
-            SyscallUpdateTokenRecord,
+            CreateContractRecord,
+            UpdateTokenRecord,
             UpdateAuthoritiesRecord,
         )
         from hathor.nanocontracts.types import NC_INITIALIZE_METHOD, ContractId
@@ -314,13 +314,13 @@ class IndexesManager(ABC):
             if self.nc_history and call.contract_id != first_call.contract_id:
                 self.nc_history.remove_single_key(call.contract_id, tx)
 
-            # Accumulate all syscalls.
+            # Accumulate all index update records.
             records.extend(call.index_updates)
 
         created_contracts: set[ContractId] = set()
         for record in records:
             match record:
-                case SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
+                case CreateContractRecord(blueprint_id=blueprint_id, contract_id=contract_id):
                     assert contract_id not in created_contracts, f'contract {contract_id.hex()} created multiple times'
                     assert contract_id != first_call.contract_id, (
                         f'contract {contract_id.hex()} cannot make a syscall to create itself'
@@ -338,7 +338,7 @@ class IndexesManager(ABC):
                         if self.blueprint_history:
                             self.blueprint_history.remove_single_key(blueprint_id, tx)
 
-                case SyscallUpdateTokenRecord():
+                case UpdateTokenRecord():
                     if self.tokens:
                         self.tokens.add_to_total(record.token_uid, -record.amount)
 

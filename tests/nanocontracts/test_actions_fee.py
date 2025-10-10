@@ -84,9 +84,9 @@ class MyOtherBlueprint(Blueprint):
         ctx: Context,
         nc_id: ContractId,
     ) -> None:
-        actions = [NCDepositAction(token_uid=self.fbt_uid, amount=1000)]
+        action = NCDepositAction(token_uid=self.fbt_uid, amount=1000)
         fees = [NCFee(token_uid=TokenUid(HTR_TOKEN_UID), amount=1)]
-        self.syscall.call_public_method(nc_id, 'noop', actions, fees)
+        self.syscall.get_contract(nc_id, blueprint_id=None).public(action, fees=fees).noop()
 
 
 class NCActionsFeeTestCase(BlueprintTestCase):
