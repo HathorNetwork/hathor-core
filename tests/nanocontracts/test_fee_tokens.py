@@ -201,7 +201,56 @@ class FeeTokensTestCase(BlueprintTestCase):
             reason='InputOutputMismatch: Fee amount is different than expected. (amount=1, expected=0)',
         )
 
-    def test_postponed_verification_fail_htr_balance(self) -> None:
+    def test_postponed_verification_fail_less_htr_balance(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..12]
+            b10 < dummy
+
+            tx1.nc_id = "{self.blueprint_id.hex()}"
+            tx1.nc_method = initialize()
+            tx1.nc_deposit = 1 HTR
+
+            tx2.nc_id = tx1
+            tx2.nc_method = create_fee_token()
+            tx2.fee = 1 HTR
+            tx2.out[0] = 1000 HTR
+
+            tx1 < b11 < tx2
+            tx1 <-- b11
+            tx2 <-- b12
+        ''')
+
+        b11, b12 = artifacts.get_typed_vertices(('b11', 'b12'), Block)
+        tx1, tx2 = artifacts.get_typed_vertices(('tx1', 'tx2'), Transaction)
+
+        fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
+        tx2.tokens.append(fbt_id)
+
+        removed_htr_output = tx2.outputs.pop()
+        assert removed_htr_output.token_data == 0
+        assert removed_htr_output.value == 1000
+        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        tx2.outputs.append(fbt_output)
+
+        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        tx2_nano_header = tx2.get_nano_header()
+        tx2_nano_header.nc_actions.append(fbt_withdraw)
+
+        artifacts.propagate_with(self.manager, up_to='b11')
+        assert tx1.get_metadata().first_block == b11.hash
+        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().voided_by is None
+
+        # Verification of minting HTR is not postponed, so it fails in verification-time.
+        with pytest.raises(Exception) as e:
+            artifacts.propagate_with(self.manager, up_to='tx2')
+
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == (
+            'full validation failed: HTR balance is different than expected. (amount=-1000, expected=0)'
+        )
+
+    def test_postponed_verification_fail_more_htr_balance(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy

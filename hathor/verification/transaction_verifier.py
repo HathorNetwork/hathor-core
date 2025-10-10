@@ -284,6 +284,15 @@ class TransactionVerifier:
                 case _:
                     assert_never(token_info.version)
 
+        # check whether the deposit/withdraw amount is correct
+        htr_expected_amount = withdraw - deposit
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
+        if htr_info.amount < htr_expected_amount:
+            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
+
         # in a partial validation, it's not possible to check fees and
         # htr amount since it depends on verification with all token versions
         if has_nonexistent_tokens:
@@ -294,14 +303,13 @@ class TransactionVerifier:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
-        # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount != htr_expected_amount:
+        if htr_info.amount > htr_expected_amount:
             raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
+
+        assert htr_info.amount == htr_expected_amount
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
