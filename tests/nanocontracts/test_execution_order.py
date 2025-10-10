@@ -12,8 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import HATHOR_TOKEN_UID, Blueprint, Context, public
 from hathor.nanocontracts.types import (
     ContractId,
     NCAction,

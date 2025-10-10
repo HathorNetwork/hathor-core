@@ -1,10 +1,9 @@
 from io import TextIOWrapper
 from typing import Sequence
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
-from hathor.nanocontracts import Context
+from hathor.nanocontracts import HATHOR_TOKEN_UID, Context
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig

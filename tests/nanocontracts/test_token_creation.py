@@ -1,3 +1,4 @@
+from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
@@ -148,7 +149,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             Balance(value=7, can_mint=False, can_melt=False)
         )
 
-        jkl_token_info = JKL._get_token_info_from_inputs()
+        jkl_token_info = JKL._get_token_info_from_inputs(Mock())
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 

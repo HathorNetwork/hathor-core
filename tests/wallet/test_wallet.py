@@ -207,7 +207,7 @@ class BasicWalletTest(unittest.TestCase):
         tx2.parents = self.manager.get_new_tx_parents()
         self.manager.cpu_mining_service.resolve(tx2)
         tx2.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(tx2, self.verification_params)
+        self.manager.verification_service.verify(tx2, self.get_verification_params(self.manager))
 
         self.assertNotEqual(len(tx2.inputs), 0)
         token_dict = defaultdict(int)

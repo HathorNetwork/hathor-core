@@ -88,6 +88,7 @@ class VertexHandler:
         """Called by block sync."""
         parent_block_hash = block.get_block_parent_hash()
         parent_block = self._tx_storage.get_block(parent_block_hash)
+        parent_meta = parent_block.get_metadata()
 
         enable_checkdatasig_count = self._feature_service.is_feature_active(
             vertex=parent_block,
@@ -98,7 +99,15 @@ class VertexHandler:
             settings=self._settings, block=parent_block, feature_service=self._feature_service
         )
 
-        params = VerificationParams(enable_checkdatasig_count=enable_checkdatasig_count, enable_nano=enable_nano)
+        if parent_meta.nc_block_root_id is None:
+            # This case only happens for the genesis and during sync of a voided chain.
+            assert parent_block.is_genesis or parent_meta.voided_by
+
+        params = VerificationParams(
+            enable_checkdatasig_count=enable_checkdatasig_count,
+            enable_nano=enable_nano,
+            nc_block_root_id=parent_meta.nc_block_root_id,
+        )
 
         for tx in deps:
             if not self._tx_storage.transaction_exists(tx.hash):
@@ -117,7 +126,10 @@ class VertexHandler:
         """Called by mempool sync."""
         best_block = self._tx_storage.get_best_block()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
-        params = VerificationParams.default_for_mempool(enable_nano=enable_nano)
+        params = VerificationParams.default_for_mempool(
+            enable_nano=enable_nano,
+            best_block=best_block,
+        )
         return self._old_on_new_vertex(tx, params)
 
     @cpu.profiler('on_new_relayed_vertex')
@@ -130,10 +142,16 @@ class VertexHandler:
     ) -> bool:
         """Called for unsolicited vertex received, usually due to real time relay."""
         best_block = self._tx_storage.get_best_block()
+        best_block_meta = best_block.get_metadata()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
+        if best_block_meta.nc_block_root_id is None:
+            assert best_block.is_genesis
         # XXX: checkdatasig enabled for relayed vertices
         params = VerificationParams(
-            enable_checkdatasig_count=True, reject_locked_reward=reject_locked_reward, enable_nano=enable_nano
+            enable_checkdatasig_count=True,
+            reject_locked_reward=reject_locked_reward,
+            enable_nano=enable_nano,
+            nc_block_root_id=best_block_meta.nc_block_root_id,
         )
         return self._old_on_new_vertex(vertex, params, quiet=quiet)
 

@@ -590,10 +590,12 @@ class Builder:
             settings = self._get_or_create_settings()
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
+            nc_storage_factory = self._get_or_create_nc_storage_factory()
             self._verification_service = VerificationService(
                 settings=settings,
                 verifiers=verifiers,
                 tx_storage=storage,
+                nc_storage_factory=nc_storage_factory,
             )
 
         return self._verification_service

@@ -2,7 +2,7 @@ from typing import Optional
 
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
+from hathor.nanocontracts import HATHOR_TOKEN_UID
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInsufficientFunds, NCInvalidSyscall
