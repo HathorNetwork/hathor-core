@@ -20,9 +20,10 @@ from math import ceil, floor
 from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from hathor.transaction.exceptions import InvalidOutputValue, TransactionDataError
+from hathor.transaction.exceptions import InvalidFeeAmount, InvalidOutputValue, TransactionDataError
 
 if TYPE_CHECKING:
+    from hathor import TokenUid
     from hathor.conf.settings import HathorSettings
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
@@ -119,3 +120,13 @@ def validate_token_name_and_symbol(settings: HathorSettings,
         raise TransactionDataError('Invalid token name ({})'.format(token_name))
     if clean_token_string(token_symbol) == clean_token_string(settings.HATHOR_TOKEN_SYMBOL):
         raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))
+
+
+def validate_fee_amount(settings: HathorSettings, token_uid: TokenUid | bytes, amount: int) -> None:
+    """Validate the fee amount."""
+    if amount <= 0:
+        raise InvalidFeeAmount(f'fees should be a positive integer, got {amount}')
+
+    if token_uid != settings.HATHOR_TOKEN_UID and amount % settings.FEE_DIVISOR != 0:
+        raise InvalidFeeAmount(f'fees using deposit custom tokens should be a multiple of {settings.FEE_DIVISOR}, '
+                               f'got {amount}')

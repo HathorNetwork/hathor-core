@@ -303,7 +303,7 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
         @public
         def call_another(self, ctx: Context, contract_id: ContractId) -> None:
             self.syscall.emit_event(b'test event on call_another')
-            self.syscall.call_public_method(contract_id, 'some_method', [])
+            self.syscall.get_contract(contract_id, blueprint_id=None).public().some_method()
 
     class TestEventsBlueprint2(Blueprint):
         @public

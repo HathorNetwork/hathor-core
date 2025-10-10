@@ -62,7 +62,7 @@ class TestIndexes2(BlueprintTestCase):
         tka_token_info = self.tokens_index.get_token_info(tka)
         htr_token_info = self.tokens_index.get_token_info(HATHOR_TOKEN_UID)
 
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tka_token_info.get_total() == amount
         assert htr_token_info.get_total() == (
             self._settings.GENESIS_TOKENS

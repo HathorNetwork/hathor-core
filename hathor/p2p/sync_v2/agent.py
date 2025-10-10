@@ -204,7 +204,7 @@ class NodeBlockSync(SyncAgent):
         return self._synced
 
     def is_errored(self) -> bool:
-        return self.state is PeerState.ERROR
+        return self.state == PeerState.ERROR
 
     def is_sync_enabled(self) -> bool:
         return self._is_enabled

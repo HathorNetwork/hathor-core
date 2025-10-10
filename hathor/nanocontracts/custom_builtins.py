@@ -356,6 +356,11 @@ DISABLED_BUILTINS: frozenset[str] = frozenset({
     # XXX: used to raise SystemExit exception to close the process, we could make it raise a NCFail
     'exit',
 
+    # XXX: floats are not allowed in runtime
+    # O(1)
+    # type float
+    'float',
+
     # XXX: used to dynamically get an attribute, must not be allowed
     'getattr',
 
@@ -501,8 +506,7 @@ EXEC_BUILTINS: dict[str, Any] = {
 
     # XXX: also required to declare classes
     # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name otherwise,
-    # since the blueprint code is adhoc, we could as well expose something else, like '__blueprint__'
-    # constant
+    # since the blueprint code is adhoc, we could as well expose something else, like '__blueprint__' constant
     '__name__': BLUEPRINT_EXPORT_NAME,
 
     # make it always True, which is how we'll normally run anyway
@@ -580,10 +584,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     # (function: Callable[[S], TypeIs[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
     # (function: Callable[[T], Any], iterable: Iterable[T], /) -> filter(Iterator[T])
     'filter': builtins.filter,
-
-    # O(1)
-    # type float
-    'float': builtins.float,
 
     # O(N) for N=len(value)
     # (value: object, format_spec: str = "", /) -> str

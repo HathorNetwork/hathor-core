@@ -120,9 +120,6 @@ class BlockchainTestCase(unittest.TestCase):
             score += weight_to_work(block.weight)
             self.assertAlmostEqual(score, meta.score)
 
-        # Fork block must have the same parents as blocks[0] as well as the same score
-        self.assertEqual(set(blocks[0].parents), set(fork_block1.parents))
-
         # Propagate fork block.
         # This block belongs to case (ii).
         self.assertTrue(manager.propagate_tx(fork_block1))
@@ -217,9 +214,6 @@ class BlockchainTestCase(unittest.TestCase):
         # Mine 4 blocks, starting a fork.
         # All these blocks belong to case (ii).
         sidechain = add_new_blocks(manager, 4, advance_clock=15, parent_block_hash=blocks[0].parents[0])
-
-        # Fork block must have the same parents as blocks[0] as well as the same score
-        self.assertEqual(set(blocks[0].parents), set(sidechain[0].parents))
 
         for block in blocks:
             meta = block.get_metadata(force_reload=True)

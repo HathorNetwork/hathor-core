@@ -70,12 +70,12 @@ class MyBlueprint(Blueprint):
 
     @view
     def call_public_method(self) -> None:
-        self.syscall.call_public_method(ContractId(VertexId(b'')), '', [])
+        self.syscall.get_contract(ContractId(VertexId(b'')), blueprint_id=None).public().nop()
 
     @view
     def call_view_method(self) -> None:
         assert self.other_id is not None
-        self.syscall.call_view_method(self.other_id, 'nop')
+        self.syscall.get_contract(self.other_id, blueprint_id=None).view().nop()
 
     @view
     def revoke_authorities(self) -> None:
@@ -83,15 +83,15 @@ class MyBlueprint(Blueprint):
 
     @view
     def mint_tokens(self) -> None:
-        self.syscall.mint_tokens(TokenUid(b''), 0)
+        self.syscall.mint_tokens(TokenUid(b''), amount=0)
 
     @view
     def melt_tokens(self) -> None:
-        self.syscall.melt_tokens(TokenUid(b''), 0)
+        self.syscall.melt_tokens(TokenUid(b''), amount=0)
 
     @view
     def create_contract(self) -> None:
-        self.syscall.create_contract(BlueprintId(VertexId(b'')), b'', [])
+        self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'').initialize()
 
     @view
     def emit_event(self) -> None:
@@ -99,24 +99,20 @@ class MyBlueprint(Blueprint):
 
     @view
     def create_deposit_token(self) -> None:
-        self.syscall.create_deposit_token('', '', 0)
-
-    @view
-    def create_token(self) -> None:
-        self.syscall.create_token('', '', 0)
+        self.syscall.create_deposit_token(token_name='', token_symbol='', amount=0)
 
     @view
     def create_fee_token(self) -> None:
-        self.syscall.create_fee_token('', '', 0)
+        self.syscall.create_fee_token(token_name='', token_symbol='', amount=0)
 
     @view
     def proxy_call_public_method(self) -> None:
-        self.syscall.proxy_call_public_method(BlueprintId(VertexId(b'')), '', [])
+        self.syscall.get_proxy(BlueprintId(VertexId(b''))).public().nop()
 
     @view
     def proxy_call_public_method_nc_args(self) -> None:
         nc_args = NCRawArgs(b'')
-        self.syscall.proxy_call_public_method_nc_args(BlueprintId(VertexId(b'')), '', [], nc_args)
+        self.syscall.get_proxy(BlueprintId(VertexId(b''))).get_public_method('').call_with_nc_args(nc_args)
 
     @view
     def change_blueprint(self) -> None:
@@ -125,6 +121,14 @@ class MyBlueprint(Blueprint):
     @view
     def get_contract(self) -> None:
         self.syscall.get_contract(ContractId(b''), blueprint_id=None)
+
+    @view
+    def get_proxy(self) -> None:
+        self.syscall.get_proxy(BlueprintId(VertexId(b'')))
+
+    @view
+    def setup_new_contract(self) -> None:
+        self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'')
 
 
 class TestSyscallsInView(BlueprintTestCase):
@@ -176,6 +180,5 @@ class TestSyscallsInView(BlueprintTestCase):
             if method_name in allowed_view_syscalls:
                 self.runner.call_view_method(contract_id, method_name)
             else:
-                method_name_err = method_name if method_name != 'create_token' else 'create_deposit_token'
-                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name_err}`'):
+                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name}`'):
                     self.runner.call_view_method(contract_id, method_name)

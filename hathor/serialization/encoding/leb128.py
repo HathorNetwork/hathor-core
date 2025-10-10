@@ -90,4 +90,5 @@ def decode_leb128(deserializer: Deserializer, *, signed: bool) -> int:
         if (byte & 0b1000_0000) == 0:
             if signed and (byte & 0b0100_0000) != 0:
                 return result | -(1 << shift)
-            return result
+            else:
+                return result

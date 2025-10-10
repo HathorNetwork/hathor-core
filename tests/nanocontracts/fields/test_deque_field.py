@@ -68,6 +68,7 @@ class BlueprintWithDeque(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
+        self.dq = deque()
         _test1(self.dq)
 
     @public
@@ -80,6 +81,7 @@ class BlueprintWithList(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
+        self.dq = []
         _test1(cast(deque, self.dq))
 
     @public

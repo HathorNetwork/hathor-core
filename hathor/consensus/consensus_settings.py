@@ -42,11 +42,11 @@ class _BaseConsensusSettings(ABC, BaseModel):
 
     def is_pow(self) -> bool:
         """Return whether this is a Proof-of-Work consensus."""
-        return self.type is ConsensusType.PROOF_OF_WORK
+        return self.type == ConsensusType.PROOF_OF_WORK
 
     def is_poa(self) -> bool:
         """Return whether this is a Proof-of-Authority consensus."""
-        return self.type is ConsensusType.PROOF_OF_AUTHORITY
+        return self.type == ConsensusType.PROOF_OF_AUTHORITY
 
     @abstractmethod
     def _get_valid_vertex_versions(self, include_genesis: bool, *, settings: HathorSettings) -> set[TxVersion]:

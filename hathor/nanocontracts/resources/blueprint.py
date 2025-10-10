@@ -23,7 +23,7 @@ from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts import types as nc_types
 from hathor.nanocontracts.blueprint import NC_FIELDS_ATTR
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import BlueprintDoesNotExist
+from hathor.nanocontracts.exception import BlueprintDoesNotExist, OCBBlueprintNotConfirmed
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -94,6 +94,13 @@ class BlueprintInfoResource(Resource):
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
             return error_response.json_dumpb()
+        except OCBBlueprintNotConfirmed:
+            request.setResponseCode(404)
+            error_response = ErrorResponse(
+                success=False,
+                error=f'Blueprint found but not confirmed: {params.blueprint_id}',
+            )
+            return error_response.json_dumpb()
 
         attributes: dict[str, str] = {}
         fields = getattr(blueprint_class, NC_FIELDS_ATTR)
@@ -125,7 +132,7 @@ class BlueprintInfoResource(Resource):
                 ))
 
             return_type = signature.return_annotation
-            if return_type is inspect._empty:
+            if return_type is inspect._empty:  # allow-is
                 return_type = None
 
             method_info = MethodInfo(

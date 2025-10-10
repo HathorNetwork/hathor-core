@@ -48,7 +48,7 @@ class TestAllFields(unittest.TestCase):
 
         assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().first_block == b11.hash
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
     def test_all_fields_ocb(self) -> None:
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
@@ -81,7 +81,7 @@ class TestAllFields(unittest.TestCase):
 
         assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().first_block == b12.hash
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
     def test_no_named_tuple_type(self) -> None:
         from typing import NamedTuple

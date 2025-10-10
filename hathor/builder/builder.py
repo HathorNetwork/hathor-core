@@ -83,7 +83,7 @@ class SyncSupportLevel(IntEnum):
                 vertex_handler=vertex_handler,
             )
             p2p_manager.add_sync_factory(SyncVersion.V2, sync_v2_factory)
-        if sync_v2_support is cls.ENABLED:
+        if sync_v2_support == cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
 
