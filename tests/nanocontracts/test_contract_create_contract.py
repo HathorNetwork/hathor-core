@@ -217,22 +217,22 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b34')
 
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc1.get_metadata().voided_by is None
 
-        assert nc2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc2.get_metadata().voided_by is None
 
-        assert nc3.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc3.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc3.get_metadata().voided_by is None
 
-        assert nc4.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc4.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc4.get_metadata().voided_by is None
 
-        assert nc5.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc5.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc5.get_metadata().voided_by is None
 
-        assert nc6.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc6.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc6.get_metadata().voided_by is None
 
         nc1_contract_id = ContractId(VertexId(nc1.hash))
@@ -358,31 +358,31 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert all(match_list)
 
         assert nc1.get_metadata().voided_by is None
-        assert nc1.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc1.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc1 in self.manager.tx_storage.iter_mempool_from_best_index()
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
 
         assert nc2.get_metadata().voided_by is None
-        assert nc2.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc2.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc2 in self.manager.tx_storage.iter_mempool_from_best_index()
         assert self.manager.tx_storage.transaction_exists(nc2.hash)
 
         assert nc3.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc3.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc3.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc3 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc3.hash)
 
         assert nc4.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc4.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc4.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc4 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc4.hash)
 
         assert nc5.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc5.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc5.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc5 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc5.hash)
 
         assert nc6.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc6.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc6.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc6 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc6.hash)

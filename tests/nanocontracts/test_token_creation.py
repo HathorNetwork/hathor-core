@@ -215,16 +215,16 @@ class NCNanoContractTestCase(unittest.TestCase):
         # print(failure_entry.error_traceback)
 
         assert tx1.get_metadata().voided_by is None
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert tx2.get_metadata().voided_by is None
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
-        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx3.get_metadata().nc_execution == NCExecutionState.FAILURE
 
         assert tx4.get_metadata().voided_by is None
-        assert tx4.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx4.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert b31.get_metadata().voided_by is None
         assert b32.get_metadata().voided_by is None

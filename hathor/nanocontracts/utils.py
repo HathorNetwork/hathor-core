@@ -44,17 +44,17 @@ CHILD_TOKEN_ID_PREFIX: bytes = b'child-token'
 
 def is_nc_public_method(method: Callable) -> bool:
     """Return True if the method is nc_public."""
-    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.PUBLIC
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NCMethodType.PUBLIC
 
 
 def is_nc_view_method(method: Callable) -> bool:
     """Return True if the method is nc_view."""
-    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.VIEW
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NCMethodType.VIEW
 
 
 def is_nc_fallback_method(method: Callable) -> bool:
     """Return True if the method is nc_fallback."""
-    return getattr(method, NC_METHOD_TYPE_ATTR, None) is NCMethodType.FALLBACK
+    return getattr(method, NC_METHOD_TYPE_ATTR, None) == NCMethodType.FALLBACK
 
 
 def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: ModuleType | None = None) -> str:

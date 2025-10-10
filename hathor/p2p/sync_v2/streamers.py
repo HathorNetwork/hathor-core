@@ -44,21 +44,21 @@ class StreamEnd(IntFlag):
     PER_REQUEST = 7
 
     def __str__(self):
-        if self is StreamEnd.END_HASH_REACHED:
+        if self == StreamEnd.END_HASH_REACHED:
             return 'end hash reached'
-        elif self is StreamEnd.NO_MORE_BLOCKS:
+        elif self == StreamEnd.NO_MORE_BLOCKS:
             return 'end of blocks, no more blocks to download from this peer'
-        elif self is StreamEnd.LIMIT_EXCEEDED:
+        elif self == StreamEnd.LIMIT_EXCEEDED:
             return 'streaming limit exceeded'
-        elif self is StreamEnd.STREAM_BECAME_VOIDED:
+        elif self == StreamEnd.STREAM_BECAME_VOIDED:
             return 'streamed block chain became voided'
-        elif self is StreamEnd.TX_NOT_CONFIRMED:
+        elif self == StreamEnd.TX_NOT_CONFIRMED:
             return 'streamed reached a tx that is not confirmed'
-        elif self is StreamEnd.INVALID_PARAMS:
+        elif self == StreamEnd.INVALID_PARAMS:
             return 'streamed with invalid parameters'
-        elif self is StreamEnd.INTERNAL_ERROR:
+        elif self == StreamEnd.INTERNAL_ERROR:
             return 'internal error'
-        elif self is StreamEnd.PER_REQUEST:
+        elif self == StreamEnd.PER_REQUEST:
             return 'stopped per request'
         else:
             raise ValueError(f'invalid StreamEnd value: {self.value}')

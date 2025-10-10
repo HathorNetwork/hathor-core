@@ -81,17 +81,17 @@ class TokenCreationTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx2.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b13')
         assert tx3.get_metadata().first_block == b13.hash
-        assert tx3.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx3.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx3.get_metadata().voided_by is None
 
     def test_create_dbt_and_withdraw_on_another_tx_before_block(self) -> None:
@@ -130,17 +130,17 @@ class TokenCreationTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx2.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b13')
         assert tx3.get_metadata().first_block == b13.hash
-        assert tx3.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx3.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx3.get_metadata().voided_by is None
 
     def test_create_dbt_and_withdraw_on_same_tx(self) -> None:
@@ -175,12 +175,12 @@ class TokenCreationTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx2.get_metadata().voided_by is None
 
     def test_withdraw_nonexistent_token(self) -> None:
@@ -209,5 +209,5 @@ class TokenCreationTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert tx1.get_metadata().first_block == b11.hash
-        assert tx1.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx1.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert tx1.get_metadata().voided_by is not None

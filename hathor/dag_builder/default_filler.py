@@ -71,7 +71,7 @@ class DefaultFiller:
         Note: We shouldn't use the DAG transactions because it would confirm them, violating the DAG description."""
         # What's the best way to fill the parents?
         # Should we use dummy transactions so it is unrelated to the other transactions?
-        if node.type is DAGNodeType.Genesis:
+        if node.type == DAGNodeType.Genesis:
             return
         if len(node.parents) >= target:
             return
@@ -145,16 +145,16 @@ class DefaultFiller:
     def run(self) -> None:
         """Run the filler."""
         for node in self._builder._nodes.values():
-            if node.type is DAGNodeType.Unknown:
+            if node.type == DAGNodeType.Unknown:
                 node.type = DAGNodeType.Transaction
 
         for node in self._builder._nodes.values():
-            if node.type is DAGNodeType.Genesis:
+            if node.type == DAGNodeType.Genesis:
                 continue
             if node.name == 'dummy':
                 continue
             if not node.inputs and not node.outputs:
-                if node.type is DAGNodeType.Block:
+                if node.type == DAGNodeType.Block:
                     continue
                 node.outputs.append(DAGOutput(1, 'HTR', {'_origin': 'f4'}))
             for i in range(len(node.outputs)):
@@ -185,7 +185,7 @@ class DefaultFiller:
                     parent_blk: DAGNode | None = None
                     for pi in node.parents:
                         pi_node = self._get_or_create_node(pi)
-                        if pi_node.type is DAGNodeType.Block:
+                        if pi_node.type == DAGNodeType.Block:
                             blk_count += 1
                             assert parent_blk is None
                             parent_blk = pi_node
@@ -289,9 +289,9 @@ class DefaultFiller:
                     node.outputs[index] = DAGOutput(-diff, 'HTR', {})
 
                 for node in self._builder._nodes.values():
-                    if node.type is DAGNodeType.Block:
+                    if node.type == DAGNodeType.Block:
                         continue
-                    if node.type is DAGNodeType.Genesis:
+                    if node.type == DAGNodeType.Genesis:
                         continue
                     if node.name == 'dummy':
                         continue

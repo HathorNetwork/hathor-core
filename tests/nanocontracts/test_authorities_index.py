@@ -112,7 +112,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         # After b11, TKA is executed and holds authorities
         artifacts.propagate_with(self.manager, up_to='b11')
-        assert tka.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tka.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         storage = self.manager.get_best_block_nc_storage(tka.hash)
         assert storage.get_balance(tka.hash) == Balance(value=0, can_mint=True, can_melt=True)
@@ -137,7 +137,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         # After b12, all authorities are revoked
         artifacts.propagate_with(self.manager, up_to='b12')
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         storage = self.manager.get_best_block_nc_storage(tka.hash)
         assert storage.get_balance(tka.hash) == Balance(value=0, can_mint=False, can_melt=False)
@@ -196,7 +196,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
         artifacts.propagate_with(self.manager, up_to='b11')
         assert b11.get_metadata().voided_by is None
         assert tka.get_metadata().first_block == b11.hash
-        assert tka.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tka.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         storage = self.manager.get_best_block_nc_storage(tka.hash)
         assert storage.get_balance(tka.hash) == Balance(value=0, can_mint=True, can_melt=True)
@@ -212,7 +212,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
         assert b11.get_metadata().voided_by == {b11.hash}
         assert a11.get_metadata().voided_by is None
         assert tka.get_metadata().first_block is None
-        assert tka.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert tka.get_metadata().nc_execution == NCExecutionState.PENDING
 
         with pytest.raises(NanoContractDoesNotExist):
             self.manager.get_best_block_nc_storage(tka.hash)
@@ -267,7 +267,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         # After b11, nc1b is executed and holds authorities
         artifacts.propagate_with(self.manager, up_to='b11')
-        assert nc1b.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1b.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc2b.get_metadata().nc_execution is None
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
@@ -281,7 +281,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         # After b12, nc2b is executed and also holds authorities
         artifacts.propagate_with(self.manager, up_to='b12')
-        assert nc2b.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2b.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
         nc2_storage = self.manager.get_best_block_nc_storage(nc2a.hash)
@@ -296,7 +296,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         # After b13, authorities are revoked from nc1a
         artifacts.propagate_with(self.manager, up_to='b13')
-        assert nc1c.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1c.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
         nc2_storage = self.manager.get_best_block_nc_storage(nc2a.hash)
@@ -311,7 +311,7 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         # Finally, after b14, authorities are revoked from nc2a and the token index reflects that nobody can mint/melt
         artifacts.propagate_with(self.manager, up_to='b14')
-        assert nc2c.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2c.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
         nc2_storage = self.manager.get_best_block_nc_storage(nc2a.hash)

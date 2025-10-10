@@ -166,10 +166,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         tag = _Tag(key[0])
         token_uid = InternalUid(key[1:33])
         assert len(token_uid) == 32
-        if tag is _Tag.INFO:
+        if tag == _Tag.INFO:
             assert len(key) == 32 + 1
             return _KeyAny(token_uid, tag)
-        elif tag is _Tag.TXS:
+        elif tag == _Tag.TXS:
             assert len(key) == 32 + 1 + 4 + 32
             timestamp: int
             (timestamp,) = struct.unpack('>I', key[33:37])

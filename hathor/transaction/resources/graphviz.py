@@ -109,7 +109,7 @@ class GraphvizFullResource(_BaseGraphvizResource):
         dot = graphviz.dot(format=self.format.dot)
 
         request.setHeader(b'content-type', self.format.content_type)
-        if self.format is FileFormat.DOT:
+        if self.format == FileFormat.DOT:
             return str(dot).encode('utf-8')
         return dot.pipe()
 
@@ -244,7 +244,7 @@ class GraphvizNeighboursResource(_BaseGraphvizResource):
         dot = graphviz.tx_neighborhood(tx, format=self.format.dot, max_level=max_level, graph_type=graph_type)
 
         request.setHeader(b'content-type', self.format.content_type)
-        if self.format is FileFormat.DOT:
+        if self.format == FileFormat.DOT:
             return str(dot).encode('utf-8')
         return dot.pipe()
 

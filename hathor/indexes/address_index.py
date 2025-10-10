@@ -48,7 +48,7 @@ class AddressIndex(TxGroupIndex[str]):
     def _handle_tx_event(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
-        assert key is HathorEvents.CONSENSUS_TX_UPDATE
+        assert key == HathorEvents.CONSENSUS_TX_UPDATE
         data = args.__dict__
         event_tx = data['tx']
 

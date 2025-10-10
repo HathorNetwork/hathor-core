@@ -38,7 +38,7 @@ class WalletEventsTestCase(BlueprintTestCase):
     def _has_address_history_event(self, *, mock: Mock, tx: Transaction) -> bool:
         for call in mock.mock_calls:
             event_type, event_args = call.args
-            assert event_type is HathorEvents.WALLET_ADDRESS_HISTORY
+            assert event_type == HathorEvents.WALLET_ADDRESS_HISTORY
             history = getattr(event_args, 'history')
             if history['tx_id'] == tx.hash_hex:
                 return True
@@ -129,7 +129,7 @@ class WalletEventsTestCase(BlueprintTestCase):
         self.run_to_completion()
 
         assert nc1.get_metadata().first_block == b11.hash
-        assert nc1.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc1.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert nc1.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, nc1.hash}
         assert tx0.get_metadata().spent_outputs == {0: [tx2.hash], 1: [nc1.hash]}
         assert tx0.get_metadata().get_output_spent_by(0) == tx2.hash

@@ -114,7 +114,7 @@ class VertexExporter:
         txs_parents = []
         for pi in node.parents:
             pi_node = self._get_node(pi)
-            if pi_node.type is DAGNodeType.Block or pi_node.name == 'genesis_block':
+            if pi_node.type == DAGNodeType.Block or pi_node.name == 'genesis_block':
                 block_parents.append(self.get_vertex_id(pi))
             else:
                 txs_parents.append(self.get_vertex_id(pi))
@@ -278,7 +278,7 @@ class VertexExporter:
         self.add_headers_if_needed(node, blk)
         blk.timestamp = self.get_min_timestamp(node) + self._settings.AVG_TIME_BETWEEN_BLOCKS
         blk.get_height = lambda: height  # type: ignore[method-assign]
-        blk.update_hash()  # the next call fails is blk.hash is None
+        blk.update_hash()  # the next call fails if blk.hash is None
         if 'weight' in node.attrs:
             blk.weight = float(node.attrs['weight'])
         else:
