@@ -7,7 +7,10 @@ from hathor.nanocontracts.exception import NCInvalidFee, NCInvalidFeePaymentToke
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import ContractId, NCDepositAction, NCFee, NCWithdrawalAction, TokenUid, public
 from hathor.nanocontracts.utils import derive_child_token_id
+from hathor.transaction import Transaction
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from tests.nanocontracts.test_reentrancy import HTR_TOKEN_UID
 
 
 class MyBlueprint(Blueprint):
@@ -63,16 +66,27 @@ class MyBlueprint(Blueprint):
 
 
 class MyOtherBlueprint(Blueprint):
+    fbt_uid: TokenUid
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
-        self.syscall.create_fee_token(
+        self.fbt_uid = self.syscall.create_fee_token(
             token_name='FBT',
             token_symbol='FBT',
             amount=1_000_000,
             mint_authority=True,
             melt_authority=True,
         )
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def move_tokens_to_nc(
+        self,
+        ctx: Context,
+        nc_id: ContractId,
+    ) -> None:
+        actions = [NCDepositAction(token_uid=self.fbt_uid, amount=1000)]
+        fees = [NCFee(token_uid=TokenUid(HTR_TOKEN_UID), amount=1)]
+        self.syscall.call_public_method(nc_id, 'noop', actions, fees)
 
 
 class NCActionsFeeTestCase(BlueprintTestCase):
@@ -346,3 +360,65 @@ class NCActionsFeeTestCase(BlueprintTestCase):
             htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
             fbt_balance_key: Balance(value=900_000, can_mint=True, can_melt=True),
         }
+
+    def test_token_index_updates(self) -> None:
+        """Test token creation, token movement between contracts, and verify token indexes."""
+        # Register the blueprint
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+        # Build the DAG: create two contracts, create tokens in first, then move tokens to second
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..13]
+            b10 < dummy
+
+            tx1.nc_id = "{self.my_other_blueprint_id.hex()}"
+            tx1.nc_method = initialize()
+            tx1.nc_deposit = 100 HTR
+
+            tx2.nc_id = "{self.my_blueprint_id.hex()}"
+            tx2.nc_method = initialize()
+
+            tx3.nc_id = tx1
+            tx3.nc_method = move_tokens_to_nc(`tx2`)
+
+            tx1 < b11 < tx2 < b12 < tx3 < b13
+            tx1 <-- b11
+            tx2 <-- b12
+            tx3 <-- b13
+        ''')
+
+        # Propagate transactions and blocks
+        artifacts.propagate_with(self.manager)
+
+        tx1, tx2, tx3 = artifacts.get_typed_vertices(('tx1', 'tx2', 'tx3'), Transaction)
+
+        # Get tokens index
+        tokens_index = self.manager.tx_storage.indexes.tokens
+        assert tokens_index is not None
+
+        fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
+        fbt_token_info = tokens_index.get_token_info(fbt_id)
+        assert fbt_token_info.get_total() == 1_000_000
+
+        # Verify HTR total (genesis + mined blocks - fees paid)
+        # Genesis: GENESIS_TOKENS + 13 blocks * INITIAL_TOKENS_PER_BLOCK
+        # Fees: 1% of 1000 (10 HTR) + 1 HTR (fee token creation) + 1 HTR (move_tokens_to_nc)
+        htr_token_info = tokens_index.get_token_info(HATHOR_TOKEN_UID)
+        expected_htr_total = (
+            self._settings.GENESIS_TOKENS
+            + 13 * self._settings.INITIAL_TOKENS_PER_BLOCK
+            - 1   # 1 HTR fee for fee token creation
+            - 1   # 1 HTR fee for first move_tokens_to_nc
+        )
+        assert htr_token_info.get_total() == expected_htr_total
+
+        # Verify contract balances after all operations
+        nc1_storage = self.manager.get_best_block_nc_storage(tx1.hash)
+        nc2_storage = self.manager.get_best_block_nc_storage(tx2.hash)
+
+        assert nc1_storage.get_balance(HATHOR_TOKEN_UID) == Balance(value=98, can_mint=False, can_melt=False)
+        assert nc1_storage.get_balance(fbt_id) == Balance(value=999_000, can_mint=True, can_melt=True)
+
+        # nc2 should have: 0 HTR, 1000 FBT
+        assert nc2_storage.get_balance(HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
+        assert nc2_storage.get_balance(fbt_id) == Balance(value=1000, can_mint=False, can_melt=False)
