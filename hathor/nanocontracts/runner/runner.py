@@ -108,9 +108,7 @@ def _forbid_syscall_from_view(
     """Mark a syscall method as forbidden to be called from @view methods."""
     def decorator(fn: Callable[Concatenate['Runner', P], T]) -> Callable[Concatenate['Runner', P], T]:
         def wrapper(self: Runner, /, *args: P.args, **kwargs: P.kwargs) -> T:
-            current_call_record = self.get_current_call_record()
-            if current_call_record.type is CallType.VIEW:
-                raise NCViewMethodError(f'@view method cannot call `syscall.{display_name}`')
+            self.forbid_call_on_view(display_name)
             return fn(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -323,13 +321,14 @@ class Runner:
     @_forbid_syscall_from_view('call_public_method')
     def syscall_call_another_contract_public_method(
         self,
+        *,
         contract_id: ContractId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         forbid_fallback: bool,
-        fees: Sequence[NCFee]
     ) -> Any:
         """Call another contract's public method. This method must be called by a blueprint during an execution."""
         if method_name == NC_INITIALIZE_METHOD:
@@ -361,8 +360,8 @@ class Runner:
         method_name: str,
         actions: Sequence[NCAction],
         fees: Sequence[NCFee],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
+        nc_args: NCArgs,
+        forbid_fallback: bool,
     ) -> Any:
         """Execute a proxy call to another blueprint's public method (similar to a DELEGATECALL).
         This method must be called by a blueprint during an execution.
@@ -372,25 +371,6 @@ class Runner:
         - For all purposes, it is a call to the calling contract
         - The storage context remains that of the calling contract
         """
-        nc_args = NCParsedArgs(args, kwargs)
-        return self.syscall_proxy_call_public_method_nc_args(
-            blueprint_id=blueprint_id,
-            method_name=method_name,
-            actions=actions,
-            fees=fees,
-            nc_args=nc_args
-        )
-
-    @_forbid_syscall_from_view('proxy_call_public_method_nc_args')
-    def syscall_proxy_call_public_method_nc_args(
-        self,
-        *,
-        blueprint_id: BlueprintId,
-        method_name: str,
-        actions: Sequence[NCAction],
-        fees: Sequence[NCFee],
-        nc_args: NCArgs
-    ) -> Any:
         if method_name == NC_INITIALIZE_METHOD:
             raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
 
@@ -406,7 +386,8 @@ class Runner:
             actions=actions,
             nc_args=nc_args,
             skip_reentrancy_validation=True,
-            fees=fees
+            fees=fees,
+            forbid_fallback=forbid_fallback,
         )
 
     def _unsafe_call_another_contract_public_method(
@@ -416,10 +397,10 @@ class Runner:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
         forbid_fallback: bool = False,
-        fees: Sequence[NCFee]
     ) -> Any:
         """Invoke another contract's public method without running the usual guard‑safety checks.
 
@@ -734,6 +715,7 @@ class Runner:
 
     def syscall_call_another_contract_view_method(
         self,
+        *,
         contract_id: ContractId,
         method_name: str,
         args: tuple[Any, ...],
@@ -794,14 +776,14 @@ class Runner:
         self._call_info.post_call(call_record)
         return self._validate_return_type_for_method(parser, ret)
 
-    def get_balance_before_current_call(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_balance_before_current_call(self, contract_id: ContractId, token_uid: TokenUid | None) -> Balance:
         """
         Return the contract balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
         """
         return self._get_balance(contract_id=contract_id, token_uid=token_uid, before_current_call=True)
 
-    def get_current_balance(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_current_balance(self, contract_id: ContractId, token_uid: TokenUid | None) -> Balance:
         """
         Return the current contract balance for a given token,
         which includes all actions and changes in the current call.
@@ -811,7 +793,7 @@ class Runner:
     def _get_balance(
         self,
         *,
-        contract_id: ContractId | None,
+        contract_id: ContractId,
         token_uid: TokenUid | None,
         before_current_call: bool,
     ) -> Balance:
@@ -820,11 +802,10 @@ class Runner:
             token_uid = TokenUid(HATHOR_TOKEN_UID)
 
         storage: NCContractStorage
-        if contract_id is None:
+        if self._call_info is not None and contract_id == self.get_current_contract_id():
             # In this case we're getting the balance of the currently executing contract,
             # so it's guaranteed that a changes tracker exists.
             # Depending on `before_current_call`, we get the current changes tracker or its storage.
-
             changes_tracker = self.get_current_changes_tracker()
             storage = changes_tracker.storage if before_current_call else changes_tracker
         else:
@@ -832,10 +813,7 @@ class Runner:
             # so a changes tracker may not yet exist if the contract is not in the call chain.
             # We cannot retrieve the balance before the current call because we don't know whether the latest
             # changes tracker was created during the current call or not.
-
-            if before_current_call:
-                raise NCFail('getting the balance of another contract before the current call is not supported.')
-
+            assert not before_current_call
             storage = self.get_current_changes_tracker_or_storage(contract_id)
 
         return storage.get_balance(bytes(token_uid))
@@ -918,12 +896,13 @@ class Runner:
     @_forbid_syscall_from_view('create_contract')
     def syscall_create_another_contract(
         self,
+        *,
         blueprint_id: BlueprintId,
         salt: bytes,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-        fees: Sequence[NCFee],
     ) -> tuple[ContractId, Any]:
         """Create a contract from another contract."""
         if not salt:
@@ -954,7 +933,7 @@ class Runner:
         return child_id, ret
 
     @_forbid_syscall_from_view('revoke_authorities')
-    def syscall_revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
+    def syscall_revoke_authorities(self, *, token_uid: TokenUid, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
         call_record = self.get_current_call_record()
         contract_id = call_record.contract_id
@@ -1346,6 +1325,12 @@ class Runner:
             raise NCInvalidFee(
                 f'Fee payment balance is different than expected. (amount={fee_sum}, expected={expected_fee})'
             )
+
+    def forbid_call_on_view(self, name: str) -> None:
+        """When called, this method will fail if the current method being executed is a view method."""
+        current_call_record = self.get_current_call_record()
+        if current_call_record.type == CallType.VIEW:
+            raise NCViewMethodError(f'@view method cannot call `syscall.{name}`')
 
 
 class RunnerFactory:

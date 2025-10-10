@@ -53,8 +53,8 @@ class MyBlueprint(Blueprint):
     @public
     def acquire_authority(self, ctx: Context, other_id: ContractId) -> None:
         self.token_uid = derive_child_token_id(other_id, 'TKA')
-        actions = [NCAcquireAuthorityAction(token_uid=self.token_uid, mint=True, melt=True)]
-        self.syscall.call_public_method(other_id, 'allow_acquire_authority', actions)
+        action = NCAcquireAuthorityAction(token_uid=self.token_uid, mint=True, melt=True)
+        self.syscall.get_contract(other_id, blueprint_id=None).public(action).allow_acquire_authority()
 
 
 class TestAuthoritiesIndex(BlueprintTestCase):

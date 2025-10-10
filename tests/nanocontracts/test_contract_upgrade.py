@@ -2,7 +2,7 @@ import pytest
 
 from hathor.nanocontracts import Blueprint, Context, fallback, public
 from hathor.nanocontracts.exception import BlueprintDoesNotExist, NCFail, NCInvalidSyscall, NCMethodNotFound
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCArgs
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCArgs
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -27,7 +27,7 @@ class ProxyBlueprint(Blueprint):
     def upgrade(self, ctx: Context, blueprint_id: BlueprintId, method_name: str) -> None:
         contract_id = self.syscall.get_contract_id()
         self.syscall.change_blueprint(blueprint_id)
-        self.syscall.call_public_method(self.contract, 'on_upgrade', [], [], contract_id, method_name)
+        self.syscall.get_contract(self.contract, blueprint_id=None).public().on_upgrade(contract_id, method_name)
 
     @public
     def on_upgrade(self, ctx: Context) -> None:
@@ -35,14 +35,15 @@ class ProxyBlueprint(Blueprint):
 
     @public
     def inc(self, ctx: Context) -> None:
-        actions: list[NCAction] = []
-        blueprint_id = self.syscall.get_blueprint_id(self.contract)
-        self.syscall.proxy_call_public_method(blueprint_id, 'inc', actions, [])
+        blueprint_id = self.syscall.get_contract(self.contract, blueprint_id=None).get_blueprint_id()
+        self.syscall.get_proxy(blueprint_id).public().inc()
 
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> None:
-        blueprint_id = self.syscall.get_blueprint_id(self.contract)
-        self.syscall.proxy_call_public_method_nc_args(blueprint_id, method_name, ctx.actions_list, [], nc_args)
+        blueprint_id = self.syscall.get_contract(self.contract, blueprint_id=None).get_blueprint_id()
+        self.syscall.get_proxy(blueprint_id) \
+            .get_public_method(method_name, *ctx.actions_list) \
+            .call_with_nc_args(nc_args)
 
 
 class CodeBlueprint1(Blueprint):
@@ -74,7 +75,10 @@ class CodeBlueprint2(Blueprint):
 
     @public
     def on_upgrade(self, ctx: Context, contract: ContractId, method_name: str) -> None:
-        self.syscall.call_public_method(contract, method_name, [])
+        self.syscall \
+            .get_contract(contract, blueprint_id=None) \
+            .get_public_method(method_name) \
+            .call()
 
 
 class CodeBlueprint3(Blueprint):

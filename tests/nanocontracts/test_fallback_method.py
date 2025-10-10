@@ -64,7 +64,7 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def call_another_fallback(self, ctx: Context, contract_id: ContractId) -> str:
-        return self.syscall.call_public_method(contract_id, 'fallback', [])
+        return self.syscall.get_contract(contract_id, blueprint_id=None).public().fallback()
 
     @public
     def call_own_fallback(self, ctx: Context) -> None:

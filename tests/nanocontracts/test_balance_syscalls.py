@@ -12,9 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import pytest
-
-from hathor import Blueprint, Context, ContractId, NCFail, TokenUid, public
+from hathor import Blueprint, Context, ContractId, TokenUid, public
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -27,32 +25,21 @@ class MyBlueprint(Blueprint):
 
     @public
     def test_balance_syscalls_on_self(self, ctx: Context) -> None:
-        self.syscall.get_current_balance()
-        self.syscall.get_balance_before_current_call()
+        assert self.syscall.get_current_balance() == 0
+        assert self.syscall.get_balance_before_current_call() == 0
 
-        self.syscall.can_mint(self.token_uid)
-        self.syscall.can_mint_before_current_call(self.token_uid)
+        assert not self.syscall.can_mint(self.token_uid)
+        assert not self.syscall.can_mint_before_current_call(self.token_uid)
 
-        self.syscall.can_melt(self.token_uid)
-        self.syscall.can_melt_before_current_call(self.token_uid)
-
-    @public
-    def test_current_balance_syscalls_on_another(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.get_current_balance(contract_id=other_id)
-        self.syscall.can_mint(self.token_uid, contract_id=other_id)
-        self.syscall.can_melt(self.token_uid, contract_id=other_id)
+        assert not self.syscall.can_melt(self.token_uid)
+        assert not self.syscall.can_melt_before_current_call(self.token_uid)
 
     @public
-    def test_get_balance_before_current_call_on_another(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.get_balance_before_current_call(contract_id=other_id)
-
-    @public
-    def test_can_mint_before_current_call_on_another(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.can_mint_before_current_call(self.token_uid, contract_id=other_id)
-
-    @public
-    def test_can_melt_before_current_call_on_another(self, ctx: Context, other_id: ContractId) -> None:
-        self.syscall.can_melt_before_current_call(self.token_uid, contract_id=other_id)
+    def test_balance_syscalls_on_another(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        assert contract.get_current_balance() == 0
+        assert not contract.can_mint(self.token_uid)
+        assert not contract.can_melt(self.token_uid)
 
 
 class BalanceSyscallsTestCase(BlueprintTestCase):
@@ -70,40 +57,10 @@ class BalanceSyscallsTestCase(BlueprintTestCase):
     def test_balance_syscalls_on_self(self) -> None:
         self.runner.call_public_method(self.contract_id1, 'test_balance_syscalls_on_self', self.create_context())
 
-    def test_current_balance_syscalls_on_another(self) -> None:
+    def test_balance_syscalls_on_another(self) -> None:
         self.runner.call_public_method(
             self.contract_id1,
-            'test_current_balance_syscalls_on_another',
+            'test_balance_syscalls_on_another',
             self.create_context(),
             self.contract_id2,
         )
-
-    def test_get_balance_before_current_call_on_another(self) -> None:
-        msg = 'getting the balance of another contract before the current call is not supported.'
-        with pytest.raises(NCFail, match=msg):
-            self.runner.call_public_method(
-                self.contract_id1,
-                'test_get_balance_before_current_call_on_another',
-                self.create_context(),
-                self.contract_id2,
-            )
-
-    def test_can_mint_before_current_call_on_another(self) -> None:
-        msg = 'getting the balance of another contract before the current call is not supported.'
-        with pytest.raises(NCFail, match=msg):
-            self.runner.call_public_method(
-                self.contract_id1,
-                'test_can_mint_before_current_call_on_another',
-                self.create_context(),
-                self.contract_id2,
-            )
-
-    def test_can_melt_before_current_call_on_another(self) -> None:
-        msg = 'getting the balance of another contract before the current call is not supported.'
-        with pytest.raises(NCFail, match=msg):
-            self.runner.call_public_method(
-                self.contract_id1,
-                'test_can_melt_before_current_call_on_another',
-                self.create_context(),
-                self.contract_id2,
-            )
