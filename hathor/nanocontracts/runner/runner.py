@@ -51,6 +51,7 @@ from hathor.nanocontracts.runner.types import (
     CallInfo,
     CallRecord,
     CallType,
+    IndexUpdateRecordType,
     SyscallCreateContractRecord,
     SyscallUpdateTokenRecord,
     UpdateAuthoritiesRecord,
@@ -437,7 +438,13 @@ class Runner:
         # Update the balances with the fee payment amount. Since some tokens could be created during contract
         # execution, the verification of the tokens and amounts will be done after it
         for fee in fees:
-            previous_changes_tracker.add_balance(fee.token_uid, -fee.amount)
+            self._update_tokens_amount([
+                SyscallUpdateTokenRecord(
+                    token_uid=fee.token_uid,
+                    amount=-fee.amount,
+                    type=IndexUpdateRecordType.MELT_TOKENS
+                )
+            ])
             self._register_paid_fee(fee.token_uid, fee.amount)
 
         ctx_actions = Context.__group_actions__(actions)
@@ -533,10 +540,6 @@ class Runner:
 
                 case _:  # pragma: no cover
                     assert_never(action)
-
-        # Account for fees paid during execution
-        for fee_token_uid, amount in self._paid_actions_fees.items():
-            total_diffs[fee_token_uid] += amount
 
         assert all(diff == 0 for diff in total_diffs.values()), (
             f'change tracker diffs do not match actions: {total_diffs}'
