@@ -1247,6 +1247,7 @@ class Runner:
         self,
         records: list[SyscallUpdateTokenRecord]
     ) -> None:
+    def _update_tokens_amount(self, records: list[UpdateTokenRecord]) -> None:
         """
         Update token balances and create index records for a token operation.
 
