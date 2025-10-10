@@ -217,7 +217,7 @@ class BlueprintEnvironment:
         blueprint_id: BlueprintId | Collection[BlueprintId] | None,
     ) -> ContractAccessor:
         """
-        Get a contract accessor for the given contract ID.
+        Get a contract accessor for the given contract ID. Use this for interacting with another contract.
 
         Args:
             contract_id: the ID of the contract.
@@ -229,6 +229,9 @@ class BlueprintEnvironment:
         return ContractAccessor(runner=self.__runner, contract_id=contract_id, blueprint_id=blueprint_id)
 
     def get_proxy(self, blueprint_id: BlueprintId) -> ProxyAccessor:
+        """
+        Get a proxy accessor for the given blueprint ID. Use this for interacting with another blueprint via a proxy.
+        """
         from hathor.nanocontracts.proxy_accessor import ProxyAccessor
         self.__runner.forbid_call_on_view('get_proxy')
         return ProxyAccessor(runner=self.__runner, blueprint_id=blueprint_id)
@@ -240,6 +243,7 @@ class BlueprintEnvironment:
         fees: Sequence[NCFee] | None = None,
         salt: bytes,
     ) -> InitializeMethodAccessor:
+        """Setup creation of a new contract."""
         from hathor.nanocontracts.initialize_method_accessor import InitializeMethodAccessor
         self.__runner.forbid_call_on_view('setup_new_contract')
         return InitializeMethodAccessor(

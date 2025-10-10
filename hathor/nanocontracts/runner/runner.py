@@ -1327,6 +1327,7 @@ class Runner:
             )
 
     def forbid_call_on_view(self, name: str) -> None:
+        """When called, this method will fail if the current method being executed is a view method."""
         current_call_record = self.get_current_call_record()
         if current_call_record.type == CallType.VIEW:
             raise NCViewMethodError(f'@view method cannot call `syscall.{name}`')

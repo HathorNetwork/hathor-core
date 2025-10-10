@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 @final
 class ContractAccessor(FauxImmutable):
     """
-    This class represents a "proxy contract instance", or a contract accessor, during a blueprint method execution.
+    This class represents a "contract instance", or a contract accessor, during a blueprint method execution.
     Calling custom blueprint methods on this class will forward the call to the actual wrapped blueprint via syscalls.
     """
     __slots__ = ('__runner', '__contract_id', '__blueprint_ids')
@@ -96,6 +96,7 @@ class ContractAccessor(FauxImmutable):
         return balance.can_melt
 
     def view(self) -> Any:
+        """Prepare a call to a view method."""
         return PreparedViewCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
@@ -103,6 +104,7 @@ class ContractAccessor(FauxImmutable):
         )
 
     def public(self, *actions: NCAction, fees: Sequence[NCFee] | None = None, forbid_fallback: bool = False) -> Any:
+        """Prepare a call to a public method."""
         return PreparedPublicCall(
             runner=self.__runner,
             contract_id=self.__contract_id,
@@ -113,6 +115,7 @@ class ContractAccessor(FauxImmutable):
         )
 
     def get_view_method(self, method_name: str) -> ViewMethodAccessor:
+        """Get a view method."""
         return ViewMethodAccessor(
             runner=self.__runner,
             contract_id=self.__contract_id,
@@ -127,6 +130,7 @@ class ContractAccessor(FauxImmutable):
         fees: Sequence[NCFee] | None = None,
         forbid_fallback: bool = False,
     ) -> PublicMethodAccessor:
+        """Get a public method."""
         return PublicMethodAccessor(
             runner=self.__runner,
             contract_id=self.__contract_id,
@@ -230,7 +234,7 @@ class PreparedPublicCall(FauxImmutable):
 @final
 class ViewMethodAccessor(FauxImmutable):
     """
-    This class represents a "proxy view method", or a view method accessor, during a blueprint method execution.
+    This class represents a "view method", or a view method accessor, during a blueprint method execution.
     It's a callable that will forward the call to the actual wrapped blueprint via syscall.
     It may be used multiple times to call the same method with different arguments.
     """
@@ -255,9 +259,11 @@ class ViewMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__method_name', method_name)
 
     def call(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments. This is just an alias for calling the object directly."""
         return self(*args, **kwargs)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments."""
         validate_blueprint_id(
             runner=self.__runner,
             contract_id=self.__contract_id,
@@ -275,7 +281,7 @@ class ViewMethodAccessor(FauxImmutable):
 @final
 class PublicMethodAccessor(FauxImmutable):
     """
-    This class represents a "proxy public method", or a public method accessor, during a blueprint method execution.
+    This class represents a "public method", or a public method accessor, during a blueprint method execution.
     It's a callable that will forward the call to the actual wrapped blueprint via syscall.
     It can only be used once because it consumes the provided actions after a single use.
     """
@@ -320,9 +326,11 @@ class PublicMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__is_dirty', False)
 
     def call(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments. This is just an alias for calling the object directly."""
         return self(*args, **kwargs)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments."""
         from hathor.nanocontracts import NCFail
         if self.__is_dirty:
             raise NCFail(

@@ -23,6 +23,12 @@ from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immuta
 
 @final
 class InitializeMethodAccessor(FauxImmutable):
+    """
+    This class represents an "initialize method", or an initialize method accessor, during a blueprint method
+    execution.
+    Calling `initialize()` on it will forward the call to the actual wrapped blueprint via syscall.
+    It can only be used once because it consumes the provided actions after a single use.
+    """
     __slots__ = (
         '__runner',
         '__blueprint_id',
@@ -56,6 +62,7 @@ class InitializeMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__is_dirty', False)
 
     def initialize(self, *args: Any, **kwargs: Any) -> tuple[ContractId, object]:
+        """Initialize a new contract."""
         from hathor.nanocontracts import NCFail
         if self.__is_dirty:
             raise NCFail(

@@ -23,6 +23,10 @@ from hathor.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immuta
 
 @final
 class ProxyAccessor(FauxImmutable):
+    """
+    This class represents a "proxy instance", or a proxy accessor, during a blueprint method execution.
+    Calling custom blueprint methods on this class will forward the call to the actual wrapped blueprint via syscalls.
+    """
     __slots__ = ('__runner', '__blueprint_id')
 
     def __init__(
@@ -42,6 +46,7 @@ class ProxyAccessor(FauxImmutable):
         return self.__blueprint_id
 
     def public(self, *actions: NCAction, fees: Sequence[NCFee] | None = None, forbid_fallback: bool = False) -> Any:
+        """Prepare a proxy call to a public method."""
         return PreparedProxyPublicCall(
             runner=self.__runner,
             blueprint_id=self.__blueprint_id,
@@ -57,6 +62,7 @@ class ProxyAccessor(FauxImmutable):
         fees: Sequence[NCFee] | None = None,
         forbid_fallback: bool = False,
     ) -> ProxyPublicMethodAccessor:
+        """Get a proxy public method."""
         return ProxyPublicMethodAccessor(
             runner=self.__runner,
             blueprint_id=self.__blueprint_id,
@@ -124,6 +130,12 @@ class PreparedProxyPublicCall(FauxImmutable):
 
 @final
 class ProxyPublicMethodAccessor(FauxImmutable):
+    """
+    This class represents a "proxy public method", or a proxy public method accessor, during a blueprint method
+    execution.
+    It's a callable that will forward the call to the actual wrapped blueprint via syscall.
+    It can only be used once because it consumes the provided actions after a single use.
+    """
     __slots__ = (
         '__runner',
         '__blueprint_id',
@@ -161,13 +173,16 @@ class ProxyPublicMethodAccessor(FauxImmutable):
         __set_faux_immutable__(self, '__is_dirty', False)
 
     def call(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments. This is just an alias for calling the object directly."""
         return self(*args, **kwargs)
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments."""
         nc_args = NCParsedArgs(args, kwargs)
         return self.call_with_nc_args(nc_args)
 
     def call_with_nc_args(self, nc_args: NCArgs) -> object:
+        """Call the method with the provided NCArgs."""
         from hathor.nanocontracts import NCFail
         if self.__is_dirty:
             raise NCFail(
