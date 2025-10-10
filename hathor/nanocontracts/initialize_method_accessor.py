@@ -67,7 +67,7 @@ class InitializeMethodAccessor(FauxImmutable):
         if self.__is_dirty:
             raise NCFail(
                 'accessor for initialize method was already used, '
-                'you must use `create` on the blueprint to call it again'
+                'you must use `setup_new_contract` to call it again'
             )
 
         __set_faux_immutable__(self, '__is_dirty', True)

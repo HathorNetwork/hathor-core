@@ -37,9 +37,6 @@ class MyBlueprint(Blueprint):
     def initialize(self, ctx: Context) -> None:
         self.message = 'initialize called'
 
-    def internal_method(self) -> None:
-        pass
-
     @view
     def simple_view_method(self, name: str) -> str:
         return f'hello "{name}" from simple view method'
@@ -57,16 +54,27 @@ class MyBlueprint(Blueprint):
     @view
     def test_simple_view_method(self, other_id: ContractId, name: str) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
-        return contract \
-            .view() \
-            .simple_view_method(name)
+
+        ret1 = contract.view().simple_view_method(name)
+        ret2 = contract.view().simple_view_method.call(name)
+        ret3 = contract.get_view_method('simple_view_method').call(name)
+        ret4 = contract.get_view_method('simple_view_method')(name)
+
+        assert len({ret1, ret2, ret3, ret4}) == 1
+        return ret1
 
     @public
     def test_simple_public_method(self, ctx: Context, other_id: ContractId, name: str) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
-        return contract \
-            .public(NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)) \
-            .simple_public_method(name)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+
+        ret1 = contract.public(action).simple_public_method(name)
+        ret2 = contract.public(action).simple_public_method.call(name)
+        ret3 = contract.get_public_method('simple_public_method', action).call(name)
+        ret4 = contract.get_public_method('simple_public_method', action)(name)
+
+        assert len({ret1, ret2, ret3, ret4}) == 1
+        return ret1
 
     @public
     def test_simple_public_method_no_actions(self, ctx: Context, other_id: ContractId, name: str) -> str:
