@@ -8,9 +8,6 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
-from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction import Transaction, Vertex
@@ -126,13 +123,7 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        block_storage = NCBlockStorage(block_trie)
-        return TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
-        )
+        return TestRunner(tx_storage=self.manager.tx_storage, settings=self._settings, reactor=self.reactor)
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""

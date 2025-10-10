@@ -1,5 +1,6 @@
 from typing import TypeVar
 
+from hathor.nanocontracts import NCRocksDBStorageFactory
 from hathor.nanocontracts.nc_types import NCType, NullNCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage import NCChangesTracker
 from hathor.nanocontracts.types import Amount, ContractId, Timestamp, VertexId
@@ -13,10 +14,11 @@ INT_NC_TYPE = make_nc_type(int)
 BOOL_NC_TYPE = make_nc_type(bool)
 
 
-class NCMemoryStorageTestCase(unittest.TestCase):
+class NCRocksDBStorageTestCase(unittest.TestCase):
     def setUp(self) -> None:
-        from hathor.nanocontracts.storage import NCMemoryStorageFactory
-        factory = NCMemoryStorageFactory()
+        super().setUp()
+        rocksdb_storage = self.create_rocksdb_storage()
+        factory = NCRocksDBStorageFactory(rocksdb_storage)
         block_storage = factory.get_empty_block_storage()
         self.storage = block_storage.get_empty_contract_storage(ContractId(VertexId(b'')))
         super().setUp()
