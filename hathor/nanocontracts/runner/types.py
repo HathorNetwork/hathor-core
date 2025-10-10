@@ -46,7 +46,7 @@ class IndexUpdateRecordType(StrEnum):
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
-class SyscallCreateContractRecord:
+class CreateContractRecord:
     blueprint_id: BlueprintId
     contract_id: ContractId
 
@@ -67,7 +67,7 @@ class SyscallCreateContractRecord:
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
-class SyscallUpdateTokenRecord:
+class UpdateTokenRecord:
     """Record for token balance updates in syscalls.
 
     This record represents a single token operation (mint, melt, or create).
@@ -147,28 +147,24 @@ class UpdateAuthoritiesRecord:
         )
 
 
-NCIndexUpdateRecord: TypeAlias = (
-    SyscallCreateContractRecord |
-    SyscallUpdateTokenRecord |
-    UpdateAuthoritiesRecord
-)
+NCIndexUpdateRecord: TypeAlias = CreateContractRecord | UpdateTokenRecord | UpdateAuthoritiesRecord
 
 
 def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdateRecord:
     syscall_type = IndexUpdateRecordType(json_dict['type'])
     match syscall_type:
         case IndexUpdateRecordType.CREATE_CONTRACT:
-            return SyscallCreateContractRecord.from_json(json_dict)
+            return CreateContractRecord.from_json(json_dict)
         case (
             IndexUpdateRecordType.MINT_TOKENS
             | IndexUpdateRecordType.MELT_TOKENS
             | IndexUpdateRecordType.CREATE_TOKEN
         ):
-            return SyscallUpdateTokenRecord.from_json(json_dict)
+            return UpdateTokenRecord.from_json(json_dict)
         case IndexUpdateRecordType.UPDATE_AUTHORITIES:
             return UpdateAuthoritiesRecord.from_json(json_dict)
         case _:
-            raise assert_never(f'invalid syscall record type: "{syscall_type}"')
+            assert_never(syscall_type)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
