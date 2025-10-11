@@ -48,15 +48,12 @@ from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
 from hathor.nanocontracts.rng import NanoRNG
-from hathor.nanocontracts.runner.types import (
-    CallInfo,
-    CallRecord,
-    CallType,
-    IndexUpdateRecordType,
+from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
+from hathor.nanocontracts.runner.index_records import (
     CreateContractRecord,
-    UpdateTokenRecord,
+    IndexRecordType,
     UpdateAuthoritiesRecord,
-    UpdateAuthoritiesRecordType,
+    UpdateTokenBalanceRecord,
 )
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
@@ -1243,10 +1240,98 @@ class Runner:
             token_id=token_creation_tx.hash
         )
 
-    def _update_tokens_amount(
+    def _create_token(
         self,
-        records: list[SyscallUpdateTokenRecord]
+        *,
+        token_version: TokenVersion,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenDescription,
+        token_symbol: str,
+        token_name: str,
     ) -> None:
+        """Create a new token."""
+        fee_amount = calculate_mint_fee(
+            settings=self._settings,
+            token_version=token_version,
+            amount=amount,
+            fee_payment_token=fee_payment_token,
+        )
+        assert amount > 0 and fee_amount < 0
+
+        record = UpdateTokenRecord(
+            type=IndexUpdateRecordType.CREATE_TOKEN,
+            token_uid=token_uid,
+            amount=amount,
+            fee_token_uid=TokenUid(fee_payment_token.token_id),
+            token_version=token_version,
+            token_symbol=token_symbol,
+            token_name=token_name,
+            fee_amount=fee_amount,
+        )
+        self._update_tokens_amount(record)
+
+    def _mint_tokens(
+        self,
+        *,
+        token_version: TokenVersion,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenDescription,
+    ) -> None:
+        """Mint tokens."""
+        fee_amount = calculate_mint_fee(
+            settings=self._settings,
+            token_version=token_version,
+            amount=amount,
+            fee_payment_token=fee_payment_token,
+        )
+        assert amount > 0 and fee_amount < 0
+
+        record = UpdateTokenRecord(
+            type=IndexUpdateRecordType.MINT_TOKENS,
+            token_uid=token_uid,
+            amount=amount,
+            fee_token_uid=TokenUid(fee_payment_token.token_id),
+            fee_amount=fee_amount,
+        )
+        self._update_tokens_amount(record)
+
+    def _melt_tokens(
+        self,
+        *,
+        token_version: TokenVersion,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenDescription,
+    ) -> None:
+        """Melt tokens."""
+        fee_amount = calculate_melt_fee(
+            settings=self._settings,
+            token_version=token_version,
+            amount=amount,
+            fee_payment_token=fee_payment_token,
+        )
+        assert amount > 0
+        match token_version:
+            case TokenVersion.NATIVE:
+                raise AssertionError
+            case TokenVersion.DEPOSIT:
+                assert fee_amount > 0
+            case TokenVersion.FEE:
+                assert fee_amount < 0
+            case _:  # pragma: no cover
+                assert_never(token_version)
+
+        record = UpdateTokenRecord(
+            type=IndexUpdateRecordType.MELT_TOKENS,
+            token_uid=token_uid,
+            amount=-amount,
+            fee_token_uid=TokenUid(fee_payment_token.token_id),
+            fee_amount=fee_amount,
+        )
+        self._update_tokens_amount(record)
+
     def _update_tokens_amount(self, records: list[UpdateTokenRecord]) -> None:
         """
         Update token balances and create index records for a token operation.
