@@ -23,7 +23,7 @@ from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
 
 if TYPE_CHECKING:
-    from hathor.nanocontracts.runner.types import UpdateAuthoritiesRecord
+    from hathor.nanocontracts.runner.index_records import UpdateAuthoritiesRecord
 
 SCOPE = Scope(
     include_blocks=False,
@@ -157,7 +157,7 @@ class TokensIndex(BaseIndex):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: int = 0,
+        total: int,
     ) -> None:
         """Create a token info for a new token created in a contract."""
         raise NotImplementedError

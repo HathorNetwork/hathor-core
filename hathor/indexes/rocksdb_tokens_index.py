@@ -28,7 +28,7 @@ from hathor.indexes.rocksdb_utils import (
     to_internal_token_uid,
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
-from hathor.nanocontracts.runner.types import UpdateAuthoritiesRecord, UpdateAuthoritiesRecordType
+from hathor.nanocontracts.runner.index_records import IndexRecordType, UpdateAuthoritiesRecord
 from hathor.nanocontracts.types import (
     NCAcquireAuthorityAction,
     NCDepositAction,
@@ -270,7 +270,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: int = 0,
+        total: int,
     ) -> None:
         self.create_token_info(
             token_uid=token_uid,
@@ -515,13 +515,13 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         dict_info = self._get_value_info(record.token_uid)
 
         increment: int
-        match record.sub_type:
-            case UpdateAuthoritiesRecordType.GRANT:
+        match record.type:
+            case IndexRecordType.GRANT_AUTHORITIES:
                 increment = 1
-            case UpdateAuthoritiesRecordType.REVOKE:
+            case IndexRecordType.REVOKE_AUTHORITIES:
                 increment = -1
             case _:
-                assert_never(record.sub_type)
+                assert_never(record.type)
 
         if undo:
             increment *= -1
