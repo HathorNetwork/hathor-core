@@ -33,6 +33,7 @@ class Scenario(Enum):
     CUSTOM_SCRIPT = 'CUSTOM_SCRIPT'
     NC_EVENTS = 'NC_EVENTS'
     NC_EVENTS_REORG = 'NC_EVENTS_REORG'
+    TRANSACTION_VOIDING_CHAIN = 'TRANSACTION_VOIDING_CHAIN'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
@@ -46,6 +47,7 @@ class Scenario(Enum):
             Scenario.CUSTOM_SCRIPT: simulate_custom_script,
             Scenario.NC_EVENTS: simulate_nc_events,
             Scenario.NC_EVENTS_REORG: simulate_nc_events_reorg,
+            Scenario.TRANSACTION_VOIDING_CHAIN: simulate_transaction_voiding_chain,
         }
 
         simulate_fn = simulate_fns[self]
@@ -385,6 +387,84 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
     simulator.run(1)
 
     return artifacts
+
+
+def simulate_transaction_voiding_chain(
+    simulator: 'Simulator',
+    manager: 'HathorManager',
+) -> Optional['DAGArtifacts']:
+    from hathor.conf.get_settings import get_global_settings
+    from hathor.simulator.utils import add_new_blocks, gen_new_tx
+    from hathor.transaction import TxInput, TxOutput
+
+    settings = get_global_settings()
+    assert manager.wallet is not None
+    address = manager.wallet.get_unused_address(mark_as_used=False)
+
+    # Add enough blocks to spend the rewards
+    add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    simulator.run(60)
+
+    # Step 1: Create regular transactions from an address
+    tx1 = gen_new_tx(manager, address, 1000)
+    tx1.weight = manager.daa.minimum_tx_weight(tx1)
+    tx1.update_hash()
+    assert manager.propagate_tx(tx1)
+    simulator.run(60)
+
+    tx2 = gen_new_tx(manager, address, 2000)
+    tx2.weight = manager.daa.minimum_tx_weight(tx2)
+    tx2.update_hash()
+    assert manager.propagate_tx(tx2)
+    simulator.run(60)
+
+    # Step 2: Confirm those transactions using a block
+    add_new_blocks(manager, 1)
+    simulator.run(60)
+
+    # Step 3: Spend the outputs from those transactions in a new tx
+    # Create a transaction that spends outputs from tx1 and tx2
+    spending_tx = gen_new_tx(manager, address, 500)
+    # Replace the inputs to use outputs from tx1 and tx2
+    spending_tx.inputs = [
+        TxInput(tx_id=tx1.hash, index=0, data=b''),
+        TxInput(tx_id=tx2.hash, index=0, data=b'')
+    ]
+    # Update outputs to spend the combined value (minus fees)
+    spending_tx.outputs = [TxOutput(value=2900, script=tx1.outputs[0].script)]
+    # Sign the inputs
+    assert manager.wallet is not None
+    manager.wallet.sign_transaction(spending_tx, manager.tx_storage)
+    spending_tx.weight = manager.daa.minimum_tx_weight(spending_tx)
+    spending_tx.update_hash()
+    assert manager.propagate_tx(spending_tx)
+    simulator.run(60)
+
+    # Step 4: Confirm this new transaction with a block
+    add_new_blocks(manager, 1)
+    simulator.run(60)
+
+    # Step 5: Void this last transaction
+    # Create a conflicting transaction that spends the same inputs with higher weight
+    voiding_tx = spending_tx.clone(include_metadata=False)
+    voiding_tx.timestamp += 1
+    voiding_tx.outputs = [TxOutput(value=2800, script=tx1.outputs[0].script)]  # Different output value
+    voiding_tx.weight = spending_tx.weight + 0.1  # Higher weight to win the conflict
+    manager.wallet.sign_transaction(voiding_tx, manager.tx_storage)
+    voiding_tx.update_hash()
+    assert manager.propagate_tx(voiding_tx)
+    simulator.run(60)
+
+    # Add a block confirming the voiding transaction
+    block = add_new_blocks(manager, 1)[0]
+    simulator.run(60)
+
+    # At this point:
+    # - spending_tx should be voided
+    # - voiding_tx should be valid
+    # - The UTXOs from tx1 and tx2 that were spent by spending_tx are now spent by voiding_tx
+    
+    return None
 
 
 def _create_dag_builder(manager: 'HathorManager') -> 'DAGBuilder':
