@@ -732,6 +732,7 @@ class HathorManager:
         if __debug__ and len(parents) == 3:
             assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
         score = parent_block_metadata.score + weight_to_work(weight)
+        self.rng.shuffle(parents_any)  # shuffle parents_any to get rid of biases if clients don't shuffle themselves
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
             reward=self.daa.get_tokens_issued_per_block(height),
