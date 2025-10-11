@@ -500,6 +500,9 @@ class HathorSettings(NamedTuple):
     # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
     NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
 
+    # Whether to measure execution (cpu/fuel and max memory) of NC calls and OCB creation
+    NC_METERED_EXECUTION: bool = True
+
     # TODO: align this with a realistic value later
     # fuel units are arbitrary but it's roughly the number of opcodes, memory_limit is in bytes
     NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE: int = 100_000  # 100K opcodes

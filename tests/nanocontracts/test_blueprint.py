@@ -1,3 +1,5 @@
+import pytest
+
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
@@ -98,6 +100,7 @@ class MyBlueprint(Blueprint):
         return 1
 
 
+@pytest.mark.does_metered_call
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
