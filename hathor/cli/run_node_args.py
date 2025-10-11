@@ -92,3 +92,4 @@ class RunNodeArgs(BaseModel, extra=Extra.allow):
     localnet: bool
     nc_indexes: bool
     nc_exec_logs: NCLogConfig
+    nc_exec_fail_trace: bool
