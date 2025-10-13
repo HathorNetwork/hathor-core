@@ -37,7 +37,7 @@ NETWORKS: dict[str, dict[str, str]] = {
     },
     'testnet': {
         'config_file': 'hathor/conf/testnet.yml',
-        'node_url': 'https://node1.golf.testnet.hathor.network/v1a',
+        'node_url': 'https://node1.india.testnet.hathor.network/v1a',
     },
     # Add more networks as needed
 }
