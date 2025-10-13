@@ -670,6 +670,13 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertFalse(data['success'])
 
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'0000',
+            b'count': b'3'
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
         # missing timestamp
         response = yield resource.get('thin_wallet/token_history', {
             b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
