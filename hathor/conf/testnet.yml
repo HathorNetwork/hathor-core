@@ -32,15 +32,14 @@ FEATURE_ACTIVATION:
       version: 0.67.0
       signal_support_by_default: true
 
-    # TODO
-    # NANO_CONTRACTS:
-    #   bit: 0
-    #   start_height: -
-    #   timeout_height: -
-    #   minimum_activation_height: 0
-    #   lock_in_on_timeout: false
-    #   version: 0.67.0
-    #   signal_support_by_default: true
+    NANO_CONTRACTS:
+      bit: 0
+      start_height: 14_400
+      timeout_height: 23_040  # 36 evaluation periods (72 hours)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.67.0
+      signal_support_by_default: true
 
 ENABLE_NANO_CONTRACTS: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
