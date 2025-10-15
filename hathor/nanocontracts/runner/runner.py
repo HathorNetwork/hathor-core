@@ -47,15 +47,13 @@ from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
 from hathor.nanocontracts.rng import NanoRNG
-from hathor.nanocontracts.runner.types import (
-    CallInfo,
-    CallRecord,
-    CallType,
-    IndexUpdateRecordType,
-    SyscallCreateContractRecord,
-    SyscallUpdateTokenRecord,
+from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
+from hathor.nanocontracts.runner.index_records import (
+    CreateContractRecord,
+    CreateTokenRecord,
+    IndexRecordType,
     UpdateAuthoritiesRecord,
-    UpdateAuthoritiesRecordType,
+    UpdateTokenBalanceRecord,
 )
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
@@ -438,12 +436,9 @@ class Runner:
         # Update the balances with the fee payment amount. Since some tokens could be created during contract
         # execution, the verification of the tokens and amounts will be done after it
         for fee in fees:
+            assert fee.amount > 0
             self._update_tokens_amount([
-                SyscallUpdateTokenRecord(
-                    token_uid=fee.token_uid,
-                    amount=-fee.amount,
-                    type=IndexUpdateRecordType.MELT_TOKENS
-                )
+                UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount)
             ])
             self._register_paid_fee(fee.token_uid, fee.amount)
 
@@ -508,10 +503,10 @@ class Runner:
                 continue
             for record in call.index_updates:
                 match record:
-                    case SyscallCreateContractRecord() | UpdateAuthoritiesRecord():
+                    case CreateContractRecord() | UpdateAuthoritiesRecord():
                         # Nothing to do here.
                         pass
-                    case SyscallUpdateTokenRecord():
+                    case CreateTokenRecord() | UpdateTokenBalanceRecord():
                         calculated_tokens_totals[record.token_uid] += record.amount
                     case _:  # pragma: no cover
                         assert_never(record)
@@ -702,7 +697,7 @@ class Runner:
                 # That's why they account for index update records.
                 record = UpdateAuthoritiesRecord(
                     token_uid=action.token_uid,
-                    sub_type=UpdateAuthoritiesRecordType.GRANT,
+                    type=IndexRecordType.GRANT_AUTHORITIES,
                     mint=action.mint,
                     melt=action.melt,
                 )
@@ -925,7 +920,7 @@ class Runner:
         )
 
         assert last_call_record.index_updates is not None
-        syscall_record = SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=child_id)
+        syscall_record = CreateContractRecord(blueprint_id=blueprint_id, contract_id=child_id)
         last_call_record.index_updates.append(syscall_record)
         return child_id, ret
 
@@ -956,7 +951,7 @@ class Runner:
         assert call_record.index_updates is not None
         syscall_record = UpdateAuthoritiesRecord(
             token_uid=token_uid,
-            sub_type=UpdateAuthoritiesRecordType.REVOKE,
+            type=IndexRecordType.REVOKE_AUTHORITIES,
             mint=revoke_mint,
             melt=revoke_melt,
         )
@@ -1243,10 +1238,7 @@ class Runner:
             token_id=token_creation_tx.hash
         )
 
-    def _update_tokens_amount(
-        self,
-        records: list[SyscallUpdateTokenRecord]
-    ) -> None:
+    def _update_tokens_amount(self, records: list[UpdateTokenBalanceRecord | CreateTokenRecord]) -> None:
         """
         Update token balances and create index records for a token operation.
 

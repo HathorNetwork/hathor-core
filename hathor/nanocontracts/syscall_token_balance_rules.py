@@ -17,19 +17,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum, auto, unique
-from typing import TYPE_CHECKING
 
-from typing_extensions import Literal, assert_never
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.exception import NCInvalidFeePaymentToken
-from hathor.nanocontracts.runner.types import IndexUpdateRecordType
+from hathor.nanocontracts.runner.index_records import CreateTokenRecord, UpdateTokenBalanceRecord
 from hathor.nanocontracts.types import TokenUid
 from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
-
-if TYPE_CHECKING:
-    from hathor.nanocontracts.runner.types import SyscallUpdateTokenRecord
 
 
 @unique
@@ -38,23 +34,6 @@ class TokenOperationType(StrEnum):
     CREATE = auto()
     MINT = auto()
     MELT = auto()
-
-
-def to_index_update_type(op_type: TokenOperationType) -> (
-    Literal[IndexUpdateRecordType.MINT_TOKENS]
-    | Literal[IndexUpdateRecordType.MELT_TOKENS]
-    | Literal[IndexUpdateRecordType.CREATE_TOKEN]
-):
-    """Convert TokenOperationType to IndexUpdateRecordType for compatibility."""
-    match op_type:
-        case TokenOperationType.CREATE:
-            return IndexUpdateRecordType.CREATE_TOKEN
-        case TokenOperationType.MINT:
-            return IndexUpdateRecordType.MINT_TOKENS
-        case TokenOperationType.MELT:
-            return IndexUpdateRecordType.MELT_TOKENS
-        case _:
-            assert_never(op_type)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -73,39 +52,43 @@ class TokenSyscallBalance:
     token_symbol: str | None = None
     token_name: str | None = None
 
-    def to_syscall_records(self) -> list['SyscallUpdateTokenRecord']:
+    def to_syscall_records(self) -> list[UpdateTokenBalanceRecord | CreateTokenRecord]:
         """
-        Convert TokenSyscallBalance to a list of SyscallUpdateTokenRecord.
+        Convert TokenSyscallBalance to a list of UpdateTokenBalanceRecord or CreateTokenRecord.
 
         Each operation generates two records:
         1. Main token operation (mint/melt/create)
         2. Fee payment token operation
 
         Returns:
-            A list with two SyscallUpdateTokenRecord instances
+            A list with two index record instances.
         """
-        from hathor.nanocontracts.runner.types import SyscallUpdateTokenRecord
-
-        operation_type = to_index_update_type(self.type)
+        records: list[UpdateTokenBalanceRecord | CreateTokenRecord] = []
 
         # First record: main token operation
-        main_token_record = SyscallUpdateTokenRecord(
-            type=operation_type,
-            token_uid=self.token.token_uid,
-            amount=self.token.amount,
-            token_version=self.token_version,
-            token_symbol=self.token_symbol,
-            token_name=self.token_name,
-        )
+        if self.token_version is not None:
+            assert self.token_symbol is not None
+            assert self.token_name is not None
+            assert self.token_version != TokenVersion.NATIVE
+            records.append(CreateTokenRecord(
+                token_uid=self.token.token_uid,
+                amount=self.token.amount,
+                token_version=self.token_version,
+                token_symbol=self.token_symbol,
+                token_name=self.token_name,
+            ))
+        else:
+            assert self.token_symbol is None
+            assert self.token_name is None
+            records.append(UpdateTokenBalanceRecord(token_uid=self.token.token_uid, amount=self.token.amount))
 
         # Second record: fee payment token
-        fee_payment_record = SyscallUpdateTokenRecord(
-            type=operation_type,
+        records.append(UpdateTokenBalanceRecord(
             token_uid=self.fee_payment.token_uid,
             amount=self.fee_payment.amount,
-        )
+        ))
 
-        return [main_token_record, fee_payment_record]
+        return records
 
 
 class TokenSyscallBalanceRules(ABC):
@@ -182,11 +165,11 @@ class TokenSyscallBalanceRules(ABC):
     def get_syscall_update_token_records(
         self,
         syscall_balance: TokenSyscallBalance
-    ) -> list['SyscallUpdateTokenRecord']:
+    ) -> list[UpdateTokenBalanceRecord | CreateTokenRecord]:
         """
         Create syscall update records for the given token operation.
 
-        This method transforms a TokenSyscallBalance into a list of SyscallUpdateTokenRecord
+        This method transforms a TokenSyscallBalance into a list of index records
         that will be appended to the call record's index_updates for tracking token operations.
 
         Args:
@@ -270,7 +253,10 @@ class _DepositTokenRules(TokenSyscallBalanceRules):
             fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=htr_amount)
         )
 
-    def get_syscall_update_token_records(self, operation: TokenSyscallBalance) -> list['SyscallUpdateTokenRecord']:
+    def get_syscall_update_token_records(
+        self,
+        operation: TokenSyscallBalance,
+    ) -> list[UpdateTokenBalanceRecord | CreateTokenRecord]:
         match operation.type:
             case TokenOperationType.MINT | TokenOperationType.CREATE:
                 assert operation.token.amount > 0 and operation.fee_payment.amount < 0
@@ -343,7 +329,10 @@ class _FeeTokenRules(TokenSyscallBalanceRules):
             fee_payment=TokenSyscallBalanceEntry(token_uid=TokenUid(fee_payment_token.token_id), amount=fee_amount)
         )
 
-    def get_syscall_update_token_records(self, operation: TokenSyscallBalance) -> list['SyscallUpdateTokenRecord']:
+    def get_syscall_update_token_records(
+        self,
+        operation: TokenSyscallBalance,
+    ) -> list[UpdateTokenBalanceRecord | CreateTokenRecord]:
         assert operation.fee_payment.amount < 0
 
         match operation.type:
