@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from typing import Any
 
+import pytest
 from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.nanocontracts.resources.blueprint import BlueprintInfoResource
@@ -146,6 +147,7 @@ class BuiltinBlueprintInfoTest(BaseBlueprintInfoTest):
         self.create_builtin_blueprint(self.manager, self.blueprint_id, my_blueprint.MyBlueprint)
 
 
+@pytest.mark.does_metered_call
 class OCBBlueprintInfoTest(BaseBlueprintInfoTest):
     __test__ = True
 

@@ -1,5 +1,6 @@
 from typing import Any
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.defer import inlineCallbacks
 
@@ -137,6 +138,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         add_new_block(self.manager)
         return nc
 
+    @pytest.mark.does_metered_call
     @inlineCallbacks
     def test_success(self):
         parents = [tx.hash for tx in self.genesis_txs]

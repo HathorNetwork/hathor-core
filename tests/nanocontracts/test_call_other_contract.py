@@ -134,6 +134,7 @@ class MyBlueprint(Blueprint):
         return self.syscall.get_contract(self.syscall.get_contract_id(), blueprint_id=None).view().get_counter()
 
 
+@pytest.mark.does_metered_call
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -246,6 +247,8 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
         self.runner.call_public_method(self.nc2_id, 'set_contract', ctx, self.nc1_id)
 
+        # increase the fuel so the recursion is triggered before the fuel is exhausted
+        self.runner._initial_fuel = 2**30
         with self.assertRaises(NCRecursionError):
             self.runner.call_public_method(self.nc1_id, 'dec', ctx, fail_on_zero=True)
         trace = self.runner.get_last_call_info()
@@ -257,6 +260,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.runner.create_contract(self.nc1_id, self.blueprint_id, ctx, 0)
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
         self.runner.call_public_method(self.nc1_id, 'set_contract', ctx, self.nc2_id)
+
+        # increase the fuel so the calls exceeded will be reached before the fuel is exhausted
+        self.runner._initial_fuel = 2**30
 
         with self.assertRaises(NCNumberOfCallsExceeded):
             self.runner.call_public_method(self.nc1_id, 'non_stop_call', ctx)

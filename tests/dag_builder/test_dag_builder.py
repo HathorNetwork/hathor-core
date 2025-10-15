@@ -358,6 +358,7 @@ if foo:
             """)
         assert str(e.value) == 'unclosed multiline string'
 
+    @pytest.mark.does_metered_call
     def test_on_chain_blueprints(self) -> None:
         bet_code = load_builtin_blueprint_for_ocb('bet.py', 'Bet', test_blueprints)
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
