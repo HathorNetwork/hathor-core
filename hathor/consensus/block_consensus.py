@@ -326,7 +326,7 @@ class BlockConsensusAlgorithm:
             raise NCFail from e
 
     def nc_update_metadata(self, tx: Transaction, runner: 'Runner') -> None:
-        from hathor.nanocontracts.runner.types import CallType
+        from hathor.nanocontracts.runner.call_info import CallType
 
         meta = tx.get_metadata()
         assert meta.nc_execution == NCExecutionState.SUCCESS

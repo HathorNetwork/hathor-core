@@ -21,7 +21,7 @@ from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Bluepri
 from hathor.nanocontracts.exception import NCInvalidMethodCall
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry
-from hathor.nanocontracts.runner.types import CallType
+from hathor.nanocontracts.runner.call_info import CallType
 from hathor.nanocontracts.types import ContractId, NCArgs, NCDepositAction, NCParsedArgs, NCRawArgs, TokenUid, fallback
 from hathor.transaction import Block, Transaction
 from tests.dag_builder.builder import TestDAGBuilder
