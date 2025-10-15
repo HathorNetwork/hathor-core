@@ -631,17 +631,11 @@ class Runner:
             rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
-        try:
-            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-            # impact the original context. Since the runner relies on the context for other critical checks, any
-            # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
-        except NCFail:
-            raise
-        except Exception as e:
-            # Convert any other exception to NCFail.
-            raise NCFail from e
+        # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+        # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+        # impact the original context. Since the runner relies on the context for other critical checks, any
+        # unauthorized modification would pose a serious security risk.
+        ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
 
         if method_name == NC_INITIALIZE_METHOD:
             self._check_all_field_initialized(blueprint)
@@ -909,7 +903,7 @@ class Runner:
     ) -> tuple[ContractId, Any]:
         """Create a contract from another contract."""
         if not salt:
-            raise Exception('invalid salt')
+            raise NCFail('invalid salt')
 
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()
