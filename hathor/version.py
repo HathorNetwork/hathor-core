@@ -19,7 +19,7 @@ from typing import Optional
 
 from structlog import get_logger
 
-BASE_VERSION = '0.66.0'
+BASE_VERSION = '0.66.1'
 
 DEFAULT_VERSION_SUFFIX = "local"
 BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"

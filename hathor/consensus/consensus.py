@@ -327,6 +327,7 @@ class ConsensusAlgorithm:
         )
         for tx in mempool_origin_bfs.run(mempool_tips, skip_root=True):
             if not isinstance(tx, Transaction):
+                mempool_origin_bfs.skip_neighbors(tx)
                 continue
             if tx.get_metadata().first_block is not None:
                 mempool_origin.add(tx)
@@ -345,9 +346,11 @@ class ConsensusAlgorithm:
         )
         for vertex in find_invalid_bfs.run(mempool_origin, skip_root=True):
             if not isinstance(vertex, Transaction):
+                # Don't skip neighbors continue the walk, it will always be bound by the reorg+mempool size
                 continue
             if vertex.get_metadata().first_block is not None:
                 # We may reach other confirmed txs from the mempool origin, so we just skip them.
+                # But don't skip neighbors, continue the walk, it will always be bound by the reorg+mempool size
                 continue
             # At this point, it's a mempool tx, so we have to re-verify it.
             if not all(rule(vertex) for rule in mempool_rules):
