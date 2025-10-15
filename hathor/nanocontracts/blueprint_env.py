@@ -17,7 +17,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection, Sequence, TypeAlias, final
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts.storage import NCContractStorage
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
 
 if TYPE_CHECKING:
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.proxy_accessor import ProxyAccessor
     from hathor.nanocontracts.rng import NanoRNG
     from hathor.nanocontracts.runner import Runner
+    from hathor.nanocontracts.storage import NCContractStorage
 
 
 NCAttrCache: TypeAlias = dict[bytes, Any] | None

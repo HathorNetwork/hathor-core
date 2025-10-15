@@ -44,7 +44,7 @@ from hathor.transaction.storage.migrations import (
     add_closest_ancestor_block,
     change_score_acc_weight_metadata,
     include_funds_for_first_block,
-    nc_storage_compat1,
+    nc_storage_compat2,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -104,7 +104,7 @@ class TransactionStorage(ABC):
         change_score_acc_weight_metadata.Migration,
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
-        nc_storage_compat1.Migration,
+        nc_storage_compat2.Migration,
     ]
 
     _migrations: list[BaseMigration]

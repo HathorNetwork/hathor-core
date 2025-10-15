@@ -29,7 +29,7 @@ from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
-from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
+from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 
@@ -37,6 +37,7 @@ T = TypeVar('T', bound=VertexBaseHeader)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.storage import NCBlockStorage
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
@@ -330,14 +331,17 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
                                     'none of its children is checkpoint-valid')
 
-    def get_complete_token_info(self) -> TokenInfoDict:
+    def get_complete_token_info(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
         """
         Get a complete token info dict, including data from both inputs and outputs.
+        It uses a block storage with the latest token changes in nano contracts
         """
-        token_dict = self._get_token_info_from_inputs()
-        self._update_token_info_from_nano_actions(token_dict=token_dict)
-        # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
+
+        token_dict = self._get_token_info_from_inputs(nc_block_storage)
+        self._update_token_info_from_nano_actions(token_dict=token_dict, nc_block_storage=nc_block_storage)
+        # These must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
+        self._update_token_info_from_fees(token_dict=token_dict)
 
         return token_dict
 
@@ -348,48 +352,71 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             return 0
         return 1
 
-    def _update_token_info_from_nano_actions(self, *, token_dict: TokenInfoDict) -> None:
+    def _update_token_info_from_nano_actions(
+        self,
+        *,
+        token_dict: TokenInfoDict,
+        nc_block_storage: NCBlockStorage,
+    ) -> None:
         """Update token_dict with nano actions."""
         if not self.is_nano_contract():
             return
 
+        assert self.storage is not None
         from hathor.nanocontracts.balance_rules import BalanceRules
         nano_header = self.get_nano_header()
 
         for action in nano_header.get_actions():
             rules = BalanceRules.get_rules(self._settings, action)
+            if action.token_uid not in token_dict:
+                # we try to load this token version from storage in case it's not in the inputs
+                token_dict[action.token_uid] = TokenInfo(
+                    version=get_token_version(self.storage, nc_block_storage, action.token_uid)
+                )
             rules.verification_rule(token_dict)
 
-    def _get_token_info_from_inputs(self) -> TokenInfoDict:
+    def _update_token_info_from_fees(self, *, token_dict: TokenInfoDict) -> None:
+        """Update token_dict with fees from fee header"""
+
+        if not self.has_fees():
+            return
+
+        fee_header = self.get_fee_header()
+        fees = fee_header.get_fees()
+        # we store the total fee amount from the header to be used in the verify_sum
+        token_dict.fees_from_fee_header = fee_header.total_fee_amount()
+        for fee in fees:
+            token_info = token_dict.get(fee.token_uid)
+            if token_info is None:
+                raise InvalidToken('no inputs/actions for token {}'.format(fee.token_uid.hex()))
+
+            # it should be defined in the inputs/actions
+            if token_info.version not in (None, TokenVersion.NATIVE, TokenVersion.DEPOSIT):
+                raise InvalidToken('token {} cannot be used to pay fees'.format(fee.token_uid.hex()))
+
+            # act as a regular output subtracting from the total amount (which is done with sum in this context)
+            token_info.amount += fee.amount
+            token_dict[fee.token_uid] = token_info
+
+    def _get_token_info_from_inputs(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)
         """
+        assert self.storage is not None
         token_dict = TokenInfoDict()
 
         # add HTR to token dict due to tx melting tokens: there might be an HTR output without any
         # input or authority. If we don't add it, an error will be raised when iterating through
         # the outputs of such tx (error: 'no token creation and no inputs for token 00')
-        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo.get_default()
+        token_dict[self._settings.HATHOR_TOKEN_UID] = TokenInfo(version=TokenVersion.NATIVE)
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
             spent_output = spent_tx.outputs[tx_input.index]
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            token_version = TokenVersion.NATIVE
+            token_version = get_token_version(self.storage, nc_block_storage, token_uid)
 
-            if token_uid != self._settings.HATHOR_TOKEN_UID:
-                from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-                assert self.storage is not None
-                try:
-                    token_creation_tx = self.storage.get_token_creation_transaction(token_uid)
-                except TransactionDoesNotExist:
-                    raise InvalidToken(f"Token UID {token_uid!r} does not match any token creation transaction")
-                token_version = token_creation_tx.token_version
-
-            token_info = token_dict.get(
-                token_uid,
-                TokenInfo.get_default(version=token_version)
-            )
+            token_info = token_dict.get(token_uid, TokenInfo(version=token_version))
 
             if spent_output.is_token_authority():
                 token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()

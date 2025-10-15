@@ -299,7 +299,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             non_signaling_block.init_static_metadata_from_storage(settings, manager.tx_storage)
 
             with pytest.raises(BlockMustSignalError):
-                manager.verification_service.verify(non_signaling_block, self.verification_params)
+                manager.verification_service.verify(non_signaling_block, self.get_verification_params(manager))
 
             with pytest.raises(InvalidNewTransaction):
                 manager.propagate_tx(non_signaling_block)

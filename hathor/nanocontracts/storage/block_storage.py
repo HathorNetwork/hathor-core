@@ -19,7 +19,7 @@ from typing import NamedTuple, Optional
 
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
-from hathor.nanocontracts.nc_types.sized_int_nc_type import Uint8NCType
+from hathor.nanocontracts.nc_types.token_version_nc_type import TokenVersionNCType
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
 from hathor.nanocontracts.storage.token_proxy import TokenProxy
@@ -64,7 +64,7 @@ class NCBlockStorage:
     _TOKEN_DESCRIPTION_NC_TYPE = make_dataclass_nc_type(
         TokenDescription,
         extra_nc_types_map={
-            TokenVersion: Uint8NCType,
+            TokenVersion: TokenVersionNCType,
         },
     )
 

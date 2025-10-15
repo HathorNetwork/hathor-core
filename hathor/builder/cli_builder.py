@@ -292,6 +292,7 @@ class CliBuilder:
             settings=settings,
             verifiers=vertex_verifiers,
             tx_storage=tx_storage,
+            nc_storage_factory=self.nc_storage_factory,
         )
 
         cpu_mining_service = CpuMiningService()

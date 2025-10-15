@@ -18,9 +18,8 @@ from unittest.mock import patch
 
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.indexes.tokens_index import TokensIndex
-from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
+from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
@@ -77,10 +76,10 @@ class TestActions(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.verification_params = VerificationParams.default_for_mempool(enable_nano=True)
 
         self.bp_id = b'1' * 32
         self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
+
         self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
             self.bp_id: MyBlueprint
         })
@@ -117,6 +116,11 @@ class TestActions(unittest.TestCase):
         self.tx0, self.tx1, self.tx2, self.tka = self.artifacts.get_typed_vertices(
             ['tx0', 'tx1', 'tx2', 'TKA'],
             Transaction,
+        )
+        best_block = self.manager.tx_storage.get_best_block()
+        self.verification_params = VerificationParams.default_for_mempool(
+            enable_nano=True,
+            best_block=best_block,
         )
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.
