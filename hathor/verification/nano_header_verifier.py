@@ -20,7 +20,6 @@ from typing import Sequence
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
-    NCError,
     NCFail,
     NCForbiddenAction,
     NCInvalidAction,
@@ -171,7 +170,7 @@ class NanoHeaderVerifier:
 
         try:
             blueprint_class = self._tx_storage.get_blueprint_class(blueprint_id)
-        except NCError as e:
+        except NCFail as e:
             raise NCTxValidationError from e
 
         method_name = nano_header.nc_method

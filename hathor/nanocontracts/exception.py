@@ -15,35 +15,35 @@
 from hathor.exception import HathorError
 from hathor.transaction.exceptions import TxValidationError
 
+"""
+All exceptions in this module MUST inherit from NCFail so they're
+correctly caught by the block consensus to fail NC transactions.
+"""
 
-class BlueprintSyntaxError(SyntaxError):
+
+class NCFail(HathorError):
+    """Raised by Blueprint's methods to fail execution."""
+
+
+class BlueprintSyntaxError(SyntaxError, NCFail):
     """Raised when a blueprint contains invalid syntax."""
     pass
 
 
-class NCError(HathorError):
-    """Base exception for nano contract's exceptions."""
+class NCTxValidationError(TxValidationError, NCFail):
     pass
 
 
-class NCTxValidationError(TxValidationError):
+class NCInvalidSignature(NCTxValidationError, NCFail):
     pass
 
 
-class NCInvalidSignature(NCTxValidationError):
+class NCInvalidPubKey(NCTxValidationError, NCFail):
     pass
 
 
-class NCInvalidPubKey(NCTxValidationError):
+class NCInvalidSeqnum(NCTxValidationError, NCFail):
     pass
-
-
-class NCInvalidSeqnum(NCTxValidationError):
-    pass
-
-
-class NCFail(NCError):
-    """Raised by Blueprint's methods to fail execution."""
 
 
 class NanoContractDoesNotExist(NCFail):
@@ -71,7 +71,7 @@ class NCViewMethodError(NCFail):
     pass
 
 
-class NCMethodNotFound(NCFail, NCTxValidationError):
+class NCMethodNotFound(NCTxValidationError):
     """Raised when a method is not found in a nano contract."""
     pass
 
@@ -102,7 +102,7 @@ class NCInvalidContractId(NCFail):
     """Raised when a contract call is invalid."""
 
 
-class NCInvalidMethodCall(NCFail, NCTxValidationError):
+class NCInvalidMethodCall(NCTxValidationError):
     """Raised when a contract calls another contract's invalid method."""
 
 
@@ -155,12 +155,12 @@ class NCForbiddenReentrancy(NCFail):
     pass
 
 
-class UnknownFieldType(NCError):
+class UnknownFieldType(NCFail):
     """Raised when there is no field available for a given type."""
     pass
 
 
-class NCContractCreationNotFound(NCError):
+class NCContractCreationNotFound(NCFail):
     """Raised when a nano contract creation transaction is not found.
 
     This error might also happen when the transaction is at the mempool or when it fails execution."""
@@ -181,38 +181,38 @@ class NCContractCreationVoided(NCContractCreationNotFound):
     pass
 
 
-class OCBInvalidScript(NCError):
+class OCBInvalidScript(NCFail):
     """Raised when an On-Chain Blueprint script does not pass our script restrictions check.
     """
     pass
 
 
-class OCBInvalidBlueprintVertexType(NCError):
+class OCBInvalidBlueprintVertexType(NCFail):
     """Raised when a vertex that is not an OnChainBlueprint is used as a blueprint-id.
     """
     pass
 
 
-class OCBBlueprintNotConfirmed(NCError):
+class OCBBlueprintNotConfirmed(NCFail):
     """Raised when trying to use an OnChainBlueprint that is not confirmed by a block in the current best chain.
     """
 
 
-class OCBPubKeyNotAllowed(NCError):
+class OCBPubKeyNotAllowed(NCFail):
     """Raised when an OnChainBlueprint transaction uses a pubkey that is not explicitly allowed in the settings.
     """
 
 
-class OCBOutOfFuelDuringLoading(NCError):
+class OCBOutOfFuelDuringLoading(NCFail):
     """Raised when loading an On-chain Blueprint and the execution exceeds the fuel limit.
     """
 
 
-class OCBOutOfMemoryDuringLoading(NCError):
+class OCBOutOfMemoryDuringLoading(NCFail):
     """Raised when loading an On-chain Blueprint and the execution exceeds the memory limit.
     """
 
 
-class NCDisabledBuiltinError(NCError):
+class NCDisabledBuiltinError(NCFail):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """

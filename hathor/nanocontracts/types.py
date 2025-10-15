@@ -31,6 +31,7 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
 )
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
+from hathor.serialization import SerializationError
 from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
@@ -506,7 +507,7 @@ class NCRawArgs:
         try:
             args_parser = ArgsOnly.from_arg_types(arg_types)
             return args_parser.deserialize_args_bytes(self.args_bytes)
-        except (NCSerializationError, TypeError):
+        except (NCSerializationError, SerializationError, TypeError, ValueError):
             return None
 
 
