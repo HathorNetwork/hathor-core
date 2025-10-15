@@ -83,10 +83,12 @@ class CreateTokenRecord:
 
     @classmethod
     def from_json(cls, json_dict: dict[str, Any]) -> Self:
+        token_version = TokenVersion(json_dict['token_version'])
+        assert token_version in (TokenVersion.DEPOSIT, TokenVersion.FEE)
         return cls(
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
             amount=json_dict['amount'],
-            token_version=json_dict['token_version'],
+            token_version=token_version,  # type: ignore[arg-type]
             token_name=json_dict['token_name'],
             token_symbol=json_dict['token_symbol'],
         )
