@@ -1354,18 +1354,14 @@ class Runner:
         changes_tracker = self.get_current_changes_tracker()
         assert operation or fee
         assert changes_tracker.nc_id == call_record.contract_id
+        assert call_record.index_updates is not None
 
-        def update(record: UpdateTokenBalanceRecord | CreateTokenRecord) -> None:
-            assert call_record.index_updates is not None
+        for record in (operation, fee):
+            if record is None:
+                continue
             changes_tracker.add_balance(record.token_uid, record.amount)
             self._updated_tokens_totals[record.token_uid] += record.amount
             call_record.index_updates.append(record)
-
-        if operation is not None:
-            update(operation)
-
-        if fee is not None:
-            update(fee)
 
     def _register_paid_fee(self, token_uid: TokenUid, amount: int) -> None:
         """ Register a fee payment in the current call."""
