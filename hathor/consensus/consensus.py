@@ -342,6 +342,7 @@ class ConsensusAlgorithm:
             lambda tx: self._reward_lock_mempool_rule(tx, new_best_height),
             lambda tx: self._unknown_contract_mempool_rule(tx),
             lambda tx: self._nano_activation_rule(storage, tx),
+            self._checkdatasig_count_rule,
         )
 
         # From the mempool origin, find the leftmost mempool txs that are invalid.
@@ -408,16 +409,44 @@ class ConsensusAlgorithm:
         return True
 
     def _nano_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
-        """Check whether a nano or OCB tx became invalid because the reorg changed the feature activation state."""
+        """Check whether a tx became invalid because the reorg changed the nano feature activation state."""
         from hathor.nanocontracts import OnChainBlueprint
         from hathor.nanocontracts.utils import is_nano_active
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.token_info import TokenVersion
 
         best_block = storage.get_best_block()
         if is_nano_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
             # When nano is active, this rule has no effect.
             return True
 
-        return not tx.is_nano_contract() and not isinstance(tx, OnChainBlueprint)
+        # The nano feature activation is actually used to enable 4 use cases:
+
+        if tx.is_nano_contract():
+            return False
+
+        if isinstance(tx, OnChainBlueprint):
+            return False
+
+        if isinstance(tx, TokenCreationTransaction) and tx.token_version == TokenVersion.FEE:
+            return False
+
+        if tx.has_fees():
+            return False
+
+        return True
+
+    def _checkdatasig_count_rule(self, tx: Transaction) -> bool:
+        """Check whether a tx became invalid because the reorg changed the checkdatasig feature activation state."""
+        from hathor.verification.vertex_verifier import VertexVerifier
+
+        # Any exception in the sigops verification will be considered
+        # a fail and the tx will be removed from the mempool.
+        try:
+            VertexVerifier._verify_sigops_output(settings=self._settings, vertex=tx, enable_checkdatasig_count=True)
+        except Exception:
+            return False
+        return True
 
 
 def _sorted_affected_txs(affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:
