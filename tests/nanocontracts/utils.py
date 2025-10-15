@@ -2,16 +2,18 @@ from typing import Any
 
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
-from hathor.nanocontracts import Blueprint
+from hathor.nanocontracts import Blueprint, NCRocksDBStorageFactory
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
+from hathor.nanocontracts.storage import NCBlockStorage
+from hathor.nanocontracts.storage.backends import RocksDBNodeTrieStore
+from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.utils import sign_pycoin
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.headers.nano_header import NanoHeader, NanoHeaderAction
-from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
@@ -22,16 +24,19 @@ class TestRunner(Runner):
 
     def __init__(
         self,
-        tx_storage: TransactionStorage,
-        storage_factory: NCStorageFactory,
-        block_storage: NCBlockStorage,
         *,
+        tx_storage: TransactionStorage,
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
     ) -> None:
         if seed is None:
             seed = b'x' * 32
+        assert isinstance(tx_storage, TransactionRocksDBStorage)
+        storage_factory = NCRocksDBStorageFactory(tx_storage._rocksdb_storage)
+        store = RocksDBNodeTrieStore(tx_storage._rocksdb_storage)
+        block_trie = PatriciaTrie(store)
+        block_storage = NCBlockStorage(block_trie)
         super().__init__(
             tx_storage=tx_storage,
             storage_factory=storage_factory,

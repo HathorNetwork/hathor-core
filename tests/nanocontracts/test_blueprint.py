@@ -2,23 +2,9 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
-from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
-from hathor.nanocontracts.types import (
-    Address,
-    BlueprintId,
-    ContractId,
-    NCDepositAction,
-    NCWithdrawalAction,
-    TokenUid,
-    VertexId,
-    public,
-    view,
-)
+from hathor.nanocontracts.types import Address, NCDepositAction, NCWithdrawalAction, TokenUid, public, view
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
-from tests.nanocontracts.utils import TestRunner
 
 STR_NC_TYPE = make_nc_type(str)
 BYTES_NC_TYPE = make_nc_type(bytes)
@@ -101,35 +87,14 @@ class MyBlueprint(Blueprint):
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.simple_fields_id = ContractId(VertexId(b'1' * 32))
-        self.container_fields_id = ContractId(VertexId(b'2' * 32))
-        self.my_blueprint_id = ContractId(VertexId(b'3' * 32))
-
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        block_storage = NCBlockStorage(block_trie)
-        self.manager = self.create_peer('unittests')
-        self.runner = TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
-        )
-
-        self.blueprint_ids: dict[str, BlueprintId] = {
-            'simple_fields': BlueprintId(VertexId(b'a' * 32)),
-            'container_fields': BlueprintId(VertexId(b'b' * 32)),
-            'my_blueprint': BlueprintId(VertexId(b'c' * 32)),
-        }
-
-        nc_catalog = self.manager.tx_storage.nc_catalog
-        nc_catalog.blueprints[self.blueprint_ids['simple_fields']] = SimpleFields
-        nc_catalog.blueprints[self.blueprint_ids['container_fields']] = ContainerFields
-        nc_catalog.blueprints[self.blueprint_ids['my_blueprint']] = MyBlueprint
+        self.simple_fields_id = self._register_blueprint_class(SimpleFields)
+        self.container_fields_id = self._register_blueprint_class(ContainerFields)
+        self.my_blueprint_id = self._register_blueprint_class(MyBlueprint)
 
         genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = [t for t in genesis if t.is_transaction][0]
 
     def test_simple_fields(self) -> None:
-        blueprint_id = self.blueprint_ids['simple_fields']
         nc_id = self.simple_fields_id
 
         ctx = self.create_context()
@@ -137,7 +102,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         b = b'bytes'
         c = 123
         d = True
-        self.runner.create_contract(nc_id, blueprint_id, ctx, a, b, c, d)
+        self.runner.create_contract(nc_id, self.simple_fields_id, ctx, a, b, c, d)
 
         storage = self.runner.get_storage(nc_id)
         self.assertEqual(storage.get_obj(b'a', STR_NC_TYPE), a)
@@ -146,7 +111,6 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.assertEqual(storage.get_obj(b'd', BOOL_NC_TYPE), d)
 
     def test_container_fields(self) -> None:
-        blueprint_id = self.blueprint_ids['container_fields']
         nc_id = self.container_fields_id
 
         ctx = self.create_context()
@@ -155,7 +119,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
             ('b', '2', b'2', 2),
             ('c', '3', b'3', 3),
         ]
-        self.runner.create_contract(nc_id, blueprint_id, ctx, items)
+        self.runner.create_contract(nc_id, self.container_fields_id, ctx, items)
 
         storage = self.runner.get_storage(nc_id)
         self.assertEqual(storage.get_obj(b'a:\x01a', STR_NC_TYPE), '1')
@@ -163,10 +127,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.assertEqual(storage.get_obj(b'a:\x01c', STR_NC_TYPE), '3')
 
     def _create_my_blueprint_contract(self) -> None:
-        blueprint_id = self.blueprint_ids['my_blueprint']
         nc_id = self.my_blueprint_id
         ctx = self.create_context()
-        self.runner.create_contract(nc_id, blueprint_id, ctx)
+        self.runner.create_contract(nc_id, self.my_blueprint_id, ctx)
 
     def test_public_method_fails(self) -> None:
         self._create_my_blueprint_contract()

@@ -13,13 +13,9 @@ from hathor.nanocontracts.exception import (
     NCViewMethodError,
 )
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
-from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
 from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import (
     Address,
-    BlueprintId,
     ContractId,
     NCAction,
     NCDepositAction,
@@ -29,7 +25,6 @@ from hathor.nanocontracts.types import (
 )
 from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
-from tests.nanocontracts.utils import TestRunner
 
 COUNTER_NC_TYPE = make_nc_type(int)
 CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type(ContractId | None)  # type: ignore[arg-type]
@@ -138,22 +133,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.manager = self.create_peer('unittests')
         self.genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = [t for t in self.genesis if t.is_transaction][0]
-
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        block_storage = NCBlockStorage(block_trie=block_trie)
-        self.runner = TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
-        )
-
-        self.blueprint_id = BlueprintId(VertexId(b'a' * 32))
-
-        nc_catalog = self.manager.tx_storage.nc_catalog
-        nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
 
         self.nc1_id = ContractId(VertexId(b'1' * 32))
         self.nc2_id = ContractId(VertexId(b'2' * 32))
