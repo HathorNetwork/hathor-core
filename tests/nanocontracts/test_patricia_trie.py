@@ -25,10 +25,15 @@ def export_trie_outline(trie: PatriciaTrie, *, node: Optional[Node] = None) -> t
 
 
 class PatriciaTrieTestCase(unittest.TestCase):
-    __test__ = False
+    def setUp(self) -> None:
+        super().setUp()
+        directory = tempfile.mkdtemp()
+        self.tmpdirs.append(directory)
+        self.rocksdb_storage = RocksDBStorage(path=directory)
 
     def create_trie(self) -> PatriciaTrie:
-        raise NotImplementedError
+        store = RocksDBNodeTrieStore(self.rocksdb_storage)
+        return PatriciaTrie(store)
 
     def test_empty_key(self) -> None:
         trie = self.create_trie()
@@ -208,17 +213,3 @@ class PatriciaTrieTestCase(unittest.TestCase):
 
         for k, v in data.items():
             self.assertEqual(trie.get(k), v)
-
-
-class RocksDBPatriciaTrieTest(PatriciaTrieTestCase):
-    __test__ = True
-
-    def setUp(self) -> None:
-        super().setUp()
-        directory = tempfile.mkdtemp()
-        self.tmpdirs.append(directory)
-        self.rocksdb_storage = RocksDBStorage(path=directory)
-
-    def create_trie(self) -> PatriciaTrie:
-        store = RocksDBNodeTrieStore(self.rocksdb_storage)
-        return PatriciaTrie(store)
