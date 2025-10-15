@@ -29,7 +29,7 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
                 'received_by': [],
                 'children': [],
                 'conflict_with': [],
-                'voided_by': [],
+                'voided_by': [self._settings.PARTIALLY_VALIDATED_ID.hex()],
                 'twins': [],
                 'validation': 'initial',
                 'accumulated_weight': 1.0,
@@ -67,7 +67,7 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
                 'received_by': [],
                 'children': [],
                 'conflict_with': [],
-                'voided_by': [],
+                'voided_by': [self._settings.PARTIALLY_VALIDATED_ID.hex()],
                 'twins': [],
                 'validation': 'initial',  # FIXME: change to 'full' when validations are enabled
                 'accumulated_weight': 1.0,
