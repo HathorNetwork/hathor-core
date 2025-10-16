@@ -131,12 +131,12 @@ class NCBlueprintTestCase(unittest.TestCase):
 
     def test_type_int_too_big(self) -> None:
         with pytest.raises(NCFail) as e:
-            self._run_test(MyBlueprint.method_int, 2**223)
+            self._run_test(MyBlueprint.method_int, 2**249)
         assert isinstance(e.value.__cause__, ValueError)
 
     def test_type_int_too_small(self) -> None:
         with pytest.raises(NCFail) as e:
-            self._run_test(MyBlueprint.method_int, -2**223 - 1)
+            self._run_test(MyBlueprint.method_int, -2**249 - 1)
         assert isinstance(e.value.__cause__, ValueError)
 
     def test_type_int_wrong_type(self) -> None:
@@ -155,20 +155,20 @@ class NCBlueprintTestCase(unittest.TestCase):
             -1,
             2**31,
             -2**31,
-            # edge valid values for 32 bytes of signed leb128 with 4 bytes
-            2**223 - 1,
-            -2**223,
+            # edge valid values for 32 bytes of signed ECV with 4 bytes
+            2**249 - 1,
+            -2**249,
         ]
         for valid_value in valid_values:
             self._run_test(Foo.bar, valid_value)
 
         invalid_values = [
-            2**223,
-            -2**223 - 1,
-            2**223 + 1,
-            2**224,
-            -2**223 - 2,
-            -2**224,
+            2**249,
+            -2**249 - 1,
+            2**249 + 1,
+            2**249,
+            -2**249 - 2,
+            -2**250,
         ]
         for invalid_value in invalid_values:
             with pytest.raises(NCFail) as e:
