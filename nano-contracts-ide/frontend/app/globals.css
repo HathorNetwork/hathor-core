@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #__next {
+    height: 100%;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-500 text-white hover:bg-primary-600 focus:ring-primary-500;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  .input {
+    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500;
+  }
+  
+  .panel {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200;
+  }
+  
+  .panel-header {
+    @apply px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg;
+  }
+  
+  .panel-content {
+    @apply p-4;
+  }
+}
+
+/* Monaco Editor Overrides */
+.monaco-editor {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace !important;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Split pane overrides */
+.Resizer {
+  background: #ddd;
+  opacity: 0.2;
+  z-index: 1;
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+.Resizer:hover {
+  -webkit-transition: all 0.2s ease;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.Resizer.horizontal {
+  height: 11px;
+  margin: -5px 0;
+  cursor: row-resize;
+  width: 100%;
+}
+
+.Resizer.vertical {
+  width: 11px;
+  margin: 0 -5px;
+  cursor: col-resize;
+  height: 100%;
+}
+
+.Resizer.disabled {
+  cursor: not-allowed;
+}
+
+.Resizer.disabled:hover {
+  opacity: 0.2;
+}
+
+/* AI Assistant styles */
+.prose-invert {
+  color: #e5e7eb;
+}
+
+.prose-invert code {
+  color: #fbbf24;
+}
+
+.prose-invert pre {
+  background-color: #1f2937;
+}
+
+.prose-invert strong {
+  color: #f9fafb;
+}
