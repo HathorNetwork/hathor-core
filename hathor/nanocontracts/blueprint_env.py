@@ -247,7 +247,6 @@ class BlueprintEnvironment:
         Get a proxy accessor for the given blueprint ID. Use this for interacting with another blueprint via a proxy.
         """
         from hathor.nanocontracts.proxy_accessor import ProxyAccessor
-        self.__runner.forbid_call_on_view('get_proxy')
         return ProxyAccessor(runner=self.__runner, blueprint_id=blueprint_id)
 
     def setup_new_contract(
