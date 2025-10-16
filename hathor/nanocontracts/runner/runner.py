@@ -229,6 +229,11 @@ class Runner:
         nc_storage = self.get_current_changes_tracker_or_storage(contract_id)
         return nc_storage.get_blueprint_id()
 
+    def get_current_code_blueprint_id(self) -> BlueprintId:
+        """Return the blueprint id of the blueprint that owns the executing code."""
+        current_call_record = self.get_current_call_record()
+        return current_call_record.blueprint_id
+
     def _build_call_info(self, contract_id: ContractId) -> CallInfo:
         from hathor.nanocontracts.nc_exec_logs import NCLogger
         return CallInfo(
@@ -374,9 +379,11 @@ class Runner:
             raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
 
         contract_id = self.get_current_contract_id()
-
         if blueprint_id == self.get_blueprint_id(contract_id):
-            raise NCInvalidSyscall('cannot call the same blueprint')
+            raise NCInvalidSyscall('cannot call the same blueprint of the running contract')
+
+        if blueprint_id == self.get_current_code_blueprint_id():
+            raise NCInvalidSyscall('cannot call the same blueprint of the running blueprint')
 
         return self._unsafe_call_another_contract_public_method(
             contract_id=contract_id,

@@ -45,6 +45,10 @@ class MyBlueprint(Blueprint):
         self.syscall.get_blueprint_id()
 
     @view
+    def get_current_code_blueprint_id(self) -> None:
+        self.syscall.get_current_code_blueprint_id()
+
+    @view
     def get_balance_before_current_call(self) -> None:
         self.syscall.get_balance_before_current_call()
 
@@ -168,6 +172,7 @@ class TestSyscallsInView(BlueprintTestCase):
             'can_melt_before_current_call',
             'call_view_method',
             'get_contract',
+            'get_current_code_blueprint_id',
         }
 
         for method_name, method in BlueprintEnvironment.__dict__.items():
