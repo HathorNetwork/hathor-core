@@ -94,7 +94,7 @@ class _SeekKeyNoLock(_SeekKeyBase):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        assert self.tag is _Tag.NOLOCK
+        assert self.tag == _Tag.NOLOCK
         assert self.amount > 0
 
     def _bytes(self, array: bytearray) -> None:
@@ -185,7 +185,7 @@ class _SeekKeyHeightLock(_SeekKeyBase):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        assert self.tag is _Tag.HEIGHTLOCK
+        assert self.tag == _Tag.HEIGHTLOCK
         assert self.heightlock >= 0
         assert self.amount > 0
 
@@ -227,9 +227,9 @@ class _KeyHeightLock(_SeekKeyHeightLock):
 def _parse_key(key: bytes) -> _KeyBase:
     assert len(key) >= 1
     tag = _Tag(key[0])
-    if tag is _Tag.INVALID:
+    if tag == _Tag.INVALID:
         raise ValueError('invalid tag found')
-    elif tag is _Tag.NOLOCK:
+    elif tag == _Tag.NOLOCK:
         assert len(key) == 1 + 32 + 25 + 8 + 32 + 1
         return _KeyNoLock(
             tag=tag,
@@ -239,7 +239,7 @@ def _parse_key(key: bytes) -> _KeyBase:
             tx_id=key[66:98],
             index=key[98],
         )
-    elif tag is _Tag.TIMELOCK:
+    elif tag == _Tag.TIMELOCK:
         assert len(key) == 1 + 32 + 25 + 4 + 8 + 32 + 1
         return _KeyTimeLock(
             tag=tag,
@@ -250,7 +250,7 @@ def _parse_key(key: bytes) -> _KeyBase:
             tx_id=key[70:102],
             index=key[102],
         )
-    elif tag is _Tag.HEIGHTLOCK:
+    elif tag == _Tag.HEIGHTLOCK:
         assert len(key) == 1 + 32 + 25 + 4 + 8 + 32 + 1
         return _KeyHeightLock(
             tag=tag,

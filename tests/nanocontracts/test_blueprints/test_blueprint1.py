@@ -12,11 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.nanocontracts import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public, view
+from hathor import Blueprint, Context, export, public, view
 
 
+@export
 class TestBlueprint1(Blueprint):
     @public
     def initialize(self, ctx: Context, a: int) -> None:
@@ -33,4 +32,4 @@ class TestBlueprint1(Blueprint):
     @public
     def create_child_contract(self, ctx: Context) -> None:
         blueprint_id = self.syscall.get_blueprint_id()
-        self.syscall.create_contract(blueprint_id, b'', [], 0)
+        self.syscall.setup_new_contract(blueprint_id, salt=b'').initialize(0)

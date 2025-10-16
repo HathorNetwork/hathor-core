@@ -17,12 +17,11 @@ from unittest.mock import ANY
 
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
-from hathor.nanocontracts.exception import NCError, NCInvalidMethodCall
+from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
+from hathor.nanocontracts.exception import NCInvalidMethodCall
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry
-from hathor.nanocontracts.runner.types import CallType
+from hathor.nanocontracts.runner.call_info import CallType
 from hathor.nanocontracts.types import ContractId, NCArgs, NCDepositAction, NCParsedArgs, NCRawArgs, TokenUid, fallback
 from hathor.transaction import Block, Transaction
 from tests.dag_builder.builder import TestDAGBuilder
@@ -64,7 +63,7 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def call_another_fallback(self, ctx: Context, contract_id: ContractId) -> str:
-        return self.syscall.call_public_method(contract_id, 'fallback', [])
+        return self.syscall.get_contract(contract_id, blueprint_id=None).public().fallback()
 
     @public
     def call_own_fallback(self, ctx: Context) -> None:
@@ -141,7 +140,7 @@ class TestFallbackMethod(BlueprintTestCase):
         ]
 
     def test_cannot_call_fallback_directly(self) -> None:
-        with pytest.raises(NCError, match='method `fallback` is not a public method'):
+        with pytest.raises(NCFail, match='method `fallback` is not a public method'):
             self.runner.call_public_method(self.contract_id, 'fallback', self.ctx)
 
     def test_cannot_call_another_fallback_directly(self) -> None:

@@ -213,6 +213,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         assert set(tx.hash for tx in manager.tx_storage.get_all_transactions()) == self.all_hashes
 
         # make sure none of its tx tips are voided
-        all_tips = manager.generate_parent_txs(None).get_all_tips()
+        parent_txs = manager.generate_parent_txs(None)
+        all_tips = parent_txs.can_include + list(parent_txs.must_include)
         iter_tips_meta = map(manager.tx_storage.get_metadata, all_tips)
         self.assertFalse(any(tx_meta.voided_by for tx_meta in iter_tips_meta))

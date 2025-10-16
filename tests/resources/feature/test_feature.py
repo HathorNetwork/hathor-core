@@ -46,7 +46,7 @@ def web() -> StubSite:
     tx_storage.get_transaction = Mock(return_value=block)
 
     def get_state(*, block: Block, feature: Feature) -> FeatureState:
-        return FeatureState.ACTIVE if feature is Feature.NOP_FEATURE_1 else FeatureState.STARTED
+        return FeatureState.ACTIVE if feature == Feature.NOP_FEATURE_1 else FeatureState.STARTED
 
     nop_feature_1_criteria = Criteria(
         bit=0,

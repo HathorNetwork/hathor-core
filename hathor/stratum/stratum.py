@@ -640,7 +640,7 @@ class StratumProtocol(JSONRPC):
         job.weight = min(share_weight, tx.weight)
 
         def jobTimeout(job: ServerJob, protocol: StratumProtocol) -> None:
-            if job is protocol.current_job and job.submitted is None:
+            if job is protocol.current_job and job.submitted is None:  # allow-is
                 # Only send new jobs if miner is still connected
                 if self.miner_id in self.factory.miner_protocols:
                     protocol.job_request()

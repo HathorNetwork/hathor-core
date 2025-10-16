@@ -16,15 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
-from typing import TYPE_CHECKING, Any, TypeAlias
-
-from typing_extensions import Literal, Self, assert_never
+from typing import TYPE_CHECKING, Any
 
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError
+from hathor.nanocontracts.runner.index_records import NCIndexUpdateRecord
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
-from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
-from hathor.transaction.token_info import TokenVersion
+from hathor.nanocontracts.types import BlueprintId, ContractId
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogger
@@ -34,139 +32,6 @@ if TYPE_CHECKING:
 class CallType(StrEnum):
     PUBLIC = auto()
     VIEW = auto()
-
-
-@unique
-class IndexUpdateRecordType(StrEnum):
-    CREATE_CONTRACT = auto()
-    MINT_TOKENS = auto()
-    MELT_TOKENS = auto()
-    CREATE_TOKEN = auto()
-    UPDATE_AUTHORITIES = auto()
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class SyscallCreateContractRecord:
-    blueprint_id: BlueprintId
-    contract_id: ContractId
-
-    def to_json(self) -> dict[str, Any]:
-        return dict(
-            type=IndexUpdateRecordType.CREATE_CONTRACT,
-            blueprint_id=self.blueprint_id.hex(),
-            contract_id=self.contract_id.hex(),
-        )
-
-    @classmethod
-    def from_json(cls, json_dict: dict[str, Any]) -> Self:
-        assert json_dict['type'] == IndexUpdateRecordType.CREATE_CONTRACT
-        return cls(
-            contract_id=ContractId(VertexId(bytes.fromhex(json_dict['contract_id']))),
-            blueprint_id=BlueprintId(VertexId(bytes.fromhex(json_dict['blueprint_id']))),
-        )
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class SyscallUpdateTokensRecord:
-    type: (
-        Literal[IndexUpdateRecordType.MINT_TOKENS]
-        | Literal[IndexUpdateRecordType.MELT_TOKENS]
-        | Literal[IndexUpdateRecordType.CREATE_TOKEN]
-    )
-    token_uid: TokenUid
-    token_amount: int
-    htr_amount: int
-    token_symbol: str | None = None
-    token_name: str | None = None
-    token_version: TokenVersion | None = None
-
-    def __post_init__(self) -> None:
-        match self.type:
-            case IndexUpdateRecordType.MINT_TOKENS | IndexUpdateRecordType.CREATE_TOKEN:
-                assert self.token_amount > 0 and self.htr_amount < 0
-            case IndexUpdateRecordType.MELT_TOKENS:
-                assert self.token_amount < 0 and self.htr_amount > 0
-            case _:
-                assert_never(self.type)
-
-    def to_json(self) -> dict[str, Any]:
-        return dict(
-            type=self.type,
-            token_uid=self.token_uid.hex(),
-            token_amount=self.token_amount,
-            token_version=self.token_version,
-            htr_amount=self.htr_amount,
-        )
-
-    @classmethod
-    def from_json(cls, json_dict: dict[str, Any]) -> Self:
-        valid_types = (
-            IndexUpdateRecordType.MINT_TOKENS, IndexUpdateRecordType.MELT_TOKENS, IndexUpdateRecordType.CREATE_TOKEN
-        )
-        assert json_dict['type'] in valid_types
-        return cls(
-            type=json_dict['type'],
-            token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            token_amount=json_dict['token_amount'],
-            token_version=json_dict['token_version'],
-            htr_amount=json_dict['htr_amount'],
-        )
-
-
-@unique
-class UpdateAuthoritiesRecordType(StrEnum):
-    GRANT = auto()
-    REVOKE = auto()
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class UpdateAuthoritiesRecord:
-    token_uid: TokenUid
-    sub_type: UpdateAuthoritiesRecordType
-    mint: bool
-    melt: bool
-
-    def __post_init__(self) -> None:
-        assert self.mint or self.melt
-
-    def to_json(self) -> dict[str, Any]:
-        return dict(
-            type=IndexUpdateRecordType.UPDATE_AUTHORITIES,
-            token_uid=self.token_uid.hex(),
-            sub_type=self.sub_type,
-            mint=self.mint,
-            melt=self.melt,
-        )
-
-    @classmethod
-    def from_json(cls, json_dict: dict[str, Any]) -> Self:
-        assert json_dict['type'] == IndexUpdateRecordType.UPDATE_AUTHORITIES
-        return cls(
-            token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            sub_type=UpdateAuthoritiesRecordType(json_dict['sub_type']),
-            mint=json_dict['mint'],
-            melt=json_dict['melt'],
-        )
-
-
-NCIndexUpdateRecord: TypeAlias = SyscallCreateContractRecord | SyscallUpdateTokensRecord | UpdateAuthoritiesRecord
-
-
-def nc_index_update_record_from_json(json_dict: dict[str, Any]) -> NCIndexUpdateRecord:
-    syscall_type = IndexUpdateRecordType(json_dict['type'])
-    match syscall_type:
-        case IndexUpdateRecordType.CREATE_CONTRACT:
-            return SyscallCreateContractRecord.from_json(json_dict)
-        case (
-            IndexUpdateRecordType.MINT_TOKENS
-            | IndexUpdateRecordType.MELT_TOKENS
-            | IndexUpdateRecordType.CREATE_TOKEN
-        ):
-            return SyscallUpdateTokensRecord.from_json(json_dict)
-        case IndexUpdateRecordType.UPDATE_AUTHORITIES:
-            return UpdateAuthoritiesRecord.from_json(json_dict)
-        case _:
-            raise assert_never(f'invalid syscall record type: "{syscall_type}"')
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -55,7 +55,7 @@ class GenesisTest(unittest.TestCase):
     def test_verify(self):
         genesis = self.storage.get_all_genesis()
         for g in genesis:
-            self._verification_service.verify_without_storage(g, self.verification_params)
+            self._verification_service.verify_without_storage(g, self.get_verification_params())
 
     def test_output(self):
         # Test if block output is valid

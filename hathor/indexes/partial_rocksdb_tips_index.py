@@ -93,11 +93,11 @@ class PartialRocksDBTipsIndex(MemoryTipsIndex, RocksDBIndexUtils):
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         log = self.log.new(index=f'tips-{self._name}')
         total: Optional[int]
-        if self is indexes_manager.all_tips:
+        if self == indexes_manager.all_tips:
             total = indexes_manager.info.get_tx_count() + indexes_manager.info.get_block_count()
-        elif self is indexes_manager.block_tips:
+        elif self == indexes_manager.block_tips:
             total = indexes_manager.info.get_block_count()
-        elif self is indexes_manager.tx_tips:
+        elif self == indexes_manager.tx_tips:
             total = indexes_manager.info.get_tx_count()
         else:
             log.info('index not identified, skipping total count')

@@ -114,14 +114,6 @@ class CliBuilder:
             reactor_type=type(reactor).__name__,
         )
 
-        # XXX Remove this protection after Nano Contracts are launched.
-        if settings.NETWORK_NAME not in ('unittests', 'nano-testnet-bravo', 'testnet-hotel'):
-            # Add protection to prevent enabling Nano Contracts due to misconfigurations.
-            self.check_or_raise(
-                not settings.ENABLE_NANO_CONTRACTS,
-                'configuration error: NanoContracts can only be enabled on specific networks for now',
-            )
-
         vertex_parser = VertexParser(settings=settings)
         tx_storage: TransactionStorage
         event_storage: EventStorage
@@ -266,6 +258,7 @@ class CliBuilder:
             nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
             feature_service=self.feature_service,
+            nc_exec_fail_trace=self._args.nc_exec_fail_trace,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -300,6 +293,7 @@ class CliBuilder:
             settings=settings,
             verifiers=vertex_verifiers,
             tx_storage=tx_storage,
+            nc_storage_factory=self.nc_storage_factory,
         )
 
         cpu_mining_service = CpuMiningService()

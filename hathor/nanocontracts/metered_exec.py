@@ -80,7 +80,9 @@ class MeteredExecutor:
     def call(self, func: Callable[_P, _T], /, *, args: _P.args) -> _T:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
+        from hathor import NCFail
         from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+
         env: dict[str, object] = {
             '__builtins__': EXEC_BUILTINS,
             '__func__': func,
@@ -97,5 +99,13 @@ class MeteredExecutor:
             optimize=0,
             _feature_version=PYTHON_CODE_COMPAT_VERSION[1],
         )
-        exec(code, env)
+
+        try:
+            exec(code, env)
+        except NCFail:
+            raise
+        except Exception as e:
+            # Convert any other exception to NCFail.
+            raise NCFail from e
+
         return cast(_T, env['__result__'])

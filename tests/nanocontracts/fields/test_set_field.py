@@ -27,6 +27,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
+        self.my_set = set()
         assert len(self.my_set) == 0
         self.my_set.add(1)
         self.my_set.add(1)

@@ -1,10 +1,15 @@
 import pytest
 
+from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
+from hathor.transaction.headers import FeeHeader, NanoHeader
+from hathor.transaction.headers.fee_header import FeeEntry
+from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.token_info import TokenVersion
 from tests import unittest
 from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts import test_blueprints
@@ -13,7 +18,7 @@ from tests.nanocontracts import test_blueprints
 class MyBlueprint(Blueprint):
     counter: int
 
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context, initial: int) -> None:
         self.counter = initial
 
@@ -385,14 +390,12 @@ if foo:
             ocb1.ocb_code = "{bet_code.encode().hex()}"
             ocb2.ocb_code = test_blueprint1.py, TestBlueprint1
             ocb3.ocb_code = ```
-                from hathor.nanocontracts import Blueprint
-                from hathor.nanocontracts.context import Context
-                from hathor.nanocontracts.types import public
+                from hathor import Blueprint, Context, export, public
+                @export
                 class MyBlueprint(Blueprint):
                     @public
                     def initialize(self, ctx: Context) -> None:
                         pass
-                __blueprint__ = MyBlueprint
             ```
         """)
 
@@ -418,3 +421,127 @@ if foo:
         assert nc3.get_nano_header().nc_id == ocb3.hash
         blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
         assert blueprint_class.__name__ == 'MyBlueprint'
+
+    def test_fee_based_token(self) -> None:
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..10]
+            b10 < dummy
+
+            FBT1.token_version = fee
+            FBT1.fee = 1 HTR
+
+            FBT2.token_version = fee
+            FBT2.fee = 1 HTR
+
+            tx1.out[0] = 111 FBT1
+            tx1.out[1] = 222 FBT2
+            tx1.fee = 1 HTR
+            tx1.fee = 100 DBT
+        ''')
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        dbt, fbt1, fbt2 = artifacts.get_typed_vertices(('DBT', 'FBT1', 'FBT2'), TokenCreationTransaction)
+
+        assert dbt.token_version == TokenVersion.DEPOSIT
+        assert fbt1.token_version == TokenVersion.FEE
+        assert fbt2.token_version == TokenVersion.FEE
+
+        assert len(tx1.headers) == 1
+        fee_header = tx1.headers[0]
+
+        assert isinstance(fee_header, FeeHeader)
+        assert fee_header.tx == tx1
+        assert fee_header.get_fees() == [
+            FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1),
+            FeeEntry(token_uid=dbt.hash, amount=100),
+        ]
+
+        assert len(fbt1.headers) == 1
+        fee_header = fbt1.headers[0]
+
+        assert isinstance(fee_header, FeeHeader)
+        assert fee_header.tx == fbt1
+        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1)]
+
+        assert len(fbt2.headers) == 1
+        fee_header = fbt2.headers[0]
+
+        assert isinstance(fee_header, FeeHeader)
+        assert fee_header.tx == fbt2
+        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1)]
+
+        artifacts.propagate_with(self.manager)
+
+        assert tx1.get_metadata().validation.is_valid()
+        assert dbt.get_metadata().validation.is_valid()
+        assert fbt1.get_metadata().validation.is_valid()
+        assert fbt2.get_metadata().validation.is_valid()
+
+        assert tx1.get_metadata().voided_by is None
+        assert dbt.get_metadata().voided_by is None
+        assert fbt1.get_metadata().voided_by is None
+        assert fbt2.get_metadata().voided_by is None
+
+    def test_fee_and_nano_headers(self) -> None:
+        blueprint_id = b'x' * 32
+        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            FBT.token_version = fee
+            FBT.fee = 1 HTR
+
+            tx1.out[0] = 123 FBT
+            tx1.fee = 1 HTR
+            tx1.nc_id = "{blueprint_id.hex()}"
+            tx1.nc_method = initialize(0)
+            tx1.nc_deposit = 100 HTR
+
+            tx1 <-- b11
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+
+        assert tx1.get_metadata().validation.is_valid()
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert tx1.get_metadata().voided_by is None
+
+        assert len(tx1.headers) == 2
+        nano_header, fee_header = tx1.headers
+
+        assert isinstance(nano_header, NanoHeader)
+        assert isinstance(fee_header, FeeHeader)
+
+    def test_duplicate_balance(self) -> None:
+        with pytest.raises(SyntaxError, match='tx1: balance set more than once for HTR'):
+            self.dag_builder.build_from_str('''
+                blockchain genesis b[1..10]
+                b10 < dummy
+
+                tx1.balance_HTR = 1
+                tx1.balance_HTR = 2
+            ''')
+
+    def test_token_id(self) -> None:
+        token_id = b'y' * 32
+        blueprint_id = b'x' * 32
+        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            TKA.token_id = "{token_id.hex()}"
+
+            tx1.nc_id = "{blueprint_id.hex()}"
+            tx1.nc_method = initialize(0)
+            tx1.nc_withdrawal = 123 TKA
+
+            tx1 <-- b11
+        ''')
+        artifacts.propagate_with(self.manager)
+
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        assert set(tx1.tokens) == {token_id}
+        assert 'TKA' not in artifacts.by_name
+        assert tx1.get_metadata().nc_execution == NCExecutionState.FAILURE

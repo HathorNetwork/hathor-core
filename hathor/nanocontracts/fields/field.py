@@ -69,9 +69,9 @@ class Field(Generic[T]):
         prefix = name.encode('utf-8')
         return Field(prefix, type_, type_map)
 
-    @property
-    def is_container(self) -> bool:
-        return self._container_node_factory.is_container
+    def _is_initialized(self, instance: Blueprint) -> bool:
+        node = self._container_node_factory.build(instance)
+        return node.has_value(self._prefix)
 
     def __set__(self, instance: Blueprint, value: T) -> None:
         node = self._container_node_factory.build(instance)
@@ -79,8 +79,14 @@ class Field(Generic[T]):
 
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
         node = self._container_node_factory.build(instance)
-        return node.get_value(self._prefix)
+        try:
+            return node.get_value(self._prefix)
+        except KeyError:
+            raise AttributeError('attribute not initialized')
 
     def __delete__(self, instance: Blueprint) -> None:
         node = self._container_node_factory.build(instance)
-        node.del_value(self._prefix)
+        try:
+            node.del_value(self._prefix)
+        except KeyError:
+            raise AttributeError('attribute not initialized')

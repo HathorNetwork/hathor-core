@@ -80,9 +80,9 @@ class RunNode:
         netargs = parser.add_mutually_exclusive_group()
         netargs.add_argument('--nano-testnet', action='store_true', help='Connect to Hathor nano-testnet')
         netargs.add_argument('--testnet', action='store_true', help='Connect to Hathor the default testnet'
-                             ' (currently testnet-hotel)')
-        netargs.add_argument('--testnet-hotel', action='store_true', help='Connect to Hathor testnet-hotel')
-        netargs.add_argument('--testnet-golf', action='store_true', help='Connect to Hathor testnet-golf')
+                             ' (currently testnet-india)')
+        netargs.add_argument('--testnet-hotel', action='store_true', help=SUPPRESS)
+        netargs.add_argument('--testnet-golf', action='store_true', help=SUPPRESS)
         netargs.add_argument('--localnet', action='store_true', help='Create a localnet with default configuration.')
 
         parser.add_argument('--test-mode-tx-weight', action='store_true',
@@ -174,6 +174,7 @@ class RunNode:
         possible_nc_exec_logs = [config.value for config in NCLogConfig]
         parser.add_argument('--nc-exec-logs', default=NCLogConfig.NONE, choices=possible_nc_exec_logs,
                             help=f'Enable saving Nano Contracts execution logs. One of {possible_nc_exec_logs}')
+        parser.add_argument('--nc-exec-fail-trace', action='store_true', help=SUPPRESS)
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -500,8 +501,7 @@ class RunNode:
         from hathor.conf import (
             LOCALNET_SETTINGS_FILEPATH,
             NANO_TESTNET_SETTINGS_FILEPATH,
-            TESTNET_GOLF_SETTINGS_FILEPATH,
-            TESTNET_HOTEL_SETTINGS_FILEPATH,
+            TESTNET_INDIA_SETTINGS_FILEPATH,
         )
         from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
@@ -518,11 +518,13 @@ class RunNode:
         if self._args.config_yaml:
             os.environ['HATHOR_CONFIG_YAML'] = self._args.config_yaml
         elif self._args.testnet:
-            os.environ['HATHOR_CONFIG_YAML'] = TESTNET_HOTEL_SETTINGS_FILEPATH
+            os.environ['HATHOR_CONFIG_YAML'] = TESTNET_INDIA_SETTINGS_FILEPATH
         elif self._args.testnet_hotel:
-            os.environ['HATHOR_CONFIG_YAML'] = TESTNET_HOTEL_SETTINGS_FILEPATH
+            self.log.critical('testnet-hotel is not supported anymore')
+            sys.exit(-1)
         elif self._args.testnet_golf:
-            os.environ['HATHOR_CONFIG_YAML'] = TESTNET_GOLF_SETTINGS_FILEPATH
+            self.log.critical('testnet-golf is not supported anymore')
+            sys.exit(-1)
         elif self._args.nano_testnet:
             os.environ['HATHOR_CONFIG_YAML'] = NANO_TESTNET_SETTINGS_FILEPATH
         elif self._args.localnet:

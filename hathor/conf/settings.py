@@ -87,8 +87,14 @@ class HathorSettings(NamedTuple):
     GENESIS_TOKENS: int = GENESIS_TOKENS
 
     # Fee rate settings
-    ENABLE_FEE_TOKEN: bool = False
     FEE_PER_OUTPUT: int = 1
+
+    @property
+    def FEE_DIVISOR(self) -> int:
+        """Divisor used for evaluating fee amounts"""
+        result = 1 / self.TOKEN_DEPOSIT_PERCENTAGE
+        assert result.is_integer()
+        return int(result)
 
     # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to
     # MINIMUM_TOKEN_UNITS_PER_BLOCK.
@@ -583,6 +589,17 @@ def _validate_tokens(genesis_tokens: int, values: dict[str, Any]) -> int:
     return genesis_tokens
 
 
+def _validate_token_deposit_percentage(token_deposit_percentage: float) -> float:
+    """Validate that TOKEN_DEPOSIT_PERCENTAGE results in an integer FEE_DIVISOR."""
+    result = 1 / token_deposit_percentage
+    if not result.is_integer():
+        raise ValueError(
+            f'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR. '
+            f'Got TOKEN_DEPOSIT_PERCENTAGE={token_deposit_percentage}, FEE_DIVISOR={result}'
+        )
+    return token_deposit_percentage
+
+
 _VALIDATORS = dict(
     _parse_hex_str=pydantic.validator(
         'P2PKH_VERSION_BYTE',
@@ -620,4 +637,7 @@ _VALIDATORS = dict(
     _validate_tokens=pydantic.validator(
         'GENESIS_TOKENS'
     )(_validate_tokens),
+    _validate_token_deposit_percentage=pydantic.validator(
+        'TOKEN_DEPOSIT_PERCENTAGE'
+    )(_validate_token_deposit_percentage),
 )

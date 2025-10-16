@@ -29,7 +29,7 @@ class Migration(BaseMigration):
         return True
 
     def get_db_name(self) -> str:
-        return 'nc_storage_compat1'
+        return 'nc_storage_compat2'
 
     def run(self, storage: 'TransactionStorage') -> None:
         raise Exception('Cannot migrate your database due to an incompatible change in the nanocontracts storage. '

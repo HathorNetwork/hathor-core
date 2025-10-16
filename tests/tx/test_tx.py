@@ -78,8 +78,10 @@ class TransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
+        best_block = self.manager.tx_storage.get_best_block()
+        block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -97,8 +99,10 @@ class TransactionTest(unittest.TestCase):
         public_bytes, signature = self.wallet.get_input_aux_data(data_to_sign, self.genesis_private_key)
         _input.data = P2PKH.create_input_data(public_bytes, signature)
 
+        best_block = self.manager.tx_storage.get_best_block()
+        block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(tx.get_complete_token_info())
+            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -238,7 +242,7 @@ class TransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(block)
 
         with self.assertRaises(BlockWithInputs):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
     def test_merge_mined_no_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -456,21 +460,21 @@ class TransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         with self.assertRaises(IncorrectParents):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # test with 3 parents
         parents = [tx.hash for tx in self.genesis]
         tx.parents = parents
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # 2 parents, 1 tx and 1 block
         parents = [self.genesis_txs[0].hash, self.genesis_blocks[0].hash]
         tx.parents = parents
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(IncorrectParents):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_block_unknown_parent(self):
         address = get_address_from_public_key(self.genesis_public_key)
@@ -489,7 +493,7 @@ class TransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(ParentDoesNotExist):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
     def test_block_number_parents(self):
         address = get_address_from_public_key(self.genesis_public_key)
@@ -507,7 +511,7 @@ class TransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(IncorrectParents):
-            self.manager.verification_service.verify(block, self.verification_params)
+            self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
 
     def test_tx_inputs_out_of_range(self):
         # we'll try to spend output 3 from genesis transaction, which does not exist
@@ -530,7 +534,7 @@ class TransactionTest(unittest.TestCase):
         # test with an inexistent index
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # now with index equals of len of outputs
         _input = [TxInput(genesis_block.hash, len(genesis_block.outputs), data)]
@@ -538,7 +542,7 @@ class TransactionTest(unittest.TestCase):
         # test with an inexistent index
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # now with inexistent tx hash
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -546,7 +550,7 @@ class TransactionTest(unittest.TestCase):
         tx.inputs = _input
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(InexistentInput):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_tx_inputs_conflict(self):
         # the new tx inputs will try to spend the same output
@@ -569,7 +573,7 @@ class TransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(tx)
         with self.assertRaises(ConflictingInputs):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_regular_tx(self):
         # this should succeed
@@ -591,7 +595,7 @@ class TransactionTest(unittest.TestCase):
 
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        self.manager.verification_service.verify(tx, self.verification_params)
+        self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_tx_weight_too_high(self):
         parents = [tx.hash for tx in self.genesis_txs]
@@ -626,7 +630,7 @@ class TransactionTest(unittest.TestCase):
         tx.update_hash()
         self.assertTrue(isnan(tx.weight))
         with self.assertRaises(WeightError):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_weight_inf(self):
         # this should succeed
@@ -649,7 +653,7 @@ class TransactionTest(unittest.TestCase):
         tx.update_hash()
         self.assertTrue(isinf(tx.weight))
         with self.assertRaises(WeightError):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_tx_duplicated_parents(self):
         # the new tx will confirm the same tx twice
@@ -672,7 +676,7 @@ class TransactionTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         with self.assertRaises(DuplicatedParents):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_update_timestamp(self):
         parents = [tx for tx in self.genesis_txs]
@@ -880,7 +884,7 @@ class TransactionTest(unittest.TestCase):
         # 'Manually resolving', to validate verify method
         tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
         with self.assertRaises(InvalidOutputValue):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # Invalid output value
         invalid_output = bytes.fromhex('ffffffff')
@@ -1116,7 +1120,7 @@ class TransactionTest(unittest.TestCase):
         tx.update_hash()
         # This calls verify to ensure that verify_sigops_output is being called on verify
         with self.assertRaises(TooManySigOps):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_sigops_output_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1129,7 +1133,7 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(inputs=[_input], outputs=[output2]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_sigops_output_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1166,7 +1170,7 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(inputs=[input1], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_sigops_input_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1181,7 +1185,7 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(inputs=[input2]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
-            self.manager.verification_service.verify(tx, self.verification_params)
+            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
     def test_sigops_input_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]

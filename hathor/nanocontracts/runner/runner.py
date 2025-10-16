@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from inspect import getattr_static
+from types import MappingProxyType
 from typing import Any, Callable, Concatenate, ParamSpec, Sequence, TypeVar
 
 from typing_extensions import assert_never
@@ -31,6 +33,8 @@ from hathor.nanocontracts.exception import (
     NCForbiddenReentrancy,
     NCInvalidContext,
     NCInvalidContractId,
+    NCInvalidFee,
+    NCInvalidFeePaymentToken,
     NCInvalidInitializeMethodCall,
     NCInvalidMethodCall,
     NCInvalidPublicMethodCallFromView,
@@ -43,18 +47,17 @@ from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
 from hathor.nanocontracts.rng import NanoRNG
-from hathor.nanocontracts.runner.types import (
-    CallInfo,
-    CallRecord,
-    CallType,
-    IndexUpdateRecordType,
-    SyscallCreateContractRecord,
-    SyscallUpdateTokensRecord,
+from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
+from hathor.nanocontracts.runner.index_records import (
+    CreateContractRecord,
+    CreateTokenRecord,
+    IndexRecordType,
     UpdateAuthoritiesRecord,
-    UpdateAuthoritiesRecordType,
+    UpdateTokenBalanceRecord,
 )
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
+from hathor.nanocontracts.syscall_token_balance_rules import TokenSyscallBalanceRules
 from hathor.nanocontracts.types import (
     NC_ALLOW_REENTRANCY,
     NC_ALLOWED_ACTIONS_ATTR,
@@ -69,6 +72,7 @@ from hathor.nanocontracts.types import (
     NCActionType,
     NCArgs,
     NCDepositAction,
+    NCFee,
     NCGrantAuthorityAction,
     NCParsedArgs,
     NCRawArgs,
@@ -85,15 +89,11 @@ from hathor.nanocontracts.utils import (
 )
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
-from hathor.transaction.exceptions import TransactionDataError
+from hathor.transaction.exceptions import InvalidFeeAmount
 from hathor.transaction.storage import TransactionStorage
-from hathor.transaction.token_info import TokenVersion
-from hathor.transaction.util import (
-    clean_token_string,
-    get_deposit_token_deposit_amount,
-    get_deposit_token_withdraw_amount,
-    validate_token_name_and_symbol,
-)
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.token_info import TokenDescription, TokenVersion
+from hathor.transaction.util import clean_token_string, validate_fee_amount, validate_token_name_and_symbol
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -107,9 +107,7 @@ def _forbid_syscall_from_view(
     """Mark a syscall method as forbidden to be called from @view methods."""
     def decorator(fn: Callable[Concatenate['Runner', P], T]) -> Callable[Concatenate['Runner', P], T]:
         def wrapper(self: Runner, /, *args: P.args, **kwargs: P.kwargs) -> T:
-            current_call_record = self.get_current_call_record()
-            if current_call_record.type is CallType.VIEW:
-                raise NCViewMethodError(f'@view method cannot call `syscall.{display_name}`')
+            self.forbid_call_on_view(display_name)
             return fn(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -157,6 +155,9 @@ class Runner:
 
         # Information about updated tokens in the current call via syscalls.
         self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
+
+        # Information about fees paid during execution inter-contract calls.
+        self._paid_actions_fees: defaultdict[TokenUid, int] = defaultdict(int)
 
     def execute_from_tx(self, tx: Transaction) -> None:
         """Execute the contract's method call."""
@@ -301,14 +302,29 @@ class Runner:
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(int)
+        self._paid_actions_fees = defaultdict(int)
         return ret
+
+    def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
+        """ Invoked after the initialize method is called to initialize uninitialized containers.
+        """
+        field_names = getattr_static(blueprint, '__fields').keys()
+        uninit_field_names = []
+        for field_name in field_names:
+            field = getattr_static(blueprint, field_name)
+            if not field._is_initialized(blueprint):
+                uninit_field_names.append(field_name)
+        if uninit_field_names:
+            raise NCFail(f"Some fields were not initialized: {', '.join(uninit_field_names)}")
 
     @_forbid_syscall_from_view('call_public_method')
     def syscall_call_another_contract_public_method(
         self,
+        *,
         contract_id: ContractId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         forbid_fallback: bool,
@@ -332,16 +348,19 @@ class Runner:
             actions=actions,
             nc_args=nc_args,
             forbid_fallback=forbid_fallback,
+            fees=fees
         )
 
     @_forbid_syscall_from_view('proxy_call_public_method')
     def syscall_proxy_call_public_method(
         self,
+        *,
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
+        fees: Sequence[NCFee],
+        nc_args: NCArgs,
+        forbid_fallback: bool,
     ) -> Any:
         """Execute a proxy call to another blueprint's public method (similar to a DELEGATECALL).
         This method must be called by a blueprint during an execution.
@@ -351,17 +370,6 @@ class Runner:
         - For all purposes, it is a call to the calling contract
         - The storage context remains that of the calling contract
         """
-        nc_args = NCParsedArgs(args, kwargs)
-        return self.syscall_proxy_call_public_method_nc_args(blueprint_id, method_name, actions, nc_args)
-
-    @_forbid_syscall_from_view('proxy_call_public_method_nc_args')
-    def syscall_proxy_call_public_method_nc_args(
-        self,
-        blueprint_id: BlueprintId,
-        method_name: str,
-        actions: Sequence[NCAction],
-        nc_args: NCArgs,
-    ) -> Any:
         if method_name == NC_INITIALIZE_METHOD:
             raise NCInvalidInitializeMethodCall('cannot call initialize from another contract')
 
@@ -377,6 +385,8 @@ class Runner:
             actions=actions,
             nc_args=nc_args,
             skip_reentrancy_validation=True,
+            fees=fees,
+            forbid_fallback=forbid_fallback,
         )
 
     def _unsafe_call_another_contract_public_method(
@@ -386,6 +396,7 @@ class Runner:
         blueprint_id: BlueprintId,
         method_name: str,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         nc_args: NCArgs,
         skip_reentrancy_validation: bool = False,
         forbid_fallback: bool = False,
@@ -397,13 +408,20 @@ class Runner:
 
         last_call_record = self.get_current_call_record()
 
-        if last_call_record.type is CallType.VIEW:
+        if last_call_record.type == CallType.VIEW:
             raise NCInvalidPublicMethodCallFromView('cannot call a public method from a view method')
 
         # Validate actions.
         for action in actions:
             if isinstance(action, BaseTokenAction) and action.amount < 0:
-                raise NCInvalidContext('amount must be positive')
+                raise NCInvalidContext('action amount must be positive')
+
+        # Validate fees
+        for fee in fees:
+            try:
+                validate_fee_amount(self._settings, fee.token_uid, fee.amount)
+            except InvalidFeeAmount as e:
+                raise NCInvalidFee(str(e)) from e
 
         first_ctx = self._call_info.stack[0].ctx
         assert first_ctx is not None
@@ -415,14 +433,24 @@ class Runner:
             rules = BalanceRules.get_rules(self._settings, action)
             rules.nc_caller_execution_rule(previous_changes_tracker)
 
+        # Update the balances with the fee payment amount. Since some tokens could be created during contract
+        # execution, the verification of the tokens and amounts will be done after it
+        for fee in fees:
+            assert fee.amount > 0
+            self._update_tokens_amount([
+                UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount)
+            ])
+            self._register_paid_fee(fee.token_uid, fee.amount)
+
+        ctx_actions = Context.__group_actions__(actions)
         # Call the other contract method.
         ctx = Context(
             caller_id=last_call_record.contract_id,
             vertex_data=first_ctx.vertex,
             block_data=first_ctx.block,
-            actions=Context.__group_actions__(actions),
+            actions=ctx_actions,
         )
-        return self._execute_public_method_call(
+        result = self._execute_public_method_call(
             contract_id=contract_id,
             blueprint_id=blueprint_id,
             method_name=method_name,
@@ -431,6 +459,10 @@ class Runner:
             skip_reentrancy_validation=skip_reentrancy_validation,
             forbid_fallback=forbid_fallback,
         )
+
+        self._validate_actions_fees(ctx_actions=ctx_actions, fees=fees)
+
+        return result
 
     def _reset_all_change_trackers(self) -> None:
         """Reset all changes and prepare for next call."""
@@ -467,17 +499,16 @@ class Runner:
         calculated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
         for call in self._call_info.calls:
             if call.index_updates is None:
-                assert call.type is CallType.VIEW
+                assert call.type == CallType.VIEW
                 continue
             for record in call.index_updates:
                 match record:
-                    case SyscallCreateContractRecord() | UpdateAuthoritiesRecord():
+                    case CreateContractRecord() | UpdateAuthoritiesRecord():
                         # Nothing to do here.
                         pass
-                    case SyscallUpdateTokensRecord():
-                        calculated_tokens_totals[record.token_uid] += record.token_amount
-                        calculated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] += record.htr_amount
-                    case _:
+                    case CreateTokenRecord() | UpdateTokenBalanceRecord():
+                        calculated_tokens_totals[record.token_uid] += record.amount
+                    case _:  # pragma: no cover
                         assert_never(record)
 
         assert calculated_tokens_totals == self._updated_tokens_totals, (
@@ -502,7 +533,7 @@ class Runner:
                     # so no need to account for them.
                     pass
 
-                case _:
+                case _:  # pragma: no cover
                     assert_never(action)
 
         assert all(diff == 0 for diff in total_diffs.values()), (
@@ -595,17 +626,14 @@ class Runner:
             rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
-        try:
-            # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-            # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-            # impact the original context. Since the runner relies on the context for other critical checks, any
-            # unauthorized modification would pose a serious security risk.
-            ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
-        except NCFail:
-            raise
-        except Exception as e:
-            # Convert any other exception to NCFail.
-            raise NCFail from e
+        # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
+        # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
+        # impact the original context. Since the runner relies on the context for other critical checks, any
+        # unauthorized modification would pose a serious security risk.
+        ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
+
+        if method_name == NC_INITIALIZE_METHOD:
+            self._check_all_field_initialized(blueprint)
 
         if len(self._call_info.change_trackers[contract_id]) > 1:
             call_record.changes_tracker.commit()
@@ -669,7 +697,7 @@ class Runner:
                 # That's why they account for index update records.
                 record = UpdateAuthoritiesRecord(
                     token_uid=action.token_uid,
-                    sub_type=UpdateAuthoritiesRecordType.GRANT,
+                    type=IndexRecordType.GRANT_AUTHORITIES,
                     mint=action.mint,
                     melt=action.melt,
                 )
@@ -679,6 +707,7 @@ class Runner:
 
     def syscall_call_another_contract_view_method(
         self,
+        *,
         contract_id: ContractId,
         method_name: str,
         args: tuple[Any, ...],
@@ -739,14 +768,14 @@ class Runner:
         self._call_info.post_call(call_record)
         return self._validate_return_type_for_method(parser, ret)
 
-    def get_balance_before_current_call(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_balance_before_current_call(self, contract_id: ContractId, token_uid: TokenUid | None) -> Balance:
         """
         Return the contract balance for a given token before the current call, that is,
         excluding any actions and changes in the current call.
         """
         return self._get_balance(contract_id=contract_id, token_uid=token_uid, before_current_call=True)
 
-    def get_current_balance(self, contract_id: ContractId | None, token_uid: TokenUid | None) -> Balance:
+    def get_current_balance(self, contract_id: ContractId, token_uid: TokenUid | None) -> Balance:
         """
         Return the current contract balance for a given token,
         which includes all actions and changes in the current call.
@@ -756,22 +785,28 @@ class Runner:
     def _get_balance(
         self,
         *,
-        contract_id: ContractId | None,
+        contract_id: ContractId,
         token_uid: TokenUid | None,
         before_current_call: bool,
     ) -> Balance:
         """Internal implementation of get_balance."""
-        if contract_id is None:
-            contract_id = self.get_current_contract_id()
         if token_uid is None:
             token_uid = TokenUid(HATHOR_TOKEN_UID)
 
         storage: NCContractStorage
-        if self._call_info is None:
-            storage = self.get_storage(contract_id)
-        else:
-            changes_tracker = self.get_current_changes_tracker(contract_id)
+        if self._call_info is not None and contract_id == self.get_current_contract_id():
+            # In this case we're getting the balance of the currently executing contract,
+            # so it's guaranteed that a changes tracker exists.
+            # Depending on `before_current_call`, we get the current changes tracker or its storage.
+            changes_tracker = self.get_current_changes_tracker()
             storage = changes_tracker.storage if before_current_call else changes_tracker
+        else:
+            # In this case we're getting the balance of another contract,
+            # so a changes tracker may not yet exist if the contract is not in the call chain.
+            # We cannot retrieve the balance before the current call because we don't know whether the latest
+            # changes tracker was created during the current call or not.
+            assert not before_current_call
+            storage = self.get_current_changes_tracker_or_storage(contract_id)
 
         return storage.get_balance(bytes(token_uid))
 
@@ -785,9 +820,10 @@ class Runner:
         call_record = self.get_current_call_record()
         return call_record.contract_id
 
-    def get_current_changes_tracker(self, contract_id: ContractId) -> NCChangesTracker:
+    def get_current_changes_tracker(self) -> NCChangesTracker:
         """Return the NCChangesTracker for the current method being executed."""
         assert self._call_info is not None
+        contract_id = self.get_current_contract_id()
         change_trackers = self._call_info.change_trackers[contract_id]
         assert len(change_trackers) > 0
         return change_trackers[-1]
@@ -852,15 +888,17 @@ class Runner:
     @_forbid_syscall_from_view('create_contract')
     def syscall_create_another_contract(
         self,
+        *,
         blueprint_id: BlueprintId,
         salt: bytes,
         actions: Sequence[NCAction],
+        fees: Sequence[NCFee],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
     ) -> tuple[ContractId, Any]:
         """Create a contract from another contract."""
         if not salt:
-            raise Exception('invalid salt')
+            raise NCFail('invalid salt')
 
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()
@@ -878,22 +916,23 @@ class Runner:
             method_name=NC_INITIALIZE_METHOD,
             actions=actions,
             nc_args=nc_args,
+            fees=fees
         )
 
         assert last_call_record.index_updates is not None
-        syscall_record = SyscallCreateContractRecord(blueprint_id=blueprint_id, contract_id=child_id)
+        syscall_record = CreateContractRecord(blueprint_id=blueprint_id, contract_id=child_id)
         last_call_record.index_updates.append(syscall_record)
         return child_id, ret
 
     @_forbid_syscall_from_view('revoke_authorities')
-    def syscall_revoke_authorities(self, token_uid: TokenUid, *, revoke_mint: bool, revoke_melt: bool) -> None:
+    def syscall_revoke_authorities(self, *, token_uid: TokenUid, revoke_mint: bool, revoke_melt: bool) -> None:
         """Revoke authorities from this nano contract."""
         call_record = self.get_current_call_record()
         contract_id = call_record.contract_id
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {contract_id.hex()} cannot revoke authorities from HTR token')
 
-        changes_tracker = self.get_current_changes_tracker(contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert changes_tracker.nc_id == call_record.contract_id
         balance = changes_tracker.get_balance(token_uid)
 
@@ -912,75 +951,79 @@ class Runner:
         assert call_record.index_updates is not None
         syscall_record = UpdateAuthoritiesRecord(
             token_uid=token_uid,
-            sub_type=UpdateAuthoritiesRecordType.REVOKE,
+            type=IndexRecordType.REVOKE_AUTHORITIES,
             mint=revoke_mint,
             melt=revoke_melt,
         )
         call_record.index_updates.append(syscall_record)
 
     @_forbid_syscall_from_view('mint_tokens')
-    def syscall_mint_tokens(self, token_uid: TokenUid, amount: int) -> None:
-        """Mint tokens and add them to the balance of this nano contract."""
+    def syscall_mint_tokens(
+        self,
+        *,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
+    ) -> None:
+        """Mint tokens and adds them to the balance of this nano contract.
+        The tokens should be already created otherwise it will raise.
+        """
+        if amount <= 0:
+            raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
+
         call_record = self.get_current_call_record()
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint HTR tokens')
 
-        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert changes_tracker.nc_id == call_record.contract_id
-        balance = changes_tracker.get_balance(token_uid)
 
+        balance = changes_tracker.get_balance(token_uid)
         if not balance.can_mint:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
-        token_amount = amount
-        htr_amount = -get_deposit_token_deposit_amount(self._settings, token_amount)
+        fee_payment_token_info = self._get_token(fee_payment_token)
+        token_info = self._get_token(token_uid)
 
-        changes_tracker.add_balance(token_uid, token_amount)
-        changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
+        syscall_rules = TokenSyscallBalanceRules.get_rules(token_uid, token_info.token_version, self._settings)
+        syscall_balance = syscall_rules.mint(amount, fee_payment_token=fee_payment_token_info)
+        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
 
-        self._updated_tokens_totals[token_uid] += token_amount
-        self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
-
-        assert call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
-            type=IndexUpdateRecordType.MINT_TOKENS,
-            token_uid=token_uid,
-            token_amount=token_amount,
-            htr_amount=htr_amount,
-        )
-        call_record.index_updates.append(syscall_record)
+        self._update_tokens_amount(records)
 
     @_forbid_syscall_from_view('melt_tokens')
-    def syscall_melt_tokens(self, token_uid: TokenUid, amount: int) -> None:
-        """Melt tokens by removing them from the balance of this nano contract."""
+    def syscall_melt_tokens(
+        self,
+        *,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenUid = TokenUid(HATHOR_TOKEN_UID)
+    ) -> None:
+        """Melt tokens by removing them from the balance of this nano contract.
+        The tokens should be already created otherwise it will raise.
+        """
+        if amount <= 0:
+            raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
+
         call_record = self.get_current_call_record()
         if token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt HTR tokens')
 
-        changes_tracker = self.get_current_changes_tracker(call_record.contract_id)
+        changes_tracker = self.get_current_changes_tracker()
         assert changes_tracker.nc_id == call_record.contract_id
-        balance = changes_tracker.get_balance(token_uid)
 
+        balance = changes_tracker.get_balance(token_uid)
         if not balance.can_melt:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
-        token_amount = -amount
-        htr_amount = get_deposit_token_withdraw_amount(self._settings, token_amount)
+        token_info = self._get_token(token_uid)
+        fee_payment_token_info = self._get_token(fee_payment_token)
 
-        changes_tracker.add_balance(token_uid, token_amount)
-        changes_tracker.add_balance(HATHOR_TOKEN_UID, htr_amount)
+        syscall_rules = TokenSyscallBalanceRules.get_rules(token_uid, token_info.token_version, self._settings)
+        syscall_balance = syscall_rules.melt(amount, fee_payment_token=fee_payment_token_info)
+        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
 
-        self._updated_tokens_totals[token_uid] += token_amount
-        self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] += htr_amount
-
-        assert call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
-            type=IndexUpdateRecordType.MELT_TOKENS,
-            token_uid=token_uid,
-            token_amount=token_amount,
-            htr_amount=htr_amount,
-        )
-        call_record.index_updates.append(syscall_record)
+        self._update_tokens_amount(records)
 
     def _validate_context(self, ctx: Context) -> None:
         """Check whether the context is valid."""
@@ -1031,42 +1074,46 @@ class Runner:
         melt_authority: bool,
     ) -> TokenUid:
         """Create a child deposit token from a contract."""
+        if amount <= 0:
+            raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
+
+        from hathor.transaction.exceptions import TransactionDataError
         try:
             validate_token_name_and_symbol(self._settings, token_name, token_symbol)
         except TransactionDataError as e:
             raise NCInvalidSyscall(str(e)) from e
 
-        last_call_record = self.get_current_call_record()
-        parent_id = last_call_record.contract_id
+        call_record = self.get_current_call_record()
+        parent_id = call_record.contract_id
         cleaned_token_symbol = clean_token_string(token_symbol)
+
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
+        token_version = TokenVersion.DEPOSIT
 
-        token_amount = amount
-        htr_amount = get_deposit_token_deposit_amount(self._settings, token_amount)
-
-        changes_tracker = self.get_current_changes_tracker(parent_id)
-        changes_tracker.create_token(token_id, token_name, token_symbol)
+        changes_tracker = self.get_current_changes_tracker()
+        changes_tracker.create_token(
+            token_id=token_id,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
+        )
         changes_tracker.grant_authorities(
             token_id,
             grant_mint=mint_authority,
             grant_melt=melt_authority,
         )
-        changes_tracker.add_balance(token_id, amount)
-        changes_tracker.add_balance(HATHOR_TOKEN_UID, -htr_amount)
-        self._updated_tokens_totals[token_id] += amount
-        self._updated_tokens_totals[TokenUid(HATHOR_TOKEN_UID)] -= htr_amount
 
-        assert last_call_record.index_updates is not None
-        syscall_record = SyscallUpdateTokensRecord(
-            type=IndexUpdateRecordType.CREATE_TOKEN,
+        syscall_rules = TokenSyscallBalanceRules.get_rules(token_id, token_version, self._settings)
+        syscall_balance = syscall_rules.create_token(
             token_uid=token_id,
-            token_amount=token_amount,
-            htr_amount=-htr_amount,
             token_symbol=token_symbol,
             token_name=token_name,
-            token_version=TokenVersion.DEPOSIT
+            amount=amount,
+            fee_payment_token=self._get_token(TokenUid(HATHOR_TOKEN_UID))
         )
-        last_call_record.index_updates.append(syscall_record)
+        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
+
+        self._update_tokens_amount(records)
 
         return token_id
 
@@ -1080,9 +1127,51 @@ class Runner:
         amount: int,
         mint_authority: bool,
         melt_authority: bool,
+        fee_payment_token: TokenUid
     ) -> TokenUid:
-        """Create a child deposit token from a contract."""
-        raise NotImplementedError('syscall not implemented')
+        """Create a child fee token from a contract."""
+        if amount <= 0:
+            raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
+
+        from hathor.transaction.exceptions import TransactionDataError
+        try:
+            validate_token_name_and_symbol(self._settings, token_name, token_symbol)
+        except TransactionDataError as e:
+            raise NCInvalidSyscall(str(e)) from e
+
+        call_record = self.get_current_call_record()
+        parent_id = call_record.contract_id
+        cleaned_token_symbol = clean_token_string(token_symbol)
+
+        fee_payment_token_info = self._get_token(fee_payment_token)
+        token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
+        token_version = TokenVersion.FEE
+
+        changes_tracker = self.get_current_changes_tracker()
+        changes_tracker.create_token(
+            token_id=token_id,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
+        )
+        changes_tracker.grant_authorities(
+            token_id,
+            grant_mint=mint_authority,
+            grant_melt=melt_authority,
+        )
+        syscall_rules = TokenSyscallBalanceRules.get_rules(token_id, token_version, self._settings)
+        syscall_balance = syscall_rules.create_token(
+            token_uid=token_id,
+            token_symbol=token_symbol,
+            token_name=token_name,
+            amount=amount,
+            fee_payment_token=fee_payment_token_info
+        )
+        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
+
+        self._update_tokens_amount(records)
+
+        return token_id
 
     @_forbid_syscall_from_view('emit_event')
     def syscall_emit_event(self, data: bytes) -> None:
@@ -1095,15 +1184,142 @@ class Runner:
         """Change the blueprint of a contract."""
         assert self._call_info is not None
         last_call_record = self.get_current_call_record()
-        if last_call_record.type is CallType.VIEW:
+        if last_call_record.type == CallType.VIEW:
             raise NCInvalidPublicMethodCallFromView('forbidden')
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
         self.tx_storage.get_blueprint_class(blueprint_id)
 
-        nc_storage = self.get_current_changes_tracker(last_call_record.contract_id)
+        nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
+
+    def _get_token(self, token_uid: TokenUid) -> TokenDescription:
+        """
+        Get a token from the current changes tracker or storage.
+
+        Raises:
+            NCInvalidSyscall when the token isn't found.
+        """
+        call_record = self.get_current_call_record()
+        changes_tracker = self.get_current_changes_tracker()
+        assert call_record.contract_id == changes_tracker.nc_id
+
+        if changes_tracker.has_token(token_uid):
+            return changes_tracker.get_token(token_uid)
+
+        # Special case for HTR token (native token with UID 00)
+        if token_uid == HATHOR_TOKEN_UID:
+            return TokenDescription(
+                token_version=TokenVersion.NATIVE,  # HTR is the native token
+                token_name=self._settings.HATHOR_TOKEN_NAME,
+                token_symbol=self._settings.HATHOR_TOKEN_SYMBOL,
+                token_id=HATHOR_TOKEN_UID  # HTR token ID is the same as its UID
+            )
+
+        # Check the transaction storage for existing tokens
+        try:
+            token_creation_tx = self.tx_storage.get_token_creation_transaction(token_uid)
+        except TransactionDoesNotExist:
+            raise NCInvalidSyscall(
+                f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
+            )
+
+        if token_creation_tx.get_metadata().first_block is None:
+            raise NCInvalidSyscall(
+                f'The {token_uid.hex()} token is not confirmed by any block '
+                f'for contract {call_record.contract_id.hex()}'
+            )
+
+        return TokenDescription(
+            token_version=token_creation_tx.token_version,
+            token_name=token_creation_tx.token_name,
+            token_symbol=token_creation_tx.token_symbol,
+            token_id=token_creation_tx.hash
+        )
+
+    def _update_tokens_amount(self, records: list[UpdateTokenBalanceRecord | CreateTokenRecord]) -> None:
+        """
+        Update token balances and create index records for a token operation.
+
+        This method performs the complete flow of updating token balances for syscalls:
+        1. Updates the contract's token balances in the changes tracker
+        2. Updates the global token totals
+        3. Appends the syscall records to call_record.index_updates
+
+        Args:
+            records: List of syscall update records (typically main token + fee payment)
+
+        Raises:
+            AssertionError: If call_record.index_updates is None
+        """
+        call_record = self.get_current_call_record()
+        changes_tracker = self.get_current_changes_tracker()
+
+        assert changes_tracker.nc_id == call_record.contract_id
+        assert call_record.index_updates is not None
+
+        for record in records:
+            changes_tracker.add_balance(record.token_uid, record.amount)
+            self._updated_tokens_totals[record.token_uid] += record.amount
+            call_record.index_updates.append(record)
+
+    def _register_paid_fee(self, token_uid: TokenUid, amount: int) -> None:
+        """ Register a fee payment in the current call."""
+        self._paid_actions_fees[token_uid] += amount
+
+    def _validate_actions_fees(
+        self,
+        ctx_actions: MappingProxyType[TokenUid, tuple[NCAction, ...]],
+        fees: Sequence[NCFee],
+    ) -> None:
+        """
+        Validate if the sum of fees is the same of the provided actions fees.
+        It should be called only after a nano contract method execution to ensure all tokens are already created.
+        """
+        # sum of the fee provided by the caller
+        fee_sum = 0
+
+        # sum of the expected fee calculated by this method
+        expected_fee = 0
+
+        allowed_token_versions = {TokenVersion.DEPOSIT, TokenVersion.NATIVE}
+        # check if the payment tokens are all deposit
+        for token_uid in self._paid_actions_fees.keys():
+            token = self._get_token(token_uid)
+
+            if token.token_version not in allowed_token_versions:
+                raise NCInvalidFeePaymentToken("fee-based tokens aren't allowed for paying fees")
+
+        for fee in fees:
+            # because we registered all fee tokens in the paid fees dict, it should contain at
+            # least the length of fees
+            assert fee.token_uid in self._paid_actions_fees
+            fee_sum += fee.get_htr_value(self._settings)
+
+        chargeable_actions = {NCActionType.DEPOSIT, NCActionType.WITHDRAWAL}
+        for token_uid, actions in ctx_actions.items():
+            # it is in the paid fees, so we assume this token is deposit-based or htr
+            if token_uid in self._paid_actions_fees:
+                continue
+
+            # we still need to check here, other tokens that weren't used to pay fees can be used
+            # so we need to fetch them
+            token_info = self._get_token(token_uid)
+            if token_info.token_version == TokenVersion.FEE:
+                # filter actions to only include deposit and withdrawal actions
+                expected_fee += sum(1 for action in actions if action.type in chargeable_actions)
+
+        if fee_sum != expected_fee:
+            raise NCInvalidFee(
+                f'Fee payment balance is different than expected. (amount={fee_sum}, expected={expected_fee})'
+            )
+
+    def forbid_call_on_view(self, name: str) -> None:
+        """When called, this method will fail if the current method being executed is a view method."""
+        current_call_record = self.get_current_call_record()
+        if current_call_record.type == CallType.VIEW:
+            raise NCViewMethodError(f'@view method cannot call `syscall.{name}`')
 
 
 class RunnerFactory:

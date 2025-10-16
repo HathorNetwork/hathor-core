@@ -52,7 +52,7 @@ class TestAllFields(unittest.TestCase):
         assert ocb1.get_metadata().first_block == b11.hash
         assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().first_block == b12.hash
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         runner = manager.get_nc_runner(b12)
         method_address = runner.call_view_method(nc1.hash, 'get_last_address_str')

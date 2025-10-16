@@ -133,7 +133,7 @@ class HistoryStreamer:
 
         If the new value is bigger than the previous value, the streaming might be resumed.
         """
-        if self._state is StreamerState.CLOSING:
+        if self._state == StreamerState.CLOSING:
             closing_ack = self._next_sequence_number - 1
             if ack == closing_ack:
                 self._last_ack = ack
@@ -163,7 +163,7 @@ class HistoryStreamer:
 
     def resume_if_possible(self) -> None:
         """Resume sending messages if possible."""
-        if self._state is StreamerState.PAUSED:
+        if self._state == StreamerState.PAUSED:
             return
         if not self._state.can_transition_to(StreamerState.ACTIVE):
             return
@@ -182,7 +182,7 @@ class HistoryStreamer:
 
     def start(self) -> Deferred[bool]:
         """Start streaming items."""
-        assert self._state is StreamerState.NOT_STARTED
+        assert self._state == StreamerState.NOT_STARTED
 
         # The websocket connection somehow instantiates an twisted.web.http.HTTPChannel object
         # which register a producer. It seems the HTTPChannel is not used anymore after switching

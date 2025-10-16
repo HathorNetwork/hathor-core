@@ -18,6 +18,7 @@ from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCAction, NCGrantAuthorityAction, TokenUid
+from hathor.transaction.token_info import TokenVersion
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -37,11 +38,11 @@ class CalleeBlueprint(Blueprint):
     @public
     def grant_all_to_other(self, ctx: Context, contract_id: ContractId, token_uid: TokenUid) -> None:
         action = NCGrantAuthorityAction(token_uid=token_uid, mint=True, melt=True)
-        self.syscall.call_public_method(contract_id, 'nop', [action])
+        self.syscall.get_contract(contract_id, blueprint_id=None).public(action).nop()
 
     @public
     def revoke_all_from_other(self, ctx: Context, contract_id: ContractId, token_uid: TokenUid) -> None:
-        self.syscall.call_public_method(contract_id, 'revoke_from_self', [], token_uid, True, True)
+        self.syscall.get_contract(contract_id, blueprint_id=None).public().revoke_from_self(token_uid, True, True)
 
 
 class CallerBlueprint(Blueprint):
@@ -58,7 +59,7 @@ class CallerBlueprint(Blueprint):
     @public
     def grant_to_other(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
         action = NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
-        self.syscall.call_public_method(self.other_id, 'nop', [action])
+        self.syscall.get_contract(self.other_id, blueprint_id=None).public(action).nop()
 
     @public(allow_grant_authority=True, allow_reentrancy=True)
     def revoke_from_self(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
@@ -66,22 +67,19 @@ class CallerBlueprint(Blueprint):
 
     @public
     def revoke_from_other(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
-        self.syscall.call_public_method(self.other_id, 'revoke_from_self', [], token_uid, mint, melt)
+        self.syscall.get_contract(self.other_id, blueprint_id=None).public().revoke_from_self(token_uid, mint, melt)
 
     @public
     def acquire_another(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
         action = NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
-        self.syscall.call_public_method(self.other_id, 'nop', [action])
+        self.syscall.get_contract(self.other_id, blueprint_id=None).public(action).nop()
 
     @public
     def call_grant_all_to_other_then_revoke(self, ctx: Context, token_uid: TokenUid) -> None:
         self.syscall.revoke_authorities(token_uid, revoke_mint=True, revoke_melt=True)
         assert not self.syscall.can_mint(token_uid)
         assert not self.syscall.can_melt(token_uid)
-        self.syscall.call_public_method(
-            self.other_id,
-            'grant_all_to_other',
-            actions=[],
+        self.syscall.get_contract(self.other_id, blueprint_id=None).public().grant_all_to_other(
             contract_id=self.syscall.get_contract_id(),
             token_uid=token_uid,
         )
@@ -95,10 +93,7 @@ class CallerBlueprint(Blueprint):
     def call_revoke_all_from_other(self, ctx: Context, token_uid: TokenUid) -> None:
         assert self.syscall.can_mint(token_uid)
         assert self.syscall.can_melt(token_uid)
-        self.syscall.call_public_method(
-            self.other_id,
-            'revoke_all_from_other',
-            actions=[],
+        self.syscall.get_contract(self.other_id, blueprint_id=None).public().revoke_all_from_other(
             contract_id=self.syscall.get_contract_id(),
             token_uid=token_uid,
         )
@@ -140,6 +135,13 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self.runner.create_contract(self.callee_id, self.callee_blueprint_id, callee_ctx)
         self.caller_storage = self.runner.get_storage(self.caller_id)
         self.callee_storage = self.runner.get_storage(self.callee_id)
+
+        self.caller_storage.create_token(
+            token_id=self.token_a,
+            token_name='TKA',
+            token_symbol='TKA',
+            token_version=TokenVersion.DEPOSIT
+        )
 
     def _grant_to_other(self, *, mint: bool, melt: bool) -> None:
         context = self.create_context(

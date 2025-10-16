@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from _hashlib import HASH
 
     from hathor.conf.settings import HathorSettings
+    from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
 logger = get_logger()
@@ -260,7 +261,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         raise NotImplementedError
 
     def is_nano_contract(self) -> bool:
-        """Return True if this transaction is a nano contract or not."""
+        """Return whether this transaction is a nano contract."""
+        return False
+
+    def has_fees(self) -> bool:
+        """Return whether this transaction has a fee header."""
         return False
 
     def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
@@ -292,7 +297,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
-        return 1
+        return 2
 
     @classmethod
     @abstractmethod
@@ -482,9 +487,14 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
         return set(chain(self.parents, (i.tx_id for i in self.inputs)))
 
-    def get_tx_parents(self) -> set[bytes]:
+    def get_tx_parents_ids(self) -> set[VertexId]:
         """Set of parent tx hashes, typically used for syncing transactions."""
         return set(self.parents[1:] if self.is_block else self.parents)
+
+    def get_tx_parents(self) -> set[Transaction]:
+        """Set of parent txs."""
+        assert self.storage is not None
+        return set(self.storage.get_tx(parent_id) for parent_id in self.get_tx_parents_ids())
 
     def get_related_addresses(self) -> set[str]:
         """ Return a set of addresses collected from tx's inputs and outputs.
