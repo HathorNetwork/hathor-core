@@ -356,6 +356,37 @@ class Runner:
             fees=fees
         )
 
+    def syscall_proxy_call_view_method(
+        self,
+        *,
+        blueprint_id: BlueprintId,
+        method_name: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+    ) -> Any:
+        """Execute a proxy call to another blueprint's view method (similar to a DELEGATECALL).
+        This method must be called by a blueprint during an execution.
+
+        When using a proxy call:
+        - The code from the target blueprint runs as if it were part of the calling contract
+        - For all purposes, it is a call to the calling contract
+        - The storage context remains that of the calling contract
+        """
+        contract_id = self.get_current_contract_id()
+        if blueprint_id == self.get_blueprint_id(contract_id):
+            raise NCInvalidSyscall('cannot call the same blueprint of the running contract')
+
+        if blueprint_id == self.get_current_code_blueprint_id():
+            raise NCInvalidSyscall('cannot call the same blueprint of the running blueprint')
+
+        return self._unsafe_call_view_method(
+            contract_id=self.get_current_contract_id(),
+            blueprint_id=blueprint_id,
+            method_name=method_name,
+            args=args,
+            kwargs=kwargs,
+        )
+
     @_forbid_syscall_from_view('proxy_call_public_method')
     def syscall_proxy_call_public_method(
         self,
@@ -370,7 +401,7 @@ class Runner:
         """Execute a proxy call to another blueprint's public method (similar to a DELEGATECALL).
         This method must be called by a blueprint during an execution.
 
-        When using delegatecall:
+        When using a proxy call:
         - The code from the target blueprint runs as if it were part of the calling contract
         - For all purposes, it is a call to the calling contract
         - The storage context remains that of the calling contract
@@ -683,7 +714,13 @@ class Runner:
         assert self._call_info is None
         self._call_info = self._build_call_info(contract_id)
         try:
-            return self._unsafe_call_view_method(contract_id, method_name, args, kwargs)
+            return self._unsafe_call_view_method(
+                contract_id=contract_id,
+                blueprint_id=self.get_blueprint_id(contract_id),
+                method_name=method_name,
+                args=args,
+                kwargs=kwargs,
+            )
         finally:
             self._reset_all_change_trackers()
 
@@ -724,11 +761,19 @@ class Runner:
         assert self._call_info is not None
         if self.get_current_contract_id() == contract_id:
             raise NCInvalidContractId('a contract cannot call itself')
-        return self._unsafe_call_view_method(contract_id, method_name, args, kwargs)
+        return self._unsafe_call_view_method(
+            contract_id=contract_id,
+            blueprint_id=self.get_blueprint_id(contract_id),
+            method_name=method_name,
+            args=args,
+            kwargs=kwargs,
+        )
 
     def _unsafe_call_view_method(
         self,
+        *,
         contract_id: ContractId,
+        blueprint_id: BlueprintId,
         method_name: str,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
@@ -742,7 +787,6 @@ class Runner:
             self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
         changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint_id = self.get_blueprint_id(contract_id)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
