@@ -28,6 +28,7 @@ from hathor import (
     fallback,
     public,
 )
+from hathor.nanocontracts.exception import NCInvalidSyscall
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -91,6 +92,34 @@ class MyBlueprint1(Blueprint):
         proxy = self.syscall.get_proxy(self.other_blueprint_id)
         return proxy.public(forbid_fallback=True).unknown()
 
+    @public
+    def test_get_blueprint_id_through_proxy(self, ctx: Context) -> BlueprintId:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        return proxy.public().get_blueprint_id()
+
+    @public
+    def test_get_current_code_blueprint_id(self, ctx: Context) -> BlueprintId:
+        current_code_blueprint_id = self.syscall.get_current_code_blueprint_id()
+        assert self.syscall.get_blueprint_id() == current_code_blueprint_id, (
+            "should be the same BlueprintId when we're not in a proxy call"
+        )
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        return proxy.public().get_current_code_blueprint_id()
+
+    @public
+    def nop(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def call_itself_through_double_proxy_other(self, ctx: Context) -> None:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        proxy.public().call_itself_through_proxy(self.other_blueprint_id)
+
+    @public
+    def call_itself_through_double_proxy_same(self, ctx: Context) -> None:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        proxy.public().call_itself_through_proxy(self.syscall.get_blueprint_id())
+
 
 class MyBlueprint2(Blueprint):
     @public
@@ -105,6 +134,23 @@ class MyBlueprint2(Blueprint):
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
         return f'fallback called for method `{method_name}`'
 
+    @public
+    def get_blueprint_id(self, ctx: Context) -> BlueprintId:
+        return self.syscall.get_blueprint_id()
+
+    @public
+    def get_current_code_blueprint_id(self, ctx: Context) -> BlueprintId:
+        return self.syscall.get_current_code_blueprint_id()
+
+    @public
+    def nop(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def call_itself_through_proxy(self, ctx: Context, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        proxy.public().nop()
+
 
 class TestProxyAccessor(BlueprintTestCase):
     def setUp(self) -> None:
@@ -112,14 +158,16 @@ class TestProxyAccessor(BlueprintTestCase):
 
         self.blueprint_id1 = self._register_blueprint_class(MyBlueprint1)
         self.blueprint_id2 = self._register_blueprint_class(MyBlueprint2)
-        self.contract_id = self.gen_random_contract_id()
+        self.contract_id1 = self.gen_random_contract_id()
+        self.contract_id2 = self.gen_random_contract_id()
 
         ctx = self.create_context([NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)])
-        self.runner.create_contract(self.contract_id, self.blueprint_id1, ctx, self.blueprint_id2)
+        self.runner.create_contract(self.contract_id1, self.blueprint_id1, ctx, self.blueprint_id2)
+        self.runner.create_contract(self.contract_id2, self.blueprint_id2, self.create_context())
 
     def test_get_blueprint_id(self) -> None:
         ret = self.runner.call_public_method(
-            self.contract_id,
+            self.contract_id1,
             'test_get_blueprint_id',
             self.create_context(),
         )
@@ -127,7 +175,7 @@ class TestProxyAccessor(BlueprintTestCase):
 
     def test_public_method(self) -> None:
         ret = self.runner.call_public_method(
-            self.contract_id,
+            self.contract_id1,
             'test_public_method',
             self.create_context(),
             'alice',
@@ -141,7 +189,7 @@ class TestProxyAccessor(BlueprintTestCase):
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
             self.runner.call_public_method(
-                self.contract_id,
+                self.contract_id1,
                 'test_multiple_public_calls_on_prepared_call',
                 self.create_context(),
             )
@@ -153,14 +201,14 @@ class TestProxyAccessor(BlueprintTestCase):
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
             self.runner.call_public_method(
-                self.contract_id,
+                self.contract_id1,
                 'test_multiple_public_calls_on_method',
                 self.create_context(),
             )
 
     def test_fallback_allowed(self) -> None:
         ret = self.runner.call_public_method(
-            self.contract_id,
+            self.contract_id1,
             'test_fallback_allowed',
             self.create_context(),
         )
@@ -170,7 +218,48 @@ class TestProxyAccessor(BlueprintTestCase):
         msg = 'method `unknown` not found and fallback is forbidden'
         with pytest.raises(NCFail, match=re.escape(msg)):
             self.runner.call_public_method(
-                self.contract_id,
+                self.contract_id1,
                 'test_fallback_forbidden',
+                self.create_context(),
+            )
+
+    def test_get_blueprint_id_through_proxy(self) -> None:
+        ret = self.runner.call_public_method(
+            self.contract_id1,
+            'test_get_blueprint_id_through_proxy',
+            self.create_context(),
+        )
+        assert ret == self.blueprint_id1
+
+    def test_get_current_code_blueprint_id(self) -> None:
+        ret = self.runner.call_public_method(
+            self.contract_id1,
+            'test_get_current_code_blueprint_id',
+            self.create_context(),
+        )
+        assert ret == self.blueprint_id2
+
+    def test_call_itself_through_proxy(self) -> None:
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint of the running contract'):
+            self.runner.call_public_method(
+                self.contract_id2,
+                'call_itself_through_proxy',
+                self.create_context(),
+                self.blueprint_id2,
+            )
+
+    def test_call_itself_through_double_proxy_other(self) -> None:
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint of the running blueprint'):
+            self.runner.call_public_method(
+                self.contract_id1,
+                'call_itself_through_double_proxy_other',
+                self.create_context(),
+            )
+
+    def test_call_itself_through_double_proxy_same(self) -> None:
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint of the running contract'):
+            self.runner.call_public_method(
+                self.contract_id1,
+                'call_itself_through_double_proxy_same',
                 self.create_context(),
             )

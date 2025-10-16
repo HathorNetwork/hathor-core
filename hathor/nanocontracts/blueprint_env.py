@@ -58,13 +58,27 @@ class BlueprintEnvironment:
         return self.__runner.syscall_get_rng()
 
     def get_contract_id(self) -> ContractId:
-        """Return the contract id of this nano contract."""
+        """Return the ContractId of the current nano contract."""
         return self.__runner.get_current_contract_id()
 
     def get_blueprint_id(self) -> BlueprintId:
-        """Return the blueprint id of this nano contract."""
+        """
+        Return the BlueprintId of the current nano contract.
+
+        This means that during a proxy call, this method will return the BlueprintId of the caller's blueprint,
+        NOT the BlueprintId of the Blueprint that owns the running code.
+        """
         contract_id = self.get_contract_id()
         return self.__runner.get_blueprint_id(contract_id)
+
+    def get_current_code_blueprint_id(self) -> BlueprintId:
+        """
+        Return the BlueprintId of the Blueprint that owns the currently running code.
+
+        This means that during a proxy call, this method will return the BlueprintId of the Blueprint that owns the
+        running code, NOT the BlueprintId of the current nano contract.
+        """
+        return self.__runner.get_current_code_blueprint_id()
 
     def get_balance_before_current_call(self, token_uid: TokenUid | None = None) -> Amount:
         """
