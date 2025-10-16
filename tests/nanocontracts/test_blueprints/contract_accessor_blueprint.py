@@ -12,29 +12,30 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.nanocontracts import HATHOR_TOKEN_UID, Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import (
+from hathor import (
+    HATHOR_TOKEN_UID,
+    Blueprint,
     BlueprintId,
+    Context,
     ContractId,
     NCArgs,
     NCDepositAction,
+    TokenUid,
     VertexId,
+    export,
     fallback,
     public,
     view,
 )
 
 
+@export
 class MyBlueprint(Blueprint):
     message: str
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
         self.message = 'initialize called'
-
-    def internal_method(self) -> None:
-        pass
 
     @view
     def simple_view_method(self, name: str) -> str:
@@ -53,16 +54,27 @@ class MyBlueprint(Blueprint):
     @view
     def test_simple_view_method(self, other_id: ContractId, name: str) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
-        return contract \
-            .view() \
-            .simple_view_method(name)
+
+        ret1 = contract.view().simple_view_method(name)
+        ret2 = contract.view().simple_view_method.call(name)
+        ret3 = contract.get_view_method('simple_view_method').call(name)
+        ret4 = contract.get_view_method('simple_view_method')(name)
+
+        assert len({ret1, ret2, ret3, ret4}) == 1
+        return ret1
 
     @public
     def test_simple_public_method(self, ctx: Context, other_id: ContractId, name: str) -> str:
         contract = self.syscall.get_contract(other_id, blueprint_id=None)
-        return contract \
-            .public(NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)) \
-            .simple_public_method(name)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+
+        ret1 = contract.public(action).simple_public_method(name)
+        ret2 = contract.public(action).simple_public_method.call(name)
+        ret3 = contract.get_public_method('simple_public_method', action).call(name)
+        ret4 = contract.get_public_method('simple_public_method', action)(name)
+
+        assert len({ret1, ret2, ret3, ret4}) == 1
+        return ret1
 
     @public
     def test_simple_public_method_no_actions(self, ctx: Context, other_id: ContractId, name: str) -> str:
@@ -201,5 +213,12 @@ class MyBlueprint(Blueprint):
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
         return f'fallback called for method `{method_name}`'
 
+    @public
+    def test_other_syscalls(self, ctx: Context, other_id: ContractId, token_uid: TokenUid) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
 
-__blueprint__ = MyBlueprint
+        assert contract.get_contract_id() == other_id
+        assert contract.get_blueprint_id() == self.syscall.get_blueprint_id()
+        assert contract.get_current_balance() == 0
+        assert not contract.can_mint(token_uid)
+        assert not contract.can_melt(token_uid)

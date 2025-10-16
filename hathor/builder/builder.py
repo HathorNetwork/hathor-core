@@ -83,7 +83,7 @@ class SyncSupportLevel(IntEnum):
                 vertex_handler=vertex_handler,
             )
             p2p_manager.add_sync_factory(SyncVersion.V2, sync_v2_factory)
-        if sync_v2_support is cls.ENABLED:
+        if sync_v2_support == cls.ENABLED:
             p2p_manager.enable_sync_version(SyncVersion.V2)
 
 
@@ -590,10 +590,12 @@ class Builder:
             settings = self._get_or_create_settings()
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
+            nc_storage_factory = self._get_or_create_nc_storage_factory()
             self._verification_service = VerificationService(
                 settings=settings,
                 verifiers=verifiers,
                 tx_storage=storage,
+                nc_storage_factory=nc_storage_factory,
             )
 
         return self._verification_service

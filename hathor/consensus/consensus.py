@@ -80,6 +80,7 @@ class ConsensusAlgorithm:
         nc_calls_sorter: NCSorterCallable,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
+        nc_exec_fail_trace: bool = False,
     ) -> None:
         self._settings = settings
         self.log = logger.new()
@@ -87,7 +88,7 @@ class ConsensusAlgorithm:
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
-            settings, runner_factory, nc_log_storage, feature_service
+            settings, runner_factory, nc_log_storage, feature_service, nc_exec_fail_trace=nc_exec_fail_trace,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
         self.nc_calls_sorter = nc_calls_sorter
@@ -143,7 +144,7 @@ class ConsensusAlgorithm:
         txs_to_remove: list[BaseTransaction] = []
         new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
 
-        if context.reorg_common_block is not None:
+        if context.reorg_info is not None:
             if new_best_height < best_height:
                 self.log.warn(
                     'height decreased, re-checking mempool', prev_height=best_height, new_height=new_best_height,
@@ -162,16 +163,21 @@ class ConsensusAlgorithm:
                 self._remove_transactions(txs_to_remove, storage, context)
 
         # emit the reorg started event if needed
-        if context.reorg_common_block is not None:
+        if context.reorg_info is not None:
             assert isinstance(old_best_block, Block)
             new_best_block = base.storage.get_transaction(new_best_tip)
-            reorg_size = old_best_block.get_height() - context.reorg_common_block.get_height()
+            reorg_size = old_best_block.get_height() - context.reorg_info.common_block.get_height()
             assert old_best_block != new_best_block
             assert reorg_size > 0
-            context.pubsub.publish(HathorEvents.REORG_STARTED, old_best_height=best_height,
-                                   old_best_block=old_best_block, new_best_height=new_best_height,
-                                   new_best_block=new_best_block, common_block=context.reorg_common_block,
-                                   reorg_size=reorg_size)
+            context.pubsub.publish(
+                HathorEvents.REORG_STARTED,
+                old_best_height=best_height,
+                old_best_block=old_best_block,
+                new_best_height=new_best_height,
+                new_best_block=new_best_block,
+                common_block=context.reorg_info.common_block,
+                reorg_size=reorg_size,
+            )
 
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
@@ -195,7 +201,7 @@ class ConsensusAlgorithm:
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
 
         # and also emit the reorg finished event if needed
-        if context.reorg_common_block is not None:
+        if context.reorg_info is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
     def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
@@ -337,6 +343,7 @@ class ConsensusAlgorithm:
             lambda tx: self._reward_lock_mempool_rule(tx, new_best_height),
             lambda tx: self._unknown_contract_mempool_rule(tx),
             lambda tx: self._nano_activation_rule(storage, tx),
+            self._checkdatasig_count_rule,
         )
 
         # From the mempool origin, find the leftmost mempool txs that are invalid.
@@ -403,16 +410,44 @@ class ConsensusAlgorithm:
         return True
 
     def _nano_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
-        """Check whether a nano or OCB tx became invalid because the reorg changed the feature activation state."""
+        """Check whether a tx became invalid because the reorg changed the nano feature activation state."""
         from hathor.nanocontracts import OnChainBlueprint
         from hathor.nanocontracts.utils import is_nano_active
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.token_info import TokenVersion
 
         best_block = storage.get_best_block()
         if is_nano_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
             # When nano is active, this rule has no effect.
             return True
 
-        return not tx.is_nano_contract() and not isinstance(tx, OnChainBlueprint)
+        # The nano feature activation is actually used to enable 4 use cases:
+
+        if tx.is_nano_contract():
+            return False
+
+        if isinstance(tx, OnChainBlueprint):
+            return False
+
+        if isinstance(tx, TokenCreationTransaction) and tx.token_version == TokenVersion.FEE:
+            return False
+
+        if tx.has_fees():
+            return False
+
+        return True
+
+    def _checkdatasig_count_rule(self, tx: Transaction) -> bool:
+        """Check whether a tx became invalid because the reorg changed the checkdatasig feature activation state."""
+        from hathor.verification.vertex_verifier import VertexVerifier
+
+        # Any exception in the sigops verification will be considered
+        # a fail and the tx will be removed from the mempool.
+        try:
+            VertexVerifier._verify_sigops_output(settings=self._settings, vertex=tx, enable_checkdatasig_count=True)
+        except Exception:
+            return False
+        return True
 
 
 def _sorted_affected_txs(affected_txs: set[BaseTransaction]) -> list[BaseTransaction]:

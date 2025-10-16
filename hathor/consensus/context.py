@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
@@ -32,16 +33,32 @@ logger = get_logger()
 _base_transaction_log = logger.new()
 
 
+@dataclass(kw_only=True, slots=True, frozen=True)
+class ReorgInfo:
+    common_block: Block
+    old_best_block: Block
+    new_best_block: Block
+
+
 class ConsensusAlgorithmContext:
     """ An instance of this class holds all the relevant information related to a single run of a consensus update.
     """
+    __slots__ = (
+        'consensus',
+        'pubsub',
+        'block_algorithm',
+        'transaction_algorithm',
+        'txs_affected',
+        'reorg_info',
+        'nc_events',
+    )
 
     consensus: 'ConsensusAlgorithm'
     pubsub: PubSubManager
     block_algorithm: 'BlockConsensusAlgorithm'
     transaction_algorithm: 'TransactionConsensusAlgorithm'
     txs_affected: set[BaseTransaction]
-    reorg_common_block: Optional[Block]
+    reorg_info: ReorgInfo | None
     nc_events: list[tuple[Transaction, list[NCEvent]]] | None
 
     def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:
@@ -50,7 +67,7 @@ class ConsensusAlgorithmContext:
         self.block_algorithm = self.consensus.block_algorithm_factory(self)
         self.transaction_algorithm = self.consensus.transaction_algorithm_factory(self)
         self.txs_affected = set()
-        self.reorg_common_block = None
+        self.reorg_info = None
         self.nc_events = None
 
     def save(self, tx: BaseTransaction) -> None:
@@ -59,7 +76,7 @@ class ConsensusAlgorithmContext:
         self.txs_affected.add(tx)
         tx.storage.save_transaction(tx, only_metadata=True)
 
-    def mark_as_reorg(self, common_block: Block) -> None:
+    def mark_as_reorg(self, reorg_info: ReorgInfo) -> None:
         """Must only be called once, will raise an assert error if called twice."""
-        assert self.reorg_common_block is None
-        self.reorg_common_block = common_block
+        assert self.reorg_info is None
+        self.reorg_info = reorg_info

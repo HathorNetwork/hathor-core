@@ -79,7 +79,7 @@ class FeatureService:
 
         must_signal_features = (
             feature for feature, feature_info in feature_infos.items()
-            if feature_info.state is FeatureState.MUST_SIGNAL
+            if feature_info.state == FeatureState.MUST_SIGNAL
         )
 
         for feature in must_signal_features:
@@ -160,13 +160,13 @@ class FeatureService:
         assert not boundary_block.is_genesis, 'cannot calculate new state for genesis'
         assert height % evaluation_interval == 0, 'cannot calculate new state for a non-boundary block'
 
-        if previous_state is FeatureState.DEFINED:
+        if previous_state == FeatureState.DEFINED:
             if height >= criteria.start_height:
                 return FeatureState.STARTED
 
             return FeatureState.DEFINED
 
-        if previous_state is FeatureState.STARTED:
+        if previous_state == FeatureState.STARTED:
             if height >= criteria.timeout_height and not criteria.lock_in_on_timeout:
                 return FeatureState.FAILED
 
@@ -185,22 +185,22 @@ class FeatureService:
 
             return FeatureState.STARTED
 
-        if previous_state is FeatureState.MUST_SIGNAL:
+        if previous_state == FeatureState.MUST_SIGNAL:
             # The MUST_SIGNAL state is defined to always take exactly one evaluation interval. Since this method is
             # only called for boundary blocks, it is guaranteed that after exactly one evaluation interval in
             # MUST_SIGNAL, the feature will transition to LOCKED_IN.
             return FeatureState.LOCKED_IN
 
-        if previous_state is FeatureState.LOCKED_IN:
+        if previous_state == FeatureState.LOCKED_IN:
             if height >= criteria.minimum_activation_height:
                 return FeatureState.ACTIVE
 
             return FeatureState.LOCKED_IN
 
-        if previous_state is FeatureState.ACTIVE:
+        if previous_state == FeatureState.ACTIVE:
             return FeatureState.ACTIVE
 
-        if previous_state is FeatureState.FAILED:
+        if previous_state == FeatureState.FAILED:
             return FeatureState.FAILED
 
         raise NotImplementedError(f'Unknown previous state: {previous_state}')

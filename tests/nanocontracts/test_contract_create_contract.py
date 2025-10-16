@@ -1,7 +1,6 @@
 from typing import Optional
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import HATHOR_TOKEN_UID, Blueprint, Context, public
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
@@ -39,10 +38,9 @@ class MyBlueprint1(Blueprint):
             action = ctx.get_single_action(token_uid)
             salt = b'x'
             assert isinstance(action, NCDepositAction)
-            new_actions = [NCDepositAction(token_uid=token_uid, amount=action.amount - initial)]
-            self.contract, _ = self.syscall.create_contract(
-                blueprint_id, salt, new_actions, blueprint_id, initial - 1, self.token_uid
-            )
+            new_action = NCDepositAction(token_uid=token_uid, amount=action.amount - initial)
+            self.contract, _ = self.syscall.setup_new_contract(blueprint_id, new_action, salt=salt) \
+                .initialize(blueprint_id, initial - 1, self.token_uid)
         else:
             self.contract = None
         self.counter = initial
@@ -52,9 +50,15 @@ class MyBlueprint1(Blueprint):
         new_actions = []
         if self.token_uid and self.syscall.can_mint(self.token_uid):
             new_actions.append(NCGrantAuthorityAction(token_uid=self.token_uid, mint=True, melt=True))
-        self.syscall.create_contract(blueprint_id, salt + b'1', new_actions, blueprint_id, 0, self.token_uid)
-        self.syscall.create_contract(blueprint_id, salt + b'2', new_actions, blueprint_id, 0, self.token_uid)
-        self.syscall.create_contract(blueprint_id, salt + b'3', new_actions, blueprint_id, 0, self.token_uid)
+
+        self.syscall.setup_new_contract(blueprint_id, *new_actions, salt=salt + b'1') \
+            .initialize(blueprint_id, 0, self.token_uid)
+
+        self.syscall.setup_new_contract(blueprint_id, *new_actions, salt=salt + b'2') \
+            .initialize(blueprint_id, 0, self.token_uid)
+
+        self.syscall.setup_new_contract(blueprint_id, *new_actions, salt=salt + b'3') \
+            .initialize(blueprint_id, 0, self.token_uid)
 
     @public
     def nop(self, ctx: Context) -> None:
@@ -83,7 +87,7 @@ class MyBlueprint2(Blueprint):
     def melt(self, ctx: Context, amount: int, contract_id: ContractId) -> None:
         assert self.token_uid is not None
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=amount)
-        self.syscall.call_public_method(contract_id, 'withdraw', [action])
+        self.syscall.get_contract(contract_id, blueprint_id=None).public(action).withdraw()
         self.syscall.melt_tokens(self.token_uid, amount)
 
 
@@ -212,22 +216,22 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager, up_to='b34')
 
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc1.get_metadata().voided_by is None
 
-        assert nc2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc2.get_metadata().voided_by is None
 
-        assert nc3.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc3.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc3.get_metadata().voided_by is None
 
-        assert nc4.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc4.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc4.get_metadata().voided_by is None
 
-        assert nc5.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc5.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc5.get_metadata().voided_by is None
 
-        assert nc6.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc6.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc6.get_metadata().voided_by is None
 
         nc1_contract_id = ContractId(VertexId(nc1.hash))
@@ -353,31 +357,31 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert all(match_list)
 
         assert nc1.get_metadata().voided_by is None
-        assert nc1.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc1.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc1 in self.manager.tx_storage.iter_mempool_from_best_index()
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
 
         assert nc2.get_metadata().voided_by is None
-        assert nc2.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc2.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc2 in self.manager.tx_storage.iter_mempool_from_best_index()
         assert self.manager.tx_storage.transaction_exists(nc2.hash)
 
         assert nc3.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc3.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc3.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc3 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc3.hash)
 
         assert nc4.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc4.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc4.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc4 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc4.hash)
 
         assert nc5.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc5.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc5.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc5 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc5.hash)
 
         assert nc6.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
-        assert nc6.get_metadata().nc_execution is NCExecutionState.PENDING
+        assert nc6.get_metadata().nc_execution == NCExecutionState.PENDING
         assert nc6 not in self.manager.tx_storage.iter_mempool_from_best_index()
         assert not self.manager.tx_storage.transaction_exists(nc6.hash)

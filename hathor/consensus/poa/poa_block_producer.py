@@ -121,7 +121,7 @@ class PoaBlockProducer:
 
     def _on_new_vertex(self, event: HathorEvents, args: EventArguments) -> None:
         """Handle propagation of new blocks after a vertex is received."""
-        assert event is HathorEvents.NETWORK_NEW_TX_ACCEPTED
+        assert event == HathorEvents.NETWORK_NEW_TX_ACCEPTED
         block = args.tx
 
         from hathor.transaction import Block

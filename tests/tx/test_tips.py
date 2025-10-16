@@ -113,8 +113,9 @@ class TipsTestCase(unittest.TestCase):
         self.assertTrue(set(b2.parents).issubset(set([tx3.hash] + [reward_blocks[-1].hash] + tx3.parents)))
 
         tx4 = add_new_transactions(self.manager, 1, advance_clock=1)[0]
-        # tx4 had no tip, so the parents will be the last block parents
-        self.assertCountEqual(set(tx4.parents), set(b2.parents[1:]))
+        # tx4 had no tip, so the parents will be tx3 and one of tx3 parents
+        self.assertTrue(tx3.hash in tx4.parents)
+        self.assertTrue(set(tx4.parents).issubset(set([tx3.hash] + tx3.parents)))
         # Then tx4 will become a tip
         self.assertCountEqual(self.get_tips(), set([tx4.hash]))
 

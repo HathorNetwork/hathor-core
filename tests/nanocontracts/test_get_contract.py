@@ -19,7 +19,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def initialize(self, ctx: Context) -> None:
-        # self.totals = {}  # XXX: "dict" initializes implicitly
+        self.totals = {}
         self.counter = 0
 
     @view

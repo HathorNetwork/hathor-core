@@ -38,7 +38,7 @@ class FeatureState(str, Enum):
 
     def is_active(self) -> bool:
         """Return whether the state is active."""
-        return self is FeatureState.ACTIVE
+        return self == FeatureState.ACTIVE
 
     @staticmethod
     def get_signaling_states() -> set['FeatureState']:

@@ -397,7 +397,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # make up some transactions that the node isn't expecting
         best_block = manager1.tx_storage.get_best_block()
-        existing_tx = manager1.tx_storage.get_transaction(list(best_block.get_tx_parents())[0])
+        existing_tx = manager1.tx_storage.get_transaction(list(best_block.get_tx_parents_ids())[0])
         fake_txs = []
         for i in range(3):
             fake_tx = existing_tx.clone()

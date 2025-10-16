@@ -100,7 +100,7 @@ class TestContractAccessor(BlueprintTestCase):
     def test_multiple_public_calls_on_method(self) -> None:
         msg = (
             'accessor for public method `simple_public_method` was already used, '
-            'you must use `public` on the contract to call it again'
+            'you must use `public`/`public_method` on the contract to call it again'
         )
         with pytest.raises(NCFail, match=re.escape(msg)):
             self.runner.call_public_method(
@@ -218,3 +218,14 @@ class TestContractAccessor(BlueprintTestCase):
                 other_id=self.contract_id2,
                 name='alice',
             )
+
+    def test_other_syscalls(self) -> None:
+        token_uid = self.gen_random_token_uid()
+
+        self.runner.call_public_method(
+            self.contract_id1,
+            'test_other_syscalls',
+            self.create_context(),
+            other_id=self.contract_id2,
+            token_uid=token_uid,
+        )

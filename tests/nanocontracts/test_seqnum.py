@@ -60,9 +60,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc1.get_metadata().voided_by is None
         assert tx2.get_metadata().voided_by is None
         assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
-        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert tx3.get_metadata().nc_execution == NCExecutionState.FAILURE
 
         tx2_nano_header = tx2.get_nano_header()
         tx3_nano_header = tx3.get_nano_header()
@@ -112,9 +112,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc1.get_metadata().voided_by is None
         assert tx2.get_metadata().voided_by == {tx2.hash, NC_EXECUTION_FAIL_ID}
         assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
-        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert tx3.get_metadata().nc_execution == NCExecutionState.FAILURE
 
         assert_nc_failure_reason(
             manager=self.manager,
@@ -176,10 +176,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert tx1.get_metadata().voided_by == {tx1.hash, NC_EXECUTION_FAIL_ID}
         assert tx2.get_metadata().voided_by == {tx1.hash}
         assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
-        assert tx1.get_metadata().nc_execution is NCExecutionState.FAILURE
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SKIPPED
-        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SKIPPED
+        assert tx3.get_metadata().nc_execution == NCExecutionState.FAILURE
 
         assert_nc_failure_reason(
             manager=self.manager,
@@ -226,10 +226,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
         b31 = artifacts.get_typed_vertex('b31', Block)
 
         assert nc1.get_metadata().voided_by is None
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert tx2.get_metadata().voided_by == {tx2.hash, NC_EXECUTION_FAIL_ID}
-        assert tx2.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=tx2.hash,
@@ -278,16 +278,16 @@ class NCBlueprintTestCase(BlueprintTestCase):
         b32 = artifacts.get_typed_vertex('b32', Block)
 
         assert nc1.get_metadata().voided_by is None
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert tx2.get_metadata().voided_by is None
-        assert tx2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert tx3.get_metadata().voided_by == {tx3.hash, NC_EXECUTION_FAIL_ID}
-        assert tx3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert tx3.get_metadata().nc_execution == NCExecutionState.FAILURE
 
         assert tx4.get_metadata().voided_by is None
-        assert tx4.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx4.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         assert b32.get_metadata().voided_by is None
 
@@ -344,13 +344,13 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc1_nano_header.nc_address == nc3_nano_header.nc_address
         assert nc1_nano_header.nc_seqnum > nc3_nano_header.nc_seqnum
 
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc1.get_metadata().voided_by is None
 
-        assert nc2.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc2.get_metadata().voided_by is None
 
-        assert nc3.get_metadata().nc_execution is NCExecutionState.FAILURE
+        assert nc3.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert nc3.get_metadata().voided_by == {nc3.hash, NC_EXECUTION_FAIL_ID}
         assert_nc_failure_reason(
             manager=self.manager,
@@ -394,7 +394,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc1_nano_header.nc_seqnum > nc2_nano_header.nc_seqnum
         assert nc1.timestamp < nc2.timestamp
 
-        assert nc0.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc0.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc0.get_metadata().voided_by is None
 
         # The execution order of nc1 and nc2 is random because even though nc1.seqnum > nc2.seqnum, the timestamp
@@ -402,10 +402,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # - When we execute nc1 before nc2, nc1 succeeds and nc2 fails.
         # - When we execute nc1 after nc2, both succeed.
 
-        assert nc1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc1.get_metadata().voided_by is None
 
-        if nc2.get_metadata().nc_execution is NCExecutionState.FAILURE:
+        if nc2.get_metadata().nc_execution == NCExecutionState.FAILURE:
             assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
             assert_nc_failure_reason(
                 manager=self.manager,
@@ -481,7 +481,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert nc3_nano_header.nc_seqnum == nc4_nano_header.nc_seqnum
         assert nc5_nano_header.nc_seqnum == nc6_nano_header.nc_seqnum
 
-        assert nc0.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert nc0.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert nc0.get_metadata().voided_by is None
 
         expected_states = {NCExecutionState.SUCCESS, NCExecutionState.FAILURE}
