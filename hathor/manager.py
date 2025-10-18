@@ -225,6 +225,7 @@ class HathorManager:
         self.stratum_factory: Optional[StratumFactory] = None
 
         self._allow_mining_without_peers = False
+        self._allow_health_without_peers = False
 
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
@@ -607,6 +608,12 @@ class HathorManager:
         """
         self._allow_mining_without_peers = True
 
+    def allow_health_without_peers(self) -> None:
+        """Allow health checks to pass without synced peers.
+        It should be used only for debugging purposes.
+        """
+        self._allow_health_without_peers = True
+
     def can_start_mining(self) -> bool:
         """ Return whether we can start mining.
         """
@@ -892,11 +899,18 @@ class HathorManager:
         return True
 
     def is_sync_healthy(self) -> tuple[bool, Optional[str]]:
+        """Check if node is healthy from sync perspective.
+
+        Checks for recent activity and synced peers (unless --allow-health-without-peers is set).
+
+        Returns:
+            Tuple of (is_healthy, reason_if_unhealthy)
+        """
         # This checks whether the last txs (blocks or transactions) we received are recent enough.
         if not self.has_recent_activity():
             return False, HathorManager.UnhealthinessReason.NO_RECENT_ACTIVITY
 
-        if not self.connections.has_synced_peer():
+        if not self._allow_health_without_peers and not self.connections.has_synced_peer():
             return False, HathorManager.UnhealthinessReason.NO_SYNCED_PEER
 
         return True, None
