@@ -383,6 +383,9 @@ class CliBuilder:
         if self._args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
+        if self._args.allow_health_without_peers:
+            self.manager.allow_health_without_peers()
+
         if self._args.x_localhost_only:
             self.manager.connections.localhost_only = True
 

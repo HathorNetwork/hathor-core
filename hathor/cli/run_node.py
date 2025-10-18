@@ -50,6 +50,7 @@ class RunNode:
     UNSAFE_ARGUMENTS: list[tuple[str, Callable[['RunNodeArgs'], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
+        ('--allow-health-without-peers', lambda args: bool(args.allow_health_without_peers)),
         ('--sync-bridge', lambda args: bool(args.sync_bridge)),
         ('--sync-v1-only', lambda args: bool(args.sync_v1_only)),
         ('--x-sync-bridge', lambda args: bool(args.x_sync_bridge)),
@@ -131,6 +132,8 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
+        parser.add_argument('--allow-health-without-peers', action='store_true',
+                            help='Allow health checks to pass without synced peers')
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
                             '/push-tx API')
