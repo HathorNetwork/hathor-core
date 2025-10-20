@@ -174,14 +174,12 @@ class TestSyscallsInView(BlueprintTestCase):
         allowed_view_syscalls = {
             'get_contract_id',
             'get_blueprint_id',
-            'get_balance',
             'get_balance_before_current_call',
             'get_current_balance',
             'can_mint',
             'can_mint_before_current_call',
             'can_melt',
             'can_melt_before_current_call',
-            'call_view_method',
             'get_contract',
             'get_proxy',
             'get_current_code_blueprint_id',
@@ -204,6 +202,9 @@ class TestSyscallsInView(BlueprintTestCase):
             if '__' in method_name or method_name in skip_tested_methods:
                 continue
             assert method_name in tested_methods, f'method `{method_name}` of DirectSyscalls was not tested'
+
+        for method_name in allowed_view_syscalls:
+            assert method_name in tested_methods, f'method `{method_name}` of `allowed_view_syscalls` was not tested'
 
     def test_indirect_syscalls(self) -> None:
         contract_id1 = self.gen_random_contract_id()
