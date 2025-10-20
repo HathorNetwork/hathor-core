@@ -222,3 +222,47 @@ class MyBlueprint(Blueprint):
         assert contract.get_current_balance() == 0
         assert not contract.can_mint(token_uid)
         assert not contract.can_melt(token_uid)
+
+    @public
+    def test_visibility_combinations_public_public_public(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        contract.public(action).simple_public_method('')
+
+    @public
+    def test_visibility_combinations_public_public_view(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        contract.public(action).simple_view_method('')
+
+    @public
+    def test_visibility_combinations_public_view_public(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        contract.view().simple_public_method('')
+
+    @public
+    def test_visibility_combinations_public_view_view(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        contract.view().simple_view_method('')
+
+    @view
+    def test_visibility_combinations_view_public_public(self, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        contract.public(action).simple_public_method('')
+
+    @view
+    def test_visibility_combinations_view_public_view(self, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        contract.public(action).simple_view_method('')
+
+    @view
+    def test_visibility_combinations_view_view_public(self, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        contract.view().simple_public_method('')
+
+    @view
+    def test_visibility_combinations_view_view_view(self, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        contract.view().simple_view_method('')

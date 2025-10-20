@@ -27,8 +27,9 @@ from hathor import (
     NCParsedArgs,
     fallback,
     public,
+    view,
 )
-from hathor.nanocontracts.exception import NCInvalidSyscall
+from hathor.nanocontracts.exception import NCInvalidMethodCall, NCInvalidSyscall, NCViewMethodError
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -43,6 +44,18 @@ class MyBlueprint1(Blueprint):
     def test_get_blueprint_id(self, ctx: Context) -> BlueprintId:
         proxy = self.syscall.get_proxy(self.other_blueprint_id)
         return proxy.get_blueprint_id()
+
+    @view
+    def test_view_method(self, name: str) -> str:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+
+        ret1 = proxy.view().hello_view(name)
+        ret2 = proxy.view().hello_view.call(name)
+        ret3 = proxy.get_view_method('hello_view').call(name)
+        ret4 = proxy.get_view_method('hello_view')(name)
+
+        assert len({ret1, ret2, ret3, ret4}) == 1
+        return ret1
 
     @public
     def test_public_method(self, ctx: Context, name: str) -> str:
@@ -60,6 +73,25 @@ class MyBlueprint1(Blueprint):
 
         assert len({ret1, ret2, ret3, ret4, ret5, ret6}) == 1
         return ret1
+
+    @view
+    def test_multiple_view_calls_on_prepared_call(self) -> tuple[str, str]:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        prepared_call = proxy.view()
+
+        ret1 = prepared_call.hello_view('alice')
+        ret2 = prepared_call.hello_view('bob')
+        return ret1, ret2
+
+    @view
+    def test_multiple_view_calls_on_method(self) -> tuple[str, str]:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        prepared_call = proxy.view()
+        method = prepared_call.hello_view
+
+        ret1 = method('alice')
+        ret2 = method('bob')
+        return ret1, ret2
 
     @public
     def test_multiple_public_calls_on_prepared_call(self, ctx: Context) -> tuple[str, str]:
@@ -106,8 +138,8 @@ class MyBlueprint1(Blueprint):
         proxy = self.syscall.get_proxy(self.other_blueprint_id)
         return proxy.public().get_current_code_blueprint_id()
 
-    @public
-    def nop(self, ctx: Context) -> None:
+    @public(allow_deposit=True)
+    def nop_public(self, ctx: Context) -> None:
         pass
 
     @public
@@ -120,11 +152,69 @@ class MyBlueprint1(Blueprint):
         proxy = self.syscall.get_proxy(self.other_blueprint_id)
         proxy.public().call_itself_through_proxy(self.syscall.get_blueprint_id())
 
+    @view
+    def call_itself_through_double_proxy_other_view(self) -> None:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        proxy.view().call_itself_through_proxy_view(self.other_blueprint_id)
+
+    @view
+    def call_itself_through_double_proxy_same_view(self) -> None:
+        proxy = self.syscall.get_proxy(self.other_blueprint_id)
+        proxy.view().call_itself_through_proxy_view(self.syscall.get_blueprint_id())
+
+    @public
+    def test_visibility_combinations_public_public_public(self, ctx: Context, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        proxy.public(action).nop_public()
+
+    @public
+    def test_visibility_combinations_public_public_view(self, ctx: Context, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        proxy.public(action).nop_view()
+
+    @public
+    def test_visibility_combinations_public_view_public(self, ctx: Context, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        proxy.view().nop_public()
+
+    @public
+    def test_visibility_combinations_public_view_view(self, ctx: Context, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        proxy.view().nop_view()
+
+    @view
+    def test_visibility_combinations_view_public_public(self, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        proxy.public(action).nop_public()
+
+    @view
+    def test_visibility_combinations_view_public_view(self, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        action = NCDepositAction(amount=123, token_uid=HATHOR_TOKEN_UID)
+        proxy.public(action).nop_view()
+
+    @view
+    def test_visibility_combinations_view_view_public(self, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        proxy.view().nop_public()
+
+    @view
+    def test_visibility_combinations_view_view_view(self, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        proxy.view().nop_view()
+
 
 class MyBlueprint2(Blueprint):
     @public
     def initialize(self, ctx: Context) -> None:
         pass
+
+    @view
+    def hello_view(self, name: str) -> str:
+        return f'hello {name}'
 
     @public(allow_deposit=True)
     def hello(self, ctx: Context, name: str) -> str:
@@ -142,14 +232,23 @@ class MyBlueprint2(Blueprint):
     def get_current_code_blueprint_id(self, ctx: Context) -> BlueprintId:
         return self.syscall.get_current_code_blueprint_id()
 
-    @public
-    def nop(self, ctx: Context) -> None:
+    @public(allow_deposit=True)
+    def nop_public(self, ctx: Context) -> None:
+        pass
+
+    @view
+    def nop_view(self) -> None:
         pass
 
     @public
     def call_itself_through_proxy(self, ctx: Context, blueprint_id: BlueprintId) -> None:
         proxy = self.syscall.get_proxy(blueprint_id)
-        proxy.public().nop()
+        proxy.public().nop_public()
+
+    @view
+    def call_itself_through_proxy_view(self, blueprint_id: BlueprintId) -> None:
+        proxy = self.syscall.get_proxy(blueprint_id)
+        proxy.view().nop_view()
 
 
 class TestProxyAccessor(BlueprintTestCase):
@@ -173,6 +272,10 @@ class TestProxyAccessor(BlueprintTestCase):
         )
         assert ret == self.blueprint_id2
 
+    def test_view_method(self) -> None:
+        ret = self.runner.call_view_method(self.contract_id1, 'test_view_method', 'alice')
+        assert ret == 'hello alice'
+
     def test_public_method(self) -> None:
         ret = self.runner.call_public_method(
             self.contract_id1,
@@ -181,6 +284,14 @@ class TestProxyAccessor(BlueprintTestCase):
             'alice',
         )
         assert ret == 'hello alice'
+
+    def test_multiple_view_calls_on_prepared_call(self) -> None:
+        ret = self.runner.call_view_method(self.contract_id1, 'test_multiple_view_calls_on_prepared_call')
+        assert ret == ('hello alice', 'hello bob')
+
+    def test_multiple_view_calls_on_method(self) -> None:
+        ret = self.runner.call_view_method(self.contract_id1, 'test_multiple_view_calls_on_method')
+        assert ret == ('hello alice', 'hello bob')
 
     def test_multiple_public_calls_on_prepared_call(self) -> None:
         msg = (
@@ -263,3 +374,100 @@ class TestProxyAccessor(BlueprintTestCase):
                 'call_itself_through_double_proxy_same',
                 self.create_context(),
             )
+
+    def test_call_itself_through_proxy_view(self) -> None:
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint of the running contract'):
+            self.runner.call_view_method(
+                self.contract_id2,
+                'call_itself_through_proxy_view',
+                self.blueprint_id2,
+            )
+
+    def test_call_itself_through_double_proxy_other_view(self) -> None:
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint of the running blueprint'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'call_itself_through_double_proxy_other_view',
+            )
+
+    def test_call_itself_through_double_proxy_same_view(self) -> None:
+        with pytest.raises(NCInvalidSyscall, match='cannot call the same blueprint of the running contract'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'call_itself_through_double_proxy_same_view',
+            )
+
+    def test_visibility_combinations(self) -> None:
+        """
+        This test checks that method visibility is respected when using proxy accessors.
+        Consider this exhaustive table of combinations of the caller method, the accessor it uses,
+        the method it calls, and the expected outcode:
+
+        caller | accessor | callee | expected
+        -------------------------------------
+        public | public   | public | SUCCESS
+        public | public   | view   | FAIL
+        public | view     | public | FAIL
+        public | view     | view   | SUCCESS
+        view   | public   | public | FAIL
+        view   | public   | view   | FAIL
+        view   | view     | public | FAIL
+        view   | view     | view   | SUCCESS
+        """
+
+        self.runner.call_public_method(
+            self.contract_id1,
+            'test_visibility_combinations_public_public_public',
+            self.create_context(),
+            blueprint_id=self.blueprint_id2,
+        )
+
+        with pytest.raises(NCInvalidMethodCall, match='method `nop_view` is not a public method'):
+            self.runner.call_public_method(
+                self.contract_id1,
+                'test_visibility_combinations_public_public_view',
+                self.create_context(),
+                blueprint_id=self.blueprint_id2,
+            )
+
+        with pytest.raises(NCInvalidMethodCall, match='`nop_public` is not a view method'):
+            self.runner.call_public_method(
+                self.contract_id1,
+                'test_visibility_combinations_public_view_public',
+                self.create_context(),
+                blueprint_id=self.blueprint_id2,
+            )
+
+        self.runner.call_public_method(
+            self.contract_id1,
+            'test_visibility_combinations_public_view_view',
+            self.create_context(),
+            blueprint_id=self.blueprint_id2,
+        )
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.proxy_call_public_method`'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'test_visibility_combinations_view_public_public',
+                blueprint_id=self.blueprint_id2,
+            )
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.proxy_call_public_method`'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'test_visibility_combinations_view_public_view',
+                blueprint_id=self.blueprint_id2,
+            )
+
+        with pytest.raises(NCInvalidMethodCall, match='`nop_public` is not a view method'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'test_visibility_combinations_view_view_public',
+                blueprint_id=self.blueprint_id2,
+            )
+
+        self.runner.call_view_method(
+            self.contract_id1,
+            'test_visibility_combinations_view_view_view',
+            blueprint_id=self.blueprint_id2,
+        )

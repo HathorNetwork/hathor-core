@@ -18,6 +18,7 @@ import re
 import pytest
 
 from hathor.nanocontracts import HATHOR_TOKEN_UID, NCFail
+from hathor.nanocontracts.exception import NCInvalidMethodCall, NCViewMethodError
 from hathor.nanocontracts.types import NCDepositAction
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from tests.nanocontracts.test_blueprints import contract_accessor_blueprint
@@ -221,11 +222,85 @@ class TestContractAccessor(BlueprintTestCase):
 
     def test_other_syscalls(self) -> None:
         token_uid = self.gen_random_token_uid()
-
         self.runner.call_public_method(
             self.contract_id1,
             'test_other_syscalls',
             self.create_context(),
             other_id=self.contract_id2,
             token_uid=token_uid,
+        )
+
+    def test_visibility_combinations(self) -> None:
+        """
+        This test checks that method visibility is respected when using contract accessors.
+        Consider this exhaustive table of combinations of the caller method, the accessor it uses,
+        the method it calls, and the expected outcode:
+
+        caller | accessor | callee | expected
+        -------------------------------------
+        public | public   | public | SUCCESS
+        public | public   | view   | FAIL
+        public | view     | public | FAIL
+        public | view     | view   | SUCCESS
+        view   | public   | public | FAIL
+        view   | public   | view   | FAIL
+        view   | view     | public | FAIL
+        view   | view     | view   | SUCCESS
+        """
+
+        self.runner.call_public_method(
+            self.contract_id1,
+            'test_visibility_combinations_public_public_public',
+            self.create_context(),
+            other_id=self.contract_id2,
+        )
+
+        with pytest.raises(NCInvalidMethodCall, match='method `simple_view_method` is not a public method'):
+            self.runner.call_public_method(
+                self.contract_id1,
+                'test_visibility_combinations_public_public_view',
+                self.create_context(),
+                other_id=self.contract_id2,
+            )
+
+        with pytest.raises(NCInvalidMethodCall, match='`simple_public_method` is not a view method'):
+            self.runner.call_public_method(
+                self.contract_id1,
+                'test_visibility_combinations_public_view_public',
+                self.create_context(),
+                other_id=self.contract_id2,
+            )
+
+        self.runner.call_public_method(
+            self.contract_id1,
+            'test_visibility_combinations_public_view_view',
+            self.create_context(),
+            other_id=self.contract_id2,
+        )
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.call_public_method`'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'test_visibility_combinations_view_public_public',
+                other_id=self.contract_id2,
+            )
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.call_public_method`'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'test_visibility_combinations_view_public_view',
+                other_id=self.contract_id2,
+            )
+
+        with pytest.raises(NCInvalidMethodCall, match='`simple_public_method` is not a view method'):
+            self.runner.call_view_method(
+                self.contract_id1,
+                'test_visibility_combinations_view_view_public',
+                other_id=self.contract_id2,
+            )
+
+        self.runner.call_view_method(
+            self.contract_id1,
+            'test_visibility_combinations_view_view_view',
+            other_id=self.contract_id2,
         )
