@@ -167,8 +167,17 @@ class ConsensusAlgorithm:
             assert isinstance(old_best_block, Block)
             new_best_block = base.storage.get_transaction(new_best_tip)
             reorg_size = old_best_block.get_height() - context.reorg_info.common_block.get_height()
+            # TODO: After we remove block ties, should the assert below be true?
+            # assert old_best_block.get_metadata().voided_by
             assert old_best_block != new_best_block
             assert reorg_size > 0
+            self.log.info(
+                'reorg detected',
+                reorg_size=reorg_size,
+                previous_best_block=old_best_block.hash_hex,
+                new_best_block=new_best_block.hash_hex,
+                common_block=context.reorg_info.common_block.hash_hex,
+            )
             context.pubsub.publish(
                 HathorEvents.REORG_STARTED,
                 old_best_height=best_height,

@@ -18,7 +18,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
 from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCMemoryStorageFactory, NCRocksDBStorageFactory, NCStorageFactory
+from hathor.nanocontracts.storage import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.types import TokenUid, VertexId, export, fallback, public, view
 
 # Identifier used in metadata's voided_by when a Nano Contract method fails.
@@ -32,7 +32,6 @@ __all__ = [
     'Runner',
     'OnChainBlueprint',
     'NCFail',
-    'NCMemoryStorageFactory',
     'NCRocksDBStorageFactory',
     'NCStorageFactory',
     'public',

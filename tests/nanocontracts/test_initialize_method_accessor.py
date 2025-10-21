@@ -16,7 +16,8 @@ import re
 
 import pytest
 
-from hathor import HATHOR_TOKEN_UID, Blueprint, BlueprintId, Context, NCDepositAction, NCFail, public
+from hathor import HATHOR_TOKEN_UID, Blueprint, BlueprintId, Context, NCDepositAction, NCFail, public, view
+from hathor.nanocontracts.exception import NCViewMethodError
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -43,6 +44,11 @@ class MyBlueprint1(Blueprint):
         method = self.syscall.setup_new_contract(blueprint_id, salt=b'1').initialize
         method('')
         method('')
+
+    @view
+    def test_initialize_from_view(self, blueprint_id: BlueprintId) -> None:
+        action = NCDepositAction(token_uid=HATHOR_TOKEN_UID, amount=123)
+        self.syscall.setup_new_contract(blueprint_id, action, salt=b'1').initialize('')
 
 
 class MyBlueprint2(Blueprint):
@@ -89,5 +95,13 @@ class TestInitializeMethodAccessor(BlueprintTestCase):
                 self.contract_id,
                 'test_multiple_initialize_calls_on_method',
                 self.create_context(),
+                self.blueprint_id2,
+            )
+
+    def test_initialize_from_view(self) -> None:
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.setup_new_contract`'):
+            self.runner.call_view_method(
+                self.contract_id,
+                'test_initialize_from_view',
                 self.blueprint_id2,
             )

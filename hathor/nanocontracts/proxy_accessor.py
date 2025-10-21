@@ -45,6 +45,13 @@ class ProxyAccessor(FauxImmutable):
         """Return the blueprint id of this proxy."""
         return self.__blueprint_id
 
+    def view(self) -> Any:
+        """Prepare a call to a proxy view method."""
+        return PreparedProxyViewCall(
+            runner=self.__runner,
+            blueprint_id=self.__blueprint_id,
+        )
+
     def public(self, *actions: NCAction, fees: Sequence[NCFee] | None = None, forbid_fallback: bool = False) -> Any:
         """Prepare a proxy call to a public method."""
         return PreparedProxyPublicCall(
@@ -53,6 +60,14 @@ class ProxyAccessor(FauxImmutable):
             actions=actions,
             fees=fees or (),
             forbid_fallback=forbid_fallback,
+        )
+
+    def get_view_method(self, method_name: str) -> ProxyViewMethodAccessor:
+        """Get a proxy view method."""
+        return ProxyViewMethodAccessor(
+            runner=self.__runner,
+            blueprint_id=self.__blueprint_id,
+            method_name=method_name,
         )
 
     def get_public_method(
@@ -70,6 +85,26 @@ class ProxyAccessor(FauxImmutable):
             actions=actions,
             fees=fees or (),
             forbid_fallback=forbid_fallback,
+        )
+
+
+@final
+class PreparedProxyViewCall(FauxImmutable):
+    __slots__ = ('__runner', '__blueprint_id')
+    __skip_faux_immutability_validation__ = True  # Needed to implement __getattr__
+
+    def __init__(self, *, runner: Runner, blueprint_id: BlueprintId) -> None:
+        self.__runner: Runner
+        self.__blueprint_id: BlueprintId
+
+        __set_faux_immutable__(self, '__runner', runner)
+        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+
+    def __getattr__(self, method_name: str) -> ProxyViewMethodAccessor:
+        return ProxyViewMethodAccessor(
+            runner=self.__runner,
+            blueprint_id=self.__blueprint_id,
+            method_name=method_name,
         )
 
 
@@ -125,6 +160,38 @@ class PreparedProxyPublicCall(FauxImmutable):
             actions=self.__actions,
             fees=self.__fees,
             forbid_fallback=self.__forbid_fallback,
+        )
+
+
+@final
+class ProxyViewMethodAccessor(FauxImmutable):
+    """
+    This class represents a "proxy view method", or a proxy view method accessor, during a blueprint method execution.
+    It's a callable that will forward the call to the actual wrapped blueprint via syscall.
+    It may be used multiple times to call the same method with different arguments.
+    """
+    __slots__ = ('__runner', '__blueprint_id', '__method_name')
+
+    def __init__(self, *, runner: Runner, blueprint_id: BlueprintId, method_name: str) -> None:
+        self.__runner: Runner
+        self.__blueprint_id: BlueprintId
+        self.__method_name: str
+
+        __set_faux_immutable__(self, '__runner', runner)
+        __set_faux_immutable__(self, '__blueprint_id', blueprint_id)
+        __set_faux_immutable__(self, '__method_name', method_name)
+
+    def call(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments. This is just an alias for calling the object directly."""
+        return self(*args, **kwargs)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> object:
+        """Call the method with the provided arguments."""
+        return self.__runner.syscall_proxy_call_view_method(
+            blueprint_id=self.__blueprint_id,
+            method_name=self.__method_name,
+            args=args,
+            kwargs=kwargs,
         )
 
 
