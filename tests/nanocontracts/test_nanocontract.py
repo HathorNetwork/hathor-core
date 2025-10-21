@@ -34,7 +34,7 @@ from hathor.transaction.exceptions import (
     MissingStackItems,
     TooManySigOps,
 )
-from hathor.transaction.headers import NanoHeader, VertexHeaderId
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
@@ -158,7 +158,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nc = self._get_nc()
         nano_header = nc.get_nano_header()
         sighash_bytes = nano_header.get_sighash_bytes()
-        deserialized, buf = NanoHeader.deserialize(Transaction(), VertexHeaderId.NANO_HEADER.value + sighash_bytes)
+        deserialized, buf = NanoHeader.deserialize(Transaction(), sighash_bytes)
 
         assert len(buf) == 0
         assert deserialized.nc_seqnum == nano_header.nc_seqnum
