@@ -194,7 +194,6 @@ SOFT_VOIDED_TX_IDS:
   - 00004305882eb3eef6b45f025ff58eb7baa5ca35f7d6f42c8b085482b00474e6
   - 000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e
 
-ENABLE_NANO_CONTRACTS: feature_activation
 FEATURE_ACTIVATION:
   features:
     INCREASE_MAX_MERKLE_PATH_LENGTH:
@@ -226,7 +225,12 @@ FEATURE_ACTIVATION:
       # Right now the best block is 5_947_110 at Tuesday, 2025-10-14 20:01:09 GMT
       start_height: 5_947_200
       timeout_height: 6_350_400  # 20 weeks
-      minimum_activation_height: 6_027_840  # 4 weeks
+      minimum_activation_height: 6_048_000  # 5 weeks
       lock_in_on_timeout: false
       version: 0.67.0
       signal_support_by_default: true
+
+ENABLE_NANO_CONTRACTS: feature_activation
+NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
+  - HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9
+  - HUbxYhtqW8pdRCC2WngPxN7MB4SUMDPrrh
