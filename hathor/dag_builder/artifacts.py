@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Iterator, NamedTuple, Sequence, TypeVar
 
 from hathor.dag_builder.types import DAGNode
 from hathor.manager import HathorManager
-from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
@@ -60,7 +59,6 @@ class DAGArtifacts:
         *,
         up_to: str | None = None,
         up_to_before: str | None = None,
-        new_relayed_vertex: bool = False
     ) -> None:
         """
         Propagate vertices using the provided manager up to the provided node name, included.  Last propagation is
@@ -82,17 +80,7 @@ class DAGArtifacts:
 
             if found_begin:
                 try:
-                    if new_relayed_vertex:
-                        assert manager.vertex_handler.on_new_relayed_vertex(vertex)
-                    else:
-                        best_block = manager.tx_storage.get_best_block()
-                        best_block_meta = best_block.get_metadata()
-                        params = VerificationParams(
-                            enable_checkdatasig_count=True,
-                            enable_nano=True,
-                            nc_block_root_id=best_block_meta.nc_block_root_id,
-                        )
-                        assert manager.vertex_handler._old_on_new_vertex(vertex, params)
+                    assert manager.vertex_handler.on_new_relayed_vertex(vertex)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
                 self._last_propagated = node.name

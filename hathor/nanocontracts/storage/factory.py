@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import TYPE_CHECKING, Optional
 
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore, NodeTrieStore, RocksDBNodeTrieStore
+from hathor.nanocontracts.storage.backends import NodeTrieStore, RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.block_storage import NCBlockStorage
 
 if TYPE_CHECKING:
@@ -60,18 +60,6 @@ class NCStorageFactory(ABC):
         """Create an empty block storage."""
         trie = self._get_trie(None)
         return NCBlockStorage(trie)
-
-
-class NCMemoryStorageFactory(NCStorageFactory):
-    """Factory to create a memory storage for a contract.
-
-    As it is a memory storage, the factory keeps all contract stored data on
-    its attribute `self.data`.
-    """
-
-    def __init__(self) -> None:
-        # This attribute stores data from all contracts.
-        self._store = MemoryNodeTrieStore()
 
 
 class NCRocksDBStorageFactory(NCStorageFactory):
