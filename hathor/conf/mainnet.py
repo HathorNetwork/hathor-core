@@ -214,6 +214,10 @@ SETTINGS = HathorSettings(
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
     ENABLE_NANO_CONTRACTS=NanoContractsSetting.FEATURE_ACTIVATION,
+    NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
+        'HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9',
+        'HUbxYhtqW8pdRCC2WngPxN7MB4SUMDPrrh',
+    ],
     FEATURE_ACTIVATION=FeatureActivationSettings(
         features={
             Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: Criteria(
@@ -246,8 +250,8 @@ SETTINGS = HathorSettings(
                 # Expected to be reached around Tuesday, 2025-08-12 17:39:56 GMT
                 # Right now the best block is 5_748_286 at Wednesday, 2025-08-06 16:02:56 GMT
                 start_height=5_947_200,
-                timeout_height=6_350_400,  # N + 10 * 20160 (10 weeks after the start)
-                minimum_activation_height=6_027_840,
+                timeout_height=6_350_400,  # 20 weeks
+                minimum_activation_height=6_048_000,  # 5 weeks
                 lock_in_on_timeout=False,
                 version='0.67.0',
                 signal_support_by_default=True,
