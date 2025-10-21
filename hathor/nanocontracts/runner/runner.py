@@ -55,9 +55,9 @@ from hathor.nanocontracts.runner.index_records import (
     UpdateAuthoritiesRecord,
     UpdateTokenBalanceRecord,
 )
+from hathor.nanocontracts.runner.token_fees import calculate_melt_fee, calculate_mint_fee
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.syscall_token_balance_rules import TokenSyscallBalanceRules
 from hathor.nanocontracts.types import (
     NC_ALLOW_REENTRANCY,
     NC_ALLOWED_ACTIONS_ATTR,
@@ -475,9 +475,9 @@ class Runner:
         # execution, the verification of the tokens and amounts will be done after it
         for fee in fees:
             assert fee.amount > 0
-            self._update_tokens_amount([
-                UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount)
-            ])
+            self._update_tokens_amount(
+                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount),
+            )
             self._register_paid_fee(fee.token_uid, fee.amount)
 
         ctx_actions = Context.__group_actions__(actions)
@@ -1033,14 +1033,19 @@ class Runner:
         if not balance.can_mint:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
-        fee_payment_token_info = self._get_token(fee_payment_token)
         token_info = self._get_token(token_uid)
+        fee_amount = calculate_mint_fee(
+            settings=self._settings,
+            token_version=token_info.token_version,
+            amount=amount,
+            fee_payment_token=self._get_token(fee_payment_token),
+        )
 
-        syscall_rules = TokenSyscallBalanceRules.get_rules(token_uid, token_info.token_version, self._settings)
-        syscall_balance = syscall_rules.mint(amount, fee_payment_token=fee_payment_token_info)
-        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
-
-        self._update_tokens_amount(records)
+        assert amount > 0 and fee_amount < 0
+        self._update_tokens_amount(
+            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=amount),
+            fee=UpdateTokenBalanceRecord(token_uid=fee_payment_token, amount=fee_amount),
+        )
 
     @_forbid_syscall_from_view('melt_tokens')
     def syscall_melt_tokens(
@@ -1068,13 +1073,28 @@ class Runner:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
         token_info = self._get_token(token_uid)
-        fee_payment_token_info = self._get_token(fee_payment_token)
+        fee_amount = calculate_melt_fee(
+            settings=self._settings,
+            token_version=token_info.token_version,
+            amount=amount,
+            fee_payment_token=self._get_token(fee_payment_token),
+        )
 
-        syscall_rules = TokenSyscallBalanceRules.get_rules(token_uid, token_info.token_version, self._settings)
-        syscall_balance = syscall_rules.melt(amount, fee_payment_token=fee_payment_token_info)
-        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
+        assert amount > 0
+        match token_info.token_version:
+            case TokenVersion.NATIVE:
+                raise AssertionError
+            case TokenVersion.DEPOSIT:
+                assert fee_amount > 0
+            case TokenVersion.FEE:
+                assert fee_amount < 0
+            case _:  # pragma: no cover
+                assert_never(token_info.token_version)
 
-        self._update_tokens_amount(records)
+        self._update_tokens_amount(
+            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=-amount),
+            fee=UpdateTokenBalanceRecord(token_uid=fee_payment_token, amount=fee_amount),
+        )
 
     def _validate_context(self, ctx: Context) -> None:
         """Check whether the context is valid."""
@@ -1154,17 +1174,14 @@ class Runner:
             grant_melt=melt_authority,
         )
 
-        syscall_rules = TokenSyscallBalanceRules.get_rules(token_id, token_version, self._settings)
-        syscall_balance = syscall_rules.create_token(
+        self._create_token(
+            token_version=token_version,
             token_uid=token_id,
-            token_symbol=token_symbol,
-            token_name=token_name,
             amount=amount,
-            fee_payment_token=self._get_token(TokenUid(HATHOR_TOKEN_UID))
+            fee_payment_token=self._get_token(TokenUid(HATHOR_TOKEN_UID)),
+            token_name=token_name,
+            token_symbol=token_symbol,
         )
-        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
-
-        self._update_tokens_amount(records)
 
         return token_id
 
@@ -1194,7 +1211,6 @@ class Runner:
         parent_id = call_record.contract_id
         cleaned_token_symbol = clean_token_string(token_symbol)
 
-        fee_payment_token_info = self._get_token(fee_payment_token)
         token_id = derive_child_token_id(parent_id, cleaned_token_symbol, salt=salt)
         token_version = TokenVersion.FEE
 
@@ -1210,17 +1226,15 @@ class Runner:
             grant_mint=mint_authority,
             grant_melt=melt_authority,
         )
-        syscall_rules = TokenSyscallBalanceRules.get_rules(token_id, token_version, self._settings)
-        syscall_balance = syscall_rules.create_token(
+
+        self._create_token(
+            token_version=token_version,
             token_uid=token_id,
+            amount=amount,
+            fee_payment_token=self._get_token(fee_payment_token),
             token_symbol=token_symbol,
             token_name=token_name,
-            amount=amount,
-            fee_payment_token=fee_payment_token_info
         )
-        records = syscall_rules.get_syscall_update_token_records(syscall_balance)
-
-        self._update_tokens_amount(records)
 
         return token_id
 
@@ -1289,7 +1303,45 @@ class Runner:
             token_id=token_creation_tx.hash
         )
 
-    def _update_tokens_amount(self, records: list[UpdateTokenBalanceRecord | CreateTokenRecord]) -> None:
+    def _create_token(
+        self,
+        *,
+        token_version: TokenVersion,
+        token_uid: TokenUid,
+        amount: int,
+        fee_payment_token: TokenDescription,
+        token_symbol: str,
+        token_name: str,
+    ) -> None:
+        """Create a new token."""
+        assert token_version in (TokenVersion.DEPOSIT, TokenVersion.FEE)
+        fee_amount = calculate_mint_fee(
+            settings=self._settings,
+            token_version=token_version,
+            amount=amount,
+            fee_payment_token=fee_payment_token,
+        )
+        assert amount > 0 and fee_amount < 0
+        self._update_tokens_amount(
+            operation=CreateTokenRecord(
+                token_uid=token_uid,
+                amount=amount,
+                token_version=token_version,  # type: ignore[arg-type]
+                token_symbol=token_symbol,
+                token_name=token_name,
+            ),
+            fee=UpdateTokenBalanceRecord(
+                token_uid=TokenUid(fee_payment_token.token_id),
+                amount=fee_amount,
+            ),
+        )
+
+    def _update_tokens_amount(
+        self,
+        *,
+        operation: UpdateTokenBalanceRecord | CreateTokenRecord | None = None,
+        fee: UpdateTokenBalanceRecord | None = None,
+    ) -> None:
         """
         Update token balances and create index records for a token operation.
 
@@ -1297,20 +1349,16 @@ class Runner:
         1. Updates the contract's token balances in the changes tracker
         2. Updates the global token totals
         3. Appends the syscall records to call_record.index_updates
-
-        Args:
-            records: List of syscall update records (typically main token + fee payment)
-
-        Raises:
-            AssertionError: If call_record.index_updates is None
         """
         call_record = self.get_current_call_record()
         changes_tracker = self.get_current_changes_tracker()
-
+        assert operation or fee
         assert changes_tracker.nc_id == call_record.contract_id
         assert call_record.index_updates is not None
 
-        for record in records:
+        for record in (operation, fee):
+            if record is None:
+                continue
             changes_tracker.add_balance(record.token_uid, record.amount)
             self._updated_tokens_totals[record.token_uid] += record.amount
             call_record.index_updates.append(record)
