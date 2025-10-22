@@ -20,8 +20,8 @@ from typing import Sequence
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
-    NCError,
     NCFail,
+    NCForbiddenAction,
     NCInvalidAction,
     NCInvalidMethodCall,
     NCInvalidSeqnum,
@@ -32,6 +32,7 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.runner.runner import MAX_SEQNUM_JUMP_SIZE
 from hathor.nanocontracts.types import (
+    NC_ALLOWED_ACTIONS_ATTR,
     NC_FALLBACK_METHOD,
     Address,
     BaseAuthorityAction,
@@ -169,17 +170,19 @@ class NanoHeaderVerifier:
 
         try:
             blueprint_class = self._tx_storage.get_blueprint_class(blueprint_id)
-        except NCError as e:
+        except NCFail as e:
             raise NCTxValidationError from e
 
         method_name = nano_header.nc_method
         method = getattr(blueprint_class, method_name, None)
+        allowed_actions: set[NCActionType]
         if method is None:
             if not allow_fallback:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is allowed')
-            fallback_method = getattr(blueprint_class, NC_FALLBACK_METHOD, None)
-            if fallback_method is None:
+            method = getattr(blueprint_class, NC_FALLBACK_METHOD, None)
+            if method is None:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
+            method_name = 'fallback'
         else:
             if not is_nc_public_method(method):
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
@@ -188,6 +191,13 @@ class NanoHeaderVerifier:
                 parser.deserialize_args_bytes(nano_header.nc_args_bytes)
             except NCFail as e:
                 raise NCTxValidationError from e
+
+        allowed_actions = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
+        assert isinstance(allowed_actions, set)
+        for action in nano_header.nc_actions:
+            if action.type not in allowed_actions:
+                exception = NCForbiddenAction(f'action {action.type} is forbidden on method `{method_name}`')
+                raise NCTxValidationError from exception
 
     def verify_seqnum(self, tx: BaseTransaction, params: VerificationParams) -> None:
         if not params.harden_nano_restrictions:

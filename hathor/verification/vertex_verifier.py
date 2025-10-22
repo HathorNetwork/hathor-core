@@ -35,7 +35,7 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -180,11 +180,25 @@ class VertexVerifier:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def verify_sigops_output(self, vertex: BaseTransaction, enable_checkdatasig_count: bool = True) -> None:
+        """Alias to `_verify_sigops_output` for compatibility."""
+        self._verify_sigops_output(
+            settings=self._settings,
+            vertex=vertex,
+            enable_checkdatasig_count=enable_checkdatasig_count,
+        )
+
+    @staticmethod
+    def _verify_sigops_output(
+        *,
+        settings: HathorSettings,
+        vertex: BaseTransaction,
+        enable_checkdatasig_count: bool,
+    ) -> None:
         """ Count sig operations on all outputs and verify that the total sum is below the limit
         """
         from hathor.transaction.scripts import SigopCounter
 
-        max_multisig_pubkeys = self._settings.MAX_MULTISIG_PUBKEYS
+        max_multisig_pubkeys = settings.MAX_MULTISIG_PUBKEYS
         counter = SigopCounter(
             max_multisig_pubkeys=max_multisig_pubkeys,
             enable_checkdatasig_count=enable_checkdatasig_count,
@@ -195,7 +209,7 @@ class VertexVerifier:
         for tx_output in vertex.outputs:
             n_txops += counter.get_sigops_count(tx_output.script)
 
-        if n_txops > self._settings.MAX_TX_SIGOPS_OUTPUT:
+        if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
 
@@ -214,6 +228,7 @@ class VertexVerifier:
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.enable_nano:
                     allowed_headers.add(NanoHeader)
+                    allowed_headers.add(FeeHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
@@ -223,12 +238,18 @@ class VertexVerifier:
         if len(vertex.headers) > vertex.get_maximum_number_of_headers():
             raise TooManyHeaders('Maximum number of headers exceeded')
 
+        seen_header_types: set[type] = set()
         allowed_headers = self.get_allowed_headers(vertex, params)
         for header in vertex.headers:
+            if type(header) in seen_header_types:
+                raise HeaderNotSupported(
+                    f'only one instance of `{type(header).__name__}` is allowed'
+                )
             if type(header) not in allowed_headers:
                 raise HeaderNotSupported(
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
+            seen_header_types.add(type(header))
 
     def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify that the timestamp is not too old. Mempool only."""

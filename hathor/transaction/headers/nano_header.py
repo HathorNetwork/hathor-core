@@ -208,7 +208,7 @@ class NanoHeader(VertexBaseHeader):
         ]
         return b''.join(ret)
 
-    def _serialize_without_header_id(self, *, skip_signature: bool) -> deque[bytes]:
+    def _serialize(self, *, skip_signature: bool) -> bytes:
         """Serialize the header with the option to skip the signature."""
         encoded_method = self.nc_method.encode('ascii')
 
@@ -230,16 +230,14 @@ class NanoHeader(VertexBaseHeader):
             ret.append(self.nc_script)
         else:
             ret.append(leb128.encode_unsigned(0, max_bytes=_NC_SCRIPT_LEN_MAX_BYTES))
-        return ret
-
-    def serialize(self) -> bytes:
-        ret = self._serialize_without_header_id(skip_signature=False)
         ret.appendleft(VertexHeaderId.NANO_HEADER.value)
         return b''.join(ret)
 
+    def serialize(self) -> bytes:
+        return self._serialize(skip_signature=False)
+
     def get_sighash_bytes(self) -> bytes:
-        ret = self._serialize_without_header_id(skip_signature=True)
-        return b''.join(ret)
+        return self._serialize(skip_signature=True)
 
     def is_creating_a_new_contract(self) -> bool:
         """Return true if this transaction is creating a new contract."""

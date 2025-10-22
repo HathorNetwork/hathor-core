@@ -48,11 +48,27 @@ class AddressIndex(TxGroupIndex[str]):
     def _handle_tx_event(self, key: HathorEvents, args: 'EventArguments') -> None:
         """ This method is called when pubsub publishes an event that we subscribed
         """
+        assert key == HathorEvents.CONSENSUS_TX_UPDATE
         data = args.__dict__
-        tx = data['tx']
-        meta = tx.get_metadata()
-        if meta.has_voided_by_changed_since_last_call() or meta.has_spent_by_changed_since_last_call():
-            self._publish_tx(tx)
+        event_tx = data['tx']
+
+        def handle_tx(tx: BaseTransaction, *, check_inputs: bool) -> None:
+            assert tx.storage is not None
+            meta = tx.get_metadata()
+            updated_voided_by = meta.has_voided_by_changed_since_last_call()
+            updated_spent_by = meta.has_spent_by_changed_since_last_call()
+
+            if updated_voided_by or updated_spent_by:
+                self._publish_tx(tx)
+
+            if check_inputs and updated_voided_by:
+                # We need to check our input txs because it's possible their spent_by was
+                # affected even when the tx was not touched by the consensus directly.
+                for tx_input in tx.inputs:
+                    affected_input_tx = tx.storage.get_transaction(tx_input.tx_id)
+                    handle_tx(affected_input_tx, check_inputs=False)
+
+        handle_tx(event_tx, check_inputs=True)
 
     def _subscribe_pubsub_events(self) -> None:
         """ Subscribe wallet index to receive voided/winner tx pubsub events

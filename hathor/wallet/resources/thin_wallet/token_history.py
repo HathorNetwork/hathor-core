@@ -17,6 +17,7 @@ from twisted.web.http import Request
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, parse_int, set_cors
 from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
+from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.util import json_dumpb
 
 ARGS = ['id', 'count']
@@ -65,6 +66,9 @@ class TokenHistoryResource(Resource):
         try:
             token_uid = bytes.fromhex(parsed['args']['id'])
         except (ValueError, AttributeError):
+            return json_dumpb({'success': False, 'message': 'Invalid token id'})
+
+        if len(token_uid) != TX_HASH_SIZE:
             return json_dumpb({'success': False, 'message': 'Invalid token id'})
 
         try:

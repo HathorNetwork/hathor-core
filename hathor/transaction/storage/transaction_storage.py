@@ -44,7 +44,7 @@ from hathor.transaction.storage.migrations import (
     add_closest_ancestor_block,
     change_score_acc_weight_metadata,
     include_funds_for_first_block,
-    nc_storage_compat1,
+    nc_storage_compat2,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -104,6 +104,7 @@ class TransactionStorage(ABC):
         change_score_acc_weight_metadata.Migration,
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
+        nc_storage_compat2.Migration,
     ]
 
     _migrations: list[BaseMigration]
@@ -152,10 +153,7 @@ class TransactionStorage(ABC):
         self._saving_genesis = False
 
         # Migrations instances
-        migration_factories = self._migration_factories[:]
-        if settings.ENABLE_NANO_CONTRACTS:
-            migration_factories.append(nc_storage_compat1.Migration)
-        self._migrations = [cls() for cls in migration_factories]
+        self._migrations = [cls() for cls in self._migration_factories]
 
         # XXX: sanity check
         migration_names = set()
@@ -236,17 +234,17 @@ class TransactionStorage(ABC):
             previous_migration_state = migration_state
 
             should_run_migration: bool
-            if migration_state is MigrationState.NOT_STARTED:
+            if migration_state == MigrationState.NOT_STARTED:
                 self.log.debug('migration is new, will run', migration=migration_name)
                 should_run_migration = True
-            elif migration_state is MigrationState.STARTED:
+            elif migration_state == MigrationState.STARTED:
                 self.log.warn('this migration was started before, but it is not marked as COMPLETED or ERROR, '
                               'it will run again but might fail', migration=migration_name)
                 should_run_migration = True
-            elif migration_state is MigrationState.COMPLETED:
+            elif migration_state == MigrationState.COMPLETED:
                 self.log.debug('migration is already complete', migration=migration_name)
                 should_run_migration = False
-            elif migration_state is MigrationState.ERROR:
+            elif migration_state == MigrationState.ERROR:
                 self.log.error('this migration was run before but resulted in an error, the database will need to be '
                                'either manually fixed or discarded', migration=migration_name)
                 raise PartialMigrationError(f'Migration error state previously: {migration_name}')
@@ -402,7 +400,7 @@ class TransactionStorage(ABC):
 
     def is_only_valid_allowed(self) -> bool:
         """Whether only valid transactions are allowed to be returned/accepted by the storage, the default state."""
-        return self.get_allow_scope() is TxAllowScope.VALID
+        return self.get_allow_scope() == TxAllowScope.VALID
 
     def is_partially_validated_allowed(self) -> bool:
         """Whether partially validated transactions are allowed to be returned/accepted by the storage."""
@@ -551,6 +549,12 @@ class TransactionStorage(ABC):
         else:
             tx = self._get_transaction(hash_bytes)
         self.post_get_validation(tx)
+        return tx
+
+    def get_tx(self, vertex_id: VertexId) -> Transaction:
+        """Return a Transaction."""
+        tx = self.get_transaction(vertex_id)
+        assert isinstance(tx, Transaction)
         return tx
 
     def get_token_creation_transaction(self, hash_bytes: bytes) -> TokenCreationTransaction:
@@ -1086,7 +1090,8 @@ class TransactionStorage(ABC):
         )
         tx1.update_hash()
 
-        assert tx1.hash == self._settings.GENESIS_TX1_HASH
+        assert tx1.hash == self._settings.GENESIS_TX1_HASH, \
+               f'{tx1.hash.hex()} != {self._settings.GENESIS_TX1_HASH.hex()}'
         return tx1
 
     def _construct_genesis_tx2(self) -> Transaction:
@@ -1100,7 +1105,8 @@ class TransactionStorage(ABC):
         )
         tx2.update_hash()
 
-        assert tx2.hash == self._settings.GENESIS_TX2_HASH
+        assert tx2.hash == self._settings.GENESIS_TX2_HASH, \
+               f'{tx2.hash.hex()} != {self._settings.GENESIS_TX2_HASH.hex()}'
         return tx2
 
     def get_parent_block(self, block: Block) -> Block:
@@ -1170,9 +1176,6 @@ class TransactionStorage(ABC):
         """Returns the source code associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
-
-        A point of difference is that an OCB will have a `__blueprint__ = BlueprintName` line, where a built-in
-        blueprint will not.
         """
         import inspect
 

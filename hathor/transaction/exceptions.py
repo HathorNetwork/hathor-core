@@ -114,6 +114,18 @@ class ConflictWithConfirmedTxError(TxValidationError):
     """Input has a conflict with a confirmed transaction."""
 
 
+class TooManyWithinConflicts(TxValidationError):
+    """Input has too many within conflicts already."""
+
+
+class TooManyBetweenConflicts(TxValidationError):
+    """Input has too many between conflicts already."""
+
+
+class InputVoidedAndConfirmed(TxValidationError):
+    """Input is spending from a voided transaction that has been confirmed by a block."""
+
+
 class TooManyOutputs(TxValidationError):
     """More than 256 outputs"""
 
@@ -250,3 +262,19 @@ class VerifyFailed(ScriptError):
 
 class TimeLocked(ScriptError):
     """Transaction is invalid because it is time locked"""
+
+
+class InvalidFeeHeader(TxValidationError):
+    """Invalid fee header"""
+
+
+class FeeHeaderTokenNotFound(InvalidFeeHeader):
+    """Token not found in the transaction tokens list"""
+
+
+class InvalidFeeAmount(InvalidFeeHeader):
+    """Invalid fee amount"""
+
+
+class TokenNotFound(TxValidationError):
+    """Token not found."""

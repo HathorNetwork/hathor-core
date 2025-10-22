@@ -19,11 +19,13 @@ from typing import NamedTuple, Optional
 
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
+from hathor.nanocontracts.nc_types.token_version_nc_type import TokenVersionNCType
 from hathor.nanocontracts.storage.contract_storage import NCContractStorage
 from hathor.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
 from hathor.nanocontracts.storage.token_proxy import TokenProxy
 from hathor.nanocontracts.types import Address, ContractId, TokenUid
 from hathor.transaction.headers.nano_header import ADDRESS_SEQNUM_SIZE
+from hathor.transaction.token_info import TokenVersion
 from hathor.utils import leb128
 
 
@@ -59,7 +61,12 @@ class NCBlockStorage:
 
     This implementation works for both memory and rocksdb backends."""
     from hathor.transaction.token_info import TokenDescription
-    _TOKEN_DESCRIPTION_NC_TYPE = make_dataclass_nc_type(TokenDescription)
+    _TOKEN_DESCRIPTION_NC_TYPE = make_dataclass_nc_type(
+        TokenDescription,
+        extra_nc_types_map={
+            TokenVersion: TokenVersionNCType,
+        },
+    )
 
     def __init__(self, block_trie: PatriciaTrie) -> None:
         self._block_trie: PatriciaTrie = block_trie
@@ -134,11 +141,23 @@ class NCBlockStorage:
         else:
             return True
 
-    def create_token(self, token_id: TokenUid, token_name: str, token_symbol: str) -> None:
+    def create_token(
+        self,
+        *,
+        token_id: TokenUid,
+        token_name: str,
+        token_symbol: str,
+        token_version: TokenVersion
+    ) -> None:
         """Create a new token in this block's nano state."""
         from hathor.transaction.token_info import TokenDescription
         key = TokenKey(token_id)
-        token_description = TokenDescription(token_id=token_id, token_name=token_name, token_symbol=token_symbol)
+        token_description = TokenDescription(
+            token_id=token_id,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
+        )
         token_description_bytes = self._TOKEN_DESCRIPTION_NC_TYPE.to_bytes(token_description)
         self._block_trie.update(bytes(key), token_description_bytes)
 

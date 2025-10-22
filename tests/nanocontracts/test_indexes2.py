@@ -12,8 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import HATHOR_TOKEN_UID, Blueprint, Context, public
 from hathor.nanocontracts.types import ContractId, VertexId
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Transaction
@@ -62,7 +61,7 @@ class TestIndexes2(BlueprintTestCase):
         tka_token_info = self.tokens_index.get_token_info(tka)
         htr_token_info = self.tokens_index.get_token_info(HATHOR_TOKEN_UID)
 
-        assert tx1.get_metadata().nc_execution is NCExecutionState.SUCCESS
+        assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tka_token_info.get_total() == amount
         assert htr_token_info.get_total() == (
             self._settings.GENESIS_TOKENS

@@ -20,10 +20,9 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import MAINNET_SETTINGS_FILEPATH, TESTNET_GOLF_SETTINGS_FILEPATH
+from hathor.conf import MAINNET_SETTINGS_FILEPATH
 from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
 from hathor.conf.settings import DECIMAL_PLACES, GENESIS_TOKEN_UNITS, GENESIS_TOKENS, HathorSettings
-from hathor.conf.testnet_golf import SETTINGS as TESTNET_GOLF_SETTINGS
 
 
 @pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])
@@ -153,6 +152,33 @@ def test_tokens() -> None:
         ) in str(e.value)
 
 
+def test_token_deposit_percentage() -> None:
+    yaml_mock = Mock()
+    required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
+
+    def mock_settings(settings_: dict[str, Any]) -> None:
+        yaml_mock.dict_from_extended_yaml = Mock(return_value=required_settings | settings_)
+
+    with patch('hathor.conf.settings.yaml', yaml_mock):
+        # Test default value passes (0.01 results in FEE_DIVISOR=100)
+        mock_settings(dict(TOKEN_DEPOSIT_PERCENTAGE=0.01))
+        HathorSettings.from_yaml(filepath='some_path')
+
+        # Test fails when TOKEN_DEPOSIT_PERCENTAGE results in non-integer FEE_DIVISOR (0.03 -> 33.333...)
+        mock_settings(dict(TOKEN_DEPOSIT_PERCENTAGE=0.03))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR' in str(e.value)
+        assert 'TOKEN_DEPOSIT_PERCENTAGE=0.03' in str(e.value)
+
+        # Test fails when TOKEN_DEPOSIT_PERCENTAGE results in non-integer FEE_DIVISOR (0.07 -> 14.285...)
+        mock_settings(dict(TOKEN_DEPOSIT_PERCENTAGE=0.07))
+        with pytest.raises(ValidationError) as e:
+            HathorSettings.from_yaml(filepath='some_path')
+        assert 'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR' in str(e.value)
+        assert 'TOKEN_DEPOSIT_PERCENTAGE=0.07' in str(e.value)
+
+
 def test_consensus_algorithm() -> None:
     yaml_mock = Mock()
     required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
@@ -236,7 +262,3 @@ def test_consensus_algorithm() -> None:
 
 def test_mainnet_settings_migration():
     assert MAINNET_SETTINGS == HathorSettings.from_yaml(filepath=MAINNET_SETTINGS_FILEPATH)
-
-
-def test_testnet_golf_settings_migration():
-    assert TESTNET_GOLF_SETTINGS == HathorSettings.from_yaml(filepath=TESTNET_GOLF_SETTINGS_FILEPATH)

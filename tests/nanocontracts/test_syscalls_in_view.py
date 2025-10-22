@@ -17,16 +17,14 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import NCViewMethodError
-from hathor.nanocontracts.types import BlueprintId, ContractId, NCRawArgs, TokenUid, VertexId
+from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
 from tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
-class MyBlueprint(Blueprint):
-    other_id: ContractId | None
-
+class DirectSyscalls(Blueprint):
     @public
-    def initialize(self, ctx: Context, other_id: ContractId | None) -> None:
-        self.other_id = other_id
+    def initialize(self, ctx: Context) -> None:
+        pass
 
     @view
     def nop(self) -> None:
@@ -43,6 +41,10 @@ class MyBlueprint(Blueprint):
     @view
     def get_blueprint_id(self) -> None:
         self.syscall.get_blueprint_id()
+
+    @view
+    def get_current_code_blueprint_id(self) -> None:
+        self.syscall.get_current_code_blueprint_id()
 
     @view
     def get_balance_before_current_call(self) -> None:
@@ -69,29 +71,16 @@ class MyBlueprint(Blueprint):
         self.syscall.can_melt_before_current_call(TokenUid(b''))
 
     @view
-    def call_public_method(self) -> None:
-        self.syscall.call_public_method(ContractId(VertexId(b'')), '', [])
-
-    @view
-    def call_view_method(self) -> None:
-        assert self.other_id is not None
-        self.syscall.call_view_method(self.other_id, 'nop')
-
-    @view
     def revoke_authorities(self) -> None:
         self.syscall.revoke_authorities(TokenUid(b''), revoke_mint=True, revoke_melt=True)
 
     @view
     def mint_tokens(self) -> None:
-        self.syscall.mint_tokens(TokenUid(b''), 0)
+        self.syscall.mint_tokens(TokenUid(b''), amount=0)
 
     @view
     def melt_tokens(self) -> None:
-        self.syscall.melt_tokens(TokenUid(b''), 0)
-
-    @view
-    def create_contract(self) -> None:
-        self.syscall.create_contract(BlueprintId(VertexId(b'')), b'', [])
+        self.syscall.melt_tokens(TokenUid(b''), amount=0)
 
     @view
     def emit_event(self) -> None:
@@ -99,24 +88,11 @@ class MyBlueprint(Blueprint):
 
     @view
     def create_deposit_token(self) -> None:
-        self.syscall.create_deposit_token('', '', 0)
-
-    @view
-    def create_token(self) -> None:
-        self.syscall.create_token('', '', 0)
+        self.syscall.create_deposit_token(token_name='', token_symbol='', amount=0)
 
     @view
     def create_fee_token(self) -> None:
-        self.syscall.create_fee_token('', '', 0)
-
-    @view
-    def proxy_call_public_method(self) -> None:
-        self.syscall.proxy_call_public_method(BlueprintId(VertexId(b'')), '', [])
-
-    @view
-    def proxy_call_public_method_nc_args(self) -> None:
-        nc_args = NCRawArgs(b'')
-        self.syscall.proxy_call_public_method_nc_args(BlueprintId(VertexId(b'')), '', [], nc_args)
+        self.syscall.create_fee_token(token_name='', token_symbol='', amount=0)
 
     @view
     def change_blueprint(self) -> None:
@@ -126,56 +102,127 @@ class MyBlueprint(Blueprint):
     def get_contract(self) -> None:
         self.syscall.get_contract(ContractId(b''), blueprint_id=None)
 
+    @view
+    def get_proxy(self) -> None:
+        self.syscall.get_proxy(BlueprintId(VertexId(b'')))
+
+    @view
+    def setup_new_contract(self) -> None:
+        self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'')
+
+
+class IndirectSyscalls(Blueprint):
+    other_blueprint_id: BlueprintId | None
+    other_contract_id: ContractId | None
+
+    @public
+    def initialize(
+        self,
+        ctx: Context,
+        other_blueprint_id: BlueprintId | None,
+        other_contract_id: ContractId | None,
+    ) -> None:
+        self.other_blueprint_id = other_blueprint_id
+        self.other_contract_id = other_contract_id
+
+    @view
+    def nop(self) -> None:
+        pass
+
+    @view
+    def call_public_method(self) -> None:
+        self.syscall.get_contract(ContractId(VertexId(b'')), blueprint_id=None).public().nop()
+
+    @view
+    def call_view_method(self) -> None:
+        assert self.other_contract_id is not None
+        self.syscall.get_contract(self.other_contract_id, blueprint_id=None).view().nop()
+
+    @view
+    def setup_new_contract(self) -> None:
+        self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'').initialize()
+
+    @view
+    def proxy_call_view_method(self) -> None:
+        assert self.other_blueprint_id is not None
+        self.syscall.get_proxy(self.other_blueprint_id).view().nop()
+
+    @view
+    def proxy_call_public_method(self) -> None:
+        self.syscall.get_proxy(BlueprintId(VertexId(b''))).public().nop()
+
 
 class TestSyscallsInView(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.blueprint_id = self._register_blueprint_class(MyBlueprint)
-
-        self.ctx = self.create_context(
-            actions=[],
-            vertex=self.get_genesis_tx(),
-            caller_id=self.gen_random_address(),
-            timestamp=self.now,
-        )
+        self.blueprint_id1 = self._register_blueprint_class(DirectSyscalls)
+        self.blueprint_id2 = self._register_blueprint_class(IndirectSyscalls)
 
     def test_rng(self) -> None:
         contract_id = self.gen_random_contract_id()
-        self.runner.create_contract(contract_id, self.blueprint_id, self.ctx, None)
+        self.runner.create_contract(contract_id, self.blueprint_id1, self.create_context())
 
         with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.rng`'):
             self.runner.call_view_method(contract_id, 'test_rng')
 
-    def test_syscalls(self) -> None:
-        other_id = self.gen_random_contract_id()
-        self.runner.create_contract(other_id, self.blueprint_id, self.ctx, None)
+    def test_direct_syscalls(self) -> None:
+        contract_id = self.gen_random_contract_id()
+        self.runner.create_contract(contract_id, self.blueprint_id1, self.create_context())
 
         properties = {'rng'}  # each property must be tested specifically
         allowed_view_syscalls = {
             'get_contract_id',
             'get_blueprint_id',
-            'get_balance',
             'get_balance_before_current_call',
             'get_current_balance',
             'can_mint',
             'can_mint_before_current_call',
             'can_melt',
             'can_melt_before_current_call',
-            'call_view_method',
             'get_contract',
+            'get_proxy',
+            'get_current_code_blueprint_id',
         }
 
+        tested_methods = set()
         for method_name, method in BlueprintEnvironment.__dict__.items():
             if '__' in method_name or method_name in properties:
                 continue
 
-            contract_id = self.gen_random_contract_id()
-            self.runner.create_contract(contract_id, self.blueprint_id, self.ctx, other_id)
-
+            tested_methods.add(method_name)
             if method_name in allowed_view_syscalls:
                 self.runner.call_view_method(contract_id, method_name)
             else:
-                method_name_err = method_name if method_name != 'create_token' else 'create_deposit_token'
-                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name_err}`'):
+                with pytest.raises(NCViewMethodError, match=f'@view method cannot call `syscall.{method_name}`'):
                     self.runner.call_view_method(contract_id, method_name)
+
+        skip_tested_methods = {'initialize', 'nop', 'test_rng'}
+        for method_name, method in DirectSyscalls.__dict__.items():
+            if '__' in method_name or method_name in skip_tested_methods:
+                continue
+            assert method_name in tested_methods, f'method `{method_name}` of DirectSyscalls was not tested'
+
+        for method_name in allowed_view_syscalls:
+            assert method_name in tested_methods, f'method `{method_name}` of `allowed_view_syscalls` was not tested'
+
+    def test_indirect_syscalls(self) -> None:
+        contract_id1 = self.gen_random_contract_id()
+        contract_id2 = self.gen_random_contract_id()
+
+        self.runner.create_contract(contract_id1, self.blueprint_id2, self.create_context(), None, None)
+        self.runner.create_contract(
+            contract_id2, self.blueprint_id2, self.create_context(), self.blueprint_id1, contract_id1
+        )
+
+        self.runner.call_view_method(contract_id2, 'call_view_method')
+        self.runner.call_view_method(contract_id2, 'proxy_call_view_method')
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.call_public_method`'):
+            self.runner.call_view_method(contract_id2, 'call_public_method')
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.setup_new_contract`'):
+            self.runner.call_view_method(contract_id2, 'setup_new_contract')
+
+        with pytest.raises(NCViewMethodError, match='@view method cannot call `syscall.proxy_call_public_method`'):
+            self.runner.call_view_method(contract_id2, 'proxy_call_public_method')

@@ -36,9 +36,9 @@ class SyncVersion(Enum):
         # XXX: these values are only used internally and in memory, there is no need to keep them consistency, for
         #      example, if we need more granularity, we can just add a 0 to all values and use the values in between,
         #      although this shouldn't really be necessary
-        if self is SyncVersion.V1_1:
+        if self == SyncVersion.V1_1:
             return 11
-        elif self is SyncVersion.V2:
+        elif self == SyncVersion.V2:
             return 20
         else:
             raise ValueError('value is either invalid for this enum or not implemented')

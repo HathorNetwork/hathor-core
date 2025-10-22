@@ -51,7 +51,7 @@ class ValidationState(IntEnum):
 
     def is_initial(self) -> bool:
         """Short-hand property"""
-        return self is ValidationState.INITIAL
+        return self == ValidationState.INITIAL
 
     def is_at_least_basic(self) -> bool:
         """Until a validation is final, it is possible to change its state when more information is available."""
@@ -75,7 +75,7 @@ class ValidationState(IntEnum):
 
     def is_invalid(self) -> bool:
         """Short-hand property."""
-        return self is ValidationState.INVALID
+        return self == ValidationState.INVALID
 
     def is_final(self) -> bool:
         """Until a validation is final, it is possible to change its state when more information is available."""

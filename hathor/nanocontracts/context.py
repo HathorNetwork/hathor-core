@@ -150,14 +150,6 @@ class Context:
                 assert_never(self.caller_id)
 
     @property
-    def timestamp(self) -> int:
-        """
-        Get the timestamp of the block executing the nano transaction.
-        DEPRECATED: Use `ctx.block.timestamp` instead.
-        """
-        return self.block.timestamp
-
-    @property
     def actions(self) -> MappingProxyType[TokenUid, tuple[NCAction, ...]]:
         """Get a mapping of actions per token."""
         return self.__actions

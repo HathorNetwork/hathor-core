@@ -142,7 +142,7 @@ def execute(args: Namespace) -> None:
             from hathor.verification.vertex_verifiers import VertexVerifiers
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
-            verification_params = VerificationParams.default_for_mempool()
+            verification_params = VerificationParams(nc_block_root_id=None, enable_checkdatasig_count=True)
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),
                 settings=settings,

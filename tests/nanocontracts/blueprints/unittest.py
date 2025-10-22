@@ -1,20 +1,17 @@
 from io import TextIOWrapper
 from typing import Sequence
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
-from hathor.nanocontracts import Context
+from hathor.nanocontracts import HATHOR_TOKEN_UID, Context
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
-from hathor.nanocontracts.storage import NCBlockStorage, NCMemoryStorageFactory
-from hathor.nanocontracts.storage.backends import MemoryNodeTrieStore
-from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction import Transaction, Vertex
+from hathor.transaction.token_info import TokenVersion
 from hathor.util import not_none
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.wallet import KeyPair
@@ -126,13 +123,7 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
-        nc_storage_factory = NCMemoryStorageFactory()
-        store = MemoryNodeTrieStore()
-        block_trie = PatriciaTrie(store)
-        block_storage = NCBlockStorage(block_trie)
-        return TestRunner(
-            self.manager.tx_storage, nc_storage_factory, block_storage, settings=self._settings, reactor=self.reactor
-        )
+        return TestRunner(tx_storage=self.manager.tx_storage, settings=self._settings, reactor=self.reactor)
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""
@@ -180,4 +171,20 @@ class BlueprintTestCase(unittest.TestCase):
             vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
             block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
             actions=Context.__group_actions__(actions or ()),
+        )
+
+    def create_token(
+        self,
+        token_uid: TokenUid,
+        token_name: str,
+        token_symbol:
+        str,
+        token_version: TokenVersion
+    ) -> None:
+        """Create a token in the runner block storage"""
+        self.runner.block_storage.create_token(
+            token_id=token_uid,
+            token_name=token_name,
+            token_symbol=token_symbol,
+            token_version=token_version
         )
