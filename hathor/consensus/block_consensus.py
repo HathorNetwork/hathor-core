@@ -441,11 +441,11 @@ class BlockConsensusAlgorithm:
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
-        assert block.hash in parent_meta.children
+        assert block.hash in parent.get_children()
 
         # This method is called after the metadata of the parent is updated.
         # So, if the parent has only one child, it must be the current block.
-        is_connected_to_the_head = bool(len(parent_meta.children) == 1)
+        is_connected_to_the_head = parent.get_children().is_single()
         is_connected_to_the_best_chain = bool(not parent_meta.voided_by)
 
         if is_connected_to_the_head and is_connected_to_the_best_chain:

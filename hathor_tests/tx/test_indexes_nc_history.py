@@ -7,6 +7,7 @@ from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.storage import TransactionRocksDBStorage
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.util import not_none
 from hathor.wallet import KeyPair, Wallet
 from hathor_tests import unittest
@@ -197,10 +198,14 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
         rocksdb_storage = RocksDBStorage(path=directory)
         vertex_parser = VertexParser(settings=self._settings)
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
-        self.tx_storage = TransactionRocksDBStorage(rocksdb_storage,
-                                                    settings=self._settings,
-                                                    vertex_parser=vertex_parser,
-                                                    nc_storage_factory=nc_storage_factory)
+        vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
+        self.tx_storage = TransactionRocksDBStorage(
+            rocksdb_storage,
+            settings=self._settings,
+            vertex_parser=vertex_parser,
+            nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
+        )
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

@@ -453,8 +453,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
         metadata = tx.get_metadata()
         metadata.spent_outputs[1].append(self.genesis_blocks[0].hash)
-        random_tx = bytes.fromhex('0000222e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0f2222')
-        metadata.children.append(random_tx)
 
         self.tx_storage.save_transaction(tx, only_metadata=True)
         tx2 = self.tx_storage.get_transaction(tx.hash)

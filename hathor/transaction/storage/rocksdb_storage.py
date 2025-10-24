@@ -25,7 +25,10 @@ from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
+from hathor.types import VertexId
+from hathor.util import json_loadb, progress
 
 if TYPE_CHECKING:
     import rocksdb
@@ -58,6 +61,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         settings: 'HathorSettings',
         vertex_parser: VertexParser,
         nc_storage_factory: NCStorageFactory,
+        vertex_children_service: RocksDBVertexChildrenService,
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
@@ -68,7 +72,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
         self.vertex_parser = vertex_parser
-        super().__init__(indexes=indexes, settings=settings, nc_storage_factory=nc_storage_factory)
+        super().__init__(
+            indexes=indexes,
+            settings=settings,
+            nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
+        )
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -235,3 +244,42 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return None
         else:
             return data.decode()
+
+    @override
+    def migrate_vertex_children(self) -> None:
+        """Migrate vertex children from metadata to their own column family."""
+        import rocksdb
+        assert isinstance(self.vertex_children, RocksDBVertexChildrenService)
+
+        def get_old_children_set(vertex_id: VertexId) -> set[VertexId]:
+            meta_bytes = self._db.get((self._cf_meta, vertex_id))
+            assert isinstance(meta_bytes, bytes)
+            meta_dict = json_loadb(meta_bytes)
+            children = meta_dict['children']
+            assert isinstance(children, list)
+            children_set = set(children)
+            assert len(children) == len(children_set)  # sanity check whether we have duplicate children
+            return {bytes.fromhex(child_id) for child_id in children_set}
+
+        batch = rocksdb.WriteBatch()
+        max_writes_per_batch = 10_000
+
+        self.log.info('copying vertex children to new structure...')
+        for vertex in progress(self._get_all_transactions(), log=self.log, total=None):
+            for child_id in get_old_children_set(vertex.hash):
+                # Manually write children to the cf instead of using the VertexChildrenService so we can use WriteBatch
+                key = RocksDBVertexChildrenService._to_key(vertex, child_id)
+                batch.put((self.vertex_children._cf, key), b'')
+
+                if batch.count() >= max_writes_per_batch:
+                    self._db.write(batch)
+                    batch.clear()
+
+        self._db.write(batch)  # one last write to clear the last batch
+
+        self.log.info('removing old vertex children metadata...')
+        for vertex in progress(self._get_all_transactions(), log=self.log, total=None):
+            # sanity check to confirm the migration was correct.
+            assert get_old_children_set(vertex.hash) == set(self.vertex_children.get_children(vertex))
+            # saving metadata will remove the children list from the stored json.
+            self.save_transaction(vertex, only_metadata=True)

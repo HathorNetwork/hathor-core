@@ -128,7 +128,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
         assert not meta.voided_by
 
         candidates = []
-        for h in meta.children:
+        for h in self.get_children():
             blk = self.storage.get_transaction(h)
             assert blk.is_block
             blk_meta = blk.get_metadata()

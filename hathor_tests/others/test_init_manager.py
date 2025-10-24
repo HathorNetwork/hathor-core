@@ -6,6 +6,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionRocksDBStorage
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor_tests import unittest
 from hathor_tests.unittest import TestBuilder
@@ -22,6 +23,7 @@ class ModifiedTransactionRocksDBStorage(TransactionRocksDBStorage):
             settings=settings,
             vertex_parser=VertexParser(settings=settings),
             nc_storage_factory=nc_storage_factory,
+            vertex_children_service=RocksDBVertexChildrenService(rocksdb_storage),
         )
         self._first_tx: BaseTransaction | None = None
 

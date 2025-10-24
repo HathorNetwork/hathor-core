@@ -130,6 +130,22 @@ class RocksDBIndexUtils:
         for _cf, rocksdb_key in it:
             yield rocksdb_key
 
+    def get_value(self, key: bytes) -> bytes | None:
+        """Get the value with the provided key, or None if it doesn't exist."""
+        return self._db.get((self._cf, key))
+
+    def put(self, key: bytes, value: bytes) -> None:
+        """Put the value with the provided key."""
+        self._db.put((self._cf, key), value)
+
+    def delete(self, key: bytes) -> None:
+        """Delete the value with the provided key."""
+        self._db.delete((self._cf, key))
+
+    def iterkeys(self) -> 'rocksdb.KeysIterator':
+        """Iter over the keys in the column family."""
+        return self._db.iterkeys(self._cf)
+
 
 class RocksDBSimpleSet(Collection[bytes], RocksDBIndexUtils):
     def __init__(self, db: 'rocksdb.DB', log: 'structlog.stdlib.BoundLogger', *, cf_name: bytes) -> None:

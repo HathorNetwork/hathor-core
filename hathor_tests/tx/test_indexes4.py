@@ -119,7 +119,7 @@ class SimulatorIndexesTestCase(unittest.TestCase):
         # XXX: sanity check that the children metadata is properly set (this is needed for one of the iterators)
         for tx in tx_storage.get_all_transactions():
             for parent_tx in map(tx_storage.get_transaction, tx.parents):
-                self.assertIn(tx.hash, parent_tx.get_metadata().children)
+                self.assertIn(tx.hash, parent_tx.get_children())
 
         # test iterators, name is used to aid in assert messages
         iterators = [

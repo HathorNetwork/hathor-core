@@ -192,7 +192,7 @@ class TransactionTest(unittest.TestCase):
         # assert that the tx has been removed from its dependencies' metadata
         for parent_id in tx.parents:
             parent = self.manager.tx_storage.get_transaction(parent_id)
-            assert tx.hash not in parent.get_metadata().children
+            assert tx.hash not in parent.get_children()
 
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
