@@ -409,7 +409,10 @@ class HathorSettings(NamedTuple):
     WS_SEND_METRICS_INTERVAL: int = 1
 
     # Interval (in seconds) to write data to prometheus
-    PROMETHEUS_WRITE_INTERVAL: int = 5
+    PROMETHEUS_WRITE_INTERVAL: int = 15
+
+    # Interval (in seconds) to update GC data for prometheus
+    PROMETHEUS_UPDATE_GC_INTERVAL: int = 60
 
     # Interval (in seconds) to collect metrics data
     METRICS_COLLECT_DATA_INTERVAL: int = 5
