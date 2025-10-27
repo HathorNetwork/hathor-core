@@ -251,7 +251,7 @@ class NanoHeader(VertexBaseHeader):
             return ContractId(VertexId(self.tx.hash))
         return ContractId(VertexId(self.nc_id))
 
-    def get_blueprint_id(self, block: Block | None = None) -> BlueprintId:
+    def get_blueprint_id(self, block: Block | None = None, *, accept_failed_execution: bool = False) -> BlueprintId:
         """Return the blueprint id."""
         from hathor.nanocontracts.exception import NanoContractDoesNotExist
         from hathor.nanocontracts.types import BlueprintId, ContractId, VertexId as NCVertexId
@@ -294,7 +294,8 @@ class NanoHeader(VertexBaseHeader):
             # otherwise, it failed or skipped execution
             from hathor.transaction.nc_execution_state import NCExecutionState
             assert nc_creation_meta.nc_execution in (NCExecutionState.FAILURE, NCExecutionState.SKIPPED)
-            raise NanoContractDoesNotExist
+            if not accept_failed_execution:
+                raise NanoContractDoesNotExist(f'contract creation is not executed: {self.nc_id.hex()}')
 
         blueprint_id = BlueprintId(NCVertexId(nc_creation.get_nano_header().nc_id))
         return blueprint_id
