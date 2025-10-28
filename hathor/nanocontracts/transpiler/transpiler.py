@@ -176,9 +176,22 @@ def exec(source: str) -> dict[str, Any]:
     transpiled_bytecode = transpile(lib_bytecode)
     code = transpiled_bytecode.to_code()
 
+    # print()
+    # print('---- exec')
+    # print('--- raw code ---------------------------------------------------------------------------------------------')
+    # print(repr(source))
+    # print('--- original bytecode ------------------------------------------------------------------------------------')
+    # print(std_bytecode.dis())
+    # print('--- transpiled bytecode ----------------------------------------------------------------------------------')
+    # dis.dis(code, depth=0)
+    # print('----------------------------------------------------------------------------------------------------------')
+
     from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+    runtime_functions = {f.__name__: f for f in TRANSPILER_RUNTIME_FUNCTIONS}
     env: dict[str, object] = {
         '__builtins__': EXEC_BUILTINS,
+        GAS_NAME: 10**10,
+        **runtime_functions,
     }
     builtins.exec(code, env)
     del env['__builtins__']
@@ -189,16 +202,27 @@ def call(func, *, args):
     from hathor import NCFail
     from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
 
+    runtime_functions = {f.__name__: f for f in TRANSPILER_RUNTIME_FUNCTIONS}
     env: dict[str, object] = {
         '__builtins__': EXEC_BUILTINS,
         '__func__': func,
         '__args__': args,
         '__result__': None,
+        GAS_NAME: 10**10,
+        **runtime_functions,
     }
 
     lib_bytecode = Bytecode.from_code(func.__code__)
     transpiled_bytecode = transpile(lib_bytecode)
     code = transpiled_bytecode.to_code()
+
+    print()
+    print('---- call')
+    print('--- original bytecode ------------------------------------------------------------------------------------')
+    print(dis.dis(func.__code__))
+    print('--- transpiled bytecode ----------------------------------------------------------------------------------')
+    dis.dis(code, depth=0)
+    print('----------------------------------------------------------------------------------------------------------')
 
     try:
         builtins.exec(code, env)
