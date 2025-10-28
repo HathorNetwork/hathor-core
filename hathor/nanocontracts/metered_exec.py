@@ -19,6 +19,7 @@ from typing import Any, Callable, ParamSpec, TypeVar, cast
 from structlog import get_logger
 
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathor.nanocontracts.transpiler import transpiler
 
 logger = get_logger()
 
@@ -109,3 +110,17 @@ class MeteredExecutor:
             raise NCFail from e
 
         return cast(_T, env['__result__'])
+
+
+class InjectionExecutor:
+    def __init__(self, fuel: int, memory_limit: int) -> None:
+        pass
+
+    def exec(self, source: str, /) -> dict[str, Any]:
+        return transpiler.exec(source)
+
+    def call(self, func: Callable[_P, _T], /, *, args: _P.args) -> _T:
+        return transpiler.call(func, args=args)
+
+
+MeteredExecutor = InjectionExecutor

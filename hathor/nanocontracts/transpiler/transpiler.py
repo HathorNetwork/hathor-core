@@ -11,7 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import builtins
 import dis
 from enum import StrEnum, auto
 from typing import Any, Iterator
@@ -168,6 +168,47 @@ def run(raw_code: str, *, available_gas: int) -> tuple[Any, int]:
     print('remaining gas:', remaining_gas)
     print()
     return result, remaining_gas
+
+
+def exec(source: str) -> dict[str, Any]:
+    std_bytecode = dis.Bytecode(source)
+    lib_bytecode = Bytecode.from_code(std_bytecode.codeobj)
+    transpiled_bytecode = transpile(lib_bytecode)
+    code = transpiled_bytecode.to_code()
+
+    from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+    env: dict[str, object] = {
+        '__builtins__': EXEC_BUILTINS,
+    }
+    builtins.exec(code, env)
+    del env['__builtins__']
+    return env
+
+
+def call(func, *, args):
+    from hathor import NCFail
+    from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+
+    env: dict[str, object] = {
+        '__builtins__': EXEC_BUILTINS,
+        '__func__': func,
+        '__args__': args,
+        '__result__': None,
+    }
+
+    lib_bytecode = Bytecode.from_code(func.__code__)
+    transpiled_bytecode = transpile(lib_bytecode)
+    code = transpiled_bytecode.to_code()
+
+    try:
+        builtins.exec(code, env)
+    except NCFail:
+        raise
+    except Exception as e:
+        # Convert any other exception to NCFail.
+        raise NCFail from e
+
+    return env['__result__']
 
 
 def transpile(bytecode: Bytecode) -> Bytecode:
