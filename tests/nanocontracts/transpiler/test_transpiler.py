@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from hathor.nanocontracts.transpiler import run
+from hathor.nanocontracts.transpiler import run, transpiler
 
 
 def test_single_const_value() -> None:
@@ -25,7 +25,7 @@ def test_single_const_value() -> None:
         code=f'{2**256-1}',
         available_gas=3,
         expected_result=2 ** 256 - 1,
-        expected_gas=0,
+        expected_gas=1,
     )
 
 
@@ -35,14 +35,14 @@ def test_binary_op_add() -> None:
         code='__identity__(2) + 3',
         available_gas=10,
         expected_result=5,
-        expected_gas=1,
+        expected_gas=5,
     )
 
     _test_success(
         code='__identity__(1) + __identity__(2) + 3',
         available_gas=100,
         expected_result=6,
-        expected_gas=85,
+        expected_gas=92,
     )
 
     _test_fail(
@@ -58,7 +58,7 @@ def test_binary_op_multiply() -> None:
         code='__identity__(2) * 3',
         available_gas=10,
         expected_result=6,
-        expected_gas=1,
+        expected_gas=5,
     )
 
     _test_fail(
@@ -74,7 +74,7 @@ def test_binary_op_power() -> None:
         code='__identity__(2)**32',
         available_gas=100,
         expected_result=2**32,
-        expected_gas=91,
+        expected_gas=95,
     )
 
     # if we don't have enough gas it will raise before the size check,
@@ -161,3 +161,21 @@ def _test_fail(*, code: str, available_gas: int, exception: type[Exception], mes
     with pytest.raises(exception) as e:
         run(code, available_gas=available_gas)
     assert str(e.value) == message
+
+
+def test_call_func() -> None:
+    def f(x: int, y: int) -> int:
+        return x + y
+
+    ret = transpiler.call(f, args=(1, 2))
+    assert ret == 3
+
+
+def test_call_method() -> None:
+    class C:
+        def f(self, x: int, y: int) -> int:
+            return x + y
+
+    c = C()
+    ret = transpiler.call(c.f, args=(1, 2))
+    assert ret == 3

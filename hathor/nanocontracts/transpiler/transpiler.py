@@ -246,7 +246,16 @@ def _transpile_instructions(bytecode: Bytecode) -> Iterator[Instr | Label]:
     for instruction in bytecode:
         match instruction:
             case Instr():
-                yield from _update_and_check_gas(instruction)
+                match instruction.name.lower():
+                    case (
+                        InstrName.RESUME
+                        | InstrName.PUSH_NULL
+                        | InstrName.PRECALL
+                        | InstrName.CALL
+                    ):
+                        pass
+                    case _:
+                        yield from _update_and_check_gas(instruction)
                 yield instruction
             case Label():
                 yield instruction
