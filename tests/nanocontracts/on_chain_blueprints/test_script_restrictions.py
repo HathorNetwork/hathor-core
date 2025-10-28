@@ -6,7 +6,9 @@ import pytest
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import OCBInvalidScript
+from hathor.transaction import Transaction
 from tests import unittest
+from tests.dag_builder.builder import TestDAGBuilder
 from tests.nanocontracts.on_chain_blueprints.utils import get_ocb_private_key
 
 
