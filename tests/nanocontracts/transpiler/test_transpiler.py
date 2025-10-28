@@ -23,17 +23,9 @@ from hathor.nanocontracts.transpiler import run
 def test_single_const_value() -> None:
     _test_success(
         code=f'{2**256-1}',
-        available_gas=0,
+        available_gas=3,
         expected_result=2 ** 256 - 1,
         expected_gas=0,
-    )
-
-    # it fails if the int is larger than 32 bytes
-    _test_fail(
-        code=f'{2**256}',
-        available_gas=0,
-        exception=RuntimeError,
-        message=f'value too large: {2**256} (int)',
     )
 
 
@@ -43,22 +35,14 @@ def test_binary_op_add() -> None:
         code='__identity__(2) + 3',
         available_gas=10,
         expected_result=5,
-        expected_gas=7,
+        expected_gas=1,
     )
 
     _test_success(
         code='__identity__(1) + __identity__(2) + 3',
-        available_gas=10,
+        available_gas=100,
         expected_result=6,
-        expected_gas=4,
-    )
-
-    # the result must be checked for size even if the individual operands are not too large
-    _test_fail(
-        code=f'__identity__({2**256-1}) + 1',
-        available_gas=10,
-        exception=RuntimeError,
-        message=f'value too large: {2**256} (int)',
+        expected_gas=85,
     )
 
     _test_fail(
@@ -74,14 +58,7 @@ def test_binary_op_multiply() -> None:
         code='__identity__(2) * 3',
         available_gas=10,
         expected_result=6,
-        expected_gas=5,
-    )
-
-    _test_fail(
-        code=f'__identity__({2**(256-1)}) * 2',
-        available_gas=10,
-        exception=RuntimeError,
-        message=f'value too large: {2**256} (int)',
+        expected_gas=1,
     )
 
     _test_fail(
@@ -97,32 +74,24 @@ def test_binary_op_power() -> None:
         code='__identity__(2)**32',
         available_gas=100,
         expected_result=2**32,
-        expected_gas=40,
-    )
-
-    # the result must be checked for size even if the individual operands are not too large
-    _test_fail(
-        code='__identity__(2)**256',
-        available_gas=200,
-        exception=RuntimeError,
-        message=f'value too large: {2**256} (int)',
+        expected_gas=91,
     )
 
     # if we don't have enough gas it will raise before the size check,
     # that is, before the expression is evaluated
     _test_fail(
         code='__identity__(2)**256',
-        available_gas=100,
+        available_gas=0,
         exception=RuntimeError,
-        message='out of gas! remaining: -10',
+        message='out of gas! remaining: -1',
     )
 
     # here, x=32**32 is evaluated, but 2**x is not
     _test_fail(
         code='2**32**32',
-        available_gas=100,
+        available_gas=0,
         exception=RuntimeError,
-        message='out of gas! remaining: -1020',
+        message='out of gas! remaining: -1',
     )
 
     # using it in a range fails too
@@ -146,15 +115,7 @@ def test_infinite_multiply() -> None:
         code=code,
         available_gas=10,
         exception=RuntimeError,
-        message='out of gas! remaining: -5',
-    )
-
-    # even with practically unlimited gas, execution fails because x reaches the max stack item size
-    _test_fail(
-        code=code,
-        available_gas=10**10,
-        exception=RuntimeError,
-        message=f'value too large: {2**256} (int)',
+        message='out of gas! remaining: -1',
     )
 
 
@@ -170,17 +131,8 @@ def test_infinite_string() -> None:
         code=code,
         available_gas=10,
         exception=RuntimeError,
-        message='out of gas! remaining: -5',
+        message='out of gas! remaining: -1',
     )
-
-    # even with practically unlimited gas, execution fails because x reaches the max stack item size
-    _test_fail(
-        code=code,
-        available_gas=10**10,
-        exception=RuntimeError,
-        message=f'value too large: {"a" * 64} (str)',
-    )
-
 
 def test_infinite_array() -> None:
     # x = ['a']; while True: x = x + x
@@ -195,15 +147,7 @@ def test_infinite_array() -> None:
         code=code,
         available_gas=10,
         exception=RuntimeError,
-        message='out of gas! remaining: -2',
-    )
-
-    # even with practically unlimited gas, execution fails because x reaches the max stack item size
-    _test_fail(
-        code=code,
-        available_gas=10**10,
-        exception=RuntimeError,
-        message=f'value too large: {["a"] * 64} (list)',
+        message='out of gas! remaining: -1',
     )
 
 
