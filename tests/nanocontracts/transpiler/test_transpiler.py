@@ -97,9 +97,9 @@ def test_binary_op_power() -> None:
     # using it in a range fails too
     _test_fail(
         code='range(2**32**32)',
-        available_gas=100,
+        available_gas=0,
         exception=RuntimeError,
-        message='out of gas! remaining: -1020',
+        message='out of gas! remaining: -1',
     )
 
 
