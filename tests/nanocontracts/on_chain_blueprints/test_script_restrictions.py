@@ -1,6 +1,8 @@
 import os
 from textwrap import dedent
 
+import pytest
+
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import OCBInvalidScript
@@ -486,3 +488,79 @@ class Foo():
         cause = cm.exception.__cause__
         self.assertIsInstance(cause, ValueError)
         self.assertEqual(cause.args, ('Decompressed code is too long.',))
+
+    def _test_internal_attr_not_allowed(self, *, attr: str, code: str) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            ocb1.ocb_private_key = "{private_key}"
+            ocb1.ocb_password = "{password}"
+
+            ocb1.ocb_code = ```
+                from hathor.nanocontracts import Blueprint
+                from hathor.nanocontracts.context import Context
+                from hathor.nanocontracts.types import public
+                class MyBlueprint1(Blueprint):
+                    @public
+                    def initialize(self, ctx: Context) -> None:
+                        x = {code}
+                __blueprint__ = MyBlueprint1
+            ```
+        ''')
+
+        for node, vertex in artifacts.list:
+            if node.name != 'ocb1':
+                assert self.manager.on_new_tx(vertex, fails_silently=False)
+                continue
+
+            with pytest.raises(OCBInvalidScript) as e:
+                self.manager.verification_service.verify(vertex)
+            assert isinstance(e.value.__cause__, SyntaxError)
+            assert str(e.value.__cause__) == f'Access to internal attributes and methods is not allowed: {attr}'
+            assert not self.manager.on_new_tx(vertex, fails_silently=True)
+
+    def test_pow_attr_not_allowed(self) -> None:
+        self._test_internal_attr_not_allowed(attr='__pow__', code='int.__pow__(2, 3)')
+
+    def test_dict_attr_not_allowed(self) -> None:
+        self._test_internal_attr_not_allowed(attr='__dict__', code='int.__dict__')
+
+    def test_pow_builtin_not_allowed(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        private_key = unittest.OCB_TEST_PRIVKEY.hex()
+        password = unittest.OCB_TEST_PASSWORD.hex()
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..12]
+            b10 < dummy
+
+            ocb1.ocb_private_key = "{private_key}"
+            ocb1.ocb_password = "{password}"
+
+            nc1.nc_id = ocb1
+            nc1.nc_method = initialize()
+
+            ocb1 <-- b11
+            b11 < nc1
+            nc1 <-- b12
+
+            ocb1.ocb_code = ```
+                from hathor.nanocontracts import Blueprint
+                from hathor.nanocontracts.context import Context
+                from hathor.nanocontracts.types import public
+                class MyBlueprint1(Blueprint):
+                    @public
+                    def initialize(self, ctx: Context) -> None:
+                        x = pow(2, 3)
+                __blueprint__ = MyBlueprint1
+            ```
+        ''')
+
+        for node, vertex in artifacts.list:
+            assert self.manager.on_new_tx(vertex, fails_silently=False)
+
+        nc1 = artifacts.get_typed_vertex('nc1', Transaction)
+        assert nc1.get_metadata().voided_by == {nc1.hash, self._settings.NC_EXECUTION_FAIL_ID}
