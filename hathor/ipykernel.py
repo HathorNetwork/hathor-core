@@ -32,7 +32,7 @@ class IPKernelApp(OriginalIPKernelApp):
             # https://ipykernel.readthedocs.io/en/stable/api/ipykernel.html#ipykernel.kernelapp.IPKernelApp.connection_dir
             # https://github.com/ipython/ipykernel/blob/main/ipykernel/kernelapp.py#L301-L320
             # if not defined now, when init_connection_file is called it will be set to 'kernel-<PID>.json', it is
-            # defined now because it's more convinient to have a fixed path that doesn't depend on the PID of the
+            # defined now because it's more convenient to have a fixed path that doesn't depend on the PID of the
             # running process, which doesn't benefit us anyway since the data dir
             self.connection_dir = runtime_dir
             self.connection_file = 'kernel.json'
