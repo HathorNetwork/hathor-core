@@ -253,14 +253,14 @@ tests = ["PyHamcrest (>=2.0.2)", "mypy", "pytest (>=4.6)", "pytest-benchmark", "
 
 [[package]]
 name = "bytecode"
-version = "0.16.1"
+version = "0.17.0"
 description = "Python module to generate and modify bytecode"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "bytecode-0.16.1-py3-none-any.whl", hash = "sha256:1d4b61ed6bade4bff44127c8283bef8131a664ce4dbe09d64a88caf329939f35"},
-    {file = "bytecode-0.16.1.tar.gz", hash = "sha256:8fbbb637c880f339e564858bc6c7984ede67ae97bc71343379a535a9a4baf398"},
+    {file = "bytecode-0.17.0-py3-none-any.whl", hash = "sha256:64fb10cde1db7ef5cc39bd414ecebd54ba3b40e1c4cf8121ca5e72f170916ff8"},
+    {file = "bytecode-0.17.0.tar.gz", hash = "sha256:0c37efa5bd158b1b873f530cceea2c645611d55bd2dc2a4758b09f185749b6fd"},
 ]
 
 [[package]]
@@ -2569,4 +2569,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "74fa8f77e8fa0c2da22ce22ff2a58ee3d332c6c4f2ce603a2e286ed08e84e113"
+content-hash = "2086f528399299bbc0cc6adbd17a499d3d803501333e993731fe5c382d6644d2"

@@ -238,7 +238,9 @@ def call(func, *, args):
 def transpile(bytecode: Bytecode) -> Bytecode:
     """Transpile a Bytecode, adding instructions for handling checks and gas consumption."""
     instructions = _transpile_instructions(bytecode)
-    return Bytecode(list(instructions))
+    b = Bytecode(list(instructions))
+    b._copy_attr_from(bytecode)
+    return b
 
 
 def _transpile_instructions(bytecode: Bytecode) -> Iterator[Instr | Label]:
