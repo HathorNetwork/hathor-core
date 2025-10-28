@@ -20,16 +20,13 @@ from bytecode import BinaryOp, Bytecode, Instr, Label
 
 from hathor.nanocontracts.transpiler.runtime import (
     TRANSPILER_RUNTIME_FUNCTIONS,
-    __calc_power_gas__,
     __check_gas__,
-    __check_max_stack_item_size__,
 )
 
 """
 This module contains functions that implement a Python bytecode transpilation to be used in on-chain Blueprints.
 
-Given a Python bytecode, the transpile() function will substitute each instruction adding checks such as stack item
-size and gas consumption.
+Given a Python bytecode, the transpile() function will substitute each instruction adding checks such gas consumption.
 """
 
 # The global name used to store the available gas in NC runtime.
@@ -44,25 +41,100 @@ TRANSPILER_NAME_BLACKLIST = [GAS_NAME, TOS_NAME]
 
 class InstrName(StrEnum):
     """Name of Python bytecode instructions"""
-    RESUME = auto()
-    LOAD_CONST = auto()
-    LOAD_NAME = auto()
+    CACHE = auto()
+    POP_TOP = auto()
+    PUSH_NULL = auto()
+    NOP = auto()
+    UNARY_POSITIVE = auto()
+    UNARY_NEGATIVE = auto()
+    UNARY_NOT = auto()
+    UNARY_INVERT = auto()
+    BINARY_SUBSCR = auto()
+    GET_LEN = auto()
+    PUSH_EXC_INFO = auto()
+    STORE_SUBSCR = auto()
+    DELETE_SUBSCR = auto()
+    GET_ITER = auto()
+    GET_YIELD_FROM_ITER = auto()
+    LOAD_BUILD_CLASS = auto()
+    LOAD_ASSERTION_ERROR = auto()
+    LIST_TO_TUPLE = auto()
+    RETURN_VALUE = auto()
+    IMPORT_STAR = auto()
+    SETUP_ANNOTATIONS = auto()
+    YIELD_VALUE = auto()
+    PREP_RERAISE_STAR = auto()
+    POP_EXCEPT = auto()
     STORE_NAME = auto()
     DELETE_NAME = auto()
-    LOAD_GLOBAL = auto()
+    UNPACK_SEQUENCE = auto()
+    FOR_ITER = auto()
+    UNPACK_EX = auto()
+    STORE_ATTR = auto()
+    DELETE_ATTR = auto()
     STORE_GLOBAL = auto()
-    PUSH_NULL = auto()
+    DELETE_GLOBAL = auto()
+    SWAP = auto()
+    LOAD_CONST = auto()
+    LOAD_NAME = auto()
+    BUILD_TUPLE = auto()
+    BUILD_LIST = auto()
+    BUILD_SET = auto()
+    BUILD_MAP = auto()
+    LOAD_ATTR = auto()
+    COMPARE_OP = auto()
+    IMPORT_NAME = auto()
+    IMPORT_FROM = auto()
+    JUMP_FORWARD = auto()
+    JUMP_IF_FALSE_OR_POP = auto()
+    JUMP_IF_TRUE_OR_POP = auto()
+    POP_JUMP_FORWARD_IF_FALSE = auto()
+    POP_JUMP_FORWARD_IF_TRUE = auto()
+    LOAD_GLOBAL = auto()
+    IS_OP = auto()
+    CONTAINS_OP = auto()
+    RERAISE = auto()
+    COPY = auto()
+    BINARY_OP = auto()
+    SEND = auto()
+    LOAD_FAST = auto()
+    STORE_FAST = auto()
+    DELETE_FAST = auto()
+    POP_JUMP_FORWARD_IF_NOT_NONE = auto()
+    POP_JUMP_FORWARD_IF_NONE = auto()
+    RAISE_VARARGS = auto()
     MAKE_FUNCTION = auto()
+    BUILD_SLICE = auto()
+    JUMP_BACKWARD_NO_INTERRUPT = auto()
+    MAKE_CELL = auto()
+    LOAD_CLOSURE = auto()
+    LOAD_DEREF = auto()
+    STORE_DEREF = auto()
+    DELETE_DEREF = auto()
+    JUMP_BACKWARD = auto()
+    CALL_FUNCTION_EX = auto()
+    EXTENDED_ARG = auto()
+    LIST_APPEND = auto()
+    SET_ADD = auto()
+    MAP_ADD = auto()
+    LOAD_CLASSDEREF = auto()
+    COPY_FREE_VARS = auto()
+    RESUME = auto()
+    FORMAT_VALUE = auto()
+    BUILD_CONST_KEY_MAP = auto()
+    BUILD_STRING = auto()
+    LOAD_METHOD = auto()
+    LIST_EXTEND = auto()
+    SET_UPDATE = auto()
+    DICT_MERGE = auto()
+    DICT_UPDATE = auto()
     PRECALL = auto()
     CALL = auto()
-    UNARY_NEGATIVE = auto()
-    BINARY_OP = auto()
-    BINARY_SUBSCR = auto()
-    POP_TOP = auto()
-    NOP = auto()
-    JUMP_BACKWARD = auto()
-    BUILD_LIST = auto()
-    RETURN_VALUE = auto()
+    KW_NAMES = auto()
+    POP_JUMP_BACKWARD_IF_NOT_NONE = auto()
+    POP_JUMP_BACKWARD_IF_NONE = auto()
+    POP_JUMP_BACKWARD_IF_FALSE = auto()
+    POP_JUMP_BACKWARD_IF_TRUE = auto()
 
     def to_instr(self, *args: Any) -> Instr:
         """Convert this instance to an Instr with the provided args."""
@@ -109,89 +181,17 @@ def _transpile_instructions(bytecode: Bytecode) -> Iterator[Instr | Label]:
     for instruction in bytecode:
         match instruction:
             case Instr():
-                # TODO: Should we spend gas for instructions added by ourselves during transpilation? If yes, move this
                 yield from _update_and_check_gas(instruction)
-                yield from _transpile_instruction(instruction)
+                yield instruction
             case Label():
                 yield instruction
             case _:
                 raise NotImplementedError(f'unsupported instruction type: {instruction}')
 
 
-def _transpile_instruction(instruction: Instr) -> Iterator[Instr]:
-    """Transpile a single instruction, possibly yielding more than one new instruction for each original one."""
-    match instruction.name.lower():
-        case (
-            InstrName.RESUME
-            | InstrName.LOAD_NAME
-            | InstrName.RETURN_VALUE
-            | InstrName.PUSH_NULL
-            | InstrName.PRECALL
-            | InstrName.CALL  # TODO: Maybe we should __check_max_stack_item_size__ for this, too. Review all ops.
-            | InstrName.POP_TOP
-            | InstrName.BINARY_SUBSCR
-            | InstrName.STORE_NAME
-            | InstrName.NOP
-            | InstrName.JUMP_BACKWARD
-            | InstrName.BUILD_LIST
-        ):
-            yield instruction
-
-        case InstrName.LOAD_CONST:
-            yield instruction
-            yield from _call_function_with_tos(__check_max_stack_item_size__.__name__)
-
-        case InstrName.BINARY_OP:
-            arg = instruction.arg
-            assert isinstance(arg, int)
-            match arg:
-                case BinaryOp.ADD | BinaryOp.MULTIPLY | BinaryOp.POWER:
-                    yield instruction
-                    yield from _call_function_with_tos(__check_max_stack_item_size__.__name__)
-                case _:
-                    raise NotImplementedError(f'unsupported BINARY_OP operation: {BinaryOp(arg).name}')
-
-        case _:
-            raise NotImplementedError(f'unsupported instruction: {instruction.name}')
-
-
-def _load_gas_expense(instruction: Instr) -> Iterator[Instr]:
+def _load_gas_expense(_instruction: Instr) -> Iterator[Instr]:
     """Load the gas expense on TOS for the provided instruction."""
-    match instruction.name.lower():
-        case (
-            InstrName.RESUME
-            | InstrName.LOAD_NAME
-            | InstrName.LOAD_CONST
-            | InstrName.RETURN_VALUE
-            | InstrName.PUSH_NULL
-            | InstrName.PRECALL
-            | InstrName.CALL
-            | InstrName.POP_TOP
-            | InstrName.BINARY_SUBSCR
-            | InstrName.STORE_NAME
-            | InstrName.NOP
-            | InstrName.JUMP_BACKWARD
-            | InstrName.BUILD_LIST
-        ):
-            yield InstrName.LOAD_CONST.to_instr(0)
-
-        case InstrName.BINARY_OP:
-            arg = instruction.arg
-            assert isinstance(arg, int)
-            match arg:
-                case BinaryOp.ADD:
-                    yield InstrName.LOAD_CONST.to_instr(3)
-                case BinaryOp.MULTIPLY:
-                    yield InstrName.LOAD_CONST.to_instr(5)
-                case BinaryOp.POWER:
-                    # __calc_power_gas__ consumes the TOS, so we duplicate it first
-                    yield from _duplicate_tos()
-                    yield from _call_function_with_tos(__calc_power_gas__.__name__)
-                case _:
-                    raise NotImplementedError(f'unsupported BINARY_OP operation: {BinaryOp(arg).name}')
-
-        case _:
-            raise NotImplementedError(f'unsupported instruction: {instruction.name}')
+    yield InstrName.LOAD_CONST.to_instr(1)
 
 
 def _update_and_check_gas(instruction: Instr) -> Iterator[Instr]:
@@ -216,14 +216,6 @@ def _update_and_check_gas(instruction: Instr) -> Iterator[Instr]:
     yield InstrName.POP_TOP.to_instr()
 
 
-def _duplicate_tos() -> Iterator[Instr]:
-    """Duplicate the TOS. Useful before calling functions that consume the TOS."""
-    yield InstrName.STORE_NAME.to_instr(TOS_NAME)
-    yield InstrName.LOAD_NAME.to_instr(TOS_NAME)
-    yield InstrName.LOAD_NAME.to_instr(TOS_NAME)
-    yield InstrName.DELETE_NAME.to_instr(TOS_NAME)
-
-
 def _call_function_with_tos(function_name: str) -> Iterator[Instr]:
     """
     Call a function with a function_name from the global scope, consuming TOS as its single argument.
@@ -235,11 +227,3 @@ def _call_function_with_tos(function_name: str) -> Iterator[Instr]:
     yield InstrName.PRECALL.to_instr(1)
     yield InstrName.CALL.to_instr(1)
     yield InstrName.DELETE_NAME.to_instr(TOS_NAME)
-
-
-def _call_function_with_args(function_name: str, *args: Any) -> Iterator[Instr]:
-    """Call a function with custom const args. The return value is put on TOS."""
-    yield InstrName.LOAD_GLOBAL.to_instr((True, function_name))
-    yield from (InstrName.LOAD_CONST.to_instr(arg) for arg in args)
-    yield InstrName.PRECALL.to_instr(len(args))
-    yield InstrName.CALL.to_instr(len(args))
