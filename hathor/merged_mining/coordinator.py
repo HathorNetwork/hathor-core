@@ -198,7 +198,7 @@ class SingleMinerJob(NamedTuple):
             [i[::-1].hex() for i in self.merkle_path],
             encode_uint32(self.version)[::-1].hex(),
             self.bits.hex(),
-            encode_uint32(self.timestamp)[::-1].hex(),  # FIXME/TODO: verify actual endianess
+            encode_uint32(self.timestamp)[::-1].hex(),  # FIXME/TODO: verify actual endianness
             self.clean
         ]
 

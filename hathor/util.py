@@ -632,7 +632,7 @@ class sorted_merger(Iterator[T]):
     """ Adaptor class to merge multiple sorted iterators into a single iterator that is also sorted.
 
     Note: for this adaptor to work as expected the input iterators have to already be sorted, but if they aren't, the
-    resulting iterator won't crash, or unexpecetdly stop working, however it will not be sorted.
+    resulting iterator won't crash, or unexpectedly stop working, however it will not be sorted.
 
     A custom key function can be supplied to customize the sort order, and the
     reverse flag can be set to request the result in descending order.
@@ -697,7 +697,7 @@ class sorted_merger(Iterator[T]):
         if not self._iterators:
             raise StopIteration
         cmp = max if self._reverse else min
-        # XXX: this line bellow is correct, but it's just really hard to convince mypy of that, ignoring for now
+        # XXX: this line below is correct, but it's just really hard to convince mypy of that, ignoring for now
         best_it = cmp(self._iterators, key=lambda it: self._key(it.peek()))  # type: ignore
         return next(best_it)
 
