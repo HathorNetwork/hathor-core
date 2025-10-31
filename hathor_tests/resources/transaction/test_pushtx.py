@@ -9,8 +9,8 @@ from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
-from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor_tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_tokens
+from hathor_tests.resources.base_resource import _BaseResourceTest, StubSite
+from hathor_tests.utils import add_blocks_unlock_reward, create_fee_tokens, create_tokens, add_tx_with_data_script
 
 
 class BasePushTxTest(_BaseResourceTest._ResourceTest):
@@ -23,8 +23,11 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(PushTxResource(self.manager))
         self.web_tokens = StubSite(SendTokensResource(self.manager, self._settings))
 
-    def get_tx(self, inputs: Optional[list[WalletInputInfo]] = None,
-               outputs: Optional[list[WalletOutputInfo]] = None) -> Transaction:
+    def get_tx(
+        self,
+        inputs: Optional[list[WalletInputInfo]] = None,
+        outputs: Optional[list[WalletOutputInfo]] = None
+    ) -> Transaction:
         if not outputs:
             address = self.get_address(0)
             assert address is not None
@@ -68,6 +71,21 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
                     raise NotImplementedError
                 args[nk] = nv
         return self.web.get('push_tx', args)
+
+    @inlineCallbacks
+    def test_push_tx_fee_header(self):
+        self.manager.wallet.unlock(b'MYPASS')
+        add_blocks_unlock_reward(self.manager)
+        address = self.get_address(0)
+        assert address is not None
+        tx = create_fee_tokens(self.manager, address_b58=address, propagate=False)
+
+        self.assertTrue(tx.has_fees())
+        tx_hex = tx.get_struct().hex()
+
+        response = yield self.push_tx({'hex_tx': tx_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
 
     @inlineCallbacks
     def test_push_tx(self) -> Generator:
