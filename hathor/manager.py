@@ -401,7 +401,9 @@ class HathorManager:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = nc_storage_factory.get_block_storage_from_block(block)
-        return self.runner_factory.create(block_storage=block_storage)
+        return self.runner_factory.create(
+            block_storage=block_storage,
+        )
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""
