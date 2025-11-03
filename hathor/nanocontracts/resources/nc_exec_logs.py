@@ -117,7 +117,10 @@ class NCExecLogsResponse(QueryParams):
 NCExecLogsResource.openapi = {
     '/nano_contract/logs': {
         'x-visibility': 'private',
-        'x-visibility-override': {'nano-testnet-bravo': 'public'},
+        'x-visibility-override': {
+            'nano-testnet-bravo': 'public',
+            'hathor-testnet-india': 'public'
+        },
         'x-rate-limit': {
             'global': [
                 {

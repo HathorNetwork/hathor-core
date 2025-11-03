@@ -7,6 +7,39 @@ DEFAULT_NO_RATE_LIMIT_TAG = no-rate-limit-latest
 # Build and Push Commands
 # =======================
 
+# GCP / Hathor Testnet
+HATHOR_TESTNET_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank
+
+HATHOR_TESTNET_INDIA_TAG_LATEST = india-latest
+HATHOR_TESTNET_INDIA_TAG_NO_RATE_LIMIT = india-no-rate-limit-latest
+
+.PHONY: hathor-testnet
+hathor-testnet: hathor-testnet-default hathor-testnet-no-rate-limit hathor-testnet-india-default hathor-testnet-india-no-rate-limit
+	@echo "All Hathor Testnet images built and pushed successfully!"
+
+.PHONY: hathor-testnet-default
+hathor-testnet-default: clean nginx.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for Hathor Testnet..."
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: hathor-testnet-no-rate-limit
+hathor-testnet-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for Hathor Testnet..."
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
+.PHONY: hathor-testnet-india-default
+hathor-testnet-india-default: clean nginx_india.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing india image for Hathor Testnet..."
+	mv nginx_india.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(HATHOR_TESTNET_INDIA_TAG_LATEST) .
+
+.PHONY: hathor-testnet-india-no-rate-limit
+hathor-testnet-india-no-rate-limit: clean nginx_india_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit india image for Hathor Testnet..."
+	mv nginx_india_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(HATHOR_TESTNET_INDIA_TAG_NO_RATE_LIMIT) .
+
 # GCP / Nano Testnet
 NANO_TESTNET_REGISTRY = us-central1-docker.pkg.dev/nano-testnet/fullnodes/webtank
 
@@ -35,9 +68,9 @@ nano-testnet-bravo-default: clean nginx_bravo.conf set_real_ip_from_cloudfront
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(NANO_TESTNET_BRAVO_TAG_LATEST) .
 
 .PHONY: nano-testnet-bravo-no-rate-limit
-nano-testnet-bravo-no-rate-limit: clean nginx_bravo.conf set_real_ip_from_cloudfront
+nano-testnet-bravo-no-rate-limit: clean nginx_bravo_no_rate_limit.conf set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit bravo image for Nano Testnet..."
-	mv nginx_bravo.conf nginx.conf
+	mv nginx_bravo_no_rate_limit.conf nginx.conf
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(NANO_TESTNET_BRAVO_TAG_NO_RATE_LIMIT) .
 
 # GCP / Standalone Fullnodes
@@ -96,7 +129,7 @@ aws-main-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfro
 
 # Build All (convenience command)
 .PHONY: build-all
-build-all: nano-testnet standalone-fullnodes ekvilibro aws-main
+build-all: hathor-testnet nano-testnet standalone-fullnodes ekvilibro aws-main
 	@echo "All images built and pushed successfully!"
 
 # Legacy commands for backward compatibility
@@ -127,6 +160,21 @@ nginx_bravo.conf:
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
 	python -m hathor generate_nginx_config --override nano-testnet-bravo - > $@
 
+nginx_bravo_no_rate_limit.conf: export PYTHONPATH := ../..
+nginx_bravo_no_rate_limit.conf:
+	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
+	python -m hathor generate_nginx_config --override nano-testnet-bravo --disable-rate-limits - > $@
+
+nginx_india.conf: export PYTHONPATH := ../..
+nginx_india.conf:
+	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
+	python -m hathor generate_nginx_config --override hathor-testnet-india - > $@
+
+nginx_india_no_rate_limit.conf: export PYTHONPATH := ../..
+nginx_india_no_rate_limit.conf:
+	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
+	python -m hathor generate_nginx_config --override hathor-testnet-india --disable-rate-limits - > $@
+
 set_real_ip_from_cloudfront:
 	curl https://ip-ranges.amazonaws.com/ip-ranges.json -s \
 	| jq '.prefixes|map(select(.service=="CLOUDFRONT"))[]|.ip_prefix' -r \
@@ -139,13 +187,18 @@ set_real_ip_from_cloudfront:
 
 .PHONY: clean
 clean:
-	rm -f nginx.conf nginx_no_rate_limit.conf nginx_bravo.conf set_real_ip_from_cloudfront
+	rm -f nginx.conf nginx_no_rate_limit.conf nginx_bravo.conf nginx_bravo_no_rate_limit.conf nginx_india.conf nginx_india_no_rate_limit.conf set_real_ip_from_cloudfront
 
 .PHONY: help
 help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "Project/Account Commands:"
+	@echo "  hathor-testnet             		- Build and push all images for GCP Project Hathor Testnet"
+	@echo "  hathor-testnet-default     		- Build and push default image for GCP Project Hathor Testnet"
+	@echo "  hathor-testnet-no-rate-limit		- Build and push no-rate-limit image for GCP Project Hathor Testnet"
+	@echo "  hathor-testnet-india-default		- Build and push india image for GCP Project Hathor Testnet"
+	@echo "  hathor-testnet-india-no-rate-limit - Build and push no-rate-limit india image for GCP Project Hathor Testnet"
 	@echo "  nano-testnet              			- Build and push all images for GCP Project Nano Testnet"
 	@echo "  nano-testnet-default      			- Build and push default image for GCP Project Nano Testnet"
 	@echo "  nano-testnet-no-rate-limit 		- Build and push no-rate-limit image for GCP Project Nano Testnet"
@@ -172,6 +225,7 @@ help:
 	@echo "  docker-no-rate-limit      - Alias for aws-main-no-rate-limit"
 	@echo ""
 	@echo "Supported Projects/Accounts:"
+	@echo "  - Hathor Testnet: $(HATHOR_TESTNET_REGISTRY)"
 	@echo "  - Nano Testnet: $(NANO_TESTNET_REGISTRY)"
 	@echo "  - Standalone Fullnodes: $(STANDALONE_FULLNODES_REGISTRY)"
 	@echo "  - Ekvilibro: $(EKVILIBRO_REGISTRY)"
