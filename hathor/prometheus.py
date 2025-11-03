@@ -63,7 +63,8 @@ TX_STORAGE_METRICS = {
 }
 
 GC_METRICS = {
-    'objects': 'Number of objects tracked by the garbage collector',
+    'tracked_objects': 'Number of objects tracked by the garbage collector',
+    'collection_counts': 'Counts used by GC to control the moment each generation should be collected',
     'collections': 'Number of collections done by the garbage collector',
     'collected': 'Number of objects collected by the garbage collector',
     'uncollectable': 'Number of objects that could not be collected by the garbage collector',
@@ -109,9 +110,16 @@ class PrometheusMetricsExporter:
         # Interval in which the write data method will be called (in seconds)
         self.call_interval: int = self._settings.PROMETHEUS_WRITE_INTERVAL
 
+        # Interval in which the update GC data method will be called (in seconds)
+        self.gc_update_interval: int = self._settings.PROMETHEUS_UPDATE_GC_INTERVAL
+
         # A timer to periodically write data to prometheus
         self._lc_write_data = LoopingCall(self._write_data)
         self._lc_write_data.clock = get_global_reactor()
+
+        # A timer to periodically update GC data
+        self._lc_update_gc_data = LoopingCall(self._set_garbage_collection_metrics)
+        self._lc_update_gc_data.clock = get_global_reactor()
 
     def _initial_setup(self) -> None:
         """ Start a collector registry to send data to node exporter
@@ -178,6 +186,7 @@ class PrometheusMetricsExporter:
         """
         self.running = True
         self._lc_write_data.start(self.call_interval, now=False)
+        self._lc_update_gc_data.start(self.gc_update_interval, now=False)
 
     def set_new_metrics(self) -> None:
         """ Update metric_gauges dict with new data from metrics
@@ -187,7 +196,6 @@ class PrometheusMetricsExporter:
 
         self._set_rocksdb_tx_storage_metrics()
         self._set_new_peer_connection_metrics()
-        self._set_garbage_collection_metrics()
 
         write_to_textfile(self.filepath, self.registry)
 
@@ -212,7 +220,8 @@ class PrometheusMetricsExporter:
         threshold = gc.get_threshold()
 
         for i in range(3):
-            self.gc_metrics['objects'].labels(generation=i).set(counts[i])
+            self.gc_metrics['tracked_objects'].labels(generation=i).set(len(gc.get_objects(i)))
+            self.gc_metrics['collection_counts'].labels(generation=i).set(counts[i])
             self.gc_metrics['collections'].labels(generation=i).set(stats[i]['collections'])
             self.gc_metrics['collected'].labels(generation=i).set(stats[i]['collected'])
             self.gc_metrics['uncollectable'].labels(generation=i).set(stats[i]['uncollectable'])
