@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 name: setup-hathor-env
 description: Setup Hathor node environment
 inputs:
