@@ -34,5 +34,10 @@ runs:
       shell: bash
 
     - name: Install Poetry dependencies
-      run: poetry install -n --no-root
+      run: |
+        poetry install -n --no-root
+        poetry run pip uninstall -y rocksdb && poetry run pip install --no-binary :all: git+https://github.com/hathornetwork/python-rocksdb.git
+        poetry run which python
+        poetry run python -c 'import rocksdb'
+        exit(-1)
       shell: bash
