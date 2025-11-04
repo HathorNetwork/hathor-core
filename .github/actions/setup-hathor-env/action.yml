@@ -38,6 +38,5 @@ runs:
         poetry install -n --no-root
         poetry run pip uninstall -y rocksdb && poetry run pip install --no-binary :all: git+https://github.com/hathornetwork/python-rocksdb.git
         poetry run which python
-        poetry run python -c 'import rocksdb'
-        exit(-1)
+        poetry run python -c 'import rocksdb; print("SUCCESS")'
       shell: bash
