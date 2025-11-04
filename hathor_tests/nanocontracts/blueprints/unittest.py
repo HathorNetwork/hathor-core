@@ -20,6 +20,8 @@ from hathor_tests.nanocontracts.utils import TestRunner
 
 
 class BlueprintTestCase(unittest.TestCase):
+    nc_seed: bytes | None = None
+
     def setUp(self):
         super().setUp()
         self.manager = self.build_manager()
@@ -123,7 +125,12 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
-        return TestRunner(tx_storage=self.manager.tx_storage, settings=self._settings, reactor=self.reactor)
+        return TestRunner(
+            tx_storage=self.manager.tx_storage,
+            settings=self._settings,
+            reactor=self.reactor,
+            seed=self.nc_seed,
+        )
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""
