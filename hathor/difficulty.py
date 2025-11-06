@@ -37,7 +37,7 @@ Primitive:
 - pdiff -> u256
 - weight -> u256
 
-From the above conversions it is possible to make all converions between (hash, target, bdiff, pdiff, weight) using
+From the above conversions it is possible to make all conversions between (hash, target, bdiff, pdiff, weight) using
 u256 as intermediary.
 
 # References
