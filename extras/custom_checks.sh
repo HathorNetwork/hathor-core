@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 # Source dirs
-SOURCE_DIRS=(hathor tests)
+SOURCE_DIRS=(hathor hathor_tests)
 
 # Define your custom linter check functions here
 # Each function should return 0 if everything is OK, and 1 if something is wrong.
@@ -58,7 +58,7 @@ function check_do_not_use_builtin_random_in_tests() {
 		hathor/merged_mining/debug_api.py
 		hathor/client.py
 		hathor/cli/tx_generator.py
-		tests/test_utils/test_leb128.py
+		hathor_tests/test_utils/test_leb128.py
 	)
 	exclude_params=()
 	for item in "${exclude[@]}"; do
@@ -82,9 +82,9 @@ function check_deprecated_typing() {
 }
 
 function check_do_not_import_tests_in_hathor() {
-	if grep -Rn '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
+	if grep -Rn '\<.*import .*hathor_tests.*\>\|\<.*from .*hathor_tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
 		echo 'do not import test definitions in the hathor module'
-		echo 'move them from tests to hathor instead'
+		echo 'move them from hathor_tests to hathor instead'
 		echo 'alternatively, comment `# skip-import-tests-custom-check` to exclude a line.'
 		return 1
 	fi
