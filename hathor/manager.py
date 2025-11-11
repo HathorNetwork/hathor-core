@@ -66,6 +66,7 @@ from hathor.util import EnvironmentInfo, LogDuration, Random
 from hathor.utils.weight import calculate_min_significant_weight, weight_to_work
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
+from hathor.vertex_helper import VertexHelper
 from hathor.wallet import BaseWallet
 
 if TYPE_CHECKING:
@@ -114,6 +115,7 @@ class HathorManager:
         vertex_parser: VertexParser,
         runner_factory: RunnerFactory,
         feature_service: FeatureService,
+        vertex_helper: VertexHelper,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -203,6 +205,7 @@ class HathorManager:
         self.vertex_parser = vertex_parser
         self.runner_factory = runner_factory
         self.feature_service = feature_service
+        self.vertex_helper = vertex_helper
 
         self.websocket_factory = websocket_factory
 

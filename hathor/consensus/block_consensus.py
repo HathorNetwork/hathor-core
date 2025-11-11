@@ -286,7 +286,13 @@ class BlockConsensusAlgorithm:
                 # We only emit events when the nc is successfully executed.
                 assert self.context.nc_events is not None
                 last_call_info = runner.get_last_call_info()
-                self.context.nc_events.append((tx, last_call_info.nc_logger.__events__))
+                events_list = last_call_info.nc_logger.__events__
+                self.context.nc_events.append((tx, events_list))
+
+                # Store events in transaction metadata
+                if events_list:
+                    tx_meta.nc_events = [(event.nc_id, event.data) for event in events_list]
+                    self.context.save(tx)
             finally:
                 # We save logs regardless of whether the nc successfully executed.
                 self._nc_log_storage.save_logs(tx, runner.get_last_call_info(), exception_and_tb)

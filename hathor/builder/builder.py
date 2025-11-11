@@ -51,6 +51,7 @@ from hathor.util import Random, get_environment_info
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
+from hathor.vertex_helper import VertexHelper
 from hathor.wallet import BaseWallet, Wallet
 
 logger = get_logger()
@@ -195,6 +196,8 @@ class Builder:
         self._runner_factory: RunnerFactory | None = None
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
+        self._vertex_helper: VertexHelper | None = None
+
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
@@ -227,6 +230,7 @@ class Builder:
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
         runner_factory = self._get_or_create_runner_factory()
+        vertex_helper = self._get_or_create_vertex_helper()
 
         if settings.ENABLE_NANO_CONTRACTS:
             tx_storage.nc_catalog = self._get_nc_catalog()
@@ -272,6 +276,7 @@ class Builder:
             poa_block_producer=poa_block_producer,
             runner_factory=runner_factory,
             feature_service=feature_service,
+            vertex_helper=vertex_helper,
             **kwargs
         )
 
@@ -682,6 +687,17 @@ class Builder:
             )
 
         return self._poa_block_producer
+
+    def _get_or_create_vertex_helper(self) -> VertexHelper:
+        if self._vertex_helper is None:
+            tx_storage = self._get_or_create_tx_storage()
+            nc_log_storage = self._get_or_create_nc_log_storage()
+            self._vertex_helper = VertexHelper(
+                storage=tx_storage,
+                nc_log_storage=nc_log_storage,
+            )
+
+        return self._vertex_helper
 
     def set_rocksdb_path(self, path: str | tempfile.TemporaryDirectory) -> 'Builder':
         if self._tx_storage:
