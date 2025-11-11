@@ -101,9 +101,15 @@ class NanoContractHistoryResource(Resource):
 
         count = params.count
         has_more = False
-        history_list = []
+        history_list: list[dict[str, Any]] = []
         for idx, tx_id in enumerate(iter_history):
-            history_list.append(tx_storage.get_transaction(tx_id).to_json_extended())
+            tx = tx_storage.get_transaction(tx_id)
+            tx_json = self.manager.vertex_json_serializer.to_json_extended(
+                tx,
+                include_nc_logs=params.include_nc_logs,
+                include_nc_events=params.include_nc_events,
+            )
+            history_list.append(tx_json)
             if idx >= count - 1:
                 # Check if iterator still has more elements
                 try:
@@ -129,6 +135,8 @@ class NCHistoryParams(QueryParams):
     after: Optional[str]
     before: Optional[str]
     count: int = Field(default=100, lt=500)
+    include_nc_logs: bool = Field(default=False)
+    include_nc_events: bool = Field(default=False)
 
 
 class NCHistoryResponse(Response):
@@ -230,6 +238,23 @@ NanoContractHistoryResource.openapi = {
                     'required': False,
                     'schema': {
                         'type': 'string',
+                    }
+                }, {
+                    'name': 'include_nc_logs',
+                    'in': 'query',
+                    'description': 'Include nano contract execution logs in the response. Default is false.',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean',
+                    }
+                }, {
+                    'name': 'include_nc_events',
+                    'in': 'query',
+                    'description': 'Include nano contract events emitted during execution in the response. '
+                                   'Default is false.',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean',
                     }
                 }
             ],

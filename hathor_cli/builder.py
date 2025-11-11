@@ -48,6 +48,7 @@ from hathor.util import Random
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
+from hathor.transaction.json_serializer import VertexJsonSerializer
 from hathor.wallet import BaseWallet, HDWallet, Wallet
 
 logger = get_logger()
@@ -329,6 +330,8 @@ class CliBuilder:
 
         SyncSupportLevel.add_factories(settings, p2p_manager, SyncSupportLevel.ENABLED, vertex_parser, vertex_handler)
 
+        vertex_json_serializer = VertexJsonSerializer(storage=tx_storage, nc_log_storage=nc_log_storage)
+
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
         poa_block_producer: PoaBlockProducer | None = None
         if settings.CONSENSUS_ALGORITHM.is_poa():
@@ -365,6 +368,7 @@ class CliBuilder:
             poa_block_producer=poa_block_producer,
             runner_factory=runner_factory,
             feature_service=self.feature_service,
+            vertex_json_serializer=vertex_json_serializer,
         )
 
         if self._args.x_ipython_kernel:

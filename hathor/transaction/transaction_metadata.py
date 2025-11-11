@@ -54,6 +54,8 @@ class TransactionMetadata:
     nc_block_root_id: Optional[bytes]
     nc_execution: Optional[NCExecutionState]
     nc_calls: Optional[list[MetaNCCallRecord]]
+    # Stores events emitted during nano contract execution
+    nc_events: Optional[list[tuple[bytes, bytes]]]  # [(nc_id, event_data)]
 
     # A dict of features in the feature activation process and their respective state. Must only be used by Blocks,
     # is None otherwise. This is only used for caching, so it can be safely cleared up, as it would be recalculated
@@ -85,6 +87,7 @@ class TransactionMetadata:
         self.nc_block_root_id = nc_block_root_id
         self.nc_execution = None
         self.nc_calls = None
+        self.nc_events = None
 
         # Tx outputs that have been spent.
         # The key is the output index, while the value is a set of the transactions which spend the output.
@@ -187,7 +190,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
-                      'feature_states', 'nc_block_root_id', 'nc_calls', 'nc_execution']:
+                      'feature_states', 'nc_block_root_id', 'nc_calls', 'nc_execution', 'nc_events']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
 
@@ -244,6 +247,11 @@ class TransactionMetadata:
         data['nc_block_root_id'] = self.nc_block_root_id.hex() if self.nc_block_root_id else None
         data['nc_calls'] = [x.to_json() for x in self.nc_calls] if self.nc_calls else None
         data['nc_execution'] = self.nc_execution.value if self.nc_execution else None
+        # Serialize nc_events: [(nc_id, event_data)]
+        if self.nc_events:
+            data['nc_events'] = [(nc_id.hex(), event_data.hex()) for nc_id, event_data in self.nc_events]
+        else:
+            data['nc_events'] = None
         return data
 
     def to_json(self) -> dict[str, Any]:
@@ -315,7 +323,7 @@ class TransactionMetadata:
         else:
             meta.nc_block_root_id = None
 
-        nc_execution_raw = data.get('nc_execution_raw')
+        nc_execution_raw = data.get('nc_execution')
         if nc_execution_raw is not None:
             meta.nc_execution = NCExecutionState(nc_execution_raw)
         else:
@@ -326,6 +334,13 @@ class TransactionMetadata:
             meta.nc_calls = [MetaNCCallRecord.from_json(x) for x in nc_calls_raw]
         else:
             meta.nc_calls = None
+
+        nc_events_raw = data.get('nc_events')
+        if nc_events_raw is not None:
+            meta.nc_events = [(bytes.fromhex(nc_id), bytes.fromhex(event_data))
+                              for nc_id, event_data in nc_events_raw]
+        else:
+            meta.nc_events = None
 
         return meta
 
