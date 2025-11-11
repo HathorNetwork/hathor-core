@@ -17,6 +17,7 @@ from typing import Any
 from structlog import get_logger
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import (
     Resource,
     get_args,
@@ -26,7 +27,6 @@ from hathor.api_util import (
     set_cors,
     validate_tx_hash,
 )
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import Block
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion

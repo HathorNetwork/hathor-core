@@ -1,5 +1,5 @@
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource
-from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.util import json_dumpb
 

@@ -1,7 +1,6 @@
 from unittest.mock import Mock
 
-from hathor.builder import CliBuilder, ResourcesBuilder
-from hathor.cli.run_node_args import RunNodeArgs
+from hathor.builder import ResourcesBuilder
 from hathor.event import EventManager
 from hathor.event.storage import EventRocksDBStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -11,6 +10,8 @@ from hathor.manager import HathorManager
 from hathor.p2p.sync_version import SyncVersion
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
 from hathor.wallet import HDWallet, Wallet
+from hathor_cli.builder import CliBuilder
+from hathor_cli.run_node_args import RunNodeArgs
 from hathor_tests import unittest
 
 
@@ -20,7 +21,7 @@ class BuilderTestCase(unittest.TestCase):
 
         self.reactor = self.clock
 
-        from hathor.cli.run_node import RunNode
+        from hathor_cli.run_node import RunNode
         self.parser = RunNode.create_parser()
 
     def _build_with_error(self, cmd_args: list[str], err_msg: str) -> None:

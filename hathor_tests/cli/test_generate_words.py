@@ -3,7 +3,7 @@ from io import StringIO
 
 from structlog.testing import capture_logs
 
-from hathor.cli.generate_valid_words import create_parser, execute
+from hathor_cli.generate_valid_words import create_parser, execute
 from hathor_tests import unittest
 
 

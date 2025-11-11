@@ -4,7 +4,7 @@ from io import StringIO
 
 from structlog.testing import capture_logs
 
-from hathor.cli import main
+from hathor_cli import main
 
 
 class CliMainTest(unittest.TestCase):

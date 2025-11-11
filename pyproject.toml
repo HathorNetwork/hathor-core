@@ -30,9 +30,13 @@ classifiers = [
     "Private :: Do Not Upload",
 ]
 exclude = ["hathor_tests", "hathor_tests.*"]
+packages = [
+    { include = "hathor" },
+    { include = "hathor_cli" },
+]
 
 [tool.poetry.scripts]
-hathor-cli = 'hathor.cli.main:main'
+hathor-cli = 'hathor_cli.main:main'
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "~7.1.1"

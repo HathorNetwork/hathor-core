@@ -1,8 +1,8 @@
 import shutil
 import tempfile
 
-from hathor.cli.wallet import create_parser, execute
 from hathor.util import json_loadb
+from hathor_cli.wallet import create_parser, execute
 from hathor_tests import unittest
 
 

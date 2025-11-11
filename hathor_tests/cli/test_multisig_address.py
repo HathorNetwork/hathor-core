@@ -4,7 +4,7 @@ from io import StringIO
 
 from structlog.testing import capture_logs
 
-from hathor.cli.multisig_address import create_parser, execute
+from hathor_cli.multisig_address import create_parser, execute
 from hathor_tests import unittest
 
 

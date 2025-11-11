@@ -18,8 +18,8 @@ from pydantic import Field
 from sortedcontainers import SortedKeyList
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint
 from hathor.util import collect_n

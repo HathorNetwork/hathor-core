@@ -5,10 +5,10 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from hathor.builder.sysctl_builder import SysctlBuilder
-from hathor.cli.run_node import RunNode
 from hathor.sysctl.exception import SysctlEntryNotFound, SysctlRunnerException
 from hathor.sysctl.init_file_loader import SysctlInitFileLoader
 from hathor.sysctl.runner import SysctlRunner
+from hathor_cli.run_node import RunNode
 from hathor_tests import unittest
 
 

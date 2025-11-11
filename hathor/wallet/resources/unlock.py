@@ -14,8 +14,8 @@
 
 from typing import Any
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import IncorrectPassword, InvalidWords
 

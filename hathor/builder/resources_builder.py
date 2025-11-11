@@ -31,9 +31,9 @@ from hathor.nanocontracts.resources.on_chain import BlueprintOnChainResource
 from hathor.prometheus import PrometheusMetricsExporter
 
 if TYPE_CHECKING:
-    from hathor.cli.run_node_args import RunNodeArgs
     from hathor.event.websocket.factory import EventWebsocketFactory
     from hathor.manager import HathorManager
+    from hathor_cli.run_node_args import RunNodeArgs
 
 logger = get_logger()
 
