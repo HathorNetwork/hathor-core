@@ -14,8 +14,8 @@
 
 import base64
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.manager import HathorManager

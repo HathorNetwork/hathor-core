@@ -1,4 +1,4 @@
-from hathor.cli.quick_test import QuickTest
+from hathor_cli.quick_test import QuickTest
 from hathor_tests import unittest
 
 

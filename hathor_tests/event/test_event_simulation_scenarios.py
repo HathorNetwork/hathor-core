@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.cli.events_simulator.scenario import Scenario
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.event_data import (
     DecodedTxOutput,
@@ -30,6 +29,7 @@ from hathor.event.model.event_type import EventType
 from hathor.event.websocket.request import StartStreamRequest
 from hathor.event.websocket.response import EventResponse
 from hathor.transaction import Block, Transaction
+from hathor_cli.events_simulator.scenario import Scenario
 from hathor_tests.event.event_simulation_tester import BaseEventSimulationTester
 
 

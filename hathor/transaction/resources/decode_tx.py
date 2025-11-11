@@ -14,8 +14,8 @@
 
 import struct
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.resources.transaction import get_tx_extra_data
 from hathor.util import json_dumpb

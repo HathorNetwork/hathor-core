@@ -8,9 +8,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from structlog.testing import capture_logs
 
-from hathor.cli.multisig_signature import create_parser, execute
 from hathor.simulator.utils import add_new_blocks
 from hathor.wallet import Wallet
+from hathor_cli.multisig_signature import create_parser, execute
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions
 

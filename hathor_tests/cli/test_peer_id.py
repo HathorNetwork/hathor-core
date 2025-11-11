@@ -3,8 +3,8 @@ from io import StringIO
 
 from structlog.testing import capture_logs
 
-from hathor.cli.peer_id import main
 from hathor.util import json_loadb
+from hathor_cli.peer_id import main
 from hathor_tests import unittest
 
 

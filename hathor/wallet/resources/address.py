@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.util import json_dumpb
 
 

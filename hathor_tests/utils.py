@@ -361,7 +361,7 @@ def execute_mining(
     prefix: str = settings.API_VERSION_PREFIX
 ) -> None:
     """Execute a mining on a given server"""
-    from hathor.cli.mining import create_parser, execute
+    from hathor_cli.mining import create_parser, execute
     partial_url = '{}:{}/{}/'.format(host, port, prefix)
     url = urllib.parse.urljoin(partial_url, path)
     parser = create_parser()
@@ -380,7 +380,7 @@ def execute_tx_gen(
     prefix: str = settings.API_VERSION_PREFIX
 ) -> None:
     """Execute a tx generator on a given server"""
-    from hathor.cli.tx_generator import create_parser, execute
+    from hathor_cli.tx_generator import create_parser, execute
     url = '{}:{}/{}/'.format(host, port, prefix)
     parser = create_parser()
     argv = [url, '--count', str(count)]

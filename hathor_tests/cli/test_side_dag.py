@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.cli.side_dag import _partition_argv
+from hathor_cli.side_dag import _partition_argv
 
 
 @pytest.mark.parametrize(

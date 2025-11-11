@@ -1,6 +1,6 @@
 import tempfile
 
-from hathor.cli.db_import import DbImport
+from hathor_cli.db_import import DbImport
 from hathor_tests import unittest
 
 

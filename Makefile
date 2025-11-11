@@ -31,7 +31,7 @@ tests-nano:
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
+	pytest --durations=10 --cov=hathor_cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
 
 .PHONY: tests-doctests
 tests-doctests:

@@ -1,6 +1,6 @@
 import tempfile
 
-from hathor.cli.shell import Shell
+from hathor_cli.shell import Shell
 from hathor_tests import unittest
 
 

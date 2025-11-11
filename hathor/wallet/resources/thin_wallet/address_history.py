@@ -18,8 +18,8 @@ from typing import Any, Optional
 from structlog import get_logger
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist

@@ -1,6 +1,6 @@
 import os
 
-from hathor.cli.db_export import DbExport
+from hathor_cli.db_export import DbExport
 from hathor_tests import unittest
 
 

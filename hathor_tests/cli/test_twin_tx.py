@@ -4,10 +4,10 @@ from io import StringIO
 import pytest
 from structlog.testing import capture_logs
 
-from hathor.cli.twin_tx import create_parser, execute
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.util import json_loadb
+from hathor_cli.twin_tx import create_parser, execute
 from hathor_tests import unittest
 from hathor_tests.utils import (
     add_blocks_unlock_reward,

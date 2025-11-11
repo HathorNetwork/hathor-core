@@ -1,6 +1,6 @@
 from unittest.mock import ANY, patch
 
-from hathor.cli.run_node import RunNode
+from hathor_cli.run_node import RunNode
 from hathor_tests import unittest
 
 

@@ -14,9 +14,9 @@
 
 from unittest.mock import Mock
 
-from hathor.cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
-from hathor.cli.events_simulator.events_simulator import create_parser, execute
 from hathor.conf.get_settings import get_global_settings
+from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
+from hathor_cli.events_simulator.events_simulator import create_parser, execute
 from hathor_tests.test_memory_reactor_clock import TestMemoryReactorClock
 
 

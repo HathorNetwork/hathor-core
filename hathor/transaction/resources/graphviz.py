@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Union
 from twisted.internet import threads
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, parse_int, set_cors, validate_tx_hash
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.graphviz import GraphvizVisualizer
 from hathor.util import json_dumpb
