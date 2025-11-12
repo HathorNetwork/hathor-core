@@ -16,8 +16,8 @@ from enum import Enum
 from itertools import islice
 from typing import TYPE_CHECKING, Iterator
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, parse_args, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import Transaction
 from hathor.util import json_dumpb

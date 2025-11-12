@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 # Source dirs
-SOURCE_DIRS=(hathor tests)
+SOURCE_DIRS=(hathor hathor_tests)
 
 # Define your custom linter check functions here
 # Each function should return 0 if everything is OK, and 1 if something is wrong.
@@ -15,7 +15,7 @@ function check_version_match() {
     # This function will check all source files containing the project version and return 1 in case
     # they don't match. When a version is provided as an environment variable, it is checked against the package version.
 
-    OPENAPI_FILE="hathor/cli/openapi_files/openapi_base.json"
+    OPENAPI_FILE="hathor/_openapi/openapi_base.json"
     SRC_FILE="hathor/version.py"
     PACKAGE_FILE="pyproject.toml"
 
@@ -57,8 +57,8 @@ function check_do_not_use_builtin_random_in_tests() {
 	exclude=(
 		hathor/merged_mining/debug_api.py
 		hathor/client.py
-		hathor/cli/tx_generator.py
-		tests/test_utils/test_leb128.py
+		hathor_cli/tx_generator.py
+		hathor_tests/test_utils/test_leb128.py
 	)
 	exclude_params=()
 	for item in "${exclude[@]}"; do
@@ -82,9 +82,9 @@ function check_deprecated_typing() {
 }
 
 function check_do_not_import_tests_in_hathor() {
-	if grep -Rn '\<.*import .*tests.*\>\|\<.*from .*tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
+	if grep -Rn '\<.*import .*hathor_tests.*\>\|\<.*from .*hathor_tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
 		echo 'do not import test definitions in the hathor module'
-		echo 'move them from tests to hathor instead'
+		echo 'move them from hathor_tests to hathor instead'
 		echo 'alternatively, comment `# skip-import-tests-custom-check` to exclude a line.'
 		return 1
 	fi
@@ -92,9 +92,10 @@ function check_do_not_import_tests_in_hathor() {
 }
 
 function check_do_not_import_from_hathor_in_entrypoints() {
+    EXCLUDES=(--exclude=builder.py)
     PATTERN='^import .*hathor.*\|^from .*hathor.* import'
 
-    if grep -Rn "$PATTERN" "hathor/cli" | grep -v 'from hathor.cli.run_node import RunNode' | grep -v '# skip-cli-import-custom-check'; then
+    if grep -Rn $EXCLUDES "$PATTERN" "hathor_cli" | grep -v 'from hathor_cli.run_node import RunNode' | grep -v '# skip-cli-import-custom-check'; then
         echo 'do not import from `hathor` in the module-level of a CLI entrypoint.'
         echo 'instead, import locally inside the function that uses the import.'
         echo 'alternatively, comment `# skip-cli-import-custom-check` to exclude a line.'

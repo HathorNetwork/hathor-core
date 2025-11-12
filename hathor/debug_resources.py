@@ -20,8 +20,8 @@ from twisted.internet import defer
 from twisted.internet.interfaces import IReactorFromThreads
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_arg_default, get_args
-from hathor.cli.openapi_files.register import register_resource
 from hathor.exception import HathorError
 from hathor.manager import HathorManager
 from hathor.reactor import ReactorProtocol

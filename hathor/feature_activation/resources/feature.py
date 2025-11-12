@@ -16,8 +16,8 @@ from typing import Optional
 
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService

@@ -16,8 +16,8 @@ import enum
 
 from structlog import get_logger
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import HathorError

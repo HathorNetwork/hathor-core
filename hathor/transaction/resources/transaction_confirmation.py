@@ -15,8 +15,8 @@
 from math import log2
 from typing import Any
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors, validate_tx_hash
-from hathor.cli.openapi_files.register import register_resource
 from hathor.manager import HathorManager
 from hathor.util import json_dumpb
 from hathor.utils.weight import weight_to_work, work_to_weight

@@ -1,13 +1,13 @@
-py_sources = hathor/ tests/ extras/custom_tests/
+py_sources = hathor/ hathor_tests/ extras/custom_tests/
 
 .PHONY: all
 all: check tests
 
 # testing:
 
-tests_cli = tests/cli/
-tests_nano = tests/nanocontracts/ tests/tx/test_indexes_nc_history.py tests/resources/nanocontracts/
-tests_lib = $(filter-out ${tests_cli} tests/__pycache__/, $(dir $(wildcard tests/*/.)))
+tests_cli = hathor_tests/cli/
+tests_nano = hathor_tests/nanocontracts/ hathor_tests/tx/test_indexes_nc_history.py hathor_tests/resources/nanocontracts/
+tests_lib = $(filter-out ${tests_cli} hathor_tests/__pycache__/, $(dir $(wildcard hathor_tests/*/.)))
 tests_ci = extras/github/
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
@@ -31,7 +31,7 @@ tests-nano:
 
 .PHONY: tests-cli
 tests-cli:
-	pytest --durations=10 --cov=hathor/cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
+	pytest --durations=10 --cov=hathor_cli/ --cov-config=.coveragerc_full --cov-fail-under=27 -p no:warnings $(tests_cli)
 
 .PHONY: tests-doctests
 tests-doctests:
@@ -47,9 +47,9 @@ tests-quick:
 
 .PHONY: tests-genesis
 tests-genesis:
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/mainnet.yml' pytest -n0 tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/testnet.yml' pytest -n0 tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/nano_testnet.yml' pytest -n0 tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/mainnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/testnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/nano_testnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
 
 .PHONY: tests-ci
 tests-ci:
@@ -64,17 +64,17 @@ tests: tests-cli tests-lib tests-genesis tests-custom tests-ci
 
 .PHONY: tests-full
 tests-full:
-	pytest $(pytest_flags) --durations=10 --cov-config=.coveragerc_full ./tests
+	pytest $(pytest_flags) --durations=10 --cov-config=.coveragerc_full ./hathor_tests
 
 # checking:
 
 .PHONY: mypy
 mypy:
-	mypy -p hathor -p tests -p extras.custom_tests
+	mypy -p hathor -p hathor_tests -p extras.custom_tests
 
 .PHONY: dmypy
 dmypy:
-	dmypy run --timeout 86400 -- -p hathor -p tests -p extras.custom_tests
+	dmypy run --timeout 86400 -- -p hathor -p hathor_tests -p extras.custom_tests
 
 .PHONY: flake8
 flake8:
@@ -111,8 +111,8 @@ isort:
 
 .PHONY: clean-pyc
 clean-pyc:
-	find hathor tests -name \*.pyc -delete
-	find hathor tests -name __pycache__ -delete
+	find hathor hathor_tests -name \*.pyc -delete
+	find hathor hathor_tests -name __pycache__ -delete
 
 .PHONY: clean-caches
 clean-caches:

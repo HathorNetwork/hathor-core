@@ -18,8 +18,8 @@ import types
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts import types as nc_types
 from hathor.nanocontracts.blueprint import NC_FIELDS_ATTR
 from hathor.nanocontracts.context import Context

@@ -56,7 +56,7 @@ class IPKernelApp(OriginalIPKernelApp):
 
     # https://ipykernel.readthedocs.io/en/stable/api/ipykernel.html#ipykernel.kernelapp.IPKernelApp.configure_tornado_logger
     def configure_tornado_logger(self) -> None:
-        # XXX: we already setup tornago logging on hathor.cli.util.setup_logging prevent this class from overriding it
+        # XXX: we already setup tornago logging on hathor_cli.util.setup_logging prevent this class from overriding it
         pass
 
     # https://ipykernel.readthedocs.io/en/stable/api/ipykernel.html#ipykernel.kernelapp.IPKernelApp.start

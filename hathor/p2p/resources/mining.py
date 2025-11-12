@@ -19,8 +19,8 @@ from json import JSONDecodeError
 
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args
-from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.transaction import Block
 from hathor.util import json_dumpb, json_loadb

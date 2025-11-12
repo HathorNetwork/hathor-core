@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
