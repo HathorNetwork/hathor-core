@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum, auto, unique
 from typing import TYPE_CHECKING, Any
 
@@ -133,3 +134,44 @@ class CallInfo:
         else:
             assert type(call_record.changes_tracker.storage) is NCContractStorage
         self.nc_logger.__log_call_end__()
+
+    def get_events(self) -> list:
+        return list(self.nc_logger.__events__)
+
+    def get_log_entries(self) -> list[dict]:
+        return self.nc_logger.__entries__
+
+    def get_formatted_logs(self) -> str:
+        from hathor.nanocontracts.nc_exec_logs import NCLogEntry, NCCallBeginEntry, NCCallEndEntry
+
+        lines = []
+        depth = -1
+        for entry in self.get_log_entries():
+            match entry:
+                case NCLogEntry():
+                    message = entry.message
+                    key_values = entry.key_values
+
+                case NCCallBeginEntry():
+                    message = f'--- CALL BEGIN: {str(entry.call_type)} --- {entry.method_name}{entry.str_args}'
+                    key_values = {
+                        'nc_id': entry.nc_id.hex(),
+                        'actions': entry.actions,
+                    }
+                    depth += 1
+
+                case NCCallEndEntry():
+                    message = '--- CALL END ---'
+                    key_values = ''
+
+                case _:
+                    raise AssertionError('unknown log entry type')
+
+            assert depth >= 0
+            prefix = '    ' * depth
+            lines.append(f'{datetime.fromtimestamp(entry.timestamp)} [{entry.level}] {prefix}{message} {key_values}')
+
+            if isinstance(entry, NCCallEndEntry):
+                depth -= 1
+
+        return '\n'.join(lines)
