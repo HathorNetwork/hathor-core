@@ -84,6 +84,8 @@ typing-extensions = "~4.12.2"
 python-healthchecklib = "^0.1.0"
 multidict = "=6.7.0"
 hathorlib = {path = "hathorlib"}
+jupyterlab = "^4.4.10"
+ipytest = "^0.14.2"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]

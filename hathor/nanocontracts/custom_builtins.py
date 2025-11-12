@@ -262,7 +262,8 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
 def _generate_disabled_builtin_func(name: str) -> Callable[..., NoReturn]:
     """Generate a function analogous to `func` but that will always raise an exception when called."""
     func = getattr(builtins, name, None)
-    assert func is not None
+    # I had to disable it because `exit` does not exist in Jupyter kernel.
+    # assert func is not None, f'{name} is None'
     msg = f'The use of `{name}` has been disabled'
 
     class __Disabled__(FauxImmutable):
