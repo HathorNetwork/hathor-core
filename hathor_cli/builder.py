@@ -22,33 +22,17 @@ from structlog import get_logger
 
 from hathor_cli.run_node_args import RunNodeArgs
 from hathor_cli.side_dag import SideDagArgs
-from hathor.consensus import ConsensusAlgorithm
+from hathor.builder.builder import Builder
 from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.event import EventManager
 from hathor.exception import BuilderError
-from hathor.execution_manager import ExecutionManager
-from hathor.feature_activation.bit_signaling_service import BitSignalingService
-from hathor.feature_activation.feature_service import FeatureService
-from hathor.feature_activation.storage.feature_activation_storage import FeatureActivationStorage
-from hathor.indexes import IndexesManager, RocksDBIndexesManager
+from hathor.indexes import IndexesManager
 from hathor.manager import HathorManager
-from hathor.mining.cpu_mining_service import CpuMiningService
-from hathor.nanocontracts.nc_exec_logs import NCLogStorage
-from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
-from hathor.stratum import StratumFactory
-from hathor.transaction.vertex_parser import VertexParser
-from hathor.util import Random
-from hathor.verification.verification_service import VerificationService
-from hathor.verification.vertex_verifiers import VertexVerifiers
-from hathor.vertex_handler import VertexHandler
-from hathor.vertex_helper import VertexHelper
-from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor.wallet import BaseWallet
 
 logger = get_logger()
 
@@ -63,6 +47,7 @@ class CliBuilder:
     def __init__(self, args: RunNodeArgs) -> None:
         self.log = logger.new()
         self._args = args
+        self.event_ws_factory = None
 
     def check_or_raise(self, condition: bool, message: str) -> None:
         """Will exit printing `message` if `condition` is False."""
@@ -76,17 +61,10 @@ class CliBuilder:
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
-        from hathor.builder import SyncSupportLevel
         from hathor.conf.get_settings import get_global_settings, get_settings_source
         from hathor.daa import TestMode
-        from hathor.event.storage import EventRocksDBStorage, EventStorage
-        from hathor.event.websocket.factory import EventWebsocketFactory
-        from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
-        from hathor.storage import RocksDBStorage
-        from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
-        from hathor.util import get_environment_info
 
         settings = get_global_settings()
 
@@ -96,6 +74,7 @@ class CliBuilder:
         self.log = logger.new()
         self.reactor = reactor
 
+        # Create or load peer
         peer: PrivatePeer
         if self._args.peer:
             peer = PrivatePeer.create_from_json_path(self._args.peer)
@@ -115,79 +94,11 @@ class CliBuilder:
             reactor_type=type(reactor).__name__,
         )
 
-        vertex_parser = VertexParser(settings=settings)
-        tx_storage: TransactionStorage
-        event_storage: EventStorage
-        indexes: IndexesManager
-        self.event_ws_factory: Optional[EventWebsocketFactory] = None
-
+        # Validate deprecated parameters
         memory_msg = 'is deprecated. use --temp-data instead'
         self.check_or_raise(not self._args.memory_storage, f'--memory-storage {memory_msg}')
         self.check_or_raise(not self._args.memory_indexes, f'--memory-indexes {memory_msg}')
-
         self.check_or_raise(bool(self._args.data) or self._args.temp_data, 'either --data or --temp-data is expected')
-        cache_capacity = self._args.rocksdb_cache
-        self.rocksdb_storage = (
-            RocksDBStorage(path=self._args.data, cache_capacity=cache_capacity)
-            if self._args.data else RocksDBStorage.create_temp(cache_capacity)
-        )
-
-        self.nc_storage_factory: NCStorageFactory = NCRocksDBStorageFactory(self.rocksdb_storage)
-
-        # Initialize indexes manager.
-        indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
-
-        kwargs: dict[str, Any] = {}
-        if self._args.disable_cache:
-            # We should only pass indexes if cache is disabled. Otherwise,
-            # only TransactionCacheStorage should have indexes.
-            kwargs['indexes'] = indexes
-        tx_storage = TransactionRocksDBStorage(
-            self.rocksdb_storage,
-            settings=settings,
-            vertex_parser=vertex_parser,
-            nc_storage_factory=self.nc_storage_factory,
-            **kwargs
-        )
-        event_storage = EventRocksDBStorage(self.rocksdb_storage)
-        feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
-
-        self.log.info('with storage', storage_class=type(tx_storage).__name__, path=self._args.data)
-
-        if self._args.cache:
-            self.log.warn('--cache is now the default and will be removed')
-
-        if self._args.disable_cache:
-            self.check_or_raise(self._args.cache_size is None, 'cannot use --disable-cache with --cache-size')
-            self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
-
-        if not self._args.disable_cache:
-            tx_storage = TransactionCacheStorage(
-                tx_storage,
-                reactor,
-                indexes=indexes,
-                settings=settings,
-                nc_storage_factory=self.nc_storage_factory,
-            )
-            tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
-            if self._args.cache_interval:
-                tx_storage.interval = self._args.cache_interval
-            self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
-
-        self.tx_storage = tx_storage
-        self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
-
-        if settings.ENABLE_NANO_CONTRACTS:
-            from hathor.nanocontracts.catalog import generate_catalog_from_settings
-            self.tx_storage.nc_catalog = generate_catalog_from_settings(settings)
-
-        self.wallet = None
-        if self._args.wallet:
-            self.wallet = self.create_wallet()
-            self.log.info('with wallet', wallet=self.wallet, path=self._args.data)
-
-        hostname = self.get_hostname()
-
         self.check_or_raise(not self._args.sync_bridge, '--sync-bridge was removed')
         self.check_or_raise(not self._args.sync_v1_only, '--sync-v1-only was removed')
         self.check_or_raise(not self._args.x_sync_bridge, '--x-sync-bridge was removed')
@@ -196,191 +107,181 @@ class CliBuilder:
         self.check_or_warn(not self._args.x_remove_sync_v1, '--x-remove-sync-v1 is deprecated and has no effect')
         self.check_or_warn(not self._args.x_sync_v2_only, '--x-sync-v2-only is deprecated and will be removed')
 
-        pubsub = PubSubManager(reactor)
+        if self._args.cache:
+            self.log.warn('--cache is now the default and will be removed')
+
+        if self._args.disable_cache:
+            self.check_or_raise(self._args.cache_size is None, 'cannot use --disable-cache with --cache-size')
+            self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
 
         if self._args.x_enable_event_queue:
             self.log.warn('--x-enable-event-queue is deprecated and will be removed, use --enable-event-queue instead')
 
-        if self._args.x_enable_event_queue or self._args.enable_event_queue:
-            self.event_ws_factory = EventWebsocketFactory(
-                peer_id=str(peer.id),
-                settings=settings,
-                reactor=reactor,
-                event_storage=event_storage
-            )
+        # Initialize Builder
+        builder = Builder()
+        builder.set_settings(settings)
+        builder.set_reactor(reactor)
+        builder.set_peer(peer)
 
-        execution_manager = ExecutionManager(reactor)
+        # Configure storage
+        if self._args.data:
+            builder.set_rocksdb_path(self._args.data)
+        # else: temp_data means use temporary storage (default in Builder)
 
-        event_manager = EventManager(
-            event_storage=event_storage,
-            event_ws_factory=self.event_ws_factory,
-            pubsub=pubsub,
-            reactor=reactor,
-            execution_manager=execution_manager,
-        )
+        if self._args.rocksdb_cache:
+            builder.set_rocksdb_cache_capacity(self._args.rocksdb_cache)
 
-        if self._args.wallet_index and tx_storage.indexes is not None:
+        # Configure cache
+        if not self._args.disable_cache:
+            cache_capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
+            builder.use_tx_storage_cache(capacity=cache_capacity)
+            # Note: cache_interval is not supported by Builder, will need to set it post-build
+
+        # Configure indexes
+        if self._args.wallet_index:
             self.log.debug('enable wallet indexes')
-            self.enable_wallet_index(tx_storage.indexes, pubsub)
+            builder.enable_wallet_index()
 
-        if self._args.utxo_index and tx_storage.indexes is not None:
+        if self._args.utxo_index:
             self.log.debug('enable utxo index')
-            tx_storage.indexes.enable_utxo_index()
+            builder.enable_utxo_index()
 
-        if self._args.nc_indexes and tx_storage.indexes is not None:
+        if self._args.nc_indexes:
             self.log.debug('enable nano indexes')
-            tx_storage.indexes.enable_nc_indexes()
+            builder.enable_nc_indexes()
 
-        from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
-        nc_calls_sorter = random_nc_calls_sorter
-
-        assert self.nc_storage_factory is not None
-        runner_factory = RunnerFactory(
-            reactor=reactor,
-            settings=settings,
-            tx_storage=tx_storage,
-            nc_storage_factory=self.nc_storage_factory,
-        )
-
-        nc_log_storage = NCLogStorage(
-            settings=settings,
-            path=self.rocksdb_storage.path,
-            config=self._args.nc_exec_logs,
-        )
-        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
-
-        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(
-            self.nc_storage_factory,
-            soft_voided_tx_ids,
-            pubsub=pubsub,
-            settings=settings,
-            runner_factory=runner_factory,
-            nc_log_storage=nc_log_storage,
-            nc_calls_sorter=nc_calls_sorter,
-            feature_service=self.feature_service,
-            nc_exec_fail_trace=self._args.nc_exec_fail_trace,
-        )
-
+        # Configure event queue
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
+            builder.enable_event_queue()
             self.log.info('--enable-event-queue flag provided. '
                           'The events detected by the full node will be stored and can be retrieved by clients')
 
-        bit_signaling_service = BitSignalingService(
-            settings=settings,
-            feature_service=self.feature_service,
-            tx_storage=tx_storage,
-            support_features=self._args.signal_support,
-            not_support_features=self._args.signal_not_support,
-            feature_storage=feature_storage,
-        )
+        # Configure stratum
+        if self._args.stratum:
+            builder.enable_stratum_server()
 
-        test_mode = TestMode.DISABLED
-        if self._args.test_mode_tx_weight:
-            test_mode = TestMode.TEST_TX_WEIGHT
-            if self.wallet:
-                self.wallet.test_mode = True
+        # Configure network
+        if self._args.x_enable_ipv6:
+            builder.enable_ipv6()
 
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
+        if self._args.x_disable_ipv4:
+            builder.disable_ipv4()
 
-        vertex_verifiers = VertexVerifiers.create_defaults(
-            reactor=reactor,
-            settings=settings,
-            daa=daa,
-            feature_service=self.feature_service,
-            tx_storage=tx_storage,
-        )
-        verification_service = VerificationService(
-            settings=settings,
-            verifiers=vertex_verifiers,
-            tx_storage=tx_storage,
-            nc_storage_factory=self.nc_storage_factory,
-        )
+        # Configure feature signaling
+        if self._args.signal_support or self._args.signal_not_support:
+            builder.set_features(
+                support_features=self._args.signal_support,
+                not_support_features=self._args.signal_not_support
+            )
 
-        cpu_mining_service = CpuMiningService()
+        # Configure NC logs
+        if self._args.nc_exec_logs:
+            builder.set_nc_log_config(self._args.nc_exec_logs)
 
-        p2p_manager = ConnectionsManager(
-            settings=settings,
-            reactor=reactor,
-            my_peer=peer,
-            pubsub=pubsub,
-            ssl=True,
-            whitelist_only=False,
-            rng=Random(),
-            enable_ipv6=self._args.x_enable_ipv6,
-            disable_ipv4=self._args.x_disable_ipv4,
-        )
-
-        vertex_handler = VertexHandler(
-            reactor=reactor,
-            settings=settings,
-            tx_storage=tx_storage,
-            verification_service=verification_service,
-            consensus=consensus_algorithm,
-            feature_service=self.feature_service,
-            pubsub=pubsub,
-            execution_manager=execution_manager,
-            wallet=self.wallet,
-            log_vertex_bytes=self._args.log_vertex_bytes,
-        )
-
-        SyncSupportLevel.add_factories(settings, p2p_manager, SyncSupportLevel.ENABLED, vertex_parser, vertex_handler)
-
-        vertex_helper = VertexHelper(storage=tx_storage, nc_log_storage=nc_log_storage)
-
-        from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
-        poa_block_producer: PoaBlockProducer | None = None
+        # Configure POA signer
         if settings.CONSENSUS_ALGORITHM.is_poa():
             assert isinstance(self._args, SideDagArgs)
             if self._args.poa_signer_file:
+                from hathor.consensus.poa import PoaSignerFile
                 poa_signer_file = PoaSignerFile.parse_file(self._args.poa_signer_file)
-                poa_block_producer = PoaBlockProducer(
-                    settings=settings,
-                    reactor=reactor,
-                    poa_signer=poa_signer_file.get_signer(),
-                )
+                builder.set_poa_signer(poa_signer_file.get_signer())
 
-        self.manager = HathorManager(
-            reactor,
-            settings=settings,
-            hostname=hostname,
-            pubsub=pubsub,
-            consensus_algorithm=consensus_algorithm,
-            daa=daa,
-            peer=peer,
-            tx_storage=tx_storage,
-            p2p_manager=p2p_manager,
-            event_manager=event_manager,
-            wallet=self.wallet,
-            checkpoints=settings.CHECKPOINTS,
-            environment_info=get_environment_info(args=str(self._args), peer_id=str(peer.id)),
-            enable_event_queue=self._args.x_enable_event_queue or self._args.enable_event_queue,
-            bit_signaling_service=bit_signaling_service,
-            verification_service=verification_service,
-            cpu_mining_service=cpu_mining_service,
-            execution_manager=execution_manager,
-            vertex_handler=vertex_handler,
-            vertex_parser=vertex_parser,
-            poa_block_producer=poa_block_producer,
-            runner_factory=runner_factory,
-            feature_service=self.feature_service,
-            vertex_helper=vertex_helper,
-        )
+        # Configure wallet
+        self.wallet = None
+        if self._args.wallet:
+            if self._args.wallet == 'hd':
+                wallet_kwargs: dict[str, Any] = {
+                    'words': self._args.words,
+                }
+                if self._args.passphrase:
+                    wallet_passphrase = getpass.getpass(prompt='HD Wallet passphrase:')
+                    wallet_kwargs['passphrase'] = wallet_passphrase.encode()
+                if self._args.data:
+                    wallet_kwargs['directory'] = self._args.data
+                from hathor.wallet import HDWallet
+                self.wallet = HDWallet(**wallet_kwargs)
+                builder.set_wallet(self.wallet)
+            elif self._args.wallet == 'keypair':
+                print('Using KeyPairWallet')
+                unlock_password = None
+                if self._args.unlock_wallet:
+                    wallet_passwd = getpass.getpass(prompt='Wallet password:')
+                    unlock_password = wallet_passwd.encode()
+                wallet_directory = self._args.data if self._args.data else None
+                if wallet_directory:
+                    builder.enable_keypair_wallet(directory=wallet_directory, unlock=unlock_password)
+                else:
+                    # Create a wallet without directory (will use default)
+                    from hathor.wallet import Wallet
+                    self.wallet = Wallet()
+                    self.wallet.flush_to_disk_interval = 5
+                    if unlock_password:
+                        self.wallet.unlock(unlock_password)
+                    builder.set_wallet(self.wallet)
+            else:
+                raise BuilderError('Invalid type of wallet')
 
+        # Handle components that need manual creation for debug parameters
+        test_mode = TestMode.DISABLED
+        if self._args.test_mode_tx_weight:
+            test_mode = TestMode.TEST_TX_WEIGHT
+            daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
+            builder.set_daa(daa)
+
+        # Configure debug parameters
+        if self._args.nc_exec_fail_trace:
+            builder.set_nc_exec_fail_trace(True)
+
+        if self._args.log_vertex_bytes:
+            builder.set_log_vertex_bytes(True)
+
+        # Set command line for environment info
+        builder.set_cmdline(str(self._args))
+
+        # Build once
+        artifacts = builder.build()
+        self.manager = artifacts.manager
+        self.tx_storage = artifacts.tx_storage
+        self.rocksdb_storage = artifacts.rocksdb_storage
+        if not self.wallet:
+            self.wallet = artifacts.wallet
+
+        # Get hostname for manager
+        hostname = self.get_hostname()
+        if hostname:
+            self.manager._hostname = hostname
+
+        # Set event_ws_factory for tests/external access
+        if self._args.x_enable_event_queue or self._args.enable_event_queue:
+            self.event_ws_factory = self.manager._event_manager._event_ws_factory
+
+        # Post-build wallet configuration
+        if self.wallet and self._args.wallet == 'keypair':
+            self.wallet.flush_to_disk_interval = 5
+
+        if self.wallet and self._args.test_mode_tx_weight:
+            self.wallet.test_mode = True
+
+        # Log storage and cache info
+        self.log.info('with storage', storage_class=type(self.tx_storage).__name__, path=self._args.data)
+        if not self._args.disable_cache:
+            from hathor.transaction.storage import TransactionCacheStorage
+            if isinstance(self.tx_storage, TransactionCacheStorage):
+                if self._args.cache_interval:
+                    self.tx_storage.interval = self._args.cache_interval
+                self.log.info('with cache', capacity=self.tx_storage.capacity, interval=self.tx_storage.interval)
+        self.log.info('with indexes', indexes_class=type(self.tx_storage.indexes).__name__)
+
+        if self.wallet:
+            self.log.info('with wallet', wallet=self.wallet, path=self._args.data)
+
+        # IPython kernel setup
         if self._args.x_ipython_kernel:
             self.check_or_raise(self._args.x_asyncio_reactor,
                                 '--x-ipython-kernel must be used with --x-asyncio-reactor')
             self._start_ipykernel()
 
-        p2p_manager.set_manager(self.manager)
-        if poa_block_producer:
-            poa_block_producer.manager = self.manager
-
-        if self._args.stratum:
-            stratum_factory = StratumFactory(self.manager, reactor=reactor)
-            self.manager.stratum_factory = stratum_factory
-            self.manager.metrics.stratum_factory = stratum_factory
-
+        # Post-build manager configuration
         if self._args.data:
             self.manager.set_cmd_path(self._args.data)
 
@@ -390,6 +291,8 @@ class CliBuilder:
         if self._args.x_localhost_only:
             self.manager.connections.localhost_only = True
 
+        # Configure peer discovery
+        p2p_manager = artifacts.p2p_manager
         dns_hosts = []
         if settings.BOOTSTRAP_DNS:
             dns_hosts.extend(settings.BOOTSTRAP_DNS)

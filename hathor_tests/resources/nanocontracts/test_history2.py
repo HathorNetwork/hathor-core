@@ -7,8 +7,8 @@ from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.resources import NanoContractHistoryResource
 from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
-from tests.dag_builder.builder import TestDAGBuilder
-from tests.resources.base_resource import StubSite, _BaseResourceTest
+from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 
 settings = HathorSettings()
 

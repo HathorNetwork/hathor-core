@@ -195,8 +195,12 @@ class Builder:
         self._nc_log_storage: NCLogStorage | None = None
         self._runner_factory: RunnerFactory | None = None
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
+        self._nc_exec_fail_trace: bool = False
 
         self._vertex_helper: VertexHelper | None = None
+        self._log_vertex_bytes: bool = False
+
+        self._cmdline: str = ''
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -266,7 +270,7 @@ class Builder:
             rng=self._rng,
             checkpoints=self._checkpoints or settings.CHECKPOINTS,
             capabilities=self._capabilities,
-            environment_info=get_environment_info(self._cmdline, str(peer.id)),
+            environment_info=get_environment_info(args=self._cmdline, peer_id=str(peer.id)),
             bit_signaling_service=bit_signaling_service,
             verification_service=verification_service,
             cpu_mining_service=cpu_mining_service,
@@ -412,6 +416,9 @@ class Builder:
             pubsub = self._get_or_create_pubsub()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
             nc_calls_sorter = self._get_nc_calls_sorter()
+            kwargs: dict[str, Any] = {}
+            if self._nc_exec_fail_trace:
+                kwargs['nc_exec_fail_trace'] = self._nc_exec_fail_trace
             self._consensus = ConsensusAlgorithm(
                 nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
@@ -421,6 +428,7 @@ class Builder:
                 nc_log_storage=self._get_or_create_nc_log_storage(),
                 nc_calls_sorter=nc_calls_sorter,
                 feature_service=self._get_or_create_feature_service(),
+                **kwargs
             )
 
         return self._consensus
@@ -653,6 +661,9 @@ class Builder:
 
     def _get_or_create_vertex_handler(self) -> VertexHandler:
         if self._vertex_handler is None:
+            kwargs: dict[str, Any] = {}
+            if self._log_vertex_bytes:
+                kwargs['log_vertex_bytes'] = self._log_vertex_bytes
             self._vertex_handler = VertexHandler(
                 reactor=self._get_reactor(),
                 settings=self._get_or_create_settings(),
@@ -663,6 +674,7 @@ class Builder:
                 execution_manager=self._get_or_create_execution_manager(),
                 pubsub=self._get_or_create_pubsub(),
                 wallet=self._get_or_create_wallet(),
+                **kwargs
             )
 
         return self._vertex_handler
@@ -725,6 +737,7 @@ class Builder:
         if self._wallet is not None:
             return self._wallet
 
+        # Keypair wallet creation
         if self._wallet_directory is None:
             return None
         self._wallet = Wallet(directory=self._wallet_directory, settings=self._get_or_create_settings())
@@ -899,4 +912,19 @@ class Builder:
     def set_nc_log_config(self, config: NCLogConfig) -> 'Builder':
         self.check_if_can_modify()
         self._nc_log_config = config
+        return self
+
+    def set_nc_exec_fail_trace(self, enabled: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._nc_exec_fail_trace = enabled
+        return self
+
+    def set_log_vertex_bytes(self, enabled: bool) -> 'Builder':
+        self.check_if_can_modify()
+        self._log_vertex_bytes = enabled
+        return self
+
+    def set_cmdline(self, cmdline: str) -> 'Builder':
+        self.check_if_can_modify()
+        self._cmdline = cmdline
         return self
