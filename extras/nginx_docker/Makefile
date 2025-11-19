@@ -109,6 +109,24 @@ ekvilibro-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfr
 	mv nginx_no_rate_limit.conf nginx.conf
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
+# GCP / Hathor Testnet Playground
+HATHOR_TESTNET_PLAYGROUND_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank
+
+.PHONY: hathor-testnet-playground
+hathor-testnet-playground: hathor-testnet-playground-default hathor-testnet-playground-no-rate-limit
+	@echo "All Hathor Testnet Playground images built and pushed successfully!"
+
+.PHONY: hathor-testnet-playground-default
+hathor-testnet-playground-default: clean nginx.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for Hathor Testnet Playground..."
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: hathor-testnet-playground-no-rate-limit
+hathor-testnet-playground-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for Hathor Testnet Playground..."
+	mv nginx_no_rate_limit.conf nginx.conf
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
 # AWS / Main Account
 AWS_MAIN_REGISTRY = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank
 
@@ -129,7 +147,7 @@ aws-main-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfro
 
 # Build All (convenience command)
 .PHONY: build-all
-build-all: hathor-testnet nano-testnet standalone-fullnodes ekvilibro aws-main
+build-all: hathor-testnet nano-testnet standalone-fullnodes ekvilibro hathor-testnet-playground aws-main
 	@echo "All images built and pushed successfully!"
 
 # Legacy commands for backward compatibility
@@ -210,6 +228,9 @@ help:
 	@echo "  ekvilibro                 			- Build and push all images for GCP Project Ekvilibro"
 	@echo "  ekvilibro-default         			- Build and push default image for GCP Project Ekvilibro"
 	@echo "  ekvilibro-no-rate-limit   			- Build and push no-rate-limit image for GCP Project Ekvilibro"
+	@echo "  hathor-testnet-playground                 - Build and push all images for GCP Project Hathor Testnet Playground"
+	@echo "  hathor-testnet-playground-default         - Build and push default image for GCP Project Hathor Testnet Playground"
+	@echo "  hathor-testnet-playground-no-rate-limit   - Build and push no-rate-limit image for GCP Project Hathor Testnet Playground"
 	@echo "  aws-main                  			- Build and push all images for AWS Main Account"
 	@echo "  aws-main-default          			- Build and push default image for AWS Main Account"
 	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
@@ -229,5 +250,6 @@ help:
 	@echo "  - Nano Testnet: $(NANO_TESTNET_REGISTRY)"
 	@echo "  - Standalone Fullnodes: $(STANDALONE_FULLNODES_REGISTRY)"
 	@echo "  - Ekvilibro: $(EKVILIBRO_REGISTRY)"
+	@echo "  - Hathor Testnet Playground: $(HATHOR_TESTNET_PLAYGROUND_REGISTRY)"
 	@echo "  - AWS Main Account: $(AWS_MAIN_REGISTRY)"
 	@echo ""
