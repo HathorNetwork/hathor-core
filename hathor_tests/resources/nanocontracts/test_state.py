@@ -42,6 +42,11 @@ class MyNamedTuple(NamedTuple):
     address: Optional[Address]
 
 
+class ReturnTuple(NamedTuple):
+    foo: str
+    token: TokenUid
+
+
 class MyBlueprint(Blueprint):
     token_uid: TokenUid
     total: Amount
@@ -117,6 +122,13 @@ class MyBlueprint(Blueprint):
             return None
 
         return multiplier * data
+
+    @view
+    def get_return_tuple(self) -> ReturnTuple:
+        return ReturnTuple(
+            foo='bar',
+            token=TokenUid(b'\x11' * 32),
+        )
 
 
 class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
@@ -231,7 +243,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
             'state', [
                 (b'id', nc.hash.hex().encode('ascii')),
                 (b'fields[]', b'token_uid'),
-             ]
+            ]
         )
         self.assertEqual(404, response0.responseCode)
         # Execute the nano contract
@@ -252,7 +264,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'calls[]', b'multiply([2, 5, 8, 10])'),
                 (b'calls[]', b'conditional_multiply_bytes([5, "01"])'),
                 (b'calls[]', b'conditional_multiply_bytes([3, null])'),
-             ]
+            ]
         )
         data1 = response1.json_value()
         fields1 = data1['fields']
@@ -509,7 +521,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'fields[]', b'token_uid'),
                 (b'block_height', str(block1.static_metadata.height).encode('ascii')),
                 (b'block_hash', block1.hash.hex().encode('ascii')),
-             ]
+            ]
         )
         self.assertEqual(400, response8.responseCode)
 
@@ -519,7 +531,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'id', nc.hash.hex().encode('ascii')),
                 (b'fields[]', b'token_uid'),
                 (b'block_height', str(block1.static_metadata.height + 5).encode('ascii')),
-             ]
+            ]
         )
         self.assertEqual(400, response9.responseCode)
 
@@ -529,7 +541,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'id', nc.hash.hex().encode('ascii')),
                 (b'fields[]', b'token_uid'),
                 (b'block_hash', '123'.encode('ascii')),
-             ]
+            ]
         )
         self.assertEqual(400, response10.responseCode)
 
@@ -539,6 +551,16 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
                 (b'id', nc.hash.hex().encode('ascii')),
                 (b'fields[]', b'token_uid'),
                 (b'block_hash', nc_bet.hash.hex().encode('ascii')),
-             ]
+            ]
         )
         self.assertEqual(400, response11.responseCode)
+
+        response12 = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'calls[]', b'get_return_tuple()'),
+            ]
+        )
+        assert response12.json_value()['calls']['get_return_tuple()'] == {
+            'value': ['bar', '1' * 64]
+        }
