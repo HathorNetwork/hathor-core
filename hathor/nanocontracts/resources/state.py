@@ -212,10 +212,9 @@ class NanoContractStateResource(Resource):
         calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
         for call_info in params.calls:
             try:
-                method_name, method_args = parse_nc_method_call(blueprint_class, call_info)
+                method_name, method_args, method = parse_nc_method_call(blueprint_class, call_info)
                 value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
-                if type(value) is bytes:
-                    value = value.hex()
+                value = method.return_.value_to_json(value)
             except Exception as e:
                 calls[call_info] = NCValueErrorResponse(errmsg=repr(e))
             else:
