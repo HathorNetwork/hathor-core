@@ -119,7 +119,8 @@ NCExecLogsResource.openapi = {
         'x-visibility': 'private',
         'x-visibility-override': {
             'nano-testnet-bravo': 'public',
-            'hathor-testnet-india': 'public'
+            'hathor-testnet-india': 'public',
+            'hathor-testnet-playground': 'public',
         },
         'x-rate-limit': {
             'global': [

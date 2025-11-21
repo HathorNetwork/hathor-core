@@ -117,14 +117,15 @@ hathor-testnet-playground: hathor-testnet-playground-default hathor-testnet-play
 	@echo "All Hathor Testnet Playground images built and pushed successfully!"
 
 .PHONY: hathor-testnet-playground-default
-hathor-testnet-playground-default: clean nginx.conf set_real_ip_from_cloudfront
+hathor-testnet-playground-default: clean nginx_playground.conf set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for Hathor Testnet Playground..."
+	mv nginx_playground.conf nginx.conf
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: hathor-testnet-playground-no-rate-limit
-hathor-testnet-playground-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+hathor-testnet-playground-no-rate-limit: clean nginx_playground_no_rate_limit.conf set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for Hathor Testnet Playground..."
-	mv nginx_no_rate_limit.conf nginx.conf
+	mv nginx_playground_no_rate_limit.conf nginx.conf
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # AWS / Main Account
@@ -192,6 +193,16 @@ nginx_india_no_rate_limit.conf: export PYTHONPATH := ../..
 nginx_india_no_rate_limit.conf:
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
 	python -m hathor generate_nginx_config --override hathor-testnet-india --disable-rate-limits - > $@
+
+nginx_playground.conf: export PYTHONPATH := ../..
+nginx_playground.conf:
+	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
+	python -m hathor generate_nginx_config --override hathor-testnet-playground - > $@
+
+nginx_playground_no_rate_limit.conf: export PYTHONPATH := ../..
+nginx_playground_no_rate_limit.conf:
+	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
+	python -m hathor generate_nginx_config --override hathor-testnet-playground --disable-rate-limits - > $@
 
 set_real_ip_from_cloudfront:
 	curl https://ip-ranges.amazonaws.com/ip-ranges.json -s \
