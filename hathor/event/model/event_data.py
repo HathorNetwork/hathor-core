@@ -23,6 +23,7 @@ from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.pubsub import EventArguments
 from hathor.transaction import Transaction
 from hathor.transaction.headers import VertexHeaderId
+from hathor.transaction.token_info import TokenVersion
 from hathor.utils.pydantic import BaseModel
 
 
@@ -44,6 +45,13 @@ class TxInput(BaseModel):
     tx_id: str
     index: int
     spent_output: TxOutput
+
+
+class NcExecInfo(BaseModel):
+    # Which transaction is responsible for causing the event
+    nc_tx: str
+    # Which block executed the transaction above, it's redundant but should be useful
+    nc_block: str
 
 
 class NanoHeader(BaseModel):
@@ -227,5 +235,31 @@ class NCEventData(BaseEventData):
         )
 
 
+class TokenCreatedData(BaseEventData):
+    """Class that represents the creation of a new token."""
+
+    token_uid: str
+    # this is None when the creation originated from a TokenCreationTransaction
+    nc_exec_info: NcExecInfo | None
+    token_name: str
+    token_symbol: str
+    token_version: TokenVersion
+
+    @classmethod
+    def from_event_arguments(cls, args: EventArguments) -> 'TokenCreatedData':
+        nc_exec_info = getattr(args, 'nc_exec_info', None)
+        if nc_exec_info is not None and not isinstance(nc_exec_info, NcExecInfo):
+            nc_exec_info = NcExecInfo(**nc_exec_info)
+        return cls(
+            token_uid=args.token_uid,
+            nc_exec_info=nc_exec_info,
+            token_name=args.token_name,
+            token_symbol=args.token_symbol,
+            token_version=args.token_version,
+        )
+
+
 # Union type to encompass BaseEventData polymorphism
-EventData: TypeAlias = EmptyData | TxData | TxDataWithoutMeta | ReorgData | NCEventData
+EventData: TypeAlias = (
+    EmptyData | TxData | TxDataWithoutMeta | ReorgData | NCEventData | TokenCreatedData
+)

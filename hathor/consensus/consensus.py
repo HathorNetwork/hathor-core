@@ -195,6 +195,10 @@ class ConsensusAlgorithm:
             tx_affected.storage.indexes.update(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
+        # signal all transactions of which the execution succeeded
+        for tx_nc_success in context.nc_exec_success:
+            context.pubsub.publish(HathorEvents.NC_EXEC_SUCCESS, tx=tx_nc_success)
+
         # handle custom NC events
         if isinstance(base, Block):
             assert context.nc_events is not None
