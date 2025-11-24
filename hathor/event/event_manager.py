@@ -23,9 +23,13 @@ from hathor.event.model.node_state import NodeState
 from hathor.event.storage import EventStorage
 from hathor.event.websocket import EventWebsocketFactory
 from hathor.execution_manager import ExecutionManager
+from hathor.nanocontracts.runner.index_records import CreateTokenRecord
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
+from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.util import not_none, progress
 from hathor.utils.iter import batch_iterator
 
@@ -174,6 +178,9 @@ class EventManager:
 
         self._handle_event(event_type, event_args)
 
+        if hathor_event == HathorEvents.NETWORK_NEW_TX_ACCEPTED:
+            self._handle_token_creation_events(event_args)
+
     def _handle_event(self, event_type: EventType, event_args: EventArguments) -> None:
         """Handles an Event Queue feature 'EventType' event."""
         assert self._is_running, 'Cannot handle event, EventManager is not started.'
@@ -239,6 +246,70 @@ class EventManager:
             event_args=event_args,
             group_id=group_id,
         )
+
+    def _handle_token_creation_events(self, event_args: EventArguments) -> None:
+        """Emit token-related events for accepted transactions."""
+        tx = getattr(event_args, 'tx', None)
+        if isinstance(tx, TokenCreationTransaction):
+            assert tx.hash is not None
+            token_uid_hex = tx.hash_hex
+            initial_amount = self._calculate_token_creation_initial_amount(tx)
+
+            token_event_args = EventArguments(
+                tx=tx,
+                token_uid=token_uid_hex,
+                token_name=tx.token_name,
+                token_symbol=tx.token_symbol,
+                token_version=tx.token_version,
+                token_initial_amount=initial_amount,
+                nc_exec_info=None,
+            )
+
+            self._handle_event(EventType.TOKEN_CREATED, token_event_args)
+
+        if isinstance(tx, Transaction) and tx.is_nano_contract():
+            meta = tx.get_metadata()
+            if meta.nc_execution == NCExecutionState.SUCCESS:
+                self._emit_nc_token_created_events(tx, meta)
+
+    @staticmethod
+    def _calculate_token_creation_initial_amount(tx: TokenCreationTransaction) -> int:
+        """Calculate the amount minted by a token-creation transaction."""
+        assert tx.hash is not None
+        total = 0
+        for tx_output in tx.outputs:
+            token_uid = tx.get_token_uid(tx_output.get_token_index())
+            if token_uid == tx.hash and not tx_output.is_token_authority():
+                total += tx_output.value
+        return total
+
+    def _emit_nc_token_created_events(
+        self,
+        tx: Transaction,
+        meta: TransactionMetadata,
+    ) -> None:
+        if not meta.nc_calls:
+            return
+        assert tx.hash is not None
+        tx_hash_hex = tx.hash_hex
+        first_block_hex = meta.first_block.hex() if meta.first_block is not None else None
+        for call in meta.nc_calls:
+            for record in call.index_updates:
+                if not isinstance(record, CreateTokenRecord):
+                    continue
+                token_event_args = EventArguments(
+                    tx=tx,
+                    token_uid=record.token_uid.hex(),
+                    token_name=record.token_name,
+                    token_symbol=record.token_symbol,
+                    token_version=record.token_version,
+                    token_initial_amount=record.amount,
+                    nc_exec_info={
+                        'nc_tx': tx_hash_hex,
+                        'nc_block': first_block_hex,
+                    },
+                )
+                self._handle_event(EventType.TOKEN_CREATED, token_event_args)
 
     def _create_event(
         self,

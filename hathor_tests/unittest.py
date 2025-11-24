@@ -277,7 +277,10 @@ class TestCase(unittest.TestCase):
 
     def create_rocksdb_storage(self, settings: HathorSettings | None = None) -> RocksDBStorage:
         artifacts = self.get_builder(settings).build()
-        return not_none(artifacts.rocksdb_storage)
+        rocksdb_storage = not_none(artifacts.rocksdb_storage)
+        # Ensure RocksDB handles are released after each test to avoid hitting OS fd limits.
+        self._pending_cleanups.append(rocksdb_storage.close)
+        return rocksdb_storage
 
     def run_to_completion(self) -> None:
         """ This will advance the test's clock until all calls scheduled are done.
