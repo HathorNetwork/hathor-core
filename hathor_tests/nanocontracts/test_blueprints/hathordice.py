@@ -33,6 +33,7 @@ from hathor import (
 class HathorDice(Blueprint):
     token_uid: TokenUid
     max_bet_amount: Amount
+    max_multiplier_tenths: int | None
     house_edge_basis_points: int  # in basis points (e.g., 50 points = 0.50%)
     random_bit_length: int
 
@@ -49,6 +50,7 @@ class HathorDice(Blueprint):
         token_uid: TokenUid,
         house_edge_basis_points: int,
         max_bet_amount: Amount,
+        max_multiplier_tenths: int | None,
         random_bit_length: int,
     ) -> None:
         if house_edge_basis_points < 0:
@@ -64,9 +66,13 @@ class HathorDice(Blueprint):
         if max_bet_amount < 0:
             raise NCFail('maximum bet amount cannot be negative')
 
+        if max_multiplier_tenths is not None and max_multiplier_tenths <= 20:
+            raise NCFail('maximum multiplier should be greater than 2.0x')
+
         self.token_uid = token_uid
         self.house_edge_basis_points = house_edge_basis_points
         self.max_bet_amount = max_bet_amount
+        self.max_multiplier_tenths = max_multiplier_tenths
         self.random_bit_length = random_bit_length
 
         self.liquidity_providers = {}
@@ -145,6 +151,11 @@ class HathorDice(Blueprint):
         if threshold < 0:
             raise NCFail('threshold must be positive')
 
+        if self.max_multiplier_tenths is not None:
+            multiplier_a, multiplier_b = self.calculate_multiplier(threshold)
+            if multiplier_a * 10 >= self.max_multiplier_tenths * multiplier_b:
+                raise NCFail('multiplier is too big')
+
         balance_amount = self.balances.get(ctx.caller_id, 0)
 
         if len(ctx.actions) > 0:
@@ -221,15 +232,20 @@ class HathorDice(Blueprint):
         return self.balances.get(caller_id, 0)
 
     @view
-    def calculate_payout(self, bet_amount: Amount, threshold: int) -> int:
+    def calculate_multiplier(self, threshold: int) -> int:
         # fair_multiplier = 2**32 / threshold
         # adjusted_multipler = fair_multiplier * (1 - house_edge)
-        # payout = bet_amount * adjusted_multiplier
         #
         # house_edge = house_edge_basis_points / 100 / 100
-        numerator = bet_amount * (2**self.random_bit_length) * (10_000 - self.house_edge_basis_points)
+        numerator = (2**self.random_bit_length) * (10_000 - self.house_edge_basis_points)
         denominator = 10_000 * threshold
-        return numerator // denominator
+        return (numerator, denominator)
+
+    @view
+    def calculate_payout(self, bet_amount: Amount, threshold: int) -> int:
+        # payout = bet_amount * adjusted_multiplier
+        numerator, denominator = self.calculate_multiplier(threshold)
+        return (bet_amount * numerator) // denominator
 
     def _get_action(self, ctx: Context, action_type: NCActionType) -> NCAction:
         if len(ctx.actions) != 1:
