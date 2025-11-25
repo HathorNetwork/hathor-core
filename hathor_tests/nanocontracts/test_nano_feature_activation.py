@@ -23,7 +23,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.types import BlueprintId
-from hathor.transaction import Block, Transaction
+from hathor.transaction import Block, Transaction, Vertex
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
@@ -228,28 +228,28 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert a11.get_metadata().nc_block_root_id == self.empty_root_id
         assert a12.get_metadata().nc_block_root_id == self.empty_root_id
 
-        nc1._metadata = None
+        self._reset_vertex(nc1)
         self.vertex_handler.on_new_relayed_vertex(nc1)
         assert nc1.get_metadata().validation.is_valid()
         assert nc1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
         assert nc1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
 
-        ocb1._metadata = None
+        self._reset_vertex(ocb1)
         self.vertex_handler.on_new_relayed_vertex(ocb1)
         assert ocb1.get_metadata().validation.is_valid()
         assert ocb1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(ocb1.hash)
         assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
 
-        fbt._metadata = None
+        self._reset_vertex(fbt)
         self.vertex_handler.on_new_relayed_vertex(fbt)
         assert fbt.get_metadata().validation.is_valid()
         assert fbt.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(fbt.hash)
         assert fbt in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
 
-        tx1._metadata = None
+        self._reset_vertex(tx1)
         self.vertex_handler.on_new_relayed_vertex(tx1)
         assert tx1.get_metadata().validation.is_valid()
         assert tx1.get_metadata().voided_by is None
@@ -264,3 +264,9 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert a11.get_metadata().nc_block_root_id == self.empty_root_id
         assert a12.get_metadata().nc_block_root_id == self.empty_root_id
         assert a13.get_metadata().nc_block_root_id not in (self.empty_root_id, None)
+
+    def _reset_vertex(self, vertex: Vertex) -> None:
+        assert vertex.storage is not None
+        vertex._metadata = None
+        for child in vertex.get_children():
+            vertex.storage.vertex_children.remove_child(vertex, child)
