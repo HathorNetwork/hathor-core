@@ -14,16 +14,28 @@
 
 from typing import Any
 
+from hathor import Blueprint, Context, public
 from hathor.nanocontracts.resources.nc_creation import NCCreationResource
 from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
-from hathor.transaction import Transaction
+from hathor.transaction import Block, Transaction
+from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
 from hathor_tests.nanocontracts.test_blueprints.bet import Bet
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import get_genesis_key
+
+
+class MyBlueprint(Blueprint):
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def create_child(self, ctx: Context) -> None:
+        self.syscall.setup_new_contract(self.syscall.get_blueprint_id(), salt=b'1').initialize()
 
 
 class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
@@ -567,4 +579,53 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         assert data == dict(
             success=False,
             error='Invalid "before" or "after": abc'
+        )
+
+    async def test_contract_create_contract(self) -> None:
+        blueprint_id = BlueprintId(self.rng.randbytes(32))
+        self.manager.tx_storage.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..12]
+            b10 < dummy
+
+            nc1.nc_id = "{blueprint_id.hex()}"
+            nc1.nc_method = initialize()
+            nc1 <-- b11
+
+            nc2.nc_id = nc1
+            nc2.nc_method = create_child()
+            nc2 <-- b12
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        b11, b12 = artifacts.get_typed_vertices(('b11', 'b12'), Block)
+        nc1, nc2, = artifacts.get_typed_vertices(('nc1', 'nc2'), Transaction)
+
+        assert nc1.get_metadata().first_block == b11.hash
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert nc2.get_metadata().first_block == b12.hash
+        assert nc2.get_metadata().nc_execution == NCExecutionState.SUCCESS
+
+        response = await self.web.get('creation')
+        data = response.json_value()
+
+        # Contracts created by contracts are currently not supported by the API and are simply omitted.
+        assert data == dict(
+            success=True,
+            before=None,
+            after=None,
+            count=10,
+            has_more=False,
+            nc_creation_txs=[
+                dict(
+                    nano_contract_id=nc1.hash_hex,
+                    blueprint_id=blueprint_id.hex(),
+                    blueprint_name='MyBlueprint',
+                    last_tx_timestamp=nc2.timestamp,
+                    total_txs=2,
+                    created_at=nc1.timestamp,
+                ),
+            ],
         )

@@ -25,7 +25,7 @@ from hathor.nanocontracts.resources.on_chain import SortOrder
 from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction import Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.util import bytes_from_hex, collect_n, not_none
+from hathor.util import bytes_from_hex, not_none
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 
@@ -138,11 +138,13 @@ class NCCreationResource(Resource):
                     )
                 iter_nc_ids = iter_getter2(tx_start=ref_tx)
 
-        nc_id_txs, has_more = collect_n(iter_nc_ids, params.count)
-        nc_txs = []
-        for nc_id in nc_id_txs:
-            item = self._get_nc_creation_item(nc_id)
-            if item is not None:
+        nc_txs: list[NCCreationItem] = []
+        has_more = False
+        for nc_id in iter_nc_ids:
+            if len(nc_txs) >= params.count:
+                has_more = True
+                break
+            if item := self._get_nc_creation_item(nc_id):
                 nc_txs.append(item)
 
         response = NCCreationResponse(
@@ -201,11 +203,6 @@ class NCCreationResource(Resource):
             total_txs=self.nc_history_index.get_transaction_count(nc_id),
             created_at=created_at,
         )
-
-    def _get_nc_creation_item_strict(self, nc_id: bytes) -> NCCreationItem:
-        tx = self._get_nc_creation_item(nc_id)
-        assert tx is not None
-        return tx
 
 
 class NCCreationParams(QueryParams):
