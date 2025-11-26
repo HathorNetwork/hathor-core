@@ -45,6 +45,7 @@ from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
+from hathor.transaction.json_serializer import VertexJsonSerializer
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
@@ -196,6 +197,8 @@ class Builder:
         self._runner_factory: RunnerFactory | None = None
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
+        self._vertex_json_serializer: VertexJsonSerializer | None = None
+
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
             raise ValueError('cannot call build twice')
@@ -228,6 +231,7 @@ class Builder:
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
         runner_factory = self._get_or_create_runner_factory()
+        vertex_json_serializer = self._get_or_create_vertex_json_serializer()
 
         if settings.ENABLE_NANO_CONTRACTS:
             tx_storage.nc_catalog = self._get_nc_catalog()
@@ -273,6 +277,7 @@ class Builder:
             poa_block_producer=poa_block_producer,
             runner_factory=runner_factory,
             feature_service=feature_service,
+            vertex_json_serializer=vertex_json_serializer,
             **kwargs
         )
 
@@ -686,6 +691,17 @@ class Builder:
             )
 
         return self._poa_block_producer
+
+    def _get_or_create_vertex_json_serializer(self) -> VertexJsonSerializer:
+        if self._vertex_json_serializer is None:
+            tx_storage = self._get_or_create_tx_storage()
+            nc_log_storage = self._get_or_create_nc_log_storage()
+            self._vertex_json_serializer = VertexJsonSerializer(
+                storage=tx_storage,
+                nc_log_storage=nc_log_storage,
+            )
+
+        return self._vertex_json_serializer
 
     def set_rocksdb_path(self, path: str | tempfile.TemporaryDirectory) -> 'Builder':
         if self._tx_storage:
