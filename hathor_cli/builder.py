@@ -42,6 +42,7 @@ from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random
 from hathor.verification.verification_service import VerificationService
@@ -135,6 +136,7 @@ class CliBuilder:
 
         # Initialize indexes manager.
         indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
+        vertex_children_service = RocksDBVertexChildrenService(self.rocksdb_storage)
 
         kwargs: dict[str, Any] = {}
         if self._args.disable_cache:
@@ -146,6 +148,7 @@ class CliBuilder:
             settings=settings,
             vertex_parser=vertex_parser,
             nc_storage_factory=self.nc_storage_factory,
+            vertex_children_service=vertex_children_service,
             **kwargs
         )
         event_storage = EventRocksDBStorage(self.rocksdb_storage)
@@ -167,6 +170,7 @@ class CliBuilder:
                 indexes=indexes,
                 settings=settings,
                 nc_storage_factory=self.nc_storage_factory,
+                vertex_children_service=vertex_children_service,
             )
             tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
             if self._args.cache_interval:

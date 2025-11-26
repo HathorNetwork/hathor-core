@@ -23,7 +23,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.types import MetaNCCallRecord
 from hathor.transaction.validation_state import ValidationState
-from hathor.util import json_dumpb, json_loadb, practically_equal
+from hathor.util import collect_n, json_dumpb, json_loadb, practically_equal
 from hathor.utils.weight import work_to_weight
 
 if TYPE_CHECKING:
@@ -34,6 +34,9 @@ if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage
 
 
+_MAX_JSON_CHILDREN = 100
+
+
 class TransactionMetadata:
     hash: Optional[bytes]
     spent_outputs: dict[int, list[bytes]]
@@ -41,7 +44,6 @@ class TransactionMetadata:
     conflict_with: Optional[list[bytes]]
     voided_by: Optional[set[bytes]]
     received_by: list[int]
-    children: list[bytes]
     twins: list[bytes]
     accumulated_weight: int
     score: int
@@ -104,10 +106,6 @@ class TransactionMetadata:
         # List of peers which have sent this transaction.
         # Store only the peers' id.
         self.received_by = []
-
-        # List of transactions which have this transaction as parent.
-        # Store only the transactions' hash.
-        self.children = []
 
         # Hash of the transactions that are twin to this transaction.
         # Twin transactions have the same inputs and outputs
@@ -187,7 +185,7 @@ class TransactionMetadata:
         """Override the default Equals behavior"""
         if not isinstance(other, TransactionMetadata):
             return False
-        for field in ['hash', 'conflict_with', 'voided_by', 'received_by', 'children',
+        for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
                       'feature_states', 'nc_block_root_id', 'nc_calls', 'nc_execution']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
@@ -216,7 +214,6 @@ class TransactionMetadata:
         for idx, hashes in self.spent_outputs.items():
             data['spent_outputs'].append([idx, [h_bytes.hex() for h_bytes in hashes]])
         data['received_by'] = list(self.received_by)
-        data['children'] = [x.hex() for x in self.children]
         data['conflict_with'] = [x.hex() for x in set(self.conflict_with)] if self.conflict_with else []
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
@@ -253,6 +250,11 @@ class TransactionMetadata:
         data = self.to_storage_json()
         data['accumulated_weight'] = work_to_weight(self.accumulated_weight)
         data['score'] = work_to_weight(self.score)
+
+        limited_children, has_more_children = collect_n(iter(self.get_tx().get_children()), _MAX_JSON_CHILDREN)
+        data['children'] = [child_id.hex() for child_id in limited_children]
+        data['has_more_children'] = has_more_children
+
         return data
 
     def to_json_extended(self, tx_storage: 'TransactionStorage') -> dict[str, Any]:
@@ -274,7 +276,6 @@ class TransactionMetadata:
             for h_hex in hashes:
                 meta.spent_outputs[idx].append(bytes.fromhex(h_hex))
         meta.received_by = list(data['received_by'])
-        meta.children = [bytes.fromhex(h) for h in data['children']]
 
         if 'conflict_with' in data and data['conflict_with']:
             meta.conflict_with = [bytes.fromhex(h) for h in set(data['conflict_with'])]

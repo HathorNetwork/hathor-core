@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
+    from hathor.transaction.vertex_children import VertexChildren
 
 logger = get_logger()
 
@@ -767,10 +768,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert self.storage is not None
 
         for parent in self.get_parents(existing_only=True):
-            metadata = parent.get_metadata()
-            if self.hash not in metadata.children:
-                metadata.children.append(self.hash)
-                self.storage.save_transaction(parent, only_metadata=True)
+            self.storage.vertex_children.add_child(parent, self.hash)
 
     def _update_initial_accumulated_weight(self) -> None:
         """Update the vertex initial accumulated_weight."""
@@ -918,6 +916,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             )
 
         self._static_metadata = static_metadata
+
+    def get_children(self) -> VertexChildren:
+        """Return an iterator of this vertex's children."""
+        assert self.storage is not None
+        return self.storage.vertex_children.get_children(self)
 
 
 """

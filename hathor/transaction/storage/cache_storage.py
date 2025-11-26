@@ -26,6 +26,7 @@ from hathor.transaction import BaseTransaction
 from hathor.transaction.storage.migrations import MigrationState
 from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
+from hathor.transaction.vertex_children import VertexChildrenService
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -48,6 +49,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
         *,
         settings: 'HathorSettings',
         nc_storage_factory: NCStorageFactory,
+        vertex_children_service: VertexChildrenService,
         indexes: Optional[IndexesManager],
         _clone_if_needed: bool = False,
     ) -> None:
@@ -85,7 +87,13 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
         # we need to use only one weakref dict, so we must first initialize super, and then
         # attribute the same weakref for both.
-        super().__init__(indexes=indexes, settings=settings, nc_storage_factory=nc_storage_factory)
+        super().__init__(
+            indexes=indexes,
+            settings=settings,
+            nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
+        )
+
         self._tx_weakref = store._tx_weakref
         # XXX: just to make sure this isn't being used anywhere, setters/getters should be used instead
         del self._allow_scope
@@ -256,3 +264,7 @@ class TransactionCacheStorage(BaseTransactionStorage):
 
     def flush(self):
         self._flush_to_storage(self.dirty_txs.copy())
+
+    @override
+    def migrate_vertex_children(self) -> None:
+        self.store.migrate_vertex_children()

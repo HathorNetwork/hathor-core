@@ -46,6 +46,7 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info
 from hathor.verification.verification_service import VerificationService
@@ -507,12 +508,14 @@ class Builder:
         rocksdb_storage = self._get_or_create_rocksdb_storage()
         nc_storage_factory = self._get_or_create_nc_storage_factory()
         vertex_parser = self._get_or_create_vertex_parser()
+        vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         self._tx_storage = TransactionRocksDBStorage(
             rocksdb_storage,
             indexes=store_indexes,
             settings=settings,
             vertex_parser=vertex_parser,
             nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
         )
 
         if self._tx_storage_cache:
@@ -526,6 +529,7 @@ class Builder:
                 indexes=indexes,
                 settings=settings,
                 nc_storage_factory=nc_storage_factory,
+                vertex_children_service=vertex_children_service,
                 **kwargs
             )
 

@@ -103,7 +103,7 @@ def test_send_event_response() -> None:
                         b'"parents":[],'
                         b'"tokens":[],"token_name":null,"token_symbol":null,"aux_pow":null,"headers":[],'
                         b'"metadata":{"hash":"abc",'
-                        b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],"children":[],'
+                        b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],'
                         b'"twins":[],"accumulated_weight":10.0,"score":20.0,"accumulated_weight_raw":"1024",'
                         b'"score_raw":"1048576","first_block":null,"height":100,'
                         b'"validation":"validation","nc_execution":null}},"group_id":null},"latest_event_id":10,'

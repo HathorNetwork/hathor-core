@@ -9,6 +9,7 @@ from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
+from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.wallet import Wallet
 from hathor_tests import unittest
@@ -117,6 +118,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-blocks': 0.0,
             b'timestamp-sorted-txs': 0.0,
             b'nc-state': 0.0,
+            b'vertex-children': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -177,6 +179,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-blocks': 0.0,
             b'timestamp-sorted-txs': 0.0,
             b'nc-state': 0.0,
+            b'vertex-children': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -260,11 +263,13 @@ class MetricsTest(unittest.TestCase):
         # Preparation
         rocksdb_storage = self.create_rocksdb_storage()
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+        vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         base_storage = TransactionRocksDBStorage(
             rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=VertexParser(settings=self._settings),
             nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
         )
         tx_storage = TransactionCacheStorage(
             base_storage,
@@ -272,6 +277,7 @@ class MetricsTest(unittest.TestCase):
             indexes=None,
             settings=self._settings,
             nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
         )
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
