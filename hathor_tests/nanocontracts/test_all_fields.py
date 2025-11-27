@@ -156,3 +156,102 @@ class TestAllFields(unittest.TestCase):
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
         assert context_exception.args[0] == r"type None is not supported by any NCType class"
+
+    def test_no_dict_inside_tuple(self) -> None:
+        with self.assertRaises(BlueprintSyntaxError) as cm:
+            class MyInvalidBlueprint(Blueprint):
+                invalid_attribute: tuple[dict[str, int]]
+
+                @public
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: tuple[dict[str, int]]`'
+        context_exception = cm.exception.__context__
+        assert isinstance(context_exception, TypeError)
+        assert context_exception.args[0] == r"type dict[str, int] is not supported by any NCType class"
+
+    def test_no_dict_inside_namedtuple(self) -> None:
+        from typing import NamedTuple
+
+        class Inner(NamedTuple):
+            data: dict[str, int]
+
+        with self.assertRaises(BlueprintSyntaxError) as cm:
+            class MyInvalidBlueprint(Blueprint):
+                invalid_attribute: Inner
+
+                @public
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: Inner`'
+        context_exception = cm.exception.__context__
+        assert isinstance(context_exception, TypeError)
+        assert context_exception.args[0] == r"type dict[str, int] is not supported by any NCType class"
+
+    def test_no_list_inside_tuple(self) -> None:
+        with self.assertRaises(BlueprintSyntaxError) as cm:
+            class MyInvalidBlueprint(Blueprint):
+                invalid_attribute: tuple[list[int]]
+
+                @public
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: tuple[list[int]]`'
+        context_exception = cm.exception.__context__
+        assert isinstance(context_exception, TypeError)
+        assert context_exception.args[0] == r"type list[int] is not supported by any NCType class"
+
+    def test_no_set_inside_tuple(self) -> None:
+        with self.assertRaises(BlueprintSyntaxError) as cm:
+            class MyInvalidBlueprint(Blueprint):
+                invalid_attribute: tuple[set[int]]
+
+                @public
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: tuple[set[int]]`'
+        context_exception = cm.exception.__context__
+        assert isinstance(context_exception, TypeError)
+        assert context_exception.args[0] == r"type set[int] is not supported by any NCType class"
+
+    def test_no_list_inside_namedtuple(self) -> None:
+        from typing import NamedTuple
+
+        class Inner(NamedTuple):
+            data: list[int]
+
+        with self.assertRaises(BlueprintSyntaxError) as cm:
+            class MyInvalidBlueprint(Blueprint):
+                invalid_attribute: Inner
+
+                @public
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: Inner`'
+        context_exception = cm.exception.__context__
+        assert isinstance(context_exception, TypeError)
+        assert context_exception.args[0] == r"type list[int] is not supported by any NCType class"
+
+    def test_no_set_inside_namedtuple(self) -> None:
+        from typing import NamedTuple
+
+        class Inner(NamedTuple):
+            data: set[int]
+
+        with self.assertRaises(BlueprintSyntaxError) as cm:
+            class MyInvalidBlueprint(Blueprint):
+                invalid_attribute: Inner
+
+                @public
+                def initialize(self, ctx: Context) -> None:
+                    pass
+
+        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: Inner`'
+        context_exception = cm.exception.__context__
+        assert isinstance(context_exception, TypeError)
+        assert context_exception.args[0] == r"type set[int] is not supported by any NCType class"
