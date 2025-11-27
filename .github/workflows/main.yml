@@ -25,7 +25,7 @@ jobs:
           full_matrix = {
             'python': ['3.11', '3.12'],
             # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
-            'os': ['ubuntu-22.04', 'macos-13'],
+            'os': ['ubuntu-22.04', 'macos-14'],
           }
           # this is the fastest one:
           reduced_matrix = {
@@ -73,10 +73,10 @@ jobs:
         with:
           path: .mypy_cache
           # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
-          key: ${{ runner.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
+          key: ${{ matrix.os }}-py${{ matrix.python }}-mypy-${{ github.head_ref || github.ref }}
           restore-keys: |
-            ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
-            ${{ runner.os }}-py${{ matrix.python }}-mypy-
+            ${{ matrix.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
+            ${{ matrix.os }}-py${{ matrix.python }}-mypy-
       - name: Run linters
         run: poetry run make check
       - name: Run tests
