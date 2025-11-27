@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall, IReactorFromThreads
@@ -26,8 +26,10 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.utils.zope import verified_cast
 
 if TYPE_CHECKING:
+    from hathor.event.model.event_data import NcExecInfo
     from hathor.nanocontracts.nc_exec_logs import NCEvent
     from hathor.transaction import BaseTransaction, Block
+    from hathor.transaction.token_info import TokenVersion
 
 logger = get_logger()
 
@@ -149,12 +151,18 @@ class EventArguments:
     """
 
     # XXX: add these as needed, these attributes don't always exist, but when they do these are their types
-    tx: 'BaseTransaction'
+    tx: BaseTransaction
     reorg_size: int
-    old_best_block: 'Block'
-    new_best_block: 'Block'
-    common_block: 'Block'
+    old_best_block: Block
+    new_best_block: Block
+    common_block: Block
     nc_event: NCEvent
+    token_uid: str
+    token_name: str
+    token_symbol: str
+    token_version: TokenVersion
+    token_initial_amount: int
+    nc_exec_info: NcExecInfo | None
 
     def __init__(self, **kwargs: Any) -> None:
         for key, value in kwargs.items():
@@ -181,7 +189,7 @@ class PubSubManager:
         self.reactor = reactor
         self.log = logger.new()
 
-        self._call_later_id: Optional[IDelayedCall] = None
+        self._call_later_id: IDelayedCall | None = None
 
     def subscribe(self, key: HathorEvents, fn: PubSubCallable) -> None:
         """Subscribe to a specific event.

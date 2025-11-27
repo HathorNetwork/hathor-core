@@ -14,7 +14,15 @@
 
 from enum import Enum
 
-from hathor.event.model.event_data import BaseEventData, EmptyData, NCEventData, ReorgData, TxData, TxDataWithoutMeta
+from hathor.event.model.event_data import (
+    BaseEventData,
+    EmptyData,
+    NCEventData,
+    ReorgData,
+    TokenCreatedData,
+    TxData,
+    TxDataWithoutMeta,
+)
 from hathor.pubsub import HathorEvents
 
 
@@ -28,6 +36,7 @@ class EventType(Enum):
     VERTEX_REMOVED = 'VERTEX_REMOVED'
     FULL_NODE_CRASHED = 'FULL_NODE_CRASHED'
     NC_EVENT = 'NC_EVENT'
+    TOKEN_CREATED = 'TOKEN_CREATED'
 
     @classmethod
     def from_hathor_event(cls, hathor_event: HathorEvents) -> 'EventType':
@@ -61,4 +70,5 @@ _EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
     EventType.VERTEX_REMOVED: TxDataWithoutMeta,
     EventType.FULL_NODE_CRASHED: EmptyData,
     EventType.NC_EVENT: NCEventData,
+    EventType.TOKEN_CREATED: TokenCreatedData,
 }
