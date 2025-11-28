@@ -34,6 +34,7 @@ class Scenario(Enum):
     NC_EVENTS = 'NC_EVENTS'
     NC_EVENTS_REORG = 'NC_EVENTS_REORG'
     TOKEN_CREATED = 'TOKEN_CREATED'
+    TOKEN_CREATED_HYBRID_WITH_REORG = 'TOKEN_CREATED_HYBRID_WITH_REORG'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
@@ -48,6 +49,7 @@ class Scenario(Enum):
             Scenario.NC_EVENTS: simulate_nc_events,
             Scenario.NC_EVENTS_REORG: simulate_nc_events_reorg,
             Scenario.TOKEN_CREATED: simulate_token_created,
+            Scenario.TOKEN_CREATED_HYBRID_WITH_REORG: simulate_token_created_hybrid_with_reorg,
         }
 
         simulate_fn = simulate_fns[self]
@@ -56,7 +58,13 @@ class Scenario(Enum):
 
     def get_reward_spend_min_blocks(self) -> int:
         """Get the REWARD_SPEND_MIN_BLOCKS settings required for this scenario."""
-        return 1 if self in (Scenario.NC_EVENTS, Scenario.NC_EVENTS_REORG, Scenario.TOKEN_CREATED) else 10
+        nc_scenarios = (
+            Scenario.NC_EVENTS,
+            Scenario.NC_EVENTS_REORG,
+            Scenario.TOKEN_CREATED,
+            Scenario.TOKEN_CREATED_HYBRID_WITH_REORG,
+        )
+        return 1 if self in nc_scenarios else 10
 
 
 def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> Optional['DAGArtifacts']:
@@ -449,6 +457,76 @@ def simulate_token_created(simulator: 'Simulator', manager: 'HathorManager') -> 
     # Propagate everything and give the simulator time to process
     artifacts.propagate_with(manager)
     simulator.run(60)
+
+    return artifacts
+
+
+def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    """
+    Simulates a HYBRID TokenCreationTransaction that:
+    1. Creates a token via traditional TokenCreationTransaction
+    2. Also has nano contract headers that create another token via syscall
+    3. Gets confirmed and both tokens are created (2 TOKEN_CREATED events)
+    4. A reorg happens, making the transaction go back to mempool
+    5. NC execution goes from SUCCESS → PENDING
+    6. NC-created token should be deleted, traditional token remains
+    """
+    from hathor.nanocontracts import Blueprint, public
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.context import Context
+
+    # Define the NC blueprint for token creation
+    class HybridTokenFactoryBlueprint(Blueprint):
+        @public(allow_deposit=True)
+        def initialize(self, ctx: Context) -> None:
+            pass
+
+        @public(allow_deposit=True)
+        def create_extra_token(self, ctx: Context) -> None:
+            """Creates an additional token via NC syscall"""
+            self.syscall.create_deposit_token(
+                token_name='NC Extra Token',
+                token_symbol='NCX',
+                amount=777,
+            )
+
+    blueprint_id = b'\xbb' * 32
+    manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint_id: HybridTokenFactoryBlueprint})
+
+    # Create a reorg scenario with a hybrid transaction
+    dag_builder = _create_dag_builder(manager)
+    artifacts = dag_builder.build_from_str(f'''
+        blockchain genesis b[1..5]
+        blockchain b2 a[3..4]
+        b1 < dummy
+        b3 < a3 < a4 < b4 < b5
+
+        # Initialize the nano contract first - confirmed in b2
+        nc_init.nc_id = "{blueprint_id.hex()}"
+        nc_init.nc_method = initialize()
+        nc_init.nc_deposit = 50 HTR
+        dummy < nc_init
+        nc_init <-- b2
+
+        # Create a HYBRID transaction (HYB) that:
+        # 1. Is a TokenCreationTransaction (creates HYB token traditionally)
+        # 2. Also has NC headers that call create_extra_token() to create NCX via syscall
+        dummy < HYB
+        HYB.token_name = "Hybrid Token"
+        HYB.token_symbol = "HYB"
+        HYB.nc_id = nc_init
+        HYB.nc_method = create_extra_token()
+        HYB.nc_deposit = 100 HTR
+
+        # HYB gets confirmed in branch a3 (after nc_init is initialized in b2)
+        # When b4 (which doesn't include HYB) becomes the main chain, HYB goes to mempool
+        nc_init < HYB
+        HYB <-- a3
+    ''')
+
+    # Propagate in steps to see the events clearly
+    artifacts.propagate_with(manager)
+    simulator.run(1)
 
     return artifacts
 
