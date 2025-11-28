@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 name: setup-hathor-env
 description: Setup Hathor node environment
 inputs:
@@ -34,5 +35,9 @@ runs:
       shell: bash
 
     - name: Install Poetry dependencies
-      run: poetry install -n --no-root
+      run: |
+        poetry install -n --no-root
+        poetry run pip uninstall -y rocksdb && poetry run pip install --no-binary :all: git+https://github.com/hathornetwork/python-rocksdb.git#eff7457b3daeb86f7220f819f1e643df957f5dba
+        poetry run which python
+        poetry run python -c 'import rocksdb; print("SUCCESS")'
       shell: bash
