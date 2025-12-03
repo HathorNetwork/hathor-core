@@ -96,8 +96,7 @@ class MemoryTipsIndex(TipsIndex):
         # Check whether any children has already been added.
         # It so, the end of the interval is equal to the smallest timestamp of the children.
         min_timestamp = inf
-        meta = tx.get_metadata()
-        for child_hash in meta.children:
+        for child_hash in tx.get_children():
             if child_hash in self.tx_last_interval:
                 child = tx.storage.get_transaction(child_hash)
                 min_timestamp = min(min_timestamp, child.timestamp)
@@ -143,7 +142,7 @@ class MemoryTipsIndex(TipsIndex):
         pi = self.tx_last_interval[tx.hash]
 
         min_timestamp = inf
-        for child_hash in meta.children:
+        for child_hash in tx.get_children():
             if child_hash in self.tx_last_interval:
                 child = tx.storage.get_transaction(child_hash)
                 min_timestamp = min(min_timestamp, child.timestamp)

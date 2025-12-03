@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.67.1"
+version = "0.68.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
@@ -29,10 +29,14 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Private :: Do Not Upload",
 ]
-exclude = ["tests", "tests.*"]
+exclude = ["hathor_tests", "hathor_tests.*"]
+packages = [
+    { include = "hathor" },
+    { include = "hathor_cli" },
+]
 
 [tool.poetry.scripts]
-hathor-cli = 'hathor.cli.main:main'
+hathor-cli = 'hathor_cli.main:main'
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "~7.1.1"
@@ -74,7 +78,7 @@ idna = "~3.4"
 setproctitle = "^1.3.3"
 sentry-sdk = {version = "^1.5.11", optional = true}
 structlog-sentry = {version = "^1.4.0", optional = true}
-hathorlib = "^0.11.0"
+hathorlib = "^0.12.0"
 pydantic = "~1.10.17"
 pyyaml = "^6.0.1"
 typing-extensions = "~4.12.2"
@@ -87,7 +91,7 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 combine_as_imports = true
 default_section = "THIRDPARTY"
 include_trailing_comma = true
-known_first_party = "hathor,tests"
+known_first_party = "hathor,hathor_tests"
 line_length = 119
 multi_line_output = 3
 
@@ -142,16 +146,16 @@ module = [
     "hathor.feature_activation.*",
     "hathor.event.*",
     "hathor.verification.*",
-    "tests.consensus.*",
-    "tests.crypto.*",
-    "tests.event.*",
-    "tests.execution_manager.*",
-    "tests.feature_activation.*",
-    "tests.p2p.*",
-    "tests.pubsub.*",
-    "tests.simulation.*",
-    "tests.unittest",
-    "tests.utils",
+    "hathor_tests.consensus.*",
+    "hathor_tests.crypto.*",
+    "hathor_tests.event.*",
+    "hathor_tests.execution_manager.*",
+    "hathor_tests.feature_activation.*",
+    "hathor_tests.p2p.*",
+    "hathor_tests.pubsub.*",
+    "hathor_tests.simulation.*",
+    "hathor_tests.unittest",
+    "hathor_tests.utils",
 ]
 strict_equality = true
 strict_concatenate = true
@@ -170,12 +174,12 @@ warn_untyped_fields = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-testpaths = ["tests"]
+testpaths = ["hathor_tests"]
 addopts = "-n auto"
 markers = [
     "slow",
 ]
-norecursedirs = ["tests/nanocontracts/test_blueprints"]
+norecursedirs = ["hathor_tests/nanocontracts/test_blueprints"]
 
 [build-system]
 requires = ["poetry-core >= 1.3.2", "cython < 0.30"]

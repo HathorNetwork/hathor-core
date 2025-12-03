@@ -18,6 +18,7 @@ WORKDIR /app/
 COPY pyproject.toml poetry.lock  ./
 RUN poetry install -n -E sentry --no-root --only=main
 COPY hathor ./hathor
+COPY hathor_cli ./hathor_cli
 COPY README.md ./
 RUN poetry build -f wheel
 RUN poetry run pip install dist/hathor-*.whl

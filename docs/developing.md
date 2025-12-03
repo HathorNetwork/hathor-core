@@ -35,7 +35,7 @@ Generate API docs:
 
 ```
 hathor-cli generate_openapi_json
-redoc-cli bundle hathor/cli/openapi_files/openapi.json --output index.html
+redoc-cli bundle hathor/_openapi/openapi.json --output index.html
 ```
 
 [open-issue]: https://github.com/HathorNetwork/hathor-core/issues/new

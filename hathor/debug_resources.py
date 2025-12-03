@@ -20,8 +20,8 @@ from twisted.internet import defer
 from twisted.internet.interfaces import IReactorFromThreads
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_arg_default, get_args
-from hathor.cli.openapi_files.register import register_resource
 from hathor.exception import HathorError
 from hathor.manager import HathorManager
 from hathor.reactor import ReactorProtocol
@@ -155,7 +155,7 @@ class DebugLogResource(Resource):
         assert level in self.valid_log_levels
         log_func = getattr(log, level)
         msg = get_arg_default(raw_args, 'msg', self.default_log_msg)
-        # TODO: maybe add an `extras` param (probably as a json body via POST) to add arbitray structed attributes
+        # TODO: maybe add an `extras` param (probably as a json body via POST) to add arbitrarily structed attributes
         log_func(msg)
         return b'OK: no side-effects\n'
 

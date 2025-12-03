@@ -15,8 +15,8 @@
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_args, render_options, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.p2p.netfilter import get_table
 from hathor.p2p.netfilter.matches import (
     NetfilterMatchAll,

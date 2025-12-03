@@ -103,7 +103,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             return
         tx_storage = tx.storage
         # do not include transactions that have a non-voided child
-        if any_non_voided(tx_storage, tx_meta.children):
+        if any_non_voided(tx_storage, tx.get_children()):
             return
         # do not include transactions that have a non-voided spent output
         if any_non_voided(tx_storage, chain(*tx_meta.spent_outputs.values())):
@@ -147,7 +147,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
                 continue
 
             # might also happen that a tip has a child or a spender that became valid, so it's not a tip anymore
-            has_non_voided_child = lambda: any_non_voided(tx_storage, meta.children)
+            has_non_voided_child = lambda: any_non_voided(tx_storage, tip_tx.get_children())
             has_non_voided_spender = lambda: any_non_voided(tx_storage, chain(*meta.spent_outputs.values()))
             if has_non_voided_child() or has_non_voided_spender():
                 to_remove.add(tip_tx.hash)
@@ -163,8 +163,9 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             meta = not_none(tx_storage.get_metadata(tx_hash))
             if meta.voided_by:
                 continue
+            to_remove_parent = tx_storage.get_transaction(tx_hash)
             # check if it has any valid children or spenders
-            has_non_voided_child = lambda: any_non_voided(tx_storage, meta.children)
+            has_non_voided_child = lambda: any_non_voided(tx_storage, to_remove_parent.get_children())
             has_non_voided_spender = lambda: any_non_voided(tx_storage, chain(*meta.spent_outputs.values()))
             if not has_non_voided_child() and not has_non_voided_spender():
                 to_add.add(tx_hash)

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from itertools import chain
 from typing import Iterator
 
@@ -21,11 +20,20 @@ from graphviz import Digraph
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import BaseTransaction
 from hathor.transaction.storage import TransactionStorage
+from hathor.util import collect_n
+
+_DEFAULT_MAX_CHILDREN = 20
 
 
 class GraphvizVisualizer:
-    def __init__(self, storage: TransactionStorage, include_funds: bool = False,
-                 include_verifications: bool = False, only_blocks: bool = False):
+    def __init__(
+        self,
+        storage: TransactionStorage,
+        include_funds: bool = False,
+        include_verifications: bool = False,
+        only_blocks: bool = False,
+        max_children: int = _DEFAULT_MAX_CHILDREN,
+    ):
         self._settings = get_global_settings()
         self.storage = storage
 
@@ -59,6 +67,8 @@ class GraphvizVisualizer:
         # Internals
         self._blocks_set: set[bytes] = set()
         self._txs_set: set[bytes] = set()
+
+        self.MAX_CHILDREN = max_children
 
     def get_node_label(self, tx: BaseTransaction) -> str:
         """ Return the node's label for tx.
@@ -211,6 +221,7 @@ class GraphvizVisualizer:
                 node_attrs.update(dict(style='filled', penwidth='5.0'))
 
             meta = tx.get_metadata()
+            limited_children, has_more_children = collect_n(iter(tx.get_children()), self.MAX_CHILDREN)
 
             if graph_type == 'verification':
                 if tx.is_block:
@@ -219,11 +230,16 @@ class GraphvizVisualizer:
                 dot.node(name, **node_attrs)
 
                 if level <= max_level:
-                    for h in chain(tx.parents, meta.children):
+                    for h in chain(tx.parents, limited_children):
                         if h not in seen:
                             seen.add(h)
                             tx2 = tx.storage.get_transaction(h)
                             to_visit.append((level + 1, tx2))
+
+                    if has_more_children:
+                        extra_children_id = f'{tx.hash_hex}_extra_children'
+                        dot.node(extra_children_id, label='more children')
+                        dot.edge(extra_children_id, name)
 
                 for h in tx.parents:
                     if h in seen:

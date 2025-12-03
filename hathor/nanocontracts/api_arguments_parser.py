@@ -20,7 +20,7 @@ from hathor.nanocontracts.exception import NCMethodNotFound
 from hathor.nanocontracts.method import Method
 
 
-def parse_nc_method_call(blueprint_class: type[Blueprint], call_info: str) -> tuple[str, Any]:
+def parse_nc_method_call(blueprint_class: type[Blueprint], call_info: str) -> tuple[str, Any, Method]:
     """Parse a string that represents an invocation to a Nano Contract method.
 
     The string must be in the following format: `method(arg1, arg2, arg3)`.
@@ -43,4 +43,4 @@ def parse_nc_method_call(blueprint_class: type[Blueprint], call_info: str) -> tu
     method = Method.from_callable(method_callable)
     parsed_args = method.args.json_to_value(args_json)
 
-    return method_name, parsed_args
+    return method_name, parsed_args, method

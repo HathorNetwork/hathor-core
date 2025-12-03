@@ -13,5 +13,5 @@
 # limitations under the License.
 
 if __name__ == '__main__':
-    from .cli import main
+    from hathor_cli import main
     main.main()

@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from structlog import get_logger
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, parse_args, render_options, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.transaction import Transaction

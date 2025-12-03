@@ -14,8 +14,8 @@
 
 from typing import TYPE_CHECKING
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.nanocontracts.exception import BlueprintDoesNotExist, OCBBlueprintNotConfirmed
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.utils.api import ErrorResponse, QueryParams, Response

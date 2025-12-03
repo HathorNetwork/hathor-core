@@ -12,9 +12,19 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 from enum import Enum
 
-from hathor.event.model.event_data import BaseEventData, EmptyData, NCEventData, ReorgData, TxData, TxDataWithoutMeta
+from hathor.event.model.event_data import (
+    BaseEventData,
+    EmptyData,
+    NCEventData,
+    ReorgData,
+    TokenCreatedData,
+    TxData,
+    TxDataWithoutMeta,
+)
 from hathor.pubsub import HathorEvents
 
 
@@ -28,15 +38,12 @@ class EventType(Enum):
     VERTEX_REMOVED = 'VERTEX_REMOVED'
     FULL_NODE_CRASHED = 'FULL_NODE_CRASHED'
     NC_EVENT = 'NC_EVENT'
+    TOKEN_CREATED = 'TOKEN_CREATED'
 
     @classmethod
-    def from_hathor_event(cls, hathor_event: HathorEvents) -> 'EventType':
+    def from_hathor_event(cls, hathor_event: HathorEvents) -> EventType | None:
         """Create an Event Queue feature EventType from a PubSub HathorEvents."""
-        event = _HATHOR_EVENT_TO_EVENT_TYPE.get(hathor_event)
-
-        assert event is not None, f'Cannot create EventType from {hathor_event}'
-
-        return event
+        return _HATHOR_EVENT_TO_EVENT_TYPE.get(hathor_event)
 
     def data_type(self) -> type[BaseEventData]:
         return _EVENT_TYPE_TO_EVENT_DATA[self]
@@ -61,4 +68,5 @@ _EVENT_TYPE_TO_EVENT_DATA: dict[EventType, type[BaseEventData]] = {
     EventType.VERTEX_REMOVED: TxDataWithoutMeta,
     EventType.FULL_NODE_CRASHED: EmptyData,
     EventType.NC_EVENT: NCEventData,
+    EventType.TOKEN_CREATED: TokenCreatedData,
 }
