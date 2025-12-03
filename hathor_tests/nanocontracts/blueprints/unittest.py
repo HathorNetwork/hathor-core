@@ -1,3 +1,4 @@
+import os
 from io import StringIO, TextIOWrapper
 from typing import Sequence
 
@@ -122,11 +123,20 @@ class BlueprintTestCase(unittest.TestCase):
         return self._register_blueprint_class(blueprint_class, blueprint_id)
 
     def build_runner(self) -> TestRunner:
-        """Create a Runner instance."""
+        """Create a Runner instance with seed from environment variable or nc_seed attribute."""
+        # Check for environment variable override first
+        env_seed = os.environ.get('HATHOR_TEST_SEED')
+        if env_seed:
+            seed = bytes.fromhex(env_seed)
+        else:
+            # Fall back to nc_seed class attribute if defined
+            seed = getattr(self, 'nc_seed', None)
+
         return TestRunner(
             tx_storage=self.manager.tx_storage,
             settings=self._settings,
             reactor=self.reactor,
+            seed=seed,
         )
 
     def gen_random_token_uid(self) -> TokenUid:
@@ -192,3 +202,140 @@ class BlueprintTestCase(unittest.TestCase):
             token_symbol=token_symbol,
             token_version=token_version
         )
+
+    # Statistical testing helpers for RNG-based contracts
+
+    def assert_win_rate(
+        self,
+        wins: int,
+        total: int,
+        expected_rate: float,
+        tolerance: float = 0.05,
+        *,
+        msg: str | None = None
+    ) -> None:
+        """Assert that observed win rate is within tolerance of expected rate.
+
+        Args:
+            wins: Number of wins observed
+            total: Total number of trials
+            expected_rate: Expected win rate (0.0 to 1.0)
+            tolerance: Acceptable deviation from expected rate (default 5%)
+            msg: Optional custom error message
+
+        Example:
+            # Expect 15.26% win rate with 5% tolerance (10.26% - 20.26%)
+            self.assert_win_rate(wins=153, total=1000, expected_rate=0.1526)
+        """
+        actual_rate = wins / total if total > 0 else 0.0
+        lower_bound = expected_rate - tolerance
+        upper_bound = expected_rate + tolerance
+
+        if not (lower_bound <= actual_rate <= upper_bound):
+            error_msg = (
+                f"Win rate {actual_rate:.4f} ({wins}/{total}) outside expected range "
+                f"[{lower_bound:.4f}, {upper_bound:.4f}] (expected={expected_rate:.4f}, tolerance={tolerance:.4f})"
+            )
+            if msg:
+                error_msg = f"{msg}: {error_msg}"
+            self.fail(error_msg)
+
+    def assert_house_edge(
+        self,
+        total_bet: int,
+        total_payout: int,
+        expected_edge_basis_points: int,
+        tolerance_basis_points: int = 50,
+        *,
+        msg: str | None = None
+    ) -> None:
+        """Assert that observed house edge matches expected value.
+
+        Args:
+            total_bet: Total amount bet
+            total_payout: Total amount paid out
+            expected_edge_basis_points: Expected house edge in basis points (e.g., 190 = 1.90%)
+            tolerance_basis_points: Acceptable deviation in basis points (default 50 = 0.50%)
+            msg: Optional custom error message
+
+        Example:
+            # Verify 1.90% house edge with 0.50% tolerance
+            self.assert_house_edge(
+                total_bet=1_000_000_00,
+                total_payout=981_000_00,
+                expected_edge_basis_points=190
+            )
+        """
+        if total_bet == 0:
+            self.fail("Cannot calculate house edge with zero total bet")
+
+        # Calculate actual house edge: (total_bet - total_payout) / total_bet
+        actual_edge = (total_bet - total_payout) / total_bet
+        actual_edge_bp = int(actual_edge * 10_000)
+
+        lower_bound = expected_edge_basis_points - tolerance_basis_points
+        upper_bound = expected_edge_basis_points + tolerance_basis_points
+
+        if not (lower_bound <= actual_edge_bp <= upper_bound):
+            error_msg = (
+                f"House edge {actual_edge_bp} bp ({actual_edge:.4%}) outside expected range "
+                f"[{lower_bound}, {upper_bound}] bp (expected={expected_edge_basis_points} bp, "
+                f"tolerance={tolerance_basis_points} bp). "
+                f"Total bet: {total_bet:,}, Total payout: {total_payout:,}"
+            )
+            if msg:
+                error_msg = f"{msg}: {error_msg}"
+            self.fail(error_msg)
+
+    def assert_distribution_uniform(
+        self,
+        values: Sequence[int],
+        min_value: int,
+        max_value: int,
+        num_bins: int = 10,
+        significance: float = 0.05,
+        *,
+        msg: str | None = None
+    ) -> None:
+        """Assert that values follow a uniform distribution using chi-squared test.
+
+        Args:
+            values: Sequence of random values to test
+            min_value: Minimum expected value (inclusive)
+            max_value: Maximum expected value (exclusive)
+            num_bins: Number of bins for chi-squared test (default 10)
+            significance: Significance level for chi-squared test (default 0.05)
+            msg: Optional custom error message
+
+        Example:
+            # Test that 1000 random values are uniformly distributed in [0, 65536)
+            lucky_numbers = [rng.randbits(16) for _ in range(1000)]
+            self.assert_distribution_uniform(lucky_numbers, 0, 65536)
+        """
+        try:
+            from scipy import stats
+        except ImportError:
+            self.skipTest("scipy not installed, cannot perform chi-squared test")
+
+        if len(values) == 0:
+            self.fail("Cannot test distribution with empty values list")
+
+        # Create histogram bins
+        bin_edges = [min_value + i * (max_value - min_value) // num_bins for i in range(num_bins + 1)]
+        observed, _ = __import__('numpy').histogram(values, bins=bin_edges)
+
+        # Expected frequency for uniform distribution
+        expected_freq = len(values) / num_bins
+        expected = [expected_freq] * num_bins
+
+        # Perform chi-squared test
+        chi2_stat, p_value = stats.chisquare(observed, expected)
+
+        if p_value < significance:
+            error_msg = (
+                f"Distribution not uniform (chi2={chi2_stat:.4f}, p={p_value:.4f}, "
+                f"significance={significance}). Values may not be uniformly distributed."
+            )
+            if msg:
+                error_msg = f"{msg}: {error_msg}"
+            self.fail(error_msg)
