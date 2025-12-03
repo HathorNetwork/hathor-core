@@ -283,6 +283,9 @@ class BlockConsensusAlgorithm:
                 assert tx.storage.indexes is not None
                 tx.storage.indexes.handle_contract_execution(tx)
 
+                # Pubsub event to indicate execution success
+                self.context.nc_exec_success.append(tx)
+
                 # We only emit events when the nc is successfully executed.
                 assert self.context.nc_events is not None
                 last_call_info = runner.get_last_call_info()

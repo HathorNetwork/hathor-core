@@ -51,6 +51,7 @@ class ConsensusAlgorithmContext:
         'txs_affected',
         'reorg_info',
         'nc_events',
+        'nc_exec_success',
     )
 
     consensus: 'ConsensusAlgorithm'
@@ -60,6 +61,7 @@ class ConsensusAlgorithmContext:
     txs_affected: set[BaseTransaction]
     reorg_info: ReorgInfo | None
     nc_events: list[tuple[Transaction, list[NCEvent]]] | None
+    nc_exec_success: list[Transaction]
 
     def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:
         self.consensus = consensus
@@ -69,6 +71,7 @@ class ConsensusAlgorithmContext:
         self.txs_affected = set()
         self.reorg_info = None
         self.nc_events = None
+        self.nc_exec_success = []
 
     def save(self, tx: BaseTransaction) -> None:
         """Only metadata is ever saved in a consensus update."""
