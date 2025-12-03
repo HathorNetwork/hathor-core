@@ -63,8 +63,8 @@ class HathorDice(Blueprint):
         if random_bit_length > 32:
             raise NCFail('random bit length too large')
 
-        if max_bet_amount < 0:
-            raise NCFail('maximum bet amount cannot be negative')
+        if max_bet_amount <= 0:
+            raise NCFail('maximum bet amount must be at least 1')
 
         if max_multiplier_tenths is not None and max_multiplier_tenths <= 20:
             raise NCFail('maximum multiplier should be greater than 2.0x')
@@ -120,9 +120,7 @@ class HathorDice(Blueprint):
     def remove_liquidity(self, ctx: Context) -> None:
         action = self._get_action(ctx, NCWithdrawalAction)
 
-        liquidity = self.liquidity_providers.get(ctx.caller_id, 0)
-        allowed_withdrawal = self.calculate_maximum_liquidity_removal(liquidity)
-
+        allowed_withdrawal = self.calculate_address_maximum_liquidity_removal(ctx.caller_id)
         if action.amount > allowed_withdrawal:
             raise NCFail('too large withdrawal')
 
