@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from hathor import (
+    Address,
     Amount,
     Blueprint,
     CallerId,
@@ -66,8 +67,8 @@ class HathorDice(Blueprint):
         if max_bet_amount <= 0:
             raise NCFail('maximum bet amount must be at least 1')
 
-        if max_multiplier_tenths is not None and max_multiplier_tenths <= 20:
-            raise NCFail('maximum multiplier should be greater than 2.0x')
+        if max_multiplier_tenths is not None and max_multiplier_tenths <= 10:
+            raise NCFail('maximum multiplier should be greater than 1.0x')
 
         self.token_uid = token_uid
         self.house_edge_basis_points = house_edge_basis_points
@@ -141,6 +142,8 @@ class HathorDice(Blueprint):
 
     @public(allow_deposit=True)
     def place_bet(self, ctx: Context, bet_amount: Amount, threshold: int) -> int:
+        if not isinstance(ctx.caller_id, Address):
+            raise NCFail('only users are allowed')
         if bet_amount <= 0:
             raise NCFail('bet amount must be positive')
         if bet_amount > self.max_bet_amount:
@@ -149,10 +152,14 @@ class HathorDice(Blueprint):
         if threshold < 0:
             raise NCFail('threshold must be positive')
 
+        max_threshold_numerator = (2**self.random_bit_length) * (10_000 - self.house_edge_basis_points)
+        if max_threshold_numerator <= threshold * 10_000:
+            raise NCFail('threshold is too large')
+
         if self.max_multiplier_tenths is not None:
             multiplier_a, multiplier_b = self.calculate_multiplier(threshold)
             if multiplier_a * 10 >= self.max_multiplier_tenths * multiplier_b:
-                raise NCFail('multiplier is too big')
+                raise NCFail('multiplier is too large')
 
         balance_amount = self.balances.get(ctx.caller_id, 0)
 
@@ -180,6 +187,7 @@ class HathorDice(Blueprint):
         if lucky_number >= threshold:
             # Lose it all!
             self.available_tokens += bet_amount
+            self.log.info('you lose', lucky_number=lucky_number)
             self.syscall.emit_event(
                 f'{{' \
                 f'"bet_amount": {bet_amount},' \
@@ -192,7 +200,7 @@ class HathorDice(Blueprint):
 
         # Win: Calculate payout with house edge
         payout = self.calculate_payout(bet_amount, threshold)
-        assert payout >= bet_amount
+        assert payout >= bet_amount, f'{payout} is smaller than {bet_amount}'
 
         if payout > self.available_tokens:
             raise NCFail('not enough liquidity')
@@ -200,6 +208,7 @@ class HathorDice(Blueprint):
         self.available_tokens -= (payout - bet_amount)
         self._add_to_balance(ctx.caller_id, payout)
 
+        self.log.info('you win', lucky_number=lucky_number, payout=payout)
         self.syscall.emit_event(
             f'{{' \
             f'"bet_amount": {bet_amount},' \
