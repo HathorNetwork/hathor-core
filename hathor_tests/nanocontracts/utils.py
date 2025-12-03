@@ -1,4 +1,7 @@
+import secrets
 from typing import Any
+
+from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
@@ -18,6 +21,8 @@ from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
 
+logger = get_logger()
+
 
 class TestRunner(Runner):
     __test__ = False
@@ -29,9 +34,13 @@ class TestRunner(Runner):
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
+        rng: object | None = None,
     ) -> None:
-        if seed is None:
-            seed = b'x' * 32
+        if seed is None and rng is None:
+            # Generate random seed for better test coverage
+            seed = secrets.token_bytes(32)
+            logger.info('using random test seed (set HATHOR_TEST_SEED to replay)', seed=seed.hex())
+
         assert isinstance(tx_storage, TransactionRocksDBStorage)
         storage_factory = NCRocksDBStorageFactory(tx_storage._rocksdb_storage)
         store = RocksDBNodeTrieStore(tx_storage._rocksdb_storage)
@@ -45,6 +54,29 @@ class TestRunner(Runner):
             reactor=reactor,
             seed=seed,
         )
+        self._test_rng = rng
+
+    def syscall_get_rng(self):
+        """Return the custom test RNG if provided, otherwise use default behavior."""
+        if self._test_rng is not None:
+            return self._test_rng
+        return super().syscall_get_rng()
+
+    def set_test_rng(self, rng: object) -> None:
+        """Set a custom test RNG to be used instead of the seed-based RNG.
+
+        Args:
+            rng: Custom RNG instance (e.g., MockSequenceRNG)
+        """
+        self._test_rng = rng
+        # Clear per-contract RNG cache so new RNG is used
+        self._rng_per_contract.clear()
+
+    def clear_test_rng(self) -> None:
+        """Clear the custom test RNG and revert to using the seed-based RNG."""
+        self._test_rng = None
+        # Clear per-contract RNG cache to regenerate from seed
+        self._rng_per_contract.clear()
 
 
 def get_nc_failure_entry(*, manager: HathorManager, tx_id: VertexId, block_id: VertexId) -> NCExecEntry:
