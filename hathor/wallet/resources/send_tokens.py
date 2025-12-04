@@ -17,8 +17,8 @@ from typing import Any, Optional, Union
 from twisted.internet import threads
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction

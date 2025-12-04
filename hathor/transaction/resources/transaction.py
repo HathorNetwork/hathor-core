@@ -17,6 +17,7 @@ from typing import Any
 from structlog import get_logger
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import (
     Resource,
     get_args,
@@ -26,7 +27,6 @@ from hathor.api_util import (
     set_cors,
     validate_tx_hash,
 )
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import Block
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion
@@ -139,12 +139,14 @@ def get_tx_extra_data(
 
         serialized['tokens'] = detailed_tokens
 
-    return {
+    result = {
         'success': True,
         'tx': serialized,
         'meta': meta.to_json_extended(tx.storage),
         'spent_outputs': spent_outputs,
     }
+
+    return result
 
 
 @register_resource
@@ -202,7 +204,21 @@ class TransactionResource(Resource):
             hash_bytes = bytes.fromhex(requested_hash)
             tx = self.manager.tx_storage.get_transaction(hash_bytes)
             tx.storage = self.manager.tx_storage
+
             data = get_tx_extra_data(tx)
+
+            # Check for optional log/event parameters and add them if requested
+            include_nc_logs = raw_args.get(b'include_nc_logs', [b'false'])[0].decode('utf-8').lower() == 'true'
+            include_nc_events = raw_args.get(b'include_nc_events', [b'false'])[0].decode('utf-8').lower() == 'true'
+
+            if include_nc_logs or include_nc_events:
+                if include_nc_logs:
+                    self.manager.vertex_json_serializer._add_nc_logs_to_dict(tx, data)
+                if include_nc_events:
+                    self.manager.vertex_json_serializer._add_nc_events_to_dict(tx, data)
+
+            # Add decoded nano contract arguments if applicable
+            self.manager.vertex_json_serializer._add_nc_args_decoded(tx, data)
 
         return json_dumpb(data)
 
@@ -373,6 +389,26 @@ TransactionResource.openapi = {
                     'required': False,
                     'schema': {
                         'type': 'string'
+                    }
+                },
+                {
+                    'name': 'include_nc_logs',
+                    'in': 'query',
+                    'description': 'Include nano contract execution logs for nano contract transactions. '
+                                   'Default is false.',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean'
+                    }
+                },
+                {
+                    'name': 'include_nc_events',
+                    'in': 'query',
+                    'description': 'Include nano contract events emitted during execution for nano contract '
+                                   'transactions. Default is false.',
+                    'required': False,
+                    'schema': {
+                        'type': 'boolean'
                     }
                 }
             ],

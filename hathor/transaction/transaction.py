@@ -323,9 +323,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         assert self.storage is not None
         if self.is_genesis:
             return
-        meta = self.get_metadata()
         # at least one child must be checkpoint validated
-        for child_tx in map(self.storage.get_transaction, meta.children):
+        for child_tx in map(self.storage.get_transaction, self.get_children()):
             if child_tx.get_metadata().validation.is_checkpoint():
                 return
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '

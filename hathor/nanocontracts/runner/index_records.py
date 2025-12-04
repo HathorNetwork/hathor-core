@@ -151,7 +151,10 @@ class UpdateAuthoritiesRecord:
 
 
 NCIndexUpdateRecord: TypeAlias = (
-    CreateContractRecord | CreateTokenRecord | UpdateTokenBalanceRecord | UpdateAuthoritiesRecord
+    CreateContractRecord
+    | CreateTokenRecord
+    | UpdateTokenBalanceRecord
+    | UpdateAuthoritiesRecord
 )
 
 

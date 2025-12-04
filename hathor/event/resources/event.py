@@ -18,8 +18,8 @@ from typing import Optional
 from pydantic import Field, NonNegativeInt
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.event import EventManager
 from hathor.event.model.base_event import BaseEvent
 from hathor.utils.api import ErrorResponse, QueryParams, Response

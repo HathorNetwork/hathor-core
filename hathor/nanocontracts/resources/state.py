@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from pydantic import Field
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
@@ -212,10 +212,9 @@ class NanoContractStateResource(Resource):
         calls: dict[str, NCValueSuccessResponse | NCValueErrorResponse] = {}
         for call_info in params.calls:
             try:
-                method_name, method_args = parse_nc_method_call(blueprint_class, call_info)
+                method_name, method_args, method = parse_nc_method_call(blueprint_class, call_info)
                 value = runner.call_view_method(nc_id_bytes, method_name, *method_args)
-                if type(value) is bytes:
-                    value = value.hex()
+                value = method.return_.value_to_json(value)
             except Exception as e:
                 calls[call_info] = NCValueErrorResponse(errmsg=repr(e))
             else:

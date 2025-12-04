@@ -44,11 +44,13 @@ from hathor.transaction.storage.migrations import (
     add_closest_ancestor_block,
     change_score_acc_weight_metadata,
     include_funds_for_first_block,
+    migrate_vertex_children,
     nc_storage_compat2,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.vertex_children import VertexChildrenService
 from hathor.types import VertexId
 
 if TYPE_CHECKING:
@@ -105,13 +107,21 @@ class TransactionStorage(ABC):
         add_closest_ancestor_block.Migration,
         include_funds_for_first_block.Migration,
         nc_storage_compat2.Migration,
+        migrate_vertex_children.Migration,
     ]
 
     _migrations: list[BaseMigration]
 
-    def __init__(self, *, settings: HathorSettings, nc_storage_factory: NCStorageFactory) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        nc_storage_factory: NCStorageFactory,
+        vertex_children_service: VertexChildrenService,
+    ) -> None:
         self._settings = settings
         self._nc_storage_factory = nc_storage_factory
+        self.vertex_children = vertex_children_service
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -1222,6 +1232,10 @@ class TransactionStorage(ABC):
         # XXX: maybe use N blocks confirmation, like reward-locks
         return blueprint_tx
 
+    @abstractmethod
+    def migrate_vertex_children(self) -> None:
+        raise NotImplementedError
+
 
 class BaseTransactionStorage(TransactionStorage):
     indexes: Optional[IndexesManager]
@@ -1233,8 +1247,13 @@ class BaseTransactionStorage(TransactionStorage):
         *,
         settings: HathorSettings,
         nc_storage_factory: NCStorageFactory,
+        vertex_children_service: VertexChildrenService,
     ) -> None:
-        super().__init__(settings=settings, nc_storage_factory=nc_storage_factory)
+        super().__init__(
+            settings=settings,
+            nc_storage_factory=nc_storage_factory,
+            vertex_children_service=vertex_children_service,
+        )
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
@@ -1436,7 +1455,7 @@ class BaseTransactionStorage(TransactionStorage):
             # XXX: We can safely discard because no other tx will try to visit this one, since timestamps are strictly
             #      higher in children, meaning we cannot possibly have item.tx as a descendant of any tx in to_visit.
             seen.discard(item.tx.hash)
-            for child_tx_hash in item.tx.get_metadata().children:
+            for child_tx_hash in item.tx.get_children():
                 if child_tx_hash in seen:
                     continue
                 child_tx = self.get_transaction(child_tx_hash)

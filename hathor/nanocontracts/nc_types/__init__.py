@@ -106,7 +106,6 @@ FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     # builtin types:
     bool: BoolNCType,
     bytes: BytesNCType,
-    dict: DictNCType,
     frozenset: FrozenSetNCType,
     int: VarInt32NCType,
     str: StrNCType,
@@ -133,6 +132,7 @@ FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
 ARG_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     **FIELD_TYPE_TO_NC_TYPE_MAP,
     # bultin types:
+    dict: DictNCType,
     list: ListNCType,
     set: SetNCType,
     # other Python types:

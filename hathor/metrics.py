@@ -121,10 +121,10 @@ class Metrics:
     def __post_init__(self) -> None:
         self.log = logger.new()
 
-        # Stores caculated tx weights saved in tx storage
+        # Stores calculated tx weights saved in tx storage
         self.weight_tx_deque: deque[WeightValue] = deque(maxlen=self.weight_tx_deque_len)
 
-        # Stores caculated block weights saved in tx storage
+        # Stores calculated block weights saved in tx storage
         self.weight_block_deque: deque[WeightValue] = deque(maxlen=self.weight_block_deque_len)
 
         # A timer to periodically collect data

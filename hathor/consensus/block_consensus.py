@@ -283,10 +283,19 @@ class BlockConsensusAlgorithm:
                 assert tx.storage.indexes is not None
                 tx.storage.indexes.handle_contract_execution(tx)
 
+                # Pubsub event to indicate execution success
+                self.context.nc_exec_success.append(tx)
+
                 # We only emit events when the nc is successfully executed.
                 assert self.context.nc_events is not None
                 last_call_info = runner.get_last_call_info()
-                self.context.nc_events.append((tx, last_call_info.nc_logger.__events__))
+                events_list = last_call_info.nc_logger.__events__
+                self.context.nc_events.append((tx, events_list))
+
+                # Store events in transaction metadata
+                if events_list:
+                    tx_meta.nc_events = [(event.nc_id, event.data) for event in events_list]
+                    self.context.save(tx)
             finally:
                 # We save logs regardless of whether the nc successfully executed.
                 self._nc_log_storage.save_logs(tx, runner.get_last_call_info(), exception_and_tb)
@@ -441,11 +450,11 @@ class BlockConsensusAlgorithm:
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
-        assert block.hash in parent_meta.children
+        assert block.hash in parent.get_children()
 
         # This method is called after the metadata of the parent is updated.
         # So, if the parent has only one child, it must be the current block.
-        is_connected_to_the_head = bool(len(parent_meta.children) == 1)
+        is_connected_to_the_head = parent.get_children().is_single()
         is_connected_to_the_best_chain = bool(not parent_meta.voided_by)
 
         if is_connected_to_the_head and is_connected_to_the_best_chain:

@@ -1,0 +1,19 @@
+{
+	"openapi": "3.0.0",
+	"servers": [
+            {
+                "url": "http://localhost:8080"
+            }
+        ],
+	"info": {
+            "title": "Hathor API",
+            "version": "0.68.0"
+	},
+	"consumes": [
+            "application/json"
+	],
+	"produces": [
+            "application/json"
+	],
+    "paths": {}
+}

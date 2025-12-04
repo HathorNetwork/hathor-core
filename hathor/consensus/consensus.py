@@ -195,6 +195,10 @@ class ConsensusAlgorithm:
             tx_affected.storage.indexes.update(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
+        # signal all transactions of which the execution succeeded
+        for tx_nc_success in context.nc_exec_success:
+            context.pubsub.publish(HathorEvents.NC_EXEC_SUCCESS, tx=tx_nc_success)
+
         # handle custom NC events
         if isinstance(base, Block):
             assert context.nc_events is not None
@@ -290,7 +294,6 @@ class ConsensusAlgorithm:
         - all indexes will be updated
         """
         parents_to_update: dict[bytes, list[bytes]] = defaultdict(list)
-        dangling_children: set[bytes] = set()
         txset = {tx.hash for tx in txs}
         for tx in txs:
             tx_meta = tx.get_metadata()
@@ -298,21 +301,26 @@ class ConsensusAlgorithm:
             assert bool(tx_meta.voided_by), 'removed txs must be voided'
             for parent in set(tx.parents) - txset:
                 parents_to_update[parent].append(tx.hash)
-            dangling_children.update(set(tx_meta.children) - txset)
+            for child in tx.get_children():
+                if child not in txset:
+                    raise AssertionError(
+                        'It is an error to try to remove transactions that would leave a gap in the DAG'
+                    )
             for spending_txs in tx_meta.spent_outputs.values():
-                dangling_children.update(set(spending_txs) - txset)
+                if set(spending_txs) - txset:
+                    raise AssertionError(
+                        'It is an error to try to remove transactions that would leave a gap in the DAG'
+                    )
             for tx_input in tx.inputs:
                 spent_tx = tx.get_spent_tx(tx_input)
                 spent_tx_meta = spent_tx.get_metadata()
                 if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
                     spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
                     context.save(spent_tx)
-        assert not dangling_children, 'It is an error to try to remove transactions that would leave a gap in the DAG'
         for parent_hash, children_to_remove in parents_to_update.items():
             parent_tx = storage.get_transaction(parent_hash)
-            parent_meta = parent_tx.get_metadata()
             for child in children_to_remove:
-                parent_meta.children.remove(child)
+                storage.vertex_children.remove_child(parent_tx, child)
             context.save(parent_tx)
         for tx in txs:
             self.log.debug('remove transaction', tx=tx.hash_hex)

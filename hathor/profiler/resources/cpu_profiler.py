@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING
 from twisted.web.http import Request
 
 import hathor
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.util import json_dumpb
 
 if TYPE_CHECKING:

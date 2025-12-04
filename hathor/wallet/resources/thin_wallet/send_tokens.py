@@ -23,8 +23,8 @@ from twisted.internet.defer import CancelledError, Deferred
 from twisted.python.failure import Failure
 from twisted.web.http import Request
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
 from hathor.reactor import get_global_reactor

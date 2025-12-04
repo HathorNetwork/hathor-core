@@ -16,8 +16,8 @@ import enum
 
 from structlog import get_logger
 
+from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, set_cors
-from hathor.cli.openapi_files.register import register_resource
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import HathorError
@@ -80,10 +80,13 @@ class GetBlockTemplateResource(Resource):
         # XXX: miner can edit block data and output_script, so it's fine if address is None
         block = self.manager.generate_mining_block(address=address, merge_mined=merged_mining)
         block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
+        block.hash = b'\x00'
 
         # serialize
         data = block.to_json(include_metadata=True)
         data.pop('hash')
+        assert data['metadata']['hash'] == '00'
+        data['metadata']['hash'] = None
         data.pop('inputs')
         data.pop('nonce', None)
         data.pop('aux_pow', None)

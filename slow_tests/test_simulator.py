@@ -5,9 +5,9 @@ from mnemonic import Mnemonic
 from hathor.transaction import BaseTransaction
 from hathor.transaction.genesis import genesis_transactions
 from hathor.wallet import HDWallet
-from tests import unittest
-from tests.clock import HeapClock
-from tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
+from hathor_tests import unittest
+from hathor_tests.clock import HeapClock
+from hathor_tests.utils import FakeConnection, MinerSimulator, RandomTransactionGenerator, Simulator
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):

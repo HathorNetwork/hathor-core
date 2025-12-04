@@ -57,6 +57,7 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.json_serializer import VertexJsonSerializer
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope
@@ -114,6 +115,7 @@ class HathorManager:
         vertex_parser: VertexParser,
         runner_factory: RunnerFactory,
         feature_service: FeatureService,
+        vertex_json_serializer: VertexJsonSerializer,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -203,6 +205,7 @@ class HathorManager:
         self.vertex_parser = vertex_parser
         self.runner_factory = runner_factory
         self.feature_service = feature_service
+        self.vertex_json_serializer = vertex_json_serializer
 
         self.websocket_factory = websocket_factory
 
