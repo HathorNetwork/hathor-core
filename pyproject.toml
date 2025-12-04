@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathor"
-version = "0.68.0"
+version = "0.69.0"
 description = "Hathor Network full-node"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"
