@@ -155,6 +155,11 @@ class NCForbiddenReentrancy(NCFail):
     pass
 
 
+class NCTypeError(NCFail):
+    """Raised when a wrong type is used."""
+    pass
+
+
 class UnknownFieldType(NCFail):
     """Raised when there is no field available for a given type."""
     pass
