@@ -40,6 +40,7 @@ from hathor.nanocontracts.exception import (
     NCInvalidPublicMethodCallFromView,
     NCInvalidSyscall,
     NCMethodNotFound,
+    NCTypeError,
     NCUninitializedContractError,
     NCViewMethodError,
 )
@@ -1241,6 +1242,9 @@ class Runner:
     @_forbid_syscall_from_view('emit_event')
     def syscall_emit_event(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
+        if not isinstance(data, bytes):
+            raise NCTypeError(f'got {type(data)} instead of bytes')
+        data = bytes(data)  # force actual bytes because isinstance could be True for "compatible" types
         assert self._call_info is not None
         self._call_info.nc_logger.__emit_event__(data)
 
