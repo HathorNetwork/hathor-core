@@ -54,6 +54,8 @@ class MyBlueprint(Blueprint):
     address_details: dict[Address, dict[str, Amount]]
     bytes_field: bytes
     dict_with_bytes: dict[bytes, str]
+    list_field: list[int]
+    set_field: set[int]
     last_caller_id: CallerId
     last_bet_address: Address
     last_vertex_id: VertexId
@@ -67,6 +69,8 @@ class MyBlueprint(Blueprint):
         self.address_details = {}
         self.bytes_field = b''
         self.dict_with_bytes = {}
+        self.list_field = []
+        self.set_field = set()
         self.last_caller_id = ctx.caller_id
         self.last_bet_address = Address(b'\00' * 25)
         self.last_vertex_id = VertexId(ctx.vertex.hash)
@@ -213,6 +217,52 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
 
         sign_openssl(nano_header, private_key)
         self.manager.cpu_mining_service.resolve(nc)
+
+    @inlineCallbacks
+    def test_container_field_returns_field_error(self):
+        parents = [tx.hash for tx in self.genesis_txs]
+        timestamp = 1 + max(tx.timestamp for tx in self.genesis)
+
+        nc = Transaction(
+            weight=1,
+            inputs=[],
+            outputs=[],
+            parents=parents,
+            storage=self.tx_storage,
+            timestamp=timestamp
+        )
+        self._fill_nc(
+            nc,
+            self.bet_id,
+            'initialize',
+            [settings.HATHOR_TOKEN_UID, timestamp],
+            self.genesis_private_key,
+        )
+        self.assertTrue(self.manager.on_new_tx(nc))
+        add_new_block(self.manager)
+
+        response = yield self.web.get(
+            'state', [
+                (b'id', nc.hash.hex().encode('ascii')),
+                (b'fields[]', b'token_uid'),
+                (b'fields[]', b'address_details'),
+                (b'fields[]', b'list_field'),
+                (b'fields[]', b'set_field'),
+            ]
+        )
+
+        data = response.json_value()
+        self.assertTrue(data['success'])
+        fields = data['fields']
+        self.assertEqual(fields['token_uid'], {'value': settings.HATHOR_TOKEN_UID.hex()})
+        self.assertEqual(fields['address_details'], {'errmsg': 'field cannot be rendered'})
+        # XXX: these are ideally the errors that make sense to return:
+        # self.assertEqual(fields['list_field'], {'errmsg': 'field cannot be rendered'})
+        # self.assertEqual(fields['set_field'], {'errmsg': 'field cannot be rendered'})
+        # XXX: however the current implementation quirks field these:
+        self.assertEqual(fields['list_field'], {'errmsg': 'field not found'})
+        self.assertEqual(fields['set_field'], {'errmsg': 'field not found'})
+        # XXX: it will change in the future along with a complete state-api implementation for container fields
 
     @inlineCallbacks
     def test_success(self):
