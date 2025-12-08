@@ -203,6 +203,9 @@ class NanoContractStateResource(Resource):
             except KeyError:
                 fields[field] = NCValueErrorResponse(errmsg='field not found')
                 continue
+            except TypeError:
+                fields[field] = NCValueErrorResponse(errmsg='field cannot be rendered')
+                continue
 
             json_value = field_nc_type.value_to_json(value)
             fields[field] = NCValueSuccessResponse(value=json_value)
