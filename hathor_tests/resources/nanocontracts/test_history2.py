@@ -13,7 +13,7 @@ from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 settings = HathorSettings()
 
 
-class TestBlueprint(Blueprint):
+class LogEmitBlueprint(Blueprint):
     value: int
 
     @public
@@ -32,7 +32,7 @@ class TransactionNanoContractTest(_BaseResourceTest._ResourceTest):
 
         self.blueprint_id = b'x' * 32
         self.catalog = NCBlueprintCatalog({
-            self.blueprint_id: TestBlueprint
+            self.blueprint_id: LogEmitBlueprint
         })
 
         self.manager = self.create_peer(
