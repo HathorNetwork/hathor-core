@@ -493,34 +493,39 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
     # Create a reorg scenario with a hybrid transaction
     dag_builder = _create_dag_builder(manager)
     artifacts = dag_builder.build_from_str(f'''
-        blockchain genesis b[1..5]
-        blockchain b2 a[3..4]
+        blockchain genesis b[1..2]
         b1 < dummy
-        b3 < a3 < a4 < b4 < b5
 
-        # Initialize the nano contract first - confirmed in b2
+        # Create transactions
+        # Initialize the nano contract
         nc_init.nc_id = "{blueprint_id.hex()}"
         nc_init.nc_method = initialize()
         nc_init.nc_deposit = 50 HTR
-        dummy < nc_init
-        nc_init <-- b2
 
         # Create a HYBRID transaction (hybrid_tx) that:
         # 1. Is a TokenCreationTransaction (creates HYB token traditionally)
         # 2. Also has NC headers that call create_extra_token() to create NCX via syscall
-        dummy < hybrid_tx
-        hybrid_tx.out[0] = 500 HYB
-        hybrid_tx.nc_id = nc_init
-        hybrid_tx.nc_method = create_extra_token()
-        hybrid_tx.nc_deposit = 100 HTR
+        HYB.nc_id = nc_init
+        # hybrid_tx.nc_id = nc_init
+        HYB.nc_method = create_extra_token()
+        HYB.nc_deposit = 100 HTR
+        # hybrid_tx.out[0] = 500 HYB
+        tit.out[0] = 500 HYB
 
-        # hybrid_tx gets confirmed in branch a3 (after nc_init is initialized in b2)
-        # When b4 (which doesn't include hybrid_tx) becomes the main chain, hybrid_tx goes to mempool
-        nc_init < hybrid_tx
+        # nc_init and hybrid_tx both confirmed in b2
+        # Then reorg happens: b2 gets orphaned, both go to mempool
+        # Both re-confirmed in a3
+        dummy < nc_init
+        nc_init <-- b2
+        HYB <-- b2
+        # tit <-- b2
+
+        blockchain b1 a[2..5]
+        nc_init <-- a3
         hybrid_tx <-- a3
     ''')
 
-    # Propagate in steps to see the events clearly
+    # Propagate all blocks - causes reorg during propagation
     artifacts.propagate_with(manager)
     simulator.run(1)
 
