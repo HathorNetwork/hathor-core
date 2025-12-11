@@ -649,15 +649,15 @@ class TransactionStorage(ABC):
         best_tip_blocks: list[bytes] = []
 
         for block_hash in (x.data for x in self.get_block_tips(timestamp)):
-            meta = self.get_metadata(block_hash)
-            assert meta is not None
+            block = self.get_transaction(block_hash)
+            meta = block.get_metadata()
             if meta.voided_by and meta.voided_by != set([block_hash]):
                 # If anyone but the block itself is voiding this block, then it must be skipped.
                 continue
-            if meta.score == best_score:
+            if block.static_metadata.score == best_score:
                 best_tip_blocks.append(block_hash)
-            elif meta.score > best_score:
-                best_score = meta.score
+            elif block.static_metadata.score > best_score:
+                best_score = block.static_metadata.score
                 best_tip_blocks = [block_hash]
         if timestamp is None:
             self._best_block_tips_cache = best_tip_blocks[:]

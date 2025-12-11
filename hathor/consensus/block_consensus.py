@@ -369,56 +369,7 @@ class BlockConsensusAlgorithm:
                                                          is_dag_verifications=False)
 
     def update_voided_info(self, block: Block) -> None:
-        """ This method is called only once when a new block arrives.
-
-        The blockchain part of the DAG is a tree with the genesis block as the root.
-        I'll say the a block A is connected to a block B when A verifies B, i.e., B is a parent of A.
-
-        A chain is a sequence of connected blocks starting in a leaf and ending in the root, i.e., any path from a leaf
-        to the root is a chain. Given a chain, its head is a leaf in the tree, and its tail is the sub-chain without
-        the head.
-
-        The best chain is a chain that has the highest score of all chains.
-
-        The score of a block is calculated as the sum of the weights of all transactions and blocks both direcly and
-        indirectly verified by the block. The score of a chain is defined as the score of its head.
-
-        The side chains are the chains whose scores are smaller than the best chain's.
-        The head of the side chains are always voided blocks.
-
-        There are two possible states for the block chain:
-        (i)  It has a single best chain, i.e., one chain has the highest score
-        (ii) It has multiple best chains, i.e., two or more chains have the same score (and this score is the highest
-             among the chains)
-
-        When there are multiple best chains, I'll call them best chain candidates.
-
-        The arrived block can be connected in four possible ways:
-        (i)   To the head of a best chain
-        (ii)  To the tail of the best chain
-        (iii) To the head of a side chain
-        (iv)  To the tail of a side chain
-
-        Thus, there are eight cases to be handled when a new block arrives, which are:
-        (i)    Single best chain, connected to the head of the best chain
-        (ii)   Single best chain, connected to the tail of the best chain
-        (iii)  Single best chain, connected to the head of a side chain
-        (iv)   Single best chain, connected to the tail of a side chain
-        (v)    Multiple best chains, connected to the head of a best chain
-        (vi)   Multiple best chains, connected to the tail of a best chain
-        (vii)  Multiple best chains, connected to the head of a side chain
-        (viii) Multiple best chains, connected to the tail of a side chain
-
-        Case (i) is trivial because the single best chain will remain as the best chain. So, just calculate the new
-        score and that's it.
-
-        Case (v) is also trivial. As there are multiple best chains and the new block is connected to the head of one
-        of them, this will be the new winner. So, the blockchain state will change to a single best chain again.
-
-        In the other cases, we must calculate the score and compare with the best score.
-
-        When there are multiple best chains, all their heads will be voided.
-        """
+        """This method is called only once when a new block arrives."""
         assert block.weight > 0, 'This algorithm assumes that block\'s weight is always greater than zero'
         if not block.parents:
             assert block.is_genesis is True
@@ -484,17 +435,14 @@ class BlockConsensusAlgorithm:
             heads = [cast(Block, storage.get_transaction(h)) for h in storage.get_best_block_tips()]
             best_score: int | None = None
             for head in heads:
-                head_meta = head.get_metadata(force_reload=True)
                 if best_score is None:
-                    best_score = head_meta.score
+                    best_score = head.static_metadata.score
                 else:
                     # All heads must have the same score.
-                    assert best_score == head_meta.score
+                    assert best_score == head.static_metadata.score
             assert best_score is not None
 
-            # Calculate the score.
-            # We cannot calculate score before getting the heads.
-            score = self.calculate_score(block)
+            score = block.static_metadata.score
 
             # Finally, check who the winner is.
             if score < best_score:
@@ -637,15 +585,14 @@ class BlockConsensusAlgorithm:
             best_score = 0
             best_heads: list[Block]
             for head in heads:
-                head_meta = head.get_metadata(force_reload=True)
-                if head_meta.score < best_score:
+                if head.static_metadata.score < best_score:
                     continue
 
-                if head_meta.score > best_score:
+                if head.static_metadata.score > best_score:
                     best_heads = [head]
-                    best_score = head_meta.score
+                    best_score = head.static_metadata.score
                 else:
-                    assert best_score == head_meta.score
+                    assert best_score == head.static_metadata.score
                     best_heads.append(head)
             assert isinstance(best_score, int) and best_score > 0
 
@@ -660,7 +607,6 @@ class BlockConsensusAlgorithm:
         """ Update score and mark the chain as the best chain.
         Thus, transactions' first_block will point to the blocks in the chain.
         """
-        self.calculate_score(block, mark_as_best_chain=True)
         self.add_first_block_markers(block)
 
     def remove_voided_by_from_chain(self, block: Block) -> None:
@@ -822,21 +768,6 @@ class BlockConsensusAlgorithm:
             assert meta.first_block is None
             meta.first_block = block.hash
             self.context.save(tx)
-
-    def calculate_score(self, block: Block) -> int:
-        """Calculate block score, which is the accumulated work of the chain."""
-        assert block.storage is not None
-        if block.is_genesis:
-            if mark_as_best_chain:
-                meta = block.get_metadata()
-                meta.score = weight_to_work(block.weight)
-                self.context.save(block)
-            return weight_to_work(block.weight)
-
-        parent = block.get_block_parent()
-        block.score = weight_to_work(block.weight) + parent.get_metadata().score
-        self.context.save(block)
-        return block.score
 
 
 class BlockConsensusAlgorithmFactory:

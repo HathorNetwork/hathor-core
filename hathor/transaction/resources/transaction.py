@@ -464,7 +464,6 @@ TransactionResource.openapi = {
                                             'voided_by': [],
                                             'twins': [],
                                             'accumulated_weight': '1024',
-                                            'score': '4096',
                                             'first_block': None
                                         },
                                         'spent_outputs': {
