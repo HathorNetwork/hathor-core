@@ -14,7 +14,7 @@ from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
 from hathor_tests import unittest
 from hathor_tests.unittest import TestBuilder
-from hathor_tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, add_new_tx, create_tokens
+from hathor_tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, create_tokens
 
 
 class BaseTransactionStorageTest(unittest.TestCase):
@@ -104,10 +104,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
             self.assertEqual(tx, tx2)
             self.assertTrue(self.tx_storage.transaction_exists(tx.hash))
 
-    def test_get_empty_merklee_tree(self):
-        # We use `first_timestamp - 1` to ensure that the merkle tree will be empty.
-        self.tx_storage.get_merkle_tree(self.tx_storage.first_timestamp - 1)
-
     def test_first_timestamp(self):
         self.assertEqual(self.tx_storage.first_timestamp, min(x.timestamp for x in self.genesis))
 
@@ -115,23 +111,19 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(1, self.tx_storage.get_block_count())
         self.assertEqual(2, self.tx_storage.get_tx_count())
         self.assertEqual(3, self.tx_storage.get_vertices_count())
-
-        block_parents_hash = [x.data for x in self.tx_storage.get_block_tips()]
-        self.assertEqual(1, len(block_parents_hash))
-        self.assertEqual(block_parents_hash, [self.genesis_blocks[0].hash])
-
-        tx_parents_hash = [x.data for x in self.tx_storage.get_tx_tips()]
-        self.assertEqual(2, len(tx_parents_hash))
-        self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
+        self.assertEqual(self.genesis_blocks[0].hash, self.tx_storage.get_best_block_hash())
+        self.assertEqual(
+            {self.genesis_txs[0], self.genesis_txs[1]},
+            set(self.tx_storage.iter_mempool_tips()),
+        )
 
     def test_storage_basic_v2(self):
         self.assertEqual(1, self.tx_storage.get_block_count())
         self.assertEqual(2, self.tx_storage.get_tx_count())
         self.assertEqual(3, self.tx_storage.get_vertices_count())
 
-        block_parents_hash = self.tx_storage.get_best_block_tips()
-        self.assertEqual(1, len(block_parents_hash))
-        self.assertEqual(block_parents_hash, [self.genesis_blocks[0].hash])
+        block_parent_hash = self.tx_storage.get_best_block_hash()
+        self.assertEqual(block_parent_hash, self.genesis_blocks[0].hash)
 
         tx_parents_hash = self.manager.get_new_tx_parents()
         self.assertEqual(2, len(tx_parents_hash))
@@ -174,27 +166,34 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(obj.to_json(), loaded_obj1.to_json())
         self.assertEqual(obj.is_block, loaded_obj1.is_block)
 
+        idx_elem = (obj.timestamp, obj.hash)
+
         # Testing add and remove from cache
         if self.tx_storage.indexes is not None:
+            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
             if obj.is_block:
-                self.assertTrue(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
+                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
             else:
-                self.assertTrue(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
+                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
-        self.tx_storage.del_from_indexes(obj)
+        self.tx_storage.del_from_indexes(obj, remove_all=True)
 
         if self.tx_storage.indexes is not None:
-            if obj.is_block:
-                self.assertFalse(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
-            else:
-                self.assertFalse(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_all)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
         self.tx_storage.add_to_indexes(obj)
         if self.tx_storage.indexes is not None:
+            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
             if obj.is_block:
-                self.assertTrue(obj.hash in self.tx_storage.indexes.block_tips.tx_last_interval)
+                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
             else:
-                self.assertTrue(obj.hash in self.tx_storage.indexes.tx_tips.tx_last_interval)
+                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
     def test_save_block(self):
         self.validate_save(self.block)
@@ -466,16 +465,16 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(total, 4)
 
     def test_storage_new_blocks(self):
-        tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-        self.assertEqual(tip_blocks, [self.genesis_blocks[0].hash])
+        tip_block = self.tx_storage.get_best_block_hash()
+        self.assertEqual(tip_block, self.genesis_blocks[0].hash)
 
         block1 = self._add_new_block()
-        tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-        self.assertEqual(tip_blocks, [block1.hash])
+        tip_block = self.tx_storage.get_best_block_hash()
+        self.assertEqual(tip_block, block1.hash)
 
         block2 = self._add_new_block()
-        tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-        self.assertEqual(tip_blocks, [block2.hash])
+        tip_block = self.tx_storage.get_best_block_hash()
+        self.assertEqual(tip_block, block2.hash)
 
         # Block3 has the same parents as block2.
         block3 = self._add_new_block(parents=block2.parents)
@@ -483,13 +482,13 @@ class BaseTransactionStorageTest(unittest.TestCase):
         meta2 = block2.get_metadata()
         meta3 = block3.get_metadata()
         self.assertEqual(meta2.score, meta3.score)
-        tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-        self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
+        tip_block = self.tx_storage.get_best_block_hash()
+        self.assertEqual(tip_block, min(block2.hash, block3.hash))
 
         # Re-generate caches to test topological sort.
         self.tx_storage._manually_initialize()
-        tip_blocks = [x.data for x in self.tx_storage.get_block_tips()]
-        self.assertEqual(set(tip_blocks), {block2.hash, block3.hash})
+        tip_block = self.tx_storage.get_best_block_hash()
+        self.assertEqual(tip_block, min(block2.hash, block3.hash))
 
     def test_token_list(self):
         tx = self.tx
@@ -515,18 +514,6 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.manager.propagate_tx(block)
         self.reactor.advance(5)
         return block
-
-    def test_best_block_tips_cache(self):
-        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
-        self.manager.wallet.unlock(b'MYPASS')
-        spent_blocks = add_new_blocks(self.manager, 10)
-        self.assertEqual(self.tx_storage._best_block_tips_cache, [spent_blocks[-1].hash])
-        unspent_blocks = add_blocks_unlock_reward(self.manager)
-        self.assertEqual(self.tx_storage._best_block_tips_cache, [unspent_blocks[-1].hash])
-        latest_blocks = add_blocks_unlock_reward(self.manager)
-        unspent_address = self.manager.wallet.get_unused_address()
-        add_new_tx(self.manager, unspent_address, 100)
-        self.assertEqual(self.tx_storage._best_block_tips_cache, [latest_blocks[-1].hash])
 
     def test_topological_sort(self):
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT

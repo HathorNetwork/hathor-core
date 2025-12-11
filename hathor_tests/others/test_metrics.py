@@ -111,9 +111,6 @@ class MetricsTest(unittest.TestCase):
             b'feature-activation-metadata': 0.0,
             b'info-index': 0.0,
             b'height-index': 0.0,
-            b'tips-all': 0.0,
-            b'tips-blocks': 0.0,
-            b'tips-txs': 0.0,
             b'timestamp-sorted-all': 0.0,
             b'timestamp-sorted-blocks': 0.0,
             b'timestamp-sorted-txs': 0.0,
@@ -123,7 +120,6 @@ class MetricsTest(unittest.TestCase):
 
         manager.tx_storage.pre_init()
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
-        manager.tx_storage.update_best_block_tips_cache(None)
 
         add_new_blocks(manager, 10)
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
@@ -172,9 +168,6 @@ class MetricsTest(unittest.TestCase):
             b'feature-activation-metadata': 0.0,
             b'info-index': 0.0,
             b'height-index': 0.0,
-            b'tips-all': 0.0,
-            b'tips-blocks': 0.0,
-            b'tips-txs': 0.0,
             b'timestamp-sorted-all': 0.0,
             b'timestamp-sorted-blocks': 0.0,
             b'timestamp-sorted-txs': 0.0,
@@ -184,7 +177,6 @@ class MetricsTest(unittest.TestCase):
 
         manager.tx_storage.pre_init()
         manager.tx_storage.indexes._manually_initialize(manager.tx_storage)
-        manager.tx_storage.update_best_block_tips_cache(None)
 
         add_new_blocks(manager, 10)
 

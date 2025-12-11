@@ -213,10 +213,10 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert not self.manager.tx_storage.transaction_exists(ocb1.hash)
         assert not self.manager.tx_storage.transaction_exists(fbt.hash)
         assert not self.manager.tx_storage.transaction_exists(tx1.hash)
-        assert nc1 not in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
-        assert ocb1 not in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
-        assert fbt not in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
-        assert tx1 not in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert nc1 not in list(self.manager.tx_storage.iter_mempool_tips())
+        assert ocb1 not in list(self.manager.tx_storage.iter_mempool_tips())
+        assert fbt not in list(self.manager.tx_storage.iter_mempool_tips())
+        assert tx1 not in list(self.manager.tx_storage.iter_mempool_tips())
 
         # The nc and fee txs are re-accepted on the mempool.
         artifacts.propagate_with(self.manager, up_to='a12')
@@ -233,28 +233,28 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert nc1.get_metadata().validation.is_valid()
         assert nc1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
-        assert nc1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert nc1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         self._reset_vertex(ocb1)
         self.vertex_handler.on_new_relayed_vertex(ocb1)
         assert ocb1.get_metadata().validation.is_valid()
         assert ocb1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(ocb1.hash)
-        assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         self._reset_vertex(fbt)
         self.vertex_handler.on_new_relayed_vertex(fbt)
         assert fbt.get_metadata().validation.is_valid()
         assert fbt.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(fbt.hash)
-        assert fbt in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert fbt in list(self.manager.tx_storage.iter_mempool_tips())
 
         self._reset_vertex(tx1)
         self.vertex_handler.on_new_relayed_vertex(tx1)
         assert tx1.get_metadata().validation.is_valid()
         assert tx1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(tx1.hash)
-        assert tx1 in list(self.manager.tx_storage.iter_mempool_tips_from_best_index())
+        assert tx1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         artifacts.propagate_with(self.manager, up_to='a13')
 

@@ -14,15 +14,13 @@
 
 from __future__ import annotations
 
-import hashlib
 from abc import ABC, abstractmethod, abstractproperty
 from collections import deque
 from contextlib import AbstractContextManager
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
 from weakref import WeakValueDictionary
 
-from intervaltree.interval import Interval
 from structlog import get_logger
 
 from hathor.execution_manager import ExecutionManager
@@ -70,13 +68,6 @@ cpu = get_cpu_profiler()
 NULL_INDEX_LAST_STARTED_AT = 0
 NULL_LAST_STARTED_AT = 1
 INDEX_ATTR_PREFIX = 'index_'
-
-
-class AllTipsCache(NamedTuple):
-    timestamp: int
-    tips: set[Interval]
-    merkle_tree: bytes
-    hashes: list[bytes]
 
 
 class TransactionStorage(ABC):
@@ -139,20 +130,11 @@ class TransactionStorage(ABC):
         # Flag to allow/disallow partially validated vertices.
         self._allow_scope: TxAllowScope = TxAllowScope.VALID
 
-        # Cache for the best block tips
-        # This cache is updated in the consensus algorithm.
-        self._best_block_tips_cache: Optional[list[bytes]] = None
-
         # If should create lock when getting a transaction
         self._should_lock = False
 
         # Provide local logger
         self.log = self.log.new()
-
-        # Cache for the latest timestamp of all tips with merkle tree precalculated to be used on the sync algorithm
-        # This cache is invalidated every time a new tx or block is added to the cache and
-        # self._all_tips_cache.timestamp is always self.latest_timestamp
-        self._all_tips_cache: Optional[AllTipsCache] = None
 
         # Initialize cache for genesis transactions.
         self._genesis_cache: dict[bytes, BaseTransaction] = {}
@@ -192,17 +174,6 @@ class TransactionStorage(ABC):
     def is_empty(self) -> bool:
         """True when only genesis is present, useful for checking for a fresh database."""
         raise NotImplementedError
-
-    def update_best_block_tips_cache(self, tips_cache: Optional[list[bytes]]) -> None:
-        # XXX: check that the cache update is working properly, only used in unittests
-        # XXX: this might not actually hold true in some cases, commenting out while we figure it out
-        # if settings.SLOW_ASSERTS:
-        #     calculated_tips = self.get_best_block_tips(skip_cache=True)
-        #     self.log.debug('cached best block tips must match calculated',
-        #                    calculated=[i.hex() for i in calculated_tips],
-        #                    cached=[i.hex() for i in tips_cache])
-        #     assert set(tips_cache) == set(calculated_tips)
-        self._best_block_tips_cache = tips_cache
 
     def pre_init(self) -> None:
         """Storages can implement this to run code before transaction loading starts"""
@@ -635,33 +606,9 @@ class TransactionStorage(ABC):
     def first_timestamp(self) -> int:
         raise NotImplementedError
 
-    @abstractmethod
-    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
-        """ Return a list of blocks that are heads in a best chain. It must be used when mining.
-
-        When more than one block is returned, it means that there are multiple best chains and
-        you can choose any of them.
-        """
-        if timestamp is None and not skip_cache and self._best_block_tips_cache is not None:
-            return self._best_block_tips_cache[:]
-
-        best_score: int = 0
-        best_tip_blocks: list[bytes] = []
-
-        for block_hash in (x.data for x in self.get_block_tips(timestamp)):
-            meta = self.get_metadata(block_hash)
-            assert meta is not None
-            if meta.voided_by and meta.voided_by != set([block_hash]):
-                # If anyone but the block itself is voiding this block, then it must be skipped.
-                continue
-            if meta.score == best_score:
-                best_tip_blocks.append(block_hash)
-            elif meta.score > best_score:
-                best_score = meta.score
-                best_tip_blocks = [block_hash]
-        if timestamp is None:
-            self._best_block_tips_cache = best_tip_blocks[:]
-        return best_tip_blocks
+    def get_best_block_hash(self) -> VertexId:
+        assert self.indexes is not None
+        return VertexId(self.indexes.height.get_tip())
 
     @abstractmethod
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
@@ -669,69 +616,14 @@ class TransactionStorage(ABC):
         return self.indexes.height.get_n_height_tips(n_blocks)
 
     def get_weight_best_block(self) -> float:
-        heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
-        highest_weight = 0.0
-        for head in heads:
-            if head.weight > highest_weight:
-                highest_weight = head.weight
-
-        return highest_weight
+        return self.get_best_block().weight
 
     def get_height_best_block(self) -> int:
         """ Iterate over best block tips and get the highest height
         """
-        heads = [self.get_transaction(h) for h in self.get_best_block_tips()]
-        highest_height = 0
-        for head in heads:
-            assert isinstance(head, Block)
-            head_height = head.get_height()
-            if head_height > highest_height:
-                highest_height = head_height
-
-        return highest_height
-
-    @cpu.profiler('get_merkle_tree')
-    def get_merkle_tree(self, timestamp: int) -> tuple[bytes, list[bytes]]:
-        """ Generate a hash to check whether the DAG is the same at that timestamp.
-
-        :rtype: tuple[bytes(hash), list[bytes(hash)]]
-        """
-        if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
-            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
-
-        intervals = self.get_all_tips(timestamp)
-        if timestamp >= self.latest_timestamp:
-            # get_all_tips will add to cache in that case
-            assert self._all_tips_cache is not None
-            return self._all_tips_cache.merkle_tree, self._all_tips_cache.hashes
-
-        return self.calculate_merkle_tree(intervals)
-
-    def calculate_merkle_tree(self, intervals: set[Interval]) -> tuple[bytes, list[bytes]]:
-        """ Generate a hash of the transactions at the intervals
-
-        :rtype: tuple[bytes(hash), list[bytes(hash)]]
-        """
-        hashes = [x.data for x in intervals]
-        hashes.sort()
-
-        merkle = hashlib.sha256()
-        for h in hashes:
-            merkle.update(h)
-
-        return merkle.digest(), hashes
-
-    @abstractmethod
-    def get_block_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_all_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_tx_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
-        raise NotImplementedError
+        assert self.indexes is not None
+        block_info = self.indexes.height.get_height_tip()
+        return block_info.height
 
     @abstractmethod
     def get_newest_blocks(self, count: int) -> tuple[list[Block], bool]:
@@ -1014,62 +906,17 @@ class TransactionStorage(ABC):
         """
         raise NotImplementedError
 
-    def iter_mempool_tips_from_tx_tips(self) -> Iterator[Transaction]:
-        """ Same behavior as the mempool index for iterating over the tips.
-
-        This basically means that the returned iterator will yield all transactions that are tips and have not been
-        confirmed by a block on the best chain.
-
-        This method requires indexes to be enabled.
-        """
+    def iter_mempool_tips(self) -> Iterator[Transaction]:
+        """Get tx tips in the mempool, using the mempool-tips index"""
         assert self.indexes is not None
-        tx_tips = self.indexes.tx_tips
+        assert self.indexes.mempool_tips is not None
+        yield from self.indexes.mempool_tips.iter(self)
 
-        for interval in tx_tips[self.latest_timestamp + 1]:
-            tx = self.get_transaction(interval.data)
-            tx_meta = tx.get_metadata()
-            assert isinstance(tx, Transaction)  # XXX: tx_tips only has transactions
-            # XXX: skip txs that have already been confirmed
-            if tx_meta.first_block:
-                continue
-            yield tx
-
-    def iter_mempool_from_tx_tips(self) -> Iterator[Transaction]:
-        """ Same behavior as the mempool index for iterating over all mempool transactions.
-
-        This basically means that the returned iterator will yield all transactions that have not been confirmed by a
-        block on the best chain. Order is not guaranteed to be the same as in the mempool index.
-
-        This method requires indexes to be enabled.
-        """
-        from hathor.transaction.storage.traversal import BFSTimestampWalk
-
-        root = self.iter_mempool_tips_from_tx_tips()
-        walk = BFSTimestampWalk(self, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False)
-        for tx in walk.run(root):
-            tx_meta = tx.get_metadata()
-            # XXX: skip blocks and tx-tips that have already been confirmed
-            if tx_meta.first_block is not None or tx.is_block:
-                walk.skip_neighbors(tx)
-            else:
-                assert isinstance(tx, Transaction)
-                yield tx
-
-    def iter_mempool_tips_from_best_index(self) -> Iterator[Transaction]:
-        """Get tx tips in the mempool, using the best available index (mempool_tips or tx_tips)"""
+    def iter_mempool(self) -> Iterator[Transaction]:
+        """Get all transactions in the mempool, using the mempool-tips index"""
         assert self.indexes is not None
-        if self.indexes.mempool_tips is not None:
-            yield from self.indexes.mempool_tips.iter(self)
-        else:
-            yield from self.iter_mempool_tips_from_tx_tips()
-
-    def iter_mempool_from_best_index(self) -> Iterator[Transaction]:
-        """Get all transactions in the mempool, using the best available index (mempool_tips or tx_tips)"""
-        assert self.indexes is not None
-        if self.indexes.mempool_tips is not None:
-            yield from self.indexes.mempool_tips.iter_all(self)
-        else:
-            yield from self.iter_mempool_from_tx_tips()
+        assert self.indexes.mempool_tips is not None
+        yield from self.indexes.mempool_tips.iter_all(self)
 
     def _construct_genesis_block(self) -> Block:
         """Return the genesis block."""
@@ -1284,15 +1131,10 @@ class BaseTransactionStorage(TransactionStorage):
         """Reset all indexes. This function should not be called unless you know what you are doing."""
         assert self.indexes is not None, 'Cannot reset indexes because they have not been enabled.'
         self.indexes.force_clear_all()
-        self.update_best_block_tips_cache(None)
-        self._all_tips_cache = None
 
     def remove_cache(self) -> None:
         """Remove all caches in case we don't need it."""
         self.indexes = None
-
-    def get_best_block_tips(self, timestamp: Optional[float] = None, *, skip_cache: bool = False) -> list[bytes]:
-        return super().get_best_block_tips(timestamp, skip_cache=skip_cache)
 
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
         block = self.get_best_block()
@@ -1306,49 +1148,6 @@ class BaseTransactionStorage(TransactionStorage):
 
     def get_weight_best_block(self) -> float:
         return super().get_weight_best_block()
-
-    def get_block_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
-        if timestamp is None:
-            timestamp = self.latest_timestamp
-        return self.indexes.block_tips[timestamp]
-
-    def get_tx_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
-        if timestamp is None:
-            timestamp = self.latest_timestamp
-        tips = self.indexes.tx_tips[timestamp]
-
-        if __debug__:
-            # XXX: this `for` is for assert only and thus is inside `if __debug__:`
-            for interval in tips:
-                meta = self.get_metadata(interval.data)
-                assert meta is not None
-                # assert not meta.voided_by
-
-        return tips
-
-    def get_all_tips(self, timestamp: Optional[float] = None) -> set[Interval]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
-        if timestamp is None:
-            timestamp = self.latest_timestamp
-
-        if self._all_tips_cache is not None and timestamp >= self._all_tips_cache.timestamp:
-            assert self._all_tips_cache.timestamp == self.latest_timestamp
-            return self._all_tips_cache.tips
-
-        tips = self.indexes.all_tips[timestamp]
-        if timestamp >= self.latest_timestamp:
-            merkle_tree, hashes = self.calculate_merkle_tree(tips)
-            self._all_tips_cache = AllTipsCache(self.latest_timestamp, tips, merkle_tree, hashes)
-
-        return tips
 
     def get_newest_blocks(self, count: int) -> tuple[list[Block], bool]:
         if self.indexes is None:
@@ -1526,7 +1325,6 @@ class BaseTransactionStorage(TransactionStorage):
             else:
                 raise NotImplementedError
         assert self.indexes is not None
-        self._all_tips_cache = None
         self.indexes.add_tx(tx)
 
     def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:

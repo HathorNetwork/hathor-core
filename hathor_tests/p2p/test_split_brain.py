@@ -6,10 +6,27 @@ from hathor.graphviz import GraphvizVisualizer
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.utils import add_new_block
+from hathor.transaction import Block
 from hathor.util import not_none
 from hathor.wallet import HDWallet
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
+
+
+def select_best_block(b1: Block, b2: Block) -> Block:
+    """This function returns the best block according to score and using hash as tiebreaker."""
+    meta1 = b1.get_metadata()
+    meta2 = b2.get_metadata()
+    if meta1.score == meta2.score:
+        if b1.hash < b2.hash:
+            return b1
+        else:
+            return b2
+    else:
+        if meta1.score > meta2.score:
+            return b1
+        else:
+            return b2
 
 
 class SyncMethodsTestCase(unittest.TestCase):
@@ -143,14 +160,9 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertEqual(block_tip1, not_none(manager1.tx_storage.indexes).height.get_tip())
         self.assertEqual(block_tip1, not_none(manager2.tx_storage.indexes).height.get_tip())
 
-    # XXX We must decide what to do when different chains have the same score
-    # For now we are voiding everyone until the first common block
     def test_split_brain_only_blocks_same_height(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
-        # manager1.avg_time_between_blocks = 3  # FIXME: This property is not defined. Fix this test.
-
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        # manager2.avg_time_between_blocks = 3  # FIXME: This property is not defined. Fix this test.
 
         for _ in range(10):
             add_new_block(manager1, advance_clock=1)
@@ -159,13 +171,12 @@ class SyncMethodsTestCase(unittest.TestCase):
             unlock_reward_blocks2 = add_blocks_unlock_reward(manager2)
             self.clock.advance(10)
 
-        block_tips1 = unlock_reward_blocks1[-1].hash
-        block_tips2 = unlock_reward_blocks2[-1].hash
+        block_tip1 = unlock_reward_blocks1[-1]
+        block_tip2 = unlock_reward_blocks2[-1]
+        best_block = select_best_block(block_tip1, block_tip2)
 
-        self.assertEqual(len(manager1.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager1.tx_storage.get_best_block_tips(), {block_tips1})
-        self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {block_tips2})
+        self.assertCountEqual(manager1.tx_storage.get_best_block_hash(), block_tip1.hash)
+        self.assertCountEqual(manager2.tx_storage.get_best_block_hash(), block_tip2.hash)
 
         # Save winners for manager1 and manager2
         winners1 = set()
@@ -200,10 +211,11 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
 
-        # self.assertEqual(len(manager1.tx_storage.get_best_block_tips()), 2)
-        # self.assertCountEqual(manager1.tx_storage.get_best_block_tips(), {block_tips1, block_tips2})
-        # self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 2)
-        # self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {block_tips1, block_tips2})
+        # XXX: there must always be a single winner, some methods still return containers (set/list/...) because
+        #      multiple winners were supported in the past, but those will eventually be refactored
+        # import pudb; pu.db
+        self.assertCountEqual(manager1.tx_storage.get_best_block_hash(), best_block.hash)
+        self.assertCountEqual(manager2.tx_storage.get_best_block_hash(), best_block.hash)
 
         winners1_after = set()
         for tx1 in manager1.tx_storage.get_all_transactions():
@@ -217,10 +229,10 @@ class SyncMethodsTestCase(unittest.TestCase):
             if not tx2_meta.voided_by:
                 winners2_after.add(tx2.hash)
 
-        # Both chains have the same height and score
-        # so they will void all blocks and keep only the genesis (the common block and txs)
-        self.assertEqual(len(winners1_after), 3)
-        self.assertEqual(len(winners2_after), 3)
+        # Both chains have the same height and score, which is of the winner block,
+        expected_count = not_none(best_block.get_height()) + 3  # genesis vertices are included
+        self.assertEqual(len(winners1_after), expected_count)
+        self.assertEqual(len(winners2_after), expected_count)
 
         new_block = add_new_block(manager1, advance_clock=1)
         self.clock.advance(20)
@@ -255,7 +267,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         winners1.add(new_block.hash)
         winners2.add(new_block.hash)
 
-        if new_block.get_block_parent().hash == block_tips1:
+        if new_block.get_block_parent().hash == block_tip1.hash:
             winners = winners1
         else:
             winners = winners2
@@ -263,10 +275,8 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertCountEqual(winners, winners1_after)
         self.assertCountEqual(winners, winners2_after)
 
-        self.assertEqual(len(manager1.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager1.tx_storage.get_best_block_tips(), {new_block.hash})
-        self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {new_block.hash})
+        self.assertCountEqual(manager1.tx_storage.get_best_block_hash(), new_block.hash)
+        self.assertCountEqual(manager2.tx_storage.get_best_block_hash(), new_block.hash)
 
     def test_split_brain_only_blocks_bigger_score(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)
