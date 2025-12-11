@@ -502,31 +502,40 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
         nc_init.nc_method = initialize()
         nc_init.nc_deposit = 50 HTR
 
-        # Create a HYBRID transaction (hybrid_tx) that:
+        # Create a HYBRID transaction (tit) that:
         # 1. Is a TokenCreationTransaction (creates HYB token traditionally)
         # 2. Also has NC headers that call create_extra_token() to create NCX via syscall
         HYB.nc_id = nc_init
-        # hybrid_tx.nc_id = nc_init
         HYB.nc_method = create_extra_token()
         HYB.nc_deposit = 100 HTR
-        # hybrid_tx.out[0] = 500 HYB
         tit.out[0] = 500 HYB
 
-        # nc_init and hybrid_tx both confirmed in b2
-        # Then reorg happens: b2 gets orphaned, both go to mempool
-        # Both re-confirmed in a3
+        # Set up parents
         dummy < nc_init
-        nc_init <-- b2
-        HYB <-- b2
-        # tit <-- b2
+        nc_init < tit   # tit depends on nc_init
 
-        blockchain b1 a[2..5]
+        # Confirm both in b2
+        nc_init <-- b2
+        tit <-- b2
+
+        # Now create the longer a-chain that will cause a reorg
+        blockchain b1 a[2..10]
+        b2 < a2
+        b2 < a3
+
+        # After reorg, both get re-confirmed in a3
         nc_init <-- a3
-        hybrid_tx <-- a3
+        # tit <-- a3
+        HYB <-- a3
     ''')
 
     # Propagate all blocks - causes reorg during propagation
+    artifacts.propagate_with(manager, up_to='b2')
+    assert not artifacts.by_name['b2'].vertex.get_metadata().voided_by
+
     artifacts.propagate_with(manager)
+    assert artifacts.by_name['b2'].vertex.get_metadata().voided_by
+
     simulator.run(1)
 
     return artifacts
