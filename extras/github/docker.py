@@ -136,7 +136,7 @@ def prep_tags(environ: Dict, base_version: str, is_pre_release: bool):
         output['tags'] = 'dont-push--local-only'
         output['push'] = 'false'
 
-    output['created'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    output['created'] = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     output['dockerfile'] = dockerfile
 
     return output
