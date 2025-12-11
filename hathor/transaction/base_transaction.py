@@ -665,13 +665,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             metadata = self.storage.get_metadata(self.hash)
             self._metadata = metadata
         if not metadata:
-            score = weight_to_work(self.weight) if self.is_genesis else 0
             accumulated_weight = weight_to_work(self.weight)
             metadata = TransactionMetadata(
                 settings=self._settings,
                 hash=self._hash,
                 accumulated_weight=accumulated_weight,
-                score=score,
             )
             self._metadata = metadata
         if not metadata.hash:
@@ -685,10 +683,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
         from hathor.transaction.transaction_metadata import ValidationState
         assert self.storage is not None
-        score = weight_to_work(self.weight) if self.is_genesis else 0
         accumulated_weight = weight_to_work(self.weight)
         self._metadata = TransactionMetadata(hash=self._hash,
-                                             score=score,
                                              accumulated_weight=accumulated_weight)
         if self.is_genesis:
             self._metadata.validation = ValidationState.CHECKPOINT_FULL

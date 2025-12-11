@@ -125,11 +125,17 @@ class BlockchainStreamingClient:
             self.log.debug('block received', blk_id=blk.hash.hex())
 
         if self.tx_storage.can_validate_full(blk):
-            try:
-                self.vertex_handler.on_new_block(blk, deps=[])
-            except HathorError:
-                self.fails(InvalidVertexError(blk.hash.hex()))
-                return
+            best_block = self.tx_storage.get_best_block()
+            is_orphan_block = (blk.get_block_parent() != best_block)
+            if is_orphan_block:
+                self.log.debug('orphan block, deferring processing', blk=blk.hash.hex())
+                self._partial_blocks.append(blk)
+            else:
+                try:
+                    self.vertex_handler.on_new_block(blk, deps=[])
+                except HathorError:
+                    self.fails(InvalidVertexError(blk.hash.hex()))
+                    return
         else:
             self._partial_blocks.append(blk)
 

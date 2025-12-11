@@ -26,6 +26,7 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.types import VertexId
 from hathor.util import json_loadb
 from hathor.utils.pydantic import BaseModel
+from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -65,6 +66,7 @@ class VertexStaticMetadata(ABC, BaseModel):
 
 class BlockStaticMetadata(VertexStaticMetadata):
     height: int
+    score: int
 
     # A list of feature activation bit counts.
     # Each list index corresponds to a bit position, and its respective value is the rolling count of active bits from
@@ -90,6 +92,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
         This must be fast, ideally O(1)."""
         height = cls._calculate_height(block, vertex_getter)
         min_height = cls._calculate_min_height(block, vertex_getter)
+        score = cls._calculate_score(block, vertex_getter)
         feature_activation_bit_counts = cls._calculate_feature_activation_bit_counts(
             block,
             height,
@@ -100,6 +103,7 @@ class BlockStaticMetadata(VertexStaticMetadata):
         return cls(
             height=height,
             min_height=min_height,
+            score=score,
             feature_activation_bit_counts=feature_activation_bit_counts,
             feature_states={},  # This will be populated in a future PR, it's currently still in normal metadata
         )
@@ -115,6 +119,16 @@ class BlockStaticMetadata(VertexStaticMetadata):
         parent_block = vertex_getter(parent_hash)
         assert isinstance(parent_block, Block)
         return parent_block.static_metadata.height + 1
+
+    @staticmethod
+    def _calculate_score(block: 'Block', vertex_getter: Callable[[VertexId], 'BaseTransaction']) -> int:
+        """Return the score of the block"""
+        score = weight_to_work(block.weight)
+        if not block.is_genesis:
+            parent_hash = block.get_block_parent_hash()
+            parent_block = vertex_getter(parent_hash)
+            score += parent_block.static_metadata.score
+        return score
 
     @staticmethod
     def _calculate_min_height(block: 'Block', vertex_getter: Callable[[VertexId], 'BaseTransaction']) -> int:
