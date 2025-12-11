@@ -70,7 +70,7 @@ pycoin = "~0.92.20230326"
 requests = "=2.32.3"
 service_identity = "~21.1.0"
 pexpect = "~4.8.0"
-intervaltree = "~3.1.0"
+sortedcontainers = "~2.4.0"
 structlog = "~22.3.0"
 rocksdb = {git = "https://github.com/hathornetwork/python-rocksdb.git"}
 aiohttp = "~3.10.3"
@@ -121,7 +121,6 @@ module = [
     'colorama',
     'configargparse',
     'graphviz',
-    'intervaltree.*',
     'prometheus_client',
     'pudb.*',
     'pycoin.*',

@@ -175,10 +175,8 @@ class SyncMethodsTestCase(unittest.TestCase):
         block_tip2 = unlock_reward_blocks2[-1]
         best_block = select_best_block(block_tip1, block_tip2)
 
-        self.assertEqual(len(manager1.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager1.tx_storage.get_best_block_tips(), {block_tip1.hash})
-        self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {block_tip2.hash})
+        self.assertCountEqual(manager1.tx_storage.get_best_block_hash(), block_tip1.hash)
+        self.assertCountEqual(manager2.tx_storage.get_best_block_hash(), block_tip2.hash)
 
         # Save winners for manager1 and manager2
         winners1 = set()
@@ -216,10 +214,8 @@ class SyncMethodsTestCase(unittest.TestCase):
         # XXX: there must always be a single winner, some methods still return containers (set/list/...) because
         #      multiple winners were supported in the past, but those will eventually be refactored
         # import pudb; pu.db
-        self.assertEqual(len(manager1.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager1.tx_storage.get_best_block_tips(), {best_block.hash})
-        self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {best_block.hash})
+        self.assertCountEqual(manager1.tx_storage.get_best_block_hash(), best_block.hash)
+        self.assertCountEqual(manager2.tx_storage.get_best_block_hash(), best_block.hash)
 
         winners1_after = set()
         for tx1 in manager1.tx_storage.get_all_transactions():
@@ -279,10 +275,8 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertCountEqual(winners, winners1_after)
         self.assertCountEqual(winners, winners2_after)
 
-        self.assertEqual(len(manager1.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager1.tx_storage.get_best_block_tips(), {new_block.hash})
-        self.assertEqual(len(manager2.tx_storage.get_best_block_tips()), 1)
-        self.assertCountEqual(manager2.tx_storage.get_best_block_tips(), {new_block.hash})
+        self.assertCountEqual(manager1.tx_storage.get_best_block_hash(), new_block.hash)
+        self.assertCountEqual(manager2.tx_storage.get_best_block_hash(), new_block.hash)
 
     def test_split_brain_only_blocks_bigger_score(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)

@@ -37,6 +37,9 @@ def _get_manager(settings: HathorSettings) -> HathorManager:
         .set_reactor(reactor) \
         .build()
 
+    # tests will need the indexes to be initialized
+    artifacts.manager._initialize_components()
+
     return artifacts.manager
 
 
