@@ -72,8 +72,10 @@ def get_tx_extra_data(
     # TransactionAccumulatedWeightResource (/transaction_acc_weight)
 
     if isinstance(tx, Block):
-        # For blocks we need to add the height
+        # For blocks we need to add the height and score from static metadata
+        from hathor.utils.weight import work_to_weight
         serialized['height'] = tx.static_metadata.height
+        serialized['score'] = work_to_weight(tx.static_metadata.score)
 
     # In the metadata we have the spent_outputs, that are the txs that spent the outputs for each index
     # However we need to send also which one of them is not voided

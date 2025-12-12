@@ -27,7 +27,9 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         dict_test['raw'] = genesis_tx.get_struct().hex()
         dict_test['nonce'] = str(dict_test['nonce'])
         if genesis_tx.is_block:
+            from hathor.utils.weight import work_to_weight
             dict_test['height'] = genesis_tx.static_metadata.height
+            dict_test['score'] = work_to_weight(genesis_tx.static_metadata.score)
         self.assertEqual(data_success['tx'], dict_test)
 
         # Test sending hash that does not exist

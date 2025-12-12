@@ -44,7 +44,6 @@ class TestMetadata(unittest.TestCase):
         meta.received_by = [1, 2, 3]
         meta.twins = [b'1', b'2']
         meta.accumulated_weight = 123
-        meta.score = 456
         meta.first_block = b'123'
         meta.validation = ValidationState.FULL
         meta.nc_block_root_id = b'456'
@@ -104,7 +103,6 @@ class TestMetadata(unittest.TestCase):
         assert (
             meta.accumulated_weight == meta2.accumulated_weight and meta.accumulated_weight == meta3.accumulated_weight
         )
-        assert meta.score == meta2.score and meta.score == meta3.score
         assert meta.first_block == meta2.first_block and meta.first_block == meta3.first_block
         assert meta.validation == meta2.validation and meta.validation == meta3.validation
         assert meta.nc_block_root_id == meta2.nc_block_root_id and meta.nc_block_root_id == meta3.nc_block_root_id
