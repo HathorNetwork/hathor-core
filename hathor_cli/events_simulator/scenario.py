@@ -471,6 +471,7 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
     from hathor.nanocontracts import Blueprint, public
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.context import Context
+    from hathor.transaction.nc_execution_state import NCExecutionState
 
     # Define the NC blueprint for token creation
     class HybridTokenFactoryBlueprint(Blueprint):
@@ -520,24 +521,53 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
 
         # Now create the longer a-chain that will cause a reorg
         blockchain b1 a[2..10]
+        a2.weight = 40
         b2 < a2
-        b2 < a3
 
         # After reorg, both get re-confirmed in a3
-        nc_init <-- a3
-        # tit <-- a3
-        HYB <-- a3
+        nc_init <-- a5
+        # tit <-- a5
+        HYB <-- a5
     ''')
 
     # Propagate all blocks - causes reorg during propagation
     artifacts.propagate_with(manager, up_to='b2')
-    assert not artifacts.by_name['b2'].vertex.get_metadata().voided_by
+    b2 = artifacts.by_name['b2'].vertex
+    nc_init = artifacts.by_name['nc_init'].vertex
+    HYB = artifacts.by_name['HYB'].vertex
+
+    assert not b2.get_metadata().voided_by
+    assert not nc_init.get_metadata().voided_by
+    assert not HYB.get_metadata().voided_by
+    assert nc_init.get_metadata().first_block == b2.hash
+    assert HYB.get_metadata().first_block == b2.hash
+    assert HYB.get_metadata().nc_execution == NCExecutionState.SUCCESS
+
+    artifacts.propagate_with(manager, up_to='a2')
+    a2 = artifacts.by_name['a2'].vertex
+
+    assert not a2.get_metadata().voided_by
+    assert b2.get_metadata().voided_by
+    assert not nc_init.get_metadata().voided_by
+    assert not HYB.get_metadata().voided_by
+    assert nc_init.get_metadata().first_block is None
+    assert HYB.get_metadata().first_block is None
+    assert HYB.get_metadata().nc_execution == NCExecutionState.PENDING
 
     artifacts.propagate_with(manager)
-    assert artifacts.by_name['b2'].vertex.get_metadata().voided_by
+    a5 = artifacts.by_name['a5'].vertex
+
+    assert not a2.get_metadata().voided_by
+    assert not a5.get_metadata().voided_by
+    assert b2.get_metadata().voided_by
+
+    assert not nc_init.get_metadata().voided_by
+    assert not HYB.get_metadata().voided_by
+    assert nc_init.get_metadata().first_block == a5.hash
+    assert HYB.get_metadata().first_block == a5.hash
+    assert HYB.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
     simulator.run(1)
-
     return artifacts
 
 
