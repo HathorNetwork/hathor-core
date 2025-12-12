@@ -42,7 +42,7 @@ def gen_new_tx(manager: HathorManager, address: str, value: int) -> Transaction:
     tx.storage = manager.tx_storage
 
     max_ts_spent_tx = max(tx.get_spent_tx(txin).timestamp for txin in tx.inputs)
-    tx.timestamp = max(max_ts_spent_tx + 1, int(manager.reactor.seconds()))
+    tx.timestamp = max(max_ts_spent_tx + 1, manager.get_timestamp_for_new_vertex())
 
     tx.weight = 1
     tx.parents = manager.get_new_tx_parents(tx.timestamp)

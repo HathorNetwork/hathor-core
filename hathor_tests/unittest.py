@@ -305,9 +305,15 @@ class TestCase(unittest.TestCase):
         self.assertTipsEqualSyncV2(manager1, manager2)
 
     def assertTipsNotEqual(self, manager1: HathorManager, manager2: HathorManager) -> None:
-        s1 = set(manager1.tx_storage.get_all_tips())
-        s2 = set(manager2.tx_storage.get_all_tips())
-        self.assertNotEqual(s1, s2)
+        """For tips to be equals the set of tx-tips + block-tip have to be equal.
+
+        This method assert that something should not match, either the tx-tips or the block-tip.
+        """
+        tips1 = not_none(not_none(manager1.tx_storage.indexes).mempool_tips).get()
+        tips1 |= {not_none(manager1.tx_storage.indexes).height.get_tip()}
+        tips2 = not_none(not_none(manager2.tx_storage.indexes).mempool_tips).get()
+        tips2 |= {not_none(manager2.tx_storage.indexes).height.get_tip()}
+        self.assertNotEqual(tips1, tips2)
 
     def assertTipsEqualSyncV2(
         self,
@@ -321,17 +327,17 @@ class TestCase(unittest.TestCase):
             tips1 = not_none(not_none(manager1.tx_storage.indexes).mempool_tips).get()
             tips2 = not_none(not_none(manager2.tx_storage.indexes).mempool_tips).get()
         else:
-            tips1 = {tx.hash for tx in manager1.tx_storage.iter_mempool_tips_from_best_index()}
-            tips2 = {tx.hash for tx in manager2.tx_storage.iter_mempool_tips_from_best_index()}
+            tips1 = {tx.hash for tx in manager1.tx_storage.iter_mempool_tips()}
+            tips2 = {tx.hash for tx in manager2.tx_storage.iter_mempool_tips()}
         self.log.debug('tx tips1', len=len(tips1), list=short_hashes(tips1))
         self.log.debug('tx tips2', len=len(tips2), list=short_hashes(tips2))
         self.assertEqual(tips1, tips2)
 
         # best block
-        s1 = set(manager1.tx_storage.get_best_block_tips())
-        s2 = set(manager2.tx_storage.get_best_block_tips())
-        self.log.debug('block tips1', len=len(s1), list=short_hashes(s1))
-        self.log.debug('block tips2', len=len(s2), list=short_hashes(s2))
+        s1 = manager1.tx_storage.get_best_block_hash()
+        s2 = manager2.tx_storage.get_best_block_hash()
+        self.log.debug('block tip1', block=s1.hex())
+        self.log.debug('block tip2', block=s2.hex())
         self.assertEqual(s1, s2)
 
         # best block (from height index)

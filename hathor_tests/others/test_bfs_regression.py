@@ -27,6 +27,15 @@ class TestBfsRegression(unittest.TestCase):
         self.manager = self.create_peer_from_builder(builder)
         self.tx_storage = self.manager.tx_storage
 
+    def _assert_block_tie(self, x: Block, y: Block) -> None:
+        assert x.get_metadata().score == y.get_metadata().score
+        if x.hash < y.hash:
+            assert not x.get_metadata().voided_by
+            assert y.get_metadata().voided_by
+        else:
+            assert x.get_metadata().voided_by
+            assert not y.get_metadata().voided_by
+
     def test_bfs_regression(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str('''
@@ -63,8 +72,7 @@ class TestBfsRegression(unittest.TestCase):
         # sanity check:
         assert not b3.get_metadata().validation.is_initial()
         assert not a3.get_metadata().validation.is_initial()
-        assert b3.get_metadata().voided_by
-        assert a3.get_metadata().voided_by
+        self._assert_block_tie(a3, b3)
         assert a4.get_metadata().validation.is_initial()
         assert tx1.get_metadata().validation.is_initial()
 
@@ -76,8 +84,7 @@ class TestBfsRegression(unittest.TestCase):
         assert not b3.get_metadata().validation.is_initial()
         assert not a3.get_metadata().validation.is_initial()
         assert not tx1.get_metadata().validation.is_initial()
-        assert b3.get_metadata().voided_by
-        assert a3.get_metadata().voided_by
+        self._assert_block_tie(a3, b3)
         assert not tx1.get_metadata().voided_by
         assert a4.get_metadata().validation.is_initial()
 

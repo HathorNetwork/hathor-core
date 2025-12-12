@@ -126,10 +126,7 @@ class BaseIndexesTest(unittest.TestCase):
             )
 
     def test_genesis_not_in_mempool(self):
-        if self.tx_storage.indexes.mempool_tips is not None:
-            mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
-        else:
-            mempool_txs = list(self.tx_storage.iter_mempool_from_tx_tips())
+        mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
         for tx in self.genesis_txs:
             self.assertNotIn(tx, mempool_txs)
 

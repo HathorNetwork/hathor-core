@@ -155,8 +155,8 @@ class FakeConnection:
             self.log.debug('best block is different')
             errmsgs.append('best block is different')
             return False
-        tips1 = {i.data for i in state1.protocol.node.tx_storage.get_tx_tips()}
-        tips2 = {i.data for i in state2.protocol.node.tx_storage.get_tx_tips()}
+        tips1 = {tx.hash for tx in state1.protocol.node.tx_storage.iter_mempool_tips()}
+        tips2 = {tx.hash for tx in state2.protocol.node.tx_storage.iter_mempool_tips()}
         if tips1 != tips2:
             self.log.debug('tx tips are different')
             errmsgs.append('tx tips are different')

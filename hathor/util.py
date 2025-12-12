@@ -21,11 +21,12 @@ import math
 import sys
 import time
 from collections import OrderedDict
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
 from functools import partial, wraps
 from random import Random as PyRandom
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, cast
 
 from structlog import get_logger
 
@@ -251,11 +252,8 @@ class LogDuration(float):
     __repr__ = __str__
 
 
-_T = TypeVar("_T")
-
-
 # borrowed from: https://github.com/facebook/pyre-check/blob/master/pyre_extensions/__init__.py
-def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
+def not_none(optional: Optional[T], message: str = 'Unexpected `None`') -> T:
     """Convert an optional to its value. Raises an `AssertionError` if the
     value is `None`"""
     if optional is None:
@@ -287,7 +285,7 @@ class Random(PyRandom):
             return self.getrandbits(n * 8).to_bytes(n, 'little')
 
 
-def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
+def collect_n(it: Iterator[T], n: int) -> tuple[list[T], bool]:
     """Collect up to n elements from an iterator into a list, returns the list and whether there were more elements.
 
     This method will consume up to n+1 elements from the iterator because it will try to get one more element after it
@@ -314,7 +312,7 @@ def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
     """
     if n < 0:
         raise ValueError(f'n must be non-negative, got {n}')
-    col: list[_T] = []
+    col: list[T] = []
     has_more = False
     while n > 0:
         try:
@@ -334,7 +332,7 @@ def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
     return col, has_more
 
 
-def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
+def skip_n(it: Iterator[T], n: int) -> Iterator[T]:
     """ Skip at least n elements if possible.
 
     Example:
@@ -362,7 +360,7 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
     return it
 
 
-def skip_until(it: Iterator[_T], condition: Callable[[_T], bool]) -> Iterator[_T]:
+def skip_until(it: Iterator[T], condition: Callable[[T], bool]) -> Iterator[T]:
     """ Skip all elements and stops after condition is True, it will also skip the element where condition is True.
 
     Example:

@@ -32,7 +32,6 @@ from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.nc_creation_index import NCCreationIndex
 from hathor.indexes.nc_history_index import NCHistoryIndex
 from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, TimestampIndex
-from hathor.indexes.tips_index import ScopeType as TipsScopeType, TipsIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
 from hathor.transaction import BaseTransaction
@@ -60,9 +59,6 @@ class IndexesManager(ABC):
     log = get_logger()
 
     info: InfoIndex
-    all_tips: TipsIndex
-    block_tips: TipsIndex
-    tx_tips: TipsIndex
 
     sorted_all: TimestampIndex
     sorted_blocks: TimestampIndex
@@ -94,9 +90,6 @@ class IndexesManager(ABC):
         """ Iterate over all of the indexes abstracted by this manager, hiding their specific implementation details"""
         return filter(None, [
             self.info,
-            self.all_tips,
-            self.block_tips,
-            self.tx_tips,
             self.sorted_all,
             self.sorted_blocks,
             self.sorted_txs,
@@ -356,20 +349,12 @@ class IndexesManager(ABC):
         """
         self.info.update_timestamps(tx)
 
-        # These two calls return False when a transaction changes from
-        # voided to executed and vice-versa.
-        r1 = self.all_tips.add_tx(tx)
-        r2 = self.sorted_all.add_tx(tx)
-        assert r1 == r2
+        r1 = self.sorted_all.add_tx(tx)
 
         if tx.is_block:
-            r3 = self.block_tips.add_tx(tx)
-            r4 = self.sorted_blocks.add_tx(tx)
-            assert r3 == r4
+            r2 = self.sorted_blocks.add_tx(tx)
         else:
-            r3 = self.tx_tips.add_tx(tx)
-            r4 = self.sorted_txs.add_tx(tx)
-            assert r3 == r4
+            r2 = self.sorted_txs.add_tx(tx)
 
         if self.addresses:
             self.addresses.add_tx(tx)
@@ -390,10 +375,10 @@ class IndexesManager(ABC):
 
         # We need to check r1 as well to make sure we don't count twice the transactions/blocks that are
         # just changing from voided to executed or vice-versa
-        if r1 and r3:
+        if r1 and r2:
             self.info.update_counts(tx)
 
-        return r3
+        return r2
 
     def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
         """ Delete a transaction from the indexes
@@ -404,9 +389,8 @@ class IndexesManager(ABC):
 
         if remove_all:
             # We delete from indexes in two cases: (i) mark tx as voided, and (ii) remove tx.
-            # We only remove tx from all_tips and sorted_all when it is removed from the storage.
-            # For clarity, when a tx is marked as voided, it is not removed from all_tips and sorted_all.
-            self.all_tips.del_tx(tx, relax_assert=relax_assert)
+            # We only remove tx from sorted_all when it is removed from the storage.
+            # For clarity, when a tx is marked as voided, it is not removed from sorted_all.
             self.sorted_all.del_tx(tx)
             if self.addresses:
                 self.addresses.remove_tx(tx)
@@ -428,10 +412,8 @@ class IndexesManager(ABC):
             self.mempool_tips.update(tx, force_remove=True)
 
         if tx.is_block:
-            self.block_tips.del_tx(tx, relax_assert=relax_assert)
             self.sorted_blocks.del_tx(tx)
         else:
-            self.tx_tips.del_tx(tx, relax_assert=relax_assert)
             self.sorted_txs.del_tx(tx)
 
         if self.tokens:
@@ -440,7 +422,6 @@ class IndexesManager(ABC):
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, rocksdb_storage: 'RocksDBStorage', *, settings: HathorSettings) -> None:
-        from hathor.indexes.partial_rocksdb_tips_index import PartialRocksDBTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
@@ -450,9 +431,6 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db, settings=settings)
         self.height = RocksDBHeightIndex(self._db, settings=settings)
-        self.all_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.ALL, settings=settings)
-        self.block_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.BLOCKS, settings=settings)
-        self.tx_tips = PartialRocksDBTipsIndex(self._db, scope_type=TipsScopeType.TXS, settings=settings)
 
         self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL, settings=settings)
         self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS, settings=settings)

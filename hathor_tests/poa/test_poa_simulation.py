@@ -158,7 +158,7 @@ class PoaSimulationTest(SimulatorTestCase):
         assert self.simulator.run(200, trigger=trigger)
         assert manager1.tx_storage.get_block_count() == 12
         assert manager2.tx_storage.get_block_count() == 12
-        assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
+        assert manager1.tx_storage.get_best_block_hash() == manager2.tx_storage.get_best_block_hash()
 
         _assert_height_weight_signer_id(
             manager1.tx_storage.get_all_transactions(),
@@ -316,7 +316,7 @@ class PoaSimulationTest(SimulatorTestCase):
 
         assert manager1.tx_storage.get_block_count() == 20
         assert manager2.tx_storage.get_block_count() == 20
-        assert manager1.tx_storage.get_best_block_tips() == manager2.tx_storage.get_best_block_tips()
+        assert manager1.tx_storage.get_best_block_hash() == manager2.tx_storage.get_best_block_hash()
 
         _assert_height_weight_signer_id(
             manager1.tx_storage.get_all_transactions(),

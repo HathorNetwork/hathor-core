@@ -260,10 +260,9 @@ class BasicWalletTest(unittest.TestCase):
         # when we receive the new tx it will remove from maybe_spent
         tx2 = w.prepare_transaction_compute_inputs(Transaction, [out], self.storage)
         tx2.storage = self.manager.tx_storage
-        tx2.timestamp = max(tx2.get_spent_tx(txin).timestamp for txin in tx2.inputs) + 1
+        tx2.timestamp = blocks[-1].timestamp + 1
         tx2.parents = self.manager.get_new_tx_parents(tx2.timestamp)
         tx2.weight = 1
-        tx2.timestamp = blocks[-1].timestamp + 1
         self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.on_new_tx(tx2))
         self.clock.advance(2)
