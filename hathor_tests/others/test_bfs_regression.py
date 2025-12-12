@@ -28,7 +28,7 @@ class TestBfsRegression(unittest.TestCase):
         self.tx_storage = self.manager.tx_storage
 
     def _assert_block_tie(self, x: Block, y: Block) -> None:
-        assert x.get_metadata().score == y.get_metadata().score
+        assert x.static_metadata.score == y.static_metadata.score
         if x.hash < y.hash:
             assert not x.get_metadata().voided_by
             assert y.get_metadata().voided_by

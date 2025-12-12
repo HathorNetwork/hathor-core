@@ -286,7 +286,7 @@ class VertexHandler:
             else:
                 message = message_fmt.format('voided block')
             kwargs['_height'] = tx.get_height()
-            kwargs['_score'] = tx.get_metadata().score
+            kwargs['_score'] = tx.static_metadata.score
         else:
             if not metadata.voided_by:
                 message = message_fmt.format('tx')

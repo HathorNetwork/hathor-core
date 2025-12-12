@@ -74,6 +74,9 @@ class BlockStaticMetadata(VertexStaticMetadata):
     # A dict of features in the feature activation process and their respective state.
     feature_states: dict[Feature, FeatureState]
 
+    # Score represents the accumulated work (proof-of-work) from genesis to this block
+    score: int
+
     @classmethod
     def create_from_storage(cls, block: 'Block', settings: HathorSettings, storage: 'TransactionStorage') -> Self:
         """Create a `BlockStaticMetadata` using dependencies provided by a storage."""
@@ -96,12 +99,14 @@ class BlockStaticMetadata(VertexStaticMetadata):
             settings,
             vertex_getter,
         )
+        score = cls._calculate_score(block, vertex_getter)
 
         return cls(
             height=height,
             min_height=min_height,
             feature_activation_bit_counts=feature_activation_bit_counts,
             feature_states={},  # This will be populated in a future PR, it's currently still in normal metadata
+            score=score,
         )
 
     @staticmethod
@@ -173,6 +178,25 @@ class BlockStaticMetadata(VertexStaticMetadata):
         assert isinstance(parent_block, Block)
 
         return parent_block.static_metadata.feature_activation_bit_counts
+
+    @staticmethod
+    def _calculate_score(block: 'Block', vertex_getter: Callable[[VertexId], 'BaseTransaction']) -> int:
+        """Calculate the score as parent_score + weight_to_work(block.weight).
+
+        Score represents the accumulated work (proof-of-work) from genesis to this block.
+        For genesis blocks, score equals the block's own weight.
+        For other blocks, score is the parent block's score plus this block's weight.
+        """
+        from hathor.utils.weight import weight_to_work
+
+        if block.is_genesis:
+            return weight_to_work(block.weight)
+
+        from hathor.transaction import Block
+        parent_hash = block.get_block_parent_hash()
+        parent_block = vertex_getter(parent_hash)
+        assert isinstance(parent_block, Block)
+        return parent_block.static_metadata.score + weight_to_work(block.weight)
 
 
 class TransactionStaticMetadata(VertexStaticMetadata):
