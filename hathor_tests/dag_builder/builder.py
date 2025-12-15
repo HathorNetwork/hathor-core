@@ -20,7 +20,7 @@ from hathor.dag_builder import DAGBuilder
 from hathor.dag_builder.types import WalletFactoryType
 from hathor.manager import HathorManager
 from hathor.util import Random
-from hathor.wallet import HDWallet
+from hathor.wallet import BaseWallet, HDWallet
 from hathor_tests.nanocontracts import test_blueprints
 from hathor_tests.utils import GENESIS_SEED
 
@@ -38,13 +38,18 @@ class TestDAGBuilder:
     def from_manager(
         manager: HathorManager,
         genesis_words: str | None = None,
-        wallet_factory: WalletFactoryType | None = None,
-        blueprints_module: ModuleType | None = None
+        wallet_factory: WalletFactoryType | dict[str, BaseWallet] | None = None,
+        blueprints_module: ModuleType | None = None,
+        deterministic: bool = False,
     ) -> DAGBuilder:
         """Create a DAGBuilder instance from a HathorManager instance."""
+        if wallet_factory is None:
+            wallet_factory = lambda: TestDAGBuilder.create_random_hd_wallet(manager.rng)
+
         return DAGBuilder.from_manager(
             manager=manager,
             genesis_words=genesis_words or GENESIS_SEED,
-            wallet_factory=wallet_factory or (lambda: TestDAGBuilder.create_random_hd_wallet(manager.rng)),
+            wallet_factory=wallet_factory,
             blueprints_module=blueprints_module or test_blueprints,
+            deterministic=deterministic,
         )
