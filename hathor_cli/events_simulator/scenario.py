@@ -35,6 +35,7 @@ class Scenario(Enum):
     NC_EVENTS_REORG = 'NC_EVENTS_REORG'
     TOKEN_CREATED = 'TOKEN_CREATED'
     TOKEN_CREATED_HYBRID_WITH_REORG = 'TOKEN_CREATED_HYBRID_WITH_REORG'
+    TOKEN_CREATED_HYBRID_WITH_REORG_2 = 'TOKEN_CREATED_HYBRID_WITH_REORG_2'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
@@ -50,6 +51,7 @@ class Scenario(Enum):
             Scenario.NC_EVENTS_REORG: simulate_nc_events_reorg,
             Scenario.TOKEN_CREATED: simulate_token_created,
             Scenario.TOKEN_CREATED_HYBRID_WITH_REORG: simulate_token_created_hybrid_with_reorg,
+            Scenario.TOKEN_CREATED_HYBRID_WITH_REORG_2: simulate_token_created_hybrid_with_reorg_2,
         }
 
         simulate_fn = simulate_fns[self]
@@ -63,6 +65,7 @@ class Scenario(Enum):
             Scenario.NC_EVENTS_REORG,
             Scenario.TOKEN_CREATED,
             Scenario.TOKEN_CREATED_HYBRID_WITH_REORG,
+            Scenario.TOKEN_CREATED_HYBRID_WITH_REORG_2,
         )
         return 1 if self in nc_scenarios else 10
 
@@ -566,6 +569,108 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
     assert nc_init.get_metadata().first_block == a5.hash
     assert HYB.get_metadata().first_block == a5.hash
     assert HYB.get_metadata().nc_execution == NCExecutionState.SUCCESS
+
+    simulator.run(1)
+    return artifacts
+
+
+def simulate_token_created_hybrid_with_reorg_2(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    """
+    Simulates a HYBRID TokenCreationTransaction that:
+    1. Creates a token via traditional TokenCreationTransaction
+    2. Also has nano contract headers that create another token via syscall
+    3. Gets confirmed and both tokens are created (2 TOKEN_CREATED events)
+    4. A reorg happens, making the transaction go back to mempool
+    5. NC execution goes from SUCCESS → PENDING
+    6. NC-created token should be deleted, traditional token remains
+    """
+    from hathor.nanocontracts import Blueprint, public
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.context import Context
+    from hathor.transaction.nc_execution_state import NCExecutionState
+
+    # Define the NC blueprint for token creation
+    class HybridTokenFactoryBlueprint(Blueprint):
+        @public(allow_deposit=True)
+        def initialize(self, ctx: Context) -> None:
+            pass
+
+        @public(allow_deposit=True)
+        def create_extra_token(self, ctx: Context) -> None:
+            """Creates an additional token via NC syscall"""
+            self.syscall.create_deposit_token(
+                token_name='NC Extra Token',
+                token_symbol='NCX',
+                amount=777,
+            )
+
+    blueprint_id = b'\xbb' * 32
+    manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint_id: HybridTokenFactoryBlueprint})
+
+    # Create a reorg scenario with a hybrid transaction
+    dag_builder = _create_dag_builder(manager)
+    artifacts = dag_builder.build_from_str(f'''
+        blockchain genesis b[1..2]
+        b1 < dummy
+
+        # Create transactions
+        # Initialize the nano contract
+        nc_init.nc_id = "{blueprint_id.hex()}"
+        nc_init.nc_method = initialize()
+        nc_init.nc_deposit = 50 HTR
+
+        # Create a HYBRID transaction (tit) that:
+        # 1. Is a TokenCreationTransaction (creates HYB token traditionally)
+        # 2. Also has NC headers that call create_extra_token() to create NCX via syscall
+        HYB.nc_id = nc_init
+        HYB.nc_method = create_extra_token()
+        HYB.nc_deposit = 100 HTR
+        tit.out[0] = 500 HYB
+
+        # Set up parents
+        dummy < nc_init
+        nc_init < tit   # tit depends on nc_init
+
+        # Confirm both in b2
+        nc_init <-- b2
+        tit <-- b2
+
+        # Now create the longer a-chain that will cause a reorg
+        blockchain b1 a[2..10]
+        a2.weight = 40
+        b2 < a2
+
+        # After reorg, both get re-confirmed in a3
+        nc_init <-- a2
+        HYB <-- a2
+    ''')
+
+    # Propagate all blocks - causes reorg during propagation
+    artifacts.propagate_with(manager, up_to='b2')
+    b2 = artifacts.by_name['b2'].vertex
+    nc_init = artifacts.by_name['nc_init'].vertex
+    HYB = artifacts.by_name['HYB'].vertex
+
+    assert not b2.get_metadata().voided_by
+    assert not nc_init.get_metadata().voided_by
+    assert not HYB.get_metadata().voided_by
+    assert nc_init.get_metadata().first_block == b2.hash
+    assert HYB.get_metadata().first_block == b2.hash
+    assert HYB.get_metadata().nc_execution == NCExecutionState.SUCCESS
+
+    artifacts.propagate_with(manager, up_to='a2')
+    a2 = artifacts.by_name['a2'].vertex
+
+    assert not a2.get_metadata().voided_by
+    assert b2.get_metadata().voided_by
+
+    assert not nc_init.get_metadata().voided_by
+    assert not HYB.get_metadata().voided_by
+    assert nc_init.get_metadata().first_block == a2.hash
+    assert HYB.get_metadata().first_block == a2.hash
+    assert HYB.get_metadata().nc_execution == NCExecutionState.SUCCESS
+
+    artifacts.propagate_with(manager)
 
     simulator.run(1)
     return artifacts
