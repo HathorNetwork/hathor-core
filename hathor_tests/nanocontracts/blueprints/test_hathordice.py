@@ -317,3 +317,154 @@ class HathorDiceTestCase(BlueprintTestCase):
         assert contract_15.max_multiplier_tenths == 15
         assert contract_20.max_multiplier_tenths == 20
         assert contract_11.max_multiplier_tenths == 11
+
+    def test_add_and_remove_liquidity_in_parts(self) -> None:
+        """Test adding liquidity and removing it in parts, verifying internal controls."""
+        self.initialize_contract()
+
+        # Get initial state (contract is initialized with liquidity from initialization)
+        contract = self.get_readonly_contract(self.nc_id)
+        initial_total_liquidity = contract.total_liquidity_provided
+        initial_available = contract.available_tokens
+
+        # Add liquidity from multiple other providers to create a realistic scenario
+        provider_1 = self.gen_random_address()
+        provider_2 = self.gen_random_address()
+
+        liquidity_provider_1 = 500_000_00
+        actions = [
+            NCDepositAction(token_uid=self.token_uid, amount=liquidity_provider_1),
+        ]
+        ctx = self.create_context(actions=actions, caller_id=provider_1)
+        adjusted_1 = self.runner.call_public_method(self.nc_id, 'add_liquidity', ctx)
+
+        liquidity_provider_2 = 750_000_00
+        actions = [
+            NCDepositAction(token_uid=self.token_uid, amount=liquidity_provider_2),
+        ]
+        ctx = self.create_context(actions=actions, caller_id=provider_2)
+        adjusted_2 = self.runner.call_public_method(self.nc_id, 'add_liquidity', ctx)
+
+        # Verify other providers' liquidity was added
+        contract = self.get_readonly_contract(self.nc_id)
+        assert contract.liquidity_providers[provider_1] == adjusted_1
+        assert contract.liquidity_providers[provider_2] == adjusted_2
+
+        other_providers_total = initial_total_liquidity + adjusted_1 + adjusted_2
+        other_providers_available = initial_available + liquidity_provider_1 + liquidity_provider_2
+
+        assert contract.total_liquidity_provided == other_providers_total
+        assert contract.available_tokens == other_providers_available
+
+        # Simulate the pool gaining value (e.g., from bets that were lost)
+        # This changes the ratio between available_tokens and total_liquidity_provided
+        # We'll increase available_tokens by 20% to simulate house winnings
+        pool_gain = other_providers_available * 20 // 100
+        contract_rw = self.get_readwrite_contract(self.nc_id)
+        contract_rw.available_tokens += pool_gain
+
+        # Get the new pool state after simulated gains
+        contract = self.get_readonly_contract(self.nc_id)
+        pool_after_bets_total = contract.total_liquidity_provided
+        pool_after_bets_available = contract.available_tokens
+
+        # Verify liquidity shares didn't change, but available tokens did
+        assert pool_after_bets_total == other_providers_total, "Liquidity shares should not change"
+        assert pool_after_bets_available == other_providers_available + pool_gain, \
+            f"Expected available {other_providers_available + pool_gain}, got {pool_after_bets_available}"
+
+        # Now add liquidity from our test caller after the ratio has changed
+        liquidity_to_add = 1_000_000_00
+        actions = [
+            NCDepositAction(token_uid=self.token_uid, amount=liquidity_to_add),
+        ]
+        ctx = self.create_context(actions=actions, caller_id=self.caller_id)
+        adjusted_amount = self.runner.call_public_method(self.nc_id, 'add_liquidity', ctx)
+
+        # Verify state after adding test caller's liquidity
+        contract = self.get_readonly_contract(self.nc_id)
+        assert contract.liquidity_providers[self.caller_id] == adjusted_amount
+        assert contract.total_liquidity_provided == pool_after_bets_total + adjusted_amount
+        assert contract.available_tokens == pool_after_bets_available + liquidity_to_add
+
+        # Calculate how much we can remove - should get a share of the pool gains
+        max_removal = self.runner.call_view_method(
+            self.nc_id,
+            'calculate_address_maximum_liquidity_removal',
+            caller_id=self.caller_id
+        )
+
+        # Remove liquidity in 3 parts
+        removal_1 = max_removal * 30 // 100
+        actions = [
+            NCWithdrawalAction(token_uid=self.token_uid, amount=removal_1),
+        ]
+        ctx = self.create_context(actions=actions, caller_id=self.caller_id)
+        self.runner.call_public_method(self.nc_id, 'remove_liquidity', ctx)
+
+        # Verify state after first removal - available_tokens should decrease
+        contract = self.get_readonly_contract(self.nc_id)
+        available_after_1 = contract.available_tokens
+        expected_available_1 = pool_after_bets_available + liquidity_to_add - removal_1
+        assert abs(available_after_1 - expected_available_1) <= 1, \
+            f"Available tokens after removal 1: expected {expected_available_1}, got {available_after_1}"
+
+        max_removal_1 = self.runner.call_view_method(
+            self.nc_id,
+            'calculate_address_maximum_liquidity_removal',
+            caller_id=self.caller_id
+        )
+
+        # Remove second part
+        removal_2 = max_removal_1 * 50 // 100
+        actions = [
+            NCWithdrawalAction(token_uid=self.token_uid, amount=removal_2),
+        ]
+        ctx = self.create_context(actions=actions, caller_id=self.caller_id)
+        self.runner.call_public_method(self.nc_id, 'remove_liquidity', ctx)
+
+        # Verify state after second removal
+        contract = self.get_readonly_contract(self.nc_id)
+        available_after_2 = contract.available_tokens
+        expected_available_2 = available_after_1 - removal_2
+        assert abs(available_after_2 - expected_available_2) <= 1, \
+            f"Available tokens after removal 2: expected {expected_available_2}, got {available_after_2}"
+
+        # Remove all remaining
+        max_removal_2 = self.runner.call_view_method(
+            self.nc_id,
+            'calculate_address_maximum_liquidity_removal',
+            caller_id=self.caller_id
+        )
+        actions = [
+            NCWithdrawalAction(token_uid=self.token_uid, amount=max_removal_2),
+        ]
+        ctx = self.create_context(actions=actions, caller_id=self.caller_id)
+        self.runner.call_public_method(self.nc_id, 'remove_liquidity', ctx)
+
+        # Verify final state
+        contract = self.get_readonly_contract(self.nc_id)
+
+        # Caller should have zero or near-zero liquidity (within rounding tolerance)
+        remaining = contract.liquidity_providers.get(self.caller_id, 0)
+        assert abs(remaining) <= 10, f"Caller should have ~0 liquidity, got {remaining}"
+
+        # Available tokens should be back to pool_after_bets_available (within small rounding tolerance)
+        assert abs(contract.available_tokens - pool_after_bets_available) <= 2, \
+            f"Expected available_tokens ~{pool_after_bets_available}, got {contract.available_tokens}"
+
+        # Total liquidity should be back to pool_after_bets_total (within small rounding tolerance)
+        assert abs(contract.total_liquidity_provided - pool_after_bets_total) <= 10, \
+            f"Expected total_liquidity ~{pool_after_bets_total}, got {contract.total_liquidity_provided}"
+
+        # Other providers should be unchanged
+        assert contract.liquidity_providers[provider_1] == adjusted_1
+        assert contract.liquidity_providers[provider_2] == adjusted_2
+
+        # Total removed should approximately equal what we added plus our share of gains
+        # With ceiling division for security, we might get slightly less due to rounding
+        total_removed = removal_1 + removal_2 + max_removal_2
+        # Due to pool gains, we should get close to what we added, possibly slightly more or less
+        # The small difference is from rounding (ceiling division protects the pool)
+        assert abs(total_removed - liquidity_to_add) <= liquidity_to_add * 1 // 100, \
+            f"Total removed {total_removed} should be close to added {liquidity_to_add}"

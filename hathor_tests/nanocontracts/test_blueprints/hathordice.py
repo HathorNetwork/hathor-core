@@ -103,6 +103,7 @@ class HathorDice(Blueprint):
 
     @view
     def calculate_adjusted_liquidity(self, amount: Amount) -> int:
+        """Calculate adjusted liquidity when ADDING liquidity (floor division)."""
         # x = amount
         # y = adjusted_amount
         # A = self.available_tokens
@@ -117,27 +118,44 @@ class HathorDice(Blueprint):
             return amount
         return (amount * self.total_liquidity_provided) // self.available_tokens
 
+    @view
+    def calculate_adjusted_liquidity_removal(self, amount: Amount) -> int:
+        """Calculate adjusted liquidity when REMOVING liquidity (ceiling division for security)."""
+        if self.available_tokens == 0:
+            return amount
+        return self._ceil_div(
+            amount * self.total_liquidity_provided,
+            self.available_tokens
+        )
+
     @public(allow_withdrawal=True)
-    def remove_liquidity(self, ctx: Context) -> None:
+    def remove_liquidity(self, ctx: Context) -> int:
         action = self._get_action(ctx, NCWithdrawalAction)
 
         allowed_withdrawal = self.calculate_address_maximum_liquidity_removal(ctx.caller_id)
         if action.amount > allowed_withdrawal:
             raise NCFail('too large withdrawal')
 
-        self.liquidity_providers[ctx.caller_id] -= action.amount
-        self.available_tokens -= action.amount
-        self.total_liquidity_provided -= action.amount
+        amount = action.amount
+        adjusted_amount = self.calculate_adjusted_liquidity_removal(amount)
+
+        self.liquidity_providers[ctx.caller_id] -= adjusted_amount
+        self.total_liquidity_provided -= adjusted_amount
+        self.available_tokens -= amount
+
+        return adjusted_amount
 
     @view
-    def calculate_maximum_liquidity_removal(self, amount: Amount) -> int:
+    def calculate_maximum_liquidity_removal(self, amount: Amount) -> Amount:
         if self.total_liquidity_provided == 0:
             return 0
+        assert amount >= 0
         return (self.available_tokens * amount) // self.total_liquidity_provided
 
     @view
-    def calculate_address_maximum_liquidity_removal(self, caller_id: CallerId) -> int:
+    def calculate_address_maximum_liquidity_removal(self, caller_id: CallerId) -> Amount:
         amount = self.liquidity_providers.get(caller_id, 0)
+        assert amount >= 0
         return self.calculate_maximum_liquidity_removal(amount)
 
     @public(allow_deposit=True)
@@ -253,6 +271,10 @@ class HathorDice(Blueprint):
         # payout = bet_amount * adjusted_multiplier
         numerator, denominator = self.calculate_multiplier(threshold)
         return (bet_amount * numerator) // denominator
+
+    def _ceil_div(self, numerator: int, denominator: int) -> int:
+        """Calculate ceiling division using (numerator + denominator - 1) // denominator."""
+        return (numerator + denominator - 1) // denominator
 
     def _get_action(self, ctx: Context, action_type: NCActionType) -> NCAction:
         if len(ctx.actions) != 1:
