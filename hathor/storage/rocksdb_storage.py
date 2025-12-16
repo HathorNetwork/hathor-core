@@ -47,6 +47,10 @@ class RocksDBStorage:
             compression=rocksdb.CompressionType.no_compression,
             allow_mmap_writes=True,  # default is False
             allow_mmap_reads=True,  # default is already True
+            # This limits the total size of WAL files (the .log files) in RocksDB.
+            # When reached, a flush is triggered by RocksDB to free up space.
+            # This was added because we had cases where these files would accumulate and use too much disk space.
+            max_total_wal_size=3 * 1024 * 1024 * 1024,  # 3GB
         )
 
         cf_names: list[bytes]
