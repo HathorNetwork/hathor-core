@@ -14,6 +14,7 @@
 
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
+from collections import defaultdict
 
 if TYPE_CHECKING:
     from hathor.dag_builder import DAGBuilder
@@ -683,13 +684,12 @@ def _create_dag_builder(manager: 'HathorManager') -> 'DAGBuilder':
     seed = ('coral light army gather adapt blossom school alcohol coral light army gather '
             'adapt blossom school alcohol coral light army gather adapt blossom school awesome')
 
-    def create_deterministic_hd_wallet() -> HDWallet:
-        hd = HDWallet(words=seed)
-        hd._manually_initialize()
-        return hd
+    hd = HDWallet(words=seed)
+    hd._manually_initialize()
 
     return DAGBuilder.from_manager(
         manager=manager,
         genesis_words=seed,
-        wallet_factory=create_deterministic_hd_wallet,
+        wallet_factory=defaultdict(lambda: hd),
+        deterministic=True
     )
