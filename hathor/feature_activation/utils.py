@@ -20,27 +20,40 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import Block
 
 
-def is_nano_active(*, settings: HathorSettings, block: Block, feature_service: FeatureService) -> bool:
-    """Return whether the Nano Contracts feature is active according to the provided settings and block."""
-    match settings.ENABLE_NANO_CONTRACTS:
+def _is_feature_active(
+    *,
+    setting: FeatureSetting,
+    feature: Feature,
+    block: Block,
+    feature_service: FeatureService,
+) -> bool:
+    """Return whether a feature is active based on the setting and block."""
+    match setting:
         case FeatureSetting.DISABLED:
             return False
         case FeatureSetting.ENABLED:
             return True
         case FeatureSetting.FEATURE_ACTIVATION:
-            return feature_service.is_feature_active(vertex=block, feature=Feature.NANO_CONTRACTS)
+            return feature_service.is_feature_active(vertex=block, feature=feature)
         case _:  # pragma: no cover
-            assert_never(settings.ENABLE_NANO_CONTRACTS)
+            assert_never(setting)
+
+
+def is_nano_active(*, settings: HathorSettings, block: Block, feature_service: FeatureService) -> bool:
+    """Return whether the Nano Contracts feature is active according to the provided settings and block."""
+    return _is_feature_active(
+        setting=settings.ENABLE_NANO_CONTRACTS,
+        feature=Feature.NANO_CONTRACTS,
+        block=block,
+        feature_service=feature_service,
+    )
 
 
 def is_fee_active(*, settings: HathorSettings, block: Block, feature_service: FeatureService) -> bool:
     """Return whether the Fee feature is active according to the provided settings and block."""
-    match settings.ENABLE_FEE:
-        case FeatureSetting.DISABLED:
-            return False
-        case FeatureSetting.ENABLED:
-            return True
-        case FeatureSetting.FEATURE_ACTIVATION:
-            return feature_service.is_feature_active(vertex=block, feature=Feature.FEE_TOKENS)
-        case _:  # pragma: no cover
-            assert_never(settings.ENABLE_FEE)
+    return _is_feature_active(
+        setting=settings.ENABLE_FEE,
+        feature=Feature.FEE_TOKENS,
+        block=block,
+        feature_service=feature_service,
+    )

@@ -23,7 +23,6 @@ from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.consensus.context import ReorgInfo
-from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -149,7 +148,7 @@ class BlockConsensusAlgorithm:
 
         from hathor.feature_activation.utils import is_nano_active
         parent = block.get_block_parent()
-        is_nano_active(settings=self._settings, feature_service=self.feature_service, block=parent)
+        return is_nano_active(settings=self._settings, feature_service=self.feature_service, block=parent)
 
     def _is_fee_active(self, block: Block) -> bool:
         """
@@ -159,8 +158,7 @@ class BlockConsensusAlgorithm:
 
         from hathor.feature_activation.utils import is_fee_active
         parent = block.get_block_parent()
-        is_fee_active(settings=self._settings, feature_service=self.feature_service, block=parent)
-
+        return is_fee_active(settings=self._settings, feature_service=self.feature_service, block=parent)
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.

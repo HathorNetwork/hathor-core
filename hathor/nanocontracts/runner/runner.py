@@ -1457,7 +1457,6 @@ class RunnerFactory:
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
 
-
     def create(
         self,
         *,
