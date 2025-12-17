@@ -28,6 +28,7 @@ class TestRunner(Runner):
         tx_storage: TransactionStorage,
         settings: HathorSettings,
         reactor: ReactorProtocol,
+        is_fee_active: bool,
         seed: bytes | None = None,
     ) -> None:
         if seed is None:
@@ -44,6 +45,7 @@ class TestRunner(Runner):
             settings=settings,
             reactor=reactor,
             seed=seed,
+            is_fee_active=is_fee_active,
         )
 
 

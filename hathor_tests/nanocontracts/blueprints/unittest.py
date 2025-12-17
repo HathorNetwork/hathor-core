@@ -123,7 +123,13 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
-        return TestRunner(tx_storage=self.manager.tx_storage, settings=self._settings, reactor=self.reactor)
+        from hathor.conf.settings import FeatureSettingEnum
+        return TestRunner(
+            tx_storage=self.manager.tx_storage,
+            settings=self._settings,
+            reactor=self.reactor,
+            is_fee_active=self._settings.ENABLE_FEE == FeatureSettingEnum.ENABLED,
+        )
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""

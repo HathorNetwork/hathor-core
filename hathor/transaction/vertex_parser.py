@@ -37,6 +37,7 @@ class VertexParser:
         supported_headers: dict[VertexHeaderId, Type[VertexBaseHeader]] = {}
         if settings.ENABLE_NANO_CONTRACTS:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
+        if settings.ENABLE_FEE:
             supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
         return supported_headers
 

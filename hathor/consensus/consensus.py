@@ -428,8 +428,8 @@ class ConsensusAlgorithm:
 
     def _nano_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
         """Check whether a tx became invalid because the reorg changed the nano feature activation state."""
+        from hathor.feature_activation.utils import is_nano_active
         from hathor.nanocontracts import OnChainBlueprint
-        from hathor.nanocontracts.utils import is_nano_active
         from hathor.transaction.token_creation_tx import TokenCreationTransaction
         from hathor.transaction.token_info import TokenVersion
 

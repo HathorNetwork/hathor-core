@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.conf.settings import NanoContractsSetting
+from hathor.conf.settings import FeatureSettingEnum
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
@@ -60,7 +60,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         )
 
         settings = self._settings._replace(
-            ENABLE_NANO_CONTRACTS=NanoContractsSetting.FEATURE_ACTIVATION,
+            ENABLE_NANO_CONTRACTS=FeatureSettingEnum.FEATURE_ACTIVATION,
             FEATURE_ACTIVATION=feature_settings,
         )
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
@@ -95,13 +95,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
             ocb1.ocb_password = "{password}"
             ocb1.ocb_code = test_blueprint1.py, TestBlueprint1
 
-            FBT.token_version = fee
-            FBT.fee = 1 HTR
-
-            tx1.out[0] = 123 FBT
-            tx1.fee = 1 HTR
-
-            b12 < nc1 < ocb1 < FBT < tx1 < b13 < a11
+            b12 < nc1 < ocb1 < b13 < a11
 
             nc1 <-- b13
             ocb1 <-- b13
@@ -116,7 +110,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
             ('b3', 'b4', 'b7', 'b8', 'b11', 'b12', 'b13', 'a11', 'a12', 'a13'),
             Block,
         )
-        nc1, ocb1, fbt, tx1 = artifacts.get_typed_vertices(('nc1', 'ocb1', 'FBT', 'tx1'), Transaction)
+        nc1, ocb1 = artifacts.get_typed_vertices(('nc1', 'ocb1'), Transaction)
 
         artifacts.propagate_with(self.manager, up_to='b3')
         assert self.feature_service.get_state(block=b3, feature=Feature.NANO_CONTRACTS) == FeatureState.DEFINED
@@ -155,19 +149,13 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert ocb1.get_metadata().validation.is_initial()
         assert ocb1.get_metadata().voided_by is None
 
-        msg = 'full validation failed: Header `FeeHeader` not supported by `TokenCreationTransaction`'
-        with pytest.raises(InvalidNewTransaction, match=msg):
-            self.vertex_handler.on_new_relayed_vertex(fbt)
-        assert fbt.get_metadata().validation.is_initial()
-        assert fbt.get_metadata().voided_by is None
-
         artifacts.propagate_with(self.manager, up_to='b12')
         assert self.feature_service.get_state(block=b12, feature=Feature.NANO_CONTRACTS) == FeatureState.ACTIVE
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id
 
-        # Now, the nc and fee txs are accepted on the mempool.
+        # Now, the nc txs are accepted on the mempool.
         artifacts.propagate_with(self.manager, up_to='nc1')
         assert nc1.get_metadata().validation.is_valid()
         assert nc1.get_metadata().voided_by is None
@@ -175,14 +163,6 @@ class TestNanoFeatureActivation(unittest.TestCase):
         artifacts.propagate_with(self.manager, up_to='ocb1')
         assert ocb1.get_metadata().validation.is_valid()
         assert ocb1.get_metadata().voided_by is None
-
-        artifacts.propagate_with(self.manager, up_to='FBT')
-        assert fbt.get_metadata().validation.is_valid()
-        assert fbt.get_metadata().voided_by is None
-
-        artifacts.propagate_with(self.manager, up_to='tx1')
-        assert tx1.get_metadata().validation.is_valid()
-        assert tx1.get_metadata().voided_by is None
 
         artifacts.propagate_with(self.manager, up_to='b13')
         assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
@@ -199,26 +179,20 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert b13.get_metadata().validation.is_invalid()
         assert nc1.get_metadata().validation.is_invalid()
         assert ocb1.get_metadata().validation.is_invalid()
-        assert fbt.get_metadata().validation.is_invalid()
-        assert tx1.get_metadata().validation.is_invalid()
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id
         assert b13.get_metadata().nc_block_root_id not in (self.empty_root_id, None)
         assert a11.get_metadata().nc_block_root_id == self.empty_root_id
 
-        # The nc and fee txs are removed from the mempool.
+        # The nc txs are removed from the mempool.
         assert not self.manager.tx_storage.transaction_exists(b13.hash)
         assert not self.manager.tx_storage.transaction_exists(nc1.hash)
         assert not self.manager.tx_storage.transaction_exists(ocb1.hash)
-        assert not self.manager.tx_storage.transaction_exists(fbt.hash)
-        assert not self.manager.tx_storage.transaction_exists(tx1.hash)
         assert nc1 not in list(self.manager.tx_storage.iter_mempool_tips())
         assert ocb1 not in list(self.manager.tx_storage.iter_mempool_tips())
-        assert fbt not in list(self.manager.tx_storage.iter_mempool_tips())
-        assert tx1 not in list(self.manager.tx_storage.iter_mempool_tips())
 
-        # The nc and fee txs are re-accepted on the mempool.
+        # The nc txs are re-accepted on the mempool.
         artifacts.propagate_with(self.manager, up_to='a12')
         assert self.feature_service.get_state(block=a12, feature=Feature.NANO_CONTRACTS) == FeatureState.ACTIVE
 
@@ -241,20 +215,6 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert ocb1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(ocb1.hash)
         assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips())
-
-        self._reset_vertex(fbt)
-        self.vertex_handler.on_new_relayed_vertex(fbt)
-        assert fbt.get_metadata().validation.is_valid()
-        assert fbt.get_metadata().voided_by is None
-        assert self.manager.tx_storage.transaction_exists(fbt.hash)
-        assert fbt in list(self.manager.tx_storage.iter_mempool_tips())
-
-        self._reset_vertex(tx1)
-        self.vertex_handler.on_new_relayed_vertex(tx1)
-        assert tx1.get_metadata().validation.is_valid()
-        assert tx1.get_metadata().voided_by is None
-        assert self.manager.tx_storage.transaction_exists(tx1.hash)
-        assert tx1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         artifacts.propagate_with(self.manager, up_to='a13')
 

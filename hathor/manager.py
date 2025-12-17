@@ -399,9 +399,18 @@ class HathorManager:
 
     def get_nc_runner(self, block: Block) -> Runner:
         """Return a contract runner for a given block."""
+        from hathor.feature_activation.utils import is_fee_active
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = nc_storage_factory.get_block_storage_from_block(block)
-        return self.runner_factory.create(block_storage=block_storage)
+        fee_active = is_fee_active(
+            settings=self._settings,
+            block=block,
+            feature_service=self.feature_service,
+        )
+        return self.runner_factory.create(
+            block_storage=block_storage,
+            is_fee_active=fee_active
+        )
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""

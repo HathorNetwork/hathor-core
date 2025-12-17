@@ -129,6 +129,7 @@ class Runner:
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
+        is_fee_active: bool,
     ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
@@ -136,6 +137,7 @@ class Runner:
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
+        self.is_fee_active = is_fee_active
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -1205,6 +1207,10 @@ class Runner:
         fee_payment_token: TokenUid
     ) -> TokenUid:
         """Create a child fee token from a contract."""
+
+        if not self.is_fee_active:
+            raise NCInvalidSyscall('fee feature is not active')
+
         if amount <= 0:
             raise NCInvalidSyscall(f"token amount must be always positive. amount={amount}")
 
@@ -1451,7 +1457,14 @@ class RunnerFactory:
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
 
-    def create(self, *, block_storage: NCBlockStorage, seed: bytes | None = None) -> Runner:
+
+    def create(
+        self,
+        *,
+        block_storage: NCBlockStorage,
+        seed: bytes | None = None,
+        is_fee_active: bool
+    ) -> Runner:
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
@@ -1459,4 +1472,5 @@ class RunnerFactory:
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,
             seed=seed,
+            is_fee_active=is_fee_active
         )

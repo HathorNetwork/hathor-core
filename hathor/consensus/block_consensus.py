@@ -145,26 +145,22 @@ class BlockConsensusAlgorithm:
         """
         Determine whether we should proceed to execute Nano transactions while making the necessary initializations.
         """
-        from hathor.conf.settings import NanoContractsSetting
         assert not block.is_genesis
 
-        match self._settings.ENABLE_NANO_CONTRACTS:
-            case NanoContractsSetting.ENABLED:
-                return True
+        from hathor.feature_activation.utils import is_nano_active
+        parent = block.get_block_parent()
+        is_nano_active(settings=self._settings, feature_service=self.feature_service, block=parent)
 
-            case NanoContractsSetting.FEATURE_ACTIVATION:
-                parent = block.get_block_parent()
-                is_active_on_parent = self.feature_service.is_feature_active(
-                    vertex=parent,
-                    feature=Feature.NANO_CONTRACTS,
-                )
-                return is_active_on_parent
+    def _is_fee_active(self, block: Block) -> bool:
+        """
+        Determine if fee tokens are enabled for the parent block
+        """
+        assert not block.is_genesis
 
-            case NanoContractsSetting.DISABLED:
-                return False
+        from hathor.feature_activation.utils import is_fee_active
+        parent = block.get_block_parent()
+        is_fee_active(settings=self._settings, feature_service=self.feature_service, block=parent)
 
-            case _:  # pragma: no cover
-                assert_never(self._settings.ENABLE_NANO_CONTRACTS)
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
@@ -239,7 +235,11 @@ class BlockConsensusAlgorithm:
                     block_storage.set_address_seqnum(Address(nc_header.nc_address), nc_header.nc_seqnum)
                 continue
 
-            runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
+            runner = self._runner_factory.create(
+                block_storage=block_storage,
+                seed=seed_hasher.digest(),
+                is_fee_active=self._is_fee_active(block)
+            )
             exception_and_tb: tuple[NCFail, str] | None = None
             token_dict = tx.get_complete_token_info(block_storage)
             should_verify_sum_after_execution = any(token_info.version is None for token_info in token_dict.values())
