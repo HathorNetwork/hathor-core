@@ -482,7 +482,7 @@ class HathorSettings(NamedTuple):
     # Used to enable nano contracts.
     ENABLE_NANO_CONTRACTS: FeatureSetting = FeatureSetting.DISABLED
 
-    # Used to enable fee for token creation.
+    # Used to enable fee-based tokens.
     ENABLE_FEE: FeatureSetting = FeatureSetting.DISABLED
 
     # List of enabled blueprints.
