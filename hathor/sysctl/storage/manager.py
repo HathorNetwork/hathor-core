@@ -39,20 +39,20 @@ class StorageSysctl(Sysctl):
     @signal_handler_safe
     def set_rocksdb_flush(self) -> None:
         """Manually trigger a RocksDB flush to persist memtables to disk.
-        
+
         This forces RocksDB to write all in-memory data (memtables) to SST files on disk.
         Useful for ensuring data persistence or freeing up memory.
         """
         # Check if we have a RocksDB storage
         from hathor.transaction.storage import TransactionRocksDBStorage
-        
+
         # Get the underlying storage
         storage = self.tx_storage
-        
+
         # If it's a cache storage, get the underlying store
         if hasattr(storage, 'store'):
             storage = storage.store
-        
+
         # Only flush if it's a RocksDB storage
         if isinstance(storage, TransactionRocksDBStorage):
             db = storage._db
@@ -66,38 +66,38 @@ class StorageSysctl(Sysctl):
             except Exception as e:
                 self.log.error('error during rocksdb flush', error=str(e))
         else:
-            self.log.warn('rocksdb flush command called but storage is not RocksDB', 
-                         storage_type=type(storage).__name__)
+            self.log.warn('rocksdb flush command called but storage is not RocksDB',
+                          storage_type=type(storage).__name__)
 
-    def get_rocksdb_wal_stats(self) -> dict[str, float | dict[str, float]]:
+    def get_rocksdb_wal_stats(self) -> dict[str, float | str | dict[str, float]]:
         """Get WAL (Write-Ahead Log) statistics for RocksDB.
-        
+
         Returns statistics including:
         - total_wal_size: Total size of all WAL files in bytes
         - wal_size_per_cf: Dictionary with WAL size per column family in bytes
-        
+
         This is useful to verify that flush operations are working correctly.
         """
         from hathor.transaction.storage import TransactionRocksDBStorage
-        
+
         # Get the underlying storage
         storage = self.tx_storage
-        
+
         # If it's a cache storage, get the underlying store
         if hasattr(storage, 'store'):
             storage = storage.store
-        
+
         # Only get stats if it's a RocksDB storage
         if isinstance(storage, TransactionRocksDBStorage):
             db = storage._db
-            result: dict[str, float | dict[str, float]] = {}
-            
+            result: dict[str, float | str | dict[str, float]] = {}
+
             try:
                 # Get total WAL size across all column families
                 total_wal_size = db.get_property(b'rocksdb.total-wal-size')
                 if total_wal_size:
                     result['total_wal_size'] = float(total_wal_size.decode('utf-8'))
-                
+
                 # Get WAL size per column family
                 wal_per_cf: dict[str, float] = {}
                 for cf in db.column_families:
@@ -105,10 +105,10 @@ class StorageSysctl(Sysctl):
                     if cf_wal_size:
                         cf_name = cf.name.decode('utf-8')
                         wal_per_cf[cf_name] = float(cf_wal_size.decode('utf-8'))
-                
+
                 if wal_per_cf:
                     result['wal_size_per_cf'] = wal_per_cf
-                
+
                 return result
             except Exception as e:
                 self.log.error('error getting rocksdb wal stats', error=str(e))
