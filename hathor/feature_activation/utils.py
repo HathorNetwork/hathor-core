@@ -14,7 +14,7 @@
 
 from typing import assert_never
 
-from hathor.conf.settings import FeatureSettingEnum, HathorSettings
+from hathor.conf.settings import FeatureSetting, HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import Block
@@ -23,11 +23,11 @@ from hathor.transaction import Block
 def is_nano_active(*, settings: HathorSettings, block: Block, feature_service: FeatureService) -> bool:
     """Return whether the Nano Contracts feature is active according to the provided settings and block."""
     match settings.ENABLE_NANO_CONTRACTS:
-        case FeatureSettingEnum.DISABLED:
+        case FeatureSetting.DISABLED:
             return False
-        case FeatureSettingEnum.ENABLED:
+        case FeatureSetting.ENABLED:
             return True
-        case FeatureSettingEnum.FEATURE_ACTIVATION:
+        case FeatureSetting.FEATURE_ACTIVATION:
             return feature_service.is_feature_active(vertex=block, feature=Feature.NANO_CONTRACTS)
         case _:  # pragma: no cover
             assert_never(settings.ENABLE_NANO_CONTRACTS)
@@ -36,11 +36,11 @@ def is_nano_active(*, settings: HathorSettings, block: Block, feature_service: F
 def is_fee_active(*, settings: HathorSettings, block: Block, feature_service: FeatureService) -> bool:
     """Return whether the Fee feature is active according to the provided settings and block."""
     match settings.ENABLE_FEE:
-        case FeatureSettingEnum.DISABLED:
+        case FeatureSetting.DISABLED:
             return False
-        case FeatureSettingEnum.ENABLED:
+        case FeatureSetting.ENABLED:
             return True
-        case FeatureSettingEnum.FEATURE_ACTIVATION:
+        case FeatureSetting.FEATURE_ACTIVATION:
             return feature_service.is_feature_active(vertex=block, feature=Feature.FEE_TOKENS)
         case _:  # pragma: no cover
             assert_never(settings.ENABLE_FEE)

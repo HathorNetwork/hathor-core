@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.conf.settings import FeatureSettingEnum
+from hathor.conf.settings import FeatureSetting
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
@@ -60,7 +60,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         )
 
         settings = self._settings._replace(
-            ENABLE_NANO_CONTRACTS=FeatureSettingEnum.FEATURE_ACTIVATION,
+            ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
             FEATURE_ACTIVATION=feature_settings,
         )
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)

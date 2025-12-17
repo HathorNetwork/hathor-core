@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.conf.settings import FeatureSettingEnum
+from hathor.conf.settings import FeatureSetting
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
@@ -45,7 +45,7 @@ class TestFeeFeatureActivation(unittest.TestCase):
         )
 
         settings = self._settings._replace(
-            ENABLE_FEE=FeatureSettingEnum.FEATURE_ACTIVATION,
+            ENABLE_FEE=FeatureSetting.FEATURE_ACTIVATION,
             FEATURE_ACTIVATION=feature_settings,
         )
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
@@ -126,7 +126,7 @@ class TestFeeFeatureActivation(unittest.TestCase):
     def test_fee_disabled(self) -> None:
         """Test that fee txs are rejected when fee is disabled."""
         # Override settings to disable fee
-        settings = self._settings._replace(ENABLE_FEE=FeatureSettingEnum.DISABLED)
+        settings = self._settings._replace(ENABLE_FEE=FeatureSetting.DISABLED)
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
 
@@ -157,7 +157,7 @@ class TestFeeFeatureActivation(unittest.TestCase):
     def test_fee_enabled(self) -> None:
         """Test that fee txs are accepted when fee is always enabled."""
         # Override settings to always enable fee
-        settings = self._settings._replace(ENABLE_FEE=FeatureSettingEnum.ENABLED)
+        settings = self._settings._replace(ENABLE_FEE=FeatureSetting.ENABLED)
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
 

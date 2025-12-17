@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.conf.settings import FeatureSettingEnum
+from hathor.conf.settings import FeatureSetting
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes.tokens_index import TokenUtxoInfo
@@ -634,7 +634,7 @@ class FeeTokenTest(unittest.TestCase):
             'testnet',
             unlock_wallet=True,
             wallet_index=True,
-            settings=self._settings._replace(ENABLE_FEE=FeatureSettingEnum.DISABLED),
+            settings=self._settings._replace(ENABLE_FEE=FeatureSetting.DISABLED),
         )
         with pytest.raises(InvalidNewTransaction) as e:
             create_fee_tokens(custom_manager, self.address_b58)
