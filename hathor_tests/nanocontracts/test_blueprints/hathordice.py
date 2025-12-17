@@ -179,6 +179,12 @@ class HathorDice(Blueprint):
             if multiplier_a * 10 >= self.max_multiplier_tenths * multiplier_b:
                 raise NCFail('multiplier is too large')
 
+        potential_payout = self.calculate_payout(bet_amount, threshold)
+        assert potential_payout >= bet_amount, f'{potential_payout} is smaller than {bet_amount}'
+
+        if potential_payout - bet_amount > self.available_tokens:
+            raise NCFail('not enough liquidity')
+
         balance_amount = self.balances.get(ctx.caller_id, 0)
 
         if len(ctx.actions) > 0:
@@ -217,11 +223,8 @@ class HathorDice(Blueprint):
             return 0
 
         # Win: Calculate payout with house edge
-        payout = self.calculate_payout(bet_amount, threshold)
-        assert payout >= bet_amount, f'{payout} is smaller than {bet_amount}'
-
-        if payout > self.available_tokens:
-            raise NCFail('not enough liquidity')
+        payout = potential_payout
+        assert payout - bet_amount <= self.available_tokens
 
         self.available_tokens -= (payout - bet_amount)
         self._add_to_balance(ctx.caller_id, payout)
