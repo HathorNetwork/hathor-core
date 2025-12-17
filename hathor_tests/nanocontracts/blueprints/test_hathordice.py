@@ -1,5 +1,3 @@
-import inspect
-
 from hathor import ContractId, NCDepositAction, NCFail, NCWithdrawalAction, TokenUid, VertexId
 from hathor.conf import HathorSettings
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -14,6 +12,7 @@ class HathorDiceTestCase(BlueprintTestCase):
     def setUp(self):
         super().setUp()
 
+        # import inspect
         # self.blueprint_id = self.register_blueprint_file(inspect.getfile(hathordice))
         self.blueprint_id = self._register_blueprint_class(hathordice.HathorDice)
         self.nc_id = ContractId(VertexId(b'1' * 32))
@@ -22,7 +21,12 @@ class HathorDiceTestCase(BlueprintTestCase):
         self.house_edge_basis_points = 190  # 1.90%
         self.caller_id = self.gen_random_address()
 
-    def initialize_contract(self, *, contract_id: ContractId | None = None, max_multiplier_tenths: int | None = None) -> ContractId:
+    def initialize_contract(
+        self,
+        *,
+        contract_id: ContractId | None = None,
+        max_multiplier_tenths: int | None = None
+    ) -> ContractId:
         if contract_id is None:
             contract_id = self.nc_id
         actions = [

@@ -78,15 +78,15 @@ class HathorDice(Blueprint):
 
         self.liquidity_providers = {}
         self.balances = {}
-        self.available_tokens = 0
-        self.total_liquidity_provided = 0
+        self.available_tokens = Amount(0)
+        self.total_liquidity_provided = Amount(0)
 
         if len(ctx.actions) > 0:
             self.add_liquidity(ctx)
 
     @public(allow_deposit=True)
     def add_liquidity(self, ctx: Context) -> int:
-        action = self._get_action(ctx, NCDepositAction)
+        action = self._get_deposit_action(ctx)
 
         amount = action.amount
         adjusted_amount = self.calculate_adjusted_liquidity(amount)
@@ -97,7 +97,7 @@ class HathorDice(Blueprint):
             self.liquidity_providers[ctx.caller_id] += adjusted_amount
 
         self.total_liquidity_provided += adjusted_amount
-        self.available_tokens += amount
+        self.available_tokens = Amount(self.available_tokens + amount)
 
         return adjusted_amount
 
@@ -130,7 +130,7 @@ class HathorDice(Blueprint):
 
     @public(allow_withdrawal=True)
     def remove_liquidity(self, ctx: Context) -> int:
-        action = self._get_action(ctx, NCWithdrawalAction)
+        action = self._get_withdrawal_action(ctx)
 
         allowed_withdrawal = self.calculate_address_maximum_liquidity_removal(ctx.caller_id)
         if action.amount > allowed_withdrawal:
@@ -141,16 +141,16 @@ class HathorDice(Blueprint):
 
         self.liquidity_providers[ctx.caller_id] -= adjusted_amount
         self.total_liquidity_provided -= adjusted_amount
-        self.available_tokens -= amount
+        self.available_tokens = Amount(self.available_tokens - amount)
 
         return adjusted_amount
 
     @view
     def calculate_maximum_liquidity_removal(self, amount: Amount) -> Amount:
         if self.total_liquidity_provided == 0:
-            return 0
+            return Amount(0)
         assert amount >= 0
-        return (self.available_tokens * amount) // self.total_liquidity_provided
+        return Amount((self.available_tokens * amount) // self.total_liquidity_provided)
 
     @view
     def calculate_address_maximum_liquidity_removal(self, caller_id: CallerId) -> Amount:
@@ -167,7 +167,7 @@ class HathorDice(Blueprint):
         if bet_amount > self.max_bet_amount:
             raise NCFail('bet amount is too high')
 
-        if threshold < 0:
+        if threshold <= 0:
             raise NCFail('threshold must be positive')
 
         max_threshold_numerator = (2**self.random_bit_length) * (10_000 - self.house_edge_basis_points)
@@ -182,7 +182,7 @@ class HathorDice(Blueprint):
         balance_amount = self.balances.get(ctx.caller_id, 0)
 
         if len(ctx.actions) > 0:
-            action = self._get_action(ctx, NCDepositAction)
+            action = self._get_deposit_action(ctx)
             deposit_amount = action.amount
         else:
             deposit_amount = 0
@@ -204,7 +204,7 @@ class HathorDice(Blueprint):
 
         if lucky_number >= threshold:
             # Lose it all!
-            self.available_tokens += bet_amount
+            self.available_tokens = Amount(self.available_tokens + bet_amount)
             self.log.info('you lose', lucky_number=lucky_number)
             self.syscall.emit_event(
                 f'{{' \
@@ -238,15 +238,15 @@ class HathorDice(Blueprint):
 
         return payout
 
-    def _add_to_balance(self, caller_id: CallerId, amount: Amount) -> None:
+    def _add_to_balance(self, caller_id: CallerId, diff: int) -> None:
         if caller_id not in self.balances:
-            self.balances[caller_id] = amount
+            self.balances[caller_id] = diff
         else:
-            self.balances[caller_id] += amount
+            self.balances[caller_id] += diff
 
     @public(allow_withdrawal=True)
     def claim_balance(self, ctx: Context) -> None:
-        action = self._get_action(ctx, NCWithdrawalAction)
+        action = self._get_withdrawal_action(ctx)
         if action.amount > self.balances.get(ctx.caller_id, 0):
             raise NCFail('not enough balance')
 
@@ -254,10 +254,10 @@ class HathorDice(Blueprint):
 
     @view
     def get_address_balance(self, caller_id: CallerId) -> Amount:
-        return self.balances.get(caller_id, 0)
+        return Amount(self.balances.get(caller_id, 0))
 
     @view
-    def calculate_multiplier(self, threshold: int) -> int:
+    def calculate_multiplier(self, threshold: int) -> tuple[int, int]:
         # fair_multiplier = 2**32 / threshold
         # adjusted_multipler = fair_multiplier * (1 - house_edge)
         #
@@ -276,9 +276,17 @@ class HathorDice(Blueprint):
         """Calculate ceiling division using (numerator + denominator - 1) // denominator."""
         return (numerator + denominator - 1) // denominator
 
-    def _get_action(self, ctx: Context, action_type: NCActionType) -> NCAction:
+    def _get_action(self, ctx: Context) -> NCAction:
         if len(ctx.actions) != 1:
             raise NCFail('only one token is allowed')
-        action = ctx.get_single_action(self.token_uid)
-        assert isinstance(action, action_type)
+        return ctx.get_single_action(self.token_uid)
+
+    def _get_withdrawal_action(self, ctx: Context) -> NCWithdrawalAction:
+        action = self._get_action(ctx)
+        assert isinstance(action, NCWithdrawalAction)
+        return action
+
+    def _get_deposit_action(self, ctx: Context) -> NCDepositAction:
+        action = self._get_action(ctx)
+        assert isinstance(action, NCDepositAction)
         return action
