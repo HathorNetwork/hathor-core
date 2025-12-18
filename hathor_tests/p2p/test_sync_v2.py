@@ -185,8 +185,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for tx in dfs.run(tx_parents):
             if tx.get_metadata().first_block == blk.hash:
                 cnt += 1
+                dfs.add_neighbors()
             else:
-                dfs.skip_neighbors(tx)
+                dfs.skip_neighbors()
         self.assertGreater(cnt, 400)
 
         # Generate 500 txs in mempool.

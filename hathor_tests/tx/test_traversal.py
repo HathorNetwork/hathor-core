@@ -100,6 +100,7 @@ class BFSTimestampWalkTestCase(BaseTraversalTestCase):
             seen.add(tx.hash)
             self.assertGreaterEqual(tx.timestamp, last_timestamp)
             last_timestamp = tx.timestamp
+            walk.add_neighbors()
         return seen
 
     def _run_rl(self, walk):
@@ -109,6 +110,7 @@ class BFSTimestampWalkTestCase(BaseTraversalTestCase):
             seen.add(tx.hash)
             self.assertLessEqual(tx.timestamp, last_timestamp)
             last_timestamp = tx.timestamp
+            walk.add_neighbors()
         return seen
 
 
@@ -131,6 +133,7 @@ class BFSOrderWalkTestCase(BaseTraversalTestCase):
             distance[tx.hash] = dist
             self.assertGreaterEqual(dist, last_dist)
             last_dist = dist
+            walk.add_neighbors()
         return seen
 
     def _run_rl(self, walk):
@@ -146,6 +149,7 @@ class BFSOrderWalkTestCase(BaseTraversalTestCase):
             distance[tx.hash] = dist
             self.assertGreaterEqual(dist, last_dist)
             last_dist = dist
+            walk.add_neighbors()
         return seen
 
 
@@ -159,10 +163,12 @@ class DFSWalkTestCase(BaseTraversalTestCase):
         seen = set()
         for tx in walk.run(self.root_tx, skip_root=skip_root):
             seen.add(tx.hash)
+            walk.add_neighbors()
         return seen
 
     def _run_rl(self, walk):
         seen = set()
         for tx in walk.run(self.root_tx, skip_root=True):
             seen.add(tx.hash)
+            walk.add_neighbors()
         return seen

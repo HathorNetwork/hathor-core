@@ -369,10 +369,11 @@ class Block(GenericVertex[BlockStaticMetadata]):
         for tx in bfs.run(self, skip_root=True):
             tx_meta = tx.get_metadata()
             if tx_meta.first_block != self.hash:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
                 continue
             assert isinstance(tx, Transaction)
             yield tx
+            bfs.add_neighbors()
 
     @override
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
