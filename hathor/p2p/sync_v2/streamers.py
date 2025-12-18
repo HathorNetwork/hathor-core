@@ -282,7 +282,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
         # Skip blocks.
         if cur.is_block:
-            self.bfs.skip_neighbors(cur)
+            self.bfs.skip_neighbors()
             return
 
         assert isinstance(cur, Transaction)
@@ -291,6 +291,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         if cur_metadata.first_block is None:
             self.log.debug('reached a tx that is not confirmed, stopping streaming')
             self.sync_agent.stop_tx_streaming_server(StreamEnd.TX_NOT_CONFIRMED)
+            self.bfs.add_neighbors()
             return
 
         # Check if tx is confirmed by the `self.current_block` or any next block.
@@ -299,7 +300,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
         first_block = self.tx_storage.get_block(cur_metadata.first_block)
         if not_none(first_block.static_metadata.height) < not_none(self.current_block.static_metadata.height):
             self.log.debug('skipping tx: out of current block')
-            self.bfs.skip_neighbors(cur)
+            self.bfs.skip_neighbors()
             return
 
         self.log.debug('send next transaction', tx_id=cur.hash.hex())
@@ -309,4 +310,4 @@ class TransactionsStreamingServer(_StreamingServerBase):
         if self.counter >= self.limit:
             self.log.debug('limit exceeded, stopping streaming')
             self.sync_agent.stop_tx_streaming_server(StreamEnd.LIMIT_EXCEEDED)
-            return
+        self.bfs.add_neighbors()
