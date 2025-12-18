@@ -14,6 +14,7 @@
 
 import pytest
 
+from hathor import Blueprint, BlueprintId, Context, ContractId, NCActionType, public
 from hathor.conf.settings import FeatureSetting
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
@@ -21,9 +22,29 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
-from hathor.transaction import Block, Transaction
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+from hathor.nanocontracts.utils import derive_child_token_id
+from hathor.transaction import Block, Transaction, TxOutput
+from hathor.transaction.headers.nano_header import NanoHeaderAction
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig
+from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+
+
+class FeeTokenBlueprint(Blueprint):
+    @public(allow_deposit=True)
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_withdrawal=True)
+    def create_fee_token(self, ctx: Context) -> None:
+        self.syscall.create_fee_token(
+            token_name='fee-based token',
+            token_symbol='FBT',
+            amount=10 ** 9,
+        )
 
 
 class TestFeeFeatureActivation(unittest.TestCase):
@@ -49,7 +70,7 @@ class TestFeeFeatureActivation(unittest.TestCase):
             FEATURE_ACTIVATION=feature_settings,
         )
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder = self.get_builder(settings).set_daa(daa)
+        builder = self.get_builder(settings).set_daa(daa).set_nc_log_config(NCLogConfig.FAILED)
 
         self.manager = self.create_peer_from_builder(builder)
         self.vertex_handler = self.manager.vertex_handler
@@ -123,70 +144,78 @@ class TestFeeFeatureActivation(unittest.TestCase):
         assert b13.get_metadata().validation.is_valid()
         assert b13.get_metadata().voided_by is None
 
-    def test_fee_disabled(self) -> None:
-        """Test that fee txs are rejected when fee is disabled."""
-        # Override settings to disable fee
-        settings = self._settings._replace(ENABLE_FEE=FeatureSetting.DISABLED)
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder = self.get_builder(settings).set_daa(daa)
+    def test_fee_syscall_before_activation(self) -> None:
+        """Test that create_fee_token syscall fails when fee feature is not yet active."""
+        # Register the blueprint
+        blueprint_id = BlueprintId(self.rng.randbytes(32))
+        self.manager.tx_storage.nc_catalog.blueprints[blueprint_id] = FeeTokenBlueprint
 
-        manager = self.create_peer_from_builder(builder)
-        dag_builder = TestDAGBuilder.from_manager(manager)
-
-        # Need at least 11 blocks to unlock rewards (REWARD_SPEND_MIN_BLOCKS=10)
-        artifacts = dag_builder.build_from_str('''
-            blockchain genesis b[1..12]
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..13]
             b10 < dummy < b11
 
-            FBT.token_version = fee
-            FBT.fee = 1 HTR
+            nc1.nc_id = "{blueprint_id.hex()}"
+            nc1.nc_method = initialize()
+            nc1.nc_deposit = 1 HTR
 
-            b12 < FBT
+            nc2.nc_id = nc1
+            nc2.nc_method = create_fee_token()
+
+            b11 < nc1 < nc2 < b12
+
+            nc1 <-- b12
+            nc2 <-- b12
         ''')
 
-        fbt = artifacts.get_typed_vertex('FBT', Transaction)
+        b8, b11, b12 = artifacts.get_typed_vertices(('b8', 'b11', 'b12'), Block)
+        nc1, nc2 = artifacts.get_typed_vertices(('nc1', 'nc2'), Transaction)
 
-        artifacts.propagate_with(manager, up_to='b12')
+        fbt_id = derive_child_token_id(ContractId(nc1.hash), token_symbol='FBT')
+        nc2.tokens.append(fbt_id)
 
-        # Fee txs are rejected because fee is disabled
-        msg = 'full validation failed: Header `FeeHeader` not supported by'
-        with pytest.raises(InvalidNewTransaction, match=msg):
-            manager.vertex_handler.on_new_relayed_vertex(fbt)
-        assert fbt.get_metadata().validation.is_initial()
+        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        nc2.outputs.append(fbt_output)
 
-    def test_fee_enabled(self) -> None:
-        """Test that fee txs are accepted when fee is always enabled."""
-        # Override settings to always enable fee
-        settings = self._settings._replace(ENABLE_FEE=FeatureSetting.ENABLED)
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder = self.get_builder(settings).set_daa(daa)
+        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        nc2_nano_header = nc2.get_nano_header()
+        nc2_nano_header.nc_actions.append(fbt_withdraw)
 
-        manager = self.create_peer_from_builder(builder)
-        dag_builder = TestDAGBuilder.from_manager(manager)
+        # Propagate b1-b4 first
+        artifacts.propagate_with(self.manager, up_to='b4')
 
-        # Need at least 11 blocks to unlock rewards (REWARD_SPEND_MIN_BLOCKS=10)
-        artifacts = dag_builder.build_from_str('''
-            blockchain genesis b[1..12]
-            b10 < dummy < b11
+        # Propagate with signaling (b5, b6, b7) to activate feature
+        signaling_blocks = ('b5', 'b6', 'b7')
+        for block_name in signaling_blocks:
+            block = artifacts.by_name[block_name].vertex
+            assert isinstance(block, Block)
+            block.storage = self.manager.tx_storage
+            block.signal_bits = self.bit_signaling_service.generate_signal_bits(block=block.get_block_parent())
+            artifacts.propagate_with(self.manager, up_to=block_name)
 
-            FBT.token_version = fee
-            FBT.fee = 1 HTR
+        artifacts.propagate_with(self.manager, up_to='b8')
+        assert self.feature_service.get_state(block=b8, feature=Feature.FEE_TOKENS) == FeatureState.LOCKED_IN
 
-            tx1.out[0] = 123 FBT
-            tx1.fee = 1 HTR
+        artifacts.propagate_with(self.manager, up_to='b11')
+        assert self.feature_service.get_state(block=b11, feature=Feature.FEE_TOKENS) == FeatureState.LOCKED_IN
 
-            b12 < FBT < tx1
-        ''')
+        # Propagate b12 which includes nc1 and nc2
+        # nc2 should fail because the fee feature is not yet active at the time of execution
+        artifacts.propagate_with(self.manager, up_to='b12')
+        assert self.feature_service.get_state(block=b12, feature=Feature.FEE_TOKENS) == FeatureState.ACTIVE
 
-        fbt, tx1 = artifacts.get_typed_vertices(('FBT', 'tx1'), Transaction)
+        # nc1 (initialize) should succeed
+        assert nc1.get_metadata().first_block == b12.hash
+        assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        assert nc1.get_metadata().voided_by is None
 
-        artifacts.propagate_with(manager, up_to='b12')
+        # nc2 (create_fee_token) should fail because the syscall checks if fee is active
+        assert nc2.get_metadata().first_block == b12.hash
+        assert nc2.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert nc2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, nc2.hash}
 
-        # Fee txs are accepted because fee is always enabled
-        artifacts.propagate_with(manager, up_to='FBT')
-        assert fbt.get_metadata().validation.is_valid()
-        assert fbt.get_metadata().voided_by is None
-
-        artifacts.propagate_with(manager, up_to='tx1')
-        assert tx1.get_metadata().validation.is_valid()
-        assert tx1.get_metadata().voided_by is None
+        assert_nc_failure_reason(
+            manager=self.manager,
+            tx_id=nc2.hash,
+            block_id=b12.hash,
+            reason='NCInvalidSyscall: fee feature is not active',
+        )
