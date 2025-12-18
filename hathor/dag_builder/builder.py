@@ -55,10 +55,11 @@ class DAGBuilder:
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         genesis_wallet: BaseWallet,
-        wallet_factory: WalletFactoryType,
+        wallet_factory: WalletFactoryType | dict[str, BaseWallet],
         vertex_resolver: VertexResolverType,
         nc_catalog: NCBlueprintCatalog,
         blueprints_module: ModuleType | None = None,
+        deterministic: bool = False,
     ) -> None:
         from hathor.dag_builder.default_filler import DefaultFiller
         from hathor.dag_builder.tokenizer import tokenize
@@ -78,14 +79,16 @@ class DAGBuilder:
             vertex_resolver=vertex_resolver,
             nc_catalog=nc_catalog,
             blueprints_module=blueprints_module,
+            deterministic=deterministic,
         )
 
     @staticmethod
     def from_manager(
         manager: HathorManager,
         genesis_words: str,
-        wallet_factory: WalletFactoryType,
-        blueprints_module: ModuleType | None = None
+        wallet_factory: WalletFactoryType | dict[str, BaseWallet],
+        blueprints_module: ModuleType | None = None,
+        deterministic: bool = False,
     ) -> DAGBuilder:
         """Create a DAGBuilder instance from a HathorManager instance."""
         assert manager.tx_storage.nc_catalog
@@ -97,6 +100,7 @@ class DAGBuilder:
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
             nc_catalog=manager.tx_storage.nc_catalog,
             blueprints_module=blueprints_module,
+            deterministic=deterministic
         )
 
     def get_main_wallet(self) -> BaseWallet:

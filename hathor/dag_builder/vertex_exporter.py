@@ -59,10 +59,11 @@ class VertexExporter:
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         genesis_wallet: BaseWallet,
-        wallet_factory: WalletFactoryType,
+        wallet_factory: WalletFactoryType | dict[str, BaseWallet],
         vertex_resolver: VertexResolverType,
         nc_catalog: NCBlueprintCatalog,
         blueprints_module: ModuleType | None,
+        deterministic: bool = False,
     ) -> None:
         self._builder = builder
         self._vertices: dict[str, BaseTransaction] = {}
@@ -77,19 +78,38 @@ class VertexExporter:
         self._nc_catalog = nc_catalog
         self._blueprints_module = blueprints_module
 
+        if isinstance(wallet_factory, dict):
+            assert 'genesis' not in wallet_factory, (
+                'when using deterministic wallets, the genesis_wallet must not be included'
+            )
+
+        if deterministic:
+            assert isinstance(wallet_factory, dict), (
+                'for deterministic builds, the wallet_factory must be a dict of wallets'
+            )
+            self._wallets = wallet_factory.copy()
+        else:
+            assert not isinstance(self._wallet_factory, dict)
+            self._wallets['main'] = self._wallet_factory()
+
         self._wallets['genesis'] = genesis_wallet
-        self._wallets['main'] = self._wallet_factory()
 
         self._next_nc_seqnum: defaultdict[bytes, int] = defaultdict(int)
+        self.deterministic = deterministic
 
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
         return self._builder._get_node(name)
 
     def get_wallet(self, name: str) -> BaseWallet:
-        if name not in self._wallets:
+        try:
+            return self._wallets[name]
+        except KeyError:
+            # we use try-except to support defaultdicts auto-initializing wallets
+            assert not self.deterministic, f'deterministic wallets must contain all wallets: {name}'
+            assert not isinstance(self._wallet_factory, dict)
             self._wallets[name] = self._wallet_factory()
-        return self._wallets[name]
+            return self._wallets[name]
 
     def get_vertex_id(self, name: str) -> bytes:
         """Get the vertex id given its node name."""
@@ -112,7 +132,8 @@ class VertexExporter:
         """Convert node parents to vertex parents, splitted into blocks and transactions."""
         block_parents = []
         txs_parents = []
-        for pi in node.parents:
+        parents = sorted(node.parents) if self.deterministic else node.parents
+        for pi in parents:
             pi_node = self._get_node(pi)
             if pi_node.type == DAGNodeType.Block or pi_node.name == 'genesis_block':
                 block_parents.append(self.get_vertex_id(pi))
