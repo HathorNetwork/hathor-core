@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 import datetime
-from dataclasses import replace
 from typing import Any, Generator
 
 from structlog import get_logger
@@ -174,7 +173,7 @@ class VertexHandler:
             return False
 
         try:
-            self._unsafe_save_and_run_consensus(vertex)
+            self._consensus.unsafe_update(vertex)
             self._post_consensus(vertex, params, quiet=quiet)
         except BaseException:
             self._log.error('unexpected exception in on_new_vertex()', vertex=vertex)
@@ -217,20 +216,6 @@ class VertexHandler:
 
         return True
 
-    def _unsafe_save_and_run_consensus(self, vertex: BaseTransaction) -> None:
-        """
-        This method is considered unsafe because the caller is responsible for crashing the full node
-        if this method throws any exception.
-        """
-        # The method below adds the tx as a child of the parents
-        # This needs to be called right before the save because we were adding the children
-        # in the tx parents even if the tx was invalid (failing the verifications above)
-        # then I would have a children that was not in the storage
-        vertex.update_initial_metadata(save=False)
-        self._tx_storage.save_transaction(vertex)
-        self._tx_storage.add_to_indexes(vertex)
-        self._consensus.unsafe_update(vertex)
-
     def _post_consensus(
         self,
         vertex: BaseTransaction,
@@ -243,15 +228,8 @@ class VertexHandler:
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
-        # XXX: during post consensus we don't need to verify weights again, so we can disable it
-        params = replace(params, skip_block_weight_verification=True)
-        assert self._tx_storage.indexes is not None
-        assert self._verification_service.validate_full(
-            vertex,
-            params,
-            init_static_metadata=False,
-        )
-        self._tx_storage.indexes.update(vertex)
+        meta = vertex.get_metadata()
+        assert meta.validation.is_fully_connected()
 
         # Publish to pubsub manager the new tx accepted, now that it's full validated
         self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
