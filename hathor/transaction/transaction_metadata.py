@@ -46,7 +46,6 @@ class TransactionMetadata:
     received_by: list[int]
     twins: list[bytes]
     accumulated_weight: int
-    score: int
     first_block: Optional[bytes]
     validation: ValidationState
 
@@ -73,7 +72,6 @@ class TransactionMetadata:
         spent_outputs: Optional[dict[int, list[bytes]]] = None,
         hash: Optional[bytes] = None,
         accumulated_weight: int = 0,
-        score: int = 0,
         nc_block_root_id: Optional[bytes] = None,
         settings: HathorSettings | None = None,
     ) -> None:
@@ -116,9 +114,6 @@ class TransactionMetadata:
 
         # Accumulated weight
         self.accumulated_weight = accumulated_weight
-
-        # Score
-        self.score = score
 
         # First valid block that verifies this transaction
         # If two blocks verify the same parent block and have the same score, both are valid.
@@ -189,7 +184,7 @@ class TransactionMetadata:
         if not isinstance(other, TransactionMetadata):
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
-                      'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
+                      'accumulated_weight', 'twins', 'first_block', 'validation',
                       'feature_states', 'nc_block_root_id', 'nc_calls', 'nc_execution', 'nc_events']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
@@ -221,7 +216,6 @@ class TransactionMetadata:
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
         data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight_raw'] = str(self.accumulated_weight)
-        data['score_raw'] = str(self.score)
 
         vertex = self.get_tx()
         data['min_height'] = vertex.static_metadata.min_height
@@ -229,12 +223,18 @@ class TransactionMetadata:
         from hathor.transaction import Block
         if isinstance(vertex, Block):
             data['height'] = vertex.static_metadata.height
+            data['score'] = vertex.static_metadata.score
+            data['min_height'] = vertex.static_metadata.min_height
             data['feature_activation_bit_counts'] = vertex.static_metadata.feature_activation_bit_counts
         else:
             # TODO: This is kept here backwards compatibility with transactions,
             #  but should be removed in the future.
             data['height'] = 0
+            data['score'] = 0
+            data['min_height'] = 0
             data['feature_activation_bit_counts'] = []
+
+        data['score_raw'] = str(data['score'])
 
         if self.feature_states is not None:
             data['feature_states'] = {feature.value: state.value for feature, state in self.feature_states.items()}
@@ -257,7 +257,6 @@ class TransactionMetadata:
     def to_json(self) -> dict[str, Any]:
         data = self.to_storage_json()
         data['accumulated_weight'] = work_to_weight(self.accumulated_weight)
-        data['score'] = work_to_weight(self.score)
 
         limited_children, has_more_children = collect_n(iter(self.get_tx().get_children()), _MAX_JSON_CHILDREN)
         data['children'] = [child_id.hex() for child_id in limited_children]
@@ -301,7 +300,6 @@ class TransactionMetadata:
             meta.twins = []
 
         meta.accumulated_weight = int(data['accumulated_weight_raw'])
-        meta.score = int(data.get('score_raw', 0))
 
         feature_states_raw = data.get('feature_states')
         if feature_states_raw:
@@ -357,6 +355,10 @@ class TransactionMetadata:
         # part of metadata, they should not be serialized.
         if 'height' in json_dict:
             del json_dict['height']
+        if 'score' in json_dict:
+            del json_dict['score']
+        if 'score_raw' in json_dict:
+            del json_dict['score_raw']
         if 'min_height' in json_dict:
             del json_dict['min_height']
         if 'feature_activation_bit_counts' in json_dict:

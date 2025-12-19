@@ -182,6 +182,9 @@ class PoaBlockProducer:
 
         signer_index = self._get_signer_index(previous_block)
         block.weight = poa.calculate_weight(self._poa_settings, block, not_none(signer_index))
+        block._static_metadata = None
+        block.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
+
         self._poa_signer.sign_block(block)
         block.update_hash()
 

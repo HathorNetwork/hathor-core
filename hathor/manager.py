@@ -719,12 +719,11 @@ class HathorManager:
                 f'(current_timestamp={current_timestamp})'
             )
         timestamp = min(max(current_timestamp, timestamp_min), timestamp_max)
-        parent_block_metadata = parent_block.get_metadata()
         # this is the min weight to cause an increase of twice the WEIGHT_TOL, we make sure to generate a template with
         # at least this weight (note that the user of the API can set its own weight, the block submit API will also
         # protect against a weight that is too small but using WEIGHT_TOL instead of 2*WEIGHT_TOL)
         min_significant_weight = calculate_min_significant_weight(
-            parent_block_metadata.score,
+            parent_block.static_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
         weight = max(
@@ -742,7 +741,7 @@ class HathorManager:
         assert 1 <= len(parents) <= 3, 'Impossible number of parents'
         if __debug__ and len(parents) == 3:
             assert len(parents_any) == 0, 'Extra parents to choose from that cannot be chosen'
-        score = parent_block_metadata.score + weight_to_work(weight)
+        score = parent_block.static_metadata.score + weight_to_work(weight)
         self.rng.shuffle(parents_any)  # shuffle parents_any to get rid of biases if clients don't shuffle themselves
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
@@ -799,10 +798,10 @@ class HathorManager:
             )
             return False
         parent_block = self.tx_storage.get_transaction(parent_hash)
-        parent_block_metadata = parent_block.get_metadata()
+        assert isinstance(parent_block, Block)
         # this is the smallest weight that won't cause the score to increase, anything equal or smaller is bad
         min_insignificant_weight = calculate_min_significant_weight(
-            parent_block_metadata.score,
+            parent_block.static_metadata.score,
             self._settings.WEIGHT_TOL
         )
         if blk.weight <= min_insignificant_weight:

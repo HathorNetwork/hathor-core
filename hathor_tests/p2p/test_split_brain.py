@@ -15,8 +15,8 @@ from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending
 
 def select_best_block(b1: Block, b2: Block) -> Block:
     """This function returns the best block according to score and using hash as tiebreaker."""
-    meta1 = b1.get_metadata()
-    meta2 = b2.get_metadata()
+    meta1 = b1.static_metadata
+    meta2 = b2.static_metadata
     if meta1.score == meta2.score:
         if b1.hash < b2.hash:
             return b1

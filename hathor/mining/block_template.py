@@ -80,7 +80,7 @@ class BlockTemplate(NamedTuple):
         block = cls(outputs=tx_outputs, parents=parents, timestamp=block_timestamp,
                     data=data or b'', storage=storage, weight=self.weight, signal_bits=self.signal_bits)
         if include_metadata:
-            block._metadata = TransactionMetadata(score=self.score)
+            block._metadata = TransactionMetadata()
         block.get_metadata(use_storage=False)
         return block
 

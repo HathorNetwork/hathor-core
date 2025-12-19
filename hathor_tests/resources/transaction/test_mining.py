@@ -19,6 +19,11 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(data['parents']), 3)
         del data['parents']
         del data['timestamp']
+        # score is now calculated from static metadata and will be non-zero
+        self.assertGreater(data['metadata']['score'], 0)
+        self.assertEqual(data['metadata']['score_raw'], str(data['metadata']['score']))
+        data['metadata']['score'] = 0
+        data['metadata']['score_raw'] = '0'
         self.assertEqual(data, {
             'version': 0,
             'weight': 1.0,
@@ -59,6 +64,11 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(data['parents']), 3)
         del data['parents']
         del data['timestamp']
+        # score is now calculated from static metadata and will be non-zero
+        self.assertGreater(data['metadata']['score'], 0)
+        self.assertEqual(data['metadata']['score_raw'], str(data['metadata']['score']))
+        data['metadata']['score'] = 0
+        data['metadata']['score_raw'] = '0'
         self.assertEqual(data, {
             'version': 0,
             'weight': 1.0,

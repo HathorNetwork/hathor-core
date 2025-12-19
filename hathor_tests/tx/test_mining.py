@@ -78,7 +78,7 @@ class MiningTest(unittest.TestCase):
             parents=block_templates[0].parents,
             parents_any=[],
             height=101,  # genesis is 0
-            score=blocks[-1].get_metadata().score + weight_to_work(1),
+            score=blocks[-1].static_metadata.score + weight_to_work(1),
             signal_bits=0
         ))
 
