@@ -763,6 +763,8 @@ class BlockConsensusAlgorithm:
     def remove_first_block_markers(self, block: Block) -> None:
         """ Remove all `meta.first_block` pointing to this block.
         """
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+
         assert block.storage is not None
         storage = block.storage
 
@@ -785,6 +787,11 @@ class BlockConsensusAlgorithm:
                     tx.storage.indexes.handle_contract_unexecution(tx)
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None
+                if meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}:
+                    assert isinstance(tx, Transaction)
+                    self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
+                    assert meta.voided_by == {NC_EXECUTION_FAIL_ID}
+                    meta.voided_by = None
             meta.first_block = None
             self.context.save(tx)
 
