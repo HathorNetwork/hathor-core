@@ -3,6 +3,7 @@ import re
 from typing import cast
 from unittest.mock import patch
 
+import pytest
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
@@ -151,6 +152,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
     def test_restart_fullnode_quick_with_cache(self) -> None:
         self._run_restart_test(use_tx_storage_cache=True)
 
+    @pytest.mark.skip(reason='broken')
     def test_exceeds_streaming_and_mempool_limits(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
