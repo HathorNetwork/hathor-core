@@ -342,20 +342,6 @@ class ConsensusAlgorithm:
             # Mempool is empty, nothing to remove.
             return []
 
-        # Find "mempool origin" txs, that is, a set of txs that when used as roots
-        # of a left-to-right BFS guarantees it'll reach all mempool txs.
-        mempool_origin: set[Transaction] = set()
-        mempool_origin_bfs = BFSTimestampWalk(
-            storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False
-        )
-        for tx in mempool_origin_bfs.run(mempool_tips, skip_root=True):
-            if not isinstance(tx, Transaction):
-                mempool_origin_bfs.skip_neighbors(tx)
-                continue
-            if tx.get_metadata().first_block is not None:
-                mempool_origin.add(tx)
-                mempool_origin_bfs.skip_neighbors(tx)
-
         mempool_rules: tuple[Callable[[Transaction], bool], ...] = (
             lambda tx: self._reward_lock_mempool_rule(tx, new_best_height),
             lambda tx: self._unknown_contract_mempool_rule(tx),
@@ -363,35 +349,37 @@ class ConsensusAlgorithm:
             self._checkdatasig_count_rule,
         )
 
-        # From the mempool origin, find the leftmost mempool txs that are invalid.
-        leftmost_invalid_txs: set[BaseTransaction] = set()
-        find_invalid_bfs = BFSTimestampWalk(
-            storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True
+        mempool_origin_bfs = BFSTimestampWalk(
+            storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False
         )
-        for vertex in find_invalid_bfs.run(mempool_origin, skip_root=True):
-            if not isinstance(vertex, Transaction):
-                # Don't skip neighbors continue the walk, it will always be bound by the reorg+mempool size
-                continue
-            if vertex.get_metadata().first_block is not None:
-                # We may reach other confirmed txs from the mempool origin, so we just skip them.
-                # But don't skip neighbors, continue the walk, it will always be bound by the reorg+mempool size
-                continue
-            # At this point, it's a mempool tx, so we have to re-verify it.
-            if not all(rule(vertex) for rule in mempool_rules):
-                leftmost_invalid_txs.add(vertex)
-                find_invalid_bfs.skip_neighbors(vertex)
 
-        # From the leftmost invalid txs, mark all vertices to the right as invalid.
-        to_remove: list[BaseTransaction] = []
+        invalid_txs: set[BaseTransaction] = set()
+
+        # Run a right-to-left BFS starting from the mempool tips.
+        for tx in mempool_origin_bfs.run(mempool_tips, skip_root=False):
+            if not isinstance(tx, Transaction):
+                mempool_origin_bfs.skip_neighbors(tx)
+                continue
+
+            assert isinstance(tx, Transaction)
+            if tx.get_metadata().first_block is not None:
+                mempool_origin_bfs.skip_neighbors(tx)
+                continue
+
+            # At this point, it's a mempool tx, so we have to re-verify it.
+            if not all(rule(tx) for rule in mempool_rules):
+                invalid_txs.add(tx)
+
+        # From the invalid txs, mark all vertices to the right as invalid. This includes both txs and blocks.
+        to_remove: set[BaseTransaction] = set()
         find_to_remove_bfs = BFSTimestampWalk(
             storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True
         )
-        for vertex in find_to_remove_bfs.run(leftmost_invalid_txs, skip_root=False):
+        for vertex in find_to_remove_bfs.run(invalid_txs, skip_root=False):
             vertex.set_validation(ValidationState.INVALID)
-            to_remove.append(vertex)
+            to_remove.add(vertex)
 
-        to_remove.reverse()
-        return to_remove
+        return sorted(to_remove, reverse=True, key=lambda tx: tx.timestamp)
 
     def _reward_lock_mempool_rule(self, tx: Transaction, new_best_height: int) -> bool:
         """
