@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
 from hathor.reward_lock.reward_lock import get_minimum_best_height
@@ -387,8 +388,9 @@ class TransactionVerifier:
                     # Skip tx itself.
                     continue
                 conflict_tx = tx.storage.get_transaction(h)
-                if conflict_tx.get_metadata().first_block is not None:
-                    # only mempool conflicts are allowed
+                conflict_meta = conflict_tx.get_metadata()
+                if conflict_meta.first_block is not None and NC_EXECUTION_FAIL_ID not in conflict_meta.voided_by:
+                    # only mempool conflicts are allowed or failed nano executions
                     raise ConflictWithConfirmedTxError('transaction has a conflict with a confirmed transaction')
                 if within_counter == 0:
                     # Only increment once per input.
