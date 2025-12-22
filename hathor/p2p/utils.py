@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
 import requests
@@ -111,8 +111,8 @@ def generate_certificate(private_key: RSAPrivateKey, ca_file: str, ca_pkey_file:
     ])
     builder = builder.subject_name(subject)
 
-    builder = builder.not_valid_before(datetime.datetime.utcnow() - datetime.timedelta(hours=1))
-    builder = builder.not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(hours=24*365*100))
+    builder = builder.not_valid_before(datetime.now(UTC) - timedelta(hours=1))
+    builder = builder.not_valid_after(datetime.now(UTC) + timedelta(hours=24*365*100))
     builder = builder.serial_number(x509.random_serial_number())
 
     builder = builder.public_key(public_key)

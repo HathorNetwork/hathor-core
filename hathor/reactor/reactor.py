@@ -60,7 +60,13 @@ def initialize_global_reactor(*, use_asyncio_reactor: bool = False) -> ReactorPr
         from twisted.internet.error import ReactorAlreadyInstalledError
 
         try:
-            asyncioreactor.install(asyncio.get_event_loop())
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        try:
+            asyncioreactor.install(loop)
         except ReactorAlreadyInstalledError as e:
             msg = (
                 "There's a Twisted reactor installed already. It's probably the default one, installed indirectly by "
