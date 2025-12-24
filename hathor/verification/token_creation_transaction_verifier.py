@@ -48,7 +48,7 @@ class TokenCreationTransactionVerifier:
         # Can't create the token with NATIVE or a non-activated version
         version_validations = [
             tx.token_version == TokenVersion.NATIVE,
-            tx.token_version == TokenVersion.FEE and not params.enable_nano,
+            tx.token_version == TokenVersion.FEE and not params.enable_fee,
         ]
 
         if any(version_validations):
