@@ -59,7 +59,7 @@ twisted = "~24.7.0"
 autobahn = "~24.4.2"
 base58 = "~2.1.1"
 colorama = "~0.4.6"
-configargparse = "~1.5.3"
+configargparse = "~1.7.1"
 cryptography = "~42.0.5"
 graphviz = "~0.20.1"
 ipython = {version = "~8.7.0", extras = ["kernel"]}
