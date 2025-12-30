@@ -25,7 +25,7 @@ jobs:
           full_matrix = {
             'python': ['3.11', '3.12'],
             # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
-            'os': ['ubuntu-22.04', 'macos-15'],
+            'os': ['ubuntu-22.04', 'macos-13'],
           }
           # this is the fastest one:
           reduced_matrix = {
