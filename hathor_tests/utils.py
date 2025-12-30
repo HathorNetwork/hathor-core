@@ -10,7 +10,6 @@ from typing import Any, Optional, cast
 import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
-from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
@@ -29,6 +28,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
+from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
 
