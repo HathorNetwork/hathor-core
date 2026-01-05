@@ -14,7 +14,7 @@
 
 [tool.poetry]
 name = "hathorlib"
-version = "0.13.0"
+version = "0.14.0"
 description = "Hathor Network base objects library"
 authors = ["Hathor Team <contact@hathor.network>"]
 license = "Apache-2.0"

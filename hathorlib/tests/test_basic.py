@@ -185,6 +185,55 @@ class HathorCommonsTestCase(unittest.TestCase):
         self.assertFalse(tx3.is_standard())
         self.assertTrue(tx3.is_standard(only_standard_script_type=False))
 
+    def test_tx_with_nano_and_fee_headers(self):
+        """Test Transaction with NanoHeader and FeeHeader"""
+        from hathorlib.headers import FeeHeader, NanoHeader
+
+        data = bytes.fromhex(
+            '0001010102a63cd61c1265d2ddcaf9e59072e999be92f1e8b3a9f80d3059667ebd07acff8200000b55'
+            '0310ce5d2405848b90497875979809205758c3be336d58fa4b358e7400006946304402201ce9d15038'
+            '2e74fb123fdb9b418372ab02f5e342eef77302711ba25bbad6fc2a022079552147f44d01fe5339e3e1'
+            '1748b5fb7bce1f45389daf8314d60a50c87b3a2e21036acf7120c9c95d917ab44ebf223f9c9fe202c3'
+            'f61a963469ac99dadbb7f066450000006401001976a914ce852b6869b2e6a78341beaf68e301784696'
+            '605e88ac0000225f00001976a914cc62dd4e0d45b3c92768eb8d31d32ee203aa968088ac4034451999'
+            '38bb1f694ac1350000000000100000096571b0cae543f7b16d395b19b655a1266210de1892fd127c3'
+            '15aa04ff105046e6f6f700001000102010000006449ce852b6869b2e6a78341beaf68e30178469660'
+            '5e819040746946304402201ce9d150382e74fb123fdb9b418372ab02f5e342eef77302711ba25bbad6'
+            'fc2a022079552147f44d01fe5339e3e11748b5fb7bce1f45389daf8314d60a50c87b3a2e21036acf71'
+            '20c9c95d917ab44ebf223f9c9fe202c3f61a963469ac99dadbb7f0664511010000000001'
+        )
+
+        tx = Transaction.create_from_struct(data)
+
+        # Verify the transaction can be serialized and deserialized correctly
+        self.assertEqual(data, bytes(tx))
+
+        # Verify basic transaction properties
+        self.assertTrue(tx.is_transaction)
+        self.assertFalse(tx.is_block)
+        self.assertTrue(tx.has_fees())
+        self.assertTrue(tx.is_nano_contract())
+
+        # Verify transaction structure
+        self.assertEqual(len(tx.inputs), 1)
+        self.assertEqual(len(tx.outputs), 2)
+        self.assertEqual(len(tx.tokens), 1)
+        self.assertEqual(len(tx.headers), 2)
+
+        # Verify the headers are of correct types
+        nano_header = tx.get_nano_header()
+        fee_header = tx.get_fee_header()
+        self.assertIsInstance(nano_header, NanoHeader)
+        self.assertIsInstance(fee_header, FeeHeader)
+
+        # Verify the fee header contains the expected fee entry
+        self.assertEqual(len(fee_header.fees), 1)
+        self.assertEqual(fee_header.fees[0].token_index, 0)
+        self.assertEqual(fee_header.fees[0].amount, 1)
+
+        # Verify the nano header has expected method
+        self.assertEqual(nano_header.nc_method, 'noop')
+
     def test_tx_version_and_signal_bits(self):
         from hathorlib.base_transaction import TxVersion
 
