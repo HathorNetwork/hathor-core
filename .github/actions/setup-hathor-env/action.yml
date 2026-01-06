@@ -30,7 +30,8 @@ runs:
       run: |
         brew cleanup -q
         # brew update -q
-        brew install -q graphviz rocksdb pkg-config
+        brew install -q graphviz rocksdb pkg-config openssl
+        echo "PYCOIN_LIBCRYPTO_PATH=$(brew --prefix openssl)/lib/libcrypto.dylib" >> $GITHUB_ENV
       shell: bash
 
     - name: Install Poetry dependencies
