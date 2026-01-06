@@ -579,7 +579,7 @@ class HathorManager:
         best_block = self.tx_storage.get_best_block()
         assert timestamp >= best_block.timestamp
 
-        def get_tx_parents(tx: BaseTransaction) -> list[Transaction]:
+        def get_tx_parents(tx: BaseTransaction, *, with_inputs: bool = False) -> list[Transaction]:
             if tx.is_genesis:
                 genesis_txs = [self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH]
                 if tx.is_transaction:
@@ -590,34 +590,38 @@ class HathorManager:
 
             parents = tx.get_tx_parents()
             assert len(parents) == 2
-            return list(parents)
+
+            txs = list(parents)
+            if with_inputs:
+                input_tx_ids = set(i.tx_id for i in tx.inputs)
+                inputs = (self.tx_storage.get_transaction(tx_id) for tx_id in input_tx_ids)
+                input_txs = (tx for tx in inputs if isinstance(tx, Transaction))
+                txs.extend(input_txs)
+
+            return txs
 
         unconfirmed_tips = [tx for tx in self.tx_storage.iter_mempool_tips() if tx.timestamp < timestamp]
-        unconfirmed_extras = sorted(
-            (tx for tx in self.tx_storage.iter_mempool() if tx.timestamp < timestamp and tx not in unconfirmed_tips),
-            key=lambda tx: tx.timestamp,
-        )
-
-        # mix the blocks tx-parents, with their own tx-parents to avoid carrying one of the genesis tx over
-        best_block_tx_parents = get_tx_parents(best_block)
-        tx1_tx_grandparents = get_tx_parents(best_block_tx_parents[0])
-        tx2_tx_grandparents = get_tx_parents(best_block_tx_parents[1])
-        confirmed_tips = sorted(
-            set(best_block_tx_parents) | set(tx1_tx_grandparents) | set(tx2_tx_grandparents),
-            key=lambda tx: tx.timestamp,
-        )
-
         match unconfirmed_tips:
             case []:
+                # mix the blocks tx-parents, with their own tx-parents to avoid carrying one of the genesis tx over
+                best_block_tx_parents = get_tx_parents(best_block)
+                tx1_tx_grandparents = get_tx_parents(best_block_tx_parents[0], with_inputs=True)
+                tx2_tx_grandparents = get_tx_parents(best_block_tx_parents[1], with_inputs=True)
+                confirmed_tips = sorted(
+                    set(best_block_tx_parents) | set(tx1_tx_grandparents) | set(tx2_tx_grandparents),
+                    key=lambda tx: tx.timestamp,
+                )
                 self.log.debug('generate_parent_txs: empty mempool, repeat parents')
                 return ParentTxs.from_txs(can_include=confirmed_tips[-2:], must_include=())
             case [tip_tx]:
-                if unconfirmed_extras:
-                    self.log.debug('generate_parent_txs: one tx tip and at least one other mempool tx')
-                    return ParentTxs.from_txs(can_include=unconfirmed_extras[-1:], must_include=(tip_tx,))
-                else:
-                    self.log.debug('generate_parent_txs: one tx in mempool, fill with one repeated parent')
-                    return ParentTxs.from_txs(can_include=confirmed_tips[-1:], must_include=(tip_tx,))
+                best_block_tx_parents = get_tx_parents(best_block)
+                repeated_parents = get_tx_parents(tip_tx, with_inputs=True)
+                confirmed_tips = sorted(
+                    set(best_block_tx_parents) | set(repeated_parents),
+                    key=lambda tx: tx.timestamp,
+                )
+                self.log.debug('generate_parent_txs: one tx in mempool, fill with one repeated parent')
+                return ParentTxs.from_txs(can_include=confirmed_tips[-1:], must_include=(tip_tx,))
             case _:
                 self.log.debug('generate_parent_txs: multiple unconfirmed mempool tips')
                 return ParentTxs.from_txs(can_include=unconfirmed_tips, must_include=())
