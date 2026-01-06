@@ -23,7 +23,6 @@ from hathor.simulator.trigger import (
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
-from hathor.transaction.storage.traversal import DFSWalk
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor_tests.dag_builder.builder import TestDAGBuilder
@@ -180,13 +179,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         blk = manager1.tx_storage.get_best_block()
         tx_parents = [manager1.tx_storage.get_transaction(x) for x in blk.parents[1:]]
         self.assertEqual(len(tx_parents), 2)
-        dfs = DFSWalk(manager1.tx_storage, is_dag_verifications=True, is_left_to_right=False)
-        cnt = 0
-        for tx in dfs.run(tx_parents):
-            if tx.get_metadata().first_block == blk.hash:
-                cnt += 1
-            else:
-                dfs.skip_neighbors(tx)
+        cnt = len(list(blk.iter_transactions_in_this_block()))
         self.assertGreater(cnt, 400)
 
         # Generate 500 txs in mempool.
