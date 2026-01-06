@@ -148,6 +148,14 @@ if version_info[1] == 11:
         'hathor.SignedData._is_protocol',
     ])
 
+
+# XXX: these only appear in Python 3.13
+if version_info[1] == 13:
+    KNOWN_CASES.extend([
+        'hathor.NCActionType._hashable_values_',
+        'hathor.NCActionType._unhashable_values_map_',
+    ])
+
 KNOWN_CASES.sort()
 
 

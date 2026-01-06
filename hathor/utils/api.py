@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import cgi
+from email.message import Message
 from typing import Type, TypeVar, Union
 
 from pydantic import Field, ValidationError
@@ -38,8 +38,11 @@ class QueryParams(BaseModel):
         encoding = 'utf8'
 
         if content_type_header := request.requestHeaders.getRawHeaders('content-type'):
-            _, options = cgi.parse_header(content_type_header[0])
-            encoding = options.get('charset', encoding)
+            msg = Message()
+            msg['content-type'] = content_type_header[0]
+            charset = msg.get_param('charset')
+            assert isinstance(charset, str)
+            encoding = charset
 
         raw_args = get_args(request).items()
         args: dict[str, str | None | list[str]] = {}
