@@ -1920,8 +1920,8 @@ test = ["pytest"]
 [package.source]
 type = "git"
 url = "https://github.com/hathornetwork/python-rocksdb.git"
-reference = "eff7457b3daeb86f7220f819f1e643df957f5dba"
-resolved_reference = "eff7457b3daeb86f7220f819f1e643df957f5dba"
+reference = "HEAD"
+resolved_reference = "9cb62eeae85002b3c0c9bf8d6625fb0d2b6e8a49"
 
 [[package]]
 name = "sentry-sdk"
@@ -2615,4 +2615,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "1ad46c7bce614cea02c8468ae6a7120f401a854cd811c3713cda95ed8ba8ec5e"
+content-hash = "f0419daaa9dec4300673f492be9000913b1768c5ff56450d8d5cd3e0a8a6b04a"
