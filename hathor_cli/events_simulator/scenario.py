@@ -534,8 +534,11 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
         HYB <-- a5
     ''')
 
+    step_fn = lambda a, b: simulator.run(1)
+
     # Propagate all blocks - causes reorg during propagation
-    artifacts.propagate_with(manager, up_to='b2')
+    artifacts.propagate_with(manager, up_to='b2', step_fn=step_fn)
+
     b2 = artifacts.by_name['b2'].vertex
     nc_init = artifacts.by_name['nc_init'].vertex
     HYB = artifacts.by_name['HYB'].vertex
@@ -547,7 +550,7 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
     assert HYB.get_metadata().first_block == b2.hash
     assert HYB.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
-    artifacts.propagate_with(manager, up_to='a2')
+    artifacts.propagate_with(manager, up_to='a2', step_fn=step_fn)
     a2 = artifacts.by_name['a2'].vertex
 
     assert not a2.get_metadata().voided_by
@@ -558,7 +561,7 @@ def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'H
     assert HYB.get_metadata().first_block is None
     assert HYB.get_metadata().nc_execution == NCExecutionState.PENDING
 
-    artifacts.propagate_with(manager)
+    artifacts.propagate_with(manager, step_fn=step_fn)
     a5 = artifacts.by_name['a5'].vertex
 
     assert not a2.get_metadata().voided_by

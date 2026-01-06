@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, NamedTuple, Sequence, TypeVar
+from typing import TYPE_CHECKING, Callable, Iterator, NamedTuple, Sequence, TypeVar
 
 from hathor.dag_builder.types import DAGNode
 from hathor.manager import HathorManager
@@ -59,6 +59,7 @@ class DAGArtifacts:
         *,
         up_to: str | None = None,
         up_to_before: str | None = None,
+        step_fn: Callable | None = None,
     ) -> None:
         """
         Propagate vertices using the provided manager up to the provided node name, included.  Last propagation is
@@ -83,6 +84,8 @@ class DAGArtifacts:
                     assert manager.vertex_handler.on_new_relayed_vertex(vertex)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
+                if step_fn:
+                    step_fn(node, vertex)
                 self._last_propagated = node.name
 
             if node.name == self._last_propagated:
