@@ -376,14 +376,14 @@ test = ["pytest"]
 
 [[package]]
 name = "configargparse"
-version = "1.5.5"
+version = "1.7.1"
 description = "A drop-in replacement for argparse that allows options to also be set via config files and/or environment variables."
 optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+python-versions = ">=3.6"
 groups = ["main"]
 files = [
-    {file = "ConfigArgParse-1.5.5-py3-none-any.whl", hash = "sha256:541360ddc1b15c517f95c0d02d1fca4591266628f3667acdc5d13dccc78884ca"},
-    {file = "ConfigArgParse-1.5.5.tar.gz", hash = "sha256:363d80a6d35614bd446e2f2b1b216f3b33741d03ac6d0a92803306f40e555b58"},
+    {file = "configargparse-1.7.1-py3-none-any.whl", hash = "sha256:8b586a31f9d873abd1ca527ffbe58863c99f36d896e2829779803125e83be4b6"},
+    {file = "configargparse-1.7.1.tar.gz", hash = "sha256:79c2ddae836a1e5914b71d58e4b9adbd9f7779d4e6351a637b7d2d9b6c46d3d9"},
 ]
 
 [package.extras]
@@ -730,20 +730,22 @@ name = "hathorlib"
 version = "0.14.0"
 description = "Hathor Network base objects library"
 optional = false
-python-versions = "<4,>=3.9"
+python-versions = ">=3.9,<4"
 groups = ["main"]
-files = [
-    {file = "hathorlib-0.14.0-py3-none-any.whl", hash = "sha256:45192eff389c273246f47222cc06a3dd2248830bc1ce8c7d698a3b0155a80604"},
-    {file = "hathorlib-0.14.0.tar.gz", hash = "sha256:cb883f4ff2d1b197ab217c3ad21d58e448ec59e92583c45d009e2f7a8166c5c4"},
-]
+files = []
+develop = false
 
 [package.dependencies]
-base58 = ">=2.1.1,<2.2.0"
-cryptography = ">=42.0.5,<42.1.0"
-pycoin = ">=0.92,<0.93"
+base58 = "~2.1.1"
+cryptography = "~42.0.5"
+pycoin = "~0.92"
 
 [package.extras]
 client = ["aiohttp (>=3.9.3,<3.10.0)", "structlog (>=22.3.0,<22.4.0)"]
+
+[package.source]
+type = "directory"
+url = "hathorlib"
 
 [[package]]
 name = "hyperlink"
@@ -2615,4 +2617,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "564cbf922d736d050d4a360f0350d02cbaa38a6cbe717129700b533c2f25ebe8"
+content-hash = "2e6238d2c32e2220b9170563700f3149f8935bada2f4a2fcac2a81f94e99156e"

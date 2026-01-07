@@ -1,0 +1,49 @@
+# yamllint disable rule:line-length
+name: lib_tests
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+      - dev
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - master
+      - dev
+jobs:
+  test:
+    name: python-${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ./hathorlib
+    timeout-minutes: 40  # default is 360
+    strategy:
+      matrix:
+        python:
+          - "3.10"
+          - "3.11"
+        os:
+          - ubuntu-22.04
+          - macos-15
+          # - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install Poetry
+        run: pip install 'poetry<2'
+      - name: Install Poetry dependencies
+        run: poetry install -n --no-root -E client
+      - name: Run linters
+        run: poetry run make check
+      - name: Run tests
+        run: poetry run make tests
+        continue-on-error: ${{ matrix.tier > 1 }}
+      - name: Upload coverage
+        uses: codecov/codecov-action@29386c70ef20e286228c72b668a06fd0e8399192 # https://github.com/codecov/codecov-action/releases/tag/v1
+        if: matrix.python == 3.11 && startsWith(matrix.os, 'ubuntu')

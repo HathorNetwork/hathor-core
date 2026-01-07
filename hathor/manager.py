@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Iterator, Optional, Union
 
-from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
@@ -68,6 +67,7 @@ from hathor.utils.weight import calculate_min_significant_weight, weight_to_work
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory

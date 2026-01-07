@@ -1,0 +1,14 @@
+language: python
+python:
+  - "3.6"
+
+install:
+  - pip install poetry
+  - poetry install -n --no-root
+
+jobs:
+  include:
+    - stage: check
+      script: poetry run make check
+    - stage: tests
+      script: poetry run make tests

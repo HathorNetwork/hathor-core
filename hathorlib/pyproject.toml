@@ -1,0 +1,81 @@
+# Copyright 2020 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[tool.poetry]
+name = "hathorlib"
+version = "0.14.0"
+description = "Hathor Network base objects library"
+authors = ["Hathor Team <contact@hathor.network>"]
+license = "Apache-2.0"
+readme = "README.md"
+homepage = "https://hathor.network/"
+repository = "https://github.com/HathorNetwork/python-hathorlib/"
+# https://pypi.org/classifiers/
+classifiers = [
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: Apache Software License",
+]
+include = ["hathorlib/py.typed"]
+exclude = ["tests", "tests.*"]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4"
+base58 = "~2.1.1"
+structlog = {version = "~22.3.0", optional = true}
+aiohttp = {version = "~3.9.3", optional = true}
+cryptography = "~42.0.5"
+pycoin = "~0.92"
+
+[tool.poetry.dev-dependencies]
+isort = {version = "~5.13.2", extras = ["colors"]}
+mypy = {version = "^1.9.0", markers = "implementation_name == 'cpython'"}
+pytest = "~8.1.1"
+pytest-cov = "~5.0.0"
+flake8 = "~7.0.0"
+
+[tool.poetry.extras]
+client = ["aiohttp", "structlog"]
+
+[tool.isort]
+combine_as_imports = true
+default_section = "THIRDPARTY"
+include_trailing_comma = true
+known_first_party = "hathorlib,tests"
+line_length = 119
+multi_line_output = 3
+
+[tool.mypy]
+pretty = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+extra_checks = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+namespace_packages = true
+show_error_codes = true
+show_error_context = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
