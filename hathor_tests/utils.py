@@ -535,9 +535,15 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     return tx
 
 
-def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
-                      token_name: str = 'TestFeeCoin', token_symbol: str = 'TFC',
-                      genesis_output_amount: Optional[int] = None) -> TokenCreationTransaction:
+def create_fee_tokens(
+    manager: 'HathorManager',
+    address_b58: Optional[str] = None,
+    mint_amount: int = 300,
+    token_name: str = 'TestFeeCoin',
+    token_symbol: str = 'TFC',
+    genesis_output_amount: Optional[int] = None,
+    propagate: bool = True,
+) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -622,9 +628,11 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
         input_.data = P2PKH.create_input_data(public_bytes, signature)
 
     manager.cpu_mining_service.resolve(tx)
-    manager.propagate_tx(tx)
-    assert isinstance(manager.reactor, Clock)
-    manager.reactor.advance(8)
+
+    if propagate:
+        manager.propagate_tx(tx)
+        assert isinstance(manager.reactor, Clock)
+        manager.reactor.advance(8)
 
     return tx
 

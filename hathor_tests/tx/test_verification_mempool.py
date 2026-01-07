@@ -4,7 +4,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.checkpoint import Checkpoint
 from hathor.exception import InvalidNewTransaction
-from hathor.nanocontracts import Blueprint, Context, fallback, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, fallback, public
 from hathor.nanocontracts.exception import (
     BlueprintDoesNotExist,
     NanoContractDoesNotExist,
@@ -188,6 +188,124 @@ class VertexHeadersTest(unittest.TestCase):
         with self.assertRaises(InvalidNewTransaction) as e:
             self.manager.vertex_handler.on_new_mempool_transaction(tx3)
         assert isinstance(e.exception.__cause__, ConflictWithConfirmedTxError)
+
+    def test_conflict_with_confirmed_nc_fail_is_allowed(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            b10 < dummy
+
+            tx1.nc_id = "{self.blueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            tx0.out[0] <<< tx_fail tx_ok
+
+            tx_fail.nc_id = tx1
+            tx_fail.nc_method = fail()
+
+            tx1 <-- b30
+            tx_fail <-- b31
+
+            b31 < tx_ok
+        ''')
+        artifacts.propagate_with(self.manager, up_to_before='tx_ok')
+
+        b31 = artifacts.get_typed_vertex('b31', Block)
+        tx_fail = artifacts.get_typed_vertex('tx_fail', Transaction)
+        tx_ok = artifacts.get_typed_vertex('tx_ok', Transaction)
+
+        assert tx_fail.get_metadata().first_block == b31.hash
+        assert tx_fail.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert tx_fail.get_metadata().voided_by == {tx_fail.hash, NC_EXECUTION_FAIL_ID}
+
+        tx_ok.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx_ok)
+
+        assert self.manager.vertex_handler.on_new_mempool_transaction(tx_ok)
+
+        assert self.manager.tx_storage.transaction_exists(tx_ok.hash)
+        assert self.manager.tx_storage.indexes.mempool_tips is not None
+        mempool_hashes = {
+            tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
+        }
+        assert tx_ok.hash in mempool_hashes
+
+    def test_mempool_tx_returns_after_reorg_with_confirmed_nc_fail_conflict(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            blockchain b31 a[32..32]
+            b10 < dummy
+
+            tx1.nc_id = "{self.blueprint_id.hex()}"
+            tx1.nc_method = initialize()
+
+            tx0.out[0] <<< tx_fail tx_ok
+
+            tx_fail.nc_id = tx1
+            tx_fail.nc_method = fail()
+
+            tx_ok.nc_id = tx1
+            tx_ok.nc_method = nop()
+
+            tx1 <-- b30
+            tx_fail <-- b31
+            tx_ok <-- b32
+
+            b31 < tx_ok
+            tx_ok < a32
+            a32.weight = 10
+        ''')
+        artifacts.propagate_with(self.manager, up_to_before='tx_ok')
+
+        b31 = artifacts.get_typed_vertex('b31', Block)
+        b32 = artifacts.get_typed_vertex('b32', Block)
+        a32 = artifacts.get_typed_vertex('a32', Block)
+        tx_fail = artifacts.get_typed_vertex('tx_fail', Transaction)
+        tx_ok = artifacts.get_typed_vertex('tx_ok', Transaction)
+
+        assert tx_fail.get_metadata().first_block == b31.hash
+        assert tx_fail.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert tx_fail.get_metadata().voided_by == {tx_fail.hash, NC_EXECUTION_FAIL_ID}
+
+        # Align reactor time with the chain so mempool timestamp checks pass.
+        self.clock.rightNow = b31.timestamp + 1
+
+        old_tx_ok_hash = tx_ok.hash
+        tx_ok.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx_ok)
+        if old_tx_ok_hash != tx_ok.hash:
+            # Keep b32 confirming tx_ok after the hash update.
+            b32.parents = [tx_ok.hash if h == old_tx_ok_hash else h for h in b32.parents]
+        # Ensure block timestamps are after tx_ok to satisfy parent timestamp checks.
+        b32.timestamp = tx_ok.timestamp + 1
+        a32.timestamp = tx_ok.timestamp + 2
+        self.dag_builder._exporter._vertex_resolver(b32)
+        self.dag_builder._exporter._vertex_resolver(a32)
+
+        assert self.manager.vertex_handler.on_new_mempool_transaction(tx_ok)
+
+        assert self.manager.tx_storage.indexes.mempool_tips is not None
+        mempool_hashes = {
+            tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
+        }
+        assert tx_ok.hash in mempool_hashes
+
+        assert self.manager.vertex_handler.on_new_relayed_vertex(b32)
+
+        tx_ok_confirmed = self.manager.tx_storage.get_transaction(tx_ok.hash)
+        assert tx_ok_confirmed.get_metadata().first_block == b32.hash
+        mempool_hashes = {
+            tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
+        }
+        assert tx_ok.hash not in mempool_hashes
+
+        assert self.manager.vertex_handler.on_new_relayed_vertex(a32)
+
+        tx_ok_reorged = self.manager.tx_storage.get_transaction(tx_ok.hash)
+        assert tx_ok_reorged.get_metadata().first_block is None
+        mempool_hashes = {
+            tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
+        }
+        assert tx_ok.hash in mempool_hashes
 
     def test_too_many_between_conflicts(self) -> None:
         lines = [f'tx0.out[{i}] <<< txN tx{i + 1}' for i in range(0, MAX_BETWEEN_CONFLICTS + 1)]

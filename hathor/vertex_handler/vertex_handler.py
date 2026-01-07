@@ -26,7 +26,7 @@ from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
-from hathor.nanocontracts.utils import is_nano_active
+from hathor.feature_activation.utils import is_fee_active, is_nano_active
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -99,6 +99,10 @@ class VertexHandler:
             settings=self._settings, block=parent_block, feature_service=self._feature_service
         )
 
+        enable_fee = is_fee_active(
+            settings=self._settings, block=parent_block, feature_service=self._feature_service
+        )
+
         if parent_meta.nc_block_root_id is None:
             # This case only happens for the genesis and during sync of a voided chain.
             assert parent_block.is_genesis or parent_meta.voided_by
@@ -106,6 +110,7 @@ class VertexHandler:
         params = VerificationParams(
             enable_checkdatasig_count=enable_checkdatasig_count,
             enable_nano=enable_nano,
+            enable_fee=enable_fee,
             nc_block_root_id=parent_meta.nc_block_root_id,
         )
 
@@ -126,8 +131,10 @@ class VertexHandler:
         """Called by mempool sync."""
         best_block = self._tx_storage.get_best_block()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
+        enable_fee = is_fee_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
         params = VerificationParams.default_for_mempool(
             enable_nano=enable_nano,
+            enable_fee=enable_fee,
             best_block=best_block,
         )
         return self._old_on_new_vertex(tx, params)
@@ -144,6 +151,7 @@ class VertexHandler:
         best_block = self._tx_storage.get_best_block()
         best_block_meta = best_block.get_metadata()
         enable_nano = is_nano_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
+        enable_fee = is_fee_active(settings=self._settings, block=best_block, feature_service=self._feature_service)
         if best_block_meta.nc_block_root_id is None:
             assert best_block.is_genesis
         # XXX: checkdatasig enabled for relayed vertices
@@ -151,6 +159,7 @@ class VertexHandler:
             enable_checkdatasig_count=True,
             reject_locked_reward=reject_locked_reward,
             enable_nano=enable_nano,
+            enable_fee=enable_fee,
             nc_block_root_id=best_block_meta.nc_block_root_id,
         )
         return self._old_on_new_vertex(vertex, params, quiet=quiet)

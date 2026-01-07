@@ -387,8 +387,9 @@ class TransactionVerifier:
                     # Skip tx itself.
                     continue
                 conflict_tx = tx.storage.get_transaction(h)
-                if conflict_tx.get_metadata().first_block is not None:
-                    # only mempool conflicts are allowed
+                conflict_meta = conflict_tx.get_metadata()
+                if conflict_meta.first_block is not None and not conflict_meta.voided_by:
+                    # only mempool conflicts are allowed or failed nano executions
                     raise ConflictWithConfirmedTxError('transaction has a conflict with a confirmed transaction')
                 if within_counter == 0:
                     # Only increment once per input.

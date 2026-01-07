@@ -727,7 +727,7 @@ test = ["coverage", "mock (>=4)", "pytest (>=7)", "pytest-cov", "pytest-mock (>=
 
 [[package]]
 name = "hathorlib"
-version = "0.13.0"
+version = "0.14.0"
 description = "Hathor Network base objects library"
 optional = false
 python-versions = ">=3.9,<4"
@@ -2617,4 +2617,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "d3f03e9e07226659ac2516da66eb6e1f201a0a31d1cf7ad7b89c9c5e6dae8e04"
+content-hash = "564cbf922d736d050d4a360f0350d02cbaa38a6cbe717129700b533c2f25ebe8"

@@ -123,7 +123,11 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
-        return TestRunner(tx_storage=self.manager.tx_storage, settings=self._settings, reactor=self.reactor)
+        return TestRunner(
+            tx_storage=self.manager.tx_storage,
+            settings=self._settings,
+            reactor=self.reactor,
+        )
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""

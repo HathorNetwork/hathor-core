@@ -22,6 +22,7 @@ from structlog import get_logger
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.feature_activation.utils import is_fee_active
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Transaction
@@ -360,6 +361,7 @@ class ConsensusAlgorithm:
             lambda tx: self._reward_lock_mempool_rule(tx, new_best_height),
             lambda tx: self._unknown_contract_mempool_rule(tx),
             lambda tx: self._nano_activation_rule(storage, tx),
+            lambda tx: self._fee_tokens_activation_rule(storage, tx),
             self._checkdatasig_count_rule,
         )
 
@@ -428,24 +430,36 @@ class ConsensusAlgorithm:
 
     def _nano_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
         """Check whether a tx became invalid because the reorg changed the nano feature activation state."""
+        from hathor.feature_activation.utils import is_nano_active
         from hathor.nanocontracts import OnChainBlueprint
-        from hathor.nanocontracts.utils import is_nano_active
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
-        from hathor.transaction.token_info import TokenVersion
 
         best_block = storage.get_best_block()
         if is_nano_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
             # When nano is active, this rule has no effect.
             return True
 
-        # The nano feature activation is actually used to enable 4 use cases:
-
+        # The nano feature activation is actually used to enable 2 use cases:
         if tx.is_nano_contract():
             return False
 
         if isinstance(tx, OnChainBlueprint):
             return False
 
+        return True
+
+    def _fee_tokens_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
+        """
+        Check whether a tx became invalid because the reorg changed the fee-based tokens feature activation state.
+        """
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.token_info import TokenVersion
+
+        best_block = storage.get_best_block()
+        if is_fee_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
+            # When fee-based tokens feature is active, this rule has no effect.
+            return True
+
+        # The fee-based tokens feature activation is actually used to enable 2 use cases:
         if isinstance(tx, TokenCreationTransaction) and tx.token_version == TokenVersion.FEE:
             return False
 

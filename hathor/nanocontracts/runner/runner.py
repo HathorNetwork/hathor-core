@@ -1451,7 +1451,12 @@ class RunnerFactory:
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
 
-    def create(self, *, block_storage: NCBlockStorage, seed: bytes | None = None) -> Runner:
+    def create(
+        self,
+        *,
+        block_storage: NCBlockStorage,
+        seed: bytes | None = None,
+    ) -> Runner:
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
