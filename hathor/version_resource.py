@@ -17,8 +17,8 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import is_nano_active
 from hathor.manager import HathorManager
-from hathor.nanocontracts.utils import is_nano_active
 from hathor.util import json_dumpb
 
 

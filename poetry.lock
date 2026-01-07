@@ -727,14 +727,14 @@ test = ["coverage", "mock (>=4)", "pytest (>=7)", "pytest-cov", "pytest-mock (>=
 
 [[package]]
 name = "hathorlib"
-version = "0.12.0"
+version = "0.14.0"
 description = "Hathor Network base objects library"
 optional = false
 python-versions = "<4,>=3.9"
 groups = ["main"]
 files = [
-    {file = "hathorlib-0.12.0-py3-none-any.whl", hash = "sha256:f9868399519eac5efdec2c93e2fa122fcc1cf6b74fcd1efac918573d690caaa5"},
-    {file = "hathorlib-0.12.0.tar.gz", hash = "sha256:09828665d081c57218b74427bf85c559e79b29c93c998fce4a49a3fd83d6c7a3"},
+    {file = "hathorlib-0.14.0-py3-none-any.whl", hash = "sha256:45192eff389c273246f47222cc06a3dd2248830bc1ce8c7d698a3b0155a80604"},
+    {file = "hathorlib-0.14.0.tar.gz", hash = "sha256:cb883f4ff2d1b197ab217c3ad21d58e448ec59e92583c45d009e2f7a8166c5c4"},
 ]
 
 [package.dependencies]
@@ -1905,10 +1905,10 @@ use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
 name = "rocksdb"
-version = "0.10.0"
+version = "0.9.3"
 description = "Python bindings for RocksDB"
 optional = false
-python-versions = ">=3.11"
+python-versions = ">=3.10"
 groups = ["main"]
 files = []
 develop = false
@@ -1921,7 +1921,7 @@ test = ["pytest"]
 type = "git"
 url = "https://github.com/hathornetwork/python-rocksdb.git"
 reference = "HEAD"
-resolved_reference = "9cb62eeae85002b3c0c9bf8d6625fb0d2b6e8a49"
+resolved_reference = "1f0ce6a35472ad2e631335f159db9906ed2ebc86"
 
 [[package]]
 name = "sentry-sdk"
@@ -2615,4 +2615,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "f0419daaa9dec4300673f492be9000913b1768c5ff56450d8d5cd3e0a8a6b04a"
+content-hash = "564cbf922d736d050d4a360f0350d02cbaa38a6cbe717129700b533c2f25ebe8"
