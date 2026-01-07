@@ -169,10 +169,9 @@ class IndexesManager(ABC):
         cache_capacity = None
 
         # Reduce cache size during initialization.
-        from hathor.transaction.storage import TransactionCacheStorage
-        if isinstance(tx_storage, TransactionCacheStorage):
-            cache_capacity = tx_storage.capacity
-            tx_storage.set_capacity(min(MAX_CACHE_SIZE_DURING_LOAD, cache_capacity))
+        if cache_data := tx_storage.get_cache_data():
+            cache_capacity = cache_data.capacity
+            tx_storage.set_cache_capacity(min(MAX_CACHE_SIZE_DURING_LOAD, cache_capacity))
 
         self.log.debug('indexes pre-init')
         for index in self.iter_all_indexes():
@@ -200,9 +199,8 @@ class IndexesManager(ABC):
                     index.init_loop_step(tx)
 
         # Restore cache capacity.
-        if isinstance(tx_storage, TransactionCacheStorage):
-            assert cache_capacity is not None
-            tx_storage.set_capacity(cache_capacity)
+        assert cache_capacity is not None
+        tx_storage.set_cache_capacity(cache_capacity)
 
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx

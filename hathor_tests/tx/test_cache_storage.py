@@ -1,7 +1,7 @@
 from hathor.daa import TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TransactionMetadata
-from hathor.transaction.storage import TransactionCacheStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor_tests import unittest
 from hathor_tests.utils import add_new_transactions
 
@@ -17,7 +17,8 @@ class CacheStorageTest(unittest.TestCase):
             .set_wallet(self._create_test_wallet(unlocked=True))
         self.manager = self.create_peer_from_builder(builder)
         self.cache_storage = self.manager.tx_storage
-        self.assertIsInstance(self.cache_storage, TransactionCacheStorage)
+        self.assertIsInstance(self.cache_storage, TransactionRocksDBStorage)
+        self.assertIsNotNone(self.cache_storage.cache_data)
 
         self.genesis = self.cache_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]
@@ -54,11 +55,11 @@ class CacheStorageTest(unittest.TestCase):
             self.cache_storage.save_transaction(tx)
 
         for tx in txs:
-            self.assertIn(tx.hash, self.cache_storage.dirty_txs)
+            self.assertIn(tx.hash, self.cache_storage.cache_data.dirty_txs)
 
         # should flush to disk and empty dirty set
-        self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
-        self.assertEqual(0, len(self.cache_storage.dirty_txs))
+        self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
+        self.assertEqual(0, len(self.cache_storage.cache_data.dirty_txs))
 
     def test_capacity(self):
         # cache should not grow over its capacity
@@ -66,7 +67,7 @@ class CacheStorageTest(unittest.TestCase):
         for tx in txs:
             self.cache_storage.save_transaction(tx)
 
-        self.assertEqual(CACHE_SIZE, len(self.cache_storage.cache))
+        self.assertEqual(CACHE_SIZE, len(self.cache_storage.cache_data.cache))
 
     def test_read_adds_to_cache(self):
         # make sure reading also adds to cache, not only writes
@@ -75,13 +76,13 @@ class CacheStorageTest(unittest.TestCase):
             self.cache_storage.save_transaction(tx)
 
         # by now, tx[0] will already have left the cache
-        self.assertNotIn(txs[0].hash, self.cache_storage.cache)
+        self.assertNotIn(txs[0].hash, self.cache_storage.cache_data.cache)
 
         # read tx
         self.cache_storage.get_transaction(txs[0].hash)
 
         # now it should be in cache
-        self.assertIn(txs[0].hash, self.cache_storage.cache)
+        self.assertIn(txs[0].hash, self.cache_storage.cache_data.cache)
 
     def test_read_moves_to_end(self):
         # when we read a tx from cache, it should be moved to the end of cache so it's evicted later
@@ -97,7 +98,7 @@ class CacheStorageTest(unittest.TestCase):
         self.cache_storage.save_transaction(txs[-1])
 
         # first tx should be in cache
-        self.assertIn(txs[0].hash, self.cache_storage.cache)
+        self.assertIn(txs[0].hash, self.cache_storage.cache_data.cache)
 
     def test_cache_eviction(self):
         # tests we're evicting the oldest tx from cache
@@ -107,9 +108,9 @@ class CacheStorageTest(unittest.TestCase):
 
         # next save should evict first tx
         self.cache_storage.save_transaction(txs[CACHE_SIZE])
-        self.assertNotIn(txs[0].hash, self.cache_storage.cache)
-        self.assertIn(txs[CACHE_SIZE].hash, self.cache_storage.cache)
-        self.assertEqual(CACHE_SIZE, len(self.cache_storage.cache))
+        self.assertNotIn(txs[0].hash, self.cache_storage.cache_data.cache)
+        self.assertIn(txs[CACHE_SIZE].hash, self.cache_storage.cache_data.cache)
+        self.assertEqual(CACHE_SIZE, len(self.cache_storage.cache_data.cache))
 
     def test_flush_thread(self):
         txs = [self._get_new_tx(nonce) for nonce in range(CACHE_SIZE)]
@@ -117,30 +118,30 @@ class CacheStorageTest(unittest.TestCase):
             self.cache_storage.save_transaction(tx)
 
         for tx in txs:
-            self.assertIn(tx.hash, self.cache_storage.dirty_txs)
+            self.assertIn(tx.hash, self.cache_storage.cache_data.dirty_txs)
 
         # Flush deferred is not None
-        self.assertIsNotNone(self.cache_storage.flush_deferred)
-        last_flush_deferred = self.cache_storage.flush_deferred
+        self.assertIsNotNone(self.cache_storage.cache_data.flush_deferred)
+        last_flush_deferred = self.cache_storage.cache_data.flush_deferred
         self.cache_storage._start_flush_thread()
-        self.assertEqual(last_flush_deferred, self.cache_storage.flush_deferred)
+        self.assertEqual(last_flush_deferred, self.cache_storage.cache_data.flush_deferred)
 
         # We flush the cache and flush_deferred becomes None
-        self.cache_storage._cb_flush_thread(self.cache_storage.dirty_txs.copy())
-        self.assertIsNone(self.cache_storage.flush_deferred)
+        self.cache_storage._cb_flush_thread()
+        self.assertIsNone(self.cache_storage.cache_data.flush_deferred)
         # After the interval it becomes not None again
         self.clock.advance(10)
-        self.assertIsNotNone(self.cache_storage.flush_deferred)
+        self.assertIsNotNone(self.cache_storage.cache_data.flush_deferred)
 
         # If an err occurs, it will become None again and then not None after the interval
         self.cache_storage._err_flush_thread('')
-        self.assertIsNone(self.cache_storage.flush_deferred)
+        self.assertIsNone(self.cache_storage.cache_data.flush_deferred)
         self.clock.advance(5)
-        self.assertIsNotNone(self.cache_storage.flush_deferred)
+        self.assertIsNotNone(self.cache_storage.cache_data.flush_deferred)
 
         # Remove element from cache to test a part of the code
-        del self.cache_storage.cache[next(iter(self.cache_storage.dirty_txs))]
-        self.cache_storage._flush_to_storage(self.cache_storage.dirty_txs.copy())
+        del self.cache_storage.cache_data.cache[next(iter(self.cache_storage.cache_data.dirty_txs))]
+        self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
 
     def test_topological_sort_dfs(self):
         self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
