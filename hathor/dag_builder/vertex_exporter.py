@@ -289,6 +289,7 @@ class VertexExporter:
 
     def _get_ast_value_bytes(self, ast_node: ast.AST) -> bytes:
         if isinstance(ast_node, ast.Constant):
+            assert isinstance(ast_node.value, str)
             return bytes.fromhex(ast_node.value)
         elif isinstance(ast_node, ast.Name):
             return self.get_vertex_id(ast_node.id)

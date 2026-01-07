@@ -114,7 +114,7 @@ def create_with_shell(cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) ->
     shell_type: type[T] = type(name, bases, attrs)
 
     # Use it to instantiate the object, init it, and return it. This mimics the default `__call__` behavior.
-    obj: T = cls.__new__(shell_type)
+    obj: T = cls.__new__(shell_type)  # type: ignore[call-overload]
     shell_type.__init__(obj, *args, **kwargs)
     return obj
 

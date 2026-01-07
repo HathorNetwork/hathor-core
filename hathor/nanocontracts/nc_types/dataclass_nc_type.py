@@ -78,9 +78,8 @@ class DataclassNCType(NCType[D]):
         # XXX: the order is important, but `dict` and `fields` should have a stable order
         values: dict[str, NCType] = {}
         for field in fields(type_):
-            values[field.name] = NCType.from_type(field.type, type_map=type_map)
-        # XXX: ignore arg-type because after using is_dataclass(type_) mypy gets confused about type_'s type
-        return cls(values, type_)  # type: ignore[arg-type]
+            values[field.name] = NCType.from_type(field.type, type_map=type_map)  # type: ignore[arg-type]
+        return cls(values, type_)
 
     @override
     def _check_value(self, value: D, /, *, deep: bool) -> None:
