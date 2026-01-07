@@ -34,6 +34,7 @@ def create_block(*, vertex_id: VertexId, height: int) -> Block:
         height=height,
         feature_activation_bit_counts=[],
         feature_states={},
+        score=0,
     ))
     return block
 
