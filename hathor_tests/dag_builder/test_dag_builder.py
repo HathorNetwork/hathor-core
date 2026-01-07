@@ -1,15 +1,20 @@
 import pytest
+from mypy.checkexpr import defaultdict
 
+from hathor.builder import Builder
 from hathor.conf.settings import HATHOR_TOKEN_UID
+from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
+from hathor.p2p.peer import PrivatePeer
 from hathor.transaction import Block, Transaction
 from hathor.transaction.headers import FeeHeader, NanoHeader
 from hathor.transaction.headers.fee_header import FeeEntry
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
+from hathor.wallet import HDWallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
@@ -37,6 +42,11 @@ class DAGBuilderTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
+        self.manager = self.create_manager()
+        self.nc_catalog = self.manager.tx_storage.nc_catalog
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+    def create_manager(self) -> HathorManager:
         from hathor.simulator.patches import SimulatorCpuMiningService
         from hathor.simulator.simulator import _build_vertex_verifiers
 
@@ -46,9 +56,7 @@ class DAGBuilderTestCase(unittest.TestCase):
             .set_vertex_verifiers_builder(_build_vertex_verifiers) \
             .set_cpu_mining_service(cpu_mining_service)
 
-        self.manager = self.create_peer_from_builder(builder)
-        self.nc_catalog = self.manager.tx_storage.nc_catalog
-        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+        return self.create_peer_from_builder(builder)
 
     def test_one_tx(self) -> None:
         artifacts = self.dag_builder.build_from_str("""
@@ -545,3 +553,203 @@ if foo:
         assert set(tx1.tokens) == {token_id}
         assert 'TKA' not in artifacts.by_name
         assert tx1.get_metadata().nc_execution == NCExecutionState.FAILURE
+
+    def test_determinism(self) -> None:
+        words = 'index talent enact review cherry lunch vacuum chef alone general rhythm banana helmet dash sudden ' \
+                'tobacco income search magic bar crater lens caution coin'
+        b1s = set()
+        b11s = set()
+        dummies = set()
+        txs1 = set()
+        txs2 = set()
+
+        for _ in range(4):
+            main_wallet = HDWallet(words=words)
+            main_wallet._manually_initialize()
+            manager = self.create_manager()
+            dag_builder = TestDAGBuilder.from_manager(
+                manager,
+                wallet_factory=lambda: main_wallet,
+            )
+            artifacts = dag_builder.build_from_str('''
+                blockchain genesis b[1..11]
+                b10 < dummy
+
+                dummy < tx1
+                dummy < tx2
+            ''')
+            artifacts.propagate_with(manager)
+
+            b1, b11 = artifacts.get_typed_vertices(('b1', 'b11'), Block)
+            dummy, tx1, tx2 = artifacts.get_typed_vertices(('dummy', 'tx1', 'tx2'), Transaction)
+
+            b1s.add(b1)
+            b11s.add(b11)
+            dummies.add(dummy)
+            txs1.add(tx1)
+            txs2.add(tx2)
+
+        assert len(b1s) == 1
+        assert len(b11s) == 1
+        assert len(dummies) == 1
+        assert len(txs1) == 1
+        assert len(txs2) == 1
+
+    def test_determinism2(self) -> None:
+        from hathor.nanocontracts import Blueprint, public
+        from hathor.nanocontracts.catalog import NCBlueprintCatalog
+        from hathor.nanocontracts.context import Context
+
+        words = 'index talent enact review cherry lunch vacuum chef alone general rhythm banana helmet dash sudden ' \
+                'tobacco income search magic bar crater lens caution coin'
+
+        class TokenFactoryBlueprint(Blueprint):
+            @public(allow_deposit=True)
+            def initialize(self, ctx: Context) -> None:
+                pass
+
+            @public(allow_deposit=True)
+            def create_nc_token(self, ctx: Context) -> None:
+                self.syscall.create_deposit_token(
+                    token_name='NC Token',
+                    token_symbol='NCT',
+                    amount=500,
+                )
+
+        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)
+        blueprint_id = b'\xaa' * 32
+        all_hashes: dict[str, set[bytes]] = defaultdict(set)
+
+        for _ in range(4):
+            main_wallet = HDWallet(words=words)
+            main_wallet._manually_initialize()
+
+            builder = Builder() \
+                .set_reactor(self.reactor) \
+                .set_peer(PrivatePeer.auto_generated()) \
+                .set_settings(settings)
+
+            manager = self.create_peer_from_builder(builder)
+            manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint_id: TokenFactoryBlueprint})
+
+            dag_builder = TestDAGBuilder.from_manager(
+                manager,
+                wallet_factory=lambda: main_wallet,  # all wallets are the same
+            )
+
+            artifacts = dag_builder.build_from_str(f'''
+                blockchain genesis b[1..10]
+                b1 < dummy
+
+                dummy < RGT < b2
+
+                tx_regular.out[0] = 300 RGT
+                RGT < tx_regular < b3
+
+                nc1.nc_id = "{blueprint_id.hex()}"
+                nc1.nc_method = initialize()
+                nc1.nc_deposit = 100 HTR
+                b5 < nc1
+
+                nc2.nc_id = nc1
+                nc2.nc_method = create_nc_token()
+                nc2.nc_deposit = 5 HTR
+
+                nc1 < nc2 < b6
+                nc1 <-- b6
+                nc2 <-- b7
+            ''')
+
+            artifacts.propagate_with(manager)
+            for pair in artifacts.list:
+                all_hashes[pair.node.name].add(pair.vertex.hash)
+
+        for name, hashes in all_hashes.items():
+            assert len(hashes) == 1, f'{name} has {len(hashes)} items'
+
+    def test_determinism3(self) -> None:
+        from hathor.nanocontracts import Blueprint, public
+        from hathor.nanocontracts.catalog import NCBlueprintCatalog
+        from hathor.nanocontracts.context import Context
+
+        words = 'index talent enact review cherry lunch vacuum chef alone general rhythm banana helmet dash sudden ' \
+                'tobacco income search magic bar crater lens caution coin'
+
+        class HybridTokenFactoryBlueprint(Blueprint):
+            @public(allow_deposit=True)
+            def initialize(self, ctx: Context) -> None:
+                pass
+
+            @public(allow_deposit=True)
+            def create_extra_token(self, ctx: Context) -> None:
+                """Creates an additional token via NC syscall"""
+                self.syscall.create_deposit_token(
+                    token_name='NC Extra Token',
+                    token_symbol='NCX',
+                    amount=777,
+                )
+
+        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)
+        blueprint_id = b'\xbb' * 32
+        all_hashes: dict[str, set[bytes]] = defaultdict(set)
+
+        for _ in range(1):
+            main_wallet = HDWallet(words=words)
+            main_wallet._manually_initialize()
+
+            builder = Builder() \
+                .set_reactor(self.reactor) \
+                .set_peer(PrivatePeer.auto_generated()) \
+                .set_settings(settings)
+
+            manager = self.create_peer_from_builder(builder)
+            manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint_id: HybridTokenFactoryBlueprint})
+
+            dag_builder = TestDAGBuilder.from_manager(
+                manager,
+                wallet_factory=lambda: main_wallet,  # all wallets are the same
+            )
+
+            artifacts = dag_builder.build_from_str(f'''
+                blockchain genesis b[1..2]
+                b1 < dummy
+
+                # Create transactions
+                # Initialize the nano contract
+                nc_init.nc_id = "{blueprint_id.hex()}"
+                nc_init.nc_method = initialize()
+                nc_init.nc_deposit = 50 HTR
+
+                # Create a HYBRID transaction (tt) that:
+                # 1. Is a TokenCreationTransaction (creates HYB token traditionally)
+                # 2. Also has NC headers that call create_extra_token() to create NCX via syscall
+                HYB.nc_id = nc_init
+                HYB.nc_method = create_extra_token()
+                HYB.nc_deposit = 100 HTR
+                tt.out[0] = 500 HYB
+
+                # Set up parents
+                dummy < nc_init
+                nc_init < tt   # tt depends on nc_init
+
+                # Confirm both in b2
+                nc_init <-- b2
+                tt <-- b2
+
+                # Now create the longer a-chain that will cause a reorg
+                blockchain b1 a[2..10]
+                a2.weight = 22
+                b2 < a2
+
+                # After reorg, both get re-confirmed in a3
+                nc_init <-- a5
+                # tt <-- a5
+                HYB <-- a5
+            ''')
+
+            artifacts.propagate_with(manager)
+            for pair in artifacts.list:
+                all_hashes[pair.node.name].add(pair.vertex.hash)
+
+        for name, hashes in all_hashes.items():
+            assert len(hashes) == 1, f'{name} has {len(hashes)} items'
