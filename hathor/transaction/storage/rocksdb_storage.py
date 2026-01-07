@@ -14,9 +14,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator, Optional
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from structlog import get_logger
+from twisted.internet import threads
 from typing_extensions import override
 
 from hathor.indexes import IndexesManager
@@ -24,7 +26,7 @@ from hathor.storage import RocksDBStorage
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.storage.migrations import MigrationState
-from hathor.transaction.storage.transaction_storage import BaseTransactionStorage
+from hathor.transaction.storage.transaction_storage import BaseTransactionStorage, CacheConfig, CacheData
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import VertexId
@@ -62,6 +64,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         vertex_parser: VertexParser,
         nc_storage_factory: NCStorageFactory,
         vertex_children_service: RocksDBVertexChildrenService,
+        cache_config: CacheConfig | None = None,
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
@@ -72,12 +75,102 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
         self.vertex_parser = vertex_parser
+
+        self.cache_data: CacheData | None = None
+        if cache_config is not None:
+            self.cache_data = CacheData(
+                reactor=cache_config.reactor,
+                interval=cache_config.interval,
+                capacity=cache_config.capacity,
+                cache=OrderedDict(),
+                dirty_txs=set(),
+            )
+
         super().__init__(
             indexes=indexes,
             settings=settings,
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
         )
+
+    def pre_init(self) -> None:
+        super().pre_init()
+        if self.cache_data is not None:
+            self.cache_data.reactor.callLater(self.cache_data.interval, self._start_flush_thread)
+
+    @override
+    def set_capacity(self, capacity: int) -> None:
+        assert self.cache_data is not None, 'cache is disabled'
+        assert capacity >= 0
+        self.cache_data.capacity = capacity
+        while len(self.cache_data.cache) > capacity:
+            self._cache_popitem()
+
+    def flush(self) -> None:
+        if self.cache_data is not None:
+            self._flush_to_storage(self.cache_data.dirty_txs.copy())
+
+    def _start_flush_thread(self) -> None:
+        assert self.cache_data is not None, 'cache is disabled'
+        if self.cache_data.flush_deferred is None:
+            deferred = threads.deferToThread(self._flush_to_storage, self.cache_data.dirty_txs.copy())
+            deferred.addCallback(self._cb_flush_thread)
+            deferred.addErrback(self._err_flush_thread)
+            self.cache_data.flush_deferred = deferred
+
+    def _cb_flush_thread(self) -> None:
+        assert self.cache_data is not None, 'cache is disabled'
+        self.cache_data.reactor.callLater(self.cache_data.interval, self._start_flush_thread)
+        self.cache_data.flush_deferred = None
+
+    def _err_flush_thread(self, reason: Any) -> None:
+        assert self.cache_data is not None, 'cache is disabled'
+        self.log.error('error flushing transactions', reason=reason)
+        self.cache_data.reactor.callLater(self.cache_data.interval, self._start_flush_thread)
+        self.cache_data.flush_deferred = None
+
+    def _flush_to_storage(self, dirty_txs_copy: set[bytes]) -> None:
+        """Write dirty pages to disk."""
+        assert self.cache_data is not None, 'cache is disabled'
+        for tx_hash in dirty_txs_copy:
+            # a dirty tx might be removed from self.cache outside this thread: if _update_cache is called
+            # and we need to save the tx to disk immediately. So it might happen that the tx which was
+            # in the dirty set when the flush thread began is not in cache anymore, hence this `if` check
+            if tx_hash in self.cache_data.cache:
+                tx = self.cache_data.cache[tx_hash]
+                self.cache_data.dirty_txs.discard(tx_hash)
+                self._save_transaction(tx, skip_cache=True)
+
+    def _cache_popitem(self) -> BaseTransaction:
+        """Pop the last recently used cache item."""
+        assert self.cache_data is not None, 'cache is disabled'
+        (_, removed_tx) = self.cache_data.cache.popitem(last=False)
+        if removed_tx.hash in self.cache_data.dirty_txs:
+            # write to disk so we don't lose the last update
+            self.cache_data.dirty_txs.discard(removed_tx.hash)
+            self.save_transaction_skip_cache(removed_tx)
+        return removed_tx
+
+    def _update_cache(self, tx: BaseTransaction) -> None:
+        """Updates the cache making sure it has at most the number of elements configured
+        as its capacity.
+
+        If we need to evict a tx from cache and it's dirty, write it to disk immediately.
+        """
+        assert self.cache_data is not None, 'cache is disabled'
+        _tx = self.cache_data.cache.get(tx.hash, None)
+        if not _tx:
+            if len(self.cache_data.cache) >= self.cache_data.capacity:
+                self._cache_popitem()
+            self.cache_data.cache[tx.hash] = tx
+        else:
+            # Tx might have been updated
+            self.cache_data.cache[tx.hash] = tx
+            self.cache_data.cache.move_to_end(tx.hash, last=True)
+
+    @override
+    def get_cache_data(self) -> CacheData | None:
+        return self.cache_data
 
     def _load_from_bytes(self, tx_data: bytes, meta_data: bytes) -> 'BaseTransaction':
         from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -104,6 +197,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def remove_transaction(self, tx: 'BaseTransaction') -> None:
         super().remove_transaction(tx)
+        if self.cache_data is not None:
+            self.cache_data.cache.pop(tx.hash, None)
+            self.cache_data.dirty_txs.discard(tx.hash)
         self._db.delete((self._cf_tx, tx.hash))
         self._db.delete((self._cf_meta, tx.hash))
         self._db.delete((self._cf_static_meta, tx.hash))
@@ -114,7 +210,23 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
-    def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
+    def save_transaction_skip_cache(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
+        super().save_transaction(tx, only_metadata=only_metadata)
+        self._save_transaction(tx, only_metadata=only_metadata, skip_cache=True)
+        self._save_to_weakref(tx)
+
+    def _save_transaction(
+        self,
+        tx: 'BaseTransaction',
+        *,
+        only_metadata: bool = False,
+        skip_cache: bool = False,
+    ) -> None:
+        if not skip_cache and self.cache_data is not None:
+            self._update_cache(tx)
+            self.cache_data.dirty_txs.add(tx.hash)
+            return
+
         key = tx.hash
         if not only_metadata:
             tx_data = self._tx_to_bytes(tx)
@@ -137,15 +249,25 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         vertex.set_static_metadata(static_metadata)
 
     def transaction_exists(self, hash_bytes: bytes) -> bool:
+        if self.cache_data is not None and hash_bytes in self.cache_data.cache:
+            return True
         may_exist, _ = self._db.key_may_exist((self._cf_tx, hash_bytes))
         if not may_exist:
             return False
         tx_exists = self._db.get((self._cf_tx, hash_bytes)) is not None
         return tx_exists
 
-    def _get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
-        tx = self.get_transaction_from_weakref(hash_bytes)
-        if tx is not None:
+    def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
+        if self.cache_data is not None and (tx := self.cache_data.cache.get(hash_bytes)):
+            self.cache_data.cache.move_to_end(hash_bytes, last=True)
+            self.cache_data.hit += 1
+            self._save_to_weakref(tx)
+            return tx
+
+        if tx := self.get_transaction_from_weakref(hash_bytes):
+            if self.cache_data is not None:
+                self.cache_data.hit += 1
+                self._update_cache(tx)
             return tx
 
         tx = self._get_transaction_from_db(hash_bytes)
@@ -156,6 +278,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         assert tx._static_metadata is not None
         assert tx.hash == hash_bytes
 
+        if self.cache_data is not None:
+            self.cache_data.miss += 1
+            self._update_cache(tx)
         self._save_to_weakref(tx)
         return tx
 
@@ -181,7 +306,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         return tx
 
     def _get_all_transactions(self) -> Iterator['BaseTransaction']:
-        tx: Optional['BaseTransaction']
+        if self.cache_data is not None:
+            self._flush_to_storage(self.cache_data.dirty_txs.copy())
 
         items = self._db.iteritems(self._cf_tx)
         items.seek_to_first()
@@ -200,6 +326,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             yield tx
 
     def is_empty(self) -> bool:
+        if self.cache_data is not None:
+            self._flush_to_storage(self.cache_data.dirty_txs.copy())
         # We consider 3 or less transactions as empty, because we want to ignore the genesis
         # block and txs
         keys = self._db.iterkeys(self._cf_tx)

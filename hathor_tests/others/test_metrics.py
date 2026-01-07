@@ -8,7 +8,8 @@ from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
+from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.wallet import Wallet
@@ -183,9 +184,9 @@ class MetricsTest(unittest.TestCase):
         # XXX: I had to close the DB and reinitialize the classes to force a flush of RocksDB memtables to disk
         # But I think we could do this in a better way if we had a python-binding for this Flush method in
         # https://github.com/facebook/rocksdb/blob/v7.5.3/include/rocksdb/db.h#L1396
-        manager.tx_storage.store._db.close()
+        manager.tx_storage._db.close()
 
-        manager = _init_manager(manager.tx_storage.store._rocksdb_storage.temp_dir)
+        manager = _init_manager(manager.tx_storage._rocksdb_storage.temp_dir)
         manager.metrics._collect_data()
 
         # We don't know exactly the sizes of each column family,
@@ -248,7 +249,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_cache_data_collection(self):
         """Test if cache-related data is correctly being collected from the
-            TransactionCacheStorage
+            TransactionRocksDBStorage
         """
         from hathor.nanocontracts.storage import NCRocksDBStorageFactory
 
@@ -256,26 +257,21 @@ class MetricsTest(unittest.TestCase):
         rocksdb_storage = self.create_rocksdb_storage()
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
-        base_storage = TransactionRocksDBStorage(
+        tx_storage = TransactionRocksDBStorage(
             rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=VertexParser(settings=self._settings),
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
-        )
-        tx_storage = TransactionCacheStorage(
-            base_storage,
-            self.clock,
-            indexes=None,
-            settings=self._settings,
-            nc_storage_factory=nc_storage_factory,
-            vertex_children_service=vertex_children_service,
+            cache_config=CacheConfig(reactor=self.clock),
         )
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
 
-        tx_storage.stats["hit"] = 10
-        tx_storage.stats["miss"] = 20
+        assert tx_storage.cache_data is not None
+        data = tx_storage.cache_data
+        data.hit = 10
+        data.miss = 20
 
         # Execution
         manager.metrics._collect_data()

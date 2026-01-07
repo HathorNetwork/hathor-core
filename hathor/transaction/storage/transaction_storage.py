@@ -15,19 +15,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod, abstractproperty
-from collections import deque
+from collections import OrderedDict, deque
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
 from weakref import WeakValueDictionary
 
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 
 from hathor.execution_manager import ExecutionManager
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
+from hathor.reactor import ReactorProtocol
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import (
@@ -68,6 +71,25 @@ cpu = get_cpu_profiler()
 NULL_INDEX_LAST_STARTED_AT = 0
 NULL_LAST_STARTED_AT = 1
 INDEX_ATTR_PREFIX = 'index_'
+
+
+@dataclass(slots=True, kw_only=True)
+class CacheConfig:
+    reactor: ReactorProtocol
+    interval: int = 5
+    capacity: int = 10000
+
+
+@dataclass(slots=True, kw_only=True)
+class CacheData:
+    reactor: ReactorProtocol
+    interval: int
+    capacity: int
+    cache: OrderedDict[bytes, BaseTransaction]
+    dirty_txs: set[bytes]  # txs that have been modified but are not persisted yet
+    flush_deferred: Deferred[None] | None = None
+    hit: int = 0
+    miss: int = 0
 
 
 class TransactionStorage(ABC):
@@ -186,6 +208,15 @@ class TransactionStorage(ABC):
 
     @abstractmethod
     def set_migration_state(self, migration_name: str, state: MigrationState) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_cache_data(self) -> CacheData | None:
+        """Return CacheData if cache is supported and enabled, and None otherwise."""
+        raise NotImplementedError
+
+    def set_capacity(self, capacity: int) -> None:
+        """Change the max number of items in cache, if cache is supported and enabled."""
         raise NotImplementedError
 
     def _check_and_apply_migrations(self) -> None:
@@ -1123,18 +1154,10 @@ class BaseTransactionStorage(TransactionStorage):
         assert self.indexes is not None
         return self.indexes.info.get_first_timestamp()
 
-    @abstractmethod
-    def _save_transaction(self, tx: BaseTransaction, *, only_metadata: bool = False) -> None:
-        raise NotImplementedError
-
     def reset_indexes(self) -> None:
         """Reset all indexes. This function should not be called unless you know what you are doing."""
         assert self.indexes is not None, 'Cannot reset indexes because they have not been enabled.'
         self.indexes.force_clear_all()
-
-    def remove_cache(self) -> None:
-        """Remove all caches in case we don't need it."""
-        self.indexes = None
 
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
         block = self.get_best_block()
