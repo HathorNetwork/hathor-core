@@ -22,12 +22,11 @@ jobs:
     strategy:
       matrix:
         python:
-          - "3.10"
           - "3.11"
+          - "3.12"
         os:
           - ubuntu-22.04
           - macos-15
-          # - windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
