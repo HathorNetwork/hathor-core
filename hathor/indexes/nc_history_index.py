@@ -69,6 +69,11 @@ class NCHistoryIndex(TxGroupIndex[bytes]):
         """Get a list of tx_ids sorted by timestamp for a given contract_id starting from the newest.
         """
         return self._get_sorted_from_key(contract_id, reverse=True)
+    
+    def get_oldest(self, contract_id: bytes) -> Iterable[bytes]:
+        """Get a list of tx_ids sorted by timestamp for a given contract_id starting from the oldest.
+        """
+        return self._get_sorted_from_key(contract_id, reverse=False)
 
     def get_older(self, contract_id: bytes, tx_start: Optional[BaseTransaction] = None) -> Iterable[bytes]:
         """Get a list of tx_ids sorted by timestamp for a given contract_id that are older than tx_start.
