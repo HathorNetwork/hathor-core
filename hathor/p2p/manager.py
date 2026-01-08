@@ -32,12 +32,12 @@ from hathor.p2p.peer_discovery import PeerDiscovery
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import VerifiedPeerStorage
+from hathor.p2p.peers_whitelist import PeersWhitelist
 from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
-from hathor.p2p.utils import parse_whitelist
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
@@ -47,9 +47,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
-
-# The timeout in seconds for the whitelist GET request
-WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class _SyncRotateInfo(NamedTuple):
@@ -85,10 +82,11 @@ class ConnectionsManager:
     new_connection_from_queue: deque[PeerId]
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: set[HathorProtocol]
-    whitelist_only: bool
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
+    p2p_whitelist: Optional[PeersWhitelist]
+    only_whitelist: bool
 
     rate_limiter: RateLimiter
 
@@ -100,7 +98,7 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
-        whitelist_only: bool,
+        peers_whitelist: PeersWhitelist | None,
         enable_ipv6: bool,
         disable_ipv4: bool,
     ) -> None:
@@ -187,16 +185,15 @@ class ConnectionsManager:
         self.lc_connect.clock = self.reactor
         self.lc_connect_interval = 0.2  # seconds
 
-        # A timer to try to reconnect to the disconnect known peers.
-        if self._settings.ENABLE_PEER_WHITELIST:
-            self.wl_reconnect = LoopingCall(self.update_whitelist)
-            self.wl_reconnect.clock = self.reactor
+        # Whitelisted peers.
+        self.peers_whitelist: PeersWhitelist | None = peers_whitelist
+
+        # One may chose whether to follow the whitelist or not. Alterable by sysctl.
+        # This is a p2p_manager copy of the wl_object status "_following_wl".
+        self.only_whitelist = self.peers_whitelist.following_wl() if self.peers_whitelist else False
 
         # Pubsub object to publish events
         self.pubsub = pubsub
-
-        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
-        self.whitelist_only = whitelist_only
 
         # Parameter to enable IPv6 connections
         self.enable_ipv6 = enable_ipv6
@@ -303,28 +300,13 @@ class ConnectionsManager:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
-        if self._settings.ENABLE_PEER_WHITELIST:
-            self._start_whitelist_reconnect()
+        if self.peers_whitelist:
+            self.peers_whitelist.start(self.drop_connection_by_peer_id)
 
         for description in self.listen_address_descriptions:
             self.listen(description)
 
         self.do_discovery()
-
-    def _start_whitelist_reconnect(self) -> None:
-        # The deferred returned by the LoopingCall start method
-        # executes when the looping call stops running
-        # https://docs.twistedmatrix.com/en/stable/api/twisted.internet.task.LoopingCall.html
-        d = self.wl_reconnect.start(30)
-        d.addErrback(self._handle_whitelist_reconnect_err)
-
-    def _handle_whitelist_reconnect_err(self, *args: Any, **kwargs: Any) -> None:
-        """ This method will be called when an exception happens inside the whitelist update
-            and ends up stopping the looping call.
-            We log the error and start the looping call again.
-        """
-        self.log.error('whitelist reconnect had an exception. Start looping call again.', args=args, kwargs=kwargs)
-        self.reactor.callLater(30, self._start_whitelist_reconnect)
 
     def _start_peer_connect_loop(self) -> None:
         # The deferred returned by the LoopingCall start method
@@ -353,6 +335,9 @@ class ConnectionsManager:
 
         if self.lc_sync_update.running:
             self.lc_sync_update.stop()
+
+        if self.peers_whitelist:
+            self.peers_whitelist.stop()
 
     def _get_peers_count(self) -> PeerConnectionsMetrics:
         """Get a dict containing the count of peers in each state"""
@@ -421,9 +406,9 @@ class ConnectionsManager:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
+
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
-
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
             protocol=protocol,
@@ -601,47 +586,6 @@ class ConnectionsManager:
         # when the peer is disconnected and without entrypoint
         for peer in list(self.verified_peer_storage.values()):
             self.connect_to_peer(peer, int(now))
-
-    def update_whitelist(self) -> Deferred[None]:
-        from twisted.web.client import readBody
-        from twisted.web.http_headers import Headers
-        assert self._settings.WHITELIST_URL is not None
-        self.log.info('update whitelist')
-        d = self._http_agent.request(
-            b'GET',
-            self._settings.WHITELIST_URL.encode(),
-            Headers({'User-Agent': ['hathor-core']}),
-            None)
-        d.addCallback(readBody)
-        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self.reactor)
-        d.addCallback(self._update_whitelist_cb)
-        d.addErrback(self._update_whitelist_err)
-
-        return d
-
-    def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
-        self.log.error('update whitelist failed', args=args, kwargs=kwargs)
-
-    def _update_whitelist_cb(self, body: bytes) -> None:
-        assert self.manager is not None
-        self.log.info('update whitelist got response')
-        try:
-            text = body.decode()
-            new_whitelist = parse_whitelist(text)
-        except Exception:
-            self.log.exception('failed to parse whitelist')
-            return
-        current_whitelist = set(self.manager.peers_whitelist)
-        peers_to_add = new_whitelist - current_whitelist
-        if peers_to_add:
-            self.log.info('add new peers to whitelist', peers=peers_to_add)
-        peers_to_remove = current_whitelist - new_whitelist
-        if peers_to_remove:
-            self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
-        for peer_id in peers_to_add:
-            self.manager.add_peer_to_whitelist(peer_id)
-        for peer_id in peers_to_remove:
-            self.manager.remove_peer_from_whitelist_and_disconnect(peer_id)
 
     def connect_to_peer(self, peer: UnverifiedPeer | PublicPeer, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
@@ -940,3 +884,44 @@ class ConnectionsManager:
         self.log.warn('Killing all connections and resetting entrypoints...')
         self.disconnect_all_peers(force=True)
         self.my_peer.reload_entrypoints_from_source_file()
+
+    def whitelist_swap(self, wl_object: PeersWhitelist) -> None:
+        """
+            Altering whitelist (URL/PATH) during full-node runtime.
+        """
+
+        if not wl_object:
+            return
+
+        if self.peers_whitelist:
+            self.peers_whitelist.stop()
+
+        # Sysctl may only update to another URL or Path, not None.
+        self.log.warn("Swapping whitelists... ")
+        self.peers_whitelist = wl_object
+
+        self.whitelist_toggle(wl_object.following_wl())
+
+    def whitelist_toggle(self, wl_toggle: bool) -> None:
+        """
+            Called if whitelist is turned "on" or "off".
+            Called via sysctl methods.
+        """
+
+        if not self.peers_whitelist:
+            return
+
+        # Pass toggle option to p2p local copy.
+        self.only_whitelist = wl_toggle
+        self.peers_whitelist._following_wl = wl_toggle
+
+        if wl_toggle:
+            self.log.warn('Whitelist ON: Node starts following it...')
+            # All connections not in the whitelist are severed.
+            for conn in self.connections:
+                if conn.get_peer_id():
+                    if conn.get_peer_id() not in self.peers_whitelist._current:
+                        conn.disconnect(reason='Whitelist turned on', force=True)
+            return
+
+        self.log.warn("Whitelist OFF - Node starts ignoring it...")
