@@ -582,7 +582,7 @@ class BaseCacheStorageTest(BaseTransactionStorageTest):
         tx_hash = tx.hash
         super()._test_remove_tx_or_block(tx)
         # XXX: make sure it was removed from the internal storage
-        self.assertFalse(self.tx_storage.store.transaction_exists(tx_hash))
+        self.assertFalse(self.tx_storage.transaction_exists(tx_hash))
 
 
 class TransactionRocksDBStorageTest(BaseTransactionStorageTest):

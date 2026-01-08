@@ -26,7 +26,6 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.base_transaction import sum_weights
 from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
-from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 
 if TYPE_CHECKING:
     from hathor.stratum import StratumFactory  # noqa: F401
@@ -149,9 +148,9 @@ class Metrics:
             self.hash_rate = self.calculate_new_hashrate(last_block[0])
             self.best_block_height = self.tx_storage.get_height_best_block()
 
-        if isinstance(self.tx_storage, TransactionCacheStorage):
-            self.log.info("Transaction cache hits during initialization", hits=self.tx_storage.stats.get("hit"))
-            self.log.info("Transaction cache misses during initialization", misses=self.tx_storage.stats.get("miss"))
+        if cache_data := self.tx_storage.get_cache_data():
+            self.log.info("Transaction cache hits during initialization", hits=cache_data.hit)
+            self.log.info("Transaction cache misses during initialization", misses=cache_data.miss)
 
     def start(self) -> None:
         self._start_initial_values()
@@ -276,19 +275,12 @@ class Metrics:
     def set_cache_data(self) -> None:
         """ Collect and set data related to the transactions cache.
         """
-        if isinstance(self.tx_storage, TransactionCacheStorage):
-            hits = self.tx_storage.stats.get("hit")
-            misses = self.tx_storage.stats.get("miss")
-            if hits:
-                self.transaction_cache_hits = hits
-            if misses:
-                self.transaction_cache_misses = misses
+        if cache_data := self.tx_storage.get_cache_data():
+            self.transaction_cache_hits = cache_data.hit
+            self.transaction_cache_misses = cache_data.miss
 
     def set_tx_storage_data(self) -> None:
         store = self.tx_storage
-
-        if isinstance(self.tx_storage, TransactionCacheStorage):
-            store = self.tx_storage.store
 
         if not isinstance(store, TransactionRocksDBStorage):
             # We currently only collect metrics for RocksDB

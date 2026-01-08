@@ -46,7 +46,8 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.storage import RocksDBStorage
 from hathor.stratum import StratumFactory
 from hathor.transaction.json_serializer import VertexJsonSerializer
-from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
+from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
+from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info
@@ -506,9 +507,11 @@ class Builder:
             self._tx_storage.indexes = indexes
             return self._tx_storage
 
-        store_indexes: Optional[IndexesManager] = indexes
+        cache_config: CacheConfig | None = None
         if self._tx_storage_cache:
-            store_indexes = None
+            cache_config = CacheConfig(reactor=self._get_reactor())
+            if self._tx_storage_cache_capacity is not None:
+                cache_config.capacity = self._tx_storage_cache_capacity
 
         rocksdb_storage = self._get_or_create_rocksdb_storage()
         nc_storage_factory = self._get_or_create_nc_storage_factory()
@@ -516,27 +519,13 @@ class Builder:
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         self._tx_storage = TransactionRocksDBStorage(
             rocksdb_storage,
-            indexes=store_indexes,
+            indexes=indexes,
             settings=settings,
             vertex_parser=vertex_parser,
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
+            cache_config=cache_config,
         )
-
-        if self._tx_storage_cache:
-            reactor = self._get_reactor()
-            kwargs: dict[str, Any] = {}
-            if self._tx_storage_cache_capacity is not None:
-                kwargs['capacity'] = self._tx_storage_cache_capacity
-            self._tx_storage = TransactionCacheStorage(
-                self._tx_storage,
-                reactor,
-                indexes=indexes,
-                settings=settings,
-                nc_storage_factory=nc_storage_factory,
-                vertex_children_service=vertex_children_service,
-                **kwargs
-            )
 
         return self._tx_storage
 
@@ -794,9 +783,8 @@ class Builder:
     def set_tx_storage(self, tx_storage: TransactionStorage) -> 'Builder':
         self.check_if_can_modify()
         self._tx_storage = tx_storage
-        internal = tx_storage.store if isinstance(tx_storage, TransactionCacheStorage) else tx_storage
-        assert isinstance(internal, TransactionRocksDBStorage)
-        self._rocksdb_storage = internal._rocksdb_storage
+        assert isinstance(tx_storage, TransactionRocksDBStorage)
+        self._rocksdb_storage = tx_storage._rocksdb_storage
         return self
 
     def set_event_storage(self, event_storage: EventStorage) -> 'Builder':
