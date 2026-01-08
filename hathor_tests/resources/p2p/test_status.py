@@ -5,6 +5,7 @@ from twisted.internet.defer import inlineCallbacks
 import hathor
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.resources import StatusResource
+from hathor.p2p.whitelist import URLPeersWhitelist
 from hathor.simulator import FakeConnection
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 
@@ -15,12 +16,30 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(StatusResource(self.manager))
         address1 = IPv4Address('TCP', '192.168.1.1', 54321)
         self.manager.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address1))
-        self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
-        self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
-
-        self.manager2 = self.create_peer('testnet')
+        url = "https://anything.com"
+        reactor = self.manager.reactor
+        mock_peers_whitelist = URLPeersWhitelist(reactor, url, True)
+        mock_peers_whitelist.start(mock_peers_whitelist._on_remove_callback)
+        self.manager.connections.peers_whitelist = mock_peers_whitelist
+        self.manager.connections.peers_whitelist.add_peer(self.get_random_peer_from_pool().id)
+        self.manager.connections.peers_whitelist.add_peer(self.get_random_peer_from_pool().id)
+        # Simulate successful fetch to end grace period
+        self.manager.connections.peers_whitelist._has_successful_fetch = True
+        url_2 = "https://somethingDifferent.com"
+        self.manager2 = self.create_peer('testnet', url_whitelist=url_2)
         address2 = IPv4Address('TCP', '192.168.1.1', 54322)
         self.manager2.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address2))
+
+        # Manager's whitelist is not empty, so its mock whitelist will be followed.
+        # Since manager 2 is a different instance, we need to add it to the whitelist of manager 1
+        self.manager.connections.peers_whitelist.add_peer(self.manager2.my_peer.id)
+
+        # Likewise for manager 1 in manager 2
+        self.manager2.connections.peers_whitelist.add_peer(self.manager.my_peer.id)
+        # Simulate successful fetch to end grace period
+        self.manager2.connections.peers_whitelist._has_successful_fetch = True
+
+        # Now, we create a fake connection between the two managers.
         self.conn1 = FakeConnection(self.manager, self.manager2, addr1=address1, addr2=address2)
 
     @inlineCallbacks
@@ -78,6 +97,9 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.conn1.run_one_step()  # PEER-ID
         self.conn1.run_one_step()  # READY
         self.conn1.run_one_step()  # BOTH PEERS ARE READY NOW
+
+        assert self.manager.connections.peers_whitelist is not None, 'Peers whitelist should not be None'
+        assert len(self.manager.connections.peers_whitelist._current) == 3, 'Should have one peer in the whitelist'
 
         response = yield self.web.get("status")
         data = response.json_value()
