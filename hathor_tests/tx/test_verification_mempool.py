@@ -223,7 +223,6 @@ class VertexHeadersTest(unittest.TestCase):
         assert self.manager.vertex_handler.on_new_mempool_transaction(tx_ok)
 
         assert self.manager.tx_storage.transaction_exists(tx_ok.hash)
-        assert self.manager.tx_storage.indexes.mempool_tips is not None
         mempool_hashes = {
             tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
         }
@@ -283,7 +282,6 @@ class VertexHeadersTest(unittest.TestCase):
 
         assert self.manager.vertex_handler.on_new_mempool_transaction(tx_ok)
 
-        assert self.manager.tx_storage.indexes.mempool_tips is not None
         mempool_hashes = {
             tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter_all(self.manager.tx_storage)
         }

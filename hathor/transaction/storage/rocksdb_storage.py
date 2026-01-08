@@ -58,12 +58,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     def __init__(
         self,
         rocksdb_storage: RocksDBStorage,
-        indexes: Optional[IndexesManager] = None,
         *,
         settings: 'HathorSettings',
         vertex_parser: VertexParser,
         nc_storage_factory: NCStorageFactory,
         vertex_children_service: RocksDBVertexChildrenService,
+        indexes: IndexesManager,
         cache_config: CacheConfig | None = None,
     ) -> None:
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)

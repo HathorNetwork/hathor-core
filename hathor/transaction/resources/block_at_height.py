@@ -44,8 +44,6 @@ class BlockAtHeightResource(Resource):
 
             :rtype: string (json)
         """
-        assert self.manager.tx_storage.indexes is not None
-
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 

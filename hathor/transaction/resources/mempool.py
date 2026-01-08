@@ -85,12 +85,8 @@ class MempoolResource(Resource):
         return json_dumpb(data)
 
     def _get_from_index(self, index_source: IndexSource) -> Iterator[Transaction]:
-        tx_storage = self.manager.tx_storage
-        assert tx_storage.indexes is not None
         if index_source == IndexSource.ANY or index_source == IndexSource.MEMPOOL:
-            # XXX: if source is ANY we try to use the mempool when possible
-            if tx_storage.indexes.mempool_tips is None:
-                raise ValueError('mempool index is not enabled')
+            # XXX: if source is ANY we try to use the mempool
             yield from self._get_from_mempool_tips_index()
         elif index_source == IndexSource.TX_TIPS:
             raise ValueError('tx-tips index has been removed')
@@ -99,8 +95,6 @@ class MempoolResource(Resource):
 
     def _get_from_mempool_tips_index(self) -> Iterator[Transaction]:
         tx_storage = self.manager.tx_storage
-        assert tx_storage.indexes is not None
-        assert tx_storage.indexes.mempool_tips is not None
         yield from tx_storage.indexes.mempool_tips.iter_all(tx_storage)
 
 

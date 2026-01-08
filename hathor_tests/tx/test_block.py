@@ -43,7 +43,7 @@ def test_calculate_feature_activation_bit_counts_genesis():
 def tx_storage() -> TransactionStorage:
     artifacts = TestBuilder().build()
     storage = artifacts.tx_storage
-    indexes = not_none(artifacts.indexes)
+    indexes = artifacts.indexes
     feature_activation_bits = [
         0b0000,  # 0: boundary block
         0b1010,

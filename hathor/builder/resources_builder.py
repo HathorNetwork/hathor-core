@@ -315,7 +315,6 @@ class ResourcesBuilder:
                 parent.putChild(url_path, resource)
 
         # Websocket resource
-        assert self.manager.tx_storage.indexes is not None
         ws_factory = HathorAdminWebsocketFactory(manager=self.manager,
                                                  metrics=self.manager.metrics,
                                                  address_index=self.manager.tx_storage.indexes.addresses)

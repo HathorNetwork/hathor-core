@@ -1,6 +1,7 @@
 from typing import Iterator
 
 from hathor.conf.settings import HathorSettings
+from hathor.indexes import RocksDBIndexesManager
 from hathor.pubsub import PubSubManager
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage import RocksDBStorage
@@ -18,12 +19,14 @@ class ModifiedTransactionRocksDBStorage(TransactionRocksDBStorage):
         from hathor.nanocontracts.storage import NCRocksDBStorageFactory
         rocksdb_storage = RocksDBStorage(path=path)
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
+        indexes = RocksDBIndexesManager(rocksdb_storage=rocksdb_storage, settings=settings)
         super().__init__(
             rocksdb_storage=rocksdb_storage,
             settings=settings,
             vertex_parser=VertexParser(settings=settings),
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=RocksDBVertexChildrenService(rocksdb_storage),
+            indexes=indexes,
         )
         self._first_tx: BaseTransaction | None = None
 

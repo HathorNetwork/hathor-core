@@ -254,7 +254,6 @@ class VertexHandler:
         """
         # XXX: during post consensus we don't need to verify weights again, so we can disable it
         params = replace(params, skip_block_weight_verification=True)
-        assert self._tx_storage.indexes is not None
         assert self._verification_service.validate_full(
             vertex,
             params,
