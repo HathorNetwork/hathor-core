@@ -734,12 +734,12 @@ class BlockConsensusAlgorithm:
         bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(block, skip_root=True):
             if tx.is_block:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
                 continue
 
             meta = tx.get_metadata()
             if meta.first_block != block.hash:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
                 continue
 
             if tx.is_nano_contract():
@@ -757,6 +757,7 @@ class BlockConsensusAlgorithm:
                     meta.voided_by = None
             meta.first_block = None
             self.context.save(tx)
+            bfs.add_neighbors()
 
     def _score_block_dfs(self, block: BaseTransaction, used: set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> int:
@@ -785,11 +786,11 @@ class BlockConsensusAlgorithm:
                 for tx in bfs.run(parent, skip_root=False):
                     assert tx.hash is not None
                     if tx.is_block:
-                        bfs.skip_neighbors(tx)
+                        bfs.skip_neighbors()
                         continue
 
                     if tx.hash in used:
-                        bfs.skip_neighbors(tx)
+                        bfs.skip_neighbors()
                         continue
                     used.add(tx.hash)
 
@@ -797,7 +798,7 @@ class BlockConsensusAlgorithm:
                     if meta.first_block:
                         first_block = storage.get_transaction(meta.first_block)
                         if first_block.timestamp <= newest_timestamp:
-                            bfs.skip_neighbors(tx)
+                            bfs.skip_neighbors()
                             continue
 
                     if mark_as_best_chain:
@@ -806,6 +807,7 @@ class BlockConsensusAlgorithm:
                         self.context.save(tx)
 
                     score += weight_to_work(tx.weight)
+                    bfs.add_neighbors()
 
         # Always save the score when it is calculated.
         meta = block.get_metadata()
