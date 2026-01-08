@@ -22,6 +22,7 @@ from structlog import get_logger
 from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
+from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.utils import is_fee_active
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
@@ -190,7 +191,9 @@ class ConsensusAlgorithm:
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
             assert tx_affected.storage is not None
-            tx_affected.storage.indexes.update(tx_affected)
+            tx_affected.storage.indexes.update_critical_indexes(tx_affected)
+            with non_critical_code(self.log):
+                tx_affected.storage.indexes.update_non_critical_indexes(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
         # signal all transactions of which the execution succeeded
