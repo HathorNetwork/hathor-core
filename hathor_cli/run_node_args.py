@@ -92,6 +92,8 @@ class RunNodeArgs(BaseModel):
     x_enable_ipv6: bool
     x_disable_ipv4: bool
     localnet: bool
+    x_p2p_whitelist_only: bool
+    x_p2p_whitelist: Optional[str]
     nc_indexes: bool
     nc_exec_logs: NCLogConfig
     nc_exec_fail_trace: bool
