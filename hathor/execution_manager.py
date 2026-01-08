@@ -13,8 +13,10 @@
 #  limitations under the License.
 
 import sys
-from typing import Callable, NoReturn
+from contextlib import contextmanager
+from typing import Callable, Iterator, NoReturn
 
+import structlog
 from structlog import get_logger
 
 from hathor.reactor import ReactorProtocol
@@ -63,3 +65,12 @@ class ExecutionManager:
         self._reactor.stop()
         self._reactor.crash()
         sys.exit(-1)
+
+
+@contextmanager
+def non_critical_code(log: structlog.stdlib.BoundLogger) -> Iterator[None]:
+    """Use this context manager to ignore all exceptions in the contained code."""
+    try:
+        yield
+    except BaseException:
+        log.exception('ignoring error in non-critical code')

@@ -23,6 +23,7 @@ from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.consensus.context import ReorgInfo
+from hathor.execution_manager import non_critical_code
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -267,7 +268,8 @@ class BlockConsensusAlgorithm:
 
                 # Update indexes. This must be after metadata is updated.
                 assert tx.storage is not None
-                tx.storage.indexes.handle_contract_execution(tx)
+                with non_critical_code(self.log):
+                    tx.storage.indexes.non_critical_handle_contract_execution(tx)
 
                 # Pubsub event to indicate execution success
                 self.context.nc_exec_success.append(tx)
@@ -566,7 +568,9 @@ class BlockConsensusAlgorithm:
             else:
                 meta.voided_by = voided_by.copy()
             self.context.save(block)
-            block.storage.del_from_indexes(block, relax_assert=True)
+            block.storage.del_from_critical_indexes(block)
+            with non_critical_code(self.log):
+                block.storage.del_from_non_critical_indexes(block)
             return True
         return False
 
@@ -741,7 +745,8 @@ class BlockConsensusAlgorithm:
             if tx.is_nano_contract():
                 if meta.nc_execution == NCExecutionState.SUCCESS:
                     assert tx.storage is not None
-                    tx.storage.indexes.handle_contract_unexecution(tx)
+                    with non_critical_code(self.log):
+                        tx.storage.indexes.non_critical_handle_contract_unexecution(tx)
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None
                 meta.nc_events = None
