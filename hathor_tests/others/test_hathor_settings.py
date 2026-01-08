@@ -35,7 +35,6 @@ def test_valid_hathor_settings_from_yaml(filepath):
         MULTISIG_VERSION_BYTE=b'\x64',
         NETWORK_NAME='testing',
         BOOTSTRAP_DNS=['mainnet.hathor.network'],
-        ENABLE_PEER_WHITELIST=True,
         WHITELIST_URL='https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids',
         MIN_TX_WEIGHT_K=0,
         MIN_TX_WEIGHT_COEFFICIENT=0,
