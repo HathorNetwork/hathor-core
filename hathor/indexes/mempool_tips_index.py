@@ -202,12 +202,13 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
             if not isinstance(tx, Transaction):
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
                 continue
             if tx.get_metadata().first_block is not None:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
             else:
                 yield tx
+                bfs.add_neighbors()
 
     def get(self) -> set[bytes]:
         return set(iter(self._index))

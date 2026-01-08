@@ -360,16 +360,17 @@ class ConsensusAlgorithm:
         # Run a right-to-left BFS starting from the mempool tips.
         for tx in find_invalid_bfs.run(mempool_tips, skip_root=False):
             if not isinstance(tx, Transaction):
-                find_invalid_bfs.skip_neighbors(tx)
+                find_invalid_bfs.skip_neighbors()
                 continue
 
             if tx.get_metadata().first_block is not None:
-                find_invalid_bfs.skip_neighbors(tx)
+                find_invalid_bfs.skip_neighbors()
                 continue
 
             # At this point, it's a mempool tx, so we have to re-verify it.
             if not all(rule(tx) for rule in mempool_rules):
                 invalid_txs.add(tx)
+            find_invalid_bfs.add_neighbors()
 
         # From the invalid txs, mark all vertices to the right as invalid. This includes both txs and blocks.
         to_remove: list[BaseTransaction] = []
@@ -379,6 +380,7 @@ class ConsensusAlgorithm:
         for vertex in find_to_remove_bfs.run(invalid_txs, skip_root=False):
             vertex.set_validation(ValidationState.INVALID)
             to_remove.append(vertex)
+            find_to_remove_bfs.add_neighbors()
 
         to_remove.reverse()
         return to_remove
