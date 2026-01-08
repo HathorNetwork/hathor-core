@@ -282,7 +282,9 @@ def run_server(
         '--status {}'.format(status),
         # We must allow mining without peers, otherwise some tests won't be able to mine.
         '--allow-mining-without-peers',
-        '--wallet-index'
+        '--wallet-index',
+        # Disable whitelist for testing (empty whitelist with restrictive policy blocks all)
+        '--x-p2p-whitelist disabled'
     ])
 
     if bootstrap:

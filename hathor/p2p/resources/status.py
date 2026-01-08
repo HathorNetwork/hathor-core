@@ -95,6 +95,11 @@ class StatusResource(Resource):
         best_blockchain = to_serializable_best_blockchain(raw_best_blockchain)
         best_block_tips = [{'hash': best_block.hash_hex, 'height': best_block.static_metadata.height}]
 
+        whitelist = self.manager.connections.peers_whitelist
+        if whitelist is not None:
+            peer_ids = whitelist.current_whitelist()
+        else:
+            peer_ids = set()
         data = {
             'server': {
                 'id': str(self.manager.connections.my_peer.id),
@@ -104,7 +109,7 @@ class StatusResource(Resource):
                 'uptime': now - self.manager.start_time,
                 'entrypoints': self.manager.connections.my_peer.info.entrypoints_as_str(),
             },
-            'peers_whitelist': [str(peer_id) for peer_id in self.manager.peers_whitelist],
+            'peers_whitelist': [str(peer_id) for peer_id in peer_ids],
             'known_peers': known_peers,
             'connections': {
                 'connected_peers': connected_peers,
