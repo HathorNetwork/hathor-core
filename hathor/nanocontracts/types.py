@@ -45,7 +45,7 @@ from hathor.utils.typing import InnerTypeMixin
 
 
 # Types to be used by blueprints.
-class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class Address(bytes, metaclass=FauxImmutableMeta):
     __allow_faux_inheritance__ = True
     __allow_faux_dunder__ = ('__str__', '__repr__')
     __slots__ = ()
@@ -66,27 +66,27 @@ class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
         return f"Address.from_str({encoded_address!r})"
 
 
-class VertexId(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class VertexId(bytes, metaclass=FauxImmutableMeta):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class BlueprintId(VertexId):  # type: ignore[misc]
+class BlueprintId(VertexId):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class ContractId(VertexId):  # type: ignore[misc]
+class ContractId(VertexId):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class TokenUid(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class TokenUid(bytes, metaclass=FauxImmutableMeta):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class TxOutputScript(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class TxOutputScript(bytes, metaclass=FauxImmutableMeta):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 

@@ -113,7 +113,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
             class MyBlueprint(Blueprint):
                 @public
-                def initialize() -> None:  # type: ignore
+                def initialize() -> None:
                     pass
 
     def test_public_wrong_self(self) -> None:
@@ -129,7 +129,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
             class MyBlueprint(Blueprint):
                 @public
-                def initialize(self: int) -> None:  # type: ignore
+                def initialize(self: int) -> None:
                     pass
 
     def test_view_missing_self(self) -> None:
@@ -141,7 +141,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
                     pass
 
                 @view
-                def nop() -> None:  # type: ignore
+                def nop() -> None:
                     pass
 
     def test_view_wrong_self(self) -> None:
@@ -165,7 +165,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
                     pass
 
                 @view
-                def nop(self: int) -> None:  # type: ignore
+                def nop(self: int) -> None:
                     pass
 
     def test_fallback_missing_self(self) -> None:
@@ -177,7 +177,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
                     pass
 
                 @fallback
-                def fallback() -> None:  # type: ignore
+                def fallback() -> None:
                     pass
 
     def test_fallback_wrong_self(self) -> None:
@@ -201,7 +201,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
                     pass
 
                 @fallback
-                def fallback(self: int) -> None:  # type: ignore
+                def fallback(self: int) -> None:
                     pass
 
     def test_public_missing_context(self) -> None:

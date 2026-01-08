@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from structlog import get_logger
 
@@ -93,7 +93,7 @@ class RocksDBTimestampIndex(TimestampIndex, RocksDBIndexUtils):
         """
         if from_timestamp is None and from_tx is not None:
             raise ValueError('from_tx needs from_timestamp, but it is None')
-        it = self._db.iterkeys(self._cf)
+        it: Any = self._db.iterkeys(self._cf)
         if reverse:
             it = reversed(it)
             if from_timestamp is None:

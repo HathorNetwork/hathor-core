@@ -89,7 +89,7 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
 
     def test_tuple(self) -> None:
         value: NCType[tuple[str, int, set[int], bool]]
-        value = make_nc_type(tuple[str, int, set[int], bool])  # type: ignore[arg-type]
+        value = make_nc_type(tuple[str, int, set[int], bool])
         self._run_test(('str', 1, {3}, True), value)
 
     def test_changes_tracker_delete(self) -> None:
