@@ -267,8 +267,6 @@ class MetricsTest(unittest.TestCase):
         )
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)
-
-        assert tx_storage.cache_data is not None
         data = tx_storage.cache_data
         data.hit = 10
         data.miss = 20

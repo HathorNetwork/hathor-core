@@ -215,7 +215,7 @@ class TransactionStorage(ABC):
         """Return CacheData if cache is supported and enabled, and None otherwise."""
         raise NotImplementedError
 
-    def set_capacity(self, capacity: int) -> None:
+    def set_cache_capacity(self, capacity: int) -> None:
         """Change the max number of items in cache, if cache is supported and enabled."""
         raise NotImplementedError
 
