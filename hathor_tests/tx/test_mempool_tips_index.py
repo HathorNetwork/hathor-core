@@ -30,8 +30,6 @@ class TestMempoolTipsIndex(unittest.TestCase):
 
         self.manager = self.create_peer_from_builder(builder)
         self.tx_storage = self.manager.tx_storage
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         self.mempool_tips = self.tx_storage.indexes.mempool_tips
 
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)

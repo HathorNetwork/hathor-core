@@ -1,6 +1,7 @@
 import tempfile
 from unittest.mock import Mock
 
+from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
@@ -257,12 +258,14 @@ class MetricsTest(unittest.TestCase):
         rocksdb_storage = self.create_rocksdb_storage()
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
+        indexes = RocksDBIndexesManager(rocksdb_storage=rocksdb_storage, settings=self._settings)
         tx_storage = TransactionRocksDBStorage(
             rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=VertexParser(settings=self._settings),
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
+            indexes=indexes,
             cache_config=CacheConfig(reactor=self.clock),
         )
 

@@ -38,7 +38,6 @@ class NCCreationResource(Resource):
         super().__init__()
         self.manager = manager
         self.tx_storage = self.manager.tx_storage
-        assert self.tx_storage.indexes is not None
         self.nc_creation_index = self.tx_storage.indexes.nc_creation
         self.nc_history_index = self.tx_storage.indexes.nc_history
         self.bp_history_index = self.tx_storage.indexes.blueprint_history

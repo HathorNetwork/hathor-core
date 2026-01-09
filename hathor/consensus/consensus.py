@@ -123,7 +123,6 @@ class ConsensusAlgorithm:
 
         assert base.storage is not None
         storage = base.storage
-        assert storage.indexes is not None
         best_height, best_tip = storage.indexes.height.get_height_tip()
 
         # This has to be called before the removal of vertices, otherwise this call may fail.
@@ -139,8 +138,7 @@ class ConsensusAlgorithm:
         # signal a mempool tips index update for all affected transactions,
         # because that index is used on _compute_vertices_that_became_invalid below.
         for tx_affected in _sorted_affected_txs(context.txs_affected):
-            if storage.indexes.mempool_tips is not None:
-                storage.indexes.mempool_tips.update(tx_affected)
+            storage.indexes.mempool_tips.update(tx_affected)
 
         txs_to_remove: list[BaseTransaction] = []
         new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
@@ -192,7 +190,6 @@ class ConsensusAlgorithm:
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
             assert tx_affected.storage is not None
-            assert tx_affected.storage.indexes is not None
             tx_affected.storage.indexes.update(tx_affected)
             context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
@@ -335,8 +332,6 @@ class ConsensusAlgorithm:
         """This method will look for transactions in the mempool that have become invalid after a reorg."""
         from hathor.transaction.storage.traversal import BFSTimestampWalk
         from hathor.transaction.validation_state import ValidationState
-        assert storage.indexes is not None
-        assert storage.indexes.mempool_tips is not None
 
         mempool_tips = list(storage.indexes.mempool_tips.iter(storage))
         if not mempool_tips:

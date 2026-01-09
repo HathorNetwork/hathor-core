@@ -215,15 +215,15 @@ class CliBuilder:
             execution_manager=execution_manager,
         )
 
-        if self._args.wallet_index and tx_storage.indexes is not None:
+        if self._args.wallet_index:
             self.log.debug('enable wallet indexes')
             self.enable_wallet_index(tx_storage.indexes, pubsub)
 
-        if self._args.utxo_index and tx_storage.indexes is not None:
+        if self._args.utxo_index:
             self.log.debug('enable utxo index')
             tx_storage.indexes.enable_utxo_index()
 
-        if self._args.nc_indexes and tx_storage.indexes is not None:
+        if self._args.nc_indexes:
             self.log.debug('enable nano indexes')
             tx_storage.indexes.enable_nc_indexes()
 

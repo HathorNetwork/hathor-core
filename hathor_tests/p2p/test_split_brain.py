@@ -134,7 +134,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         # Add one more block to manager1, so it's the winner chain
         add_new_block(manager1, advance_clock=1)
 
-        block_tip1 = not_none(manager1.tx_storage.indexes).height.get_tip()
+        block_tip1 = manager1.tx_storage.indexes.height.get_tip()
 
         self.assertConsensusValid(manager1)
         self.assertConsensusValid(manager2)
@@ -157,8 +157,8 @@ class SyncMethodsTestCase(unittest.TestCase):
         self.assertConsensusValid(manager2)
         self.assertConsensusEqual(manager1, manager2)
 
-        self.assertEqual(block_tip1, not_none(manager1.tx_storage.indexes).height.get_tip())
-        self.assertEqual(block_tip1, not_none(manager2.tx_storage.indexes).height.get_tip())
+        self.assertEqual(block_tip1, manager1.tx_storage.indexes.height.get_tip())
+        self.assertEqual(block_tip1, manager2.tx_storage.indexes.height.get_tip())
 
     def test_split_brain_only_blocks_same_height(self) -> None:
         manager1 = self.create_peer(self.network, unlock_wallet=True)

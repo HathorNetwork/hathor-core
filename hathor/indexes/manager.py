@@ -65,7 +65,7 @@ class IndexesManager(ABC):
     sorted_txs: TimestampIndex
 
     height: HeightIndex
-    mempool_tips: Optional[MempoolTipsIndex]
+    mempool_tips: MempoolTipsIndex
     addresses: Optional[AddressIndex]
     tokens: Optional[TokensIndex]
     utxo: Optional[UtxoIndex]
@@ -120,20 +120,9 @@ class IndexesManager(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def enable_mempool_index(self) -> None:
-        """Enable mempool index. It does nothing if it has already been enabled."""
-        raise NotImplementedError
-
-    @abstractmethod
     def enable_nc_indexes(self) -> None:
         """Enable Nano Contract related indexes."""
         raise NotImplementedError
-
-    def force_clear_all(self) -> None:
-        """ Force clear all indexes.
-        """
-        for index in self.iter_all_indexes():
-            index.force_clear()
 
     def _manually_initialize(self, tx_storage: 'TransactionStorage') -> None:
         """ Initialize the indexes, checking the indexes that need initialization, and the optimal iterator to use.
@@ -197,8 +186,7 @@ class IndexesManager(ABC):
     def update(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
         """
-        if self.mempool_tips:
-            self.mempool_tips.update(tx)
+        self.mempool_tips.update(tx)
         if self.utxo:
             self.utxo.update(tx)
 
@@ -405,7 +393,7 @@ class IndexesManager(ABC):
             self.info.update_counts(tx, remove=True)
 
         # mempool will pick-up if the transaction is voided/invalid and remove it
-        if self.mempool_tips is not None and tx.storage.transaction_exists(tx.hash):
+        if tx.storage.transaction_exists(tx.hash):
             logger.debug('remove from mempool tips', tx=tx.hash_hex)
             self.mempool_tips.update(tx, force_remove=True)
 
@@ -420,6 +408,7 @@ class IndexesManager(ABC):
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, rocksdb_storage: 'RocksDBStorage', *, settings: HathorSettings) -> None:
+        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
@@ -429,6 +418,8 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db, settings=settings)
         self.height = RocksDBHeightIndex(self._db, settings=settings)
+        # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
+        self.mempool_tips = MemoryMempoolTipsIndex(settings=self.settings)
 
         self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL, settings=settings)
         self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS, settings=settings)
@@ -437,7 +428,6 @@ class RocksDBIndexesManager(IndexesManager):
         self.addresses = None
         self.tokens = None
         self.utxo = None
-        self.mempool_tips = None
         self.nc_creation = None
         self.nc_history = None
         self.blueprints = None
@@ -460,12 +450,6 @@ class RocksDBIndexesManager(IndexesManager):
         from hathor.indexes.rocksdb_utxo_index import RocksDBUtxoIndex
         if self.utxo is None:
             self.utxo = RocksDBUtxoIndex(self._db, settings=self.settings)
-
-    def enable_mempool_index(self) -> None:
-        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
-        if self.mempool_tips is None:
-            # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
-            self.mempool_tips = MemoryMempoolTipsIndex(settings=self.settings)
 
     def enable_nc_indexes(self) -> None:
         from hathor.indexes.blueprint_timestamp_index import BlueprintTimestampIndex
