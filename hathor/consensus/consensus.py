@@ -99,8 +99,8 @@ class ConsensusAlgorithm:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
         return ConsensusAlgorithmContext(self, self._pubsub)
 
-    @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
-    def unsafe_update(self, base: BaseTransaction) -> None:
+    @cpu.profiler(key=lambda self, vertex: 'consensus!{}'.format(vertex.hash.hex()))
+    def unsafe_update(self, vertex: BaseTransaction) -> None:
         """
         Run a consensus update with its own context, indexes will be updated accordingly.
 
@@ -108,31 +108,36 @@ class ConsensusAlgorithm:
         if this method throws any exception.
         """
         from hathor.transaction import Block, Transaction
-        assert base.storage is not None
-        assert base.storage.is_only_valid_allowed()
-        meta = base.get_metadata()
+        assert vertex.storage is not None
+
+        vertex.update_initial_metadata(save=False)
+        vertex.storage.save_transaction(vertex)
+        vertex.storage.add_to_indexes(vertex)
+
+        assert vertex.storage.is_only_valid_allowed()
+        meta = vertex.get_metadata()
         assert meta.validation.is_valid()
 
         # XXX: first make sure we can run the consensus update on this tx:
-        meta = base.get_metadata()
+        meta = vertex.get_metadata()
         assert meta.voided_by is None or (self._settings.PARTIALLY_VALIDATED_ID not in meta.voided_by)
         assert meta.validation.is_fully_connected()
 
         # this context instance will live only while this update is running
         context = self.create_context()
 
-        assert base.storage is not None
-        storage = base.storage
+        assert vertex.storage is not None
+        storage = vertex.storage
         assert storage.indexes is not None
         best_height, best_tip = storage.indexes.height.get_height_tip()
 
         # This has to be called before the removal of vertices, otherwise this call may fail.
-        old_best_block = base.storage.get_transaction(best_tip)
+        old_best_block = vertex.storage.get_transaction(best_tip)
 
-        if isinstance(base, Transaction):
-            context.transaction_algorithm.update_consensus(base)
-        elif isinstance(base, Block):
-            context.block_algorithm.update_consensus(base)
+        if isinstance(vertex, Transaction):
+            context.transaction_algorithm.update_consensus(vertex)
+        elif isinstance(vertex, Block):
+            context.block_algorithm.update_consensus(vertex)
         else:
             raise NotImplementedError
 
@@ -166,7 +171,7 @@ class ConsensusAlgorithm:
         # emit the reorg started event if needed
         if context.reorg_info is not None:
             assert isinstance(old_best_block, Block)
-            new_best_block = base.storage.get_transaction(new_best_tip)
+            new_best_block = vertex.storage.get_transaction(new_best_tip)
             reorg_size = old_best_block.get_height() - context.reorg_info.common_block.get_height()
             # TODO: After we remove block ties, should the assert below be true?
             # assert old_best_block.get_metadata().voided_by
@@ -201,7 +206,7 @@ class ConsensusAlgorithm:
             context.pubsub.publish(HathorEvents.NC_EXEC_SUCCESS, tx=tx_nc_success)
 
         # handle custom NC events
-        if isinstance(base, Block):
+        if isinstance(vertex, Block):
             assert context.nc_events is not None
             for tx, events in context.nc_events:
                 assert tx.is_nano_contract()
@@ -217,6 +222,9 @@ class ConsensusAlgorithm:
         # and also emit the reorg finished event if needed
         if context.reorg_info is not None:
             context.pubsub.publish(HathorEvents.REORG_FINISHED)
+
+        assert vertex.storage.indexes is not None
+        vertex.storage.indexes.update(vertex)
 
     def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         """Filter out voided_by entries that should be inherited from parents."""
