@@ -267,6 +267,7 @@ class VerificationService:
         block_storage = self._get_block_storage(params)
         self.verifiers.tx.verify_sum(
             self._settings,
+            tx,
             token_dict or tx.get_complete_token_info(block_storage),
             # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
             allow_nonexistent_tokens=tx.is_nano_contract()

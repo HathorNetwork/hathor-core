@@ -240,6 +240,7 @@ class TransactionVerifier:
     def verify_sum(
         cls,
         settings: HathorSettings,
+        tx: Transaction,
         token_dict: TokenInfoDict,
         allow_nonexistent_tokens: bool = False,
     ) -> None:
@@ -264,7 +265,8 @@ class TransactionVerifier:
             cls._check_token_permissions(token_uid, token_info)
             match token_info.version:
                 case None:
-                    # when a token is not found, we can't assert the HTR value, since we don't know its version
+                    # When a token is not found, we can't assert the HTR value since we don't know the token version.
+                    # This is only possible for nanos, because they may create the missing token in execution-time.
                     if not allow_nonexistent_tokens:
                         raise TokenNotFound(f'token uid {token_uid.hex()} not found.')
                     has_nonexistent_tokens = True
@@ -293,9 +295,12 @@ class TransactionVerifier:
                 htr_expected_amount,
             ))
 
-        # in a partial validation, it's not possible to check fees and
-        # htr amount since it depends on verification with all token versions
         if has_nonexistent_tokens:
+            # In a partial verification, it's not possible to check fees and
+            # HTR amount since it depends on knowledge of all token versions.
+            # The skipped checks below are simply postponed to execution-time
+            # and run when a block confirms the nano tx.
+            assert tx.is_nano_contract()
             return
 
         expected_fee = token_dict.calculate_fee(settings)
