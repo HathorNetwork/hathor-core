@@ -153,7 +153,8 @@ class IndexesManager(ABC):
                 indexes_to_init.append(index)
 
         if indexes_to_init:
-            self.log.info('there are indexes that need initialization', indexes_to_init=indexes_to_init)
+            indexes_names = [type(index).__name__ for index in indexes_to_init]
+            self.log.info('there are indexes that need initialization', indexes_to_init=indexes_names)
         else:
             self.log.info('there are no indexes that need initialization')
 
@@ -185,6 +186,7 @@ class IndexesManager(ABC):
             tx_iter = iter([])
             self.log.debug('indexes init')
 
+        self.log.info('initializing indexes...')
         for tx in tx_iter:
             # feed each transaction to the indexes that they are interested in
             for index in indexes_to_init:

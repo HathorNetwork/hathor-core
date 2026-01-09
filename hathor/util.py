@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import datetime
 import gc
 import json
 import math
@@ -392,7 +391,7 @@ def skip_until(it: Iterator[T], condition: Callable[[T], bool]) -> Iterator[T]:
 
 
 _DT_ITER_NEXT_WARN = 3  # time in seconds to warn when `next(iter_tx)` takes too long
-_DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (it can take longer, but not shorter)
+_DT_LOG_PROGRESS = 10  # time in seconds after which a progress will be logged (it can take longer, but not shorter)
 _DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
 
 
@@ -470,13 +469,12 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
     """ Inner implementation of progress helper.
     """
     t_start = time.time()
-    h = 0
-    ts_tx = 0
 
     count = 0
     count_log_prev = 0
     block_count = 0
     tx_count = 0
+    first_log = True
 
     log.debug('load will start')
     t_log_prev = t_start
@@ -491,20 +489,14 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
         if dt_next > _DT_ITER_NEXT_WARN:
             log.warn('iterator was slow to yield', took_sec=dt_next)
 
-        # XXX: this is only informative and made to work with either partially/fully validated blocks/transactions
-        from hathor.transaction import Block
-        if isinstance(tx, Block):
-            h = max(h, tx.static_metadata.height)
-        ts_tx = max(ts_tx, tx.timestamp)
-
         t_log = time.time()
         dt_log = LogDuration(t_log - t_log_prev)
-        if dt_log > _DT_LOG_PROGRESS:
+        if first_log or dt_log > _DT_LOG_PROGRESS:
+            first_log = False
             t_log_prev = t_log
             dcount = count - count_log_prev
             tx_rate = '?' if dt_log == 0 else dcount / dt_log
-            ts = datetime.datetime.fromtimestamp(ts_tx)
-            kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
+            kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count)
             if total:
                 progress_ = count / total
                 elapsed_time = t_log - t_start
@@ -515,7 +507,6 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
                     remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
                 log.info(
                     f'loading... {math.floor(progress_ * 100):2.0f}%',
-                    progress=progress_,
                     remaining_time=remaining_time,
                     **kwargs
                 )
@@ -544,7 +535,7 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
     t_final = time.time()
     dt_total = LogDuration(t_final - t_start)
     tx_rate = '?' if dt_total == 0 else count / dt_total
-    log.info('loaded', tx_count=count, tx_rate=tx_rate, total_dt=dt_total, height=h, blocks=block_count, txs=tx_count)
+    log.info('loaded', tx_count=count, tx_rate=tx_rate, total_dt=dt_total, blocks=block_count, txs=tx_count)
 
 
 class peekable(Iterator[T]):
