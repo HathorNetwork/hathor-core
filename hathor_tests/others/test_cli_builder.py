@@ -55,7 +55,7 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        # V1_1 deprecated (msbrogli suggestion)
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
@@ -76,7 +76,7 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_sync_default(self):
         manager = self._build(['--temp-data'])
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        # V1_1 deprecated (msbrogli suggestion)
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_bridge(self):
@@ -87,12 +87,12 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_sync_v2_only(self):
         manager = self._build(['--temp-data', '--x-sync-v2-only'])
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        # V1_1 deprecated (msbrogli suggestion)
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_v2_only2(self):
         manager = self._build(['--temp-data', '--sync-v2-only'])
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
+        # V1_1 deprecated (msbrogli suggestion)
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_v1_only(self):
