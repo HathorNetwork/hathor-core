@@ -31,6 +31,7 @@ from hathor.indexes.info_index import InfoIndex
 from hathor.indexes.mempool_tips_index import MempoolTipsIndex
 from hathor.indexes.nc_creation_index import NCCreationIndex
 from hathor.indexes.nc_history_index import NCHistoryIndex
+from hathor.indexes.scope import Scope
 from hathor.indexes.timestamp_index import ScopeType as TimestampScopeType, TimestampIndex
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.indexes.utxo_index import UtxoIndex
@@ -153,7 +154,8 @@ class IndexesManager(ABC):
                 indexes_to_init.append(index)
 
         if indexes_to_init:
-            self.log.info('there are indexes that need initialization', indexes_to_init=indexes_to_init)
+            indexes_names = [type(index).__name__ for index in indexes_to_init]
+            self.log.info('there are indexes that need initialization', indexes_to_init=indexes_names)
         else:
             self.log.info('there are no indexes that need initialization')
 
@@ -177,14 +179,20 @@ class IndexesManager(ABC):
             index.init_start(self)
 
         if indexes_to_init:
-            overall_scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
+            overall_scope: Scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
             tx_iter_inner = overall_scope.get_iterator(tx_storage)
-            tx_iter = tx_progress(tx_iter_inner, log=self.log, total=tx_storage.get_vertices_count())
+            tx_iter = tx_progress(
+                tx_iter_inner,
+                log=self.log,
+                total=tx_storage.get_vertices_count(),
+                show_height_and_ts=overall_scope.topological_order,
+            )
             self.log.debug('indexes init', scope=overall_scope)
         else:
             tx_iter = iter([])
             self.log.debug('indexes init')
 
+        self.log.info('initializing indexes...')
         for tx in tx_iter:
             # feed each transaction to the indexes that they are interested in
             for index in indexes_to_init:
