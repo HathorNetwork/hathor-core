@@ -120,16 +120,11 @@ class NanoContractHistoryResource(Resource):
         history_list: list[dict[str, Any]] = []
         for idx, tx_id in enumerate(iter_history):
             tx = tx_storage.get_transaction(tx_id)
-            tx_json = tx.to_json_extended()
-            if params.include_nc_logs:
-                nc_logs = self.manager.consensus_algorithm.nc_log_storage.get_json_logs(tx.hash)
-                tx_json['nc_logs'] = nc_logs
-            if params.include_nc_events:
-                meta = tx.get_metadata()
-                if meta.nc_calls:
-                    tx_json['nc_events'] = [call.to_json() for call in meta.nc_calls]
-                else:
-                    tx_json['nc_events'] = []
+            tx_json = self.manager.vertex_json_serializer.to_json_extended(
+                tx,
+                include_nc_logs=params.include_nc_logs,
+                include_nc_events=params.include_nc_events,
+            )
             history_list.append(tx_json)
             if idx >= count - 1:
                 # Check if iterator still has more elements
