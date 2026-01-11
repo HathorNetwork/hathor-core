@@ -555,7 +555,7 @@ class StratumProtocol(JSONRPC):
         try:
             verifier.verify_pow(tx)
         except PowError:
-            # Transaction pow was not enough, but the share was succesfully submited
+            # Transaction pow was not enough, but the share was successfully submitted
             self.log.info('high hash, keep mining', tx=tx)
             return
         else:
@@ -569,7 +569,7 @@ class StratumProtocol(JSONRPC):
                 self.manager.submit_block(tx)
                 self.blocks_found += 1
             except (InvalidNewTransaction, TxValidationError) as e:
-                # Block propagation failed, but the share was succesfully submited
+                # Block propagation failed, but the share was successfully submitted
                 self.log.warn('block propagation failed', block=tx, error=e)
             else:
                 self.log.info('new block found', block=tx)
