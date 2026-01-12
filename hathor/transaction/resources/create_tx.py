@@ -122,7 +122,7 @@ class CreateTxResource(Resource):
 
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
-        verifiers.tx.verify_sum(self.manager._settings, tx.get_complete_token_info(block_storage))
+        verifiers.tx.verify_sum(self.manager._settings, tx, tx.get_complete_token_info(block_storage))
 
 
 CreateTxResource.openapi = {

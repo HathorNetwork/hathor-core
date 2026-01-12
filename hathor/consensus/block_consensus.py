@@ -318,7 +318,7 @@ class BlockConsensusAlgorithm:
         from hathor.verification.transaction_verifier import TransactionVerifier
         try:
             token_dict = tx.get_complete_token_info(block_storage)
-            TransactionVerifier.verify_sum(self._settings, token_dict)
+            TransactionVerifier.verify_sum(self._settings, tx, token_dict)
         except TokenNotFound as e:
             # At this point, any nonexistent token would have made a prior validation fail. For example, if there
             # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.
