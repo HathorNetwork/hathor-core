@@ -132,7 +132,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             if tx_hash in self.cache_data.cache:
                 tx = self.cache_data.cache[tx_hash]
                 self.cache_data.dirty_txs.discard(tx_hash)
-                self._save_transaction(tx, skip_cache=True)
+                self._save_transaction_to_db(tx)
 
     def _cache_popitem(self) -> None:
         """Pop the last recently used cache item."""
@@ -144,7 +144,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         if removed_tx.hash in self.cache_data.dirty_txs:
             # write to disk so we don't lose the last update
             self.cache_data.dirty_txs.discard(removed_tx.hash)
-            self.save_transaction_skip_cache(removed_tx)
+            self._save_transaction_to_db(removed_tx)
 
     def _update_cache(self, tx: BaseTransaction) -> None:
         """Updates the cache making sure it has at most the number of elements configured
@@ -203,27 +203,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._save_transaction(tx, only_metadata=only_metadata)
         self._save_to_weakref(tx)
 
-    def save_transaction_skip_cache(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        super().save_transaction(tx, only_metadata=only_metadata)
-        self._save_transaction(tx, only_metadata=only_metadata, skip_cache=True)
-        self._save_to_weakref(tx)
+    def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
+        self._update_cache(tx)
+        self.cache_data.dirty_txs.add(tx.hash)
 
-    def _save_transaction(
-        self,
-        tx: 'BaseTransaction',
-        *,
-        only_metadata: bool = False,
-        skip_cache: bool = False,
-    ) -> None:
-        if not skip_cache:
-            self._update_cache(tx)
-            self.cache_data.dirty_txs.add(tx.hash)
-            return
-
+    def _save_transaction_to_db(self, tx: 'BaseTransaction') -> None:
         key = tx.hash
-        if not only_metadata:
-            tx_data = self._tx_to_bytes(tx)
-            self._db.put((self._cf_tx, key), tx_data)
+        tx_data = self._tx_to_bytes(tx)
+        self._db.put((self._cf_tx, key), tx_data)
         meta_data = tx.get_metadata(use_storage=False).to_bytes()
         self._db.put((self._cf_meta, key), meta_data)
 
