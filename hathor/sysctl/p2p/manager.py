@@ -15,6 +15,7 @@
 import os
 
 from hathor.p2p.manager import ConnectionsManager
+from hathor.p2p.netfilter.utils import add_blacklist_peers, list_blacklist_peers, remove_blacklist_peers
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
@@ -121,6 +122,21 @@ class ConnectionsManagerSysctl(Sysctl):
             'reload_entrypoints_and_connections',
             None,
             self.reload_entrypoints_and_connections,
+        )
+        self.register(
+            'blacklist.add_peers',
+            None,
+            self.set_blacklist_add_peers,
+        )
+        self.register(
+            'blacklist.remove_peers',
+            None,
+            self.set_blacklist_remove_peers,
+        )
+        self.register(
+            'blacklist.list_peers',
+            self.get_blacklist_list_peers,
+            None,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -269,3 +285,43 @@ class ConnectionsManagerSysctl(Sysctl):
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
+
+    @signal_handler_safe
+    def set_blacklist_add_peers(self, peer_ids: str | list[str]) -> None:
+        """Add peer(s) to the blacklist. Accepts a single peer-id string or a list of peer-ids."""
+        # Validate peer IDs
+        peer_id_list = [peer_ids] if isinstance(peer_ids, str) else peer_ids
+        try:
+            for peer_id in peer_id_list:
+                if peer_id:  # Skip empty strings
+                    PeerId(peer_id)  # Validate format
+        except ValueError as e:
+            raise SysctlException(f'Invalid peer-id format: {e}')
+
+        added_peers = add_blacklist_peers(peer_ids)
+        if added_peers:
+            self.log.info('Added peers to blacklist', peer_ids=added_peers)
+        else:
+            self.log.info('No new peers added to blacklist (already blacklisted or empty)')
+
+    @signal_handler_safe
+    def set_blacklist_remove_peers(self, peer_ids: str | list[str]) -> None:
+        """Remove peer(s) from the blacklist. Accepts a single peer-id string or a list of peer-ids."""
+        # Validate peer IDs
+        peer_id_list = [peer_ids] if isinstance(peer_ids, str) else peer_ids
+        try:
+            for peer_id in peer_id_list:
+                if peer_id:  # Skip empty strings
+                    PeerId(peer_id)  # Validate format
+        except ValueError as e:
+            raise SysctlException(f'Invalid peer-id format: {e}')
+
+        removed_peers = remove_blacklist_peers(peer_ids)
+        if removed_peers:
+            self.log.info('Removed peers from blacklist', peer_ids=removed_peers)
+        else:
+            self.log.info('No peers removed from blacklist (not found or empty)')
+
+    def get_blacklist_list_peers(self) -> list[str]:
+        """List all currently blacklisted peer_ids."""
+        return list_blacklist_peers()
