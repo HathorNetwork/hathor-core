@@ -370,7 +370,7 @@ class HathorManager:
         if self.poa_block_producer:
             self.poa_block_producer.stop()
 
-        self.tx_storage.flush()
+        self.tx_storage.close()
 
         return defer.DeferredList(waits)
 

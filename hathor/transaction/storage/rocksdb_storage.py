@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
@@ -77,6 +78,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
         self._rocksdb_storage = rocksdb_storage
         self._db = rocksdb_storage.get_db()
+        self._is_closed = threading.Event()
         self.vertex_parser = vertex_parser
 
         cache_config = cache_config or CacheConfig(capacity=0)
@@ -105,11 +107,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         while len(self.cache_data.cache) > capacity:
             self._cache_popitem()
 
-    def flush(self) -> None:
+    def close(self) -> None:
+        assert not self._is_closed.is_set()
         self._flush_to_storage(self.cache_data.dirty_txs.copy())
+        self._rocksdb_storage.close()
+        self._is_closed.set()
 
     def _start_flush_thread(self) -> None:
-        if self.cache_data.flush_deferred is None:
+        if self.cache_data.flush_deferred is None and not self._is_closed.is_set():
             deferred = threads.deferToThread(self._flush_to_storage, self.cache_data.dirty_txs.copy())
             deferred.addCallback(self._cb_flush_thread)
             deferred.addErrback(self._err_flush_thread)
@@ -126,6 +131,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def _flush_to_storage(self, dirty_txs_copy: set[bytes]) -> None:
         """Write dirty pages to disk."""
+        if self._is_closed.is_set():
+            self.log.warn('tried to flush on closed db')
+            return
         for tx_hash in dirty_txs_copy:
             # a dirty tx might be removed from self.cache outside this thread: if _update_cache is called
             # and we need to save the tx to disk immediately. So it might happen that the tx which was
