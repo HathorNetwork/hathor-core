@@ -200,7 +200,8 @@ class RocksDBNCHistoryIndexesTest(NCHistoryIndexesTest):
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         self.tx_storage = TransactionRocksDBStorage(
-            rocksdb_storage,
+            reactor=self.reactor,
+            rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=vertex_parser,
             nc_storage_factory=nc_storage_factory,

@@ -30,7 +30,6 @@ from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
-from hathor.reactor import ReactorProtocol
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
 from hathor.transaction.block import Block
 from hathor.transaction.storage.exceptions import (
@@ -75,14 +74,12 @@ INDEX_ATTR_PREFIX = 'index_'
 
 @dataclass(slots=True, kw_only=True)
 class CacheConfig:
-    reactor: ReactorProtocol
     interval: int = 5
     capacity: int = 10000
 
 
 @dataclass(slots=True, kw_only=True)
 class CacheData:
-    reactor: ReactorProtocol
     interval: int
     capacity: int
     cache: OrderedDict[bytes, BaseTransaction]

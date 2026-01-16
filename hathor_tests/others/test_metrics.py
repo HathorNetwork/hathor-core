@@ -258,12 +258,13 @@ class MetricsTest(unittest.TestCase):
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         tx_storage = TransactionRocksDBStorage(
+            reactor=self.reactor,
             rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=VertexParser(settings=self._settings),
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
-            cache_config=CacheConfig(reactor=self.clock),
+            cache_config=CacheConfig(),
         )
 
         manager = self.create_peer('testnet', tx_storage=tx_storage)

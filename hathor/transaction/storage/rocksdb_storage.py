@@ -22,7 +22,7 @@ from twisted.internet import threads
 from typing_extensions import override
 
 from hathor.indexes import IndexesManager
-from hathor.reactor import get_global_reactor
+from hathor.reactor import ReactorProtocol
 from hathor.storage import RocksDBStorage
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -58,15 +58,17 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def __init__(
         self,
+        *,
+        reactor: ReactorProtocol,
         rocksdb_storage: RocksDBStorage,
         indexes: Optional[IndexesManager] = None,
-        *,
         settings: 'HathorSettings',
         vertex_parser: VertexParser,
         nc_storage_factory: NCStorageFactory,
         vertex_children_service: RocksDBVertexChildrenService,
         cache_config: CacheConfig | None = None,
     ) -> None:
+        self._reactor = reactor
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._cf_static_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_STATIC_META)
@@ -77,9 +79,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._db = rocksdb_storage.get_db()
         self.vertex_parser = vertex_parser
 
-        cache_config = cache_config or CacheConfig(reactor=get_global_reactor(), capacity=0)
+        cache_config = cache_config or CacheConfig(capacity=0)
         self.cache_data = CacheData(
-            reactor=cache_config.reactor,
             interval=cache_config.interval,
             capacity=cache_config.capacity,
             cache=OrderedDict(),
@@ -95,7 +96,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
 
     def pre_init(self) -> None:
         super().pre_init()
-        self.cache_data.reactor.callLater(self.cache_data.interval, self._start_flush_thread)
+        self._reactor.callLater(self.cache_data.interval, self._start_flush_thread)
 
     @override
     def set_cache_capacity(self, capacity: int) -> None:
@@ -115,12 +116,12 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             self.cache_data.flush_deferred = deferred
 
     def _cb_flush_thread(self) -> None:
-        self.cache_data.reactor.callLater(self.cache_data.interval, self._start_flush_thread)
+        self._reactor.callLater(self.cache_data.interval, self._start_flush_thread)
         self.cache_data.flush_deferred = None
 
     def _err_flush_thread(self, reason: Any) -> None:
         self.log.error('error flushing transactions', reason=reason)
-        self.cache_data.reactor.callLater(self.cache_data.interval, self._start_flush_thread)
+        self._reactor.callLater(self.cache_data.interval, self._start_flush_thread)
         self.cache_data.flush_deferred = None
 
     def _flush_to_storage(self, dirty_txs_copy: set[bytes]) -> None:
