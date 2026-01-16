@@ -143,14 +143,14 @@ class CliBuilder:
         cache_config: CacheConfig | None = None
         if not self._args.disable_cache:
             cache_config = CacheConfig(
-                reactor=reactor,
                 capacity=self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE,
             )
             if self._args.cache_interval:
                 cache_config.interval = self._args.cache_interval
             self.log.info('with cache', capacity=cache_config.capacity, interval=cache_config.interval)
         tx_storage = TransactionRocksDBStorage(
-            self.rocksdb_storage,
+            reactor=reactor,
+            rocksdb_storage=self.rocksdb_storage,
             settings=settings,
             vertex_parser=vertex_parser,
             nc_storage_factory=self.nc_storage_factory,

@@ -509,7 +509,7 @@ class Builder:
 
         cache_config: CacheConfig | None = None
         if self._tx_storage_cache:
-            cache_config = CacheConfig(reactor=self._get_reactor())
+            cache_config = CacheConfig()
             if self._tx_storage_cache_capacity is not None:
                 cache_config.capacity = self._tx_storage_cache_capacity
 
@@ -518,7 +518,8 @@ class Builder:
         vertex_parser = self._get_or_create_vertex_parser()
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
         self._tx_storage = TransactionRocksDBStorage(
-            rocksdb_storage,
+            reactor=self._get_reactor(),
+            rocksdb_storage=rocksdb_storage,
             indexes=indexes,
             settings=settings,
             vertex_parser=vertex_parser,

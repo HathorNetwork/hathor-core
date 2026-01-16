@@ -2,6 +2,7 @@ from typing import Iterator
 
 from hathor.conf.settings import HathorSettings
 from hathor.pubsub import PubSubManager
+from hathor.reactor import ReactorProtocol
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage import RocksDBStorage
 from hathor.transaction import BaseTransaction
@@ -14,11 +15,12 @@ from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending
 
 
 class ModifiedTransactionRocksDBStorage(TransactionRocksDBStorage):
-    def __init__(self, path: str, settings: HathorSettings):
+    def __init__(self, reactor: ReactorProtocol, path: str, settings: HathorSettings):
         from hathor.nanocontracts.storage import NCRocksDBStorageFactory
         rocksdb_storage = RocksDBStorage(path=path)
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         super().__init__(
+            reactor=reactor,
             rocksdb_storage=rocksdb_storage,
             settings=settings,
             vertex_parser=VertexParser(settings=settings),
@@ -44,7 +46,9 @@ class SimpleManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.path = self.mkdtemp()
-        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
+        self.tx_storage = ModifiedTransactionRocksDBStorage(
+            reactor=self.reactor, path=self.path, settings=self._settings
+        )
         self.pubsub = PubSubManager(self.clock)
 
     def test_invalid_arguments(self):
@@ -104,7 +108,9 @@ class ManagerInitializationTestCase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.path = self.mkdtemp()
-        self.tx_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
+        self.tx_storage = ModifiedTransactionRocksDBStorage(
+            reactor=self.reactor, path=self.path, settings=self._settings
+        )
         self.network = 'testnet'
         self.manager = self.create_peer(self.network, tx_storage=self.tx_storage)
 
@@ -145,7 +151,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # a new manager must be successfully initialized
         self.manager.stop()
         self.tx_storage._rocksdb_storage.close()
-        new_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
+        new_storage = ModifiedTransactionRocksDBStorage(reactor=self.reactor, path=self.path, settings=self._settings)
         artifacts = self.get_builder().set_tx_storage(new_storage).build()
         artifacts.manager.start()
         self.clock.run()
@@ -170,7 +176,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # a new manager must be successfully initialized
         self.manager.stop()
         self.tx_storage._rocksdb_storage.close()
-        new_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
+        new_storage = ModifiedTransactionRocksDBStorage(reactor=self.reactor, path=self.path, settings=self._settings)
         artifacts = self.get_builder().set_tx_storage(new_storage).build()
         artifacts.manager.start()
         self.clock.run()
@@ -206,7 +212,7 @@ class ManagerInitializationTestCase(unittest.TestCase):
         # create a new manager (which will initialize in the self.create_peer call)
         self.manager.stop()
         self.tx_storage._rocksdb_storage.close()
-        new_storage = ModifiedTransactionRocksDBStorage(path=self.path, settings=self._settings)
+        new_storage = ModifiedTransactionRocksDBStorage(reactor=self.reactor, path=self.path, settings=self._settings)
         artifacts = self.get_builder().set_tx_storage(new_storage).build()
         manager = artifacts.manager
         manager.start()
