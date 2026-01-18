@@ -185,6 +185,20 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         ids = [tx['hash'] for tx in data2['history']]
         self.assertEqual(ids, [tx1.hash.hex(), nc1.hash.hex()])
 
+        # Check ascending order
+        response_asc = yield self.web.get(
+            'history',
+            {
+                b'id': nc1.hash.hex().encode('ascii'),
+                b'order': b'asc',
+            }
+        )
+        data_asc = response_asc.json_value()
+        self.assertEqual(data_asc['has_more'], False)
+        self.assertEqual(len(data_asc['history']), 2)
+        ids_asc = [tx['hash'] for tx in data_asc['history']]
+        self.assertEqual(ids_asc, [nc1.hash.hex(), tx1.hash.hex()])
+
         # Check paging works minimally with after
         response2a = yield self.web.get(
             'history',
