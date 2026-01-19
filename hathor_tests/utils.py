@@ -752,6 +752,7 @@ class EventMocker:
     next_id: int = 0
     tx_data = TxData(
         hash='abc',
+        name='tx name',
         nonce=123,
         timestamp=456,
         signal_bits=0,
