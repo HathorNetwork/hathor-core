@@ -142,6 +142,7 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
     token_symbol: Optional[str]
     aux_pow: Optional[str] = None
     headers: list[TxHeader] = []
+    name: str | None
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> Self:
@@ -178,6 +179,7 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
             )
 
         tx_json['headers'] = headers
+        tx_json['name'] = args.tx.name
         return cls(**tx_json)
 
 
