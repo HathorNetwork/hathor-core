@@ -26,7 +26,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: Apache Software License",
     "Private :: Do Not Upload",
 ]
 exclude = ["hathor_tests", "hathor_tests.*"]
@@ -84,6 +83,8 @@ typing-extensions = "~4.12.2"
 python-healthchecklib = "^0.1.0"
 multidict = "=6.7.0"
 hathorlib = {path = "hathorlib"}
+cffi = "=1.17.1"
+zope-interface = "=8.2"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]
