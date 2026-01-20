@@ -25,7 +25,7 @@ from weakref import WeakValueDictionary
 from structlog import get_logger
 from twisted.internet.defer import Deferred
 
-from hathor.execution_manager import ExecutionManager
+from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.profiler import get_cpu_profiler
@@ -345,7 +345,7 @@ class TransactionStorage(ABC):
                 assert tx == tx2
             except TransactionDoesNotExist:
                 self.save_transaction(tx)
-                self.add_to_indexes(tx)
+                self.add_to_non_critical_indexes(tx)
                 tx2 = tx
             self._genesis_cache[tx2.hash] = tx2
 
@@ -482,7 +482,9 @@ class TransactionStorage(ABC):
 
         :param tx: Transaction to be removed
         """
-        self.del_from_indexes(tx, remove_all=True, relax_assert=True)
+        self.del_from_critical_indexes(tx)
+        with non_critical_code(self.log):
+            self.del_from_non_critical_indexes(tx, remove_all=True)
 
     @abstractmethod
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -781,11 +783,15 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def add_to_indexes(self, tx: BaseTransaction) -> None:
+    def add_to_non_critical_indexes(self, tx: BaseTransaction) -> None:
         raise NotImplementedError
 
     @abstractmethod
-    def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
+    def del_from_critical_indexes(self, tx: BaseTransaction) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def del_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -1284,11 +1290,14 @@ class BaseTransactionStorage(TransactionStorage):
                     else:
                         stack.append(txinput)
 
-    def add_to_indexes(self, tx: BaseTransaction) -> None:
-        self.indexes.add_tx(tx)
+    def add_to_non_critical_indexes(self, tx: BaseTransaction) -> None:
+        self.indexes.add_tx_to_non_critical_indexes(tx)
 
-    def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
-        self.indexes.del_tx(tx, remove_all=remove_all, relax_assert=relax_assert)
+    def del_from_critical_indexes(self, tx: BaseTransaction) -> None:
+        self.indexes.del_tx_from_critical_indexes(tx)
+
+    def del_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
+        self.indexes.del_tx_from_non_critical_indexes(tx, remove_all=remove_all)
 
     def get_block_count(self) -> int:
         return self.indexes.info.get_block_count()

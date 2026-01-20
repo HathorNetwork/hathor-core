@@ -23,7 +23,7 @@ from twisted.internet.task import deferLater
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.exception import HathorError, InvalidNewTransaction
-from hathor.execution_manager import ExecutionManager
+from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import is_fee_active, is_nano_active
@@ -237,7 +237,8 @@ class VertexHandler:
         # then I would have a children that was not in the storage
         vertex.update_initial_metadata(save=False)
         self._tx_storage.save_transaction(vertex)
-        self._tx_storage.add_to_indexes(vertex)
+        with non_critical_code(self._log):
+            self._tx_storage.add_to_non_critical_indexes(vertex)
         self._consensus.unsafe_update(vertex)
 
     def _post_consensus(
@@ -259,16 +260,19 @@ class VertexHandler:
             params,
             init_static_metadata=False,
         )
-        self._tx_storage.indexes.update(vertex)
 
-        # Publish to pubsub manager the new tx accepted, now that it's full validated
-        self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
+        self._tx_storage.indexes.update_critical_indexes(vertex)
+        with non_critical_code(self._log):
+            self._tx_storage.indexes.update_non_critical_indexes(vertex)
 
-        if self._wallet:
-            # TODO Remove it and use pubsub instead.
-            self._wallet.on_new_tx(vertex)
+            # Publish to pubsub manager the new tx accepted, now that it's full validated
+            self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
 
-        self._log_new_object(vertex, 'new {}', quiet=quiet)
+            if self._wallet:
+                # TODO Remove it and use pubsub instead.
+                self._wallet.on_new_tx(vertex)
+
+            self._log_new_object(vertex, 'new {}', quiet=quiet)
 
     def _log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
         """ A shortcut for logging additional information for block/txs.

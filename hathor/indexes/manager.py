@@ -191,14 +191,16 @@ class IndexesManager(ABC):
         assert cache_capacity is not None
         tx_storage.set_cache_capacity(cache_capacity)
 
-    def update(self, tx: BaseTransaction) -> None:
+    def update_critical_indexes(self, tx: BaseTransaction) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
         """
         self.mempool_tips.update(tx)
+
+    def update_non_critical_indexes(self, tx: BaseTransaction) -> None:
         if self.utxo:
             self.utxo.update(tx)
 
-    def handle_contract_execution(self, tx: BaseTransaction) -> None:
+    def non_critical_handle_contract_execution(self, tx: BaseTransaction) -> None:
         """
         Update indexes according to a Nano Contract execution.
         Must be called only once for each time a contract is executed.
@@ -270,7 +272,7 @@ class IndexesManager(ABC):
                 case _:
                     assert_never(record)
 
-    def handle_contract_unexecution(self, tx: BaseTransaction) -> None:
+    def non_critical_handle_contract_unexecution(self, tx: BaseTransaction) -> None:
         """
         Update indexes according to a Nano Contract unexecution, which happens when a reorg unconfirms a nano tx.
         Must be called only once for each time a contract is unexecuted.
@@ -336,7 +338,7 @@ class IndexesManager(ABC):
                 case _:
                     assert_never(record)
 
-    def add_tx(self, tx: BaseTransaction) -> bool:
+    def add_tx_to_non_critical_indexes(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
         :param tx: Transaction to be added
@@ -374,7 +376,14 @@ class IndexesManager(ABC):
 
         return r2
 
-    def del_tx(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
+    def del_tx_from_critical_indexes(self, tx: BaseTransaction) -> None:
+        assert tx.storage is not None
+        # mempool will pick-up if the transaction is voided/invalid and remove it
+        if tx.storage.transaction_exists(tx.hash):
+            logger.debug('remove from mempool tips', tx=tx.hash_hex)
+            self.mempool_tips.update(tx, force_remove=True)
+
+    def del_tx_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
         """ Delete a transaction from the indexes
 
         :param tx: Transaction to be deleted
@@ -399,11 +408,6 @@ class IndexesManager(ABC):
             if self.blueprint_history:
                 self.blueprint_history.remove_tx(tx)
             self.info.update_counts(tx, remove=True)
-
-        # mempool will pick-up if the transaction is voided/invalid and remove it
-        if tx.storage.transaction_exists(tx.hash):
-            logger.debug('remove from mempool tips', tx=tx.hash_hex)
-            self.mempool_tips.update(tx, force_remove=True)
 
         if tx.is_block:
             self.sorted_blocks.del_tx(tx)
