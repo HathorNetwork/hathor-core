@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
+from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor_cli.run_node_args import RunNodeArgs
 from hathor_cli.side_dag import SideDagArgs
 from hathor.consensus import ConsensusAlgorithm
@@ -86,7 +87,7 @@ class CliBuilder:
         from hathor.p2p.netfilter.utils import add_peer_id_blacklist
         from hathor.p2p.peer_discovery import BootstrapPeerDiscovery, DNSPeerDiscovery
         from hathor.storage import RocksDBStorage
-        from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage, TransactionStorage
+        from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
         from hathor.util import get_environment_info
 
         settings = get_global_settings()
@@ -139,18 +140,23 @@ class CliBuilder:
         indexes = RocksDBIndexesManager(self.rocksdb_storage, settings=settings)
         vertex_children_service = RocksDBVertexChildrenService(self.rocksdb_storage)
 
-        kwargs: dict[str, Any] = {}
-        if self._args.disable_cache:
-            # We should only pass indexes if cache is disabled. Otherwise,
-            # only TransactionCacheStorage should have indexes.
-            kwargs['indexes'] = indexes
+        cache_config: CacheConfig | None = None
+        if not self._args.disable_cache:
+            cache_config = CacheConfig(
+                capacity=self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE,
+            )
+            if self._args.cache_interval:
+                cache_config.interval = self._args.cache_interval
+            self.log.info('with cache', capacity=cache_config.capacity, interval=cache_config.interval)
         tx_storage = TransactionRocksDBStorage(
-            self.rocksdb_storage,
+            reactor=reactor,
+            rocksdb_storage=self.rocksdb_storage,
             settings=settings,
             vertex_parser=vertex_parser,
             nc_storage_factory=self.nc_storage_factory,
             vertex_children_service=vertex_children_service,
-            **kwargs
+            indexes=indexes,
+            cache_config=cache_config,
         )
         event_storage = EventRocksDBStorage(self.rocksdb_storage)
         feature_storage = FeatureActivationStorage(settings=settings, rocksdb_storage=self.rocksdb_storage)
@@ -163,20 +169,6 @@ class CliBuilder:
         if self._args.disable_cache:
             self.check_or_raise(self._args.cache_size is None, 'cannot use --disable-cache with --cache-size')
             self.check_or_raise(self._args.cache_interval is None, 'cannot use --disable-cache with --cache-interval')
-
-        if not self._args.disable_cache:
-            tx_storage = TransactionCacheStorage(
-                tx_storage,
-                reactor,
-                indexes=indexes,
-                settings=settings,
-                nc_storage_factory=self.nc_storage_factory,
-                vertex_children_service=vertex_children_service,
-            )
-            tx_storage.capacity = self._args.cache_size if self._args.cache_size is not None else DEFAULT_CACHE_SIZE
-            if self._args.cache_interval:
-                tx_storage.interval = self._args.cache_interval
-            self.log.info('with cache', capacity=tx_storage.capacity, interval=tx_storage.interval)
 
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)

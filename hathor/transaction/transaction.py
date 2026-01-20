@@ -304,7 +304,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             nano_header = self.get_nano_header()
             json['nc_id'] = nano_header.get_contract_id().hex()
             json['nc_seqnum'] = nano_header.nc_seqnum
-            json['nc_blueprint_id'] = nano_header.get_blueprint_id(accept_failed_execution=True).hex()
+            json['nc_blueprint_id'] = nano_header.get_blueprint_id_for_json().hex()
             json['nc_method'] = nano_header.nc_method
             json['nc_args'] = nano_header.nc_args_bytes.hex()
             json['nc_address'] = get_address_b58_from_bytes(nano_header.nc_address)

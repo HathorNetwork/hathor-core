@@ -119,7 +119,7 @@ class P2PKH(BaseScript):
             timelock = None
             pushdata_timelock = groups[0]
             if pushdata_timelock:
-                timelock_bytes = pushdata_timelock[1:]
+                timelock_bytes = get_pushdata(pushdata_timelock)
                 timelock = struct.unpack('!I', timelock_bytes)[0]
             pushdata_address = groups[1]
             public_key_hash = get_pushdata(pushdata_address)
