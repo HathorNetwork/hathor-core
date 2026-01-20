@@ -309,10 +309,10 @@ class TestCase(unittest.TestCase):
 
         This method assert that something should not match, either the tx-tips or the block-tip.
         """
-        tips1 = not_none(not_none(manager1.tx_storage.indexes).mempool_tips).get()
-        tips1 |= {not_none(manager1.tx_storage.indexes).height.get_tip()}
-        tips2 = not_none(not_none(manager2.tx_storage.indexes).mempool_tips).get()
-        tips2 |= {not_none(manager2.tx_storage.indexes).height.get_tip()}
+        tips1 = manager1.tx_storage.indexes.mempool_tips.get()
+        tips1 |= {manager1.tx_storage.indexes.height.get_tip()}
+        tips2 = manager2.tx_storage.indexes.mempool_tips.get()
+        tips2 |= {manager2.tx_storage.indexes.height.get_tip()}
         self.assertNotEqual(tips1, tips2)
 
     def assertTipsEqualSyncV2(
@@ -324,8 +324,8 @@ class TestCase(unittest.TestCase):
     ) -> None:
         # tx tips
         if strict_sync_v2_indexes:
-            tips1 = not_none(not_none(manager1.tx_storage.indexes).mempool_tips).get()
-            tips2 = not_none(not_none(manager2.tx_storage.indexes).mempool_tips).get()
+            tips1 = manager1.tx_storage.indexes.mempool_tips.get()
+            tips2 = manager2.tx_storage.indexes.mempool_tips.get()
         else:
             tips1 = {tx.hash for tx in manager1.tx_storage.iter_mempool_tips()}
             tips2 = {tx.hash for tx in manager2.tx_storage.iter_mempool_tips()}
@@ -341,8 +341,8 @@ class TestCase(unittest.TestCase):
         self.assertEqual(s1, s2)
 
         # best block (from height index)
-        b1 = not_none(manager1.tx_storage.indexes).height.get_tip()
-        b2 = not_none(manager2.tx_storage.indexes).height.get_tip()
+        b1 = manager1.tx_storage.indexes.height.get_tip()
+        b2 = manager2.tx_storage.indexes.height.get_tip()
         self.assertIn(b1, s2)
         self.assertIn(b2, s1)
 

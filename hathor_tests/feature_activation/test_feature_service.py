@@ -39,7 +39,7 @@ from hathor_tests.unittest import TestBuilder
 def get_storage(settings: HathorSettings, *, up_to_height: int) -> TransactionStorage:
     artifacts = TestBuilder(settings).build()
     storage = artifacts.tx_storage
-    indexes = not_none(artifacts.indexes)
+    indexes = artifacts.indexes
     feature_activation_bits = [
         0b0000,  # 0: boundary block
         0b0010,

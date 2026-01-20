@@ -43,7 +43,6 @@ class NanoContractHistoryResource(Resource):
         set_cors(request, 'GET')
 
         tx_storage = self.manager.tx_storage
-        assert tx_storage.indexes is not None
         if tx_storage.indexes.nc_history is None:
             request.setResponseCode(503)
             error_response = ErrorResponse(success=False, error='Nano contract history index not initialized')

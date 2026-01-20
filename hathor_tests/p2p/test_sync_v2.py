@@ -244,8 +244,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         ''')
         artifacts.propagate_with(manager1)
 
-        assert manager1.tx_storage.indexes is not None
-        assert manager1.tx_storage.indexes.mempool_tips is not None
         mempool_tips_count = len(manager1.tx_storage.indexes.mempool_tips.get())
         # we should expect at the very least 30 tips
         self.assertGreater(mempool_tips_count, 30)
@@ -381,7 +379,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    index_manager = conn12.manager2.tx_storage.indexes
                     vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)
@@ -416,7 +414,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    index_manager = conn12.manager2.tx_storage.indexes
                     vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)

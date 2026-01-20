@@ -267,7 +267,6 @@ class BlockConsensusAlgorithm:
 
                 # Update indexes. This must be after metadata is updated.
                 assert tx.storage is not None
-                assert tx.storage.indexes is not None
                 tx.storage.indexes.handle_contract_execution(tx)
 
                 # Pubsub event to indicate execution success
@@ -413,9 +412,7 @@ class BlockConsensusAlgorithm:
             return
 
         assert block.storage is not None
-
         storage = block.storage
-        assert storage.indexes is not None
 
         # Union of voided_by of parents
         voided_by: set[bytes] = self.union_voided_by_from_parents(block)
@@ -517,7 +514,6 @@ class BlockConsensusAlgorithm:
         """Mark as reorg only if reorg size > 0."""
         assert new_best_block.storage is not None
         storage = new_best_block.storage
-        assert storage.indexes is not None
         _, old_best_block_hash = storage.indexes.height.get_height_tip()
         old_best_block = storage.get_transaction(old_best_block_hash)
         assert isinstance(old_best_block, Block)
@@ -745,7 +741,6 @@ class BlockConsensusAlgorithm:
             if tx.is_nano_contract():
                 if meta.nc_execution == NCExecutionState.SUCCESS:
                     assert tx.storage is not None
-                    assert tx.storage.indexes is not None
                     tx.storage.indexes.handle_contract_unexecution(tx)
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None

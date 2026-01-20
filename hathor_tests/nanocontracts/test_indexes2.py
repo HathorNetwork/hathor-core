@@ -31,8 +31,6 @@ class MyBlueprint(Blueprint):
 class TestIndexes2(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
-
-        assert self.manager.tx_storage.indexes is not None
         assert self.manager.tx_storage.indexes.tokens is not None
         self.tokens_index = self.manager.tx_storage.indexes.tokens
 
