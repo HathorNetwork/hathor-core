@@ -157,7 +157,6 @@ class BlueprintInfoResource(Resource):
             name=blueprint_class.__name__,
             attributes=attributes,
             public_methods=public_methods,
-            private_methods=view_methods,  # DEPRECATED
             view_methods=view_methods,
             docstring=inspect.getdoc(blueprint_class),
         )
@@ -184,7 +183,6 @@ class BlueprintInfoResponse(Response):
     name: str
     attributes: dict[str, str]
     public_methods: dict[str, MethodInfo]
-    private_methods: dict[str, MethodInfo]  # DEPRECATED
     view_methods: dict[str, MethodInfo]
     docstring: str | None
 
