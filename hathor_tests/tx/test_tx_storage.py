@@ -169,31 +169,28 @@ class BaseTransactionStorageTest(unittest.TestCase):
         idx_elem = (obj.timestamp, obj.hash)
 
         # Testing add and remove from cache
-        if self.tx_storage.indexes is not None:
-            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
-            if obj.is_block:
-                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
-                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
-            else:
-                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
-                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+        self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
+        if obj.is_block:
+            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+        else:
+            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
         self.tx_storage.del_from_indexes(obj, remove_all=True)
 
-        if self.tx_storage.indexes is not None:
-            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_all)
-            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
-            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+        self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_all)
+        self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+        self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
         self.tx_storage.add_to_indexes(obj)
-        if self.tx_storage.indexes is not None:
-            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
-            if obj.is_block:
-                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
-                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
-            else:
-                self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
-                self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+        self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
+        if obj.is_block:
+            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+        else:
+            self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
+            self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
     def test_save_block(self):
         self.validate_save(self.block)

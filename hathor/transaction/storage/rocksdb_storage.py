@@ -61,11 +61,11 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         *,
         reactor: ReactorProtocol,
         rocksdb_storage: RocksDBStorage,
-        indexes: Optional[IndexesManager] = None,
         settings: 'HathorSettings',
         vertex_parser: VertexParser,
         nc_storage_factory: NCStorageFactory,
         vertex_children_service: RocksDBVertexChildrenService,
+        indexes: IndexesManager,
         cache_config: CacheConfig | None = None,
     ) -> None:
         self._reactor = reactor

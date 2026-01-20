@@ -103,7 +103,7 @@ class BuildArtifacts(NamedTuple):
     tx_storage: TransactionStorage
     feature_service: FeatureService
     bit_signaling_service: BitSignalingService
-    indexes: Optional[IndexesManager]
+    indexes: IndexesManager
     wallet: Optional[BaseWallet]
     rocksdb_storage: RocksDBStorage
     stratum_factory: Optional[StratumFactory]

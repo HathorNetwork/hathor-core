@@ -93,7 +93,7 @@ class TransactionStorage(ABC):
     """Legacy sync interface, please copy @deprecated decorator when implementing methods."""
 
     pubsub: Optional[PubSubManager]
-    indexes: Optional[IndexesManager]
+    indexes: IndexesManager
     _latest_n_height_tips: list[HeightInfo]
     nc_catalog: Optional['NCBlueprintCatalog'] = None
 
@@ -128,10 +128,12 @@ class TransactionStorage(ABC):
         settings: HathorSettings,
         nc_storage_factory: NCStorageFactory,
         vertex_children_service: VertexChildrenService,
+        indexes: IndexesManager,
     ) -> None:
         self._settings = settings
         self._nc_storage_factory = nc_storage_factory
         self.vertex_children = vertex_children_service
+        self.indexes = indexes
         # Weakref is used to guarantee that there is only one instance of each transaction in memory.
         self._tx_weakref: WeakValueDictionary[bytes, BaseTransaction] = WeakValueDictionary()
         self._tx_weakref_disabled: bool = False
@@ -161,8 +163,6 @@ class TransactionStorage(ABC):
         # Internal toggle to choose when to select topological DFS iterator, used only on some tests
         self._always_use_topological_dfs = False
 
-        self._saving_genesis = False
-
         # Migrations instances
         self._migrations = [cls() for cls in self._migration_factories]
 
@@ -183,11 +183,6 @@ class TransactionStorage(ABC):
     def get_allow_scope(self) -> TxAllowScope:
         """Get the current allow scope."""
         return self._allow_scope
-
-    @abstractmethod
-    def reset_indexes(self) -> None:
-        """Reset all the indexes, making sure that no persisted value is reused."""
-        raise NotImplementedError
 
     @abstractmethod
     def is_empty(self) -> bool:
@@ -329,7 +324,6 @@ class TransactionStorage(ABC):
 
     def get_best_block(self) -> Block:
         """The block with highest score or one of the blocks with highest scores. Can be used for mining."""
-        assert self.indexes is not None
         block_hash = self.indexes.height.get_tip()
         block = self.get_transaction(block_hash)
         assert isinstance(block, Block)
@@ -338,7 +332,6 @@ class TransactionStorage(ABC):
 
     def _save_or_verify_genesis(self) -> None:
         """Save all genesis in the storage."""
-        self._saving_genesis = True
         genesis_txs = [
             self._construct_genesis_block(),
             self._construct_genesis_tx1(),
@@ -355,7 +348,6 @@ class TransactionStorage(ABC):
                 self.add_to_indexes(tx)
                 tx2 = tx
             self._genesis_cache[tx2.hash] = tx2
-        self._saving_genesis = False
 
     def _save_to_weakref(self, tx: BaseTransaction) -> None:
         """ Save transaction to weakref.
@@ -490,8 +482,7 @@ class TransactionStorage(ABC):
 
         :param tx: Transaction to be removed
         """
-        if self.indexes is not None:
-            self.del_from_indexes(tx, remove_all=True, relax_assert=True)
+        self.del_from_indexes(tx, remove_all=True, relax_assert=True)
 
     @abstractmethod
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -583,7 +574,6 @@ class TransactionStorage(ABC):
 
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""
-        assert self.indexes is not None
         ancestor_hash = self.indexes.height.get(height)
 
         return None if ancestor_hash is None else self.get_block(ancestor_hash)
@@ -635,12 +625,10 @@ class TransactionStorage(ABC):
         raise NotImplementedError
 
     def get_best_block_hash(self) -> VertexId:
-        assert self.indexes is not None
         return VertexId(self.indexes.height.get_tip())
 
     @abstractmethod
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
-        assert self.indexes is not None
         return self.indexes.height.get_n_height_tips(n_blocks)
 
     def get_weight_best_block(self) -> float:
@@ -649,7 +637,6 @@ class TransactionStorage(ABC):
     def get_height_best_block(self) -> int:
         """ Iterate over best block tips and get the highest height
         """
-        assert self.indexes is not None
         block_info = self.indexes.height.get_height_tip()
         return block_info.height
 
@@ -738,8 +725,6 @@ class TransactionStorage(ABC):
         #       is known to be true, but we could add a mechanism similar to what indexes use to know they're
         #       up-to-date and get rid of that assumption so this method can be used without having to make any
         #       assumptions
-        assert self.indexes is not None
-
         if self._always_use_topological_dfs:
             self.log.debug('force choosing DFS iterator')
             return self._topological_sort_dfs()
@@ -918,7 +903,6 @@ class TransactionStorage(ABC):
 
         Using this mehtod ensures that the same timestamp is being used and the correct indexes are being selected.
         """
-        assert self.indexes is not None
         self.set_last_started_at(timestamp)
         for index in self.indexes.iter_all_indexes():
             index_db_name = index.get_db_name()
@@ -936,14 +920,10 @@ class TransactionStorage(ABC):
 
     def iter_mempool_tips(self) -> Iterator[Transaction]:
         """Get tx tips in the mempool, using the mempool-tips index"""
-        assert self.indexes is not None
-        assert self.indexes.mempool_tips is not None
         yield from self.indexes.mempool_tips.iter(self)
 
     def iter_mempool(self) -> Iterator[Transaction]:
         """Get all transactions in the mempool, using the mempool-tips index"""
-        assert self.indexes is not None
-        assert self.indexes.mempool_tips is not None
         yield from self.indexes.mempool_tips.iter_all(self)
 
     def _construct_genesis_block(self) -> Block:
@@ -1113,28 +1093,24 @@ class TransactionStorage(ABC):
 
 
 class BaseTransactionStorage(TransactionStorage):
-    indexes: Optional[IndexesManager]
-
     def __init__(
         self,
-        indexes: Optional[IndexesManager] = None,
         pubsub: Optional[Any] = None,
         *,
         settings: HathorSettings,
         nc_storage_factory: NCStorageFactory,
         vertex_children_service: VertexChildrenService,
+        indexes: IndexesManager,
     ) -> None:
         super().__init__(
             settings=settings,
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
+            indexes=indexes,
         )
 
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
-
-        # Indexes.
-        self.indexes = indexes
 
         # Either save or verify all genesis.
         self._save_or_verify_genesis()
@@ -1143,18 +1119,11 @@ class BaseTransactionStorage(TransactionStorage):
 
     @property
     def latest_timestamp(self) -> int:
-        assert self.indexes is not None
         return self.indexes.info.get_latest_timestamp()
 
     @property
     def first_timestamp(self) -> int:
-        assert self.indexes is not None
         return self.indexes.info.get_first_timestamp()
-
-    def reset_indexes(self) -> None:
-        """Reset all indexes. This function should not be called unless you know what you are doing."""
-        assert self.indexes is not None, 'Cannot reset indexes because they have not been enabled.'
-        self.indexes.force_clear_all()
 
     def get_n_height_tips(self, n_blocks: int) -> list[HeightInfo]:
         block = self.get_best_block()
@@ -1170,50 +1139,32 @@ class BaseTransactionStorage(TransactionStorage):
         return super().get_weight_best_block()
 
     def get_newest_blocks(self, count: int) -> tuple[list[Block], bool]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         block_hashes, has_more = self.indexes.sorted_blocks.get_newest(count)
         blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_newest_txs(self, count: int) -> tuple[list[BaseTransaction], bool]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         tx_hashes, has_more = self.indexes.sorted_txs.get_newest(count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
     def get_older_blocks_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[Block], bool]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         block_hashes, has_more = self.indexes.sorted_blocks.get_older(timestamp, hash_bytes, count)
         blocks = [cast(Block, self.get_transaction(block_hash)) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_newer_blocks_after(self, timestamp: int, hash_bytes: bytes,
                                count: int) -> tuple[list[BaseTransaction], bool]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         block_hashes, has_more = self.indexes.sorted_blocks.get_newer(timestamp, hash_bytes, count)
         blocks = [self.get_transaction(block_hash) for block_hash in block_hashes]
         return blocks, has_more
 
     def get_older_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[BaseTransaction], bool]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         tx_hashes, has_more = self.indexes.sorted_txs.get_older(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
 
     def get_newer_txs_after(self, timestamp: int, hash_bytes: bytes, count: int) -> tuple[list[BaseTransaction], bool]:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         tx_hashes, has_more = self.indexes.sorted_txs.get_newer(timestamp, hash_bytes, count)
         txs = [self.get_transaction(tx_hash) for tx_hash in tx_hashes]
         return txs, has_more
@@ -1222,12 +1173,9 @@ class BaseTransactionStorage(TransactionStorage):
         self._manually_initialize_indexes()
 
     def _manually_initialize_indexes(self) -> None:
-        if self.indexes is not None:
-            self.indexes._manually_initialize(self)
+        self.indexes._manually_initialize(self)
 
     def _topological_sort_timestamp_index(self) -> Iterator[BaseTransaction]:
-        assert self.indexes is not None
-
         cur_timestamp: Optional[int] = None
         cur_blocks: list[Block] = []
         cur_txs: list[Transaction] = []
@@ -1337,38 +1285,18 @@ class BaseTransactionStorage(TransactionStorage):
                         stack.append(txinput)
 
     def add_to_indexes(self, tx: BaseTransaction) -> None:
-        if self.indexes is None:
-            if self._saving_genesis:
-                # XXX: avoid failing on some situations where this is called before we know it's OK to skip
-                #      see: https://github.com/HathorNetwork/hathor-core/pull/436
-                return
-            else:
-                raise NotImplementedError
-        assert self.indexes is not None
         self.indexes.add_tx(tx)
 
     def del_from_indexes(self, tx: BaseTransaction, *, remove_all: bool = False, relax_assert: bool = False) -> None:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         self.indexes.del_tx(tx, remove_all=remove_all, relax_assert=relax_assert)
 
     def get_block_count(self) -> int:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         return self.indexes.info.get_block_count()
 
     def get_tx_count(self) -> int:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         return self.indexes.info.get_tx_count()
 
     def get_vertices_count(self) -> int:
-        if self.indexes is None:
-            raise NotImplementedError
-        assert self.indexes is not None
         return self.indexes.info.get_vertices_count()
 
     def get_genesis(self, hash_bytes: bytes) -> Optional[BaseTransaction]:

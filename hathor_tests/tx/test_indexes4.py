@@ -56,7 +56,6 @@ class SimulatorIndexesTestCase(unittest.TestCase):
 
         # XXX: this test makes use of the internals of TipsIndex, AddressIndex and UtxoIndex
         tx_storage = self.manager.tx_storage
-        assert tx_storage.indexes is not None
 
         # XXX: sanity check that we've at least produced something
         self.assertGreater(tx_storage.get_vertices_count(), 3)

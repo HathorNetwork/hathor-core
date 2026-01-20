@@ -84,15 +84,6 @@ class NanoContractStateResource(Resource):
 
         if params.block_height is not None:
             # Get hash of the block with the height
-            if self.manager.tx_storage.indexes is None:
-                # No indexes enabled in the storage
-                request.setResponseCode(503)
-                error_response = ErrorResponse(
-                                    success=False,
-                                    error='No indexes enabled in the storage, so we can\'t filter by block height.'
-                                )
-                return error_response.json_dumpb()
-
             block_hash = self.manager.tx_storage.indexes.height.get(params.block_height)
             if block_hash is None:
                 # No block hash was found with this height
@@ -103,15 +94,6 @@ class NanoContractStateResource(Resource):
                                 )
                 return error_response.json_dumpb()
         elif params.timestamp is not None:
-            if self.manager.tx_storage.indexes is None:
-                # No indexes enabled in the storage
-                request.setResponseCode(503)
-                error_response = ErrorResponse(
-                    success=False,
-                    error='No indexes enabled in the storage, so we can\'t filter by timestamp.'
-                )
-                return error_response.json_dumpb()
-
             block_hashes, has_more = self.manager.tx_storage.indexes.sorted_blocks.get_older(
                 timestamp=params.timestamp,
                 hash_bytes=None,

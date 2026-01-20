@@ -439,8 +439,6 @@ class HathorManager:
             self.wallet._manually_initialize()
 
         self.tx_storage.pre_init()
-        assert self.tx_storage.indexes is not None
-
         self._bit_signaling_service.start()
 
         started_at = int(time.time())
@@ -517,7 +515,6 @@ class HathorManager:
 
         This method needs the essential indexes to be already initialized.
         """
-        assert self.tx_storage.indexes is not None
         # based on the current best-height, filter-out checkpoints that aren't expected to exist in the database
         best_height = self.tx_storage.get_height_best_block()
         expected_checkpoints = [cp for cp in self.checkpoints if cp.height <= best_height]

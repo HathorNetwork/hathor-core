@@ -62,7 +62,6 @@ class UtxoSearchResource(Resource):
 
         # setup
         tx_storage = self.manager.tx_storage
-        assert tx_storage.indexes is not None
         if tx_storage.indexes.utxo is None:
             request.setResponseCode(503)
             return json_dumpb({'success': False})
