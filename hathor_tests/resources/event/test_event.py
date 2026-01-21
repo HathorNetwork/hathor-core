@@ -42,7 +42,7 @@ def web():
 
 @pytest.fixture
 def data():
-    return EventMocker.tx_data.dict()
+    return EventMocker.tx_data.model_dump()
 
 
 def test_get_events(web, data):

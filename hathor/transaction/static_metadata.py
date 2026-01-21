@@ -289,6 +289,6 @@ class TransactionStaticMetadata(VertexStaticMetadata):
     @override
     def json_dumpb(self) -> bytes:
         from hathor.util import json_dumpb
-        json_dict = self.dict()
+        json_dict = self.model_dump()
         json_dict['closest_ancestor_block'] = json_dict['closest_ancestor_block'].hex()
         return json_dumpb(json_dict)

@@ -17,14 +17,14 @@ from __future__ import annotations
 import hashlib
 from abc import ABC, abstractmethod
 from enum import Enum, unique
-from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypeAlias, Union
 
-from pydantic import Field, NonNegativeInt, PrivateAttr, validator
+from pydantic import Discriminator, NonNegativeInt, PrivateAttr, Tag, field_validator, model_validator
 from typing_extensions import override
 
 from hathor.transaction import TxVersion
 from hathor.util import json_dumpb
-from hathor.utils.pydantic import BaseModel
+from hathor.utils.pydantic import BaseModel, Hex
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -97,34 +97,20 @@ class PowSettings(_BaseConsensusSettings):
 
 
 class PoaSignerSettings(BaseModel):
-    public_key: bytes
+    public_key: Hex[bytes]
     start_height: NonNegativeInt = 0
     end_height: NonNegativeInt | None = None
 
-    @validator('public_key', pre=True)
-    def _parse_hex_str(cls, hex_str: str | bytes) -> bytes:
-        from hathor.conf.settings import parse_hex_str
-        return parse_hex_str(hex_str)
-
-    @validator('end_height')
-    def _validate_end_height(cls, end_height: int | None, values: dict[str, Any]) -> int | None:
-        start_height = values.get('start_height')
-        assert start_height is not None, 'start_height must be set'
-
-        if end_height is None:
-            return None
-
-        if end_height <= start_height:
-            raise ValueError(f'end_height ({end_height}) must be greater than start_height ({start_height})')
-
-        return end_height
+    @model_validator(mode='after')
+    def _validate_end_height(self) -> 'PoaSignerSettings':
+        # Validate end_height > start_height after initialization
+        if self.end_height is not None and self.end_height <= self.start_height:
+            raise ValueError(f'end_height ({self.end_height}) must be greater than start_height ({self.start_height})')
+        return self
 
     def to_json_dict(self) -> dict[str, Any]:
         """Return this signer settings instance as a json dict."""
-        json_dict = self.dict()
-        # TODO: We can use a custom serializer to convert bytes to hex when we update to Pydantic V2.
-        json_dict['public_key'] = self.public_key.hex()
-        return json_dict
+        return self.model_dump()
 
 
 class PoaSettings(_BaseConsensusSettings):
@@ -133,7 +119,8 @@ class PoaSettings(_BaseConsensusSettings):
     # A list of Proof-of-Authority signer public keys that have permission to produce blocks.
     signers: tuple[PoaSignerSettings, ...]
 
-    @validator('signers')
+    @field_validator('signers', mode='after')
+    @classmethod
     def _validate_signers(cls, signers: tuple[PoaSignerSettings, ...]) -> tuple[PoaSignerSettings, ...]:
         if len(signers) == 0:
             raise ValueError('At least one signer must be provided in PoA networks')
@@ -165,4 +152,10 @@ class PoaSettings(_BaseConsensusSettings):
         return hashlib.sha256(data).digest().hex()
 
 
-ConsensusSettings: TypeAlias = Annotated[PowSettings | PoaSettings, Field(discriminator='type')]
+ConsensusSettings: TypeAlias = Annotated[
+    Union[
+        Annotated[PowSettings, Tag(ConsensusType.PROOF_OF_WORK)],
+        Annotated[PoaSettings, Tag(ConsensusType.PROOF_OF_AUTHORITY)],
+    ],
+    Discriminator('type')
+]

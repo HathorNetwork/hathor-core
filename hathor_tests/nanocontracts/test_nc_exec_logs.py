@@ -92,19 +92,19 @@ class BaseNCExecLogs(unittest.TestCase):
         assert self.manager.tx_storage.nc_catalog is not None
         blueprint_class = self.manager.tx_storage.nc_catalog.blueprints[nano_header.nc_id]
         return [
-            NCCallBeginEntry.construct(
-                nc_id=tx.hash,
+            NCCallBeginEntry.model_construct(
+                nc_id=ContractId(tx.hash),
                 call_type=CallType.PUBLIC,
                 method_name='initialize',
                 timestamp=ANY,
                 actions=[],
             ),
-            NCLogEntry.construct(
+            NCLogEntry.model_construct(
                 level=NCLogLevel.INFO,
                 message=f'initialize() called on {blueprint_class.__name__}',
                 timestamp=ANY,
             ),
-            NCCallEndEntry.construct(timestamp=ANY),
+            NCCallEndEntry.model_construct(timestamp=ANY),
         ]
 
     def _prepare(self, nc_log_config: NCLogConfig = NCLogConfig.ALL) -> None:
@@ -279,38 +279,38 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert not_none(self.nc_log_storage.get_logs(nc2.hash)).entries == {
             b2.hash: [NCExecEntry(
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='log_levels',
                         timestamp=ANY,
                         actions=[],
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='log_levels() called',
                         key_values=dict(test1='1'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.INFO,
                         message='log_levels() called',
                         key_values=dict(test2='2'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.WARN,
                         message='log_levels() called',
                         key_values=dict(test3='3'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.ERROR,
                         message='log_levels() called',
                         key_values=dict(test4='4'),
                         timestamp=ANY,
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY),
                 ],
             )],
         }
@@ -319,13 +319,13 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert not_none(self.nc_log_storage.get_logs(nc2.hash, log_level=NCLogLevel.WARN)).entries == {
             b2.hash: [NCExecEntry(
                 logs=[
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.WARN,
                         message='log_levels() called',
                         key_values=dict(test3='3'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.ERROR,
                         message='log_levels() called',
                         key_values=dict(test4='4'),
@@ -364,17 +364,17 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         result = not_none(self.nc_log_storage.get_logs(nc2.hash))
         assert result.entries == {
-            b2.hash: [NCExecEntry.construct(
+            b2.hash: [NCExecEntry.model_construct(
                 error_traceback=ANY,
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='fail',
                         timestamp=ANY,
                         actions=[],
                     ),
-                    NCLogEntry.construct(level=NCLogLevel.WARN, message='fail() called', timestamp=ANY),
+                    NCLogEntry.model_construct(level=NCLogLevel.WARN, message='fail() called', timestamp=ANY),
                 ],
             )],
         }
@@ -413,17 +413,17 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         result = not_none(self.nc_log_storage.get_logs(nc2.hash))
         assert result.entries == {
-            b2.hash: [NCExecEntry.construct(
+            b2.hash: [NCExecEntry.model_construct(
                 error_traceback=ANY,
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='value_error',
                         timestamp=ANY,
                         actions=[],
                     ),
-                    NCLogEntry.construct(level=NCLogLevel.WARN, message='value_error() called', timestamp=ANY),
+                    NCLogEntry.model_construct(level=NCLogLevel.WARN, message='value_error() called', timestamp=ANY),
                 ],
             )],
         }
@@ -541,8 +541,8 @@ class TestNCExecLogs(BaseNCExecLogs):
             b2.hash: [NCExecEntry(
                 error_traceback=None,
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='call_another_public',
                         str_args=str((nc2.hash,)),
@@ -555,14 +555,14 @@ class TestNCExecLogs(BaseNCExecLogs):
                             )
                         ],
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='call_another_public() called on MyBlueprint1',
                         key_values=dict(contract_id=nc2.hash_hex),
                         timestamp=ANY,
                     ),
-                    NCCallBeginEntry.construct(
-                        nc_id=nc2.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc2.hash),
                         call_type=CallType.PUBLIC,
                         method_name='sum',
                         str_args=str((1, 2)),
@@ -575,33 +575,33 @@ class TestNCExecLogs(BaseNCExecLogs):
                             )
                         ],
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='sum() called on MyBlueprint2',
                         key_values=dict(a='1', b='2'),
                         timestamp=ANY
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
-                    NCCallBeginEntry.construct(
-                        nc_id=nc2.hash,
+                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc2.hash),
                         call_type=CallType.VIEW,
                         method_name='hello_world',
                         timestamp=ANY,
                         actions=None,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='hello_world() called on MyBlueprint2',
                         timestamp=ANY,
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
-                    NCLogEntry.construct(
+                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='results on MyBlueprint1',
                         key_values=dict(result1='3', result2='hello world'),
                         timestamp=ANY
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY),
                 ],
             )],
         }

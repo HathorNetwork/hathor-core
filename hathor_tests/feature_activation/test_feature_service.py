@@ -90,7 +90,7 @@ def get_storage(settings: HathorSettings, *, up_to_height: int) -> TransactionSt
 
 
 def get_settings(*, features: dict[Feature, Criteria]) -> HathorSettings:
-    feature_settings = FeatureSettings.construct(
+    feature_settings = FeatureSettings.model_construct(
         evaluation_interval=4,
         default_threshold=3,
         features=features,
@@ -133,7 +133,7 @@ def test_get_state_first_interval(block_height: int) -> None:
 )
 def test_get_state_from_defined(block_height: int, start_height: int, expected_state: FeatureState) -> None:
     features = {
-        Feature.NOP_FEATURE_1: Criteria.construct(
+        Feature.NOP_FEATURE_1: Criteria.model_construct(
             bit=Mock(),
             start_height=start_height,
             timeout_height=Mock(),
@@ -158,7 +158,7 @@ def test_get_state_from_started_to_failed(
     timeout_height: int,
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=timeout_height,
@@ -184,7 +184,7 @@ def test_get_state_from_started_to_must_signal_on_timeout(
     timeout_height: int,
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=timeout_height,
@@ -210,11 +210,11 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
     block_height: int,
     default_threshold: int
 ) -> None:
-    feature_settings = FeatureSettings.construct(
+    feature_settings = FeatureSettings.model_construct(
         evaluation_interval=4,
         default_threshold=default_threshold,
         features={
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=1,
                 start_height=0,
                 timeout_height=400,
@@ -241,7 +241,7 @@ def test_get_state_from_started_to_locked_in_on_custom_threshold(
     custom_threshold: int
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=1,
                 start_height=0,
                 timeout_height=400,
@@ -275,7 +275,7 @@ def test_get_state_from_started_to_started(
     timeout_height: int,
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=timeout_height,
@@ -299,7 +299,7 @@ def test_get_state_from_must_signal_to_locked_in(
     block_height: int,
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=8,
@@ -325,7 +325,7 @@ def test_get_state_from_locked_in_to_active(
     minimum_activation_height: int,
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=8,
@@ -352,7 +352,7 @@ def test_get_state_from_locked_in_to_locked_in(
     minimum_activation_height: int,
 ) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=8,
@@ -375,7 +375,7 @@ def test_get_state_from_locked_in_to_locked_in(
 @pytest.mark.parametrize('block_height', [20, 21, 22, 23])
 def test_get_state_from_active(block_height: int) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=8,
@@ -397,7 +397,7 @@ def test_get_state_from_active(block_height: int) -> None:
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_caching_mechanism(block_height: int) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=8,
@@ -431,7 +431,7 @@ def test_caching_mechanism(block_height: int) -> None:
 @pytest.mark.parametrize('block_height', [16, 17, 18, 19])
 def test_is_feature_active(block_height: int) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=3,
                 start_height=0,
                 timeout_height=8,
@@ -456,7 +456,7 @@ def test_is_feature_active(block_height: int) -> None:
 @pytest.mark.parametrize('block_height', [12, 13, 14, 15])
 def test_get_state_from_failed(block_height: int) -> None:
     features = {
-            Feature.NOP_FEATURE_1: Criteria.construct(
+            Feature.NOP_FEATURE_1: Criteria.model_construct(
                 bit=Mock(),
                 start_height=0,
                 timeout_height=8,
@@ -485,8 +485,8 @@ def test_get_state_undefined_feature() -> None:
 
 
 def test_get_feature_info() -> None:
-    criteria_mock_1 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
-    criteria_mock_2 = Criteria.construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
+    criteria_mock_1 = Criteria.model_construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
+    criteria_mock_2 = Criteria.model_construct(bit=Mock(), start_height=Mock(), timeout_height=Mock(), version=Mock())
     settings = get_settings(features={
         Feature.NOP_FEATURE_1: criteria_mock_1,
         Feature.NOP_FEATURE_2: criteria_mock_2

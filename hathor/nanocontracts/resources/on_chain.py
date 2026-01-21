@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import Field
 from twisted.web.http import Request
@@ -151,8 +152,8 @@ class SortOrder(str, Enum):
 
 
 class OnChainBlueprintsParams(QueryParams):
-    before: str | None
-    after: str | None
+    before: str | None = None
+    after: str | None = None
     count: int = Field(default=10, le=100)
     search: str | None = None
     order: SortOrder = SortOrder.DESC
@@ -165,7 +166,7 @@ class OnChainBlueprintItem(Response):
 
 
 class OnChainBlueprintsResponse(Response):
-    success: bool = Field(default=True, const=True)
+    success: Literal[True] = True
     blueprints: list[OnChainBlueprintItem]
     before: str | None
     after: str | None
