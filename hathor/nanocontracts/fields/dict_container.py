@@ -203,8 +203,7 @@ class DictContainer(Container[K], Generic[K, V]):
     def get(self, key: K, default: V | _T | None, /) -> V | _T | None:
         ...
 
-    # XXX: `misc` is ignored because mypy thinks this function does not accept all arguments of the second get overload
-    def get(self, key: K, default: V | _T | None = None, /) -> V | _T | None:  # type: ignore[misc]
+    def get(self, key: K, default: V | _T | None = None, /) -> V | _T | None:
         # return the value for key if key is in the storage, else default
         if key in self:
             return self[key]

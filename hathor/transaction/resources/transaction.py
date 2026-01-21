@@ -58,8 +58,6 @@ def get_tx_extra_data(
         Returns success, tx serializes, metadata and spent outputs
     """
     assert tx.storage is not None
-    assert tx.storage.indexes is not None
-
     settings = get_global_settings()
     serialized = tx.to_json(decode_script=True)
     serialized['raw'] = tx.get_struct().hex()

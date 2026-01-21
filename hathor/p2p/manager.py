@@ -259,11 +259,6 @@ class ConnectionsManager:
             raise TypeError('Class built incorrectly without any enabled sync version')
 
         self.manager = manager
-        if self.is_sync_version_available(SyncVersion.V2):
-            assert self.manager.tx_storage.indexes is not None
-            indexes = self.manager.tx_storage.indexes
-            self.log.debug('enable sync-v2 indexes')
-            indexes.enable_mempool_index()
 
     def add_listen_address_description(self, addr: str) -> None:
         """Add address to listen for incoming connections."""

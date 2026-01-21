@@ -14,7 +14,7 @@
 
 import struct
 from abc import ABC
-from typing import Iterator, final
+from typing import Any, Iterator, final
 
 import rocksdb
 from structlog import get_logger
@@ -99,7 +99,7 @@ class RocksDBVertexTimestampIndex(VertexTimestampIndex, RocksDBIndexUtils, ABC):
         reverse: bool,
         inclusive: bool = False,
     ) -> Iterator[bytes]:
-        it = self._db.iterkeys(self._cf)
+        it: Any = self._db.iterkeys(self._cf)
         if reverse:
             it = reversed(it)
             if tx_start is None:

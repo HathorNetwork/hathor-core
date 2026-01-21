@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Iterator, Optional, Union
 
-from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
@@ -68,6 +67,7 @@ from hathor.utils.weight import calculate_min_significant_weight, weight_to_work
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory
@@ -401,7 +401,9 @@ class HathorManager:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = nc_storage_factory.get_block_storage_from_block(block)
-        return self.runner_factory.create(block_storage=block_storage)
+        return self.runner_factory.create(
+            block_storage=block_storage,
+        )
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""
@@ -437,8 +439,6 @@ class HathorManager:
             self.wallet._manually_initialize()
 
         self.tx_storage.pre_init()
-        assert self.tx_storage.indexes is not None
-
         self._bit_signaling_service.start()
 
         started_at = int(time.time())
@@ -515,7 +515,6 @@ class HathorManager:
 
         This method needs the essential indexes to be already initialized.
         """
-        assert self.tx_storage.indexes is not None
         # based on the current best-height, filter-out checkpoints that aren't expected to exist in the database
         best_height = self.tx_storage.get_height_best_block()
         expected_checkpoints = [cp for cp in self.checkpoints if cp.height <= best_height]

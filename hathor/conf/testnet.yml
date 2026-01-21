@@ -41,7 +41,18 @@ FEATURE_ACTIVATION:
       version: 0.67.0
       signal_support_by_default: true
 
+    # current height: 295_587 at 2026-01-20 19:45:03 UTC
+    FEE_TOKENS:
+      bit: 1
+      start_height: 295_680  # expected around 2026-01-20 20:31:33 UTC
+      timeout_height: 304_320  # 36 evaluation periods (72 hours)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.69.0
+      signal_support_by_default: true
+
 ENABLE_NANO_CONTRACTS: feature_activation
+ENABLE_FEE_BASED_TOKENS: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
   - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY

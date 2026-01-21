@@ -86,7 +86,6 @@ class SyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual([tx1.hash, tx2.hash], spent_meta.spent_outputs[txin.index])
 
-        assert self.manager1.tx_storage.indexes.mempool_tips is not None
         self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
         self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
 
@@ -111,7 +110,6 @@ class SyncMethodsTestCase(unittest.TestCase):
             spent_meta = spent_tx.get_metadata()
             self.assertEqual([tx1.hash, tx2.hash, tx3.hash], spent_meta.spent_outputs[txin.index])
 
-        assert self.manager1.tx_storage.indexes.mempool_tips is not None
         self.assertNotIn(tx1.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
         self.assertNotIn(tx2.hash, self.manager1.tx_storage.indexes.mempool_tips.get())
         self.assertIn(tx3.hash, self.manager1.tx_storage.indexes.mempool_tips.get())

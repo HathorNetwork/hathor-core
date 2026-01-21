@@ -74,7 +74,8 @@ def test_broadcast_event(can_receive_event: bool) -> None:
     factory.broadcast_event(event)
 
     if not can_receive_event:
-        return connection.send_event_response.assert_not_called()
+        connection.send_event_response.assert_not_called()
+        return
 
     response = EventResponse(
         peer_id='my_peer_id',
@@ -136,7 +137,8 @@ def test_send_next_event_to_connection(next_expected_event_id: int, can_receive_
     clock.advance(0)
 
     if not can_receive_event or next_expected_event_id > n_starting_events - 1:
-        return connection.send_event_response.assert_not_called()
+        connection.send_event_response.assert_not_called()
+        return
 
     calls = []
     for _id in range(next_expected_event_id, n_starting_events):

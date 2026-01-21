@@ -3,7 +3,6 @@ import re
 from typing import cast
 from unittest.mock import patch
 
-import pytest
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
@@ -24,7 +23,6 @@ from hathor.simulator.trigger import (
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
-from hathor.transaction.storage.traversal import DFSWalk
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor_tests.dag_builder.builder import TestDAGBuilder
@@ -152,7 +150,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
     def test_restart_fullnode_quick_with_cache(self) -> None:
         self._run_restart_test(use_tx_storage_cache=True)
 
-    @pytest.mark.skip(reason='broken')
     def test_exceeds_streaming_and_mempool_limits(self) -> None:
         manager1 = self.create_peer()
         manager1.allow_mining_without_peers()
@@ -182,13 +179,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         blk = manager1.tx_storage.get_best_block()
         tx_parents = [manager1.tx_storage.get_transaction(x) for x in blk.parents[1:]]
         self.assertEqual(len(tx_parents), 2)
-        dfs = DFSWalk(manager1.tx_storage, is_dag_verifications=True, is_left_to_right=False)
-        cnt = 0
-        for tx in dfs.run(tx_parents):
-            if tx.get_metadata().first_block == blk.hash:
-                cnt += 1
-            else:
-                dfs.skip_neighbors(tx)
+        cnt = len(list(blk.iter_transactions_in_this_block()))
         self.assertGreater(cnt, 400)
 
         # Generate 500 txs in mempool.
@@ -253,8 +244,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         ''')
         artifacts.propagate_with(manager1)
 
-        assert manager1.tx_storage.indexes is not None
-        assert manager1.tx_storage.indexes.mempool_tips is not None
         mempool_tips_count = len(manager1.tx_storage.indexes.mempool_tips.get())
         # we should expect at the very least 30 tips
         self.assertGreater(mempool_tips_count, 30)
@@ -390,7 +379,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    index_manager = conn12.manager2.tx_storage.indexes
                     vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)
@@ -425,7 +414,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    index_manager = conn12.manager2.tx_storage.indexes
                     vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)

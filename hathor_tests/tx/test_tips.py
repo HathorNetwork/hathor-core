@@ -14,8 +14,6 @@ class TipsTestCase(unittest.TestCase):
         self.manager = self.create_peer(self.network, unlock_wallet=True)
 
     def get_tips(self):
-        assert self.manager.tx_storage.indexes is not None
-        assert self.manager.tx_storage.indexes.mempool_tips is not None
         return self.manager.tx_storage.indexes.mempool_tips.get()
 
     def test_tips_back(self):

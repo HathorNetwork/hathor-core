@@ -8,7 +8,7 @@ from hathor.exception import BuilderError
 from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.sync_version import SyncVersion
-from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.wallet import HDWallet, Wallet
 from hathor_cli.builder import CliBuilder
 from hathor_cli.run_node_args import RunNodeArgs
@@ -50,8 +50,8 @@ class BuilderTestCase(unittest.TestCase):
     def test_all_default(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
-        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsNotNone(manager.tx_storage.cache_data)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
@@ -70,8 +70,8 @@ class BuilderTestCase(unittest.TestCase):
     def test_rocksdb_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
-        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsNotNone(manager.tx_storage.cache_data)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
 
     def test_sync_default(self):

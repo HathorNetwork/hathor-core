@@ -191,7 +191,7 @@ def _get_aliased_type(type_: type | UnionType, alias_map: TypeAliasMap) -> tuple
             final_type = reduce(or_, aliased_args)  # = type_args[0] | type_args[1] | ... | type_args[N]
             # XXX: for some reason, only sometimes doing T | None, results in typing.Union instead of types.UnionType
             assert isinstance(final_type, (UnionType, _UnionGenericAlias)), '| of types results in union'
-            return final_type, replaced
+            return final_type, replaced  # type: ignore[return-value]
 
         # XXX: special case, when going from list -> tuple, we need to add an ellipsis, that is to say, the equivalent
         #      type for `list[T]` is `tuple[T, ...]`

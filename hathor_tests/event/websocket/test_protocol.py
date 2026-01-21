@@ -102,7 +102,7 @@ def test_send_event_response() -> None:
                         b'"timestamp":456,"signal_bits":0,"version":1,"weight":10.0,"inputs":[],"outputs":[],'
                         b'"parents":[],'
                         b'"tokens":[],"token_name":null,"token_symbol":null,"aux_pow":null,"headers":[],'
-                        b'"metadata":{"hash":"abc",'
+                        b'"name":"tx name","metadata":{"hash":"abc",'
                         b'"spent_outputs":[],"conflict_with":[],"voided_by":[],"received_by":[],'
                         b'"twins":[],"accumulated_weight":10.0,"score":20.0,"accumulated_weight_raw":"1024",'
                         b'"score_raw":"1048576","first_block":null,"height":100,'

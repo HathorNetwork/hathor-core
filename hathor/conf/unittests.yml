@@ -24,6 +24,7 @@ FEATURE_ACTIVATION:
   default_threshold: 3
 
 ENABLE_NANO_CONTRACTS: enabled
+ENABLE_FEE_BASED_TOKENS: enabled
 
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   # keypair wallet:

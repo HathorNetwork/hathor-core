@@ -1,4 +1,4 @@
-from typing import Generator, Optional
+from typing import Any, Generator, Optional
 
 from twisted.internet.defer import inlineCallbacks
 
@@ -10,7 +10,7 @@ from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor_tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_tokens
+from hathor_tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_fee_tokens, create_tokens
 
 
 class BasePushTxTest(_BaseResourceTest._ResourceTest):
@@ -23,8 +23,11 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(PushTxResource(self.manager))
         self.web_tokens = StubSite(SendTokensResource(self.manager, self._settings))
 
-    def get_tx(self, inputs: Optional[list[WalletInputInfo]] = None,
-               outputs: Optional[list[WalletOutputInfo]] = None) -> Transaction:
+    def get_tx(
+        self,
+        inputs: Optional[list[WalletInputInfo]] = None,
+        outputs: Optional[list[WalletOutputInfo]] = None
+    ) -> Transaction:
         if not outputs:
             address = self.get_address(0)
             assert address is not None
@@ -70,6 +73,21 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         return self.web.get('push_tx', args)
 
     @inlineCallbacks
+    def test_push_tx_fee_header(self):
+        self.manager.wallet.unlock(b'MYPASS')
+        add_blocks_unlock_reward(self.manager)
+        address = self.get_address(0)
+        assert address is not None
+        tx = create_fee_tokens(self.manager, address_b58=address, propagate=False)
+
+        self.assertTrue(tx.has_fees())
+        tx_hex = tx.get_struct().hex()
+
+        response = yield self.push_tx({'hex_tx': tx_hex})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+    @inlineCallbacks
     def test_push_tx(self) -> Generator:
         self.manager.wallet.unlock(b'MYPASS')
         blocks = add_new_blocks(self.manager, 5, advance_clock=15)
@@ -77,7 +95,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx = self.get_tx()
 
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -90,7 +108,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.manager.cpu_mining_service.resolve(tx)
 
         tx_hex = tx.get_struct().hex()
-        response_success = yield self.push_tx({'hex_tx': tx_hex})
+        response_success: Any = yield self.push_tx({'hex_tx': tx_hex})
         data_success = response_success.json_value()
         self.assertFalse(data_success['success'])
 
@@ -118,7 +136,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         # Invalid tx (don't have inputs)
         genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_transaction)
         genesis_hex = genesis_tx.get_struct().hex()
-        response_genesis = yield self.push_tx({'tx_hex': genesis_hex})
+        response_genesis: Any = yield self.push_tx({'tx_hex': genesis_hex})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])
 
@@ -143,14 +161,14 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         address = script_type_out.address
         tx3 = create_tokens(self.manager, address, mint_amount=100, propagate=False, nft_data='test')
         tx3_hex = tx3.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx3_hex})
+        response: Any = yield self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
     @inlineCallbacks
     def test_invalid_params(self) -> Generator:
         # Missing hex
-        response = yield self.push_tx()
+        response: Any = yield self.push_tx()
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -165,7 +183,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         self.assertFalse(data['success'])
 
         # Invalid tx hex
-        response_error2 = yield self.push_tx({'hex_tx': 'a12c'})
+        response_error2: Any = yield self.push_tx({'hex_tx': 'a12c'})
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
@@ -180,7 +198,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.outputs[0].script = b'*' * (self._settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
         self.manager.cpu_mining_service.resolve(tx)
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
         self.assertEqual('Transaction is non standard.', data['message'])
@@ -196,7 +214,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.outputs[0].script = b'*' * 5
         self.manager.cpu_mining_service.resolve(tx)
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
         expected = 'Transaction is non standard.'
@@ -211,7 +229,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         # Push a first tx
         tx = self.get_tx()
         tx_hex = tx.get_struct().hex()
-        response = yield self.push_tx({'hex_tx': tx_hex})
+        response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
@@ -275,7 +293,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx1 = add_tx_with_data_script(self.manager, ['test'], propagate=False)
         tx1_hex = tx1.get_struct().hex()
 
-        response = yield self.push_tx({'hex_tx': tx1_hex})
+        response: Any = yield self.push_tx({'hex_tx': tx1_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
 
