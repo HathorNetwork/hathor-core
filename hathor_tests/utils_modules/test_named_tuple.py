@@ -35,16 +35,16 @@ class OuterTuple(NamedTuple):
     b: InnerTuple
     c: InnerModel
 
-    @classmethod
-    def validate_a(cls, a: int) -> int:
-        if a > 10:
-            raise ValueError('"a" cannot be greater than 10')
 
-        return a
+def _validate_a(a: int) -> int:
+    """Validator for 'a' field - must not be greater than 10."""
+    if a > 10:
+        raise ValueError('"a" cannot be greater than 10')
+    return a
 
 
 VALIDATORS = dict(
-    validate_a=pydantic.validator('a')(OuterTuple.validate_a)
+    validate_a=pydantic.field_validator('a', mode='before')(_validate_a)
 )
 
 
@@ -86,4 +86,4 @@ def test_validated_named_tuple_from_dict_error(attributes):
         validated_named_tuple_from_dict(OuterTuple, attributes, validators=VALIDATORS)
 
     errors = e.value.errors()
-    assert errors[0]['msg'] == '"a" cannot be greater than 10'
+    assert errors[0]['msg'] == 'Value error, "a" cannot be greater than 10'

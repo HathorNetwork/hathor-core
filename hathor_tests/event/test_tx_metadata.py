@@ -44,7 +44,7 @@ def test_from_spent_output_list() -> None:
         SpentOutput(index=0, tx_ids=['a', 'b']),
         SpentOutput(index=1, tx_ids=['c', 'd']),
     ]
-    metadata = TxMetadata.parse_obj(
+    metadata = TxMetadata.model_validate(
         dict(
             hash='some_hash',
             spent_outputs=[
@@ -74,7 +74,7 @@ def test_from_spent_output_dict() -> None:
         SpentOutput(index=0, tx_ids=['a', 'b']),
         SpentOutput(index=1, tx_ids=['c', 'd']),
     ]
-    metadata = TxMetadata.parse_obj(
+    metadata = TxMetadata.model_validate(
         dict(
             hash='some_hash',
             spent_outputs=[

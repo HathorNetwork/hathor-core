@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any, Optional
-
-from pydantic import Field
+from typing import Any, Literal, Optional
 
 from hathor.utils.pydantic import BaseModel
 
@@ -24,13 +22,13 @@ class WebSocketMessage(BaseModel):
 
 
 class WebSocketErrorMessage(WebSocketMessage):
-    type: str = Field('error', const=True)
-    success: bool = Field(False, const=True)
+    type: Literal['error'] = 'error'
+    success: Literal[False] = False
     errmsg: str
 
 
 class CapabilitiesMessage(WebSocketMessage):
-    type: str = Field('capabilities', const=True)
+    type: Literal['capabilities'] = 'capabilities'
     capabilities: list[str]
 
 
@@ -39,33 +37,33 @@ class StreamBase(WebSocketMessage):
 
 
 class StreamErrorMessage(StreamBase):
-    type: str = Field('stream:history:error', const=True)
+    type: Literal['stream:history:error'] = 'stream:history:error'
     id: str
     errmsg: str
 
 
 class StreamBeginMessage(StreamBase):
-    type: str = Field('stream:history:begin', const=True)
+    type: Literal['stream:history:begin'] = 'stream:history:begin'
     id: str
     seq: int
     window_size: Optional[int]
 
 
 class StreamEndMessage(StreamBase):
-    type: str = Field('stream:history:end', const=True)
+    type: Literal['stream:history:end'] = 'stream:history:end'
     id: str
     seq: int
 
 
 class StreamVertexMessage(StreamBase):
-    type: str = Field('stream:history:vertex', const=True)
+    type: Literal['stream:history:vertex'] = 'stream:history:vertex'
     id: str
     seq: int
     data: dict[str, Any]
 
 
 class StreamAddressMessage(StreamBase):
-    type: str = Field('stream:history:address', const=True)
+    type: Literal['stream:history:address'] = 'stream:history:address'
     id: str
     seq: int
     index: int

@@ -26,7 +26,7 @@ class BuilderTestCase(unittest.TestCase):
 
     def _build_with_error(self, cmd_args: list[str], err_msg: str) -> None:
         raw_args = self.parser.parse_args(cmd_args)
-        args = RunNodeArgs.parse_obj(vars(raw_args))
+        args = RunNodeArgs.model_validate(vars(raw_args))
         builder = CliBuilder(args)
         with self.assertRaises(BuilderError) as cm:
             manager = builder.create_manager(self.reactor)
@@ -36,7 +36,7 @@ class BuilderTestCase(unittest.TestCase):
 
     def _build(self, cmd_args: list[str]) -> HathorManager:
         raw_args = self.parser.parse_args(cmd_args)
-        args = RunNodeArgs.parse_obj(vars(raw_args))
+        args = RunNodeArgs.model_validate(vars(raw_args))
         builder = CliBuilder(args)
         manager = builder.create_manager(self.reactor)
         self.assertIsNotNone(manager)

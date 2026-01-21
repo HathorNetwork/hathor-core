@@ -72,10 +72,10 @@ def test_valid_hathor_settings_from_yaml(filepath):
 @pytest.mark.parametrize(
     ['filepath', 'error'],
     [
-        ('fixtures/invalid_byte_hathor_settings_fixture.yml', "expected 'str' or 'bytes', got 64"),
+        ('fixtures/invalid_byte_hathor_settings_fixture.yml', "Value error, expected 'str' or 'bytes', got 64"),
         (
             'fixtures/invalid_features_hathor_settings_fixture.yml',
-            'Should be a multiple of evaluation_interval: 2001 % 1000 != 0'
+            'Value error, timeout_height should be a multiple of evaluation_interval: 2001 % 1000 != 0'
         )
     ]
 )

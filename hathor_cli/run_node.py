@@ -586,7 +586,7 @@ class RunNode:
 
     def _parse_args_obj(self, args: dict[str, Any]) -> 'RunNodeArgs':
         from hathor_cli.run_node_args import RunNodeArgs
-        return RunNodeArgs.parse_obj(args)
+        return RunNodeArgs.model_validate(args)
 
     def run(self) -> None:
         self.reactor.run()

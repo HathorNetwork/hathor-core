@@ -15,11 +15,11 @@
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Any, NewType
+from typing import TYPE_CHECKING, NewType
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from pydantic import Field, validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from hathor.consensus import poa
 from hathor.crypto.util import (
@@ -33,46 +33,52 @@ if TYPE_CHECKING:
     from hathor.transaction.poa import PoaBlock
 
 
-class PoaSignerFile(BaseModel, arbitrary_types_allowed=True):
+class PoaSignerFile(BaseModel):
     """Class that represents a Proof-of-Authority signer configuration file."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     private_key: ec.EllipticCurvePrivateKeyWithSerialization = Field(alias='private_key_hex')
     public_key: ec.EllipticCurvePublicKey = Field(alias='public_key_hex')
     address: str
 
-    @validator('private_key', pre=True)
+    @field_validator('private_key', mode='before')
+    @classmethod
     def _parse_private_key(cls, private_key_hex: str) -> ec.EllipticCurvePrivateKeyWithSerialization:
         """Parse a private key hex into a private key instance."""
         private_key_bytes = bytes.fromhex(private_key_hex)
         return get_private_key_from_bytes(private_key_bytes)
 
-    @validator('public_key', pre=True)
-    def _validate_public_key_first_bytes(
-        cls,
-        public_key_hex: str,
-        values: dict[str, Any]
-    ) -> ec.EllipticCurvePublicKey:
-        """Parse a public key hex into a public key instance, and validate that it corresponds to the private key."""
-        private_key = values.get('private_key')
-        assert isinstance(private_key, ec.EllipticCurvePrivateKey), 'private_key must be set'
+    @model_validator(mode='after')
+    def _validate_keys_and_address(self) -> 'PoaSignerFile':
+        """Validate that public key and address correspond to the private key."""
+        actual_public_key = self.private_key.public_key()
+        actual_public_key_bytes = get_public_key_bytes_compressed(actual_public_key)
 
-        public_key_bytes = bytes.fromhex(public_key_hex)
-        actual_public_key = private_key.public_key()
-
-        if public_key_bytes != get_public_key_bytes_compressed(actual_public_key):
+        # Validate the provided public key matches the one derived from private key
+        provided_public_key_bytes = get_public_key_bytes_compressed(self.public_key)
+        if provided_public_key_bytes != actual_public_key_bytes:
             raise ValueError('invalid public key')
 
-        return actual_public_key
-
-    @validator('address')
-    def _validate_address(cls, address: str, values: dict[str, Any]) -> str:
-        """Validate that the provided address corresponds to the provided private key."""
-        private_key = values.get('private_key')
-        assert isinstance(private_key, ec.EllipticCurvePrivateKey), 'private_key must be set'
-
-        if address != get_address_b58_from_public_key(private_key.public_key()):
+        if self.address != get_address_b58_from_public_key(actual_public_key):
             raise ValueError('invalid address')
 
-        return address
+        return self
+
+    @field_validator('public_key', mode='before')
+    @classmethod
+    def _parse_public_key(cls, public_key_hex: str | ec.EllipticCurvePublicKey) -> ec.EllipticCurvePublicKey:
+        """Parse public key hex to public key object."""
+        if isinstance(public_key_hex, ec.EllipticCurvePublicKey):
+            return public_key_hex
+        # The public key is provided as compressed bytes
+        public_key_bytes = bytes.fromhex(public_key_hex)
+        # For compressed public keys, we need to use a different approach
+        from cryptography.hazmat.primitives.asymmetric import ec as ec_module
+
+        # Load compressed public key
+        return ec_module.EllipticCurvePublicKey.from_encoded_point(
+            ec_module.SECP256K1(), public_key_bytes
+        )
 
     def get_signer(self) -> PoaSigner:
         """Get a PoaSigner for this file."""
