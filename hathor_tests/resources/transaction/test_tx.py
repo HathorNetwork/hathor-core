@@ -8,7 +8,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.validation_state import ValidationState
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
-from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions
+from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions, create_fee_tokens
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -526,3 +526,82 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("transaction", {b'id': bytes(tx.hash_hex, 'utf-8')})
         data = response.json_value()
         self.assertFalse(data['success'])
+
+    @inlineCallbacks
+    def test_fees_field_block(self):
+        """Test that blocks return fees: [] (empty list)"""
+        # Get genesis block
+        genesis_block = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_block)
+        response = yield self.web.get("transaction", {b'id': bytes(genesis_block.hash.hex(), 'utf-8')})
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        self.assertIn('fees', data)
+        self.assertEqual(data['fees'], [])
+
+        # Add a new block and verify it also has fees: []
+        blocks = add_new_blocks(self.manager, 1, advance_clock=1)
+        response = yield self.web.get("transaction", {b'id': bytes(blocks[0].hash.hex(), 'utf-8')})
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        self.assertIn('fees', data)
+        self.assertEqual(data['fees'], [])
+
+    @inlineCallbacks
+    def test_fees_field_regular_transaction(self):
+        """Test that regular transactions (without fee header) return fees: [] (empty list)"""
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+
+        tx = add_new_transactions(self.manager, 1)[0]
+
+        response = yield self.web.get("transaction", {b'id': bytes(tx.hash.hex(), 'utf-8')})
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        self.assertIn('fees', data)
+        self.assertEqual(data['fees'], [])
+        # Verify transaction does not have fees
+        self.assertFalse(tx.has_fees())
+
+    @inlineCallbacks
+    def test_fees_field_transaction_with_fee_header(self):
+        """Test that transactions with fee header return the correct fee entries"""
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+
+        address_b58 = self.manager.wallet.get_unused_address()
+
+        initial_mint_amount = 500
+        htr_amount = 1000
+        fee_tx = create_fee_tokens(
+            self.manager,
+            address_b58,
+            initial_mint_amount,
+            genesis_output_amount=htr_amount
+        )
+
+        # Test that the TokenCreationTransaction with fee header returns correct fee entries
+        response = yield self.web.get("transaction", {b'id': bytes(fee_tx.hash.hex(), 'utf-8')})
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        self.assertIn('fees', data)
+        self.assertTrue(fee_tx.has_fees())
+
+        # Verify fees is a list with the expected entries
+        fees = data['fees']
+        self.assertIsInstance(fees, list)
+        self.assertGreater(len(fees), 0)
+
+        # Verify each fee entry has the expected structure
+        for fee_entry in fees:
+            self.assertIn('token_uid', fee_entry)
+            self.assertIn('amount', fee_entry)
+            self.assertIsInstance(fee_entry['token_uid'], str)
+            self.assertIsInstance(fee_entry['amount'], int)
+
+        # Verify total fee amount matches the header
+        total_fee_from_api = sum(entry['amount'] for entry in fees)
+        self.assertEqual(fee_tx.get_fee_header().total_fee_amount(), total_fee_from_api)

@@ -46,6 +46,12 @@ class FeeEntry:
     token_uid: TokenUid
     amount: int
 
+    def to_json(self) -> dict:
+        return {
+            'token_uid': self.token_uid.hex(),
+            'amount': self.amount,
+        }
+
 
 @dataclass(slots=True, kw_only=True)
 class FeeHeader(VertexBaseHeader):
