@@ -83,7 +83,6 @@ class TestActions(unittest.TestCase):
         self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
             self.bp_id: MyBlueprint
         })
-        assert self.manager.tx_storage.indexes is not None
         self.tokens_index: TokensIndex = not_none(self.manager.tx_storage.indexes.tokens)
         self.nc_seqnum = 0
 

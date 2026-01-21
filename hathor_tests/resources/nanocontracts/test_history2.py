@@ -13,7 +13,7 @@ from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 settings = HathorSettings()
 
 
-class TestBlueprint(Blueprint):
+class LogEmitBlueprint(Blueprint):
     value: int
 
     @public
@@ -32,7 +32,7 @@ class TransactionNanoContractTest(_BaseResourceTest._ResourceTest):
 
         self.blueprint_id = b'x' * 32
         self.catalog = NCBlueprintCatalog({
-            self.blueprint_id: TestBlueprint
+            self.blueprint_id: LogEmitBlueprint
         })
 
         self.manager = self.create_peer(
@@ -107,37 +107,23 @@ class TransactionNanoContractTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(bytes.fromhex(event['data']), b'combined test')
 
         # Test NanoContractHistoryResource API
-        # Test history for nc1
-        response = yield self.web_history.get('history', {
+        # By default, transactions are created with increasing timestamps, so nc2 is newer than nc1.
+        # Test history for nc1 with default order (desc)
+        response_desc = yield self.web_history.get('history', {
             b'id': nc1.hash.hex().encode('ascii'),
             b'include_nc_logs': b'true',
             b'include_nc_events': b'true',
         })
-        data = response.json_value()
-        self.assertTrue(data['success'])
-        self.assertGreater(len(data['history']), 0)
+        data_desc = response_desc.json_value()
+        self.assertTrue(data_desc['success'])
+        self.assertEqual(len(data_desc['history']), 2)
 
-        # Find nc1 in history (it should be the initialize transaction)
-        nc1_in_history = None
-        for tx_data in data['history']:
-            if tx_data['hash'] == nc1.hash_hex:
-                nc1_in_history = tx_data
-                break
+        # Check order (desc), newest first: nc2, then nc1
+        self.assertEqual(data_desc['history'][0]['hash'], nc2.hash_hex)
+        self.assertEqual(data_desc['history'][1]['hash'], nc1.hash_hex)
 
-        self.assertIsNotNone(nc1_in_history)
-        self.assertEqual(nc1_in_history['nc_args_decoded'], [42])
-        self.assertIn('nc_logs', nc1_in_history)
-        self.assertIn('nc_events', nc1_in_history)
-        self.assertEqual(nc1_in_history['nc_events'], [])
-
-        # Find nc2 in history (log_and_emit transaction)
-        nc2_in_history = None
-        for tx_data in data['history']:
-            if tx_data['hash'] == nc2.hash_hex:
-                nc2_in_history = tx_data
-                break
-
-        self.assertIsNotNone(nc2_in_history)
+        # Check content of nc2 in history
+        nc2_in_history = data_desc['history'][0]
         self.assertEqual(nc2_in_history['nc_args_decoded'], ["combined test"])
         self.assertIn('nc_logs', nc2_in_history)
         self.assertIsInstance(nc2_in_history['nc_logs'], dict)
@@ -147,3 +133,23 @@ class TransactionNanoContractTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(nc2_in_history['nc_events']), 1)
         event = nc2_in_history['nc_events'][0]
         self.assertEqual(bytes.fromhex(event['data']), b'combined test')
+
+        # Check content of nc1 in history
+        nc1_in_history = data_desc['history'][1]
+        self.assertEqual(nc1_in_history['nc_args_decoded'], [42])
+        self.assertIn('nc_logs', nc1_in_history)
+        self.assertIn('nc_events', nc1_in_history)
+        self.assertEqual(nc1_in_history['nc_events'], [])
+
+        # Test history for nc1 with asc order
+        response_asc = yield self.web_history.get('history', {
+            b'id': nc1.hash.hex().encode('ascii'),
+            b'order': b'asc',
+        })
+        data_asc = response_asc.json_value()
+        self.assertTrue(data_asc['success'])
+        self.assertEqual(len(data_asc['history']), 2)
+
+        # Check order (asc), oldest first: nc1, then nc2
+        self.assertEqual(data_asc['history'][0]['hash'], nc1.hash_hex)
+        self.assertEqual(data_asc['history'][1]['hash'], nc2.hash_hex)

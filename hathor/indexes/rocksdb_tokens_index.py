@@ -14,7 +14,7 @@
 
 from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, cast
+from typing import TYPE_CHECKING, Any, Iterator, NamedTuple, Optional, cast
 
 from structlog import get_logger
 from typing_extensions import assert_never, override
@@ -542,7 +542,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                            *, reverse: bool = False) -> Iterator[bytes]:
         """ Iterate over all transactions of a token, by default from oldest to newest.
         """
-        it = self._db.iterkeys(self._cf)
+        it: Any = self._db.iterkeys(self._cf)
         seek_key = self._to_key_txs(token_uid, from_tx)
         self.log.debug('seek to', token_uid=token_uid.hex(), key=seek_key.hex())
         if reverse:

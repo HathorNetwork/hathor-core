@@ -130,7 +130,6 @@ async def gap_limit_search(
 ) -> AddressSearch:
     """An async iterator that yields addresses and vertices, stopping when the gap limit is reached.
     """
-    assert manager.tx_storage.indexes is not None
     assert manager.tx_storage.indexes.addresses is not None
     addresses_index = manager.tx_storage.indexes.addresses
     empty_addresses_counter = 0

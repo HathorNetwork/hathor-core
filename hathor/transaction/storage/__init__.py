@@ -12,14 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.transaction.storage.cache_storage import TransactionCacheStorage
 from hathor.transaction.storage.rocksdb_storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
 from hathor.transaction.storage.vertex_storage_protocol import VertexStorageProtocol
 
 __all__ = [
     'TransactionStorage',
-    'TransactionCacheStorage',
     'TransactionRocksDBStorage',
     'VertexStorageProtocol'
 ]

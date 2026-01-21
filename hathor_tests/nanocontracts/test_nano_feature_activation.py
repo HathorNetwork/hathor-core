@@ -14,7 +14,7 @@
 
 import pytest
 
-from hathor.conf.settings import NanoContractsSetting
+from hathor.conf.settings import FeatureSetting
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
@@ -55,12 +55,20 @@ class TestNanoFeatureActivation(unittest.TestCase):
                     timeout_height=12,
                     signal_support_by_default=True,
                     version='0.0.0'
+                ),
+                Feature.FEE_TOKENS: Criteria(
+                    bit=3,
+                    start_height=4,
+                    timeout_height=12,
+                    signal_support_by_default=True,
+                    version='0.0.0'
                 )
             }
         )
 
         settings = self._settings._replace(
-            ENABLE_NANO_CONTRACTS=NanoContractsSetting.FEATURE_ACTIVATION,
+            ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
+            ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
             FEATURE_ACTIVATION=feature_settings,
         )
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
@@ -120,9 +128,11 @@ class TestNanoFeatureActivation(unittest.TestCase):
 
         artifacts.propagate_with(self.manager, up_to='b3')
         assert self.feature_service.get_state(block=b3, feature=Feature.NANO_CONTRACTS) == FeatureState.DEFINED
+        assert self.feature_service.get_state(block=b3, feature=Feature.FEE_TOKENS) == FeatureState.DEFINED
 
         artifacts.propagate_with(self.manager, up_to='b4')
         assert self.feature_service.get_state(block=b4, feature=Feature.NANO_CONTRACTS) == FeatureState.STARTED
+        assert self.feature_service.get_state(block=b4, feature=Feature.FEE_TOKENS) == FeatureState.STARTED
 
         signaling_blocks = ('b5', 'b6', 'b7')
         for block_name in signaling_blocks:
@@ -133,12 +143,15 @@ class TestNanoFeatureActivation(unittest.TestCase):
             artifacts.propagate_with(self.manager, up_to=block_name)
 
         assert self.feature_service.get_state(block=b7, feature=Feature.NANO_CONTRACTS) == FeatureState.STARTED
+        assert self.feature_service.get_state(block=b7, feature=Feature.FEE_TOKENS) == FeatureState.STARTED
 
         artifacts.propagate_with(self.manager, up_to='b8')
         assert self.feature_service.get_state(block=b8, feature=Feature.NANO_CONTRACTS) == FeatureState.LOCKED_IN
+        assert self.feature_service.get_state(block=b8, feature=Feature.FEE_TOKENS) == FeatureState.LOCKED_IN
 
         artifacts.propagate_with(self.manager, up_to='b11')
         assert self.feature_service.get_state(block=b11, feature=Feature.NANO_CONTRACTS) == FeatureState.LOCKED_IN
+        assert self.feature_service.get_state(block=b11, feature=Feature.FEE_TOKENS) == FeatureState.LOCKED_IN
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
 
@@ -163,6 +176,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
 
         artifacts.propagate_with(self.manager, up_to='b12')
         assert self.feature_service.get_state(block=b12, feature=Feature.NANO_CONTRACTS) == FeatureState.ACTIVE
+        assert self.feature_service.get_state(block=b12, feature=Feature.FEE_TOKENS) == FeatureState.ACTIVE
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id
@@ -221,6 +235,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         # The nc and fee txs are re-accepted on the mempool.
         artifacts.propagate_with(self.manager, up_to='a12')
         assert self.feature_service.get_state(block=a12, feature=Feature.NANO_CONTRACTS) == FeatureState.ACTIVE
+        assert self.feature_service.get_state(block=a12, feature=Feature.FEE_TOKENS) == FeatureState.ACTIVE
 
         assert b11.get_metadata().nc_block_root_id == self.empty_root_id
         assert b12.get_metadata().nc_block_root_id == self.empty_root_id

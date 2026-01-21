@@ -10,7 +10,6 @@ from typing import Any, Optional, cast
 import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
-from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
@@ -29,6 +28,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
+from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
 
@@ -535,9 +535,15 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     return tx
 
 
-def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
-                      token_name: str = 'TestFeeCoin', token_symbol: str = 'TFC',
-                      genesis_output_amount: Optional[int] = None) -> TokenCreationTransaction:
+def create_fee_tokens(
+    manager: 'HathorManager',
+    address_b58: Optional[str] = None,
+    mint_amount: int = 300,
+    token_name: str = 'TestFeeCoin',
+    token_symbol: str = 'TFC',
+    genesis_output_amount: Optional[int] = None,
+    propagate: bool = True,
+) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -622,9 +628,11 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
         input_.data = P2PKH.create_input_data(public_bytes, signature)
 
     manager.cpu_mining_service.resolve(tx)
-    manager.propagate_tx(tx)
-    assert isinstance(manager.reactor, Clock)
-    manager.reactor.advance(8)
+
+    if propagate:
+        manager.propagate_tx(tx)
+        assert isinstance(manager.reactor, Clock)
+        manager.reactor.advance(8)
 
     return tx
 
@@ -744,6 +752,7 @@ class EventMocker:
     next_id: int = 0
     tx_data = TxData(
         hash='abc',
+        name='tx name',
         nonce=123,
         timestamp=456,
         signal_bits=0,

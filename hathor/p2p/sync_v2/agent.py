@@ -181,8 +181,6 @@ class NodeBlockSync(SyncAgent):
     def get_status(self) -> dict[str, Any]:
         """ Return the status of the sync.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         tips = self.tx_storage.indexes.mempool_tips.get()
         tips_limited, tips_has_more = collect_n(iter(tips), MAX_MEMPOOL_STATUS_TIPS)
         res = {
@@ -361,7 +359,6 @@ class NodeBlockSync(SyncAgent):
 
         Notice that we might already have all other peer's blocks while the other peer is still syncing.
         """
-        assert self.tx_storage.indexes is not None
         self.state = PeerState.SYNCING_BLOCKS
 
         # Get my best block.
@@ -462,8 +459,6 @@ class NodeBlockSync(SyncAgent):
     def handle_get_tips(self, _payload: str) -> None:
         """ Handle a GET-TIPS message.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         if self._is_streaming:
             self.log.warn('can\'t send while streaming')  # XXX: or can we?
             self.send_message(ProtocolMessages.MEMPOOL_END)
@@ -641,7 +636,6 @@ class NodeBlockSync(SyncAgent):
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
-        assert self.tx_storage.indexes is not None
         heights = json.loads(payload)
         if len(heights) > 20:
             self.log.info('too many heights', heights_qty=len(heights))

@@ -152,7 +152,7 @@ def get_arg_default(args: dict[bytes, list[bytes]], key: str, default: T) -> T:
     bkey = key.encode()
     values = args.get(bkey)
     if not values:
-        return cast(T, default)
+        return default
     value: bytes = values[0]
     if isinstance(default, int):
         return cast(T, int(value))

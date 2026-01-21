@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, ParamSpec, TypeVar, cast
+from typing import Any, Callable, TypeVar, TypeVarTuple, Unpack, cast
 
 from structlog import get_logger
 
@@ -23,7 +23,7 @@ from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
 logger = get_logger()
 
 _T = TypeVar('_T')
-_P = ParamSpec('_P')
+_Ts = TypeVarTuple('_Ts')
 
 
 # https://docs.python.org/3/library/sys.html#sys.settrace
@@ -77,7 +77,7 @@ class MeteredExecutor:
         del env['__builtins__']
         return env
 
-    def call(self, func: Callable[_P, _T], /, *, args: _P.args) -> _T:
+    def call(self, func: Callable[[Unpack[_Ts]], _T], /, *, args: tuple[Unpack[_Ts]]) -> _T:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
         from hathor import NCFail

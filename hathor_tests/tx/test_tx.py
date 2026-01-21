@@ -86,7 +86,7 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -107,7 +107,7 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks

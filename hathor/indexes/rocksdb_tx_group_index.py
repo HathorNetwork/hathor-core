@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import abstractmethod
-from typing import Callable, Iterator, Optional, Sized, TypeVar
+from typing import Any, Callable, Generic, Iterator, Optional, Sized, TypeVar
 
 import rocksdb
 from structlog import get_logger
@@ -31,7 +31,7 @@ KT = TypeVar('KT', bound=Sized)
 GROUP_COUNT_VALUE_SIZE = 4  # in bytes
 
 
-class _RocksDBTxGroupStatsIndex(RocksDBIndexUtils):
+class _RocksDBTxGroupStatsIndex(RocksDBIndexUtils, Generic[KT]):
     def __init__(
         self,
         db: rocksdb.DB,
@@ -157,7 +157,7 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
         reverse: bool = False
     ) -> Iterator[bytes]:
         self.log.debug('seek to', key=key)
-        it = self._db.iterkeys(self._cf)
+        it: Any = self._db.iterkeys(self._cf)
         if reverse:
             it = reversed(it)
             # when reversed we increment the key by 1, which effectively goes to the end of a prefix
@@ -191,7 +191,7 @@ class RocksDBTxGroupIndex(TxGroupIndex[KT], RocksDBIndexUtils):
 
     @override
     def get_latest_tx_timestamp(self, key: KT) -> int | None:
-        it = self._db.iterkeys(self._cf)
+        it: Any = self._db.iterkeys(self._cf)
         it = reversed(it)
         # when reversed we increment the key by 1, which effectively goes to the end of a prefix
         it.seek_for_prev(incr_key(self._to_rocksdb_key(key)))

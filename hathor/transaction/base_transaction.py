@@ -744,6 +744,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             work += weight_to_work(tx.weight)
             if stop_value is not None and work > stop_value:
                 break
+            bfs_walk.add_neighbors()
 
         metadata.accumulated_weight = work
         if save_file:

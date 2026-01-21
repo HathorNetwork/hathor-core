@@ -23,7 +23,6 @@ from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.consensus.context import ReorgInfo
-from hathor.feature_activation.feature import Feature
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -145,26 +144,11 @@ class BlockConsensusAlgorithm:
         """
         Determine whether we should proceed to execute Nano transactions while making the necessary initializations.
         """
-        from hathor.conf.settings import NanoContractsSetting
         assert not block.is_genesis
 
-        match self._settings.ENABLE_NANO_CONTRACTS:
-            case NanoContractsSetting.ENABLED:
-                return True
-
-            case NanoContractsSetting.FEATURE_ACTIVATION:
-                parent = block.get_block_parent()
-                is_active_on_parent = self.feature_service.is_feature_active(
-                    vertex=parent,
-                    feature=Feature.NANO_CONTRACTS,
-                )
-                return is_active_on_parent
-
-            case NanoContractsSetting.DISABLED:
-                return False
-
-            case _:  # pragma: no cover
-                assert_never(self._settings.ENABLE_NANO_CONTRACTS)
+        from hathor.feature_activation.utils import is_nano_active
+        parent = block.get_block_parent()
+        return is_nano_active(settings=self._settings, feature_service=self.feature_service, block=parent)
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.
@@ -239,7 +223,10 @@ class BlockConsensusAlgorithm:
                     block_storage.set_address_seqnum(Address(nc_header.nc_address), nc_header.nc_seqnum)
                 continue
 
-            runner = self._runner_factory.create(block_storage=block_storage, seed=seed_hasher.digest())
+            runner = self._runner_factory.create(
+                block_storage=block_storage,
+                seed=seed_hasher.digest(),
+            )
             exception_and_tb: tuple[NCFail, str] | None = None
             token_dict = tx.get_complete_token_info(block_storage)
             should_verify_sum_after_execution = any(token_info.version is None for token_info in token_dict.values())
@@ -280,7 +267,6 @@ class BlockConsensusAlgorithm:
 
                 # Update indexes. This must be after metadata is updated.
                 assert tx.storage is not None
-                assert tx.storage.indexes is not None
                 tx.storage.indexes.handle_contract_execution(tx)
 
                 # Pubsub event to indicate execution success
@@ -331,7 +317,7 @@ class BlockConsensusAlgorithm:
         from hathor.verification.transaction_verifier import TransactionVerifier
         try:
             token_dict = tx.get_complete_token_info(block_storage)
-            TransactionVerifier.verify_sum(self._settings, token_dict)
+            TransactionVerifier.verify_sum(self._settings, tx, token_dict)
         except TokenNotFound as e:
             # At this point, any nonexistent token would have made a prior validation fail. For example, if there
             # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.
@@ -426,9 +412,7 @@ class BlockConsensusAlgorithm:
             return
 
         assert block.storage is not None
-
         storage = block.storage
-        assert storage.indexes is not None
 
         # Union of voided_by of parents
         voided_by: set[bytes] = self.union_voided_by_from_parents(block)
@@ -530,7 +514,6 @@ class BlockConsensusAlgorithm:
         """Mark as reorg only if reorg size > 0."""
         assert new_best_block.storage is not None
         storage = new_best_block.storage
-        assert storage.indexes is not None
         _, old_best_block_hash = storage.indexes.height.get_height_tip()
         old_best_block = storage.get_transaction(old_best_block_hash)
         assert isinstance(old_best_block, Block)
@@ -747,18 +730,17 @@ class BlockConsensusAlgorithm:
         bfs = BFSTimestampWalk(storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(block, skip_root=True):
             if tx.is_block:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
                 continue
 
             meta = tx.get_metadata()
             if meta.first_block != block.hash:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
                 continue
 
             if tx.is_nano_contract():
                 if meta.nc_execution == NCExecutionState.SUCCESS:
                     assert tx.storage is not None
-                    assert tx.storage.indexes is not None
                     tx.storage.indexes.handle_contract_unexecution(tx)
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None
@@ -770,6 +752,7 @@ class BlockConsensusAlgorithm:
                     meta.voided_by = None
             meta.first_block = None
             self.context.save(tx)
+            bfs.add_neighbors()
 
     def _score_block_dfs(self, block: BaseTransaction, used: set[bytes],
                          mark_as_best_chain: bool, newest_timestamp: int) -> int:
@@ -798,11 +781,11 @@ class BlockConsensusAlgorithm:
                 for tx in bfs.run(parent, skip_root=False):
                     assert tx.hash is not None
                     if tx.is_block:
-                        bfs.skip_neighbors(tx)
+                        bfs.skip_neighbors()
                         continue
 
                     if tx.hash in used:
-                        bfs.skip_neighbors(tx)
+                        bfs.skip_neighbors()
                         continue
                     used.add(tx.hash)
 
@@ -810,7 +793,7 @@ class BlockConsensusAlgorithm:
                     if meta.first_block:
                         first_block = storage.get_transaction(meta.first_block)
                         if first_block.timestamp <= newest_timestamp:
-                            bfs.skip_neighbors(tx)
+                            bfs.skip_neighbors()
                             continue
 
                     if mark_as_best_chain:
@@ -819,6 +802,7 @@ class BlockConsensusAlgorithm:
                         self.context.save(tx)
 
                     score += weight_to_work(tx.weight)
+                    bfs.add_neighbors()
 
         # Always save the score when it is calculated.
         meta = block.get_metadata()

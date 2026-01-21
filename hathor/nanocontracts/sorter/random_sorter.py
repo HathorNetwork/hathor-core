@@ -154,9 +154,9 @@ class NCBlockSorter:
         self.db[id_] = vertex
         return vertex
 
-    def get_vertices_with_no_outgoing_edges(self) -> list[VertexId]:
+    def get_vertices_with_no_outgoing_edges(self) -> SortedSet[VertexId]:
         """Get all vertices with no outgoing edges."""
-        return sorted(v.id for v in self.db.values() if not v.outgoing_edges)
+        return SortedSet(v.id for v in self.db.values() if not v.outgoing_edges)
 
     def generate_random_topological_order(self, seed: bytes) -> list[VertexId]:
         """Generate a random topological order according to the DAG.
@@ -169,7 +169,7 @@ class NCBlockSorter:
 
         rng = NanoRNG(seed)
 
-        candidates = SortedSet(self.get_vertices_with_no_outgoing_edges())
+        candidates = self.get_vertices_with_no_outgoing_edges()
         ret = []
         for i in range(len(self.db)):
             assert len(candidates) > 0, 'empty candidates, probably caused by circular dependencies in the graph'
