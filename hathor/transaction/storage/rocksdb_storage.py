@@ -115,7 +115,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             deferred.addErrback(self._err_flush_thread)
             self.cache_data.flush_deferred = deferred
 
-    def _cb_flush_thread(self) -> None:
+    def _cb_flush_thread(self, _res: None) -> None:
         self._reactor.callLater(self.cache_data.interval, self._start_flush_thread)
         self.cache_data.flush_deferred = None
 
