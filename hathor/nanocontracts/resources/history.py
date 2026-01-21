@@ -19,6 +19,7 @@ from pydantic import Field
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
+from hathor.nanocontracts.resources.on_chain import SortOrder
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
@@ -73,30 +74,46 @@ class NanoContractHistoryResource(Resource):
             error_response = ErrorResponse(success=False, error='Nano contract does not exist.')
             return error_response.json_dumpb()
 
-        if params.after:
-            try:
-                ref_tx = tx_storage.get_transaction(bytes.fromhex(params.after))
-            except TransactionDoesNotExist:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(success=False, error=f'Hash {params.after} is not a transaction hash.')
-                return error_response.json_dumpb()
+        is_desc = params.order.is_desc()
 
-            iter_history = iter(tx_storage.indexes.nc_history.get_older(nc_id_bytes, ref_tx))
-            # This method returns the iterator including the tx used as `after`
-            next(iter_history)
-        elif params.before:
-            try:
-                ref_tx = tx_storage.get_transaction(bytes.fromhex(params.before))
-            except TransactionDoesNotExist:
-                request.setResponseCode(400)
-                error_response = ErrorResponse(success=False, error=f'Hash {params.before} is not a transaction hash.')
-                return error_response.json_dumpb()
-
-            iter_history = iter(tx_storage.indexes.nc_history.get_newer(nc_id_bytes, ref_tx))
-            # This method returns the iterator including the tx used as `before`
-            next(iter_history)
+        if not params.before and not params.after:
+            iter_history = (
+                iter(tx_storage.indexes.nc_history.get_newest(nc_id_bytes)) if is_desc
+                else iter(tx_storage.indexes.nc_history.get_oldest(nc_id_bytes))
+            )
         else:
-            iter_history = iter(tx_storage.indexes.nc_history.get_newest(nc_id_bytes))
+            ref_tx_id_hex = params.before or params.after
+            assert ref_tx_id_hex is not None
+
+            try:
+                ref_tx_id = bytes.fromhex(ref_tx_id_hex)
+            except ValueError:
+                request.setResponseCode(400)
+                error_response = ErrorResponse(success=False, error=f'Invalid hash: {ref_tx_id_hex}')
+                return error_response.json_dumpb()
+
+            try:
+                ref_tx = tx_storage.get_transaction(ref_tx_id)
+            except TransactionDoesNotExist:
+                request.setResponseCode(404)
+                error_response = ErrorResponse(success=False, error=f'Transaction {ref_tx_id_hex} not found.')
+                return error_response.json_dumpb()
+
+            if is_desc:
+                iter_getter = tx_storage.indexes.nc_history.get_newer if params.before \
+                    else tx_storage.indexes.nc_history.get_older
+            else:
+                iter_getter = tx_storage.indexes.nc_history.get_older if params.before \
+                    else tx_storage.indexes.nc_history.get_newer
+
+            iter_history = iter(iter_getter(nc_id_bytes, ref_tx))
+            # This method returns the iterator including the tx used as `before` or `after`
+            try:
+                next(iter_history)
+            except StopIteration:
+                # This can happen if the `ref_tx` is the only tx in the history, in this case the iterator will be
+                # empty. It's safe to just ignore this and let the loop below handle the empty iterator.
+                pass
 
         count = params.count
         has_more = False
@@ -134,6 +151,7 @@ class NCHistoryParams(QueryParams):
     after: Optional[str]
     before: Optional[str]
     count: int = Field(default=100, lt=500)
+    order: SortOrder = SortOrder.DESC
     include_nc_logs: bool = Field(default=False)
     include_nc_events: bool = Field(default=False)
 
@@ -234,6 +252,14 @@ NanoContractHistoryResource.openapi = {
                     'name': 'before',
                     'in': 'query',
                     'description': 'Hash of transaction to offset the result before.',
+                    'required': False,
+                    'schema': {
+                        'type': 'string',
+                    }
+                }, {
+                    'name': 'order',
+                    'in': 'query',
+                    'description': 'Sort order, either "asc" or "desc".',
                     'required': False,
                     'schema': {
                         'type': 'string',
