@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, TypeAlias, Union, cast
+from typing import Any, Optional, TypeAlias
 
-from pydantic import Extra, validator
+from pydantic import ConfigDict, model_validator
 from typing_extensions import Self
 
 from hathor.crypto.util import get_address_b58_from_bytes
@@ -27,13 +27,15 @@ from hathor.transaction.token_info import TokenVersion
 from hathor.utils.pydantic import BaseModel
 
 
-class DecodedTxOutput(BaseModel, extra=Extra.ignore):
+class DecodedTxOutput(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     type: str
     address: str
-    timelock: Optional[int]
+    timelock: Optional[int] = None
 
 
-class TxOutput(BaseModel, extra=Extra.ignore):
+class TxOutput(BaseModel):
+    model_config = ConfigDict(extra='ignore')
     value: int
     token_data: int
     script: str
@@ -70,8 +72,18 @@ class SpentOutput(BaseModel):
     index: int
     tx_ids: list[str]
 
+    @model_validator(mode='before')
+    @classmethod
+    def _parse_list_format(cls, data: Any) -> Any:
+        """Accept both dict format and list format [index, tx_ids] from metadata.to_json()."""
+        if isinstance(data, list):
+            return {'index': data[0], 'tx_ids': data[1]}
+        return data
 
-class TxMetadata(BaseModel, extra=Extra.ignore):
+
+class TxMetadata(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
     hash: str
     spent_outputs: list[SpentOutput]
     conflict_with: list[str]
@@ -82,32 +94,10 @@ class TxMetadata(BaseModel, extra=Extra.ignore):
     score: float
     accumulated_weight_raw: str
     score_raw: str
-    first_block: Optional[str]
+    first_block: Optional[str] = None
     height: int
     validation: str
-    nc_execution: str | None
-
-    @validator('spent_outputs', pre=True, each_item=True)
-    def _parse_spent_outputs(cls, spent_output: Union[SpentOutput, list[Union[int, list[str]]]]) -> SpentOutput:
-        """
-        This validator method is called by pydantic when parsing models, and is not supposed to be called directly.
-        It either returns a SpentOutput if it receives one, or tries to parse it as a list (as returned from
-        metadata.to_json() method). Examples:
-
-        >>> TxMetadata._parse_spent_outputs(SpentOutput(index=0, tx_ids=['tx1', 'tx2']))
-        SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
-        >>> TxMetadata._parse_spent_outputs([0, ['tx1', 'tx2']])
-        SpentOutput(index=0, tx_ids=['tx1', 'tx2'])
-        """
-        if isinstance(spent_output, list):
-            index, tx_ids = spent_output
-
-            return SpentOutput(
-                index=cast(int, index),
-                tx_ids=cast(list[str], tx_ids)
-            )
-
-        return spent_output
+    nc_execution: str | None = None
 
 
 class BaseEventData(BaseModel):
@@ -125,12 +115,14 @@ class EmptyData(BaseEventData):
         return cls()
 
 
-class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
+class TxDataWithoutMeta(BaseEventData):
     """Class that represents transaction data on an event."""
+    model_config = ConfigDict(extra='ignore')
+
     hash: str
     nonce: Optional[int] = None
     timestamp: int
-    signal_bits: int | None
+    signal_bits: int | None = None
     version: int
     weight: float
     inputs: list['TxInput']
@@ -138,11 +130,11 @@ class TxDataWithoutMeta(BaseEventData, extra=Extra.ignore):
     parents: list[str]
     tokens: list[str]
     # TODO: Token name and symbol could be in a different class because they're only used by TokenCreationTransaction
-    token_name: Optional[str]
-    token_symbol: Optional[str]
+    token_name: Optional[str] = None
+    token_symbol: Optional[str] = None
     aux_pow: Optional[str] = None
     headers: list[TxHeader] = []
-    name: str | None
+    name: str | None = None
 
     @classmethod
     def from_event_arguments(cls, args: EventArguments) -> Self:

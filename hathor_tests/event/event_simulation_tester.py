@@ -62,12 +62,12 @@ class BaseEventSimulationTester(SimulatorTestCase):
         )
 
     def _get_success_responses(self) -> list[EventResponse]:
-        return list(map(EventResponse.parse_obj, self._get_transport_messages()))
+        return list(map(EventResponse.model_validate, self._get_transport_messages()))
 
     def _get_error_response(self) -> InvalidRequestResponse:
         responses = self._get_transport_messages()
         assert len(responses) == 1
-        return InvalidRequestResponse.parse_obj(responses[0])
+        return InvalidRequestResponse.model_validate(responses[0])
 
     def _get_transport_messages(self) -> list[dict[str, Any]]:
         values = self.transport.value()

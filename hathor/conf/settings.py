@@ -16,7 +16,7 @@ import os
 from enum import StrEnum, auto, unique
 from math import log
 from pathlib import Path
-from typing import Any, NamedTuple, Optional, Union
+from typing import NamedTuple, Optional, Union
 
 import pydantic
 
@@ -559,43 +559,36 @@ def parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
         return bytes.fromhex(hex_str.lstrip('x'))
 
     if not isinstance(hex_str, bytes):
-        raise TypeError(f'expected \'str\' or \'bytes\', got {hex_str}')
+        raise ValueError(f'expected \'str\' or \'bytes\', got {hex_str}')
 
     return hex_str
 
 
-def _validate_consensus_algorithm(consensus_algorithm: ConsensusSettings, values: dict[str, Any]) -> ConsensusSettings:
+def _validate_consensus_algorithm(model: HathorSettings) -> HathorSettings:
     """Validate that if Proof-of-Authority is enabled, block rewards must not be set."""
+    consensus_algorithm = model.CONSENSUS_ALGORITHM
     if consensus_algorithm.is_pow():
-        return consensus_algorithm
+        return model
 
-    assert consensus_algorithm.is_poa()
-    blocks_per_halving = values.get('BLOCKS_PER_HALVING')
-    initial_token_units_per_block = values.get('INITIAL_TOKEN_UNITS_PER_BLOCK')
-    minimum_token_units_per_block = values.get('MINIMUM_TOKEN_UNITS_PER_BLOCK')
-    assert initial_token_units_per_block is not None, 'INITIAL_TOKEN_UNITS_PER_BLOCK must be set'
-    assert minimum_token_units_per_block is not None, 'MINIMUM_TOKEN_UNITS_PER_BLOCK must be set'
-
-    if blocks_per_halving is not None or initial_token_units_per_block != 0 or minimum_token_units_per_block != 0:
+    if (model.BLOCKS_PER_HALVING is not None or
+        model.INITIAL_TOKEN_UNITS_PER_BLOCK != 0 or
+            model.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
         raise ValueError('PoA networks do not support block rewards')
+    return model
 
-    return consensus_algorithm
 
-
-def _validate_tokens(genesis_tokens: int, values: dict[str, Any]) -> int:
+def _validate_tokens(model: HathorSettings) -> HathorSettings:
     """Validate genesis tokens."""
-    genesis_token_units = values.get('GENESIS_TOKEN_UNITS')
-    decimal_places = values.get('DECIMAL_PLACES')
-    assert genesis_token_units is not None, 'GENESIS_TOKEN_UNITS must be set'
-    assert decimal_places is not None, 'DECIMAL_PLACES must be set'
+    genesis_tokens = model.GENESIS_TOKENS
+    genesis_token_units = model.GENESIS_TOKEN_UNITS
+    decimal_places = model.DECIMAL_PLACES
 
     if genesis_tokens != genesis_token_units * (10 ** decimal_places):
         raise ValueError(
-            f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, GENESIS_TOKEN_UNITS={genesis_token_units}, '
-            f'DECIMAL_PLACES={decimal_places}',
+            f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
+            f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
         )
-
-    return genesis_tokens
+    return model
 
 
 def _validate_token_deposit_percentage(token_deposit_percentage: float) -> float:
@@ -610,43 +603,43 @@ def _validate_token_deposit_percentage(token_deposit_percentage: float) -> float
 
 
 _VALIDATORS = dict(
-    _parse_hex_str=pydantic.validator(
+    _parse_hex_str=pydantic.field_validator(
         'P2PKH_VERSION_BYTE',
         'MULTISIG_VERSION_BYTE',
         'GENESIS_OUTPUT_SCRIPT',
         'GENESIS_BLOCK_HASH',
         'GENESIS_TX1_HASH',
         'GENESIS_TX2_HASH',
-        pre=True,
-        allow_reuse=True
+        mode='before',
     )(parse_hex_str),
-    _parse_soft_voided_tx_id=pydantic.validator(
+    _parse_soft_voided_tx_id=pydantic.field_validator(
         'SOFT_VOIDED_TX_IDS',
-        pre=True,
-        allow_reuse=True,
-        each_item=True
-    )(parse_hex_str),
-    _parse_skipped_verification_tx_id=pydantic.validator(
+        mode='before',
+    )(lambda v: [parse_hex_str(x) for x in v] if isinstance(v, list) else v),
+    _parse_skipped_verification_tx_id=pydantic.field_validator(
         'SKIP_VERIFICATION',
-        pre=True,
-        allow_reuse=True,
-        each_item=True
-    )(parse_hex_str),
-    _parse_checkpoints=pydantic.validator(
+        mode='before',
+    )(lambda v: [parse_hex_str(x) for x in v] if isinstance(v, list) else v),
+    _parse_checkpoints=pydantic.field_validator(
         'CHECKPOINTS',
-        pre=True
+        mode='before',
     )(_parse_checkpoints),
-    _parse_blueprints=pydantic.validator(
+    _parse_blueprints=pydantic.field_validator(
         'BLUEPRINTS',
-        pre=True
+        mode='before',
     )(_parse_blueprints),
-    _validate_consensus_algorithm=pydantic.validator(
-        'CONSENSUS_ALGORITHM'
+    _validate_consensus_algorithm=pydantic.model_validator(
+        mode='after',
     )(_validate_consensus_algorithm),
-    _validate_tokens=pydantic.validator(
-        'GENESIS_TOKENS'
+    _validate_tokens=pydantic.model_validator(
+        mode='after',
     )(_validate_tokens),
-    _validate_token_deposit_percentage=pydantic.validator(
-        'TOKEN_DEPOSIT_PERCENTAGE'
+    _validate_token_deposit_percentage=pydantic.field_validator(
+        'TOKEN_DEPOSIT_PERCENTAGE',
+        mode='after',
     )(_validate_token_deposit_percentage),
+    _parse_feature_activation=pydantic.field_validator(
+        'FEATURE_ACTIVATION',
+        mode='before',
+    )(lambda v: FeatureActivationSettings.model_validate(v) if isinstance(v, dict) else v),
 )
