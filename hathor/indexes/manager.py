@@ -338,7 +338,7 @@ class IndexesManager(ABC):
                 case _:
                     assert_never(record)
 
-    def add_tx_to_non_critical_indexes(self, tx: BaseTransaction) -> bool:
+    def add_to_non_critical_indexes(self, tx: BaseTransaction) -> bool:
         """ Add a transaction to the indexes
 
         :param tx: Transaction to be added
@@ -376,14 +376,14 @@ class IndexesManager(ABC):
 
         return r2
 
-    def del_tx_from_critical_indexes(self, tx: BaseTransaction) -> None:
+    def del_from_critical_indexes(self, tx: BaseTransaction) -> None:
         assert tx.storage is not None
         # mempool will pick-up if the transaction is voided/invalid and remove it
         if tx.storage.transaction_exists(tx.hash):
             logger.debug('remove from mempool tips', tx=tx.hash_hex)
             self.mempool_tips.update(tx, force_remove=True)
 
-    def del_tx_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
+    def del_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
         """ Delete a transaction from the indexes
 
         :param tx: Transaction to be deleted

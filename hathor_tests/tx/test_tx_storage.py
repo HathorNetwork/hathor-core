@@ -154,7 +154,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
 
     def validate_save(self, obj):
         self.tx_storage.save_transaction(obj)
-        self.tx_storage.add_to_non_critical_indexes(obj)
+        self.tx_storage.indexes.add_to_non_critical_indexes(obj)
 
         loaded_obj1 = self.tx_storage.get_transaction(obj.hash)
 
@@ -177,14 +177,14 @@ class BaseTransactionStorageTest(unittest.TestCase):
             self.assertIn(idx_elem, self.tx_storage.indexes.sorted_txs)
             self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
-        self.tx_storage.del_from_critical_indexes(obj)
-        self.tx_storage.del_from_non_critical_indexes(obj, remove_all=True)
+        self.tx_storage.indexes.del_from_critical_indexes(obj)
+        self.tx_storage.indexes.del_from_non_critical_indexes(obj, remove_all=True)
 
         self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_all)
         self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_txs)
         self.assertNotIn(idx_elem, self.tx_storage.indexes.sorted_blocks)
 
-        self.tx_storage.add_to_non_critical_indexes(obj)
+        self.tx_storage.indexes.add_to_non_critical_indexes(obj)
         self.assertIn(idx_elem, self.tx_storage.indexes.sorted_all)
         if obj.is_block:
             self.assertIn(idx_elem, self.tx_storage.indexes.sorted_blocks)

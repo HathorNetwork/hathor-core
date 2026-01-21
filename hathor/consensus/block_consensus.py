@@ -568,9 +568,9 @@ class BlockConsensusAlgorithm:
             else:
                 meta.voided_by = voided_by.copy()
             self.context.save(block)
-            block.storage.del_from_critical_indexes(block)
+            block.storage.indexes.del_from_critical_indexes(block)
             with non_critical_code(self.log):
-                block.storage.del_from_non_critical_indexes(block)
+                block.storage.indexes.del_from_non_critical_indexes(block)
             return True
         return False
 

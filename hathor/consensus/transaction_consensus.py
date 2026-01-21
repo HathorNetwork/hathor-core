@@ -229,9 +229,9 @@ class TransactionConsensusAlgorithm:
         if voided_by:
             meta.voided_by = voided_by.copy()
             self.context.save(tx)
-            tx.storage.del_from_critical_indexes(tx)
+            tx.storage.indexes.del_from_critical_indexes(tx)
             with non_critical_code(self.log):
-                tx.storage.del_from_non_critical_indexes(tx)
+                tx.storage.indexes.del_from_non_critical_indexes(tx)
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
@@ -403,7 +403,7 @@ class TransactionConsensusAlgorithm:
             if not meta2.voided_by:
                 meta2.voided_by = None
                 with non_critical_code(self.log):
-                    tx.storage.add_to_non_critical_indexes(tx2)
+                    tx.storage.indexes.add_to_non_critical_indexes(tx2)
             self.context.save(tx2)
             self.assert_valid_consensus(tx2)
             bfs.add_neighbors()
@@ -507,9 +507,9 @@ class TransactionConsensusAlgorithm:
                 # All voided transactions with conflicts must have their accumulated weight calculated.
                 tx2.update_accumulated_weight(save_file=False)
             self.context.save(tx2)
-            tx2.storage.del_from_critical_indexes(tx2)
+            tx2.storage.indexes.del_from_critical_indexes(tx2)
             with non_critical_code(self.log):
-                tx2.storage.del_from_non_critical_indexes(tx2)
+                tx2.storage.indexes.del_from_non_critical_indexes(tx2)
             self.assert_valid_consensus(tx2)
             bfs.add_neighbors()
 

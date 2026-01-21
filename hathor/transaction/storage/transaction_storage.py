@@ -345,7 +345,7 @@ class TransactionStorage(ABC):
                 assert tx == tx2
             except TransactionDoesNotExist:
                 self.save_transaction(tx)
-                self.add_to_non_critical_indexes(tx)
+                self.indexes.add_to_non_critical_indexes(tx)
                 tx2 = tx
             self._genesis_cache[tx2.hash] = tx2
 
@@ -482,9 +482,9 @@ class TransactionStorage(ABC):
 
         :param tx: Transaction to be removed
         """
-        self.del_from_critical_indexes(tx)
+        self.indexes.del_from_critical_indexes(tx)
         with non_critical_code(self.log):
-            self.del_from_non_critical_indexes(tx, remove_all=True)
+            self.indexes.del_from_non_critical_indexes(tx, remove_all=True)
 
     @abstractmethod
     def transaction_exists(self, hash_bytes: bytes) -> bool:
@@ -780,18 +780,6 @@ class TransactionStorage(ABC):
         consistent and up-to-date. It could replace _topological_sort_timestamp_index if we can show it is faster or at
         least not slower by most practical cases.
         """
-        raise NotImplementedError
-
-    @abstractmethod
-    def add_to_non_critical_indexes(self, tx: BaseTransaction) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def del_from_critical_indexes(self, tx: BaseTransaction) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def del_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -1289,15 +1277,6 @@ class BaseTransactionStorage(TransactionStorage):
                         pass
                     else:
                         stack.append(txinput)
-
-    def add_to_non_critical_indexes(self, tx: BaseTransaction) -> None:
-        self.indexes.add_tx_to_non_critical_indexes(tx)
-
-    def del_from_critical_indexes(self, tx: BaseTransaction) -> None:
-        self.indexes.del_tx_from_critical_indexes(tx)
-
-    def del_from_non_critical_indexes(self, tx: BaseTransaction, *, remove_all: bool = False) -> None:
-        self.indexes.del_tx_from_non_critical_indexes(tx, remove_all=remove_all)
 
     def get_block_count(self) -> int:
         return self.indexes.info.get_block_count()

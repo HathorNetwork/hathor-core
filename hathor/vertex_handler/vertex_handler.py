@@ -238,7 +238,7 @@ class VertexHandler:
         vertex.update_initial_metadata(save=False)
         self._tx_storage.save_transaction(vertex)
         with non_critical_code(self._log):
-            self._tx_storage.add_to_non_critical_indexes(vertex)
+            self._tx_storage.indexes.add_to_non_critical_indexes(vertex)
         self._consensus.unsafe_update(vertex)
 
     def _post_consensus(
