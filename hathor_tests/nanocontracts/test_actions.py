@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
+from hathor.feature_activation.utils import Features
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
@@ -118,8 +119,12 @@ class TestActions(unittest.TestCase):
         )
         best_block = self.manager.tx_storage.get_best_block()
         self.verification_params = VerificationParams.default_for_mempool(
-            enable_nano=True,
             best_block=best_block,
+            features=Features(
+                count_checkdatasig_op=False,
+                nano=True,
+                fee_tokens=False,
+            )
         )
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.

@@ -12,11 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from enum import Enum, unique
+from enum import StrEnum, unique
 
 
 @unique
-class Feature(str, Enum):
+class Feature(StrEnum):
     """
     An enum containing all features that participate in the feature activation process, past or future, activated
     or not, for all networks. Features should NOT be removed from this enum, to preserve history. Their values
@@ -30,7 +30,5 @@ class Feature(str, Enum):
 
     INCREASE_MAX_MERKLE_PATH_LENGTH = 'INCREASE_MAX_MERKLE_PATH_LENGTH'
     COUNT_CHECKDATASIG_OP = 'COUNT_CHECKDATASIG_OP'
-
     NANO_CONTRACTS = 'NANO_CONTRACTS'
-
     FEE_TOKENS = 'FEE_TOKENS'

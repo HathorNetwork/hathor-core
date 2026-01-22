@@ -226,9 +226,9 @@ class VertexVerifier:
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
             case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
-                if params.enable_nano:
+                if params.features.nano:
                     allowed_headers.add(NanoHeader)
-                if params.enable_fee:
+                if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
