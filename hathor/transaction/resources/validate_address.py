@@ -13,13 +13,32 @@
 # limitations under the License.
 
 import base64
-from typing import Union
+from typing import Literal, Union
+
+from pydantic import Field
 
 from hathor._openapi.register import register_resource
+from hathor.api.openapi import api_endpoint
+from hathor.api.schemas import ResponseModel
 from hathor.api_util import Resource, set_cors
 from hathor.manager import HathorManager
 from hathor.transaction.scripts import create_base_script
-from hathor.util import api_catch_exceptions, json_dumpb
+from hathor.util import api_catch_exceptions
+
+
+class ValidateAddressSuccessResponse(ResponseModel):
+    """Response model for valid address."""
+    valid: Literal[True] = Field(description="Whether the address is valid")
+    script: str = Field(description="Base64-encoded output script")
+    address: str = Field(description="Base58-encoded address")
+    type: str = Field(description="Address type (e.g., 'p2pkh', 'multisig')")
+
+
+class ValidateAddressErrorResponse(ResponseModel):
+    """Response model for invalid address."""
+    valid: Literal[False] = Field(description="Whether the address is valid")
+    error: str = Field(description="Error type name")
+    msg: str = Field(description="Error message")
 
 
 @register_resource
@@ -54,6 +73,20 @@ class _ValidateAddressResource(Resource):
         assert isinstance(address, str)
         self.address = address
 
+    @api_endpoint(
+        path='/validate_address/{address}',
+        method='GET',
+        operation_id='validate_address',
+        summary='Validate address and also create output script',
+        description='Validates a Base58 address and returns its script if valid.',
+        tags=['transaction'],
+        visibility='public',
+        rate_limit_global=[{'rate': '2000r/s', 'burst': 200, 'delay': 100}],
+        rate_limit_per_ip=[{'rate': '50r/s', 'burst': 10, 'delay': 3}],
+        response_model=ValidateAddressSuccessResponse,
+        error_responses=[ValidateAddressErrorResponse],
+        path_params_regex={'address': '.*'},
+    )
     @api_catch_exceptions
     def render_GET(self, request):
         """ Get request /validate_address/<address> that returns a script if address is valid.
@@ -64,99 +97,17 @@ class _ValidateAddressResource(Resource):
         try:
             base_script = create_base_script(self.address)
         except Exception as e:
-            ret = {
-                'valid': False,
-                'error': type(e).__name__,
-                'msg': str(e),
-            }
-        else:
-            ret = {
-                'valid': True,
-                'script': base64.b64encode(base_script.get_script()).decode('ascii'),
-                'address': base_script.get_address(),
-                'type': base_script.get_type().lower(),
-            }
+            error_response = ValidateAddressErrorResponse(
+                valid=False,
+                error=type(e).__name__,
+                msg=str(e),
+            )
+            return error_response.json_dumpb()
 
-        return json_dumpb(ret)
-
-
-ValidateAddressResource.openapi = {
-    '/validate_address/{address}': {
-        'x-visibility': 'public',
-        'x-path-params-regex': {
-            'address': '.*',
-        },
-        'x-rate-limit': {
-            'global': [
-                {
-                    'rate': '2000r/s',
-                    'burst': 200,
-                    'delay': 100
-                }
-            ],
-            'per-ip': [
-                {
-                    'rate': '50r/s',
-                    'burst': 10,
-                    'delay': 3
-                }
-            ]
-        },
-        'get': {
-            'tags': ['transaction'],
-            'operationId': 'validate_address',
-            'summary': 'Validate address and also create output script',
-            'parameters': [
-                {
-                    'in': 'path',
-                    'name': 'address',
-                    'description': 'Base58 address to be decoded',
-                    'required': True,
-                    'schema': {
-                        'type': 'string'
-                    }
-                }
-            ],
-            'responses': {
-                '200': {
-                    'description': 'Success',
-                    'content': {
-                        'application/json': {
-                            'schema': {
-                                'type': 'object',
-                                'properties': {
-                                    'valid': {
-                                        'type': 'boolean',
-                                    },
-                                    'script': {
-                                        'type': 'string',  # base64 encoded
-                                    },
-                                    'address': {
-                                        'type': 'string',  # base58 encoded
-                                    },
-                                    'type': {
-                                        'type': 'string',
-                                        'enum': [
-                                            'p2pkh',
-                                            'multisig',
-                                        ],
-                                    },
-                                }
-                            },
-                            'examples': {
-                                'valid_address': {
-                                    'summary': 'Valid P2PKH address response',
-                                    'value': {
-                                        'valid': True,
-                                        'script': 'dqkUr6YAVWv0Ps6bjgSGuqMb1GqCw6+IrA==',
-                                        'address': 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+        success_response = ValidateAddressSuccessResponse(
+            valid=True,
+            script=base64.b64encode(base_script.get_script()).decode('ascii'),
+            address=base_script.get_address(),
+            type=base_script.get_type().lower(),
+        )
+        return success_response.json_dumpb()
