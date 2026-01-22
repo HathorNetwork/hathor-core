@@ -16,9 +16,18 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import Discriminator, NonNegativeInt, RootModel, Tag
 
+from hathor.api.asyncapi.decorators import ws_message
+from hathor.api.asyncapi.generator import MessageDirection
 from hathor.utils.pydantic import BaseModel
 
 
+@ws_message(
+    name='startStream',
+    direction=MessageDirection.RECEIVE,
+    summary='Start event streaming',
+    description='Start receiving events from the server.',
+    tags=['flow-control'],
+)
 class StartStreamRequest(BaseModel):
     """Class that represents a client request to start streaming events.
 
@@ -32,6 +41,13 @@ class StartStreamRequest(BaseModel):
     window_size: NonNegativeInt
 
 
+@ws_message(
+    name='ack',
+    direction=MessageDirection.RECEIVE,
+    summary='Acknowledge events',
+    description='Acknowledge processed events and adjust the window.',
+    tags=['flow-control'],
+)
 class AckRequest(BaseModel):
     """Class that represents a client request to ack and event and change the window size.
 
@@ -45,6 +61,13 @@ class AckRequest(BaseModel):
     window_size: NonNegativeInt
 
 
+@ws_message(
+    name='stopStream',
+    direction=MessageDirection.RECEIVE,
+    summary='Stop event streaming',
+    description='Stop receiving events. Can be resumed later with START_STREAM.',
+    tags=['flow-control'],
+)
 class StopStreamRequest(BaseModel):
     """Class that represents a client request to stop streaming events.
 
