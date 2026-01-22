@@ -24,7 +24,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         for _ in range(num_txs):
             address = not_none(self.get_address(0))
             value = self.rng.choice([5, 10, 15, 20])
-            tx = add_new_tx(manager, address, value)
+            tx = add_new_tx(manager, address, value, advance_clock=1)
             txs.append(tx)
         return txs
 

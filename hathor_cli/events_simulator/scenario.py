@@ -177,7 +177,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     assert manager.wallet is not None
     address = manager.wallet.get_unused_address(mark_as_used=False)
 
-    blocks = add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
+    blocks = add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1, advance_clock=1)
     simulator.run(60)
 
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)

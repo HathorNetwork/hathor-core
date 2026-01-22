@@ -28,7 +28,7 @@ from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import Features
 from hathor.profiler import get_cpu_profiler
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.scripts.opcode import OpcodesVersion
@@ -53,7 +53,6 @@ class VertexHandler:
         '_feature_service',
         '_pubsub',
         '_execution_manager',
-        '_wallet',
         '_log_vertex_bytes',
     )
 
@@ -80,8 +79,20 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._execution_manager = execution_manager
-        self._wallet = wallet
         self._log_vertex_bytes = log_vertex_bytes
+
+        self._register_wallet(wallet)
+
+    def _register_wallet(self, wallet: BaseWallet | None) -> None:
+        """Register a wallet on pubsub."""
+        if wallet is None:
+            return
+
+        def handler(event: HathorEvents, args: EventArguments) -> None:
+            assert event == HathorEvents.NETWORK_NEW_TX_PROCESSING
+            wallet.on_new_tx(args.tx)
+
+        self._pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_PROCESSING, handler)
 
     @cpu.profiler('on_new_block')
     @inlineCallbacks
@@ -232,6 +243,7 @@ class VertexHandler:
         self._tx_storage.save_transaction(vertex)
         with non_critical_code(self._log):
             self._tx_storage.indexes.add_to_non_critical_indexes(vertex)
+        self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_PROCESSING, tx=vertex)
         self._consensus.unsafe_update(vertex)
 
     def _post_consensus(
@@ -260,10 +272,6 @@ class VertexHandler:
 
             # Publish to pubsub manager the new tx accepted, now that it's full validated
             self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
-
-            if self._wallet:
-                # TODO Remove it and use pubsub instead.
-                self._wallet.on_new_tx(vertex)
 
             self._log_new_object(vertex, 'new {}', quiet=quiet)
 
