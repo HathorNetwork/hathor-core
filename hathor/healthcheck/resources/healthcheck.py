@@ -1,4 +1,5 @@
 import asyncio
+from typing import Literal
 
 from healthcheck import (
     Healthcheck,
@@ -7,15 +8,53 @@ from healthcheck import (
     HealthcheckResponse,
     HealthcheckStatus,
 )
+from pydantic import Field
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 from twisted.web.http import Request
 from twisted.web.server import NOT_DONE_YET
 
 from hathor._openapi.register import register_resource
+from hathor.api.openapi import api_endpoint
+from hathor.api.schemas import ResponseModel
 from hathor.api_util import Resource, get_arg_default, get_args
 from hathor.manager import HathorManager
 from hathor.util import json_dumpb
+from hathor.utils.api import QueryParams
+
+
+class HealthcheckParams(QueryParams):
+    """Query parameters for the /health endpoint."""
+    strict_status_code: str | None = Field(
+        default=None,
+        description="If set to '1', always return 200 status code even if unhealthy"
+    )
+
+
+class HealthcheckComponentResponse(ResponseModel):
+    """Response model for a single healthcheck component."""
+    componentName: str = Field(description="Name of the component")
+    componentType: str = Field(description="Type of the component (e.g., 'internal')")
+    status: str = Field(description="Component status ('pass' or 'fail')")
+    output: str = Field(description="Human-readable output message")
+
+
+class HealthcheckSuccessResponse(ResponseModel):
+    """Response model for successful healthcheck."""
+    status: Literal['pass'] = Field(description="Overall health status")
+    description: str = Field(description="Service description including version")
+    checks: dict[str, list[HealthcheckComponentResponse]] = Field(
+        description="Map of component names to their check results"
+    )
+
+
+class HealthcheckFailResponse(ResponseModel):
+    """Response model for failed healthcheck."""
+    status: Literal['fail'] = Field(description="Overall health status")
+    description: str = Field(description="Service description including version")
+    checks: dict[str, list[HealthcheckComponentResponse]] = Field(
+        description="Map of component names to their check results"
+    )
 
 
 async def sync_healthcheck(manager: HathorManager) -> HealthcheckCallbackResponse:
@@ -57,6 +96,30 @@ class HealthcheckResource(Resource):
         request.write(json_dumpb(result.to_json()))
         request.finish()
 
+    @api_endpoint(
+        path='/health',
+        method='GET',
+        operation_id='health',
+        summary='Health status of the fullnode',
+        description='''Returns 200 if the fullnode should be considered healthy.
+
+Returns 503 otherwise. The response will contain the components that were considered for the healthcheck
+and the reason why they were unhealthy.
+
+Optionally, there is a query parameter 'strict_status_code' that can be used to return 200 even if the fullnode
+is unhealthy. When its value is 1, the response will always be 200.
+
+We currently perform 2 checks in the sync mechanism for the healthcheck:
+1. Whether the fullnode has recent block activity, i.e. if the fullnode has blocks with recent timestamps.
+2. Whether the fullnode has at least one synced peer''',
+        tags=['healthcheck'],
+        visibility='public',
+        rate_limit_global=[{'rate': '10r/s', 'burst': 10, 'delay': 5}],
+        rate_limit_per_ip=[{'rate': '1r/s', 'burst': 3, 'delay': 2}],
+        query_params_model=HealthcheckParams,
+        response_model=HealthcheckSuccessResponse,
+        error_responses=[HealthcheckFailResponse],
+    )
     def render_GET(self, request):
         """ GET request /health/
             Returns the health status of the fullnode
@@ -87,146 +150,3 @@ class HealthcheckResource(Resource):
         deferred.addErrback(self._render_error, request)
 
         return NOT_DONE_YET
-
-
-HealthcheckResource.openapi = {
-    '/health': {
-        'x-visibility': 'public',
-        'x-rate-limit': {
-            'global': [
-                {
-                    'rate': '10r/s',
-                    'burst': 10,
-                    'delay': 5
-                }
-            ],
-            'per-ip': [
-                {
-                    'rate': '1r/s',
-                    'burst': 3,
-                    'delay': 2
-                }
-            ]
-        },
-        'get': {
-            'tags': ['healthcheck'],
-            'operationId': 'get',
-            'summary': 'Health status of the fullnode',
-            'description': '''
-Returns 200 if the fullnode should be considered healthy.
-
-Returns 503 otherwise. The response will contain the components that were considered for the healthcheck
-and the reason why they were unhealthy.
-
-Returning 503 with a response body is not the standard behavior for our API, but it was chosen because
-most healthcheck tools expect a 503 response code to indicate that the service is unhealthy.
-
-Optionally, there is a query parameter 'strict_status_code' that can be used to return 200 even if the fullnode
-is unhealthy. When its value is 1, the response will always be 200.
-
-We currently perform 2 checks in the sync mechanism for the healthcheck:
-1. Whether the fullnode has recent block activity, i.e. if the fullnode has blocks with recent timestamps.
-2. Whether the fullnode has at least one synced peer
-            ''',
-            'parameters': [
-                {
-                    'name': 'strict_status_code',
-                    'in': 'query',
-                    'description': 'Enables strict status code. If set to 1, the response will always be 200.',
-                    'required': False,
-                    'schema': {
-                        'type': 'string'
-                    }
-                },
-            ],
-            'responses': {
-                '200': {
-                    'description': 'Healthy',
-                    'content': {
-                        'application/json': {
-                            'examples': {
-                                'healthy': {
-                                    'summary': 'Healthy node',
-                                    'value': {
-                                        'status': 'pass',
-                                        'description': 'Hathor-core v0.56.0',
-                                        'checks': {
-                                            'sync': [
-                                                {
-                                                    'componentName': 'sync',
-                                                    'componentType': 'internal',
-                                                    'status': 'pass',
-                                                    'output': 'Healthy'
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                '503': {
-                    'description': 'Unhealthy',
-                    'content': {
-                        'application/json': {
-                            'examples': {
-                                'no_recent_activity': {
-                                    'summary': 'Node with no recent activity',
-                                    'value': {
-                                        'status': 'fail',
-                                        'description': 'Hathor-core v0.56.0',
-                                        'checks': {
-                                            'sync': [
-                                                {
-                                                    'componentName': 'sync',
-                                                    'componentType': 'internal',
-                                                    'status': 'fail',
-                                                    'output': 'Node doesn\'t have recent blocks'
-                                                }
-                                            ]
-                                        }
-                                    }
-                                },
-                                'no_synced_peer': {
-                                    'summary': 'Node with no synced peer',
-                                    'value': {
-                                        'status': 'fail',
-                                        'description': 'Hathor-core v0.56.0',
-                                        'checks': {
-                                            'sync': [
-                                                {
-                                                    'componentName': 'sync',
-                                                    'componentType': 'internal',
-                                                    'status': 'fail',
-                                                    'output': 'Node doesn\'t have a synced peer'
-                                                }
-                                            ]
-                                        }
-                                    }
-                                },
-                                'peer_best_block_far_ahead': {
-                                    'summary': 'Peer with best block too far ahead',
-                                    'value': {
-                                        'status': 'fail',
-                                        'description': 'Hathor-core v0.56.0',
-                                        'checks': {
-                                            'sync': [
-                                                {
-                                                    'componentName': 'sync',
-                                                    'componentType': 'internal',
-                                                    'status': 'fail',
-                                                    'output': 'Node\'s peer with highest height is too far ahead.'
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-            }
-        }
-    }
-}
