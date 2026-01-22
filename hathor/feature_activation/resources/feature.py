@@ -14,10 +14,11 @@
 
 from typing import Optional
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
+from hathor.api.openapi import api_endpoint
 from hathor.api_util import Resource, set_cors
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
@@ -25,7 +26,51 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
+from hathor.types import BlockId
 from hathor.utils.api import ErrorResponse, QueryParams, Response
+from hathor.utils.pydantic import Hex
+
+
+class GetBlockFeaturesParams(QueryParams):
+    """Query parameters for the /feature endpoint when querying a specific block."""
+    block: Hex[BlockId] = Field(description="Block hash to query feature states for")
+
+
+class GetBlockFeatureResponse(Response):
+    """Response model for a single feature's state in a block."""
+    model_config = ConfigDict(use_enum_values=True)
+
+    bit: int = Field(description="Signal bit for this feature")
+    signal: int = Field(description="Signal value in the block")
+    feature: Feature = Field(description="Feature identifier")
+    feature_state: str = Field(description="Current state of the feature")
+
+
+class GetBlockFeaturesResponse(Response):
+    """Response model for all features' states in a block."""
+    signal_bits: list[GetBlockFeatureResponse] = Field(description="List of feature signal states")
+
+
+class GetFeatureResponse(Response):
+    """Response model for a single feature's activation info."""
+    model_config = ConfigDict(use_enum_values=True)
+
+    name: Feature = Field(description="Feature identifier")
+    state: str = Field(description="Current activation state")
+    acceptance: Optional[float] = Field(description="Current acceptance percentage (if in signaling state)")
+    threshold: float = Field(description="Required threshold percentage for activation")
+    start_height: int = Field(description="Block height when signaling starts")
+    minimum_activation_height: int = Field(description="Minimum height for activation")
+    timeout_height: int = Field(description="Block height when signaling times out")
+    lock_in_on_timeout: bool = Field(description="Whether to lock in on timeout")
+    version: str = Field(description="Feature version string")
+
+
+class GetFeaturesResponse(Response):
+    """Response model for all features' activation info."""
+    block_hash: Hex[BlockId] = Field(description="Best block hash")
+    block_height: int = Field(description="Best block height")
+    features: list[GetFeatureResponse] = Field(description="List of feature activation info")
 
 
 @register_resource
@@ -46,6 +91,20 @@ class FeatureResource(Resource):
         self._feature_service = feature_service
         self.tx_storage = tx_storage
 
+    @api_endpoint(
+        path='/feature',
+        method='GET',
+        operation_id='feature',
+        summary='Feature Activation',
+        description='Returns information about features in the Feature Activation process.',
+        tags=['feature'],
+        visibility='public',
+        rate_limit_global=[{'rate': '50r/s', 'burst': 100, 'delay': 50}],
+        rate_limit_per_ip=[{'rate': '1r/s', 'burst': 10, 'delay': 3}],
+        query_params_model=GetBlockFeaturesParams,
+        response_model=GetFeaturesResponse,
+        error_responses=[ErrorResponse],
+    )
     def render_GET(self, request: Request) -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
@@ -61,11 +120,10 @@ class FeatureResource(Resource):
         if isinstance(params, ErrorResponse):
             return params.json_dumpb()
 
-        block_hash = bytes.fromhex(params.block)
-        block = self.tx_storage.get_transaction(block_hash)
+        block = self.tx_storage.get_transaction(params.block)
 
         if not isinstance(block, Block):
-            error = ErrorResponse(error=f"Hash '{params.block}' is not a Block.")
+            error = ErrorResponse(error=f"Hash '{params.block.hex()}' is not a Block.")
             return error.json_dumpb()
 
         signal_bits = []
@@ -120,113 +178,9 @@ class FeatureResource(Resource):
             features.append(feature_response)
 
         response = GetFeaturesResponse(
-            block_hash=best_block.hash_hex,
+            block_hash=BlockId(best_block.hash),
             block_height=best_block.get_height(),
             features=features
         )
 
         return response.json_dumpb()
-
-
-class GetBlockFeaturesParams(QueryParams):
-    block: str
-
-
-class GetBlockFeatureResponse(Response):
-    model_config = ConfigDict(use_enum_values=True)
-
-    bit: int
-    signal: int
-    feature: Feature
-    feature_state: str
-
-
-class GetBlockFeaturesResponse(Response):
-    signal_bits: list[GetBlockFeatureResponse]
-
-
-class GetFeatureResponse(Response):
-    model_config = ConfigDict(use_enum_values=True)
-
-    name: Feature
-    state: str
-    acceptance: Optional[float]
-    threshold: float
-    start_height: int
-    minimum_activation_height: int
-    timeout_height: int
-    lock_in_on_timeout: bool
-    version: str
-
-
-class GetFeaturesResponse(Response):
-    block_hash: str
-    block_height: int
-    features: list[GetFeatureResponse]
-
-
-FeatureResource.openapi = {
-    '/feature': {
-        'x-visibility': 'public',
-        'x-rate-limit': {
-            'global': [
-                {
-                    'rate': '50r/s',
-                    'burst': 100,
-                    'delay': 50
-                }
-            ],
-            'per-ip': [
-                {
-                    'rate': '1r/s',
-                    'burst': 10,
-                    'delay': 3
-                }
-            ]
-        },
-        'get': {
-            'operationId': 'feature',
-            'summary': 'Feature Activation',
-            'description': 'Returns information about features in the Feature Activation process',
-            'responses': {
-                '200': {
-                    'description': 'Success',
-                    'content': {
-                        'application/json': {
-                            'examples': {
-                                'success': {
-                                    'block_hash': '00000000083580e5b299e9cb271fd5977103897e8640fcd5498767b6cefba6f5',
-                                    'block_height': 123,
-                                    'features': [
-                                        {
-                                            'name': 'NOP_FEATURE_1',
-                                            'state': 'ACTIVE',
-                                            'acceptance': None,
-                                            'threshold': 0.75,
-                                            'start_height': 0,
-                                            'minimum_activation_height': 0,
-                                            'timeout_height': 100,
-                                            'lock_in_on_timeout': False,
-                                            'version': '0.1.0'
-                                        },
-                                        {
-                                            'name': 'NOP_FEATURE_2',
-                                            'state': 'STARTED',
-                                            'acceptance': 0.25,
-                                            'threshold': 0.5,
-                                            'start_height': 200,
-                                            'minimum_activation_height': 0,
-                                            'timeout_height': 300,
-                                            'lock_in_on_timeout': False,
-                                            'version': '0.2.0'
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
