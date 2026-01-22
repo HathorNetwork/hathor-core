@@ -24,6 +24,8 @@ Amount: TypeAlias = int            # NewType('Amount', int)
 Timestamp: TypeAlias = int         # NewType('Timestamp', int)
 TxOutputScript: TypeAlias = bytes  # NewType('TxOutputScript', bytes)
 VertexId: TypeAlias = bytes        # NewType('VertexId', bytes)
+BlockId: TypeAlias = VertexId      # NewType('BlockId', VertexId)
+TransactionId: TypeAlias = VertexId  # NewType('TransactionId', VertexId)
 TokenUid: TypeAlias = VertexId     # NewType('TokenUid', VertexId)
 
 
