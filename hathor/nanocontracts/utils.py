@@ -179,7 +179,10 @@ def json_dumps(
     separators: tuple[str, str] | None = (',', ':'),
     sort_keys: bool = False,
 ) -> str:
-    """Serialize obj as a JSON. Arguments are a subset of Python's `json.dumps`."""
+    """
+    Serialize obj as a JSON. Arguments are a subset of Python's `json.dumps`.
+    It automatically converts `bytes`-like values to their hex representation.
+    """
     import json
 
     def dump_bytes(data: Any) -> str:
