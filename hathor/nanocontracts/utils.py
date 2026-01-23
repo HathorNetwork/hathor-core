@@ -169,3 +169,22 @@ def verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
         return True
     except InvalidSignature:
         return False
+
+
+def json_dumps(
+    obj: object,
+    *,
+    ensure_ascii: bool = True,
+    indent: int | str | None = None,
+    separators: tuple[str, str] | None = (',', ':'),
+    sort_keys: bool = False,
+) -> str:
+    """Serialize obj as a JSON. Arguments are a subset of Python's `json.dumps`."""
+    import json
+    return json.dumps(
+        obj,
+        ensure_ascii=ensure_ascii,
+        indent=indent,
+        separators=separators,
+        sort_keys=sort_keys,
+    )
