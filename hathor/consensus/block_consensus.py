@@ -78,7 +78,7 @@ class BlockConsensusAlgorithm:
 
     def execute_nano_contracts(self, block: Block) -> None:
         """Execute the method calls for transactions confirmed by this block handling reorgs."""
-        self._block_executor.execute_block(
+        self._block_executor.execute_chain(
             block,
             self.context,
             on_failure=self.mark_as_nc_fail_execution,
