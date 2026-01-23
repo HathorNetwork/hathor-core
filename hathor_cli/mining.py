@@ -24,7 +24,6 @@ from multiprocessing import Process, Queue
 
 import requests
 
-
 _SLEEP_ON_ERROR_SECONDS = 5
 _MAX_CONN_RETRIES = math.inf
 
@@ -146,7 +145,7 @@ def execute(args: Namespace) -> None:
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
             verification_params = VerificationParams(nc_block_root_id=None, features=Features(
                 count_checkdatasig_op=True,
-                nano=False,
+                nanocontracts=False,
                 fee_tokens=False,
             ))
             verifiers = VertexVerifiers.create_defaults(

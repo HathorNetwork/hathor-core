@@ -122,7 +122,7 @@ class TestActions(unittest.TestCase):
             best_block=best_block,
             features=Features(
                 count_checkdatasig_op=False,
-                nano=True,
+                nanocontracts=True,
                 fee_tokens=False,
             )
         )

@@ -424,7 +424,7 @@ class ConsensusAlgorithm:
         features = Features.from_vertex(
             settings=self._settings, vertex=best_block, feature_service=self.feature_service
         )
-        if features.nano:
+        if features.nanocontracts:
             # When nano is active, this rule has no effect.
             return True
 

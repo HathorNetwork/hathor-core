@@ -150,7 +150,7 @@ class BlockConsensusAlgorithm:
 
         parent = block.get_block_parent()
         features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=parent)
-        return features.nano
+        return features.nanocontracts
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.

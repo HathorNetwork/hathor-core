@@ -47,7 +47,7 @@ class VerificationParams:
         if features is None:
             features = Features(
                 count_checkdatasig_op=True,
-                nano=True,
+                nanocontracts=True,
                 fee_tokens=False
             )
 

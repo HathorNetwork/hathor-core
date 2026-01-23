@@ -49,7 +49,7 @@ class VersionResource(Resource):
         features = Features.from_vertex(
             settings=self._settings, vertex=best_block, feature_service=self.feature_service
         )
-        nano_contracts_enabled = features.nano
+        nano_contracts_enabled = features.nanocontracts
 
         data = {
             'version': hathor.__version__,

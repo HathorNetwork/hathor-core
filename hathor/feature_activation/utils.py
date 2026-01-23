@@ -31,7 +31,7 @@ class Features:
     """A dataclass holding state information about features from the Feature Activation process."""
 
     count_checkdatasig_op: bool
-    nano: bool
+    nanocontracts: bool
     fee_tokens: bool
 
     @staticmethod
@@ -45,15 +45,15 @@ class Features:
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
         }
 
-        features = {
+        feature_is_active: dict[Feature, bool] = {
             feature: _is_feature_active(setting, feature_states.get(feature, FeatureState.DEFINED))
             for feature, setting in feature_settings.items()
         }
 
         return Features(
-            count_checkdatasig_op=features[Feature.COUNT_CHECKDATASIG_OP],
-            nano=features[Feature.NANO_CONTRACTS],
-            fee_tokens=features[Feature.FEE_TOKENS],
+            count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
+            nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
+            fee_tokens=feature_is_active[Feature.FEE_TOKENS],
         )
 
 

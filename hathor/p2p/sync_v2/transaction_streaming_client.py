@@ -57,7 +57,7 @@ class TransactionStreamingClient:
             nc_block_root_id=None,
             features=Features(
                 count_checkdatasig_op=False,
-                nano=False,
+                nanocontracts=False,
                 fee_tokens=False,
             )
         )
