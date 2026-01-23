@@ -19,6 +19,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from hathor import ContractId
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.nanocontracts import Blueprint, Context, NCFail, public, utils as nc_utils, view
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -39,7 +40,7 @@ class MyBlueprint(Blueprint):
 
     @view
     def test_json_dumps(self) -> str:
-        obj = dict(a=[1, 2, 3], b=123, c='abc')
+        obj = dict(a=[1, 2, 3], b=123, c='abc', d=ContractId(b'\x01' * 32))
         return nc_utils.json_dumps(obj)
 
 
@@ -84,4 +85,6 @@ class TestUtilsFunctions(BlueprintTestCase):
     def test_json_dumps(self) -> None:
         result = self.runner.call_view_method(self.contract_id, 'test_json_dumps')
 
-        assert result == '{"a":[1,2,3],"b":123,"c":"abc"}'
+        assert result == (
+            '{"a":[1,2,3],"b":123,"c":"abc","d":"0101010101010101010101010101010101010101010101010101010101010101"}'
+        )
