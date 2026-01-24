@@ -287,7 +287,7 @@ class TransactionStaticMetadata(VertexStaticMetadata):
         return closest_ancestor_block.hash
 
     @override
-    def json_dumpb(self) -> bytes:
+    def json_dumpb(self, *, sort_keys: bool = False) -> bytes:
         from hathor.util import json_dumpb
         json_dict = self.model_dump()
         json_dict['closest_ancestor_block'] = json_dict['closest_ancestor_block'].hex()
