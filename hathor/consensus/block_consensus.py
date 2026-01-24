@@ -24,6 +24,7 @@ from typing_extensions import assert_never
 
 from hathor.consensus.context import ReorgInfo
 from hathor.execution_manager import non_critical_code
+from hathor.feature_activation.utils import Features
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -147,9 +148,9 @@ class BlockConsensusAlgorithm:
         """
         assert not block.is_genesis
 
-        from hathor.feature_activation.utils import is_nano_active
         parent = block.get_block_parent()
-        return is_nano_active(settings=self._settings, feature_service=self.feature_service, block=parent)
+        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=parent)
+        return features.nanocontracts
 
     def _nc_execute_calls(self, block: Block, *, is_reorg: bool) -> None:
         """Internal method to execute the method calls for transactions confirmed by this block.

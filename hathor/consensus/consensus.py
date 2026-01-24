@@ -23,7 +23,7 @@ from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
-from hathor.feature_activation.utils import is_fee_active
+from hathor.feature_activation.utils import Features
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Transaction
@@ -418,11 +418,13 @@ class ConsensusAlgorithm:
 
     def _nano_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
         """Check whether a tx became invalid because the reorg changed the nano feature activation state."""
-        from hathor.feature_activation.utils import is_nano_active
         from hathor.nanocontracts import OnChainBlueprint
 
         best_block = storage.get_best_block()
-        if is_nano_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
+        features = Features.from_vertex(
+            settings=self._settings, vertex=best_block, feature_service=self.feature_service
+        )
+        if features.nanocontracts:
             # When nano is active, this rule has no effect.
             return True
 
@@ -443,7 +445,10 @@ class ConsensusAlgorithm:
         from hathor.transaction.token_info import TokenVersion
 
         best_block = storage.get_best_block()
-        if is_fee_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
+        features = Features.from_vertex(
+            settings=self._settings, vertex=best_block, feature_service=self.feature_service
+        )
+        if features.fee_tokens:
             # When fee-based tokens feature is active, this rule has no effect.
             return True
 

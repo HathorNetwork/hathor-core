@@ -260,7 +260,7 @@ class VerificationService:
             # TODO do genesis validation
             return
         self.verify_without_storage(tx, params)
-        self.verifiers.tx.verify_sigops_input(tx, params.enable_checkdatasig_count)
+        self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
         self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
@@ -327,7 +327,7 @@ class VerificationService:
         self.verifiers.vertex.verify_outputs(block)
         self.verifiers.block.verify_output_token_indexes(block)
         self.verifiers.block.verify_data(block)
-        self.verifiers.vertex.verify_sigops_output(block, params.enable_checkdatasig_count)
+        self.verifiers.vertex.verify_sigops_output(block, params.features.count_checkdatasig_op)
 
     def _verify_without_storage_block(self, block: Block, params: VerificationParams) -> None:
         """ Run all verifications that do not need a storage.
@@ -349,7 +349,7 @@ class VerificationService:
         self.verifiers.tx.verify_number_of_inputs(tx)
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)
-        self.verifiers.vertex.verify_sigops_output(tx, params.enable_checkdatasig_count)
+        self.verifiers.vertex.verify_sigops_output(tx, params.features.count_checkdatasig_op)
         self.verifiers.tx.verify_tokens(tx, params)
 
     def _verify_without_storage_token_creation_tx(

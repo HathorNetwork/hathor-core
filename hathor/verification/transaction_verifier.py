@@ -338,7 +338,7 @@ class TransactionVerifier:
             TxVersion.TOKEN_CREATION_TRANSACTION,
         }
 
-        if params.enable_nano:
+        if params.features.nanocontracts:
             allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         if tx.version not in allowed_tx_versions:
