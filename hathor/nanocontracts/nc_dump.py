@@ -21,7 +21,7 @@ from typing_extensions import assert_never
 
 from hathor import __version__
 from hathor.conf.settings import HathorSettings
-from hathor.nanocontracts.storage.block_storage import _Tag as BlockTag
+from hathor.nanocontracts.storage.block_storage import NCBlockStorage, _Tag as BlockTag
 from hathor.nanocontracts.storage.contract_storage import _Tag as ContractTag
 from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
 from hathor.transaction import Block
@@ -53,29 +53,43 @@ class ContractDump(BaseModel):
 
 
 class NCDumper:
-    __slots__ = ('_log', 'settings', 'tx_storage')
+    __slots__ = ('_log', 'settings', 'tx_storage', '_visited_block_root_ids', '_visited_contract_root_ids')
 
     def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
         self._log = logger.new()
         self.settings = settings
         self.tx_storage = tx_storage
+        self._visited_block_root_ids: set[bytes] = set()
+        self._visited_contract_root_ids: set[bytes] = set()  # TODO?
 
     def get_nc_dump(self) -> NCDump:
-        blocks = dict(self.get_block_nc_dump(block) for block in self._iter_blocks())
+        blocks = {}
+
+        for block in self._iter_blocks():
+            meta = block.get_metadata()
+            assert meta.nc_block_root_id is not None
+
+            if meta.nc_block_root_id in self._visited_block_root_ids:
+                self._log.info('skipping block', block_hash=block.hash.hex(), height=block.get_height())
+                continue
+
+            self._log.info('processing block', block_hash=block.hash.hex(), height=block.get_height())
+            self._visited_block_root_ids.add(meta.nc_block_root_id)
+            block_storage = self.tx_storage.get_nc_block_storage(block)
+            block_dump = self.get_block_nc_dump(block, block_storage)
+            blocks[meta.nc_block_root_id] = block_dump
+
         return NCDump(
             version=__version__,
             network=self.settings.NETWORK_NAME,
             blocks=blocks,
         )
 
-    def get_block_nc_dump(self, block: Block) -> tuple[bytes, BlockDump]:
-        self._log.info('processing block', block_hash=block.hash.hex(), height=block.get_height())
+    def get_block_nc_dump(self, block: Block, block_storage: NCBlockStorage) -> BlockDump:
+        block_trie = block_storage._block_trie
         contracts = {}
         tokens = {}
         addresses = {}
-
-        block_storage = self.tx_storage.get_nc_block_storage(block)
-        block_trie = block_storage._block_trie
 
         for iter_node in block_trie.iter_dfs():
             node = iter_node.node
@@ -96,17 +110,13 @@ class NCDumper:
                     case _:
                         assert_never(tag)
 
-        block_dump = BlockDump(
+        return BlockDump(
             hash=block.hash,
             height=block.get_height(),
             contracts=contracts,
             tokens=tokens,
             addresses=addresses,
         )
-
-        meta = block.get_metadata()
-        assert meta.nc_block_root_id is not None
-        return meta.nc_block_root_id, block_dump
 
     def _get_contract_nc_dump(self, contract_trie: PatriciaTrie, contract_hash: bytes) -> ContractDump:
         attrs = {}

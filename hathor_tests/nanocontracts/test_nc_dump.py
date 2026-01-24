@@ -139,17 +139,12 @@ class TestNCDump(BlueprintTestCase):
         ''')
 
         artifacts.propagate_with(self.manager)
-        b11, b12 = artifacts.get_typed_vertices(('b11', 'b12'), Block)
+        b12 = artifacts.get_typed_vertex('b12', Block)
         nc1 = artifacts.get_typed_vertex('nc1', Transaction)
 
-        b11_root_id = not_none(b11.get_metadata().nc_block_root_id)
         b12_root_id = not_none(b12.get_metadata().nc_block_root_id)
-
-        b11_storage = self.manager.get_nc_block_storage(b11)
         b12_storage = self.manager.get_nc_block_storage(b12)
-        nc1_root_id = b11_storage.get_contract_root_id(nc1.hash)
-        assert nc1_root_id == b12_storage.get_contract_root_id(nc1.hash)
-
+        nc1_root_id = b12_storage.get_contract_root_id(nc1.hash)
         nc1_address = nc1.get_nano_header().nc_address
 
         result = self.nc_dumper.get_nc_dump()
@@ -179,18 +174,7 @@ class TestNCDump(BlueprintTestCase):
                     addresses={
                         nc1_address: bytes.fromhex('00'),
                     },
-                ),
-                b11_root_id: BlockDump(
-                    hash=b11.hash,
-                    height=11,
-                    contracts={
-                        nc1_root_id: nc1_dump,
-                    },
-                    tokens={},
-                    addresses={
-                        nc1_address: bytes.fromhex('00'),
-                    },
-                ),
+                )
             }
         )
 
