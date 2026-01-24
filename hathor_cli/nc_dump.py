@@ -24,7 +24,6 @@ from hathor_cli.run_node import RunNode
 
 class OutputFormat(StrEnum):
     JSON = auto()
-    YAML = auto()
 
 
 class NcDump(RunNode):
@@ -47,7 +46,7 @@ class NcDump(RunNode):
             '--format',
             type=lambda s: OutputFormat(s.lower()),
             choices=list(OutputFormat),
-            default=OutputFormat.YAML,
+            default=OutputFormat.JSON,
             help='Output format (default: yaml)',
         )
         return parser
@@ -68,8 +67,6 @@ class NcDump(RunNode):
         match self.output_format:
             case OutputFormat.JSON:
                 output = nc_dump.json_dumps(sort_keys=True)
-            case OutputFormat.YAML:
-                output = nc_dump.yaml_dumps(sort_keys=True)
             case _:
                 assert_never(self.output_format)
 
