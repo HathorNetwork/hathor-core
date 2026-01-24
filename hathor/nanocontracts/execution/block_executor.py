@@ -57,7 +57,6 @@ class NCExecutionFailure:
 @dataclass(slots=True, frozen=True)
 class NCExecutionSkipped:
     """Result type for skipped NC execution (voided transactions)."""
-    seqnum_update: tuple[bytes, int] | None  # (nc_address, new_seqnum) or None
 
 
 NCExecutionResult = NCExecutionSuccess | NCExecutionFailure | NCExecutionSkipped
@@ -305,16 +304,9 @@ class NCBlockExecutor:
                     call_info = runner.get_last_call_info()
                     self._nc_log_storage.save_logs(tx, call_info, (exception, tb))
 
-                case NCExecutionSkipped(seqnum_update=seqnum_update):
-                    from hathor.nanocontracts.types import Address
-
+                case NCExecutionSkipped():
                     tx_meta.nc_execution = NCExecutionState.SKIPPED
                     context.save(tx)
-
-                    # Update seqnum if needed
-                    if seqnum_update is not None:
-                        nc_address, new_seqnum = seqnum_update
-                        block_storage.set_address_seqnum(Address(nc_address), new_seqnum)
 
         # Save block state root id. If nothing happens, it should be the same as its block parent.
         block_storage.commit()
@@ -366,10 +358,9 @@ class NCBlockExecutor:
             # Check if seqnum needs to be updated.
             nc_header = tx.get_nano_header()
             seqnum = block_storage.get_address_seqnum(Address(nc_header.nc_address))
-            seqnum_update: tuple[bytes, int] | None = None
             if nc_header.nc_seqnum > seqnum:
-                seqnum_update = (nc_header.nc_address, nc_header.nc_seqnum)
-            return NCExecutionSkipped(seqnum_update=seqnum_update)
+                block_storage.set_address_seqnum(nc_header.nc_address, nc_header.nc_seqnum)
+            return NCExecutionSkipped()
 
         runner = self._runner_factory.create(
             block_storage=block_storage,
