@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Iterator
 
 from typing_extensions import assert_never
@@ -26,30 +25,28 @@ from hathor.nanocontracts.storage.contract_storage import _Tag as ContractTag
 from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
+from hathor.utils.pydantic import BaseModel, Hex
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class NCDump:
+class NCDump(BaseModel):
     version: str
     network: str
-    blocks: dict[bytes, BlockDump]
+    blocks: dict[Hex[bytes], BlockDump]
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class BlockDump:
-    hash: bytes
+class BlockDump(BaseModel):
+    hash: Hex[bytes]
     height: int
-    contracts: dict[bytes, ContractDump]
-    tokens: dict[bytes, bytes]
-    addresses: dict[bytes, bytes]
+    contracts: dict[Hex[bytes], ContractDump]
+    tokens: dict[Hex[bytes], Hex[bytes]]
+    addresses: dict[Hex[bytes], Hex[bytes]]
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class ContractDump:
-    hash: bytes
-    attrs: dict[bytes, bytes]
-    balances: dict[bytes, bytes]
-    metadata: dict[bytes, bytes]
+class ContractDump(BaseModel):
+    hash: Hex[bytes]
+    attrs: dict[Hex[bytes], Hex[bytes]]
+    balances: dict[Hex[bytes], Hex[bytes]]
+    metadata: dict[Hex[bytes], Hex[bytes]]
 
 
 class NCDumper:
