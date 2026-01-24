@@ -15,8 +15,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, assert_never
+from typing import TYPE_CHECKING, Callable
 
 from structlog import get_logger
 
@@ -24,35 +23,24 @@ from hathor.consensus.block_consensus import BlockConsensusAlgorithmFactory
 from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
-from hathor.feature_activation.feature import Feature
-from hathor.nanocontracts.exception import NCInvalidSignature
-from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
+from hathor.feature_activation.utils import is_fee_active
 from hathor.profiler import get_cpu_profiler
-from hathor.pubsub import HathorEvents
-from hathor.transaction import BaseTransaction, Block, Transaction
-from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooManySigOps
+from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.transaction import BaseTransaction, Transaction
+from hathor.transaction.exceptions import RewardLocked
 from hathor.util import not_none
-from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts import NCStorageFactory
-    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
-    from hathor.nanocontracts.runner.runner import RunnerFactory
-    from hathor.nanocontracts.sorter.types import NCSorterCallable
+    from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class ConsensusEvent:
-    event: HathorEvents
-    kwargs: dict[str, Any]
 
 
 class ConsensusAlgorithm:
@@ -83,53 +71,39 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
-        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
+        pubsub: PubSubManager,
         *,
-        settings: HathorSettings,
-        tx_storage: TransactionStorage,
-        runner_factory: RunnerFactory,
-        nc_calls_sorter: NCSorterCallable,
-        nc_log_storage: NCLogStorage,
-        feature_service: FeatureService,
-        nc_exec_fail_trace: bool = False,
+        settings: 'HathorSettings',
+        nc_storage_factory: 'NCStorageFactory',
+        block_executor: 'NCBlockExecutor',
+        consensus_block_executor: 'NCConsensusBlockExecutor',
+        feature_service: 'FeatureService',
     ) -> None:
         self._settings = settings
         self.log = logger.new()
-        self.tx_storage = tx_storage
-        self.nc_storage_factory = nc_storage_factory
+        self._pubsub = pubsub
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
+        self.nc_storage_factory = nc_storage_factory
 
-        # Create NCBlockExecutor (pure) for execution
-        self._block_executor = NCBlockExecutor(
-            settings=settings,
-            runner_factory=runner_factory,
-            nc_storage_factory=nc_storage_factory,
-            nc_calls_sorter=nc_calls_sorter,
-        )
+        # Pure block executor for dry-run and testing purposes
+        self._block_executor = block_executor
 
-        # Create NCConsensusBlockExecutor (with side effects) for consensus
-        self._consensus_block_executor = NCConsensusBlockExecutor(
-            settings=settings,
-            block_executor=self._block_executor,
-            nc_storage_factory=nc_storage_factory,
-            nc_log_storage=nc_log_storage,
-            nc_exec_fail_trace=nc_exec_fail_trace,
-        )
+        # Consensus block executor (with side effects) for consensus
+        self._consensus_block_executor = consensus_block_executor
 
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
             settings, self._consensus_block_executor, feature_service,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
-        self.nc_calls_sorter = nc_calls_sorter
         self.feature_service = feature_service
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
-        return ConsensusAlgorithmContext(self)
+        return ConsensusAlgorithmContext(self, self._pubsub)
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
-    def unsafe_update(self, base: BaseTransaction) -> list[ConsensusEvent]:
+    def unsafe_update(self, base: BaseTransaction) -> None:
         """
         Run a consensus update with its own context, indexes will be updated accordingly.
 
@@ -137,7 +111,8 @@ class ConsensusAlgorithm:
         if this method throws any exception.
         """
         from hathor.transaction import Block, Transaction
-        assert self.tx_storage.is_only_valid_allowed()
+        assert base.storage is not None
+        assert base.storage.is_only_valid_allowed()
         meta = base.get_metadata()
         assert meta.validation.is_valid()
 
@@ -149,10 +124,12 @@ class ConsensusAlgorithm:
         # this context instance will live only while this update is running
         context = self.create_context()
 
-        best_height, best_tip = self.tx_storage.indexes.height.get_height_tip()
+        assert base.storage is not None
+        storage = base.storage
+        best_height, best_tip = storage.indexes.height.get_height_tip()
 
         # This has to be called before the removal of vertices, otherwise this call may fail.
-        old_best_block = self.tx_storage.get_block(best_tip)
+        old_best_block = base.storage.get_transaction(best_tip)
 
         if isinstance(base, Transaction):
             context.transaction_algorithm.update_consensus(base)
@@ -164,10 +141,10 @@ class ConsensusAlgorithm:
         # signal a mempool tips index update for all affected transactions,
         # because that index is used on _compute_vertices_that_became_invalid below.
         for tx_affected in _sorted_affected_txs(context.txs_affected):
-            self.tx_storage.indexes.mempool_tips.update(tx_affected)
+            storage.indexes.mempool_tips.update(tx_affected)
 
         txs_to_remove: list[BaseTransaction] = []
-        new_best_height, new_best_tip = self.tx_storage.indexes.height.get_height_tip()
+        new_best_height, new_best_tip = storage.indexes.height.get_height_tip()
 
         if context.reorg_info is not None:
             if new_best_height < best_height:
@@ -177,24 +154,20 @@ class ConsensusAlgorithm:
                 )
 
             # XXX: this method will mark as INVALID all transactions in the mempool that became invalid after the reorg
-            txs_to_remove.extend(
-                self._compute_vertices_that_became_invalid(new_best_block=context.reorg_info.new_best_block)
-            )
+            txs_to_remove.extend(self._compute_vertices_that_became_invalid(storage, new_best_height))
 
         if txs_to_remove:
             self.log.warn('some transactions on the mempool became invalid and will be removed',
                           count=len(txs_to_remove))
             # XXX: because transactions in `txs_to_remove` are marked as invalid, we need this context to be
             # able to remove them
-            with self.tx_storage.allow_invalid_context():
-                self._remove_transactions(txs_to_remove, context)
-
-        pubsub_events = []
+            with storage.allow_invalid_context():
+                self._remove_transactions(txs_to_remove, storage, context)
 
         # emit the reorg started event if needed
         if context.reorg_info is not None:
             assert isinstance(old_best_block, Block)
-            new_best_block = self.tx_storage.get_transaction(new_best_tip)
+            new_best_block = base.storage.get_transaction(new_best_tip)
             reorg_size = old_best_block.get_height() - context.reorg_info.common_block.get_height()
             # TODO: After we remove block ties, should the assert below be true?
             # assert old_best_block.get_metadata().voided_by
@@ -207,28 +180,27 @@ class ConsensusAlgorithm:
                 new_best_block=new_best_block.hash_hex,
                 common_block=context.reorg_info.common_block.hash_hex,
             )
-            pubsub_events.append(ConsensusEvent(
-                event=HathorEvents.REORG_STARTED,
-                kwargs=dict(
-                    old_best_height=best_height,
-                    old_best_block=old_best_block,
-                    new_best_height=new_best_height,
-                    new_best_block=new_best_block,
-                    common_block=context.reorg_info.common_block,
-                    reorg_size=reorg_size,
-                )
-            ))
+            context.pubsub.publish(
+                HathorEvents.REORG_STARTED,
+                old_best_height=best_height,
+                old_best_block=old_best_block,
+                new_best_height=new_best_height,
+                new_best_block=new_best_block,
+                common_block=context.reorg_info.common_block,
+                reorg_size=reorg_size,
+            )
 
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
-            self.tx_storage.indexes.update_critical_indexes(tx_affected)
+            assert tx_affected.storage is not None
+            tx_affected.storage.indexes.update_critical_indexes(tx_affected)
             with non_critical_code(self.log):
-                self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
-            pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_UPDATE, kwargs=dict(tx=tx_affected)))
+                tx_affected.storage.indexes.update_non_critical_indexes(tx_affected)
+            context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
 
         # signal all transactions of which the execution succeeded
         for tx_nc_success in context.nc_exec_success:
-            pubsub_events.append(ConsensusEvent(event=HathorEvents.NC_EXEC_SUCCESS, kwargs=dict(tx=tx_nc_success)))
+            context.pubsub.publish(HathorEvents.NC_EXEC_SUCCESS, tx=tx_nc_success)
 
         # handle custom NC events
         if isinstance(base, Block):
@@ -236,21 +208,17 @@ class ConsensusAlgorithm:
             for tx, events in context.nc_events:
                 assert tx.is_nano_contract()
                 for event in events:
-                    pubsub_events.append(
-                        ConsensusEvent(event=HathorEvents.NC_EVENT, kwargs=dict(tx=tx, nc_event=event))
-                    )
+                    context.pubsub.publish(HathorEvents.NC_EVENT, tx=tx, nc_event=event)
         else:
             assert context.nc_events is None
 
         # And emit events for txs that were removed
         for tx_removed in txs_to_remove:
-            pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_REMOVED, kwargs=dict(tx=tx_removed)))
+            context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
 
         # and also emit the reorg finished event if needed
         if context.reorg_info is not None:
-            pubsub_events.append(ConsensusEvent(event=HathorEvents.REORG_FINISHED, kwargs={}))
-
-        return pubsub_events
+            context.pubsub.publish(HathorEvents.REORG_FINISHED)
 
     def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         """Filter out voided_by entries that should be inherited from parents."""
@@ -276,7 +244,8 @@ class ConsensusAlgorithm:
                 continue
             if h in self.soft_voided_tx_ids:
                 continue
-            tx3 = self.tx_storage.get_transaction(h)
+            assert tx.storage is not None
+            tx3 = tx.storage.get_transaction(h)
             tx3_meta = tx3.get_metadata()
             tx3_voided_by: set[bytes] = tx3_meta.voided_by or set()
             if not (self.soft_voided_tx_ids & tx3_voided_by):
@@ -300,7 +269,8 @@ class ConsensusAlgorithm:
                 continue
             if h == tx.hash:
                 continue
-            tx2 = self.tx_storage.get_transaction(h)
+            assert tx.storage is not None
+            tx2 = tx.storage.get_transaction(h)
             tx2_meta = tx2.get_metadata()
             tx2_voided_by: set[bytes] = tx2_meta.voided_by or set()
             if NC_EXECUTION_FAIL_ID in tx2_voided_by:
@@ -308,7 +278,12 @@ class ConsensusAlgorithm:
         assert NC_EXECUTION_FAIL_ID not in ret
         return ret
 
-    def _remove_transactions(self, txs: list[BaseTransaction], context: ConsensusAlgorithmContext) -> None:
+    def _remove_transactions(
+        self,
+        txs: list[BaseTransaction],
+        storage: TransactionStorage,
+        context: ConsensusAlgorithmContext,
+    ) -> None:
         """Will remove all the transactions on the list from the database.
 
         Special notes:
@@ -346,32 +321,38 @@ class ConsensusAlgorithm:
                     spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
                     context.save(spent_tx)
         for parent_hash, children_to_remove in parents_to_update.items():
-            parent_tx = self.tx_storage.get_transaction(parent_hash)
+            parent_tx = storage.get_transaction(parent_hash)
             for child in children_to_remove:
-                self.tx_storage.vertex_children.remove_child(parent_tx, child)
+                storage.vertex_children.remove_child(parent_tx, child)
             context.save(parent_tx)
         for tx in txs:
             self.log.debug('remove transaction', tx=tx.hash_hex)
-            self.tx_storage.remove_transaction(tx)
+            storage.remove_transaction(tx)
 
-    def _compute_vertices_that_became_invalid(self, *, new_best_block: Block) -> list[BaseTransaction]:
+    def _compute_vertices_that_became_invalid(
+        self,
+        storage: TransactionStorage,
+        new_best_height: int,
+    ) -> list[BaseTransaction]:
         """This method will look for transactions in the mempool that have become invalid after a reorg."""
         from hathor.transaction.storage.traversal import BFSTimestampWalk
         from hathor.transaction.validation_state import ValidationState
 
-        mempool_tips = list(self.tx_storage.indexes.mempool_tips.iter(self.tx_storage))
+        mempool_tips = list(storage.indexes.mempool_tips.iter(storage))
         if not mempool_tips:
             # Mempool is empty, nothing to remove.
             return []
 
         mempool_rules: tuple[Callable[[Transaction], bool], ...] = (
-            lambda tx: self._reward_lock_mempool_rule(tx, new_best_block.get_height()),
-            lambda tx: self._feature_activation_rules(tx, new_best_block),
-            self._unknown_contract_mempool_rule,
+            lambda tx: self._reward_lock_mempool_rule(tx, new_best_height),
+            lambda tx: self._unknown_contract_mempool_rule(tx),
+            lambda tx: self._nano_activation_rule(storage, tx),
+            lambda tx: self._fee_tokens_activation_rule(storage, tx),
+            self._checkdatasig_count_rule,
         )
 
         find_invalid_bfs = BFSTimestampWalk(
-            self.tx_storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False
+            storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=False
         )
 
         invalid_txs: set[BaseTransaction] = set()
@@ -394,7 +375,7 @@ class ConsensusAlgorithm:
         # From the invalid txs, mark all vertices to the right as invalid. This includes both txs and blocks.
         to_remove: list[BaseTransaction] = []
         find_to_remove_bfs = BFSTimestampWalk(
-            self.tx_storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True
+            storage, is_dag_funds=True, is_dag_verifications=True, is_left_to_right=True
         )
         for vertex in find_to_remove_bfs.run(invalid_txs, skip_root=False):
             vertex.set_validation(ValidationState.INVALID)
@@ -437,43 +418,13 @@ class ConsensusAlgorithm:
             return False
         return True
 
-    def _feature_activation_rules(self, tx: Transaction, new_best_block: Block) -> bool:
-        """Check whether a tx became invalid because of some feature state of the new best block."""
-        features = self.feature_service.get_feature_states(vertex=new_best_block)
-
-        for feature, feature_state in features.items():
-            is_active = feature_state.is_active()
-            match feature:
-                case Feature.NANO_CONTRACTS:
-                    if not self._nano_activation_rule(tx, is_active):
-                        return False
-                case Feature.FEE_TOKENS:
-                    if not self._fee_tokens_activation_rule(tx, is_active):
-                        return False
-                case Feature.COUNT_CHECKDATASIG_OP:
-                    if not self._checkdatasig_count_rule(tx):
-                        return False
-                case Feature.OPCODES_V2:
-                    if not self._opcodes_v2_activation_rule(tx, new_best_block):
-                        return False
-                case (
-                    Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
-                    | Feature.NOP_FEATURE_1
-                    | Feature.NOP_FEATURE_2
-                    | Feature.NOP_FEATURE_3
-                ):
-                    # These features do not affect transactions.
-                    pass
-                case _:
-                    assert_never(feature)
-
-        return True
-
-    def _nano_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
+    def _nano_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
         """Check whether a tx became invalid because the reorg changed the nano feature activation state."""
+        from hathor.feature_activation.utils import is_nano_active
         from hathor.nanocontracts import OnChainBlueprint
 
-        if is_active:
+        best_block = storage.get_best_block()
+        if is_nano_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
             # When nano is active, this rule has no effect.
             return True
 
@@ -486,14 +437,15 @@ class ConsensusAlgorithm:
 
         return True
 
-    def _fee_tokens_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
+    def _fee_tokens_activation_rule(self, storage: TransactionStorage, tx: Transaction) -> bool:
         """
         Check whether a tx became invalid because the reorg changed the fee-based tokens feature activation state.
         """
         from hathor.transaction.token_creation_tx import TokenCreationTransaction
         from hathor.transaction.token_info import TokenVersion
 
-        if is_active:
+        best_block = storage.get_best_block()
+        if is_fee_active(settings=self._settings, block=best_block, feature_service=self.feature_service):
             # When fee-based tokens feature is active, this rule has no effect.
             return True
 
@@ -507,50 +459,15 @@ class ConsensusAlgorithm:
         return True
 
     def _checkdatasig_count_rule(self, tx: Transaction) -> bool:
-        """Check whether a tx became invalid because of the count checkdatasig feature."""
+        """Check whether a tx became invalid because the reorg changed the checkdatasig feature activation state."""
         from hathor.verification.vertex_verifier import VertexVerifier
 
-        # We check all txs regardless of the feature state, because this rule
-        # already prohibited mempool txs before the block feature activation.
         # Any exception in the sigops verification will be considered
         # a fail and the tx will be removed from the mempool.
         try:
             VertexVerifier._verify_sigops_output(settings=self._settings, vertex=tx, enable_checkdatasig_count=True)
-        except Exception as e:
-            if not isinstance(e, TooManySigOps):
-                self.log.exception('unexpected exception in mempool-reverification')
+        except Exception:
             return False
-        return True
-
-    def _opcodes_v2_activation_rule(self, tx: Transaction, new_best_block: Block) -> bool:
-        """Check whether a tx became invalid because of the opcodes V2 feature."""
-        from hathor.verification.nano_header_verifier import NanoHeaderVerifier
-        from hathor.verification.transaction_verifier import TransactionVerifier
-
-        # We check all txs regardless of the feature state, because this rule
-        # already prohibited mempool txs before the block feature activation.
-
-        params = VerificationParams.default_for_mempool(best_block=new_best_block)
-
-        # Any exception in the inputs verification will be considered
-        # a fail and the tx will be removed from the mempool.
-        try:
-            TransactionVerifier._verify_inputs(self._settings, tx, params, skip_script=False)
-        except Exception as e:
-            if not isinstance(e, InvalidInputData):
-                self.log.exception('unexpected exception in mempool-reverification')
-            return False
-
-        # Any exception in the nc_signature verification will be considered
-        # a fail and the tx will be removed from the mempool.
-        if tx.is_nano_contract():
-            try:
-                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, params)
-            except Exception as e:
-                if not isinstance(e, NCInvalidSignature):
-                    self.log.exception('unexpected exception in mempool-reverification')
-                return False
-
         return True
 
 

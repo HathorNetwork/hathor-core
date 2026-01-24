@@ -36,6 +36,9 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
+from hathor.nanocontracts.execution.subprocess_block_executor import NCSubprocessBlockExecutor
+from hathor.nanocontracts.execution.subprocess_pool import NCSubprocessPool
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
@@ -199,6 +202,12 @@ class Builder:
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
         self._vertex_json_serializer: VertexJsonSerializer | None = None
+
+        # Subprocess execution for nano contracts
+        self._enable_subprocess_execution: bool = False
+        self._subprocess_pythonhashseed: int = 0
+        self._subprocess_timeout: float = 30.0
+        self._subprocess_pool: 'NCSubprocessPool | None' = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -408,20 +417,90 @@ class Builder:
         )
         return self._nc_log_storage
 
+    def _get_or_create_block_executor(self) -> NCBlockExecutor:
+        """Create the pure NCBlockExecutor used for dry-run and testing."""
+        settings = self._get_or_create_settings()
+        runner_factory = self._get_or_create_runner_factory()
+        nc_storage_factory = self._get_or_create_nc_storage_factory()
+        nc_calls_sorter = self._get_nc_calls_sorter()
+
+        return NCBlockExecutor(
+            settings=settings,
+            runner_factory=runner_factory,
+            nc_storage_factory=nc_storage_factory,
+            nc_calls_sorter=nc_calls_sorter,
+        )
+
+    def _get_or_create_consensus_block_executor(
+        self,
+        block_executor: NCBlockExecutor,
+    ) -> NCConsensusBlockExecutor:
+        """Create the NCConsensusBlockExecutor that wraps the block executor.
+
+        If subprocess execution is enabled, creates an NCSubprocessBlockExecutor
+        instead of using the regular NCBlockExecutor for consensus.
+        """
+        settings = self._get_or_create_settings()
+        nc_storage_factory = self._get_or_create_nc_storage_factory()
+        nc_log_storage = self._get_or_create_nc_log_storage()
+
+        # Determine which executor to use for consensus
+        consensus_executor: NCBlockExecutor | NCSubprocessBlockExecutor
+        if self._enable_subprocess_execution:
+            tx_storage = self._get_or_create_tx_storage()
+            nc_catalog = self._get_nc_catalog()
+
+            # Create and start subprocess pool
+            self._subprocess_pool = NCSubprocessPool(
+                settings=settings,
+                nc_catalog=nc_catalog,
+                nc_storage_factory=nc_storage_factory,
+                tx_storage=tx_storage,
+                pythonhashseed=self._subprocess_pythonhashseed,
+                timeout=self._subprocess_timeout,
+            )
+            self._subprocess_pool.start()
+
+            # Create subprocess block executor
+            consensus_executor = NCSubprocessBlockExecutor(
+                subprocess_pool=self._subprocess_pool,
+                tx_storage=tx_storage,
+                nc_storage_factory=nc_storage_factory,
+            )
+            self.log.info(
+                'using subprocess execution for nano contracts',
+                pythonhashseed=self._subprocess_pythonhashseed,
+                timeout=self._subprocess_timeout,
+            )
+        else:
+            consensus_executor = block_executor
+
+        return NCConsensusBlockExecutor(
+            settings=settings,
+            block_executor=consensus_executor,
+            nc_storage_factory=nc_storage_factory,
+            nc_log_storage=nc_log_storage,
+        )
+
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
+            pubsub = self._get_or_create_pubsub()
+            settings = self._get_or_create_settings()
+            feature_service = self._get_or_create_feature_service()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
-            nc_calls_sorter = self._get_nc_calls_sorter()
+
+            block_executor = self._get_or_create_block_executor()
+            consensus_block_executor = self._get_or_create_consensus_block_executor(block_executor)
+
             self._consensus = ConsensusAlgorithm(
-                nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
-                settings=self._get_or_create_settings(),
-                runner_factory=self._get_or_create_runner_factory(),
-                nc_log_storage=self._get_or_create_nc_log_storage(),
-                nc_calls_sorter=nc_calls_sorter,
-                feature_service=self._get_or_create_feature_service(),
-                tx_storage=self._get_or_create_tx_storage(),
+                pubsub=pubsub,
+                settings=settings,
+                nc_storage_factory=nc_storage_factory,
+                block_executor=block_executor,
+                consensus_block_executor=consensus_block_executor,
+                feature_service=feature_service,
             )
 
         return self._consensus
@@ -655,6 +734,7 @@ class Builder:
                 feature_service=self._get_or_create_feature_service(),
                 execution_manager=self._get_or_create_execution_manager(),
                 pubsub=self._get_or_create_pubsub(),
+                wallet=self._get_or_create_wallet(),
             )
 
         return self._vertex_handler
@@ -860,6 +940,33 @@ class Builder:
         self.check_if_can_modify()
         self._nc_anti_mev = False
         return self
+
+    def enable_subprocess_execution(
+        self,
+        pythonhashseed: int = 0,
+        timeout: float = 30.0,
+    ) -> 'Builder':
+        """Enable subprocess execution for nano contracts.
+
+        When enabled, nano contract execution runs in a separate process with
+        a controlled PYTHONHASHSEED for deterministic hash ordering.
+
+        Args:
+            pythonhashseed: The PYTHONHASHSEED value for the subprocess (default: 0)
+            timeout: Timeout in seconds for subprocess execution (default: 30.0)
+        """
+        self.check_if_can_modify()
+        self._enable_subprocess_execution = True
+        self._subprocess_pythonhashseed = pythonhashseed
+        self._subprocess_timeout = timeout
+        return self
+
+    def shutdown_subprocess_pool(self) -> None:
+        """Shutdown the subprocess pool if it exists."""
+        if self._subprocess_pool is not None:
+            self.log.info('shutting down subprocess pool')
+            self._subprocess_pool.shutdown()
+            self._subprocess_pool = None
 
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':
         self.check_if_can_modify()

@@ -135,6 +135,8 @@ class NCBlockExecutor:
         block: Block,
         *,
         should_skip: ShouldSkipPredicate,
+        nc_txs: list[Transaction],
+        parent_root_id: bytes,
     ) -> Iterator[NCBlockEffect]:
         """Execute block as generator, yielding effects without applying them.
 
@@ -145,6 +147,8 @@ class NCBlockExecutor:
             block: The block to execute.
             should_skip: A predicate function that determines if a transaction should be skipped.
                 This allows the caller to provide context-specific voided state tracking.
+            nc_txs: List of NC transactions to execute.
+            parent_root_id: NC block root ID from parent block's metadata.
 
         Yields:
             NCBlockEffect instances representing each step of execution.
@@ -152,19 +156,7 @@ class NCBlockExecutor:
         assert self._settings.ENABLE_NANO_CONTRACTS
         assert not block.is_genesis, "Genesis blocks should be handled separately"
 
-        meta = block.get_metadata()
-        assert not meta.voided_by
-
-        parent = block.get_block_parent()
-        parent_meta = parent.get_metadata()
-        parent_root_id = parent_meta.nc_block_root_id
-        assert parent_root_id is not None
-
-        nc_calls: list[Transaction] = []
-        for tx in block.iter_transactions_in_this_block():
-            if not tx.is_nano_contract():
-                continue
-            nc_calls.append(tx)
+        nc_calls = [tx for tx in nc_txs if tx.is_nano_contract()]
 
         nc_sorted_calls = self._nc_calls_sorter(block, nc_calls) if nc_calls else []
         block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)

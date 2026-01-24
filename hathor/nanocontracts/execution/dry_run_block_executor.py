@@ -118,10 +118,18 @@ class NCDryRunBlockExecutor:
         block_meta = block.get_metadata()
         expected_root_id = block_meta.nc_block_root_id.hex() if block_meta.nc_block_root_id else ''
 
-        # Build dependency graph for in-memory voided tracking
+        # Get parent_root_id from parent block's metadata
+        parent = block.get_block_parent()
+        parent_meta = parent.get_metadata()
+        parent_root_id = parent_meta.nc_block_root_id
+        assert parent_root_id is not None
+
+        # Get NC transactions from block and build dependency graph
+        nc_txs: list[Transaction] = []
         tx_deps: dict[bytes, set[bytes]] = {}
         for tx in block.iter_transactions_in_this_block():
             if tx.is_nano_contract():
+                nc_txs.append(tx)
                 tx_deps[tx.hash] = {txin.tx_id for txin in tx.inputs}
 
         # Track voided txs in-memory during execution
@@ -149,7 +157,12 @@ class NCDryRunBlockExecutor:
         transactions: list[DryRunTxResult] = []
         current_rng_seed: Optional[str] = None
 
-        for effect in self._block_executor.execute_block(block, should_skip=should_skip):
+        for effect in self._block_executor.execute_block(
+            block,
+            should_skip=should_skip,
+            nc_txs=nc_txs,
+            parent_root_id=parent_root_id,
+        ):
             match effect:
                 case NCBeginBlock(parent_root_id=parent_root_id, nc_sorted_calls=calls):
                     initial_block_root_id = parent_root_id.hex()

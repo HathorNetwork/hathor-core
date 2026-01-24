@@ -69,6 +69,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         cache_config: CacheConfig | None = None,
     ) -> None:
         self._reactor = reactor
+
         self._cf_tx = rocksdb_storage.get_or_create_column_family(_CF_NAME_TX)
         self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_META)
         self._cf_static_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_STATIC_META)

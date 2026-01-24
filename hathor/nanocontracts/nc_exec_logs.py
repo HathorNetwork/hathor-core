@@ -290,6 +290,59 @@ class NCLogStorage:
         with path.open(mode='a') as f:
             f.write(json.dumps(new_line_dict) + '\n')
 
+    def save_logs_from_json(
+        self,
+        tx: Transaction,
+        call_info_json: str,
+        exception_info: tuple[str, str] | None,
+    ) -> None:
+        """Persist NC execution logs from serialized JSON (for subprocess execution).
+
+        Args:
+            tx: The transaction being logged
+            call_info_json: JSON string containing call info data
+            exception_info: Tuple of (exception_repr, traceback) or None if success
+        """
+        assert tx.is_nano_contract()
+        meta = tx.get_metadata()
+        assert meta.first_block is not None, 'nc exec logs can only be saved when the nc is confirmed'
+
+        exception_repr, tb = exception_info if exception_info is not None else (None, None)
+
+        match self._config:
+            case NCLogConfig.NONE:
+                # don't save any logs
+                return
+            case NCLogConfig.ALL:
+                # save all logs
+                pass
+            case NCLogConfig.FAILED:
+                if exception_repr is None:
+                    # don't save when there's no exception
+                    return
+            case NCLogConfig.FAILED_UNHANDLED:
+                if exception_repr is None:
+                    # don't save when there's no exception
+                    return
+                # For subprocess execution, we can't easily distinguish NCFail vs other
+                # exceptions, so we save all failures
+                pass
+            case _:
+                assert_never(self._config)
+
+        # Create minimal log entry
+        # Note: The subprocess doesn't have full log entries, just call records
+        # call_info_json is available but we don't parse detailed logs from it
+        new_entry = NCExecEntry(
+            logs=[],  # Subprocess execution doesn't capture detailed logs
+            error_traceback=tb,
+        )
+        new_line_dict = {meta.first_block.hex(): new_entry.dict()}
+        path = self._get_file_path(tx.hash)
+
+        with path.open(mode='a') as f:
+            f.write(json.dumps(new_line_dict) + '\n')
+
     def _get_file_path(self, vertex_id: VertexId) -> Path:
         dir_path = self._path.joinpath(vertex_id[0:1].hex())
         os.makedirs(dir_path, exist_ok=True)
