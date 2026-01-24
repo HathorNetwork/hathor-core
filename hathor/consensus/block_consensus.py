@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.consensus.context import ConsensusAlgorithmContext
     from hathor.feature_activation.feature_service import FeatureService
-    from hathor.nanocontracts.execution import NCBlockExecutor
+    from hathor.nanocontracts.execution import NCConsensusBlockExecutor
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 
 logger = get_logger()
@@ -46,7 +46,7 @@ class BlockConsensusAlgorithm:
         self,
         settings: 'HathorSettings',
         context: 'ConsensusAlgorithmContext',
-        block_executor: 'NCBlockExecutor',
+        block_executor: 'NCConsensusBlockExecutor',
         feature_service: 'FeatureService',
     ) -> None:
         self._settings = settings
@@ -601,7 +601,7 @@ class BlockConsensusAlgorithmFactory:
     def __init__(
         self,
         settings: 'HathorSettings',
-        block_executor: 'NCBlockExecutor',
+        block_executor: 'NCConsensusBlockExecutor',
         feature_service: 'FeatureService',
     ) -> None:
         self.settings = settings
