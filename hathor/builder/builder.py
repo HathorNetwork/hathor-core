@@ -423,6 +423,7 @@ class Builder:
                 nc_log_storage=self._get_or_create_nc_log_storage(),
                 nc_calls_sorter=nc_calls_sorter,
                 feature_service=self._get_or_create_feature_service(),
+                tx_storage=self._get_or_create_tx_storage(),
             )
 
         return self._consensus
