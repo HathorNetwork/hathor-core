@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Iterator
 
+from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor import __version__
@@ -26,6 +27,8 @@ from hathor.nanocontracts.storage.patricia_trie import Node, PatriciaTrie
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionStorage
 from hathor.utils.pydantic import BaseModel, Hex
+
+logger = get_logger()
 
 
 class NCDump(BaseModel):
@@ -50,9 +53,10 @@ class ContractDump(BaseModel):
 
 
 class NCDumper:
-    __slots__ = ('settings', 'tx_storage', )
+    __slots__ = ('_log', 'settings', 'tx_storage')
 
     def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
+        self._log = logger.new()
         self.settings = settings
         self.tx_storage = tx_storage
 
@@ -65,6 +69,7 @@ class NCDumper:
         )
 
     def get_block_nc_dump(self, block: Block) -> tuple[bytes, BlockDump]:
+        self._log.info('processing block', block_hash=block.hash.hex(), height=block.get_height())
         contracts = {}
         tokens = {}
         addresses = {}
