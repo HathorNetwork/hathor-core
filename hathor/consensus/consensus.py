@@ -24,7 +24,7 @@ from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.utils import is_fee_active
-from hathor.nanocontracts.execution import NCBlockExecutor
+from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Transaction
@@ -91,18 +91,25 @@ class ConsensusAlgorithm:
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
 
-        # Create NCBlockExecutor with all NC-related dependencies
+        # Create NCBlockExecutor (pure) for execution
         self._block_executor = NCBlockExecutor(
             settings=settings,
             runner_factory=runner_factory,
             nc_storage_factory=nc_storage_factory,
-            nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
+        )
+
+        # Create NCConsensusBlockExecutor (with side effects) for consensus
+        self._consensus_block_executor = NCConsensusBlockExecutor(
+            settings=settings,
+            block_executor=self._block_executor,
+            nc_storage_factory=nc_storage_factory,
+            nc_log_storage=nc_log_storage,
             nc_exec_fail_trace=nc_exec_fail_trace,
         )
 
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
-            settings, self._block_executor, feature_service,
+            settings, self._consensus_block_executor, feature_service,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
         self.nc_calls_sorter = nc_calls_sorter
