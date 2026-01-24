@@ -177,10 +177,19 @@ class NCConsensusBlockExecutor:
             self.initialize_empty(block, context)
             return
 
+        # Verify block hasn't been executed yet
+        meta = block.get_metadata()
+        assert meta.nc_block_root_id is None
+
+        # Create predicate that reads from database metadata
+        def should_skip(tx: Transaction) -> bool:
+            tx_meta = tx.get_metadata()
+            return bool(tx_meta.voided_by)
+
         # Track NC transactions for final verification (populated from NCBeginBlock)
         nc_sorted_calls: list[Transaction] = []
 
-        for effect in self._block_executor.execute_block(block):
+        for effect in self._block_executor.execute_block(block, should_skip=should_skip):
             match effect:
                 case NCBeginBlock(nc_sorted_calls=nc_sorted_calls):
                     pass
@@ -222,14 +231,21 @@ class NCConsensusBlockExecutor:
             context: Consensus algorithm context for saving state.
             on_failure: Callback for failed transactions.
         """
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+
         match effect:
             case NCBeginBlock():
                 # Nothing to apply at block start
                 pass
 
-            case NCBeginTransaction():
-                # Nothing to apply at transaction start
-                pass
+            case NCBeginTransaction(tx=tx):
+                # Verify transaction hasn't been executed yet
+                tx_meta = tx.get_metadata()
+                assert tx_meta.nc_execution in {None, NCExecutionState.PENDING}
+                if tx_meta.voided_by:
+                    # During normal execution, NC_EXECUTION_FAIL_ID should not be in voided_by
+                    # as that is added by the executor itself after a failure
+                    assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
 
             case NCTxExecutionSuccess(tx=tx, runner=runner):
                 from hathor.nanocontracts.runner.call_info import CallType

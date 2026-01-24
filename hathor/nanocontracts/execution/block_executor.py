@@ -19,12 +19,14 @@ from __future__ import annotations
 import hashlib
 import traceback
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from hathor.nanocontracts.exception import NCFail
 from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
-from hathor.transaction.nc_execution_state import NCExecutionState
+
+# Type alias for the skip predicate
+ShouldSkipPredicate = Callable[[Transaction], bool]
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -131,6 +133,8 @@ class NCBlockExecutor:
     def execute_block(
         self,
         block: Block,
+        *,
+        should_skip: ShouldSkipPredicate,
     ) -> Iterator[NCBlockEffect]:
         """Execute block as generator, yielding effects without applying them.
 
@@ -139,18 +143,17 @@ class NCBlockExecutor:
 
         Args:
             block: The block to execute.
+            should_skip: A predicate function that determines if a transaction should be skipped.
+                This allows the caller to provide context-specific voided state tracking.
 
         Yields:
             NCBlockEffect instances representing each step of execution.
         """
-        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
-
         assert self._settings.ENABLE_NANO_CONTRACTS
         assert not block.is_genesis, "Genesis blocks should be handled separately"
 
         meta = block.get_metadata()
         assert not meta.voided_by
-        assert meta.nc_block_root_id is None
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
@@ -161,10 +164,6 @@ class NCBlockExecutor:
         for tx in block.iter_transactions_in_this_block():
             if not tx.is_nano_contract():
                 continue
-            tx_meta = tx.get_metadata()
-            assert tx_meta.nc_execution in {None, NCExecutionState.PENDING}
-            if tx_meta.voided_by:
-                assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
             nc_calls.append(tx)
 
         nc_sorted_calls = self._nc_calls_sorter(block, nc_calls) if nc_calls else []
@@ -192,6 +191,7 @@ class NCBlockExecutor:
                 tx=tx,
                 block_storage=block_storage,
                 rng_seed=rng_seed,
+                should_skip=should_skip,
             )
             yield result
 
@@ -213,18 +213,24 @@ class NCBlockExecutor:
         tx: Transaction,
         block_storage: 'NCBlockStorage',
         rng_seed: bytes,
+        should_skip: ShouldSkipPredicate,
     ) -> NCTxExecutionResult:
         """Execute a single NC transaction.
 
         This method is pure and side-effect free. It does not persist anything,
         does not call callbacks, and returns all information needed by the caller
-        to handle success/failure cases."""
+        to handle success/failure cases.
+
+        Args:
+            tx: The transaction to execute.
+            block_storage: The block storage for this execution context.
+            rng_seed: The RNG seed for this transaction.
+            should_skip: Predicate to determine if transaction should be skipped.
+        """
         from hathor.nanocontracts.types import Address
 
-        tx_meta = tx.get_metadata()
-        if tx_meta.voided_by:
-            # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
-            # mark this tx as voided.
+        if should_skip(tx):
+            # Skip transactions based on the caller-provided predicate.
             # Check if seqnum needs to be updated.
             nc_header = tx.get_nano_header()
             nc_address = Address(nc_header.nc_address)

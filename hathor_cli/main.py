@@ -44,6 +44,7 @@ class CliManager:
             multisig_address,
             multisig_signature,
             multisig_spend,
+            nc_dry_run,
             nc_dump,
             nginx_config,
             openapi_json,
@@ -101,6 +102,7 @@ class CliManager:
         self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
         self.add_cmd('dev', 'x-nc-dump', nc_dump, 'EXPERIMENTAL: Dump the nc storage in a text format.')
+        self.add_cmd('dev', 'x-nc-dry-run', nc_dry_run, 'EXPERIMENTAL: Dry-run NC block execution')
         self.add_cmd('dev', 'replay-logs', replay_logs, 'EXPERIMENTAL: re-play json logs as console printed')
         self.add_cmd('dev', 'load-from-logs', load_from_logs,
                      'Load vertices as they are found in a log dump that was parsed with parse-logs')
