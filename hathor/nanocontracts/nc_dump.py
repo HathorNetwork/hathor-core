@@ -70,7 +70,7 @@ class NCDumper:
             assert meta.nc_block_root_id is not None
 
             if meta.nc_block_root_id in self._visited_block_root_ids:
-                self._log.info('skipping block', block_hash=block.hash.hex(), height=block.get_height())
+                self._log.debug('skipping block', block_hash=block.hash.hex(), height=block.get_height())
                 continue
 
             self._log.info('processing block', block_hash=block.hash.hex(), height=block.get_height())
