@@ -307,8 +307,8 @@ class TransactionVerifier:
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
         htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount < htr_expected_amount:
-            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
+        if htr_info.amount > htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
@@ -326,8 +326,8 @@ class TransactionVerifier:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
-        if htr_info.amount > htr_expected_amount:
-            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
+        if htr_info.amount < htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
