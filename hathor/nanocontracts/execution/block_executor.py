@@ -209,22 +209,9 @@ class NCBlockExecutor:
                 # Skip other type of transactions.
                 continue
             tx_meta = tx.get_metadata()
-            if is_reorg:
-                assert context.reorg_info is not None
-                # Clear the NC_EXECUTION_FAIL_ID flag if this is the only reason the transaction was voided.
-                # This case might only happen when handling reorgs.
-                assert tx.storage is not None
-                if tx_meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}:
-                    if tx_meta.conflict_with:
-                        for tx_conflict_id in tx_meta.conflict_with:
-                            tx_conflict = tx.storage.get_transaction(tx_conflict_id)
-                            tx_conflict_meta = tx_conflict.get_metadata()
-                            assert tx_conflict_meta.first_block is None
-                            assert tx_conflict_meta.voided_by
-                    context.transaction_algorithm.remove_voided_by(tx, tx.hash)
-                    tx_meta.voided_by = None
-                    context.save(tx)
-            tx_meta.nc_execution = NCExecutionState.PENDING
+            assert tx_meta.nc_execution in {None, NCExecutionState.PENDING}
+            if tx_meta.voided_by:
+                assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
             nc_calls.append(tx)
 
         if not nc_calls:
