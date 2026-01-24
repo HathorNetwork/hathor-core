@@ -135,8 +135,9 @@ def test_random_sorter_stable_order() -> None:
         '0000142cf4351face7ff5803117f6d4c0375b0b724c576f7ffcbea7058fa9470',
         '000049ba9ba45cf8dccaed7d05b8a383ca392b9329866531da9c45960e699f26',
     ])
-    order = sorter.generate_random_topological_order(seed)
+    order, stuck = sorter.generate_random_topological_order(seed)
     assert order == expected_order
+    assert stuck == set()
 
     # XXX: this is necessary to preserve the consensus of the mainnet
     tx1 = bytes.fromhex('0000142cf4351face7ff5803117f6d4c0375b0b724c576f7ffcbea7058fa9470')

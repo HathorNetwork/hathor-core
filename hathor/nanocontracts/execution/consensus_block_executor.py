@@ -177,10 +177,19 @@ class NCConsensusBlockExecutor:
             self.initialize_empty(block, context)
             return
 
-        # Track NC transactions for final verification (populated from NCBeginBlock)
-        nc_sorted_calls: list[Transaction] = []
+        # Verify block hasn't been executed yet
+        meta = block.get_metadata()
+        assert meta.nc_block_root_id is None
 
-        for effect in self._block_executor.execute_block(block):
+        # Create predicate that reads from database metadata
+        def should_skip(tx: Transaction) -> bool:
+            tx_meta = tx.get_metadata()
+            return bool(tx_meta.voided_by)
+
+        # Track NC transactions for final verification (populated from NCBeginBlock)
+        nc_sorted_calls: tuple[Transaction, ...] = tuple()
+
+        for effect in self._block_executor.execute_block(block, should_skip=should_skip):
             match effect:
                 case NCBeginBlock(nc_sorted_calls=nc_sorted_calls):
                     pass
@@ -222,14 +231,21 @@ class NCConsensusBlockExecutor:
             context: Consensus algorithm context for saving state.
             on_failure: Callback for failed transactions.
         """
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+
         match effect:
             case NCBeginBlock():
                 # Nothing to apply at block start
                 pass
 
-            case NCBeginTransaction():
-                # Nothing to apply at transaction start
-                pass
+            case NCBeginTransaction(tx=tx):
+                # Verify transaction hasn't been executed yet
+                tx_meta = tx.get_metadata()
+                assert tx_meta.nc_execution in {None, NCExecutionState.PENDING}
+                if tx_meta.voided_by:
+                    # During normal execution, NC_EXECUTION_FAIL_ID should not be in voided_by
+                    # as that is added by the executor itself after a failure
+                    assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
 
             case NCTxExecutionSuccess(tx=tx, runner=runner):
                 from hathor.nanocontracts.runner.call_info import CallType
@@ -239,7 +255,8 @@ class NCConsensusBlockExecutor:
                 tx_meta.nc_execution = NCExecutionState.SUCCESS
                 context.save(tx)
 
-                # Commit the runner changes
+                # Persist contract trie nodes to the shared store.
+                # Tx-level block-storage updates were already committed in NCBlockExecutor.
                 # TODO Avoid calling multiple commits for the same contract. The best would be
                 #      to call the commit method once per contract per block, just like we do
                 #      for the block_storage. This ensures we will have a clean database with
@@ -278,9 +295,9 @@ class NCConsensusBlockExecutor:
                     context.save(tx)
 
                 # Save logs
-                self._nc_log_storage.save_logs(tx, call_info, None)
+                self._nc_log_storage.save_logs(tx, call_info.nc_logger.__entries__, None)
 
-            case NCTxExecutionFailure(tx=tx, runner=runner, exception=exception, traceback=tb):
+            case NCTxExecutionFailure(tx=tx, call_info=call_info, exception=exception, traceback=tb):
                 # Log the failure
                 kwargs: dict[str, Any] = {}
                 if tx.name:
@@ -298,8 +315,8 @@ class NCConsensusBlockExecutor:
                 on_failure(tx)
 
                 # Save logs with exception info
-                call_info = runner.get_last_call_info()
-                self._nc_log_storage.save_logs(tx, call_info, (exception, tb))
+                log_entries = call_info.nc_logger.__entries__ if call_info is not None else []
+                self._nc_log_storage.save_logs(tx, log_entries, (exception, tb))
 
             case NCTxExecutionSkipped(tx=tx):
                 tx_meta = tx.get_metadata()

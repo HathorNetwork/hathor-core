@@ -28,7 +28,7 @@ from hathorlib.nanocontracts.types import ContractId
 from hathorlib.utils.pydantic import BaseModel, Hex
 
 if TYPE_CHECKING:
-    from hathorlib.nanocontracts.runner.call_info import CallInfo, CallRecord
+    from hathorlib.nanocontracts.runner.call_info import CallRecord
 
 MAX_EVENT_SIZE: int = 1024  # 1KiB
 
@@ -135,14 +135,6 @@ class NCExecEntry(BaseModel):
     """
     logs: list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry]
     error_traceback: str | None = None
-
-    @staticmethod
-    def from_call_info(call_info: CallInfo, error_tb: str | None) -> NCExecEntry:
-        """Create a NCExecEntry from a CallInfo and an optional traceback."""
-        return NCExecEntry(
-            logs=call_info.nc_logger.__entries__,
-            error_traceback=error_tb,
-        )
 
     def filter(self, log_level: NCLogLevel) -> NCExecEntry:
         """Create a new NCExecEntry while keeping logs with the provided log level or higher."""

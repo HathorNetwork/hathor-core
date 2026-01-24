@@ -240,10 +240,10 @@ class Runner:
                 'Cannot call initialize from call_public_method(); use create_contract() instead.'
             )
         try:
-            ret = self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
-        finally:
-            self._reset_all_changes()
-        return ret
+            return self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
+        except Exception:
+            self.discard_pending_changes()
+            raise
 
     def _unsafe_call_public_method(
         self,
@@ -275,9 +275,40 @@ class Runner:
         )
 
         self._validate_balances(ctx)
-        self._commit_all_changes_to_storage()
 
         return ret
+
+    def collect_created_tokens_from_uncommitted_changes(self) -> dict[TokenUid, TokenDescription]:
+        """Collect all tokens created in the current uncommitted execution context."""
+        if self._call_info is None:
+            return {}
+
+        created_tokens: dict[TokenUid, TokenDescription] = {}
+        for change_trackers in self._call_info.change_trackers.values():
+            assert len(change_trackers) == 1
+            created_tokens.update(change_trackers[0]._created_tokens)
+        return created_tokens
+
+    def has_pending_changes(self) -> bool:
+        """Return True when the last successful mutating call still needs finalization."""
+        return self._call_info is not None
+
+    def commit_pending_changes(self) -> None:
+        """Commit pending changes to block storage and finalize execution state."""
+        assert self._call_info is not None, 'no uncommitted changes available to commit'
+        self._commit_all_changes_to_storage()
+        self._reset_all_changes()
+
+    def discard_pending_changes(self) -> None:
+        """Discard pending changes and finalize execution state without committing."""
+        if self._call_info is None:
+            return
+
+        for nc_id in list(self._storages):
+            if not self.block_storage.has_contract(nc_id):
+                self._storages.pop(nc_id, None)
+
+        self._reset_all_changes()
 
     def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
         """ Invoked after the initialize method is called to initialize uninitialized containers.
@@ -916,10 +947,10 @@ class Runner:
 
         self._internal_create_contract(contract_id, blueprint_id)
         try:
-            ret = self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
-        finally:
-            self._reset_all_changes()
-        return ret
+            return self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
+        except Exception:
+            self.discard_pending_changes()
+            raise
 
     @_forbid_syscall_from_view('create_contract')
     def syscall_create_another_contract(

@@ -14,7 +14,7 @@
 
 import tempfile
 from enum import IntEnum
-from typing import Any, Callable, NamedTuple, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
 
@@ -55,6 +55,9 @@ from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts.execution import NCBlockExecutor
 
 logger = get_logger()
 
@@ -190,8 +193,6 @@ class Builder:
 
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
-
-        self._nc_anti_mev: bool = True
 
         self._nc_storage_factory: NCStorageFactory | None = None
         self._nc_log_storage: NCLogStorage | None = None
@@ -389,12 +390,8 @@ class Builder:
         return self._nc_storage_factory
 
     def _get_nc_calls_sorter(self) -> NCSorterCallable:
-        if self._nc_anti_mev:
-            from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
-            return random_nc_calls_sorter
-        else:
-            from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
-            return timestamp_nc_calls_sorter
+        from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
+        return random_nc_calls_sorter
 
     def _get_or_create_nc_log_storage(self) -> NCLogStorage:
         if self._nc_log_storage is not None:
@@ -408,18 +405,27 @@ class Builder:
         )
         return self._nc_log_storage
 
+    def _get_or_create_block_executor(self) -> 'NCBlockExecutor':
+        from hathor.nanocontracts.execution import NCBlockExecutor
+        nc_storage_factory = self._get_or_create_nc_storage_factory()
+        return NCBlockExecutor(
+            settings=self._get_or_create_settings(),
+            runner_factory=self._get_or_create_runner_factory(),
+            nc_storage_factory=nc_storage_factory,
+            nc_calls_sorter=self._get_nc_calls_sorter(),
+            feature_service=self._get_or_create_feature_service(),
+        )
+
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
-            nc_calls_sorter = self._get_nc_calls_sorter()
             self._consensus = ConsensusAlgorithm(
                 nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
                 settings=self._get_or_create_settings(),
-                runner_factory=self._get_or_create_runner_factory(),
+                block_executor=self._get_or_create_block_executor(),
                 nc_log_storage=self._get_or_create_nc_log_storage(),
-                nc_calls_sorter=nc_calls_sorter,
                 feature_service=self._get_or_create_feature_service(),
                 tx_storage=self._get_or_create_tx_storage(),
             )
@@ -860,16 +866,6 @@ class Builder:
     def disable_ipv4(self) -> 'Builder':
         self.check_if_can_modify()
         self._disable_ipv4 = True
-        return self
-
-    def enable_nc_anti_mev(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._nc_anti_mev = True
-        return self
-
-    def disable_nc_anti_mev(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._nc_anti_mev = False
         return self
 
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':

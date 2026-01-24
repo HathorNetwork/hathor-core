@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, assert_never
 
 from hathor.nanocontracts import NCFail
-from hathor.nanocontracts.runner import CallInfo
 from hathor.transaction import Transaction
 from hathor.types import VertexId
 
@@ -56,7 +55,12 @@ class NCLogStorage:
         self._path = Path(path).joinpath(NC_EXEC_LOGS_DIR)
         self._config = config
 
-    def save_logs(self, tx: Transaction, call_info: CallInfo, exception_and_tb: tuple[NCFail, str] | None) -> None:
+    def save_logs(
+        self,
+        tx: Transaction,
+        log_entries: list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry],
+        exception_and_tb: tuple[NCFail, str] | None,
+    ) -> None:
         """Persist new NC execution logs."""
         assert tx.is_nano_contract()
         meta = tx.get_metadata()
@@ -85,7 +89,7 @@ class NCLogStorage:
             case _:
                 assert_never(self._config)
 
-        new_entry = NCExecEntry.from_call_info(call_info, tb)
+        new_entry = NCExecEntry(logs=log_entries, error_traceback=tb)
         new_line_dict = {meta.first_block.hex(): new_entry.model_dump()}
         path = self._get_file_path(tx.hash)
 

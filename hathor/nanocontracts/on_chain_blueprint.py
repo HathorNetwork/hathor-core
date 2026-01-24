@@ -185,7 +185,6 @@ class OnChainBlueprint(Transaction):
 
         self.code: Code = code if code is not None else Code(CodeKind.PYTHON_ZLIB, b'', self._settings)
         self._ast_cache: Optional[ast.Module] = None
-        self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
 
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
@@ -241,12 +240,10 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
         """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
-        if self._blueprint_loaded_env is None:
-            blueprint_class, env = self._load_blueprint_code_exec()
-            assert isinstance(blueprint_class, type)
-            assert issubclass(blueprint_class, Blueprint)
-            self._blueprint_loaded_env = blueprint_class, env
-        return self._blueprint_loaded_env
+        blueprint_class, env = self._load_blueprint_code_exec()
+        assert isinstance(blueprint_class, type)
+        assert issubclass(blueprint_class, Blueprint)
+        return blueprint_class, env
 
     def get_blueprint_object_bypass(self) -> object:
         """Loads the code and returns the object exported with @export"""
