@@ -67,7 +67,7 @@ class NcDump(RunNode):
         self.log.info('exporting nc dump', format=self.output_format.value)
         match self.output_format:
             case OutputFormat.JSON:
-                output = nc_dump.json_dumpb(sort_keys=True).decode('utf-8')
+                output = nc_dump.json_dumps(sort_keys=True)
             case OutputFormat.YAML:
                 output = nc_dump.yaml_dumps(sort_keys=True)
             case _:

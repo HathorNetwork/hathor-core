@@ -85,13 +85,17 @@ class BaseModel(PydanticBaseModel):
     """
     model_config = ConfigDict(extra='forbid', frozen=True)
 
-    def json_dumpb(self, *, sort_keys: bool = False) -> bytes:
-        """Utility method for converting a Model into bytes representation of a JSON."""
+    def json_dumps(self, *, sort_keys: bool = False) -> str:
+        """Utility method for converting a Model into a JSON string."""
         if sort_keys:
             import json
             data = self.model_dump(mode='json')
-            return json.dumps(data, sort_keys=True).encode('utf-8')
-        return self.model_dump_json().encode('utf-8')
+            return json.dumps(data, sort_keys=True)
+        return self.model_dump_json()
+
+    def json_dumpb(self, *, sort_keys: bool = False) -> bytes:
+        """Utility method for converting a Model into bytes representation of a JSON."""
+        return self.json_dumps(sort_keys=sort_keys).encode('utf-8')
 
     def yaml_dumps(self, *, sort_keys: bool = False) -> str:
         import yaml
