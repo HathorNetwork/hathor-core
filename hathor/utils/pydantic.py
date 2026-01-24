@@ -88,3 +88,8 @@ class BaseModel(PydanticBaseModel):
     def json_dumpb(self) -> bytes:
         """Utility method for converting a Model into bytes representation of a JSON."""
         return self.model_dump_json().encode('utf-8')
+
+    def yaml_dumps(self) -> str:
+        import yaml
+        data = self.model_dump(mode='json')
+        return yaml.dump(data, default_flow_style=False)
