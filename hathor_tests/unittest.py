@@ -178,6 +178,9 @@ class TestCase(unittest.TestCase):
         if artifacts.rocksdb_storage:
             self._pending_cleanups.append(artifacts.rocksdb_storage.close)
 
+        if builder._subprocess_pool is not None:
+            self._pending_cleanups.append(builder.shutdown_subprocess_pool)
+
         # manager.avg_time_between_blocks = 0.0001  # FIXME: This property is not defined. Fix this.
 
         if start_manager:
