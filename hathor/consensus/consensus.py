@@ -24,7 +24,6 @@ from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.utils import is_fee_active
-from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Transaction
@@ -35,9 +34,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts import NCStorageFactory
-    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
-    from hathor.nanocontracts.runner.runner import RunnerFactory
-    from hathor.nanocontracts.sorter.types import NCSorterCallable
+    from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -74,45 +71,31 @@ class ConsensusAlgorithm:
 
     def __init__(
         self,
-        nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
         pubsub: PubSubManager,
         *,
         settings: 'HathorSettings',
-        runner_factory: 'RunnerFactory',
-        nc_calls_sorter: 'NCSorterCallable',
-        nc_log_storage: 'NCLogStorage',
+        nc_storage_factory: 'NCStorageFactory',
+        block_executor: 'NCBlockExecutor',
+        consensus_block_executor: 'NCConsensusBlockExecutor',
         feature_service: 'FeatureService',
-        nc_exec_fail_trace: bool = False,
     ) -> None:
         self._settings = settings
         self.log = logger.new()
         self._pubsub = pubsub
-        self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
+        self.nc_storage_factory = nc_storage_factory
 
-        # Create NCBlockExecutor (pure) for execution
-        self._block_executor = NCBlockExecutor(
-            settings=settings,
-            runner_factory=runner_factory,
-            nc_storage_factory=nc_storage_factory,
-            nc_calls_sorter=nc_calls_sorter,
-        )
+        # Pure block executor for dry-run and testing purposes
+        self._block_executor = block_executor
 
-        # Create NCConsensusBlockExecutor (with side effects) for consensus
-        self._consensus_block_executor = NCConsensusBlockExecutor(
-            settings=settings,
-            block_executor=self._block_executor,
-            nc_storage_factory=nc_storage_factory,
-            nc_log_storage=nc_log_storage,
-            nc_exec_fail_trace=nc_exec_fail_trace,
-        )
+        # Consensus block executor (with side effects) for consensus
+        self._consensus_block_executor = consensus_block_executor
 
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
             settings, self._consensus_block_executor, feature_service,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
-        self.nc_calls_sorter = nc_calls_sorter
         self.feature_service = feature_service
 
     def create_context(self) -> ConsensusAlgorithmContext:

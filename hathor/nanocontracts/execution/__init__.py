@@ -17,6 +17,11 @@
 from hathor.nanocontracts.execution.block_executor import NCBlockExecutor
 from hathor.nanocontracts.execution.consensus_block_executor import NCConsensusBlockExecutor
 
+# Subprocess-related imports are done lazily to avoid circular imports
+# Users should import directly from the submodules when needed:
+#   from hathor.nanocontracts.execution.subprocess_block_executor import NCSubprocessBlockExecutor
+#   from hathor.nanocontracts.execution.subprocess_pool import NCSubprocessPool
+
 __all__ = [
     'NCBlockExecutor',
     'NCConsensusBlockExecutor',

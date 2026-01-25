@@ -21,6 +21,11 @@ from hathor.nanocontracts.storage.backends import NodeTrieStore
 
 NodeId = NewType('NodeId', bytes)
 
+# The empty root is a constant - it's always sha256(b'') since the root node has key=b'', no content, and no children.
+# This allows us to create the empty root directly without reading from storage, which is necessary for
+# subprocess NC execution where the secondary RocksDB instance may not see the empty root written by the main process.
+EMPTY_ROOT_ID = NodeId(bytes.fromhex('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'))
+
 
 class DictChildren(dict[bytes, NodeId]):
     """Data structure to store children of tree nodes."""
@@ -104,7 +109,10 @@ class PatriciaTrie:
     def __init__(self, store: NodeTrieStore, *, root_id: Optional[NodeId] = None) -> None:
         self._local_changes: dict[NodeId, Node] = {}
         self._db = store
-        if root_id is None:
+        if root_id is None or root_id == EMPTY_ROOT_ID:
+            # Create empty root directly - no storage read needed.
+            # This is critical for subprocess NC execution where the secondary RocksDB
+            # instance may not see the empty root written by the main process.
             self.root: Node = Node(key=b'', length=0)
             self.root.update_id()
             self._db[self.root.id] = self.root
