@@ -175,6 +175,8 @@ class RunNode:
         parser.add_argument('--nc-exec-logs', default=NCLogConfig.NONE, choices=possible_nc_exec_logs,
                             help=f'Enable saving Nano Contracts execution logs. One of {possible_nc_exec_logs}')
         parser.add_argument('--nc-exec-fail-trace', action='store_true', help=SUPPRESS)
+        parser.add_argument('--nc-sandbox-api-config-file', type=str, default=None,
+                            help='Path to YAML config file for API sandbox settings (runtime-reloadable)')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
@@ -235,7 +237,7 @@ class RunNode:
                 self.manager,
                 self._args,
                 builder.event_ws_factory,
-                builder.feature_service
+                builder.feature_service,
             )
             status_server = resources_builder.build()
             if self._args.status:
@@ -266,6 +268,7 @@ class RunNode:
             stratum_factory=self.manager.stratum_factory,
             feature_service=self.manager.vertex_handler._feature_service,
             bit_signaling_service=self.manager._bit_signaling_service,
+            sandbox_api_config_loader=builder.sandbox_api_config_loader,
         )
 
     def start_sentry_if_possible(self) -> None:

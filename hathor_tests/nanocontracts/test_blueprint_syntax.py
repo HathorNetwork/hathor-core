@@ -341,8 +341,6 @@ class TestBlueprintSyntax(BlueprintTestCase):
                 def initialize(self, ctx: Context, a) -> None:  # type: ignore
                     pass
 
-    # TODO
-    @pytest.mark.skip(reason='code commented on nanocontracts/types.py')
     def test_public_invalid_arg_type(self) -> None:
         msg = 'unsupported type `float` on argument `a` of method `initialize`'
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
@@ -359,8 +357,6 @@ class TestBlueprintSyntax(BlueprintTestCase):
                 def initialize(self, ctx: Context):  # type: ignore
                     pass
 
-    # TODO
-    @pytest.mark.skip(reason='code commented on nanocontracts/types.py')
     def test_public_invalid_return_type(self) -> None:
         msg = 'unsupported return type `float` on method `initialize`'
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
@@ -381,8 +377,6 @@ class TestBlueprintSyntax(BlueprintTestCase):
                 def nop(self, a) -> None:  # type: ignore
                     pass
 
-    # TODO
-    @pytest.mark.skip(reason='code commented on nanocontracts/types.py')
     def test_view_invalid_arg_type(self) -> None:
         msg = 'unsupported type `float` on argument `a` of method `nop`'
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
@@ -407,8 +401,6 @@ class TestBlueprintSyntax(BlueprintTestCase):
                 def nop(self):
                     pass
 
-    # TODO
-    @pytest.mark.skip(reason='code commented on nanocontracts/types.py')
     def test_view_invalid_return_type(self) -> None:
         msg = 'unsupported return type `float` on method `nop`'
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
@@ -505,10 +497,8 @@ class TestBlueprintSyntax(BlueprintTestCase):
                 def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs):  # type: ignore
                     pass
 
-    # TODO
-    @pytest.mark.skip(reason='code commented on nanocontracts/types.py')
     def test_fallback_invalid_return_type(self) -> None:
-        msg = 'unsupported return type `float` on method `nop`'
+        msg = 'unsupported return type `float` on method `fallback`'
         with pytest.raises(BlueprintSyntaxError, match=re.escape(msg)):
             class MyBlueprint(Blueprint):
                 @public

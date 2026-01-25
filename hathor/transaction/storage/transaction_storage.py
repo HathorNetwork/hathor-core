@@ -58,6 +58,8 @@ if TYPE_CHECKING:
     from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.metered_exec import MeteredExecutor
+    from hathor.nanocontracts.sandbox import SandboxCounts
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
     from hathor.nanocontracts.types import BlueprintId, ContractId
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -1048,17 +1050,43 @@ class TransactionStorage(ABC):
             assert module is not None
             return inspect.getsource(module)
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
-        """Returns the blueprint class associated with the given blueprint_id.
+    def get_blueprint_class(
+        self,
+        blueprint_id: BlueprintId,
+        skip_loading_cost: bool = False,
+        executor: 'MeteredExecutor | None' = None,
+    ) -> tuple[type['Blueprint'], 'SandboxCounts | None']:
+        """Returns the blueprint class and loading cost associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+
+        Args:
+            blueprint_id: The blueprint ID to look up.
+            skip_loading_cost: If True, skip applying cached loading costs for on-chain
+                              blueprints. Used to deduplicate loading costs when the same
+                              blueprint is accessed multiple times in a single call chain.
+            executor: A MeteredExecutor to use for loading on-chain blueprints. If None,
+                     a disabled executor is created (no sandbox protection).
+
+        Returns:
+            A tuple of (blueprint_class, loading_cost).
+            - For on-chain blueprints: loading_cost is the SandboxCounts of costs charged (or None if skipped)
+            - For catalog blueprints: loading_cost is always None
         """
         from hathor.nanocontracts import OnChainBlueprint
         blueprint = self._get_blueprint(blueprint_id)
         if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
+            blueprint_class = blueprint.get_blueprint_class(
+                executor=executor,
+                skip_loading_cost=skip_loading_cost,
+            )
+            # Return loading cost only if it was actually charged
+            loading_cost: SandboxCounts | None = None
+            if not skip_loading_cost:
+                loading_cost = blueprint.loading_costs
+            return blueprint_class, loading_cost
         else:
-            return blueprint
+            return blueprint, None
 
     def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
         """Return an on-chain blueprint transaction."""
