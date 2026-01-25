@@ -137,9 +137,6 @@ class Runner:
         self._settings = settings
         self.reactor = reactor
 
-        # For tracking fuel and memory usage
-        self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
-        self._memory_limit = self._settings.NC_MEMORY_LIMIT_TO_CALL_METHOD
         self._metered_executor: MeteredExecutor | None = None
 
         # Flag indicating to keep record of all calls.
@@ -291,7 +288,7 @@ class Runner:
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+        self._metered_executor = MeteredExecutor()
 
         blueprint_id = self.get_blueprint_id(contract_id)
 
@@ -672,7 +669,11 @@ class Runner:
         # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
         # impact the original context. Since the runner relies on the context for other critical checks, any
         # unauthorized modification would pose a serious security risk.
-        ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
+        #
+        # Only reset sandbox counters for top-level calls (depth == 1).
+        # Nested calls (cross-contract) should accumulate statement counts.
+        is_top_level_call = self._call_info.depth == 1
+        ret = self._metered_executor.call(method, args=(ctx.copy(), *args), reset_counters=is_top_level_call)
 
         # All calls must end with non-negative balances.
         call_record.changes_tracker.validate_balances_are_positive()
@@ -791,7 +792,7 @@ class Runner:
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
         if self._metered_executor is None:
-            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+            self._metered_executor = MeteredExecutor()
 
         changes_tracker = self._create_changes_tracker(contract_id)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
@@ -818,7 +819,10 @@ class Runner:
         )
         self._call_info.pre_call(call_record)
 
-        ret = self._metered_executor.call(method, args=args)
+        # Only reset sandbox counters for top-level calls (depth == 1).
+        # Nested calls (cross-contract) should accumulate statement counts.
+        is_top_level_call = self._call_info.depth == 1
+        ret = self._metered_executor.call(method, args=args, reset_counters=is_top_level_call)
 
         if not changes_tracker.is_empty():
             raise NCViewMethodError('view methods cannot change the state')
