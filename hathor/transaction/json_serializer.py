@@ -134,7 +134,7 @@ class VertexJsonSerializer:
             blueprint_id = nano_header.get_blueprint_id_for_json()
 
         try:
-            blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class, _ = self.tx_storage.get_blueprint_class(blueprint_id)
         except NCFail:
             return None
 

@@ -20,9 +20,6 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
-from hathor.transaction.storage.rocksdb_storage import CacheConfig
-from hathor_cli.run_node_args import RunNodeArgs
-from hathor_cli.side_dag import SideDagArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -36,6 +33,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
+from hathor.nanocontracts.sandbox import MeteredExecutorFactory, SandboxAPIConfigLoader
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -43,14 +41,17 @@ from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
+from hathor.transaction.json_serializer import VertexJsonSerializer
+from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
-from hathor.transaction.json_serializer import VertexJsonSerializer
 from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor_cli.run_node_args import RunNodeArgs
+from hathor_cli.side_dag import SideDagArgs
 
 logger = get_logger()
 
@@ -65,6 +66,7 @@ class CliBuilder:
     def __init__(self, args: RunNodeArgs) -> None:
         self.log = logger.new()
         self._args = args
+        self.sandbox_api_config_loader: SandboxAPIConfigLoader | None = None
 
     def check_or_raise(self, condition: bool, message: str) -> None:
         """Will exit printing `message` if `condition` is False."""
@@ -231,11 +233,27 @@ class CliBuilder:
         nc_calls_sorter = random_nc_calls_sorter
 
         assert self.nc_storage_factory is not None
+
+        # Create SandboxAPIConfigLoader if nano contracts are enabled
+        if settings.ENABLE_NANO_CONTRACTS:
+            self.sandbox_api_config_loader = SandboxAPIConfigLoader(
+                default_config=settings.NC_SANDBOX_CONFIG_API,
+                config_file=self._args.nc_sandbox_api_config_file,
+            )
+
+        # Create executor factory with settings-based configs
+        executor_factory = MeteredExecutorFactory(
+            loading_config=settings.NC_SANDBOX_CONFIG_LOADING,
+            execution_config=settings.NC_SANDBOX_CONFIG_EXECUTION,
+            api_config_loader=self.sandbox_api_config_loader,
+        )
+
         runner_factory = RunnerFactory(
             reactor=reactor,
             settings=settings,
             tx_storage=tx_storage,
             nc_storage_factory=self.nc_storage_factory,
+            executor_factory=executor_factory,
         )
 
         nc_log_storage = NCLogStorage(

@@ -8,6 +8,7 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG, SandboxConfig
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
 from hathor.nanocontracts.vertex_data import BlockData, VertexData
 from hathor.transaction import Transaction, Vertex
@@ -33,6 +34,12 @@ class BlueprintTestCase(unittest.TestCase):
         self.now = int(self.reactor.seconds())
 
         self._token_index = 1
+
+    def tearDown(self):
+        import sys
+        if hasattr(sys, 'sandbox'):
+            sys.sandbox.reset()  # This correctly restores all defaults
+        super().tearDown()
 
     def build_manager(self) -> HathorManager:
         """Create a HathorManager instance."""
@@ -66,7 +73,7 @@ class BlueprintTestCase(unittest.TestCase):
         nc_logger = NCLogger(__reactor__=runner.reactor, __nc_id__=contract_id)
         env = BlueprintEnvironment(runner, nc_logger, contract_storage, disable_cache=True)
         blueprint_id = runner.get_blueprint_id(contract_id)
-        blueprint_class = runner.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class, _ = runner.tx_storage.get_blueprint_class(blueprint_id)
         contract = blueprint_class(env)
         return contract
 
@@ -121,12 +128,13 @@ class BlueprintTestCase(unittest.TestCase):
 
         return self._register_blueprint_class(blueprint_class, blueprint_id)
 
-    def build_runner(self) -> TestRunner:
+    def build_runner(self, sandbox_config: SandboxConfig = DISABLED_CONFIG) -> TestRunner:
         """Create a Runner instance."""
         return TestRunner(
             tx_storage=self.manager.tx_storage,
             settings=self._settings,
             reactor=self.reactor,
+            sandbox_config=sandbox_config,
         )
 
     def gen_random_token_uid(self) -> TokenUid:

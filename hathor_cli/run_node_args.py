@@ -95,3 +95,4 @@ class RunNodeArgs(BaseModel):
     nc_indexes: bool
     nc_exec_logs: NCLogConfig
     nc_exec_fail_trace: bool
+    nc_sandbox_api_config_file: Optional[str]

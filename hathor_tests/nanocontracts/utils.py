@@ -6,6 +6,7 @@ from hathor.nanocontracts import Blueprint, NCRocksDBStorageFactory
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
 from hathor.nanocontracts.runner import Runner
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG, MeteredExecutorFactory, SandboxConfig
 from hathor.nanocontracts.storage import NCBlockStorage
 from hathor.nanocontracts.storage.backends import RocksDBNodeTrieStore
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
@@ -29,6 +30,7 @@ class TestRunner(Runner):
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
+        sandbox_config: SandboxConfig = DISABLED_CONFIG,
     ) -> None:
         if seed is None:
             seed = b'x' * 32
@@ -37,6 +39,8 @@ class TestRunner(Runner):
         store = RocksDBNodeTrieStore(tx_storage._rocksdb_storage)
         block_trie = PatriciaTrie(store)
         block_storage = NCBlockStorage(block_trie)
+        # Create a test factory from the provided sandbox_config for compatibility
+        executor_factory = MeteredExecutorFactory(execution_config=sandbox_config)
         super().__init__(
             tx_storage=tx_storage,
             storage_factory=storage_factory,
@@ -44,6 +48,7 @@ class TestRunner(Runner):
             settings=settings,
             reactor=reactor,
             seed=seed,
+            executor_factory=executor_factory,
         )
 
 

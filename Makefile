@@ -7,7 +7,8 @@ all: check tests
 
 tests_cli = hathor_tests/cli/
 tests_nano = hathor_tests/nanocontracts/ hathor_tests/tx/test_indexes_nc_history.py hathor_tests/resources/nanocontracts/
-tests_lib = $(filter-out ${tests_cli} hathor_tests/__pycache__/, $(dir $(wildcard hathor_tests/*/.)))
+tests_sandbox = hathor_tests/sandbox/
+tests_lib = $(filter-out ${tests_cli} ${tests_sandbox} hathor_tests/__pycache__/, $(dir $(wildcard hathor_tests/*/.)))
 tests_ci = extras/github/
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=xml --cov=hathor
@@ -28,6 +29,10 @@ pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov-report=x
 .PHONY: tests-nano
 tests-nano:
 	pytest --durations=10 --cov-report=html --cov=hathor/nanocontracts/ --cov-config=.coveragerc_full -p no:warnings $(tests_nano)
+
+.PHONY: tests-sandbox
+tests-sandbox:
+	HATHOR_TEST_CONFIG_YAML='./hathor/conf/unittests_sandbox.yml' pytest --durations=10 -p no:warnings $(tests_sandbox)
 
 .PHONY: tests-cli
 tests-cli:
@@ -60,7 +65,7 @@ tests-custom:
 	bash ./extras/custom_tests.sh
 
 .PHONY: tests
-tests: tests-cli tests-lib tests-genesis tests-custom tests-ci
+tests: tests-cli tests-lib tests-genesis tests-custom tests-ci tests-sandbox
 
 .PHONY: tests-full
 tests-full:

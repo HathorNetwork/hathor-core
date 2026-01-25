@@ -21,6 +21,8 @@ from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathorlib.conf.settings import HathorSettings as LibSettings
 
+from hathor.nanocontracts.sandbox import SandboxConfig
+
 DECIMAL_PLACES = 2
 
 GENESIS_TOKEN_UNITS = 1 * (10 ** 9)  # 1B
@@ -76,3 +78,76 @@ class HathorSettings(LibSettings):
                 self.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
             raise ValueError('PoA networks do not support block rewards')
         return self
+
+    # Sandbox configuration for blueprint loading (consensus-critical).
+    # When enabled=False, sandbox protection is disabled during blueprint loading.
+    # When enabled=True, requires sandbox-enabled Python.
+    # In YAML, use "default" to enable sandbox with DEFAULT_CONFIG_LOADING (uses max_operations=100K for loading).
+    NC_SANDBOX_CONFIG_LOADING: SandboxConfig = SandboxConfig(enabled=False)
+
+    @field_validator('NC_SANDBOX_CONFIG_LOADING', mode='before')
+    @classmethod
+    def _parse_sandbox_config_loading(cls, value: Union[str, SandboxConfig, None]) -> SandboxConfig:
+        """Parse sandbox config for loading from YAML. Accepts 'default' string, SandboxConfig, or None."""
+        from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_LOADING, DISABLED_CONFIG
+
+        if value is None:
+            return DISABLED_CONFIG
+        if isinstance(value, SandboxConfig):
+            return value
+        if isinstance(value, str):
+            if value == 'default':
+                return DEFAULT_CONFIG_LOADING
+            raise ValueError(f"NC_SANDBOX_CONFIG_LOADING must be 'default' or null, got: {value!r}")
+        raise TypeError(
+            f"NC_SANDBOX_CONFIG_LOADING must be 'default', SandboxConfig, or null, got: {type(value).__name__}"
+        )
+
+    # Sandbox configuration for method execution (consensus-critical).
+    # When enabled=False, sandbox protection is disabled during method execution.
+    # When enabled=True, requires sandbox-enabled Python.
+    # In YAML, use "default" to enable sandbox with DEFAULT_CONFIG_EXECUTION (uses max_operations=1M for execution).
+    NC_SANDBOX_CONFIG_EXECUTION: SandboxConfig = SandboxConfig(enabled=False)
+
+    @field_validator('NC_SANDBOX_CONFIG_EXECUTION', mode='before')
+    @classmethod
+    def _parse_sandbox_config_execution(cls, value: Union[str, SandboxConfig, None]) -> SandboxConfig:
+        """Parse sandbox config for execution from YAML. Accepts 'default' string, SandboxConfig, or None."""
+        from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_EXECUTION, DISABLED_CONFIG
+
+        if value is None:
+            return DISABLED_CONFIG
+        if isinstance(value, SandboxConfig):
+            return value
+        if isinstance(value, str):
+            if value == 'default':
+                return DEFAULT_CONFIG_EXECUTION
+            raise ValueError(f"NC_SANDBOX_CONFIG_EXECUTION must be 'default' or null, got: {value!r}")
+        raise TypeError(
+            f"NC_SANDBOX_CONFIG_EXECUTION must be 'default', SandboxConfig, or null, got: {type(value).__name__}"
+        )
+
+    # Sandbox configuration for API view method calls (local, not consensus-critical).
+    # When enabled=False, sandbox protection is disabled during API calls.
+    # When enabled=True, requires sandbox-enabled Python.
+    # In YAML, use "default" to enable sandbox with DEFAULT_CONFIG_API (uses max_operations=10M for API views).
+    # Runtime config file override can be specified via CLI --nc-sandbox-api-config-file argument.
+    NC_SANDBOX_CONFIG_API: SandboxConfig | None = None
+
+    @field_validator('NC_SANDBOX_CONFIG_API', mode='before')
+    @classmethod
+    def _parse_sandbox_config_api(cls, value: Union[str, SandboxConfig, None]) -> SandboxConfig | None:
+        """Parse sandbox config for API views from YAML. Accepts 'default' string, SandboxConfig, or None."""
+        from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_API
+
+        if value is None:
+            return None
+        if isinstance(value, SandboxConfig):
+            return value
+        if isinstance(value, str):
+            if value == 'default':
+                return DEFAULT_CONFIG_API
+            raise ValueError(f"NC_SANDBOX_CONFIG_API must be 'default' or null, got: {value!r}")
+        raise TypeError(
+            f"NC_SANDBOX_CONFIG_API must be 'default', SandboxConfig, or null, got: {type(value).__name__}"
+        )

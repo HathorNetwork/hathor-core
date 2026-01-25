@@ -111,7 +111,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         assert nc.is_nano_contract()
         nano_header = nc.get_nano_header()
         blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-        blueprint_class = nc.storage.get_blueprint_class(blueprint_id)
+        blueprint_class, _ = nc.storage.get_blueprint_class(blueprint_id)
         return dict(
             nano_contract_id=nc.hash_hex,
             blueprint_id=blueprint_id.hex(),

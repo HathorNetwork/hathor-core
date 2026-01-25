@@ -20,6 +20,7 @@ from hathor.sysctl import (
     Sysctl,
     WebsocketManagerSysctl,
 )
+from hathor.sysctl.nanocontracts import SandboxAPISysctl
 from hathor.sysctl.storage import StorageSysctl
 
 
@@ -43,5 +44,11 @@ class SysctlBuilder:
         ws_factory = self.artifacts.manager.websocket_factory
         if ws_factory is not None:
             root.put_child('ws', WebsocketManagerSysctl(ws_factory))
+
+        # Add nano contracts sandbox API sysctl if nano contracts are enabled and loader exists
+        if self.artifacts.settings.ENABLE_NANO_CONTRACTS:
+            loader = self.artifacts.sandbox_api_config_loader
+            if loader is not None:
+                root.put_child('nc_sandbox_api', SandboxAPISysctl(loader))
 
         return root

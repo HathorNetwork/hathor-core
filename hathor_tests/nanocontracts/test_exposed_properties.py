@@ -4,8 +4,8 @@ from types import MethodType
 from typing import Any
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+from hathor.nanocontracts.sandbox import ALLOWED_IMPORTS
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 MAX_DEPTH = 20
