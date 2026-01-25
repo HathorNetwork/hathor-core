@@ -409,17 +409,17 @@ if foo:
 
         assert ocb1.get_blueprint_class().__name__ == 'Bet'
         assert nc1.get_nano_header().nc_id == ocb1.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb1.hash)
+        blueprint_class, _ = self.manager.tx_storage.get_blueprint_class(ocb1.hash)
         assert blueprint_class.__name__ == 'Bet'
 
         assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
         assert nc2.get_nano_header().nc_id == ocb2.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb2.hash)
+        blueprint_class, _ = self.manager.tx_storage.get_blueprint_class(ocb2.hash)
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
         assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
         assert nc3.get_nano_header().nc_id == ocb3.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
+        blueprint_class, _ = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
         assert blueprint_class.__name__ == 'MyBlueprint'
 
     def test_fee_based_token(self) -> None:

@@ -57,7 +57,7 @@ class TestRestrictedOCB(unittest.TestCase):
 
         assert ocb.get_blueprint_class().__name__ == 'TestBlueprint1'
         assert nc.get_nano_header().nc_id == ocb.hash
-        blueprint_class = manager.tx_storage.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
+        blueprint_class, _ = manager.tx_storage.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
     def test_ocb_address_not_allowed(self) -> None:
@@ -119,7 +119,7 @@ class TestRestrictedOCB(unittest.TestCase):
 
         assert ocb.get_blueprint_class().__name__ == 'TestBlueprint1'
         assert nc.get_nano_header().nc_id == ocb.hash
-        blueprint_class = manager.tx_storage.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
+        blueprint_class, _ = manager.tx_storage.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
     def test_ocb_invalid_pubkey(self) -> None:

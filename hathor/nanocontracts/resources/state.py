@@ -121,8 +121,10 @@ class NanoContractStateResource(Resource):
         else:
             block = self.manager.tx_storage.get_best_block()
 
+        # Create runner with API sandbox config
+        runner = self.manager.get_nc_runner_for_api(block)
+
         try:
-            runner = self.manager.get_nc_runner(block)
             nc_storage = runner.get_storage(nc_id_bytes)
         except NanoContractDoesNotExist:
             # Nano contract does not exist at this block
@@ -134,7 +136,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class, _ = self.manager.tx_storage.get_blueprint_class(blueprint_id)
 
         value: Any
         # Get balances.
