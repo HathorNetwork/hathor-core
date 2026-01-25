@@ -235,7 +235,7 @@ class RunNode:
                 self.manager,
                 self._args,
                 builder.event_ws_factory,
-                builder.feature_service
+                builder.feature_service,
             )
             status_server = resources_builder.build()
             if self._args.status:
@@ -266,6 +266,7 @@ class RunNode:
             stratum_factory=self.manager.stratum_factory,
             feature_service=self.manager.vertex_handler._feature_service,
             bit_signaling_service=self.manager._bit_signaling_service,
+            sandbox_api_config_loader=builder.sandbox_api_config_loader,
         )
 
     def start_sentry_if_possible(self) -> None:

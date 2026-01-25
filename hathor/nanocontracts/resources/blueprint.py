@@ -92,7 +92,7 @@ class BlueprintInfoResource(Resource):
             return error_response.json_dumpb()
 
         try:
-            blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class, _ = self.manager.tx_storage.get_blueprint_class(blueprint_id)
         except BlueprintDoesNotExist:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')

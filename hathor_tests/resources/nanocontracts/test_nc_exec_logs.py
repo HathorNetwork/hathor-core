@@ -134,6 +134,7 @@ class NCExecLogsResourceTest(BaseNCExecLogs):
                                 type='CALL_END',
                                 level='DEBUG',
                                 timestamp=ANY,
+                                sandbox_counters=ANY,
                             )
                         ],
                     ),
@@ -170,6 +171,7 @@ class NCExecLogsResourceTest(BaseNCExecLogs):
                 type='CALL_END',
                 level='DEBUG',
                 timestamp=ANY,
+                sandbox_counters=ANY,
             )
         ]
 

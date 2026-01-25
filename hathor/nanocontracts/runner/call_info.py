@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCNumberOfCallsExceeded, NCRecursionError
 from hathor.nanocontracts.runner.index_records import NCIndexUpdateRecord
+from hathor.nanocontracts.sandbox import SandboxCounters, SandboxCounts
 from hathor.nanocontracts.storage import NCChangesTracker, NCContractStorage
 from hathor.nanocontracts.types import BlueprintId, ContractId
 
@@ -64,6 +65,15 @@ class CallRecord:
 
     # A list of actions or syscalls that affect indexes. None when it's a VIEW call.
     index_updates: list[NCIndexUpdateRecord] | None
+
+    # Sandbox counters captured before/after this call. None when sandbox is not active.
+    # This is a mutable container that gets populated during call execution.
+    sandbox_counters: SandboxCounters | None = None
+
+    # OCB loading cost charged for this call. None means no loading cost was charged
+    # (either sandbox not active, or blueprint was already loaded in this call chain).
+    # This is set when the blueprint is loaded for this call.
+    ocb_loading_cost: SandboxCounts | None = None
 
 
 @dataclass(slots=True, kw_only=True)
@@ -132,4 +142,4 @@ class CallInfo:
             assert call_record.changes_tracker == change_trackers.pop()
         else:
             assert type(call_record.changes_tracker.storage) is NCContractStorage
-        self.nc_logger.__log_call_end__()
+        self.nc_logger.__log_call_end__(call_record)

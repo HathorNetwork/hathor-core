@@ -33,9 +33,9 @@ from typing import (
 
 from typing_extensions import Self, TypeVarTuple
 
-from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
 from hathor.nanocontracts.faux_immutable import FauxImmutable
+from hathor.nanocontracts.sandbox import ALLOWED_IMPORTS
 from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME
 
 T = TypeVar('T')

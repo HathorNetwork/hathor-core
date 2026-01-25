@@ -72,6 +72,7 @@ from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory
 
+
 logger = get_logger()
 
 
@@ -407,12 +408,29 @@ class HathorManager:
             self.profiler.dump_stats(save_to)
 
     def get_nc_runner(self, block: Block) -> Runner:
-        """Return a contract runner for a given block."""
+        """Return a contract runner for a given block.
+
+        Uses the execution sandbox config (consensus-critical).
+
+        Args:
+            block: The block to create a runner for.
+        """
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = nc_storage_factory.get_block_storage_from_block(block)
-        return self.runner_factory.create(
-            block_storage=block_storage,
-        )
+        return self.runner_factory.create(block_storage=block_storage)
+
+    def get_nc_runner_for_api(self, block: Block) -> Runner:
+        """Return a contract runner for API views at a given block.
+
+        Uses the API sandbox config (local, not consensus-critical).
+        The runner is optimized for view method calls with no RNG seed.
+
+        Args:
+            block: The block to create a runner for.
+        """
+        nc_storage_factory = self.consensus_algorithm.nc_storage_factory
+        block_storage = nc_storage_factory.get_block_storage_from_block(block)
+        return self.runner_factory.create_for_api(block_storage=block_storage)
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""
