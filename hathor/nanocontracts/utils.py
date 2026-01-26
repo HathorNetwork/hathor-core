@@ -188,7 +188,7 @@ def json_dumps(
     def dump_bytes(data: Any) -> str:
         if isinstance(data, bytes):
             return data.hex()
-        raise TypeError
+        raise TypeError(f'Object of type {type(data).__name__} is not JSON serializable')
 
     return json.dumps(
         obj,

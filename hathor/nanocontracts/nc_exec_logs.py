@@ -233,7 +233,8 @@ class NCLogger:
 
     def __emit_event__(self, data: bytes) -> None:
         """Emit a custom event from a Nano Contract."""
-        assert isinstance(data, bytes)
+        if not isinstance(data, bytes):
+            raise NCFail(f'event data must be of type `bytes`, found `{type(data).__name__}`')
         if len(data) > MAX_EVENT_SIZE:
             raise NCFail(f'event data cannot be larger than {MAX_EVENT_SIZE} bytes, is {len(data)}')
         self.__events__.append(NCEvent(nc_id=self.__nc_id__, data=data))
