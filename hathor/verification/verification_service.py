@@ -261,7 +261,7 @@ class VerificationService:
             return
         self.verify_without_storage(tx, params)
         self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
-        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
+        self.verifiers.tx.verify_inputs(tx, params)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
         block_storage = self._get_block_storage(params)
@@ -320,7 +320,7 @@ class VerificationService:
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
-            self._verify_without_storage_nano_header(vertex)
+            self._verify_without_storage_nano_header(vertex, params)
 
     def _verify_without_storage_base_block(self, block: Block, params: VerificationParams) -> None:
         self.verifiers.block.verify_no_inputs(block)
@@ -359,9 +359,9 @@ class VerificationService:
     ) -> None:
         self._verify_without_storage_tx(tx, params)
 
-    def _verify_without_storage_nano_header(self, tx: BaseTransaction) -> None:
+    def _verify_without_storage_nano_header(self, tx: BaseTransaction, params: VerificationParams) -> None:
         assert tx.is_nano_contract()
-        self.verifiers.nano_header.verify_nc_signature(tx)
+        self.verifiers.nano_header.verify_nc_signature(tx, params)
         self.verifiers.nano_header.verify_actions(tx)
 
     def _verify_without_storage_fee_header(self, tx: BaseTransaction) -> None:

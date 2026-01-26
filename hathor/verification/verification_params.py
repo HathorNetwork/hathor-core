@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from hathor.feature_activation.utils import Features
 from hathor.transaction import Block
+from hathor.transaction.scripts.opcode import OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -48,7 +49,8 @@ class VerificationParams:
             features = Features(
                 count_checkdatasig_op=True,
                 nanocontracts=True,
-                fee_tokens=False
+                fee_tokens=False,
+                opcodes_version=OpcodesVersion.V2,
             )
 
         return cls(

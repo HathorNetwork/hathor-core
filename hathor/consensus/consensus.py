@@ -24,12 +24,14 @@ from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.feature import Feature
+from hathor.nanocontracts.exception import NCInvalidSignature
 from hathor.nanocontracts.execution import NCBlockExecutor
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.transaction import BaseTransaction, Block, Transaction
-from hathor.transaction.exceptions import RewardLocked
+from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooManySigOps
 from hathor.util import not_none
+from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -431,6 +433,9 @@ class ConsensusAlgorithm:
                 case Feature.COUNT_CHECKDATASIG_OP:
                     if not self._checkdatasig_count_rule(tx):
                         return False
+                case Feature.OPCODES_V2:
+                    if not self._opcodes_v2_activation_rule(tx, new_best_block):
+                        return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.NOP_FEATURE_1
@@ -491,8 +496,41 @@ class ConsensusAlgorithm:
         # a fail and the tx will be removed from the mempool.
         try:
             VertexVerifier._verify_sigops_output(settings=self._settings, vertex=tx, enable_checkdatasig_count=True)
-        except Exception:
+        except Exception as e:
+            if not isinstance(e, TooManySigOps):
+                self.log.exception('unexpected exception in mempool-reverification')
             return False
+        return True
+
+    def _opcodes_v2_activation_rule(self, tx: Transaction, new_best_block: Block) -> bool:
+        """Check whether a tx became invalid because of the opcodes V2 feature."""
+        from hathor.verification.nano_header_verifier import NanoHeaderVerifier
+        from hathor.verification.transaction_verifier import TransactionVerifier
+
+        # We check all txs regardless of the feature state, because this rule
+        # already prohibited mempool txs before the block feature activation.
+
+        params = VerificationParams.default_for_mempool(best_block=new_best_block)
+
+        # Any exception in the inputs verification will be considered
+        # a fail and the tx will be removed from the mempool.
+        try:
+            TransactionVerifier._verify_inputs(self._settings, tx, params, skip_script=False)
+        except Exception as e:
+            if not isinstance(e, InvalidInputData):
+                self.log.exception('unexpected exception in mempool-reverification')
+            return False
+
+        # Any exception in the nc_signature verification will be considered
+        # a fail and the tx will be removed from the mempool.
+        if tx.is_nano_contract():
+            try:
+                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, params)
+            except Exception as e:
+                if not isinstance(e, NCInvalidSignature):
+                    self.log.exception('unexpected exception in mempool-reverification')
+                return False
+
         return True
 
 

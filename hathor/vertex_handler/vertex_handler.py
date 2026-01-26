@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import dataclasses
 import datetime
 from dataclasses import replace
 from typing import Any, Generator
@@ -30,6 +31,7 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.verification.verification_params import VerificationParams
@@ -118,13 +120,14 @@ class VertexHandler:
     def on_new_mempool_transaction(self, tx: Transaction) -> bool:
         """Called by mempool sync."""
         best_block = self._tx_storage.get_best_block()
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self._feature_service,
+            vertex=best_block,
+        )
         params = VerificationParams.default_for_mempool(
             best_block=best_block,
-            features=Features.from_vertex(
-                settings=self._settings,
-                feature_service=self._feature_service,
-                vertex=best_block,
-            ),
+            features=dataclasses.replace(features, opcodes_version=OpcodesVersion.V2),
         )
         return self._old_on_new_vertex(tx, params)
 
@@ -142,14 +145,15 @@ class VertexHandler:
         if best_block_meta.nc_block_root_id is None:
             assert best_block.is_genesis
 
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self._feature_service,
+            vertex=best_block,
+        )
         params = VerificationParams(
             reject_locked_reward=reject_locked_reward,
             nc_block_root_id=best_block_meta.nc_block_root_id,
-            features=Features.from_vertex(
-                settings=self._settings,
-                feature_service=self._feature_service,
-                vertex=best_block,
-            ),
+            features=dataclasses.replace(features, opcodes_version=OpcodesVersion.V2),
         )
         return self._old_on_new_vertex(vertex, params, quiet=quiet)
 

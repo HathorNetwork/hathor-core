@@ -29,6 +29,7 @@ from hathor.nanocontracts.types import NCActionType, TokenUid
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers.nano_header import NanoHeaderAction
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
 from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
 from hathor.verification.verification_params import VerificationParams
@@ -124,6 +125,7 @@ class TestActions(unittest.TestCase):
                 count_checkdatasig_op=False,
                 nanocontracts=True,
                 fee_tokens=False,
+                opcodes_version=OpcodesVersion.V1,
             )
         )
 
