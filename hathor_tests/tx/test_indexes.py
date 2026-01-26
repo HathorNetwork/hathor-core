@@ -362,7 +362,7 @@ class BaseIndexesTest(unittest.TestCase):
         txs = []
         values = list(range(1, 301))
         for value in values:
-            txs.append(add_new_tx(self.manager, address, value, advance_clock=1))
+            txs.append(add_new_tx(self.manager, address, value))
         assert len(txs) == len(values)
         txs_and_values = list(zip(txs, values))
 

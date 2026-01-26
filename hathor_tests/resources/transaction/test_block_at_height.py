@@ -20,14 +20,14 @@ class BlockAtHeightTest(_BaseResourceTest._ResourceTest):
 
         confirmed_tx_list = []
         for _ in range(15):
-            confirmed_tx_list.append(add_new_tx(self.manager, address, 1, advance_clock=1))
+            confirmed_tx_list.append(add_new_tx(self.manager, address, 1))
 
         block = add_new_block(self.manager, advance_clock=1)
         height = block.get_height()
 
         # non-confirmed transactions
         for _ in range(15):
-            add_new_tx(self.manager, address, 1, advance_clock=1)
+            add_new_tx(self.manager, address, 1)
 
         response = yield self.web.get("block_at_height", {
             b'height': str(height).encode('ascii'),
@@ -48,14 +48,14 @@ class BlockAtHeightTest(_BaseResourceTest._ResourceTest):
 
         confirmed_tx_list = []
         for _ in range(15):
-            confirmed_tx_list.append(add_new_tx(self.manager, address, 1, advance_clock=1))
+            confirmed_tx_list.append(add_new_tx(self.manager, address, 1))
 
         block = add_new_block(self.manager, advance_clock=1)
         height = block.get_height()
 
         # non-confirmed transactions
         for _ in range(15):
-            add_new_tx(self.manager, address, 1, advance_clock=1)
+            add_new_tx(self.manager, address, 1)
 
         response = yield self.web.get("block_at_height", {
             b'height': str(height).encode('ascii'),

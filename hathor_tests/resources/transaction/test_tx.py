@@ -292,9 +292,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         # Add some blocks and txs and get them in timestamp order
         blocks = add_new_blocks(self.manager, 4, advance_clock=1)
         _blocks = add_blocks_unlock_reward(self.manager)
-        txs = sorted(
-            add_new_transactions(self.manager, 25, advance_clock=1), key=lambda x: (x.timestamp, x.hash)
-        )
+        txs = sorted(add_new_transactions(self.manager, 25), key=lambda x: (x.timestamp, x.hash))
 
         blocks.extend(_blocks)
         blocks = sorted(blocks, key=lambda x: (x.timestamp, x.hash))
@@ -486,7 +484,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         # Add some blocks and txs and get them in timestamp order
         blocks = add_new_blocks(self.manager, 4, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
-        add_new_transactions(self.manager, 25, advance_clock=1)
+        add_new_transactions(self.manager, 25)
 
         response = yield self.web.get(
                 "transaction", {
