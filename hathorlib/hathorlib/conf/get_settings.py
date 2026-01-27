@@ -14,7 +14,7 @@ def HathorSettings() -> Settings:
     global _config_file
     # Import config file for network
     default_file = 'hathorlib.conf.mainnet'
-    config_file = os.environ.get('TXMINING_CONFIG_FILE', default_file)
+    config_file = os.environ.get('HATHORLIB_CONFIG_FILE', default_file)
     if _config_file is None:
         _config_file = config_file
     elif _config_file != config_file:

@@ -8,7 +8,7 @@ LICENSE file in the root directory of this source tree.
 from struct import pack
 from typing import Dict
 
-from hathorlib.base_transaction import BaseTransaction, TxOutput
+from hathorlib.base_transaction import GenericVertex, TxOutput
 from hathorlib.utils import int_to_bytes, unpack, unpack_len
 
 # Signal bits (B), version (B), outputs len (B)
@@ -18,7 +18,7 @@ _FUNDS_FORMAT_STRING = '!BBB'
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
-class Block(BaseTransaction):
+class Block(GenericVertex):
     SERIALIZATION_NONCE_SIZE = 16
 
     @property

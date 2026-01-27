@@ -80,12 +80,12 @@ class TxVersion(IntEnum):
 
         raise ValueError(f'Invalid version: {value}')
 
-    def get_cls(self) -> Type['BaseTransaction']:
+    def get_cls(self) -> Type['GenericVertex']:
         from hathorlib import Block, TokenCreationTransaction, Transaction
         from hathorlib.nanocontracts.nanocontract import DeprecatedNanoContract
         from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
-        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
+        cls_map: Dict[TxVersion, Type[GenericVertex]] = {
             TxVersion.REGULAR_BLOCK: Block,
             TxVersion.REGULAR_TRANSACTION: Transaction,
             TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
@@ -101,7 +101,7 @@ class TxVersion(IntEnum):
             return cls
 
 
-class BaseTransaction(ABC):
+class GenericVertex(ABC):
     """Hathor base transaction"""
 
     __slots__ = (
@@ -115,7 +115,7 @@ class BaseTransaction(ABC):
     HEX_BASE = 16
 
     # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
-    # differently by each subclass of BaseTransaction.
+    # differently by each subclass of GenericVertex.
     # Currently only the Block subclass uses it, carrying information about Feature Activation bits and also extra
     # bits reserved for future use, depending on the configuration.
     signal_bits: int
@@ -178,7 +178,7 @@ class BaseTransaction(ABC):
         class_name = type(self).__name__
         return '%s(%s)' % (class_name, ', '.join('%s=%s' % i for i in self._get_formatted_fields_dict().items()))
 
-    def clone(self) -> 'BaseTransaction':
+    def clone(self) -> 'GenericVertex':
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
@@ -218,7 +218,7 @@ class BaseTransaction(ABC):
 
     @classmethod
     @abstractmethod
-    def create_from_struct(cls, struct_bytes: bytes) -> 'BaseTransaction':
+    def create_from_struct(cls, struct_bytes: bytes) -> 'GenericVertex':
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -235,7 +235,7 @@ class BaseTransaction(ABC):
 
         :raises NotImplement: when one of the transactions do not have a calculated hash
         """
-        if not isinstance(other, BaseTransaction):
+        if not isinstance(other, GenericVertex):
             return NotImplemented
         if self.hash and other.hash:
             return self.hash == other.hash
@@ -485,7 +485,7 @@ class BaseTransaction(ABC):
 
 
 class TxInput:
-    _tx: BaseTransaction  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
+    _tx: GenericVertex  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
 
     def __init__(self, tx_id: bytes, index: int, data: bytes) -> None:
         """
@@ -717,7 +717,7 @@ def output_value_to_bytes(number: int) -> bytes:
         return number.to_bytes(4, byteorder='big', signed=True)  # `signed` makes no difference, but oh well
 
 
-def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
+def tx_or_block_from_bytes(data: bytes) -> GenericVertex:
     """ Creates the correct tx subclass from a sequence of bytes
     """
     # version field takes up the second byte only

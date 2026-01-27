@@ -23,7 +23,7 @@ from hathorlib.headers.types import VertexHeaderId
 from hathorlib.utils import int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathorlib.base_transaction import BaseTransaction
+    from hathorlib.base_transaction import GenericVertex
     from hathorlib.headers.nano_header import NanoHeader, NanoHeaderAction
 
 
@@ -32,7 +32,7 @@ NC_VERSION = 1
 
 @dataclass(frozen=True)
 class DeprecatedNanoHeader(VertexBaseHeader):
-    tx: BaseTransaction
+    tx: GenericVertex
 
     # nc_id equals to the blueprint_id when a Nano Contract is being created.
     # nc_id equals to the nanocontract_id when a method is being called.
@@ -53,7 +53,7 @@ class DeprecatedNanoHeader(VertexBaseHeader):
     nc_version: int = NC_VERSION
 
     @classmethod
-    def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[DeprecatedNanoHeader, bytes]:
+    def deserialize(cls, tx: GenericVertex, buf: bytes) -> tuple[DeprecatedNanoHeader, bytes]:
         header_id, buf = buf[:1], buf[1:]
         assert header_id == VertexHeaderId.NANO_HEADER.value
         (nc_version,), buf = unpack('!B', buf)

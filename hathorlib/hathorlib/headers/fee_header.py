@@ -22,7 +22,7 @@ from hathorlib.headers.types import VertexHeaderId
 from hathorlib.utils import int_to_bytes, unpack
 
 if TYPE_CHECKING:
-    from hathorlib.base_transaction import BaseTransaction
+    from hathorlib.base_transaction import GenericVertex
     from hathorlib.transaction import Transaction
 
 
@@ -44,7 +44,7 @@ class FeeHeader(VertexBaseHeader):
     fees: list[FeeHeaderEntry]
 
     @classmethod
-    def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[FeeHeader, bytes]:
+    def deserialize(cls, tx: GenericVertex, buf: bytes) -> tuple[FeeHeader, bytes]:
         from hathorlib.base_transaction import bytes_to_output_value
 
         header_id, buf = buf[:1], buf[1:]

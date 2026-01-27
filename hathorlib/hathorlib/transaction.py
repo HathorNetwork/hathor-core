@@ -12,7 +12,7 @@ from collections import namedtuple
 from struct import pack
 from typing import TYPE_CHECKING, List, TypeVar
 
-from hathorlib.base_transaction import TX_HASH_SIZE, BaseTransaction, TxInput, TxOutput
+from hathorlib.base_transaction import TX_HASH_SIZE, GenericVertex, TxInput, TxOutput
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidOutputValue, InvalidToken
 from hathorlib.headers import VertexBaseHeader
@@ -34,7 +34,7 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 
 
-class Transaction(BaseTransaction):
+class Transaction(GenericVertex):
     __slots__ = ('tokens',)
 
     SERIALIZATION_NONCE_SIZE = 4
