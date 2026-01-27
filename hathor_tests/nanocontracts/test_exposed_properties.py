@@ -118,6 +118,7 @@ KNOWN_CASES = [
     'hathor.SignedData.some_new_attribute',
     'hathor.export.some_new_attribute',
     'hathor.fallback.some_new_attribute',
+    'hathor.json_dumps.some_new_attribute',
     'hathor.public.some_new_attribute',
     'hathor.sha3.some_new_attribute',
     'hathor.verify_ecdsa.some_new_attribute',

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import hashlib
 from types import ModuleType
-from typing import Callable
+from typing import Any, Callable
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -169,3 +169,32 @@ def verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
         return True
     except InvalidSignature:
         return False
+
+
+def json_dumps(
+    obj: object,
+    *,
+    ensure_ascii: bool = True,
+    indent: int | str | None = None,
+    separators: tuple[str, str] | None = (',', ':'),
+    sort_keys: bool = False,
+) -> str:
+    """
+    Serialize obj as a JSON. Arguments are a subset of Python's `json.dumps`.
+    It automatically converts `bytes`-like values to their hex representation.
+    """
+    import json
+
+    def dump_bytes(data: Any) -> str:
+        if isinstance(data, bytes):
+            return data.hex()
+        raise TypeError(f'Object of type {type(data).__name__} is not JSON serializable')
+
+    return json.dumps(
+        obj,
+        ensure_ascii=ensure_ascii,
+        indent=indent,
+        separators=separators,
+        sort_keys=sort_keys,
+        default=dump_bytes,
+    )
