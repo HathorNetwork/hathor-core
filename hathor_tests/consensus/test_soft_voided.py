@@ -54,6 +54,8 @@ class SoftVoidedTestCase(SimulatorTestCase):
 
         yield gen_tx2
 
+        gen_tx2.stop()
+
         self.assertEqual(1, len(soft_voided_tx_ids))
         txA_hash = list(soft_voided_tx_ids)[0]
 
