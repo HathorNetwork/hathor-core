@@ -133,15 +133,23 @@ def get_tx_extra_data(
                 'uid': token_uid_hex,
                 'name': token_info.get_name(),
                 'symbol': token_info.get_symbol(),
+                'version': token_info.get_version()
             })
 
         serialized['tokens'] = detailed_tokens
+
+    # Calculate fee for the transaction
+    fee = 0
+    from hathor.transaction import Transaction
+    if isinstance(tx, Transaction) and tx.has_fees():
+        fee = tx.get_fee_header().total_fee_amount()
 
     result = {
         'success': True,
         'tx': serialized,
         'meta': meta.to_json_extended(tx.storage),
         'spent_outputs': spent_outputs,
+        'fee': fee,
     }
 
     return result
