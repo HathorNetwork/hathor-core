@@ -140,9 +140,16 @@ def execute(args: Namespace) -> None:
             from hathor.verification.verification_params import VerificationParams
             from hathor.verification.verification_service import VerificationService
             from hathor.verification.vertex_verifiers import VertexVerifiers
+            from hathor.feature_activation.utils import Features
+            from hathor.transaction.scripts.opcode import OpcodesVersion
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
-            verification_params = VerificationParams(nc_block_root_id=None, enable_checkdatasig_count=True)
+            verification_params = VerificationParams(nc_block_root_id=None, features=Features(
+                count_checkdatasig_op=True,
+                nanocontracts=False,
+                fee_tokens=False,
+                opcodes_version=OpcodesVersion.V2,
+            ))
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),
                 settings=settings,

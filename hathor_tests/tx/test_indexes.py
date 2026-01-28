@@ -250,7 +250,7 @@ class BaseIndexesTest(unittest.TestCase):
         block2 = self.manager.generate_mining_block(parent_block_hash=block1.parents[0],
                                                     address=decode_address(address))
         block2.parents[1:] = [txA2.hash, txB2.hash]
-        block2.timestamp = block1.timestamp
+        block2.timestamp = block1.timestamp + 1
         block2.weight = 4
         self.manager.cpu_mining_service.resolve(block2)
         self.manager.propagate_tx(block2)

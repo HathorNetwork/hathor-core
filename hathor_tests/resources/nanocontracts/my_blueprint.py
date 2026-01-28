@@ -4,6 +4,7 @@ from hathor import (
     Address,
     Amount,
     Blueprint,
+    CallerId,
     Context,
     SignedData,
     Timestamp,
@@ -30,6 +31,7 @@ class MyBlueprint(Blueprint):
     a_tuple: tuple[str, int, bool]
     a_dict_dict_tuple: dict[str, tuple[str, int]]
     a_optional_int: Optional[int]
+    a_caller_id: CallerId
 
     @public
     def initialize(self, ctx: Context, arg1: int) -> None:

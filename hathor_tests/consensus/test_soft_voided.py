@@ -54,6 +54,8 @@ class SoftVoidedTestCase(SimulatorTestCase):
 
         yield gen_tx2
 
+        gen_tx2.stop()
+
         self.assertEqual(1, len(soft_voided_tx_ids))
         txA_hash = list(soft_voided_tx_ids)[0]
 
@@ -84,6 +86,7 @@ class SoftVoidedTestCase(SimulatorTestCase):
         assert manager2.wallet is not None
         address = manager2.wallet.get_unused_address(mark_as_used=False)
         value = 1
+        simulator.run_to_completion()
         txC = gen_new_tx(manager2, address, value)
         txC.parents[0] = txA.hash
         txC.timestamp = max(txC.timestamp, txA.timestamp + 1)

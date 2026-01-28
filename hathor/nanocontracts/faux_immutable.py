@@ -42,6 +42,8 @@ def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dic
         '__doc__',
         '__init__',
         '__call__',
+        '__firstlineno__',
+        '__static_attributes__',
     }) | custom_allowed_dunder
 
     # pop the attribute so the created class doesn't have it and it isn't inherited

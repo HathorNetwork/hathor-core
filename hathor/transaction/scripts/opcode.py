@@ -15,6 +15,7 @@
 import datetime
 import struct
 from enum import IntEnum
+from typing import Callable
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
@@ -46,6 +47,11 @@ from hathor.transaction.scripts.execute import (
     get_script_op,
 )
 from hathor.transaction.scripts.script_context import ScriptContext
+
+
+class OpcodesVersion(IntEnum):
+    V1 = 1
+    V2 = 2
 
 
 class Opcode(IntEnum):
@@ -626,7 +632,7 @@ def op_integer(opcode: int, stack: Stack) -> None:
         raise ScriptError(e) from e
 
 
-def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
+def execute_op_code(opcode: Opcode, context: ScriptContext, version: OpcodesVersion) -> None:
     """
     Execute a function opcode.
 
@@ -635,17 +641,27 @@ def execute_op_code(opcode: Opcode, context: ScriptContext) -> None:
         context: the script context to be manipulated.
     """
     context.logs.append(f'Executing function opcode {opcode.name} ({hex(opcode.value)})')
-    match opcode:
-        case Opcode.OP_DUP: op_dup(context)
-        case Opcode.OP_EQUAL: op_equal(context)
-        case Opcode.OP_EQUALVERIFY: op_equalverify(context)
-        case Opcode.OP_CHECKSIG: op_checksig(context)
-        case Opcode.OP_HASH160: op_hash160(context)
-        case Opcode.OP_GREATERTHAN_TIMESTAMP: op_greaterthan_timestamp(context)
-        case Opcode.OP_CHECKMULTISIG: op_checkmultisig(context)
-        case Opcode.OP_DATA_STREQUAL: op_data_strequal(context)
-        case Opcode.OP_DATA_GREATERTHAN: op_data_greaterthan(context)
-        case Opcode.OP_DATA_MATCH_VALUE: op_data_match_value(context)
-        case Opcode.OP_CHECKDATASIG: op_checkdatasig(context)
-        case Opcode.OP_FIND_P2PKH: op_find_p2pkh(context)
-        case _: raise ScriptError(f'unknown opcode: {opcode}')
+    opcode_fns: dict[Opcode, Callable[[ScriptContext], None]] = {
+        Opcode.OP_DUP: op_dup,
+        Opcode.OP_EQUAL: op_equal,
+        Opcode.OP_EQUALVERIFY: op_equalverify,
+        Opcode.OP_CHECKSIG: op_checksig,
+        Opcode.OP_HASH160: op_hash160,
+        Opcode.OP_GREATERTHAN_TIMESTAMP: op_greaterthan_timestamp,
+        Opcode.OP_CHECKMULTISIG: op_checkmultisig,
+    }
+
+    if version == OpcodesVersion.V1:
+        opcode_fns.update({
+            Opcode.OP_DATA_STREQUAL: op_data_strequal,
+            Opcode.OP_DATA_GREATERTHAN: op_data_greaterthan,
+            Opcode.OP_DATA_MATCH_VALUE: op_data_match_value,
+            Opcode.OP_CHECKDATASIG: op_checkdatasig,
+            Opcode.OP_FIND_P2PKH: op_find_p2pkh,
+        })
+
+    opcode_fn = opcode_fns.get(opcode)
+    if opcode_fn is None:
+        raise ScriptError(f'unknown opcode: {opcode}')
+
+    opcode_fn(context)

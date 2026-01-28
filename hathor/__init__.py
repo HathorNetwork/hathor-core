@@ -39,7 +39,7 @@ from hathor.nanocontracts.types import (
     TxOutputScript,
     VertexId,
 )
-from hathor.nanocontracts.utils import sha3, verify_ecdsa
+from hathor.nanocontracts.utils import json_dumps, sha3, verify_ecdsa
 from hathor.version import __version__
 
 __all__ = [
@@ -73,5 +73,6 @@ __all__ = [
     'VertexId',
     'sha3',
     'verify_ecdsa',
+    'json_dumps',
     '__version__',
 ]

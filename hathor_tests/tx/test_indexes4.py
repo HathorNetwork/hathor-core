@@ -49,6 +49,7 @@ class SimulatorIndexesTestCase(unittest.TestCase):
             value = 500
             tx = gen_new_tx(manager, address, value)
             assert manager.propagate_tx(tx)
+            self.clock.advance(1)
         return manager
 
     def test_index_initialization(self):

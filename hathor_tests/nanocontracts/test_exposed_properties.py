@@ -118,6 +118,7 @@ KNOWN_CASES = [
     'hathor.SignedData.some_new_attribute',
     'hathor.export.some_new_attribute',
     'hathor.fallback.some_new_attribute',
+    'hathor.json_dumps.some_new_attribute',
     'hathor.public.some_new_attribute',
     'hathor.sha3.some_new_attribute',
     'hathor.verify_ecdsa.some_new_attribute',
@@ -146,6 +147,14 @@ KNOWN_CASES = [
 if version_info[1] == 11:
     KNOWN_CASES.extend([
         'hathor.SignedData._is_protocol',
+    ])
+
+
+# XXX: these only appear in Python 3.13
+if version_info[1] == 13:
+    KNOWN_CASES.extend([
+        'hathor.NCActionType._hashable_values_',
+        'hathor.NCActionType._unhashable_values_map_',
     ])
 
 KNOWN_CASES.sort()

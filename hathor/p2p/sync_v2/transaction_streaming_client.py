@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
+from hathor.feature_activation.utils import Features
 from hathor.p2p.sync_v2.exception import (
     InvalidVertexError,
     StreamingError,
@@ -27,6 +28,7 @@ from hathor.p2p.sync_v2.exception import (
 from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.types import VertexId
 from hathor.verification.verification_params import VerificationParams
 
@@ -53,8 +55,13 @@ class TransactionStreamingClient:
         #      We can also set the `nc_block_root_id` to `None` because we only call `verify_basic`,
         #      which doesn't need it.
         self.verification_params = VerificationParams(
-            enable_checkdatasig_count=False,
             nc_block_root_id=None,
+            features=Features(
+                count_checkdatasig_op=False,
+                nanocontracts=False,
+                fee_tokens=False,
+                opcodes_version=OpcodesVersion.V1,
+            )
         )
 
         self.reactor = sync_agent.reactor

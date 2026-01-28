@@ -64,5 +64,6 @@ ALLOWED_IMPORTS: dict[str, dict[str, object]] = {
         NCParsedArgs=hathor.NCParsedArgs,
         sha3=hathor.sha3,
         verify_ecdsa=hathor.verify_ecdsa,
+        json_dumps=hathor.json_dumps,
     ),
 }

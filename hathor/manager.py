@@ -51,7 +51,7 @@ from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
@@ -222,6 +222,7 @@ class HathorManager:
         if self.wallet:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
+            self._subscribe_wallet(self.wallet)
 
         # It will be inject later by the builder.
         # XXX Remove this attribute after all dependencies are cleared.
@@ -250,6 +251,14 @@ class HathorManager:
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
+
+    def _subscribe_wallet(self, wallet: BaseWallet) -> None:
+        """Register a wallet on pubsub."""
+        def handler(event: HathorEvents, args: EventArguments) -> None:
+            assert event == HathorEvents.NETWORK_NEW_TX_PROCESSING
+            wallet.on_new_tx(args.tx)
+
+        self.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_PROCESSING, handler)
 
     def get_default_capabilities(self) -> list[str]:
         """Return the default capabilities for this manager."""

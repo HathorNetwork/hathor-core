@@ -1,3 +1,4 @@
+import pytest
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_blocks
@@ -14,6 +15,7 @@ from hathor_tests.resources.base_resource import StubSite, TestDummyRequest, _Ba
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
+@pytest.mark.skip(reason='old feature, this will be removed')
 class NanoContractsTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()

@@ -411,18 +411,17 @@ class Builder:
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
-            pubsub = self._get_or_create_pubsub()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
             nc_calls_sorter = self._get_nc_calls_sorter()
             self._consensus = ConsensusAlgorithm(
                 nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
-                pubsub=pubsub,
                 settings=self._get_or_create_settings(),
                 runner_factory=self._get_or_create_runner_factory(),
                 nc_log_storage=self._get_or_create_nc_log_storage(),
                 nc_calls_sorter=nc_calls_sorter,
                 feature_service=self._get_or_create_feature_service(),
+                tx_storage=self._get_or_create_tx_storage(),
             )
 
         return self._consensus
@@ -656,7 +655,6 @@ class Builder:
                 feature_service=self._get_or_create_feature_service(),
                 execution_manager=self._get_or_create_execution_manager(),
                 pubsub=self._get_or_create_pubsub(),
-                wallet=self._get_or_create_wallet(),
             )
 
         return self._vertex_handler
