@@ -23,7 +23,6 @@ from twisted.internet.defer import Deferred
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from typing_extensions import override
 
-from hathor import VertexId
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.nc_dump.nc_dumper import DumpMode, NCDumper
 from hathor.nanocontracts.storage.patricia_trie import DictChildren, Node, NodeId
@@ -38,6 +37,7 @@ from hathor.p2p.sync_version import SyncVersion
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Block
 from hathor.transaction.storage import TransactionRocksDBStorage
+from hathor.types import VertexId
 
 _TIMEOUT = 10
 
