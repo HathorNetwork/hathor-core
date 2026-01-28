@@ -21,6 +21,7 @@ from hathorlib.scripts.construct import (
 from hathorlib.scripts.execute import ScriptExtras, script_eval
 from hathorlib.scripts.hathor_script import HathorScript
 from hathorlib.scripts.multi_sig import MultiSig
+from hathorlib.scripts.data_script import DataScript
 from hathorlib.scripts.nano_contract_match_values import NanoContractMatchValues
 from hathorlib.scripts.opcode import Opcode
 from hathorlib.scripts.p2pkh import P2PKH
@@ -29,6 +30,7 @@ __all__ = [
     'Opcode',
     'P2PKH',
     'MultiSig',
+    'DataScript',
     'NanoContractMatchValues',
     'HathorScript',
     'ScriptExtras',
