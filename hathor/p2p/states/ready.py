@@ -362,7 +362,7 @@ class ReadyState(BaseState):
             self.protocol.send_error_and_close_connection('Invalid root-id received (bad size)')
             return
         self.peer_nc_block_root_id = (block_id, nc_root_id)
-        self.log.info('response received', block_id=block_id.hex(), nc_root_id=nc_root_id.hex())
+        self.log.debug('response received', block_id=block_id.hex(), nc_root_id=nc_root_id.hex())
 
     def send_get_nc_db_node(self, node_id: NodeId) -> None:
         """ Send a GET-NC-DB-NODE command requesting a node with a given node-id.
@@ -409,4 +409,4 @@ class ReadyState(BaseState):
             self.protocol.send_error_and_close_connection('invalid nc-db-node received (not a json)')
             return
         self.peer_nc_node = nc_db_node_data
-        self.log.info('response received', nc_node=nc_db_node_data)
+        self.log.debug('response received', nc_node=nc_db_node_data)

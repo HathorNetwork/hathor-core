@@ -154,9 +154,6 @@ class HathorManager:
         self.rng = rng
 
         self.reactor = reactor
-        add_system_event_trigger = getattr(self.reactor, 'addSystemEventTrigger', None)
-        if add_system_event_trigger is not None:
-            add_system_event_trigger('after', 'shutdown', self.stop)
 
         self.state: Optional[HathorManager.NodeState] = None
 
@@ -279,6 +276,10 @@ class HathorManager:
         if self.is_started:
             raise Exception('HathorManager is already started')
         self.is_started = True
+
+        add_system_event_trigger = getattr(self.reactor, 'addSystemEventTrigger', None)
+        if add_system_event_trigger is not None:
+            add_system_event_trigger('after', 'shutdown', self.stop)
 
         self.log.info('start manager', network=self.network)
 
