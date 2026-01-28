@@ -36,6 +36,10 @@ logger = get_logger()
 
 class HathorEvents(Enum):
     """
+        NETWORK_NEW_TX_PROCESSING:
+            Triggered when a new tx/block is received and will begin processing, just before consensus
+            Publishes a tx/block object
+
         NETWORK_NEW_TX_ACCEPTED:
             Triggered when a new tx/block is accepted in the network
             Publishes a tx/block object
@@ -117,6 +121,8 @@ class HathorEvents(Enum):
     NETWORK_PEER_READY = 'network:peer_ready'
 
     NETWORK_PEER_DISCONNECTED = 'network:peer_disconnected'
+
+    NETWORK_NEW_TX_PROCESSING = 'network:new_tx_processing'
 
     NETWORK_NEW_TX_ACCEPTED = 'network:new_tx_accepted'
 

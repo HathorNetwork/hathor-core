@@ -124,6 +124,7 @@ class MultisigTestCase(unittest.TestCase):
 
         # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))
+        self.clock.advance(1)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount + 300))

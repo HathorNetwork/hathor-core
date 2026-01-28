@@ -165,6 +165,7 @@ class TransactionTest(unittest.TestCase):
         assert tx_address not in balance_per_address
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx))
+        self.clock.advance(1)
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         assert balance_per_address[tx_address] == 6400
 
