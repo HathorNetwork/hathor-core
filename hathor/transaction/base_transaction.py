@@ -500,7 +500,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def get_related_addresses(self) -> set[str]:
         """ Return a set of addresses collected from tx's inputs and outputs.
         """
-        from hathor.transaction.scripts import parse_address_script
+        from hathorlib.scripts import parse_address_script
 
         assert self.storage is not None
         addresses: set[str] = set()
@@ -1106,7 +1106,7 @@ class TxOutput:
 
     def is_standard_script(self) -> bool:
         """Return True if this output has a standard script."""
-        from hathor.transaction.scripts import P2PKH
+        from hathorlib.scripts import P2PKH
         p2pkh = P2PKH.parse_script(self.script)
         if p2pkh is not None:
             return True
@@ -1123,7 +1123,7 @@ class TxOutput:
     def to_human_readable(self) -> dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
         """
-        from hathor.transaction.scripts import NanoContractMatchValues, parse_address_script
+        from hathorlib.scripts import NanoContractMatchValues, parse_address_script
 
         script_type = parse_address_script(self.script)
         if script_type:

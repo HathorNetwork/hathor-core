@@ -20,7 +20,6 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf.get_settings import get_global_settings
 from hathorlib.utils import (
     get_address_b58_from_bytes,
     get_hash160,
@@ -532,7 +531,8 @@ def op_checkmultisig(context: ScriptContext) -> None:
     :raises MissingStackItems: if stack is empty or it has less signatures than the minimum required
     :raises VerifyFailed: verification failed
     """
-    settings = get_global_settings()
+    settings = context.extras.settings
+    assert settings is not None, 'settings is required to run scripts'
 
     if not len(context.stack):
         raise MissingStackItems('OP_CHECKMULTISIG: empty stack')

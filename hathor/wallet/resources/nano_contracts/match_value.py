@@ -22,7 +22,7 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+from hathorlib.scripts import P2PKH, NanoContractMatchValues
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 

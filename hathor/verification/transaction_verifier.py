@@ -105,7 +105,7 @@ class TransactionVerifier:
     def verify_sigops_input(self, tx: Transaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
-        from hathor.transaction.scripts import SigopCounter
+        from hathorlib.scripts import SigopCounter
         from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
         counter = SigopCounter(

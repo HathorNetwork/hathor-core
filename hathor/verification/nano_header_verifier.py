@@ -46,8 +46,8 @@ from hathor.nanocontracts.utils import is_nc_public_method
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import ScriptError, TooManySigOps
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
-from hathor.transaction.scripts import SigopCounter, create_output_script
-from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
+from hathorlib.scripts import SigopCounter, ScriptExtras
+from hathor.transaction.scripts import create_output_script, raw_script_eval
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
 

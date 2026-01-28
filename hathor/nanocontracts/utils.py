@@ -95,7 +95,7 @@ def derive_child_token_id(parent_id: ContractId, token_symbol: str, *, salt: byt
 def sign_openssl(nano_header: NanoHeader, privkey: ec.EllipticCurvePrivateKey) -> None:
     """Sign this nano header using a privkey from the cryptography lib."""
     from hathor.transaction import Transaction
-    from hathor.transaction.scripts import P2PKH
+    from hathorlib.scripts import P2PKH
 
     pubkey = privkey.public_key()
     pubkey_bytes = get_public_key_bytes_compressed(pubkey)
@@ -111,7 +111,7 @@ def sign_openssl(nano_header: NanoHeader, privkey: ec.EllipticCurvePrivateKey) -
 def sign_pycoin(nano_header: NanoHeader, privkey: PycoinKey) -> None:
     """Sign this nano header using a privkey from the pycoin lib."""
     from hathor.transaction import Transaction
-    from hathor.transaction.scripts import P2PKH
+    from hathorlib.scripts import P2PKH
 
     pubkey_bytes = privkey.sec()
     nano_header.nc_address = get_address_from_public_key_bytes(pubkey_bytes)
@@ -133,7 +133,7 @@ def sign_openssl_multisig(
 ) -> None:
     """Sign this nano header with multisig using privkeys from the cryptography lib."""
     from hathor.transaction import Transaction
-    from hathor.transaction.scripts import MultiSig
+    from hathorlib.scripts import MultiSig
     from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script
 
     redeem_script = generate_multisig_redeem_script(required_count, redeem_pubkey_bytes)

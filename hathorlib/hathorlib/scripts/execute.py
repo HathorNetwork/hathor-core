@@ -25,7 +25,7 @@ from hathorlib.exceptions import DataIndexError, FinalStackInvalid, OutOfData, I
 @dataclass(slots=True, frozen=True, kw_only=True)
 class ScriptExtras:
     tx: Transaction
-    settings: Settings
+    settings: Optional[Settings] = None
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

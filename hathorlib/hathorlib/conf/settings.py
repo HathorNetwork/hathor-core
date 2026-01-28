@@ -56,3 +56,9 @@ class HathorSettings(NamedTuple):
 
     # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
     NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
+
+    # Maximum number of pubkeys per OP_CHECKMULTISIG
+    MAX_MULTISIG_PUBKEYS: int = 20
+
+    # Maximum number of signatures per OP_CHECKMULTISIG
+    MAX_MULTISIG_SIGNATURES: int = 15

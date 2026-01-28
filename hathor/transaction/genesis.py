@@ -19,7 +19,7 @@ import base58
 from hathor.conf.settings import HathorSettings
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import Block, Transaction, TxOutput
-from hathor.transaction.scripts import P2PKH
+from hathorlib.scripts import P2PKH
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401

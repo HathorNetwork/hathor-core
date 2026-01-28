@@ -21,7 +21,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import get_hash160, get_private_key_from_bytes
-from hathor.transaction.scripts import HathorScript, Opcode
+from hathorlib.scripts import HathorScript, Opcode
 from hathor.transaction.transaction import Transaction
 
 

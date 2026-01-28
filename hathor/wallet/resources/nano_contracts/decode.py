@@ -18,7 +18,7 @@ import struct
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
 from hathor.transaction import Transaction
-from hathor.transaction.scripts import NanoContractMatchValues
+from hathorlib.scripts import NanoContractMatchValues
 from hathor.util import json_dumpb
 
 

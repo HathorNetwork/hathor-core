@@ -18,7 +18,7 @@ from hathorlib.scripts.construct import (
     create_output_script,
     parse_address_script,
 )
-from hathorlib.scripts.execute import ScriptExtras, script_eval
+from hathorlib.scripts.execute import ScriptExtras, execute_eval, script_eval, raw_script_eval
 from hathorlib.scripts.hathor_script import HathorScript
 from hathorlib.scripts.multi_sig import MultiSig
 from hathorlib.scripts.data_script import DataScript
@@ -38,5 +38,7 @@ __all__ = [
     'parse_address_script',
     'create_base_script',
     'create_output_script',
+    'execute_eval',
     'script_eval',
+    'raw_script_eval',
 ]

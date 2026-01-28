@@ -23,7 +23,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
-from hathor.transaction.scripts import parse_address_script
+from hathorlib.scripts import parse_address_script
 from hathor.util import sorted_merger
 
 logger = get_logger()

@@ -196,7 +196,7 @@ class VertexVerifier:
     ) -> None:
         """ Count sig operations on all outputs and verify that the total sum is below the limit
         """
-        from hathor.transaction.scripts import SigopCounter
+        from hathorlib.scripts import SigopCounter
 
         max_multisig_pubkeys = settings.MAX_MULTISIG_PUBKEYS
         counter = SigopCounter(

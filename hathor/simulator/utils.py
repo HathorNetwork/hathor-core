@@ -149,7 +149,7 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
 
     txin = manager.rng.choice(tx.inputs)
 
-    from hathor.transaction.scripts import P2PKH, parse_address_script
+    from hathorlib.scripts import P2PKH, parse_address_script
     spent_tx = tx.get_spent_tx(txin)
     spent_txout = spent_tx.outputs[txin.index]
     p2pkh = parse_address_script(spent_txout.script)
