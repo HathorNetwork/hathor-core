@@ -192,16 +192,16 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
-        from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
-        fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
-        memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
-        metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
+        from hathor.nanocontracts.metered_exec import MeteredExecutor
+        metered_executor = MeteredExecutor()
         try:
             env = metered_executor.exec(self.code.text)
-        except OutOfFuelError as e:
-            self.log.error('loading blueprint module failed, fuel limit exceeded')
+        except RuntimeError as e:
+            # Statement limit exceeded (max_statements)
+            self.log.error('loading blueprint module failed, statement limit exceeded')
             raise OCBOutOfFuelDuringLoading from e
-        except OutOfMemoryError as e:
+        except MemoryError as e:
+            # Allocation limit exceeded (max_allocations)
             self.log.error('loading blueprint module failed, memory limit exceeded')
             raise OCBOutOfMemoryDuringLoading from e
         blueprint_class = env[BLUEPRINT_EXPORT_NAME]
