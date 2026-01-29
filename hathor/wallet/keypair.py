@@ -96,7 +96,7 @@ class KeyPair:
         from cryptography.hazmat.primitives import hashes
 
         from hathor.crypto.util import get_public_key_bytes_compressed
-        from hathor.transaction.scripts import P2PKH
+        from hathorlib.scripts import P2PKH
 
         private_key = self.get_private_key(password)
         public_key = private_key.public_key()

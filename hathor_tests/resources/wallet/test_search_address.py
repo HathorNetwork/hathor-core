@@ -2,10 +2,10 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens
+from hathorlib.scripts import parse_address_script
 
 
 class SearchAddressTest(_BaseResourceTest._ResourceTest):

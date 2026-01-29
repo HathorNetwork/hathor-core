@@ -16,11 +16,11 @@ import base64
 import struct
 from typing import Any, Optional
 
-from hathor.crypto.util import get_address_b58_from_bytes
-from hathor.transaction.scripts.construct import get_pushdata, re_compile
-from hathor.transaction.scripts.execute import binary_to_int
-from hathor.transaction.scripts.hathor_script import HathorScript
-from hathor.transaction.scripts.opcode import Opcode
+from hathorlib.utils import get_address_b58_from_bytes
+from hathorlib.scripts.construct import get_pushdata, re_compile
+from hathorlib.scripts.execute import binary_to_int
+from hathorlib.scripts.hathor_script import HathorScript
+from hathorlib.scripts.opcode import Opcode
 
 
 # XXX: does it make sense to make this BaseScript too?

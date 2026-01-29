@@ -15,13 +15,13 @@
 import re
 from typing import TYPE_CHECKING, Any, Generator, NamedTuple, Optional, Pattern, Union
 
-from hathor.conf.get_settings import get_global_settings
-from hathor.crypto.util import decode_address
-from hathor.transaction.exceptions import ScriptError
-from hathor.transaction.scripts.base_script import BaseScript
+from hathorlib.conf.settings import HathorSettings as Settings
+from hathorlib.utils import decode_address
+from hathorlib.exceptions import ScriptError
+from hathorlib.scripts.base_script import BaseScript
 
 if TYPE_CHECKING:
-    from hathor.transaction.scripts import P2PKH, MultiSig, Opcode
+    from hathorlib.scripts import P2PKH, MultiSig, Opcode
 
 
 def re_compile(pattern: str) -> Pattern[bytes]:
@@ -47,7 +47,7 @@ def re_compile(pattern: str) -> Pattern[bytes]:
     def _to_byte_pattern(m):
         x = m.group().decode('ascii').strip()
         if x.startswith('OP_'):
-            from hathor.transaction.scripts.opcode import Opcode
+            from hathorlib.scripts.opcode import Opcode
             return bytes([Opcode[x]])
         elif x.startswith('DATA_'):
             length = int(m.group()[5:])
@@ -70,7 +70,7 @@ def _re_pushdata(length: int) -> bytes:
     :return: A non-compiled regular expression
     :rtype: bytes
     """
-    from hathor.transaction.scripts.opcode import Opcode
+    from hathorlib.scripts.opcode import Opcode
     ret = [bytes([Opcode.OP_PUSHDATA1]), bytes([length]), b'.{', str(length).encode('ascii'), b'}']
 
     if length <= 75:
@@ -80,23 +80,22 @@ def _re_pushdata(length: int) -> bytes:
     return b''.join(ret)
 
 
-def create_base_script(address: str, timelock: Optional[Any] = None) -> BaseScript:
+def create_base_script(settings: Settings, address: str, timelock: Optional[Any] = None) -> BaseScript:
     """ Verifies if address is P2PKH or Multisig and return the corresponding BaseScript implementation.
     """
-    from hathor.transaction.scripts.execute import binary_to_int
-    settings = get_global_settings()
+    from hathorlib.scripts.execute import binary_to_int
     baddress = decode_address(address)
     if baddress[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
-        from hathor.transaction.scripts import P2PKH
+        from hathorlib.scripts import P2PKH
         return P2PKH(address, timelock)
     elif baddress[0] == binary_to_int(settings.MULTISIG_VERSION_BYTE):
-        from hathor.transaction.scripts import MultiSig
+        from hathorlib.scripts import MultiSig
         return MultiSig(address, timelock)
     else:
         raise ScriptError('The address is not valid')
 
 
-def create_output_script(address: bytes, timelock: Optional[Any] = None) -> bytes:
+def create_output_script(settings: Settings, address: bytes, timelock: Optional[Any] = None) -> bytes:
     """ Verifies if address is P2PKH or Multisig and create correct output script
 
         :param address: address to send tokens
@@ -109,14 +108,13 @@ def create_output_script(address: bytes, timelock: Optional[Any] = None) -> byte
 
         :rtype: bytes
     """
-    from hathor.transaction.scripts.execute import binary_to_int
-    settings = get_global_settings()
+    from hathorlib.scripts.execute import binary_to_int
     # XXX: if the address class can somehow be simplified create_base_script could be used here
     if address[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
-        from hathor.transaction.scripts import P2PKH
+        from hathorlib.scripts import P2PKH
         return P2PKH.create_output_script(address, timelock)
     elif address[0] == binary_to_int(settings.MULTISIG_VERSION_BYTE):
-        from hathor.transaction.scripts import MultiSig
+        from hathorlib.scripts import MultiSig
         return MultiSig.create_output_script(address, timelock)
     else:
         raise ScriptError('The address is not valid')
@@ -131,7 +129,7 @@ def parse_address_script(script: bytes) -> Optional[Union['P2PKH', 'MultiSig']]:
         :return: P2PKH or MultiSig class or None
         :rtype: class or None
     """
-    from hathor.transaction.scripts import P2PKH, MultiSig
+    from hathorlib.scripts import P2PKH, MultiSig
     script_classes: list[type[Union[P2PKH, MultiSig]]] = [P2PKH, MultiSig]
     # Each class verifies its script
     for script_class in script_classes:
@@ -156,8 +154,8 @@ def parse_script_ops(data: bytes) -> Generator[_ScriptOperation, None, None]:
         :return: generator for operations on script
         :rtype: Generator[_ScriptOperation, None, None]
     """
-    from hathor.transaction.scripts import Opcode
-    from hathor.transaction.scripts.execute import Stack, get_script_op
+    from hathorlib.scripts import Opcode
+    from hathorlib.scripts.execute import Stack, get_script_op
     op: Union[Opcode, int]
 
     pos = 0
@@ -201,8 +199,8 @@ class SigopCounter:
         :return: number of signature operations the script would do if it was executed
         :rtype: int
         """
-        from hathor.transaction.scripts import Opcode
-        from hathor.transaction.scripts.execute import decode_opn, get_script_op
+        from hathorlib.scripts import Opcode
+        from hathorlib.scripts.execute import decode_opn, get_script_op
         n_ops: int = 0
         data_len: int = len(data)
         pos: int = 0
@@ -253,7 +251,7 @@ class SigopCounter:
         # If validating an input, should check the spent_tx for MultiSig
         if output_script is not None:
             # If it's P2PSH we have to validate the redeem_script sigop count
-            from hathor.transaction.scripts import MultiSig
+            from hathorlib.scripts import MultiSig
             if MultiSig.re_match.search(output_script):
                 multisig_data = MultiSig.get_multisig_data(data)
                 # input_script + redeem_script

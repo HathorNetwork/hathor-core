@@ -126,6 +126,9 @@ class ScriptError(HathorError):
     """Base class for script evaluation errors"""
 
 
+class InvalidOpcodeError(ScriptError):
+    """Found an invalid opcode when interpreting a script."""
+
 class OutOfData(ScriptError):
     """PUSHDATA operation with more bytes than we have available"""
 

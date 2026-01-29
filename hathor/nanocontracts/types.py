@@ -32,9 +32,10 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathor.serialization import SerializationError
-from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
+
+from hathorlib.scripts.opcode import OpcodesVersion
 
 # XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
 #
@@ -160,9 +161,9 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
     def checksig(self, script: bytes) -> bool:
         """Check if `self.script_input` satisfies the provided script."""
-        from hathor.transaction.exceptions import ScriptError
-        from hathor.transaction.scripts import ScriptExtras
-        from hathor.transaction.scripts.execute import raw_script_eval
+        from hathor.transaction.scripts import raw_script_eval
+        from hathorlib.exceptions import ScriptError
+        from hathorlib.scripts import ScriptExtras
         extras = ScriptExtras(tx=self, version=OpcodesVersion.V2)  # type: ignore[arg-type]
         try:
             raw_script_eval(input_data=self.script_input, output_script=script, extras=extras)

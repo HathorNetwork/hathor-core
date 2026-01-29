@@ -82,7 +82,7 @@ pyyaml = "^6.0.1"
 typing-extensions = "~4.12.2"
 python-healthchecklib = "^0.1.0"
 multidict = "=6.7.0"
-hathorlib = {path = "hathorlib"}
+hathorlib = {path = "hathorlib", develop = true}
 cffi = "=1.17.1"
 zope-interface = "=8.2"
 

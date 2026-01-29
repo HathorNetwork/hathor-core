@@ -22,13 +22,13 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ForbiddenMelt, HeaderNotSupported, InputOutputMismatch
 from hathor.transaction.headers import FeeHeader
 from hathor.transaction.headers.fee_header import FeeHeaderEntry
-from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_withdraw_amount
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.utils import add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key
+from hathorlib.scripts import P2PKH
 
 
 class FeeTokenTest(unittest.TestCase):

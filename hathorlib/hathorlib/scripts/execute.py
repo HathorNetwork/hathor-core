@@ -18,23 +18,26 @@ import struct
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
-from hathor.transaction import BaseTransaction, Transaction, TxInput
-from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData
+from hathorlib.conf.settings import HathorSettings as Settings
+from hathorlib.base_transaction import GenericVertex, TxInput
+from hathorlib.transaction import Transaction
+from hathorlib.exceptions import DataIndexError, FinalStackInvalid, OutOfData, InvalidOpcodeError
 
 if TYPE_CHECKING:
-    from hathor.transaction.scripts.opcode import OpcodesVersion
+    from hathorlib.scripts.opcode import OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class ScriptExtras:
     tx: Transaction
+    settings: Optional[Settings] = None
     version: OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class UtxoScriptExtras(ScriptExtras):
     txin: TxInput
-    spent_tx: BaseTransaction
+    spent_tx: GenericVertex
 
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
@@ -66,8 +69,8 @@ def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
         :raises ScriptError: case opcode is not found
         :raises FinalStackInvalid: case the evaluation fails
     """
-    from hathor.transaction.scripts.opcode import Opcode, execute_op_code
-    from hathor.transaction.scripts.script_context import ScriptContext
+    from hathorlib.scripts.opcode import Opcode, execute_op_code
+    from hathorlib.scripts.script_context import ScriptContext
     stack: Stack = []
     context = ScriptContext(stack=stack, logs=log, extras=extras)
     data_len = len(data)
@@ -100,7 +103,7 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, version: OpcodesVersion) -> None:
+def script_eval(tx: Transaction, txin: TxInput, spent_tx: GenericVertex, settings: Settings, version: OpcodesVersion) -> None:
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -111,21 +114,24 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, versi
     :type txin: :py:class:`hathor.transaction.TxInput`
 
     :param spent_tx: the transaction referenced by the input
-    :type spent_tx: :py:class:`hathor.transaction.BaseTransaction`
+    :type spent_tx: :py:class:`hathor.transaction.GenericVertex`
+
+    :param settings: the transaction referenced by the input
+    :type settings: :py:class:`hathorlib.transaction.GenericVertex`
 
     :raises ScriptError: if script verification fails
     """
     raw_script_eval(
         input_data=txin.data,
         output_script=spent_tx.outputs[txin.index].script,
-        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=version),
+        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=settings, version=version),
     )
 
 
 def raw_script_eval(*, input_data: bytes, output_script: bytes, extras: ScriptExtras) -> None:
     log: list[str] = []
 
-    from hathor.transaction.scripts import MultiSig
+    from hathorlib.scripts import MultiSig
     if MultiSig.re_match.search(output_script):
         # For MultiSig there are 2 executions:
         # First we need to evaluate that redeem_script matches redeem_script_hash
@@ -151,15 +157,15 @@ def decode_opn(opcode: int) -> int:
         :param opcode: the opcode to convert
         :type opcode: bytes
 
-        :raises InvalidScriptError: case opcode is not a valid OP_N
+        :raises InvalidOpcodeError: case opcode is not a valid OP_N
 
         :return: int value for opcode param
         :rtype: int
     """
-    from hathor.transaction.scripts import Opcode
+    from hathorlib.scripts import Opcode
     int_val = opcode - Opcode.OP_0
     if not (0 <= int_val <= 16):
-        raise InvalidScriptError('unknown opcode {}'.format(opcode))
+        raise InvalidOpcodeError('unknown opcode {}'.format(opcode))
     return int_val
 
 
@@ -177,7 +183,7 @@ def get_script_op(pos: int, data: bytes, stack: Optional[Stack] = None) -> Opcod
         :type stack: Union[Stack, None]
 
         :raises OutOfData: when trying to read out of script
-        :raises InvalidScriptError: when opcode in `pos` is invalid
+        :raises InvalidOpcodeError: when opcode in `pos` is invalid
 
         :return: extracted opcode at `pos` and position of next opcode on `data`
         :rtype: OpcodePosition
@@ -185,9 +191,9 @@ def get_script_op(pos: int, data: bytes, stack: Optional[Stack] = None) -> Opcod
     opcode = get_data_single_byte(pos, data)
 
     # validate opcode
-    from hathor.transaction.scripts import Opcode
+    from hathorlib.scripts import Opcode
     if not Opcode.is_valid_opcode(opcode):
-        raise InvalidScriptError('Invalid Opcode ({}) at position {} in {!r}'.format(opcode, pos, data))
+        raise InvalidOpcodeError('Invalid Opcode ({}) at position {} in {!r}'.format(opcode, pos, data))
 
     to_append: Union[bytes, int, str]
     if 1 <= opcode <= 75:

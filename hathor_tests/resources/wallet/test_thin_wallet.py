@@ -6,7 +6,7 @@ from twisted.internet.defer import Deferred, inlineCallbacks
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.transaction.scripts import create_output_script
 from hathor.transaction.token_info import TokenVersion
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
@@ -16,6 +16,7 @@ from hathor.wallet.resources.thin_wallet import (
 )
 from hathor_tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx, create_fee_tokens, create_tokens
+from hathorlib.scripts import P2PKH, parse_address_script
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):

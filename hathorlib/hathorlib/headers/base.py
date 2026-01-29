@@ -18,13 +18,13 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from hathorlib.base_transaction import BaseTransaction
+    from hathorlib.base_transaction import GenericVertex
 
 
 class VertexBaseHeader(ABC):
     @classmethod
     @abstractmethod
-    def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[VertexBaseHeader, bytes]:
+    def deserialize(cls, tx: GenericVertex, buf: bytes) -> tuple[VertexBaseHeader, bytes]:
         """Deserialize header from `buf` which starts with header id."""
         raise NotImplementedError
 

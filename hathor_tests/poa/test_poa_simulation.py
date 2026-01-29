@@ -33,11 +33,11 @@ from hathor.simulator.trigger import StopWhenTrue
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
 from hathor.transaction.genesis import generate_new_genesis
 from hathor.transaction.poa import PoaBlock
-from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import not_none
 from hathor_tests.poa.utils import get_settings, get_signer
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathorlib.scripts import P2PKH
 
 
 def _get_blocks_by_height(manager: HathorManager) -> defaultdict[int, list[PoaBlock]]:

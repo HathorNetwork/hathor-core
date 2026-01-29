@@ -14,7 +14,7 @@ settings = HathorSettings()
 def get_genesis_output():
     import base58
 
-    from hathor.transaction.scripts import P2PKH
+    from hathorlib.scripts import P2PKH
     if settings.NETWORK_NAME == 'mainnet':
         address = 'HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD'
     elif settings.NETWORK_NAME.startswith('testnet'):

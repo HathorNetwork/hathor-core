@@ -12,23 +12,25 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction.scripts.construct import (
+from hathorlib.scripts.construct import (
     SigopCounter,
     create_base_script,
     create_output_script,
     parse_address_script,
 )
-from hathor.transaction.scripts.execute import ScriptExtras, script_eval
-from hathor.transaction.scripts.hathor_script import HathorScript
-from hathor.transaction.scripts.multi_sig import MultiSig
-from hathor.transaction.scripts.nano_contract_match_values import NanoContractMatchValues
-from hathor.transaction.scripts.opcode import Opcode
-from hathor.transaction.scripts.p2pkh import P2PKH
+from hathorlib.scripts.execute import ScriptExtras, execute_eval, script_eval, raw_script_eval
+from hathorlib.scripts.hathor_script import HathorScript
+from hathorlib.scripts.multi_sig import MultiSig
+from hathorlib.scripts.data_script import DataScript
+from hathorlib.scripts.nano_contract_match_values import NanoContractMatchValues
+from hathorlib.scripts.opcode import Opcode
+from hathorlib.scripts.p2pkh import P2PKH
 
 __all__ = [
     'Opcode',
     'P2PKH',
     'MultiSig',
+    'DataScript',
     'NanoContractMatchValues',
     'HathorScript',
     'ScriptExtras',
@@ -36,5 +38,7 @@ __all__ = [
     'parse_address_script',
     'create_base_script',
     'create_output_script',
+    'execute_eval',
     'script_eval',
+    'raw_script_eval',
 ]

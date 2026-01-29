@@ -23,12 +23,11 @@ from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_double
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput, TxOutput
 from hathor.transaction.headers import FeeHeader
 from hathor.transaction.headers.fee_header import FeeHeaderEntry
-from hathor.transaction.scripts import P2PKH, HathorScript, Opcode, parse_address_script
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
-from hathorlib.scripts import DataScript
+from hathorlib.scripts import P2PKH, DataScript, HathorScript, Opcode, parse_address_script
 
 settings = HathorSettings()
 

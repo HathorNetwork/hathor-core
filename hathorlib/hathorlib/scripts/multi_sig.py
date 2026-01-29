@@ -15,12 +15,12 @@
 import struct
 from typing import Any, Optional
 
-from hathor.crypto.util import decode_address, get_address_b58_from_redeem_script_hash
-from hathor.transaction.scripts.base_script import BaseScript
-from hathor.transaction.scripts.construct import get_pushdata, re_compile
-from hathor.transaction.scripts.execute import Stack, get_script_op
-from hathor.transaction.scripts.hathor_script import HathorScript
-from hathor.transaction.scripts.opcode import Opcode, op_pushdata, op_pushdata1
+from hathorlib.utils import decode_address, get_address_b58_from_redeem_script_hash
+from hathorlib.scripts.base_script import BaseScript
+from hathorlib.scripts.construct import get_pushdata, re_compile
+from hathorlib.scripts.execute import Stack, get_script_op
+from hathorlib.scripts.hathor_script import HathorScript
+from hathorlib.scripts.opcode import Opcode, op_pushdata, op_pushdata1
 
 
 class MultiSig(BaseScript):

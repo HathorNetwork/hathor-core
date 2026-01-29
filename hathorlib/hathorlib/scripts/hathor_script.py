@@ -15,7 +15,7 @@
 import struct
 from typing import Union
 
-from hathor.transaction.scripts.opcode import Opcode
+from hathorlib.scripts.opcode import Opcode
 
 
 class HathorScript:

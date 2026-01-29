@@ -21,16 +21,15 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from hathor.conf.get_settings import get_global_settings
-from hathor.crypto.util import (
+from hathorlib.utils import (
     get_address_b58_from_bytes,
     get_hash160,
     get_public_key_from_bytes_compressed,
     is_pubkey_compressed,
 )
-from hathor.transaction.exceptions import (
+from hathorlib.exceptions import (
     EqualVerifyFailed,
-    InvalidScriptError,
+    InvalidOpcodeError,
     InvalidStackData,
     MissingStackItems,
     OracleChecksigFailed,
@@ -38,7 +37,7 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
-from hathor.transaction.scripts.execute import (
+from hathorlib.scripts.execute import (
     Stack,
     UtxoScriptExtras,
     binary_to_int,
@@ -46,7 +45,7 @@ from hathor.transaction.scripts.execute import (
     get_data_value,
     get_script_op,
 )
-from hathor.transaction.scripts.script_context import ScriptContext
+from hathorlib.scripts.script_context import ScriptContext
 
 
 class OpcodesVersion(IntEnum):
@@ -499,7 +498,7 @@ def op_find_p2pkh(context: ScriptContext) -> None:
     :type stack: list[]
 
     :param tx: Transaction to be added
-    :type tx: :py:class:`hathor.transaction.BaseTransaction`
+    :type tx: :py:class:`hathorlib.GenericVertex`
 
     :param contract_value: amount available on the nano contract (on the original output)
     :type contract_type: int
@@ -510,7 +509,7 @@ def op_find_p2pkh(context: ScriptContext) -> None:
     if not len(context.stack):
         raise MissingStackItems('OP_FIND_P2PKH: empty stack')
 
-    from hathor.transaction.scripts import P2PKH
+    from hathorlib.scripts import P2PKH
     assert isinstance(context.extras, UtxoScriptExtras)
     spent_tx = context.extras.spent_tx
     txin = context.extras.txin
@@ -538,7 +537,8 @@ def op_checkmultisig(context: ScriptContext) -> None:
     :raises MissingStackItems: if stack is empty or it has less signatures than the minimum required
     :raises VerifyFailed: verification failed
     """
-    settings = get_global_settings()
+    settings = context.extras.settings
+    assert settings is not None, 'settings is required to run scripts'
 
     if not len(context.stack):
         raise MissingStackItems('OP_CHECKMULTISIG: empty stack')
@@ -628,7 +628,7 @@ def op_integer(opcode: int, stack: Stack) -> None:
     """
     try:
         stack.append(decode_opn(opcode))
-    except InvalidScriptError as e:
+    except InvalidOpcodeError as e:
         raise ScriptError(e) from e
 
 

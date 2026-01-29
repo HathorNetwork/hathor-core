@@ -23,7 +23,7 @@ from hathorlib.headers.types import VertexHeaderId
 from hathorlib.utils import decode_unsigned, encode_unsigned, int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathorlib.base_transaction import BaseTransaction
+    from hathorlib.base_transaction import GenericVertex
     from hathorlib.nanocontracts.types import NCActionType
 
 NC_INITIALIZE_METHOD = 'initialize'
@@ -41,7 +41,7 @@ class NanoHeaderAction:
 
 @dataclass(frozen=True)
 class NanoHeader(VertexBaseHeader):
-    tx: BaseTransaction
+    tx: GenericVertex
 
     # Sequence number for the caller.
     nc_seqnum: int
@@ -78,7 +78,7 @@ class NanoHeader(VertexBaseHeader):
         ), buf
 
     @classmethod
-    def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[NanoHeader, bytes]:
+    def deserialize(cls, tx: GenericVertex, buf: bytes) -> tuple[NanoHeader, bytes]:
         from hathorlib.nanocontracts import DeprecatedNanoContract
 
         header_id, buf = buf[:1], buf[1:]

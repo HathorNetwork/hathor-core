@@ -9,12 +9,12 @@ from twisted.internet.threads import deferToThread
 from hathor.daa import TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
 from hathor_tests import unittest
 from hathor_tests.unittest import TestBuilder
 from hathor_tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, create_tokens
+from hathorlib.scripts import P2PKH
 
 
 class BaseTransactionStorageTest(unittest.TestCase):

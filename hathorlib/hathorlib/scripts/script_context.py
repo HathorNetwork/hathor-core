@@ -12,12 +12,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction.scripts.execute import ScriptExtras, Stack
+from hathorlib.scripts.execute import ScriptExtras, Stack
 
 
 class ScriptContext:
     """A context to be manipulated during script execution. A separate instance must be used for each script."""
     __slots__ = ('stack', 'logs', 'extras')
+    stack: Stack
+    logs: list[str]
+    extras: ScriptExtras
 
     def __init__(self, *, stack: Stack, logs: list[str], extras: ScriptExtras) -> None:
         self.stack = stack

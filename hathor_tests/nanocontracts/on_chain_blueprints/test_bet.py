@@ -22,9 +22,9 @@ from hathor.nanocontracts.types import (
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
-from hathor.transaction.scripts import P2PKH
 from hathor.util import initialize_hd_wallet, not_none
 from hathor.wallet import KeyPair
+from hathorlib.scripts import P2PKH
 
 from ...utils import DEFAULT_WORDS
 from .. import test_blueprints

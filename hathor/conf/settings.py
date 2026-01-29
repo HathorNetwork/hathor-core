@@ -130,7 +130,7 @@ class HathorSettings(NamedTuple):
     # P2PKH HMcJymyctyhnWsWTXqhP9txDwgNZaMWf42
     #
     # To generate a new P2PKH script, run:
-    # >>> from hathor.transaction.scripts import P2PKH
+    # >>> from hathorlib.scripts import P2PKH
     # >>> import base58
     # >>> address = base58.b58decode('HMcJymyctyhnWsWTXqhP9txDwgNZaMWf42')
     # >>> P2PKH.create_output_script(address=address).hex()

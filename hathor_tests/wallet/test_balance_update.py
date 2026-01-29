@@ -1,11 +1,11 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import PrivateKeyNotFound
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens
+from hathorlib.scripts import P2PKH
 
 
 class HathorSyncMethodsTestCase(unittest.TestCase):

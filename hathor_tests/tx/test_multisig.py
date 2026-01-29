@@ -5,12 +5,13 @@ from hathor.exception import InvalidNewTransaction
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
-from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
-from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathor.transaction.scripts import create_output_script, script_eval
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
+from hathorlib.scripts import P2PKH, MultiSig, parse_address_script
+from hathorlib.scripts.opcode import OpcodesVersion
 
 
 class MultisigTestCase(unittest.TestCase):

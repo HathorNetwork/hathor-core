@@ -33,7 +33,6 @@ from hathor.transaction.exceptions import (
     TransactionDataError,
     WeightError,
 )
-from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.verification_params import VerificationParams
@@ -45,6 +44,7 @@ from hathor_tests.utils import (
     create_script_with_sigops,
     get_genesis_key,
 )
+from hathorlib.scripts import P2PKH, parse_address_script
 
 
 class TransactionTest(unittest.TestCase):

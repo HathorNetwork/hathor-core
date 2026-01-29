@@ -20,9 +20,9 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
-from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
+from hathorlib.scripts import parse_address_script
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction
