@@ -1366,14 +1366,14 @@ files = [
 
 [[package]]
 name = "packaging"
-version = "23.2"
+version = "26.0"
 description = "Core utilities for Python packages"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 groups = ["main", "dev"]
 files = [
-    {file = "packaging-23.2-py3-none-any.whl", hash = "sha256:8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7"},
-    {file = "packaging-23.2.tar.gz", hash = "sha256:048fb0e9405036518eaaf48a55953c750c11e1a1b68e0dd1a9d62ed0c092cfc5"},
+    {file = "packaging-26.0-py3-none-any.whl", hash = "sha256:b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529"},
+    {file = "packaging-26.0.tar.gz", hash = "sha256:00243ae351a257117b6a241061796684b084ed1c516a08c48a3f7e147a9d80b4"},
 ]
 
 [[package]]
@@ -2016,10 +2016,10 @@ use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
 name = "rocksdb"
-version = "0.9.3"
+version = "0.10.0"
 description = "Python bindings for RocksDB"
 optional = false
-python-versions = ">=3.10"
+python-versions = ">=3.11"
 groups = ["main"]
 files = []
 develop = false
@@ -2032,7 +2032,7 @@ test = ["pytest"]
 type = "git"
 url = "https://github.com/hathornetwork/python-rocksdb.git"
 reference = "HEAD"
-resolved_reference = "1f0ce6a35472ad2e631335f159db9906ed2ebc86"
+resolved_reference = "9cb62eeae85002b3c0c9bf8d6625fb0d2b6e8a49"
 
 [[package]]
 name = "sentry-sdk"
@@ -2719,4 +2719,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "00c97ccd8d0b45e844ae915c1fa9aab9d5616ad0be8562956179a665906ee277"
+content-hash = "8dde7fc3df325eaf23d3ec1c502f84b05f813de4ec3fc39a0ee93e377a790e2d"
