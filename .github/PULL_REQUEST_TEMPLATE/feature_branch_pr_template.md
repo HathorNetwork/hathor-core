@@ -8,4 +8,5 @@ What was the motivation for the changes in this PR?
 
 ### Checklist
 
-- [ ] If you are requesting a merge into `master`, confirm this code is production-ready and can be included in future releases as soon as it gets merged 
+- [ ] If you are requesting a merge into `master`, confirm this code is production-ready and can be included in future releases as soon as it gets merged
+- [ ] Added changelog fragment OR added `skip-changelog` label

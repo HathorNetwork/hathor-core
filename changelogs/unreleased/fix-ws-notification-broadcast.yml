@@ -1,5 +1,0 @@
----
-title: Fixing ws message being sent to wrong user
-merge_request: 302
-author:
-type: fix
