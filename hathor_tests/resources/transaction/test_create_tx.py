@@ -6,9 +6,10 @@ from hathor.daa import TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
-from hathor.transaction.scripts import P2PKH, create_base_script
+from hathor.transaction.scripts import create_base_script
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
+from hathorlib.scripts import P2PKH
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):

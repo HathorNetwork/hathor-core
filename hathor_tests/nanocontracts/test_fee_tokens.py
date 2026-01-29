@@ -23,10 +23,10 @@ from hathor.transaction.headers import FeeHeader
 from hathor.transaction.headers.fee_header import FeeHeaderEntry
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.transaction.scripts import Opcode
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathorlib.scripts import Opcode
 
 
 class MyBlueprint(Blueprint):

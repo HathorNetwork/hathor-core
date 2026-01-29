@@ -3,9 +3,10 @@ import base64
 import base58
 
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, script_eval
+from hathor.transaction.scripts import script_eval
 from hathor.util import json_dumpb
 from hathor_tests import unittest
+from hathorlib.scripts import P2PKH, NanoContractMatchValues
 
 
 class NanoContracts(unittest.TestCase):

@@ -1,6 +1,6 @@
 from hathor.nanocontracts.types import ContractId, SignedData, VertexId
-from hathor.transaction.scripts import P2PKH
 from hathor_tests import unittest
+from hathorlib.scripts import P2PKH
 
 
 class BaseNanoContractTestCase(unittest.TestCase):

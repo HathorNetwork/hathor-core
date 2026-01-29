@@ -423,7 +423,7 @@ class BaseIndexesTest(unittest.TestCase):
     def test_utxo_index_after_push_tx(self):
         from hathor.indexes.utxo_index import UtxoIndexItem
         from hathor.transaction import TxInput, TxOutput
-        from hathor.transaction.scripts import P2PKH
+        from hathorlib.scripts import P2PKH
         utxo_index = self.tx_storage.indexes.utxo
 
         address = self.get_address(0)
@@ -493,7 +493,7 @@ class BaseIndexesTest(unittest.TestCase):
         """
         from hathor.indexes.utxo_index import UtxoIndexItem
         from hathor.transaction import TxInput, TxOutput
-        from hathor.transaction.scripts import P2PKH
+        from hathorlib.scripts import P2PKH
         utxo_index = self.tx_storage.indexes.utxo
 
         address = self.get_address(0)

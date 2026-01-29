@@ -27,9 +27,9 @@ from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
-from hathor.transaction.scripts import P2PKH
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, get_genesis_key
+from hathorlib.scripts import P2PKH
 
 settings = HathorSettings()
 

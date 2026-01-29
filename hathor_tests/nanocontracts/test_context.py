@@ -6,10 +6,10 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.vertex_data import BlockData, NanoHeaderData, VertexData
 from hathor.transaction import Block, Transaction
 from hathor.transaction.base_transaction import TxVersion
-from hathor.transaction.scripts import parse_address_script
 from hathor.util import not_none
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.scripts import parse_address_script
 
 GLOBAL_CTX_DATA: tuple[VertexData, BlockData] | None = None
 

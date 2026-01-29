@@ -18,11 +18,11 @@ from hathor.nanocontracts.types import (
     TxOutputScript,
     VertexId,
 )
-from hathor.transaction.scripts import P2PKH
 from hathor.util import not_none
 from hathor.wallet import KeyPair
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.test_blueprints import bet
+from hathorlib.scripts import P2PKH
 
 settings = HathorSettings()
 

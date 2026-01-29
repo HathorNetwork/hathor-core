@@ -36,11 +36,11 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
-from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT, MAX_NC_SCRIPT_SIZE
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
+from hathorlib.scripts import P2PKH, HathorScript, Opcode
 
 STR_NC_TYPE = make_nc_type(str)
 INT_NC_TYPE = make_nc_type(int)

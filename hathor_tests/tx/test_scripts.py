@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from hathor.conf.lib_settings import get_lib_settings
 from hathor.crypto.util import get_address_from_public_key, get_hash160, get_public_key_bytes_compressed
 from hathor.transaction.exceptions import (
     DataIndexError,
@@ -18,9 +19,13 @@ from hathor.transaction.exceptions import (
     TimeLocked,
     VerifyFailed,
 )
-from hathor.transaction.scripts import P2PKH, HathorScript, MultiSig, Opcode, create_base_script, create_output_script
-from hathor.transaction.scripts.construct import SigopCounter, get_pushdata, re_compile
-from hathor.transaction.scripts.execute import (
+from hathor.transaction.scripts import create_base_script, create_output_script
+from hathor.wallet import HDWallet
+from hathor_tests import unittest
+from hathor_tests.utils import BURN_ADDRESS, get_genesis_key
+from hathorlib.scripts import P2PKH, HathorScript, MultiSig, Opcode
+from hathorlib.scripts.construct import SigopCounter, get_pushdata, re_compile
+from hathorlib.scripts.execute import (
     Stack,
     UtxoScriptExtras,
     binary_to_int,
@@ -31,7 +36,7 @@ from hathor.transaction.scripts.execute import (
     get_data_value,
     get_script_op,
 )
-from hathor.transaction.scripts.opcode import (
+from hathorlib.scripts.opcode import (
     op_checkdatasig,
     op_checkmultisig,
     op_checksig,
@@ -49,10 +54,7 @@ from hathor.transaction.scripts.opcode import (
     op_pushdata,
     op_pushdata1,
 )
-from hathor.transaction.scripts.script_context import ScriptContext
-from hathor.wallet import HDWallet
-from hathor_tests import unittest
-from hathor_tests.utils import BURN_ADDRESS, get_genesis_key
+from hathorlib.scripts.script_context import ScriptContext
 
 
 class TestScripts(unittest.TestCase):
@@ -257,7 +259,7 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), settings=get_lib_settings())
 
         # wrong signature puts False (0) on stack
         stack: Stack = [b'aaaaaaaaa', pubkey_bytes]
@@ -282,7 +284,7 @@ class TestScripts(unittest.TestCase):
         signature = self.genesis_private_key.sign(hashed_data, ec.ECDSA(hashes.SHA256()))
         pubkey_bytes = get_public_key_bytes_compressed(self.genesis_public_key)
 
-        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), settings=get_lib_settings())
 
         stack: Stack = [signature, pubkey_bytes]
         self.assertIsNone(tx._sighash_data_cache)
@@ -512,28 +514,28 @@ class TestScripts(unittest.TestCase):
         # try with just 1 output
         stack: Stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out_genesis)])
-        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=get_lib_settings())
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs and correct output among them
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)])
-        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=get_lib_settings())
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs without correct amount output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)])
-        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=get_lib_settings())
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
 
         # several outputs without correct address output
         stack = [genesis_address]
         tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
-        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx)
+        extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=get_lib_settings())
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
 
@@ -547,7 +549,7 @@ class TestScripts(unittest.TestCase):
         tx = Transaction()
 
         stack: Stack = [struct.pack('!I', timestamp)]
-        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), settings=get_lib_settings())
 
         with self.assertRaises(TimeLocked):
             tx.timestamp = timestamp - 1
@@ -573,7 +575,7 @@ class TestScripts(unittest.TestCase):
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         data_to_sign = tx.get_sighash_all()
-        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock())
+        extras = UtxoScriptExtras(tx=tx, txin=Mock(), spent_tx=Mock(), settings=get_lib_settings())
 
         wallet = HDWallet()
         wallet._manually_initialize()

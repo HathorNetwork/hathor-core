@@ -7,11 +7,11 @@ from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
-from hathor.transaction.scripts import P2PKH
 from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.utils import add_blocks_unlock_reward, get_genesis_key
+from hathorlib.scripts import P2PKH
 
 DEBUG: bool = False
 

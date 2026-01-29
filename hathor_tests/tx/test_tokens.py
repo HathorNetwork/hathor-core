@@ -7,12 +7,12 @@ from hathor.exception import InvalidNewTransaction
 from hathor.indexes.tokens_index import TokenUtxoInfo
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import BlockWithTokensError, InputOutputMismatch, InvalidToken, TransactionDataError
-from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
+from hathorlib.scripts import P2PKH
 
 
 class TokenTest(unittest.TestCase):

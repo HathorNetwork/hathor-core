@@ -17,7 +17,6 @@ from unittest.mock import Mock, patch
 from hathor.crypto.util import get_address_from_public_key
 from hathor.manager import HathorManager
 from hathor.transaction import BitcoinAuxPow, Block, MergeMinedBlock, Transaction, TxInput, TxOutput
-from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.validation_state import ValidationState
@@ -28,6 +27,7 @@ from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
+from hathorlib.scripts import P2PKH
 
 
 class VerificationTest(unittest.TestCase):
