@@ -20,8 +20,8 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import Self
 
-from hathorlib.scripts import P2PKH, MultiSig, parse_address_script
 from hathor.types import TokenUid, VertexId
+from hathorlib.scripts import P2PKH, MultiSig, parse_address_script
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput, TxVersion

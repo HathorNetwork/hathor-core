@@ -22,9 +22,9 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_missing_params_msg, render_options, set_cors
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
-from hathorlib.scripts import P2PKH, NanoContractMatchValues
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
+from hathorlib.scripts import P2PKH, NanoContractMatchValues
 
 PARAMS_POST = ['values', 'fallback_address', 'oracle_pubkey_hash', 'oracle_data_id', 'total_value', 'input_value']
 

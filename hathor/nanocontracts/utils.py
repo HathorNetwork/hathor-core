@@ -133,8 +133,8 @@ def sign_openssl_multisig(
 ) -> None:
     """Sign this nano header with multisig using privkeys from the cryptography lib."""
     from hathor.transaction import Transaction
-    from hathorlib.scripts import MultiSig
     from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script
+    from hathorlib.scripts import MultiSig
 
     redeem_script = generate_multisig_redeem_script(required_count, redeem_pubkey_bytes)
     multisig_address_b58 = generate_multisig_address(redeem_script)

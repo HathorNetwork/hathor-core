@@ -42,9 +42,9 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
-from hathorlib.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+from hathorlib.scripts import P2PKH
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 

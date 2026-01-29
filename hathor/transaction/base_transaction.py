@@ -14,16 +14,12 @@
 
 from __future__ import annotations
 
-import base64
-import datetime
-import hashlib
 import time
 import weakref
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from enum import IntEnum
 from itertools import chain
-from math import isfinite, log
-from struct import pack
+from math import log
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
@@ -31,26 +27,17 @@ from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
-from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.util import (
-    VerboseCallback,
-    bytes_to_output_value,
-    int_to_bytes,
-    output_value_to_bytes,
-    unpack,
-    unpack_len,
-)
+from hathor.transaction.util import VerboseCallback
 from hathor.transaction.validation_state import ValidationState
-from hathor.types import TokenUid, TxOutputScript, VertexId
+from hathor.types import VertexId
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
+from hathorlib import GenericVertex as LibGenericVertex, TxInput, TxOutput
 
 if TYPE_CHECKING:
-    from _hashlib import HASH
-
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -145,7 +132,7 @@ _base_transaction_log = logger.new()
 StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covariant=True)
 
 
-class GenericVertex(ABC, Generic[StaticMetadataT]):
+class GenericVertex(LibGenericVertex, Generic[StaticMetadataT]):
     """Hathor generic vertex"""
 
     __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
@@ -193,6 +180,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
+        super().__init__()
+
         self._settings = settings or get_global_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
@@ -225,65 +214,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         """ Used internally on __repr__ and __str__, returns a dict of `field_name: formatted_value`.
         """
-        from collections import OrderedDict
-        d = OrderedDict(
-            name=self.name or '',
-            nonce='%d' % (self.nonce or 0),
-            timestamp='%s' % self.timestamp,
-            version='%s' % int(self.version),
-            weight='%f' % self.weight,
-            hash=self.hash_hex,
-        )
+        d = super()._get_formatted_fields_dict(short)
         if not short:
-            d.update(
-                inputs=repr(self.inputs),
-                outputs=repr(self.outputs),
-                parents=repr([x.hex() for x in self.parents]),
-                storage=repr(self.storage),
-            )
+            d.update(storage=self.storage)
         return d
 
-    def __repr__(self) -> str:
-        class_name = type(self).__name__
-        return '%s(%s)' % (class_name, ', '.join('%s=%s' % i for i in self._get_formatted_fields_dict(False).items()))
-
-    def __str__(self) -> str:
-        class_name = type(self).__name__
-        return '%s(%s)' % (class_name, ', '.join('%s=%s' % i for i in self._get_formatted_fields_dict().items()))
-
-    @property
-    @abstractmethod
-    def is_block(self) -> bool:
-        raise NotImplementedError
-
-    @property
-    @abstractmethod
-    def is_transaction(self) -> bool:
-        raise NotImplementedError
-
-    def is_nano_contract(self) -> bool:
-        """Return whether this transaction is a nano contract."""
-        return False
-
-    def has_fees(self) -> bool:
-        """Return whether this transaction has a fee header."""
-        return False
-
-    def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all common fields for a Transaction and a Block from a buffer.
-
-        :param struct_bytes: Bytes of a serialized transaction
-        :type struct_bytes: bytes
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        buf = self.get_funds_fields_from_struct(struct_bytes, verbose=verbose)
-        buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
-        return buf
-
+    # FIXME: VertexParser should work the same on hathorlib and then we can remove this method.
     def get_header_from_bytes(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """Parse bytes and return the next header in buffer."""
         from hathor.transaction.vertex_parser import VertexParser
@@ -296,88 +232,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self.headers.append(header)
         return buf
 
-    def get_maximum_number_of_headers(self) -> int:
-        """Return the maximum number of headers for this vertex."""
-        return 2
-
-    @classmethod
-    @abstractmethod
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        """ Create a transaction from its bytes.
-
-        :param struct_bytes: Bytes of a serialized transaction
-        :type struct_bytes: bytes
-
-        :return: A transaction or a block, depending on the class `cls`
-
-        :raises ValueError: when the sequence of bytes is incorrect
+    def set_storage(self, storage: 'TransactionStorage'):
+        """ Transaction Storage setter
         """
-        raise NotImplementedError
-
-    def __eq__(self, other: object) -> bool:
-        """Two transactions are equal when their hash matches
-
-        :raises NotImplement: when one of the transactions do not have a calculated hash
-        """
-        if not isinstance(other, GenericVertex):
-            return NotImplemented
-        if self._hash and other._hash:
-            return self.hash == other.hash
-        return False
-
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the transaction
-
-        :rtype: bytes
-        """
-        return self.get_struct()
-
-    def __hash__(self) -> int:
-        return hash(self.hash)
-
-    @property
-    def hash(self) -> VertexId:
-        assert self._hash is not None, 'Vertex hash must be initialized.'
-        return self._hash
-
-    @hash.setter
-    def hash(self, value: VertexId) -> None:
-        self._hash = value
-
-    @property
-    def hash_hex(self) -> str:
-        """Return the current stored hash in hex string format"""
-        if self._hash is not None:
-            return self.hash.hex()
-        else:
-            return ''
-
-    @property
-    def sum_outputs(self) -> int:
-        """Sum of the value of the outputs"""
-        return sum(output.value for output in self.outputs if not output.is_token_authority())
-
-    def get_target(self, override_weight: Optional[float] = None) -> int:
-        """Target to be achieved in the mining process"""
-        if not isfinite(self.weight):
-            raise WeightError
-        return int(2**(256 - (override_weight or self.weight)) - 1)
-
-    def get_time_from_now(self, now: Optional[Any] = None) -> str:
-        """ Return a the time difference between now and the tx's timestamp
-
-        :return: String in the format "0 days, 00:00:00"
-        :rtype: str
-        """
-        if now is None:
-            now = datetime.datetime.now()
-        ts = datetime.datetime.fromtimestamp(self.timestamp)
-        dt = now - ts
-        seconds = dt.seconds
-        hours, seconds = divmod(seconds, 3600)
-        minutes, seconds = divmod(seconds, 60)
-        return '{} days, {:02d}:{:02d}:{:02d}'.format(dt.days, hours, minutes, seconds)
+        self.storage = storage
 
     def get_parents(self, *, existing_only: bool = False) -> Iterator['BaseTransaction']:
         """Return an iterator of the parents
@@ -405,84 +263,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return False
         from hathor.transaction.genesis import is_genesis
         return is_genesis(self.hash, settings=self._settings)
-
-    @abstractmethod
-    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        raise NotImplementedError
-
-    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all common graph fields for a Transaction and a Block from a buffer.
-
-        :param buf: Bytes of a serialized transaction
-        :type buf: bytes
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
-        if verbose:
-            verbose('weigth', self.weight)
-            verbose('timestamp', self.timestamp)
-            verbose('parents_len', parents_len)
-
-        for _ in range(parents_len):
-            parent, buf = unpack_len(TX_HASH_SIZE, buf)  # 256bits
-            self.parents.append(parent)
-            if verbose:
-                verbose('parent', parent.hex())
-
-        return buf
-
-    @abstractmethod
-    def get_funds_struct(self) -> bytes:
-        raise NotImplementedError
-
-    def get_graph_struct(self) -> bytes:
-        """Return the graph data serialization of the transaction, without including the nonce field
-
-        :return: graph data serialization of the transaction
-        :rtype: bytes
-        """
-        struct_bytes = pack(_GRAPH_FORMAT_STRING, self.weight, self.timestamp, len(self.parents))
-        for parent in self.parents:
-            struct_bytes += parent
-        return struct_bytes
-
-    def get_headers_struct(self) -> bytes:
-        """Return the serialization of the headers only."""
-        return b''.join(h.serialize() for h in self.headers)
-
-    def get_struct_without_nonce(self) -> bytes:
-        """Return a partial serialization of the transaction, without including the nonce field
-
-        :return: Partial serialization of the transaction
-        :rtype: bytes
-        """
-        struct_bytes = self.get_funds_struct()
-        struct_bytes += self.get_graph_struct()
-        return struct_bytes
-
-    def get_struct_nonce(self) -> bytes:
-        """Return a partial serialization of the transaction's proof-of-work, which is usually the nonce field
-
-        :return: Partial serialization of the transaction's proof-of-work
-        :rtype: bytes
-        """
-        assert self.SERIALIZATION_NONCE_SIZE is not None
-        struct_bytes = int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
-        return struct_bytes
-
-    def get_struct(self) -> bytes:
-        """Return the complete serialization of the transaction
-
-        :rtype: bytes
-        """
-        struct_bytes = self.get_struct_without_nonce()
-        struct_bytes += self.get_struct_nonce()
-        struct_bytes += self.get_headers_struct()
-        return struct_bytes
 
     def get_all_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
@@ -569,77 +349,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         To be implemented by tx/block, used by `self.validate_checkpoint`. Should not modify the validation state."""
         raise NotImplementedError
 
-    def get_funds_hash(self) -> bytes:
-        """Return the sha256 of the funds part of the transaction
-
-        :return: the hash of the funds data
-        :rtype: bytes
-        """
-        funds_hash = hashlib.sha256()
-        funds_hash.update(self.get_funds_struct())
-        return funds_hash.digest()
-
-    def get_graph_and_headers_hash(self) -> bytes:
-        """Return the sha256 of the graph part of the transaction + its headers
-
-        :return: the hash of the graph and headers data
-        :rtype: bytes
-        """
-        h = hashlib.sha256()
-        h.update(self.get_graph_struct())
-        h.update(self.get_headers_struct())
-        return h.digest()
-
-    def get_mining_header_without_nonce(self) -> bytes:
-        """Return the transaction header without the nonce
-
-        :return: transaction header without the nonce
-        :rtype: bytes
-        """
-        data = self.get_funds_hash() + self.get_graph_and_headers_hash()
-        assert len(data) == 64, 'the mining data should have a fixed size of 64 bytes'
-        return data
-
-    def calculate_hash1(self) -> 'HASH':
-        """Return the sha256 of the transaction without including the `nonce`
-
-        :return: A partial hash of the transaction
-        :rtype: :py:class:`_hashlib.HASH`
-        """
-        calculate_hash1 = hashlib.sha256()
-        calculate_hash1.update(self.get_mining_header_without_nonce())
-        return calculate_hash1
-
-    def calculate_hash2(self, part1: 'HASH') -> bytes:
-        """Return the hash of the transaction, starting from a partial hash
-
-        The hash of the transactions is the `sha256(sha256(bytes(tx))`.
-
-        :param part1: A partial hash of the transaction, usually from `calculate_hash1`
-        :type part1: :py:class:`_hashlib.HASH`
-
-        :return: The transaction hash
-        :rtype: bytes
-        """
-        part1.update(self.nonce.to_bytes(self.HASH_NONCE_SIZE, byteorder='big', signed=False))
-        # SHA256D gets the hash in littlean format. Reverse the bytes to get the big-endian representation.
-        return hashlib.sha256(part1.digest()).digest()[::-1]
-
-    def calculate_hash(self) -> bytes:
-        """Return the full hash of the transaction
-
-        It is the same as calling `self.calculate_hash2(self.calculate_hash1())`.
-
-        :return: The hash transaction
-        :rtype: bytes
-        """
-        part1 = self.calculate_hash1()
-        return self.calculate_hash2(part1)
-
     def update_hash(self) -> None:
         """ Update the hash of the transaction.
         """
-        self.hash = self.calculate_hash()
+        super().update_hash()
         if metadata := getattr(self, '_metadata', None):
             metadata.hash = self.hash
 
@@ -796,29 +509,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         """ Creates a json serializable dict object from self
         """
-        data: dict[str, Any] = {}
-        data['hash'] = self.hash_hex or None
-        data['nonce'] = self.nonce
-        data['timestamp'] = self.timestamp
-        data['version'] = int(self.version)
-        data['weight'] = self.weight
-        data['signal_bits'] = self.signal_bits
-
-        data['parents'] = []
-        for parent in self.parents:
-            data['parents'].append(parent.hex())
-
-        data['inputs'] = []
-        for tx_input in self.inputs:
-            data_input: dict[str, Any] = {}
-            data_input['tx_id'] = tx_input.tx_id.hex()
-            data_input['index'] = tx_input.index
-            data_input['data'] = base64.b64encode(tx_input.data).decode('utf-8')
-            data['inputs'].append(data_input)
-
-        data['outputs'] = []
-        for output in self.outputs:
-            data['outputs'].append(output.to_json(decode_script=decode_script))
+        data = super().to_json(decode_script)
 
         if include_metadata:
             data['metadata'] = self.get_metadata().to_json()
@@ -881,20 +572,15 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :return: Transaction or Block copy
         """
-        new_tx = self.create_from_struct(
-            self.get_struct(),
-            storage=self.storage if include_storage else None,
-        )
+        new_tx = self.create_from_struct(self.get_struct())
+        if include_storage and self.storage is not None:
+            new_tx.set_storage(self.storage)
         # static_metadata can be safely copied as it is a frozen dataclass
         new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
             assert self._metadata is not None  # FIXME: is this actually true or do we have to check if not None
             new_tx._metadata = self._metadata.clone()
         return new_tx
-
-    @abstractmethod
-    def get_token_uid(self, index: int) -> TokenUid:
-        raise NotImplementedError
 
     @property
     def static_metadata(self) -> StaticMetadataT:
@@ -931,218 +617,3 @@ removed in the future).
 """
 Vertex: TypeAlias = GenericVertex[VertexStaticMetadata]
 BaseTransaction: TypeAlias = Vertex
-
-
-class TxInput:
-    _tx: BaseTransaction  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
-
-    def __init__(self, tx_id: VertexId, index: int, data: bytes) -> None:
-        """
-            tx_id: hash of the transaction that contains the output of this input
-            index: index of the output you are spending from transaction tx_id (1 byte)
-            data: data to solve output script
-        """
-        assert isinstance(tx_id, VertexId), 'Value is %s, type %s' % (str(tx_id), type(tx_id))
-        assert isinstance(index, int), 'Value is %s, type %s' % (str(index), type(index))
-        assert isinstance(data, bytes), 'Value is %s, type %s' % (str(data), type(data))
-
-        self.tx_id = tx_id
-        self.index = index
-        self.data = data
-
-    def __repr__(self) -> str:
-        return str(self)
-
-    def __str__(self) -> str:
-        return 'TxInput(tx_id=%s, index=%s)' % (self.tx_id.hex(), self.index)
-
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the input
-
-        :rtype: bytes
-        """
-        ret = b''
-        ret += self.tx_id
-        ret += int_to_bytes(self.index, 1)
-        ret += int_to_bytes(len(self.data), 2)  # data length
-        ret += self.data
-        return ret
-
-    def get_sighash_bytes(self) -> bytes:
-        """Return a serialization of the input for the sighash. It always clears the input data.
-
-        :return: Serialization of the input
-        :rtype: bytes
-        """
-        ret = bytearray()
-        ret += self.tx_id
-        ret += int_to_bytes(self.index, 1)
-        ret += int_to_bytes(0, 2)
-        return bytes(ret)
-
-    @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
-        """ Creates a TxInput from a serialized input. Returns the input
-        and remaining bytes
-        """
-        input_tx_id, buf = unpack_len(TX_HASH_SIZE, buf)
-        if verbose:
-            verbose('txin_tx_id', input_tx_id.hex())
-        (input_index, data_len), buf = unpack('!BH', buf)
-        if verbose:
-            verbose('txin_index', input_index)
-            verbose('txin_data_len', data_len)
-        input_data, buf = unpack_len(data_len, buf)
-        if verbose:
-            verbose('txin_data', input_data.hex())
-        txin = cls(input_tx_id, input_index, input_data)
-        return txin, buf
-
-    @classmethod
-    def create_from_dict(cls, data: dict) -> 'TxInput':
-        """ Creates a TxInput from a human readable dict."""
-        return cls(
-            bytes.fromhex(data['tx_id']),
-            int(data['index']),
-            base64.b64decode(data['data']) if data.get('data') else b'',
-        )
-
-    def to_human_readable(self) -> dict[str, Any]:
-        """Returns dict of Input information, ready to be serialized
-
-        :rtype: dict
-        """
-        return {
-            'tx_id': self.tx_id.hex(),  # string
-            'index': self.index,  # int
-            'data': base64.b64encode(self.data).decode('utf-8')  # string
-        }
-
-
-class TxOutput:
-
-    # first bit in the index byte indicates whether it's an authority output
-    TOKEN_INDEX_MASK = 0b01111111
-    TOKEN_AUTHORITY_MASK = 0b10000000
-
-    # last bit is mint authority
-    TOKEN_MINT_MASK = 0b00000001
-    # second to last bit is melt authority
-    TOKEN_MELT_MASK = 0b00000010
-
-    ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
-
-    def __init__(self, value: int, script: TxOutputScript, token_data: int = 0) -> None:
-        """
-            value: amount spent (4 bytes)
-            script: script in bytes
-            token_data: index of the token uid in the uid list
-        """
-        assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
-        assert isinstance(script, TxOutputScript), 'script is %s, type %s' % (str(script), type(script))
-        assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
-        if value <= 0 or value > MAX_OUTPUT_VALUE:
-            raise InvalidOutputValue
-
-        self.value = value  # int
-        self.script = script  # bytes
-        self.token_data = token_data  # int
-
-    def __eq__(self, other):
-        return (
-            self.value == other.value and
-            self.script == other.script and
-            self.token_data == other.token_data
-        )
-
-    def __repr__(self) -> str:
-        return str(self)
-
-    def __str__(self) -> str:
-        cls_name = type(self).__name__
-        value_str = hex(self.value) if self.is_token_authority() else str(self.value)
-        if self.token_data:
-            return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
-        else:
-            return f'{cls_name}(value={value_str}, script={self.script.hex()})'
-
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the output
-
-        :rtype: bytes
-        """
-        ret = b''
-        ret += output_value_to_bytes(self.value)
-        ret += int_to_bytes(self.token_data, 1)
-        ret += int_to_bytes(len(self.script), 2)    # script length
-        ret += self.script
-        return ret
-
-    @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
-        """ Creates a TxOutput from a serialized output. Returns the output
-        and remaining bytes
-        """
-        value, buf = bytes_to_output_value(buf)
-        if verbose:
-            verbose('txout_value', value)
-        (token_data, script_len), buf = unpack('!BH', buf)
-        if verbose:
-            verbose('txout_token_data', token_data)
-            verbose('txout_script_len', script_len)
-        script, buf = unpack_len(script_len, buf)
-        if verbose:
-            verbose('txout_script', script.hex())
-        txout = cls(value, script, token_data)
-        return txout, buf
-
-    def get_token_index(self) -> int:
-        """The token uid index in the list"""
-        return self.token_data & self.TOKEN_INDEX_MASK
-
-    def is_token_authority(self) -> bool:
-        """Whether this is a token authority output"""
-        return (self.token_data & self.TOKEN_AUTHORITY_MASK) > 0
-
-    def is_standard_script(self) -> bool:
-        """Return True if this output has a standard script."""
-        from hathorlib.scripts import P2PKH
-        p2pkh = P2PKH.parse_script(self.script)
-        if p2pkh is not None:
-            return True
-        return False
-
-    def can_mint_token(self) -> bool:
-        """Whether this utxo can mint tokens"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_MINT_MASK) > 0)
-
-    def can_melt_token(self) -> bool:
-        """Whether this utxo can melt tokens"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
-
-    def to_human_readable(self) -> dict[str, Any]:
-        """Checks what kind of script this is and returns it in human readable form
-        """
-        from hathorlib.scripts import NanoContractMatchValues, parse_address_script
-
-        script_type = parse_address_script(self.script)
-        if script_type:
-            ret = script_type.to_human_readable()
-            ret['value'] = self.value
-            ret['token_data'] = self.token_data
-            return ret
-
-        nano_contract = NanoContractMatchValues.parse_script(self.script)
-        if nano_contract:
-            return nano_contract.to_human_readable()
-
-        return {}
-
-    def to_json(self, *, decode_script: bool = False) -> dict[str, Any]:
-        data: dict[str, Any] = {}
-        data['value'] = self.value
-        data['token_data'] = self.token_data
-        data['script'] = base64.b64encode(self.script).decode('utf-8')
-        if decode_script:
-            data['decoded'] = self.to_human_readable()
-        return data

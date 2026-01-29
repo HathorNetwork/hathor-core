@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from math import isfinite, log
 from struct import error as StructError, pack
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, Self, TypeAlias, Callable
 
 from _hashlib import HASH
 
@@ -41,6 +41,16 @@ _GRAPH_FORMAT_STRING = '!dIB'
 
 # The int value of one byte
 _ONE_BYTE = 0xFF
+
+
+Address: TypeAlias = bytes         # NewType('Address', bytes)
+AddressB58: TypeAlias = str
+Amount: TypeAlias = int            # NewType('Amount', int)
+Timestamp: TypeAlias = int         # NewType('Timestamp', int)
+TxOutputScript: TypeAlias = bytes  # NewType('TxOutputScript', bytes)
+VertexId: TypeAlias = bytes        # NewType('VertexId', bytes)
+TokenUid: TypeAlias = VertexId     # NewType('TokenUid', VertexId)
+VerboseCallback = Optional[Callable[[str, Any], None]]
 
 
 def sum_weights(w1: float, w2: float) -> float:
@@ -105,7 +115,7 @@ class GenericVertex(ABC):
     """Hathor base transaction"""
 
     __slots__ = (
-        'version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', 'hash', 'headers'
+        'name', 'version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash', 'headers'
     )
 
     # Even though nonce is serialized with different sizes for tx and blocks
@@ -130,8 +140,9 @@ class GenericVertex(ABC):
         self.inputs: List['TxInput'] = []
         self.outputs: List['TxOutput'] = []
         self.parents: List[bytes] = []
-        self.hash: bytes = b''
+        self._hash: Optional[bytes] = None
         self.headers: list[VertexBaseHeader] = []
+        self.name = None
 
     @property
     @abstractmethod
@@ -141,6 +152,10 @@ class GenericVertex(ABC):
     @property
     @abstractmethod
     def is_transaction(self) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_token_uid(self, index: int) -> TokenUid:
         raise NotImplementedError
 
     def is_nano_contract(self) -> bool:
@@ -156,6 +171,7 @@ class GenericVertex(ABC):
         """
         from collections import OrderedDict
         d = OrderedDict(
+            name=self.name or '',
             nonce='%d' % (self.nonce or 0),
             timestamp='%s' % self.timestamp,
             version='%s' % int(self.version),
@@ -178,15 +194,14 @@ class GenericVertex(ABC):
         class_name = type(self).__name__
         return '%s(%s)' % (class_name, ', '.join('%s=%s' % i for i in self._get_formatted_fields_dict().items()))
 
-    def clone(self) -> 'GenericVertex':
+    def clone(self) -> Self:
         """Return exact copy without sharing memory, including metadata if loaded.
 
         :return: Transaction or Block copy
         """
-        new_tx = self.create_from_struct(bytes(self))
-        return new_tx
+        return self.create_from_struct(bytes(self))
 
-    def get_fields_from_struct(self, struct_bytes: bytes) -> bytes:
+    def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -197,8 +212,8 @@ class GenericVertex(ABC):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        buf = self.get_funds_fields_from_struct(struct_bytes)
-        buf = self.get_graph_fields_from_struct(buf)
+        buf = self.get_funds_fields_from_struct(struct_bytes, verbose=verbose)
+        buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
         return buf
 
     def get_header_from_bytes(self, buf: bytes) -> bytes:
@@ -218,7 +233,7 @@ class GenericVertex(ABC):
 
     @classmethod
     @abstractmethod
-    def create_from_struct(cls, struct_bytes: bytes) -> 'GenericVertex':
+    def create_from_struct(cls, struct_bytes: bytes) -> Self:
         """ Create a transaction from its bytes.
 
         :param struct_bytes: Bytes of a serialized transaction
@@ -237,7 +252,7 @@ class GenericVertex(ABC):
         """
         if not isinstance(other, GenericVertex):
             return NotImplemented
-        if self.hash and other.hash:
+        if self._hash and other._hash:
             return self.hash == other.hash
         return False
 
@@ -249,13 +264,21 @@ class GenericVertex(ABC):
         return self.get_struct()
 
     def __hash__(self) -> int:
-        assert self.hash is not None
         return hash(self.hash)
+
+    @property
+    def hash(self) -> VertexId:
+        assert self._hash is not None, 'Vertex hash must be initialized.'
+        return self._hash
+
+    @hash.setter
+    def hash(self, value: VertexId) -> None:
+        self._hash = value
 
     @property
     def hash_hex(self) -> str:
         """Return the current stored hash in hex string format"""
-        if self.hash is not None:
+        if self._hash is not None:
             return self.hash.hex()
         else:
             return ''
@@ -287,10 +310,10 @@ class GenericVertex(ABC):
         return '{} days, {:02d}:{:02d}:{:02d}'.format(dt.days, hours, minutes, seconds)
 
     @abstractmethod
-    def get_funds_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         raise NotImplementedError
 
-    def get_graph_fields_from_struct(self, buf: bytes) -> bytes:
+    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common graph fields for a Transaction and a Block from a buffer.
 
         :param buf: Bytes of a serialized transaction
@@ -302,10 +325,16 @@ class GenericVertex(ABC):
         :raises ValueError: when the sequence of bytes is incorect
         """
         (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
+        if verbose:
+            verbose('weigth', self.weight)
+            verbose('timestamp', self.timestamp)
+            verbose('parents_len', parents_len)
 
         for _ in range(parents_len):
             parent, buf = unpack_len(TX_HASH_SIZE, buf)  # 256bits
             self.parents.append(parent)
+            if verbose:
+                verbose('parent', parent.hex())
 
         return buf
 
@@ -437,11 +466,6 @@ class GenericVertex(ABC):
         part1 = self.calculate_hash1()
         return self.calculate_hash2(part1)
 
-    def update_hash(self) -> None:
-        """ Update the hash of the transaction.
-        """
-        self.hash = self.calculate_hash()
-
     def is_nft_creation_standard(self) -> bool:
         """Returns True if it's an NFT creation transaction"""
         return False
@@ -483,6 +507,35 @@ class GenericVertex(ABC):
 
         return True
 
+    def to_json(self, decode_script: bool = False) -> dict[str, Any]:
+        """ Creates a json serializable dict object from self
+        """
+        data: dict[str, Any] = {}
+        data['hash'] = self.hash_hex or None
+        data['nonce'] = self.nonce
+        data['timestamp'] = self.timestamp
+        data['version'] = int(self.version)
+        data['weight'] = self.weight
+        data['signal_bits'] = self.signal_bits
+
+        data['parents'] = []
+        for parent in self.parents:
+            data['parents'].append(parent.hex())
+
+        data['inputs'] = []
+        for tx_input in self.inputs:
+            data_input: dict[str, Any] = {}
+            data_input['tx_id'] = tx_input.tx_id.hex()
+            data_input['index'] = tx_input.index
+            data_input['data'] = base64.b64encode(tx_input.data).decode('utf-8')
+            data['inputs'].append(data_input)
+
+        data['outputs'] = []
+        for output in self.outputs:
+            data['outputs'].append(output.to_json(decode_script=decode_script))
+
+        return data
+
 
 class TxInput:
     _tx: GenericVertex  # XXX: used for caching on hathor.transaction.Transaction.get_spent_tx
@@ -519,31 +572,44 @@ class TxInput:
         ret += self.data
         return ret
 
-    def get_sighash_bytes(self, clear_data: bool) -> bytes:
+    def get_sighash_bytes(self) -> bytes:
         """Return a serialization of the input for the sighash
 
         :return: Serialization of the input
         :rtype: bytes
         """
-        if not clear_data:
-            return bytes(self)
-        else:
-            ret = bytearray()
-            ret += self.tx_id
-            ret += int_to_bytes(self.index, 1)
-            ret += int_to_bytes(0, 2)
-            return bytes(ret)
+        ret = bytearray()
+        ret += self.tx_id
+        ret += int_to_bytes(self.index, 1)
+        ret += int_to_bytes(0, 2)
+        return bytes(ret)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes) -> Tuple['TxInput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> Tuple['TxInput', bytes]:
         """ Creates a TxInput from a serialized input. Returns the input
         and remaining bytes
         """
         input_tx_id, buf = unpack_len(TX_HASH_SIZE, buf)
+        if verbose:
+            verbose('txin_tx_id', input_tx_id.hex())
         (input_index, data_len), buf = unpack('!BH', buf)
+        if verbose:
+            verbose('txin_index', input_index)
+            verbose('txin_data_len', data_len)
         input_data, buf = unpack_len(data_len, buf)
+        if verbose:
+            verbose('txin_data', input_data.hex())
         txin = cls(input_tx_id, input_index, input_data)
         return txin, buf
+
+    @classmethod
+    def create_from_dict(cls, data: dict) -> 'TxInput':
+        """ Creates a TxInput from a human readable dict."""
+        return cls(
+            bytes.fromhex(data['tx_id']),
+            int(data['index']),
+            base64.b64decode(data['data']) if data.get('data') else b'',
+        )
 
     def to_human_readable(self) -> Dict[str, Any]:
         """Returns dict of Input information, ready to be serialized
@@ -590,12 +656,23 @@ class TxOutput:
         self.script = script  # bytes
         self.token_data = token_data  # int
 
+    def __eq__(self, other):
+        return (
+            self.value == other.value and
+            self.script == other.script and
+            self.token_data == other.token_data
+        )
+
     def __repr__(self) -> str:
         return str(self)
 
     def __str__(self) -> str:
-        value_str = bin(self.value) if self.is_token_authority() else str(self.value)
-        return ('TxOutput(token_data=%s, value=%s)' % (bin(self.token_data), value_str))
+        cls_name = type(self).__name__
+        value_str = hex(self.value) if self.is_token_authority() else str(self.value)
+        if self.token_data:
+            return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
+        else:
+            return f'{cls_name}(value={value_str}, script={self.script.hex()})'
 
     def __bytes__(self) -> bytes:
         """Returns a byte representation of the output
@@ -610,13 +687,20 @@ class TxOutput:
         return ret
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes) -> Tuple['TxOutput', bytes]:
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
         """ Creates a TxOutput from a serialized output. Returns the output
         and remaining bytes
         """
         value, buf = bytes_to_output_value(buf)
+        if verbose:
+            verbose('txout_value', value)
         (token_data, script_len), buf = unpack('!BH', buf)
+        if verbose:
+            verbose('txout_token_data', token_data)
+            verbose('txout_script_len', script_len)
         script, buf = unpack_len(script_len, buf)
+        if verbose:
+            verbose('txout_script', script.hex())
         txout = cls(value, script, token_data)
         return txout, buf
 
@@ -639,7 +723,7 @@ class TxOutput:
     def to_human_readable(self) -> Dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
         """
-        from hathorlib.scripts import parse_address_script
+        from hathorlib.scripts import NanoContractMatchValues, parse_address_script
 
         script_type = parse_address_script(self.script)
         if script_type:
@@ -647,6 +731,10 @@ class TxOutput:
             ret['value'] = self.value
             ret['token_data'] = self.token_data
             return ret
+
+        nano_contract = NanoContractMatchValues.parse_script(self.script)
+        if nano_contract:
+            return nano_contract.to_human_readable()
 
         return {}
 
@@ -680,8 +768,8 @@ class TxOutput:
         # Second check: output script type
         # if we allow different script types, then it's ok
         # otherwise we check if it's one of the standard types
-        parsed_output = parse_address_script(self.script)
         if only_standard_script_type:
+            parsed_output = parse_address_script(self.script)
             if parsed_output is None or not isinstance(parsed_output, self.STANDARD_SCRIPT_TYPES):
                 return False
 

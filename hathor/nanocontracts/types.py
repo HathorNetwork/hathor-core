@@ -159,9 +159,9 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
     def checksig(self, script: bytes) -> bool:
         """Check if `self.script_input` satisfies the provided script."""
+        from hathor.transaction.scripts import raw_script_eval
         from hathorlib.exceptions import ScriptError
         from hathorlib.scripts import ScriptExtras
-        from hathor.transaction.scripts import raw_script_eval
         extras = ScriptExtras(tx=self)  # type: ignore[arg-type]
         try:
             raw_script_eval(input_data=self.script_input, output_script=script, extras=extras)

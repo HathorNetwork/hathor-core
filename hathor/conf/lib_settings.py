@@ -14,12 +14,11 @@
 #
 from functools import cache
 
-from hathorlib.conf.settings import HathorSettings as LibSettings
 from hathor.conf import HathorSettings
+from hathorlib.conf.settings import HathorSettings as LibSettings
+
 
 @cache
 def get_lib_settings() -> LibSettings:
     hathor_settings = HathorSettings()
     return LibSettings(**hathor_settings._asdict())
-
-
