@@ -90,7 +90,7 @@ class BlockAtHeightResource(Resource):
 
 class BlockAtHeightParams(QueryParams):
     height: int
-    include_transactions: str | None
+    include_transactions: str | None = None
 
 
 BlockAtHeightResource.openapi = {

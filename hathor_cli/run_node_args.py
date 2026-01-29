@@ -14,18 +14,20 @@
 
 from typing import Optional
 
-from pydantic import Extra
+from pydantic import ConfigDict
 
 from hathor.feature_activation.feature import Feature  # skip-cli-import-custom-check
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig  # skip-cli-import-custom-check
 from hathor.utils.pydantic import BaseModel  # skip-cli-import-custom-check
 
 
-class RunNodeArgs(BaseModel, extra=Extra.allow):
+class RunNodeArgs(BaseModel):
     """
     Class that represents the CLI arguments used by the run_node command.
     Arguments must also be added to hathor_cli.run_node.RunNode.create_parser.
     """
+    model_config = ConfigDict(extra='allow')
+
     hostname: Optional[str]
     auto_hostname: bool
     unsafe_mode: Optional[str]
