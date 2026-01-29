@@ -35,6 +35,8 @@ from hathor.serialization import SerializationError
 from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
+from hathorlib.scripts.opcode import OpcodesVersion
+
 # XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
 #
 # Metaclass conflict: the metaclass of a derived class must be a (non-strict) subclass of the metaclasses of all its
@@ -162,7 +164,7 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
         from hathor.transaction.scripts import raw_script_eval
         from hathorlib.exceptions import ScriptError
         from hathorlib.scripts import ScriptExtras
-        extras = ScriptExtras(tx=self)  # type: ignore[arg-type]
+        extras = ScriptExtras(tx=self, version=OpcodesVersion.V2)  # type: ignore[arg-type]
         try:
             raw_script_eval(input_data=self.script_input, output_script=script, extras=extras)
         except ScriptError:

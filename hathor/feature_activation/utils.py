@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.transaction.scripts.opcode import OpcodesVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import FeatureSetting, HathorSettings
@@ -33,6 +34,7 @@ class Features:
     count_checkdatasig_op: bool
     nanocontracts: bool
     fee_tokens: bool
+    opcodes_version: OpcodesVersion
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
@@ -43,6 +45,7 @@ class Features:
             Feature.COUNT_CHECKDATASIG_OP: FeatureSetting.FEATURE_ACTIVATION,
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
+            Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
         }
 
         feature_is_active: dict[Feature, bool] = {
@@ -50,10 +53,13 @@ class Features:
             for feature, setting in feature_settings.items()
         }
 
+        opcodes_version = OpcodesVersion.V2 if feature_is_active[Feature.OPCODES_V2] else OpcodesVersion.V1
+
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
             nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
+            opcodes_version=opcodes_version,
         )
 
 

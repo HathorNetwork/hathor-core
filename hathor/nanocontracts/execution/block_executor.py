@@ -1,0 +1,411 @@
+#  Copyright 2025 Hathor Labs
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+"""NCBlockExecutor - Executes nano contract transactions in a block."""
+
+from __future__ import annotations
+
+import hashlib
+import traceback
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable
+
+from structlog import get_logger
+from typing_extensions import assert_never
+
+from hathor.execution_manager import non_critical_code
+from hathor.nanocontracts.exception import NCFail
+from hathor.transaction import Block, Transaction
+from hathor.transaction.exceptions import TokenNotFound
+from hathor.transaction.nc_execution_state import NCExecutionState
+from hathor.transaction.types import MetaNCCallRecord
+
+if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
+    from hathor.consensus.context import ConsensusAlgorithmContext
+    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+    from hathor.nanocontracts.runner import Runner
+    from hathor.nanocontracts.runner.runner import RunnerFactory
+    from hathor.nanocontracts.sorter.types import NCSorterCallable
+    from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
+
+
+@dataclass(slots=True, frozen=True)
+class NCExecutionSuccess:
+    """Result type for successful NC execution."""
+    runner: 'Runner'
+
+
+@dataclass(slots=True, frozen=True)
+class NCExecutionFailure:
+    """Result type for failed NC execution."""
+    runner: 'Runner'
+    exception: 'NCFail'
+    traceback: str
+
+
+@dataclass(slots=True, frozen=True)
+class NCExecutionSkipped:
+    """Result type for skipped NC execution (voided transactions)."""
+    seqnum_update: tuple[bytes, int] | None  # (nc_address, new_seqnum) or None
+
+
+NCExecutionResult = NCExecutionSuccess | NCExecutionFailure | NCExecutionSkipped
+
+logger = get_logger()
+
+_base_transaction_log = logger.new()
+
+
+class NCBlockExecutor:
+    """
+    Executes all nano contract transactions in a block.
+
+    This class contains the core NC execution logic, extracted from
+    BlockConsensusAlgorithm to allow reuse by debugging tools.
+    """
+
+    def __init__(
+        self,
+        *,
+        settings: 'HathorSettings',
+        runner_factory: 'RunnerFactory',
+        nc_storage_factory: 'NCStorageFactory',
+        nc_log_storage: 'NCLogStorage',
+        nc_calls_sorter: 'NCSorterCallable',
+        nc_exec_fail_trace: bool = False,
+    ) -> None:
+        """
+        Initialize the block executor.
+
+        Args:
+            settings: Hathor settings.
+            runner_factory: Factory to create Runner instances.
+            nc_storage_factory: Factory to create NC storage instances.
+            nc_log_storage: Storage for NC execution logs.
+            nc_calls_sorter: Function to sort NC transactions for deterministic execution order.
+            nc_exec_fail_trace: Whether to include stack traces in failure logs.
+        """
+        self._settings = settings
+        self._runner_factory = runner_factory
+        self._nc_storage_factory = nc_storage_factory
+        self._nc_log_storage = nc_log_storage
+        self._nc_calls_sorter = nc_calls_sorter
+        self._nc_exec_fail_trace = nc_exec_fail_trace
+
+    @property
+    def log(self) -> Any:
+        return _base_transaction_log
+
+    def initialize_empty(self, block: Block, context: 'ConsensusAlgorithmContext') -> None:
+        """Initialize a block with an empty contract trie."""
+        meta = block.get_metadata()
+        block_storage = self._nc_storage_factory.get_empty_block_storage()
+        block_storage.commit()
+        if meta.nc_block_root_id is not None:
+            assert meta.nc_block_root_id == block_storage.get_root_id()
+        else:
+            meta.nc_block_root_id = block_storage.get_root_id()
+            context.save(block)
+
+    def execute_chain(
+        self,
+        block: Block,
+        context: 'ConsensusAlgorithmContext',
+        *,
+        on_failure: Callable[[Transaction], None],
+    ) -> None:
+        """Execute NC transactions for a block and any pending parent blocks, handling reorgs.
+
+        This method determines which blocks need execution (handling reorgs) and
+        executes them in order from oldest to newest."""
+        # If we reach this point, Nano Contracts must be enabled.
+        assert self._settings.ENABLE_NANO_CONTRACTS
+        assert not block.is_genesis
+
+        meta = block.get_metadata()
+        if meta.voided_by:
+            # If the block is voided, skip execution.
+            return
+
+        assert meta.nc_block_root_id is None
+
+        to_be_executed: list[Block] = []
+        is_reorg: bool = False
+        if context.reorg_info:
+            # handle reorgs
+            is_reorg = True
+            cur = block
+            # XXX We could stop when `cur_meta.nc_block_root_id is not None` but
+            #     first we need to refactor meta.first_block and meta.voided_by to
+            #     have different values per block.
+            while cur != context.reorg_info.common_block:
+                cur_meta = cur.get_metadata()
+                if cur_meta.nc_block_root_id is not None:
+                    # Reset nc_block_root_id to force re-execution.
+                    cur_meta.nc_block_root_id = None
+                to_be_executed.append(cur)
+                cur = cur.get_block_parent()
+        else:
+            # No reorg occurred, so we execute all unexecuted blocks.
+            # Normally it's just the current block, but it's possible to have
+            # voided and therefore unexecuted blocks connected to the best chain,
+            # for example when a block is voided by a transaction.
+            cur = block
+            while True:
+                cur_meta = cur.get_metadata()
+                if cur_meta.nc_block_root_id is not None:
+                    break
+                to_be_executed.append(cur)
+                if cur.is_genesis:
+                    break
+                cur = cur.get_block_parent()
+
+        for current in to_be_executed[::-1]:
+            self.execute_block(current, context, is_reorg=is_reorg, on_failure=on_failure)
+
+    def execute_block(
+        self,
+        block: Block,
+        context: 'ConsensusAlgorithmContext',
+        *,
+        is_reorg: bool,
+        on_failure: Callable[[Transaction], None],
+    ) -> None:
+        """Execute all NC transactions in a single block."""
+        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+
+        assert self._settings.ENABLE_NANO_CONTRACTS
+
+        if block.is_genesis:
+            # XXX We can remove this call after the full node initialization is refactored and
+            #     the genesis block goes through the consensus protocol.
+            self.initialize_empty(block, context)
+            return
+
+        meta = block.get_metadata()
+        assert not meta.voided_by
+        assert meta.nc_block_root_id is None
+
+        parent = block.get_block_parent()
+        parent_meta = parent.get_metadata()
+        block_root_id = parent_meta.nc_block_root_id
+        assert block_root_id is not None
+
+        nc_calls: list[Transaction] = []
+        for tx in block.iter_transactions_in_this_block():
+            if not tx.is_nano_contract():
+                # Skip other type of transactions.
+                continue
+            tx_meta = tx.get_metadata()
+            assert tx_meta.nc_execution in {None, NCExecutionState.PENDING}
+            if tx_meta.voided_by:
+                assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
+            nc_calls.append(tx)
+
+        if not nc_calls:
+            meta.nc_block_root_id = block_root_id
+            context.save(block)
+            return
+
+        nc_sorted_calls = self._nc_calls_sorter(block, nc_calls)
+        block_storage = self._nc_storage_factory.get_block_storage(block_root_id)
+        seed_hasher = hashlib.sha256(block.hash)
+
+        for tx in nc_sorted_calls:
+            # Compute RNG seed for this transaction
+            seed_hasher.update(tx.hash)
+            seed_hasher.update(block_storage.get_root_id())
+            rng_seed = seed_hasher.digest()
+
+            result = self.execute_transaction(
+                tx=tx,
+                block_storage=block_storage,
+                rng_seed=rng_seed,
+            )
+
+            # Handle the execution result
+            tx_meta = tx.get_metadata()
+            match result:
+                case NCExecutionSuccess(runner=runner):
+                    from hathor.nanocontracts.runner.call_info import CallType
+
+                    tx_meta.nc_execution = NCExecutionState.SUCCESS
+                    context.save(tx)
+
+                    # Commit the runner changes
+                    # TODO Avoid calling multiple commits for the same contract. The best would be
+                    #      to call the commit method once per contract per block, just like we do
+                    #      for the block_storage. This ensures we will have a clean database with
+                    #      no orphan nodes.
+                    runner.commit()
+
+                    # Derive call_info, nc_calls, and events from runner
+                    call_info = runner.get_last_call_info()
+                    assert call_info.calls is not None
+                    nc_calls_records = [
+                        MetaNCCallRecord.from_call_record(call)
+                        for call in call_info.calls if call.type == CallType.PUBLIC
+                    ]
+                    events_list = call_info.nc_logger.__events__
+
+                    # Update metadata with call records
+                    assert tx_meta.nc_calls is None
+                    tx_meta.nc_calls = nc_calls_records
+                    context.save(tx)
+
+                    # Update indexes. This must be after metadata is updated.
+                    assert tx.storage is not None
+                    with non_critical_code(self.log):
+                        tx.storage.indexes.non_critical_handle_contract_execution(tx)
+
+                    # Pubsub event to indicate execution success
+                    context.nc_exec_success.append(tx)
+
+                    # Store events for pubsub
+                    assert context.nc_events is not None
+                    context.nc_events.append((tx, events_list))
+
+                    # Store events in transaction metadata
+                    if events_list:
+                        tx_meta.nc_events = [(event.nc_id, event.data) for event in events_list]
+                        context.save(tx)
+
+                    # Save logs
+                    self._nc_log_storage.save_logs(tx, call_info, None)
+
+                case NCExecutionFailure(runner=runner, exception=exception, traceback=tb):
+                    # Log the failure
+                    kwargs: dict[str, Any] = {}
+                    if tx.name:
+                        kwargs['__name'] = tx.name
+                    if self._nc_exec_fail_trace:
+                        kwargs['exc_info'] = True
+                    self.log.info(
+                        'nc execution failed',
+                        tx=tx.hash.hex(),
+                        error=repr(exception),
+                        cause=repr(exception.__cause__),
+                        **kwargs,
+                    )
+
+                    on_failure(tx)
+
+                    # Save logs with exception info
+                    call_info = runner.get_last_call_info()
+                    self._nc_log_storage.save_logs(tx, call_info, (exception, tb))
+
+                case NCExecutionSkipped(seqnum_update=seqnum_update):
+                    from hathor.nanocontracts.types import Address
+
+                    tx_meta.nc_execution = NCExecutionState.SKIPPED
+                    context.save(tx)
+
+                    # Update seqnum if needed
+                    if seqnum_update is not None:
+                        nc_address, new_seqnum = seqnum_update
+                        block_storage.set_address_seqnum(Address(nc_address), new_seqnum)
+
+                case _:
+                    assert_never(result)
+
+        # Save block state root id. If nothing happens, it should be the same as its block parent.
+        block_storage.commit()
+        assert block_storage.get_root_id() is not None
+        meta.nc_block_root_id = block_storage.get_root_id()
+        context.save(block)
+
+        # Log and verify execution states for all transactions
+        for tx in nc_calls:
+            tx_meta = tx.get_metadata()
+            assert tx_meta.nc_execution is not None
+            self.log.info('nano tx execution status',
+                          blk=block.hash.hex(),
+                          tx=tx.hash.hex(),
+                          execution=tx_meta.nc_execution.value)
+            match tx_meta.nc_execution:
+                case NCExecutionState.PENDING:  # pragma: no cover
+                    assert False, 'unexpected pending state'  # should never happen
+                case NCExecutionState.SUCCESS:
+                    assert tx_meta.voided_by is None
+                case NCExecutionState.FAILURE:
+                    assert tx_meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}
+                case NCExecutionState.SKIPPED:
+                    assert tx_meta.voided_by
+                    assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
+                case _:  # pragma: no cover
+                    assert_never(tx_meta.nc_execution)
+
+    def execute_transaction(
+        self,
+        *,
+        tx: Transaction,
+        block_storage: 'NCBlockStorage',
+        rng_seed: bytes,
+    ) -> NCExecutionResult:
+        """Execute a single NC transaction.
+
+        This method is pure and side-effect free. It does not persist anything,
+        does not call callbacks, and returns all information needed by the caller
+        to handle success/failure cases."""
+        from hathor.nanocontracts.types import Address
+
+        tx_meta = tx.get_metadata()
+        if tx_meta.voided_by:
+            # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
+            # mark this tx as voided.
+            # Check if seqnum needs to be updated.
+            nc_header = tx.get_nano_header()
+            seqnum = block_storage.get_address_seqnum(Address(nc_header.nc_address))
+            seqnum_update: tuple[bytes, int] | None = None
+            if nc_header.nc_seqnum > seqnum:
+                seqnum_update = (nc_header.nc_address, nc_header.nc_seqnum)
+            return NCExecutionSkipped(seqnum_update=seqnum_update)
+
+        runner = self._runner_factory.create(
+            block_storage=block_storage,
+            seed=rng_seed,
+        )
+        token_dict = tx.get_complete_token_info(block_storage)
+        should_verify_sum_after_execution = any(token_info.version is None for token_info in token_dict.values())
+
+        try:
+            runner.execute_from_tx(tx)
+
+            # after the execution we have the latest state in the storage
+            # and at this point no tokens pending creation
+            if should_verify_sum_after_execution:
+                self._verify_sum_after_execution(tx, block_storage)
+
+        except NCFail as e:
+            return NCExecutionFailure(
+                runner=runner,
+                exception=e,
+                traceback=traceback.format_exc(),
+            )
+
+        return NCExecutionSuccess(runner=runner)
+
+    def _verify_sum_after_execution(self, tx: Transaction, block_storage: 'NCBlockStorage') -> None:
+        """Verify token sums after execution for dynamically created tokens."""
+        from hathor.verification.transaction_verifier import TransactionVerifier
+        try:
+            token_dict = tx.get_complete_token_info(block_storage)
+            TransactionVerifier.verify_sum(self._settings, tx, token_dict)
+        except TokenNotFound as e:
+            # At this point, any nonexistent token would have made a prior validation fail. For example, if there
+            # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.
+            raise AssertionError from e
+        except Exception as e:
+            raise NCFail from e

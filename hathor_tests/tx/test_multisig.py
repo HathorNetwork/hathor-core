@@ -11,6 +11,7 @@ from hathor.wallet.util import generate_multisig_address, generate_multisig_rede
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
 from hathorlib.scripts import P2PKH, MultiSig, parse_address_script
+from hathorlib.scripts.opcode import OpcodesVersion
 
 
 class MultisigTestCase(unittest.TestCase):
@@ -124,6 +125,7 @@ class MultisigTestCase(unittest.TestCase):
 
         # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))
+        self.clock.advance(1)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount + 300))
@@ -136,7 +138,7 @@ class MultisigTestCase(unittest.TestCase):
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
         self.assertEqual(cls_script.to_human_readable(), expected_dict)
 
-        script_eval(tx, tx_input, tx1)
+        script_eval(tx, tx_input, tx1, version=OpcodesVersion.V2)
 
         # Script error
         with self.assertRaises(ScriptError):

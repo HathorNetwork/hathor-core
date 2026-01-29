@@ -15,7 +15,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Callable, assert_never
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Callable, assert_never
 
 from structlog import get_logger
 
@@ -24,11 +25,14 @@ from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.feature import Feature
+from hathor.nanocontracts.exception import NCInvalidSignature
+from hathor.nanocontracts.execution import NCBlockExecutor
 from hathor.profiler import get_cpu_profiler
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Block, Transaction
-from hathor.transaction.exceptions import RewardLocked
+from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooManySigOps
 from hathor.util import not_none
+from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -43,6 +47,12 @@ logger = get_logger()
 cpu = get_cpu_profiler()
 
 _base_transaction_log = logger.new()
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ConsensusEvent:
+    event: HathorEvents
+    kwargs: dict[str, Any]
 
 
 class ConsensusAlgorithm:
@@ -75,7 +85,6 @@ class ConsensusAlgorithm:
         self,
         nc_storage_factory: 'NCStorageFactory',
         soft_voided_tx_ids: set[bytes],
-        pubsub: PubSubManager,
         *,
         settings: HathorSettings,
         tx_storage: TransactionStorage,
@@ -87,12 +96,22 @@ class ConsensusAlgorithm:
     ) -> None:
         self._settings = settings
         self.log = logger.new()
-        self._pubsub = pubsub
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
+
+        # Create NCBlockExecutor with all NC-related dependencies
+        self._block_executor = NCBlockExecutor(
+            settings=settings,
+            runner_factory=runner_factory,
+            nc_storage_factory=nc_storage_factory,
+            nc_log_storage=nc_log_storage,
+            nc_calls_sorter=nc_calls_sorter,
+            nc_exec_fail_trace=nc_exec_fail_trace,
+        )
+
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
-            settings, runner_factory, nc_log_storage, feature_service, nc_exec_fail_trace=nc_exec_fail_trace,
+            settings, self._block_executor, feature_service,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
         self.nc_calls_sorter = nc_calls_sorter
@@ -100,10 +119,10 @@ class ConsensusAlgorithm:
 
     def create_context(self) -> ConsensusAlgorithmContext:
         """Handy method to create a context that can be used to access block and transaction algorithms."""
-        return ConsensusAlgorithmContext(self, self._pubsub)
+        return ConsensusAlgorithmContext(self)
 
     @cpu.profiler(key=lambda self, base: 'consensus!{}'.format(base.hash.hex()))
-    def unsafe_update(self, base: BaseTransaction) -> None:
+    def unsafe_update(self, base: BaseTransaction) -> list[ConsensusEvent]:
         """
         Run a consensus update with its own context, indexes will be updated accordingly.
 
@@ -163,6 +182,8 @@ class ConsensusAlgorithm:
             with self.tx_storage.allow_invalid_context():
                 self._remove_transactions(txs_to_remove, context)
 
+        pubsub_events = []
+
         # emit the reorg started event if needed
         if context.reorg_info is not None:
             assert isinstance(old_best_block, Block)
@@ -179,26 +200,28 @@ class ConsensusAlgorithm:
                 new_best_block=new_best_block.hash_hex,
                 common_block=context.reorg_info.common_block.hash_hex,
             )
-            context.pubsub.publish(
-                HathorEvents.REORG_STARTED,
-                old_best_height=best_height,
-                old_best_block=old_best_block,
-                new_best_height=new_best_height,
-                new_best_block=new_best_block,
-                common_block=context.reorg_info.common_block,
-                reorg_size=reorg_size,
-            )
+            pubsub_events.append(ConsensusEvent(
+                event=HathorEvents.REORG_STARTED,
+                kwargs=dict(
+                    old_best_height=best_height,
+                    old_best_block=old_best_block,
+                    new_best_height=new_best_height,
+                    new_best_block=new_best_block,
+                    common_block=context.reorg_info.common_block,
+                    reorg_size=reorg_size,
+                )
+            ))
 
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
             self.tx_storage.indexes.update_critical_indexes(tx_affected)
             with non_critical_code(self.log):
                 self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
-            context.pubsub.publish(HathorEvents.CONSENSUS_TX_UPDATE, tx=tx_affected)
+            pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_UPDATE, kwargs=dict(tx=tx_affected)))
 
         # signal all transactions of which the execution succeeded
         for tx_nc_success in context.nc_exec_success:
-            context.pubsub.publish(HathorEvents.NC_EXEC_SUCCESS, tx=tx_nc_success)
+            pubsub_events.append(ConsensusEvent(event=HathorEvents.NC_EXEC_SUCCESS, kwargs=dict(tx=tx_nc_success)))
 
         # handle custom NC events
         if isinstance(base, Block):
@@ -206,17 +229,21 @@ class ConsensusAlgorithm:
             for tx, events in context.nc_events:
                 assert tx.is_nano_contract()
                 for event in events:
-                    context.pubsub.publish(HathorEvents.NC_EVENT, tx=tx, nc_event=event)
+                    pubsub_events.append(
+                        ConsensusEvent(event=HathorEvents.NC_EVENT, kwargs=dict(tx=tx, nc_event=event))
+                    )
         else:
             assert context.nc_events is None
 
         # And emit events for txs that were removed
         for tx_removed in txs_to_remove:
-            context.pubsub.publish(HathorEvents.CONSENSUS_TX_REMOVED, tx=tx_removed)
+            pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_REMOVED, kwargs=dict(tx=tx_removed)))
 
         # and also emit the reorg finished event if needed
         if context.reorg_info is not None:
-            context.pubsub.publish(HathorEvents.REORG_FINISHED)
+            pubsub_events.append(ConsensusEvent(event=HathorEvents.REORG_FINISHED, kwargs={}))
+
+        return pubsub_events
 
     def filter_out_voided_by_entries_from_parents(self, tx: BaseTransaction, voided_by: set[bytes]) -> set[bytes]:
         """Filter out voided_by entries that should be inherited from parents."""
@@ -419,6 +446,9 @@ class ConsensusAlgorithm:
                 case Feature.COUNT_CHECKDATASIG_OP:
                     if not self._checkdatasig_count_rule(tx):
                         return False
+                case Feature.OPCODES_V2:
+                    if not self._opcodes_v2_activation_rule(tx, new_best_block):
+                        return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.NOP_FEATURE_1
@@ -479,8 +509,41 @@ class ConsensusAlgorithm:
         # a fail and the tx will be removed from the mempool.
         try:
             VertexVerifier._verify_sigops_output(settings=self._settings, vertex=tx, enable_checkdatasig_count=True)
-        except Exception:
+        except Exception as e:
+            if not isinstance(e, TooManySigOps):
+                self.log.exception('unexpected exception in mempool-reverification')
             return False
+        return True
+
+    def _opcodes_v2_activation_rule(self, tx: Transaction, new_best_block: Block) -> bool:
+        """Check whether a tx became invalid because of the opcodes V2 feature."""
+        from hathor.verification.nano_header_verifier import NanoHeaderVerifier
+        from hathor.verification.transaction_verifier import TransactionVerifier
+
+        # We check all txs regardless of the feature state, because this rule
+        # already prohibited mempool txs before the block feature activation.
+
+        params = VerificationParams.default_for_mempool(best_block=new_best_block)
+
+        # Any exception in the inputs verification will be considered
+        # a fail and the tx will be removed from the mempool.
+        try:
+            TransactionVerifier._verify_inputs(self._settings, tx, params, skip_script=False)
+        except Exception as e:
+            if not isinstance(e, InvalidInputData):
+                self.log.exception('unexpected exception in mempool-reverification')
+            return False
+
+        # Any exception in the nc_signature verification will be considered
+        # a fail and the tx will be removed from the mempool.
+        if tx.is_nano_contract():
+            try:
+                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, params)
+            except Exception as e:
+                if not isinstance(e, NCInvalidSignature):
+                    self.log.exception('unexpected exception in mempool-reverification')
+                return False
+
         return True
 
 

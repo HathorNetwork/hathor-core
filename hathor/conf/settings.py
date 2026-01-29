@@ -485,6 +485,9 @@ class HathorSettings(NamedTuple):
     # Used to enable fee-based tokens.
     ENABLE_FEE_BASED_TOKENS: FeatureSetting = FeatureSetting.DISABLED
 
+    # Used to enable opcodes V2.
+    ENABLE_OPCODES_V2: FeatureSetting = FeatureSetting.DISABLED
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}
 

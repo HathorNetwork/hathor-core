@@ -53,7 +53,7 @@ def gen_new_tx(manager: HathorManager, address: str, value: int) -> Transaction:
 def add_new_blocks(
     manager: HathorManager,
     num_blocks: int,
-    advance_clock: Optional[int] = None,
+    advance_clock: int = 1,
     *,
     parent_block_hash: Optional[VertexId] = None,
     block_data: bytes = b'',
@@ -85,7 +85,7 @@ def add_new_blocks(
 
 def add_new_block(
     manager: HathorManager,
-    advance_clock: Optional[int] = None,
+    advance_clock: int = 1,
     *,
     parent_block_hash: Optional[VertexId] = None,
     data: bytes = b'',

@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import dataclasses
 import datetime
 from dataclasses import replace
 from typing import Any, Generator
@@ -22,6 +23,7 @@ from twisted.internet.task import deferLater
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
+from hathor.consensus.consensus import ConsensusEvent
 from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.feature_activation.feature_service import FeatureService
@@ -30,11 +32,11 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block, Transaction
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.verification.verification_params import VerificationParams
 from hathor.verification.verification_service import VerificationService
-from hathor.wallet import BaseWallet
 
 logger = get_logger()
 cpu = get_cpu_profiler()
@@ -51,7 +53,6 @@ class VertexHandler:
         '_feature_service',
         '_pubsub',
         '_execution_manager',
-        '_wallet',
         '_log_vertex_bytes',
     )
 
@@ -66,7 +67,6 @@ class VertexHandler:
         feature_service: FeatureService,
         pubsub: PubSubManager,
         execution_manager: ExecutionManager,
-        wallet: BaseWallet | None,
         log_vertex_bytes: bool = False,
     ) -> None:
         self._log = logger.new()
@@ -78,7 +78,6 @@ class VertexHandler:
         self._feature_service = feature_service
         self._pubsub = pubsub
         self._execution_manager = execution_manager
-        self._wallet = wallet
         self._log_vertex_bytes = log_vertex_bytes
 
     @cpu.profiler('on_new_block')
@@ -118,13 +117,14 @@ class VertexHandler:
     def on_new_mempool_transaction(self, tx: Transaction) -> bool:
         """Called by mempool sync."""
         best_block = self._tx_storage.get_best_block()
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self._feature_service,
+            vertex=best_block,
+        )
         params = VerificationParams.default_for_mempool(
             best_block=best_block,
-            features=Features.from_vertex(
-                settings=self._settings,
-                feature_service=self._feature_service,
-                vertex=best_block,
-            ),
+            features=dataclasses.replace(features, opcodes_version=OpcodesVersion.V2),
         )
         return self._old_on_new_vertex(tx, params)
 
@@ -142,14 +142,15 @@ class VertexHandler:
         if best_block_meta.nc_block_root_id is None:
             assert best_block.is_genesis
 
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self._feature_service,
+            vertex=best_block,
+        )
         params = VerificationParams(
             reject_locked_reward=reject_locked_reward,
             nc_block_root_id=best_block_meta.nc_block_root_id,
-            features=Features.from_vertex(
-                settings=self._settings,
-                feature_service=self._feature_service,
-                vertex=best_block,
-            ),
+            features=dataclasses.replace(features, opcodes_version=OpcodesVersion.V2),
         )
         return self._old_on_new_vertex(vertex, params, quiet=quiet)
 
@@ -172,8 +173,8 @@ class VertexHandler:
             return False
 
         try:
-            self._unsafe_save_and_run_consensus(vertex)
-            self._post_consensus(vertex, params, quiet=quiet)
+            consensus_events = self._unsafe_save_and_run_consensus(vertex)
+            self._post_consensus(vertex, params, consensus_events, quiet=quiet)
         except BaseException:
             self._log.error('unexpected exception in on_new_vertex()', vertex=vertex)
             meta = vertex.get_metadata()
@@ -215,7 +216,7 @@ class VertexHandler:
 
         return True
 
-    def _unsafe_save_and_run_consensus(self, vertex: BaseTransaction) -> None:
+    def _unsafe_save_and_run_consensus(self, vertex: BaseTransaction) -> list[ConsensusEvent]:
         """
         This method is considered unsafe because the caller is responsible for crashing the full node
         if this method throws any exception.
@@ -228,12 +229,13 @@ class VertexHandler:
         self._tx_storage.save_transaction(vertex)
         with non_critical_code(self._log):
             self._tx_storage.indexes.add_to_non_critical_indexes(vertex)
-        self._consensus.unsafe_update(vertex)
+        return self._consensus.unsafe_update(vertex)
 
     def _post_consensus(
         self,
         vertex: BaseTransaction,
         params: VerificationParams,
+        consensus_events: list[ConsensusEvent],
         *,
         quiet: bool,
     ) -> None:
@@ -254,12 +256,10 @@ class VertexHandler:
         with non_critical_code(self._log):
             self._tx_storage.indexes.update_non_critical_indexes(vertex)
 
-            # Publish to pubsub manager the new tx accepted, now that it's full validated
+            self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_PROCESSING, tx=vertex)
+            for event in consensus_events:
+                self._pubsub.publish(event.event, **event.kwargs)
             self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
-
-            if self._wallet:
-                # TODO Remove it and use pubsub instead.
-                self._wallet.on_new_tx(vertex)
 
             self._log_new_object(vertex, 'new {}', quiet=quiet)
 

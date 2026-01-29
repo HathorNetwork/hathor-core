@@ -249,7 +249,6 @@ class CliBuilder:
         consensus_algorithm = ConsensusAlgorithm(
             self.nc_storage_factory,
             soft_voided_tx_ids,
-            pubsub=pubsub,
             settings=settings,
             runner_factory=runner_factory,
             nc_log_storage=nc_log_storage,
@@ -317,7 +316,6 @@ class CliBuilder:
             feature_service=self.feature_service,
             pubsub=pubsub,
             execution_manager=execution_manager,
-            wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 

@@ -51,6 +51,16 @@ FEATURE_ACTIVATION:
       version: 0.69.0
       signal_support_by_default: true
 
+    # current height: 316_075 at 2026-01-27 23:07:42 GMT
+    OPCODES_V2:
+      bit: 0
+      start_height: 316_080  # expected around 2026-01-27 23:12:42 GMT
+      timeout_height: 327_600  # 48 evaluation periods (4 days)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.69.0
+      signal_support_by_default: true
+
 ENABLE_NANO_CONTRACTS: feature_activation
 ENABLE_FEE_BASED_TOKENS: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:

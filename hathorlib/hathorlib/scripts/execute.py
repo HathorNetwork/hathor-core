@@ -12,20 +12,26 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 import struct
 from dataclasses import dataclass
-from typing import NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
 from hathorlib.conf.settings import HathorSettings as Settings
 from hathorlib.base_transaction import GenericVertex, TxInput
 from hathorlib.transaction import Transaction
 from hathorlib.exceptions import DataIndexError, FinalStackInvalid, OutOfData, InvalidOpcodeError
 
+if TYPE_CHECKING:
+    from hathorlib.scripts.opcode import OpcodesVersion
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class ScriptExtras:
     tx: Transaction
     settings: Optional[Settings] = None
+    version: OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -75,7 +81,7 @@ def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
             continue
 
         # this is an opcode manipulating the stack
-        execute_op_code(Opcode(opcode), context)
+        execute_op_code(Opcode(opcode), context, extras.version)
 
     evaluate_final_stack(stack, log)
 
@@ -97,7 +103,7 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: GenericVertex, settings: Settings) -> None:
+def script_eval(tx: Transaction, txin: TxInput, spent_tx: GenericVertex, settings: Settings, version: OpcodesVersion) -> None:
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -118,7 +124,7 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: GenericVertex, setting
     raw_script_eval(
         input_data=txin.data,
         output_script=spent_tx.outputs[txin.index].script,
-        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=settings),
+        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, settings=settings, version=version),
     )
 
 

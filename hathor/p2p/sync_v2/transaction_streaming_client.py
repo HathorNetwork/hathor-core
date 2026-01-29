@@ -28,6 +28,7 @@ from hathor.p2p.sync_v2.exception import (
 from hathor.p2p.sync_v2.streamers import StreamEnd
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import HathorError, TxValidationError
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.types import VertexId
 from hathor.verification.verification_params import VerificationParams
 
@@ -59,6 +60,7 @@ class TransactionStreamingClient:
                 count_checkdatasig_op=False,
                 nanocontracts=False,
                 fee_tokens=False,
+                opcodes_version=OpcodesVersion.V1,
             )
         )
 
