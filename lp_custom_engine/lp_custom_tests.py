@@ -1,5 +1,7 @@
 # File for testing some attributes and methods of different classes
 from lp_engine_objects import *
+from lp_utils import *
+import numpy as np
 
 def end_test() -> None:
     print("---------------")
@@ -171,6 +173,29 @@ def test_link_txs() -> None:
 def test_slippage_shifts() -> None:
     pass
 
+def test_gaussian_curve() -> None:
+    x_axis = np.arange(-0.5, 0.501, 0.001)
+    avg = 0.05
+    std_dev = 0.1
+
+    # Plotting multiple gaussian curves - varying the std dev
+    plt.figure(figsize=(8,6))
+    for ind in range(1, 6):
+        g_curve = gaussian_curve(avg, ind*std_dev, x_axis, False)
+        plt.plot(x_axis, g_curve, alpha=0.7, linewidth=2, label=f'std = {ind*std_dev:.2f}')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    plt.figure(figsize=(8,6))
+    for ind in range(1, 6):
+        g_curve = gaussian_curve(ind*avg, std_dev, x_axis, False)
+        plt.plot(x_axis, g_curve, alpha=0.7, linewidth=2, label=f'avg = {ind*avg:.2f}')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+        
+
 
 #test_tx_init()
 #test_tx_slippage()
@@ -178,4 +203,5 @@ def test_slippage_shifts() -> None:
 #test_add_threads()
 #test_trade_thread()
 #test_random_shuffle()
-test_link_txs()
+#test_link_txs()
+#test_gaussian_curve()
