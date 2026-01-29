@@ -8,14 +8,18 @@ import numpy as np
     objects given.
 """
 
+# ---- Control Panel ---- #
+NUMBER_OF_TXS: int = 10
+POOL_PERCENT: float = 0.05 / 100  # Percentage of the Pool 
 AMOUNT_A: float = 1000000
 AMOUNT_B: float = 2000000
+NOISE_SPREAD: float= POOL_PERCENT*AMOUNT_A
+AVG_SWAP: float = NOISE_SPREAD/2    #  -std/2 < AVG_SWAP < std/2 ideally.
+# ----------------------- #
+
 CONSTANT: float = AMOUNT_A*AMOUNT_B
 QUOTED_PRICE: float = AMOUNT_B/AMOUNT_A
-POOL_PERCENT: float = 0.05 / 100  # Percentage of the Pool 
-NOISE_SPREAD: float= POOL_PERCENT*AMOUNT_A
-NUMBER_OF_TXS: int = 10
-AVG_SWAP: float = NOISE_SPREAD/2
+
 
 def set_liquidity_pool(amount_a: float, amount_b: float) -> LiquidityPool:
     if amount_a <= 0:
@@ -91,7 +95,7 @@ def trade_and_random_trade(thread: Tx_Thread, lp: LiquidityPool, plot: bool = Fa
     plt.show()
 
 # Question for later: does liquidity provision within a block make the r_s and s curves 
-# NOT coincide at the end?
+# NOT coincide at the end?b
 
 # Does liquidity provision dampen the curve?
 
@@ -213,6 +217,10 @@ def shift_histograms() -> None:
     plt.show()
 
 def increase_avg_histograms() -> None:
+    """
+        Script for increasing the average per swap and obtain different histograms.
+    Docstring for increase_avg_histograms
+    """
     amount_a = AMOUNT_A
     amount_b = AMOUNT_B
     number_of_hists = 5
@@ -221,7 +229,7 @@ def increase_avg_histograms() -> None:
     iter = 100
     avg = percent_of_A_per_swap*amount_a/100
     d_avg = avg
-    noise = avg/5#avg*0.1 + 2
+    noise = avg/5
 
     d_bin = 0.05
     bin_limit = 5
@@ -449,32 +457,110 @@ def sweep_std(n_times: int = 2000, n_txs: list[int] = (5, 10, 25),
     plt.legend()
     plt.show()
 
-def sweep_avg_and_std(n_times: int = 2000, n_txs: list[int] = (10, 25, 50, 100),
+def sweep_avg_and_std(n_iterations: int = 2000, n_txs: list[int] = (10, 25, 50, 100),
       amount_a: int = AMOUNT_A, amount_b: int = AMOUNT_B,
       avg_swap_list: float = [0, NOISE_SPREAD/4, NOISE_SPREAD/2],
       noise_spread: list[float] = [NOISE_SPREAD], slip_lims: float = 0.1) -> None:
+    """
+    Sweeps varying average AND standard deviation of the transaction data set, stacking their histograms in the same plot.
+    
+    :param n_times: Description
+    :type n_times: int
+    :param n_txs: Description
+    :type n_txs: list[int]
+    :param amount_a: Description
+    :type amount_a: int
+    :param amount_b: Description
+    :type amount_b: int
+    :param avg_swap_list: Description
+    :type avg_swap_list: float
+    :param noise_spread: Description
+    :type noise_spread: list[float]
+    :param slip_lims: Description
+    :type slip_lims: float
+    """
     avg_swap_list = np.array([0, 0.25, 0.5])
-    n_times = int(n_times) # Ensures integer status to n_times. 
+    n_iterations = int(n_iterations) # Ensures integer status to n_iterations. 
     slip_lims = abs(slip_lims)
-    if n_times <= 0 or slip_lims <= 0:
+    if n_iterations <= 0 or slip_lims <= 0:
         raise ValueError("Value must be a positive integer.")
     
-    
+    colors = ['red', 'blue', 'green', 'yellow', 'brown', 'pink', 'grey', 'black']   # Color schema for number of transactions
+    slip_colors = ['blue', 'green', 'yellow', 'orange', 'red']                      # Color schema for slippage thresholds
+    alphas = [0.5, 0.4, 0.3, 0.25, 0.25, 0.25, 0.25]
+
     for q, avg_swap_k in enumerate(avg_swap_list):
-        
-        colors = ['red', 'blue', 'green', 'yellow', 'brown', 'pink', 'grey', 'black']
-        alphas = [0.5, 0.4, 0.3, 0.25, 0.25, 0.25, 0.25]
         for k, sigma in enumerate(noise_spread):
             avg_swap = avg_swap_k*sigma
             n_shifts = []
-            long_shifts = []
-            within_margin = np.zeros_like(n_txs)
-            within_twice_margin = np.zeros_like(n_txs)
-            within_thrice_margin = np.zeros_like(n_txs)
-            for index, n_tx in enumerate(n_txs):
-                if n_tx <= 0:
-                    raise ValueError("N_tx must be positive")
-                for _ in range(n_times):
+            n_shifts, (within_margin, within_twice_margin) = compute_all_shifts(amount_a, amount_b, avg_swap_k, sigma, n_txs, n_iterations, slip_lims)
+
+            bins = np.arange(-1.00, 1.00, 0.02)
+            values = []
+
+            # Build a weighted histogram (normalize count as a percentage).
+            for ind, array in enumerate(n_shifts):
+                weights = 100*np.ones_like(array)/len(array)
+                counts, _, _ = plt.hist(np.array(array), bins=bins, weights=weights, edgecolor='black', density=False, alpha=alphas[k%len(alphas)],
+                        label=f'{n_txs[ind]} txs, {slip_lims}-{100*within_margin[ind]/len(array):.1f}% | {2*slip_lims}-{100*within_twice_margin[ind]/len(array):.1f}%',
+                        color= colors[ind%len(colors)])
+
+                # Getting the values of the first histogram.
+                # This will be used to extract the highest count number.
+                if ind == 0:
+                    values = counts
+
+        if q == len(avg_swap_list) - 1:
+            for index, each in enumerate([slip_lims, 2*slip_lims, 3*slip_lims, 4*slip_lims, 5*slip_lims]):
+                plt.plot([-each, -each],[0, np.max(values)/2], linestyle='--', linewidth=3, color=slip_colors[index], label=f"{each}% shift", alpha=0.5)
+                plt.plot([each, each],[0, np.max(values)/2], linestyle='--', linewidth=3, color=slip_colors[index], alpha=0.8)
+    avg_swap_list = np.array(avg_swap_list)
+    noise_spread = np.array(noise_spread)
+    plt.title(f"Avg. = {avg_swap_list}% | Std. = {noise_spread/(10*NOISE_SPREAD)}% |{n_iterations} it.", fontsize=13)
+    plt.xlabel("Slippage Shift", fontsize=13)
+    plt.ylabel(" [%] of Total Swaps", fontsize=13)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.legend()
+    plt.show()
+
+
+def compute_all_shifts(amount_a: float, amount_b: float, avg_swap: float, sigma: float, n_txs: list[float] | NDArray[np.float64], n_iterations: int, slip_lims: float, ):
+    """
+    Computes all slippage shifts for a number of transactions
+     within a transaction thread, for a given number of iterations. Returns a numpy array
+     with the all the slippages for the tx thread after n_iterations iterations.
+    
+     Slippage limits are checkmarks. If a given slippage shift outbursts such limit, this transaction is counted.
+    :param amount_a: Amount of tokens A
+    :type amount_a: float
+    :param amount_b: Amount of tokens B
+    :type amount_b: float
+    :param avg_swap: Average Swap 
+    :type avg_swap: float
+    :param sigma: Standard Deviation
+    :type sigma: float
+    :param n_txs: List of number of Transactions within each batch 
+    :type n_txs: list[float] | NDArray[np.float64]
+    :param n_iterations: Number of times to iterate for the histogram.
+    :type n_iterations: int
+    :param slip_lims: Limits of slippage to count. 
+    :type slip_lims: float
+    """
+
+    # List of slippage transactions which outburst.
+    # For each number of transactions provided, in the beginning they all are zero. 
+    within_margin = np.zeros_like(n_txs)
+    within_twice_margin = np.zeros_like(n_txs)
+    long_shifts = []
+    n_shifts = []
+    n_txs = np.array(n_txs) if type(n_txs) != NDArray[np.float64] else n_txs
+    print(type(n_txs))
+    if n_txs.any() <= 0:
+        raise ValueError("Number of transactions needs to be positive.")
+    for index, n_tx in enumerate(n_txs):
+                for _ in range(n_iterations):
                     shifts = average_shifts(amount_a, amount_b, n_tx,
                                     avg_swap, sigma, iterations=1,
                                     show=False, index=75, legend=False)
@@ -484,35 +570,12 @@ def sweep_avg_and_std(n_times: int = 2000, n_txs: list[int] = (10, 25, 50, 100),
                         within_margin[index] += 1
                     if x > 2*slip_lims or x < -2*slip_lims:
                         within_twice_margin[index] += 1
-                    if x > 3*slip_lims or x < -3*slip_lims:
-                        within_thrice_margin[index] += 1
-                    
                 n_shifts.append(long_shifts)
+    print(n_shifts)
+    print('yo')
+    return n_shifts, (within_margin, within_twice_margin)
 
-            bins = np.arange(-1.00, 1.00, 0.02)
-            
-            values = []
-            for ind, array in enumerate(n_shifts):
-                weights = 100*np.ones_like(array)/len(array)
-                counts, _, _ = plt.hist(np.array(array), bins=bins, weights=weights, edgecolor='black', density=False, alpha=alphas[k%len(alphas)],
-                        label=f'{n_txs[ind]} txs, {slip_lims}-{100*within_margin[ind]/len(array):.1f}% | {2*slip_lims}-{100*within_twice_margin[ind]/len(array):.1f}%, | {3*slip_lims}-{100*within_thrice_margin[ind]/len(array):.1f}',
-                        color= colors[k%len(colors)])
-                if ind == 0:
-                    values = counts
-        colors = ['blue', 'green', 'yellow', 'orange', 'red']
-        if q == len(avg_swap_list) - 1:
-            for index, each in enumerate([slip_lims, 2*slip_lims, 3*slip_lims, 4*slip_lims, 5*slip_lims ]):
-                plt.plot([-each, -each],[0, np.max(values)/2], linestyle='--', linewidth=3, color=colors[index], label=f"{each}% shift", alpha=0.5)
-                plt.plot([each, each],[0, np.max(values)/2], linestyle='--', linewidth=3, color=colors[index], alpha=0.8)
-    
-    plt.title(f"Avg. = {avg_swap_list}| Std. = {noise_spread/(10*NOISE_SPREAD)}% |{n_times} it.", fontsize=13)
-    plt.xlabel("Slippage Shift", fontsize=13)
-    plt.ylabel(" [%] of Total Swaps", fontsize=13)
-    plt.xticks(fontsize=14)
-    plt.yticks(fontsize=14)
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.legend()
-    plt.show()
+
 # Thoughts:
 
 # 1. Extract the worst value given for each tx-id of all the series and plot it?
@@ -534,7 +597,7 @@ def sweep_avg_and_std(n_times: int = 2000, n_txs: list[int] = (10, 25, 50, 100),
 #increase_noise_histograms()
 #same_state_cloud(n_times = 1000, n_txs = 1*NUMBER_OF_TXS)
 #sweep_transactions(slip_lims=0.1)
-sweep_avg(slip_lims=0.15)
+sweep_avg_and_std()
 #sweep_std(slip_lims=0.15, noise_spread=noise_list)
 #sweep_avg_and_std(slip_lims=0.15, noise_spread=noise_list, n_times=1000)
 # By liquidity
