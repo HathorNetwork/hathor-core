@@ -25,7 +25,11 @@ class Tx:
         """
         if id < 0:
             raise ValueError("Transaction ID must be non-negative.") 
-        
+        if amount == 0:
+            raise ValueError("Transaction Amount must be non-zero.")
+        if quoted_price <= 0:
+            raise ValueError("Token quoted price must be positive.")
+  
         self.id = id                            # Index of Transaction.
         self.amount = amount                    # Amount of tokens to be swapped. Negative is sellout of A, Positive is buyout of A.
         self.quoted_price = quoted_price        # Price of token at the beginning of the block (perceived price at purchase)
@@ -281,8 +285,55 @@ class Tx_Thread:
                 break
             tx = tx.next_tx
 
-        return tx_list  
+        return tx_list 
 
+    def insert_tx(self, tx: Tx, index: int) -> None:
+        """
+        Function to insert a custom transaction within the batch. 
+        Useful for modeling the impact of whale transactions within a particular batch.
+        
+        :param self: Description
+        """
+
+        
+        swaps = self.swaps
+        thread = self.thread
+        randomized = self.randomized
+
+        if index < 0:
+            raise ValueError("Index passed must be non-negative.")
+
+        if index > len(self.thread):
+            raise ValueError("Index out of range.")
+        
+        if randomized:
+            raise Exception("Batch is already randomized, no insertion allowed.")
+        
+        if not tx:
+            raise Exception("Passed null tx.")
+
+        if not (swaps or thread):
+            raise ValueError("No swaps or txs in thread.")
+
+        
+        amount = tx.amount
+        
+        swaps.insert(index, amount)
+
+        for id, transaction in enumerate(thread):
+            if index == 0:
+                tx.next_tx = self.tx_head
+                self.tx_head = transaction
+                return  
+
+            if id == index - 1:
+                tx.next_tx = transaction.next_tx
+                transaction.next_tx = tx.next_tx
+                return 
+
+        raise Exception("Index out of bounds")
+
+       
 """
     Thoughts:
     1. We have the liquidity pool giving the prices. 
