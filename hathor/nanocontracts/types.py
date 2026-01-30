@@ -32,6 +32,7 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathor.serialization import SerializationError
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
@@ -162,7 +163,7 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
         from hathor.transaction.exceptions import ScriptError
         from hathor.transaction.scripts import ScriptExtras
         from hathor.transaction.scripts.execute import raw_script_eval
-        extras = ScriptExtras(tx=self)  # type: ignore[arg-type]
+        extras = ScriptExtras(tx=self, version=OpcodesVersion.V2)  # type: ignore[arg-type]
         try:
             raw_script_eval(input_data=self.script_input, output_script=script, extras=extras)
         except ScriptError:

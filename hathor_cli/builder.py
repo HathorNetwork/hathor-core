@@ -249,13 +249,13 @@ class CliBuilder:
         consensus_algorithm = ConsensusAlgorithm(
             self.nc_storage_factory,
             soft_voided_tx_ids,
-            pubsub=pubsub,
             settings=settings,
             runner_factory=runner_factory,
             nc_log_storage=nc_log_storage,
             nc_calls_sorter=nc_calls_sorter,
             feature_service=self.feature_service,
             nc_exec_fail_trace=self._args.nc_exec_fail_trace,
+            tx_storage=tx_storage,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -316,7 +316,6 @@ class CliBuilder:
             feature_service=self.feature_service,
             pubsub=pubsub,
             execution_manager=execution_manager,
-            wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 

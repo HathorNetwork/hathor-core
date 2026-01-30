@@ -128,13 +128,24 @@ class TransactionVerifier:
             raise TooManySigOps(
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
 
-    def verify_inputs(self, tx: Transaction, *, skip_script: bool = False) -> None:
+    def verify_inputs(self, tx: Transaction, params: VerificationParams, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
+        self._verify_inputs(self._settings, tx, params, skip_script=skip_script)
+
+    @classmethod
+    def _verify_inputs(
+        cls,
+        settings: HathorSettings,
+        tx: Transaction,
+        params: VerificationParams,
+        *,
+        skip_script: bool,
+    ) -> None:
         spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in tx.inputs:
-            if len(input_tx.data) > self._settings.MAX_INPUT_DATA_SIZE:
+            if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
                 raise InvalidInputDataSize('size: {} and max-size: {}'.format(
-                    len(input_tx.data), self._settings.MAX_INPUT_DATA_SIZE
+                    len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
                 ))
 
             spent_tx = tx.get_spent_tx(input_tx)
@@ -149,7 +160,7 @@ class TransactionVerifier:
                 ))
 
             if not skip_script:
-                self.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx)
+                cls.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx, params=params)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
@@ -158,7 +169,14 @@ class TransactionVerifier:
                     tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
 
-    def verify_script(self, *, tx: Transaction, input_tx: TxInput, spent_tx: BaseTransaction) -> None:
+    @staticmethod
+    def verify_script(
+        *,
+        tx: Transaction,
+        input_tx: TxInput,
+        spent_tx: BaseTransaction,
+        params: VerificationParams,
+    ) -> None:
         """
         :type tx: Transaction
         :type input_tx: TxInput
@@ -166,7 +184,7 @@ class TransactionVerifier:
         """
         from hathor.transaction.scripts import script_eval
         try:
-            script_eval(tx, input_tx, spent_tx)
+            script_eval(tx, input_tx, spent_tx, params.features.opcodes_version)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
@@ -289,8 +307,8 @@ class TransactionVerifier:
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
         htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount < htr_expected_amount:
-            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
+        if htr_info.amount > htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
@@ -308,8 +326,8 @@ class TransactionVerifier:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
-        if htr_info.amount > htr_expected_amount:
-            raise InputOutputMismatch('HTR balance is different than expected. (amount={}, expected={})'.format(
+        if htr_info.amount < htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
@@ -338,7 +356,7 @@ class TransactionVerifier:
             TxVersion.TOKEN_CREATION_TRANSACTION,
         }
 
-        if params.enable_nano:
+        if params.features.nanocontracts:
             allowed_tx_versions.add(TxVersion.ON_CHAIN_BLUEPRINT)
 
         if tx.version not in allowed_tx_versions:

@@ -25,6 +25,7 @@ class HistoryTest(_BaseResourceTest._ResourceTest):
             cpu_mining_service=CpuMiningService()
         )
         yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        self.clock.advance(1)
 
         # Getting wallet history
         response = yield self.web.get("wallet/history", {b'page': 1, b'count': 10})

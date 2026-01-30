@@ -19,6 +19,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from hathor import ContractId
 from hathor.crypto.util import get_public_key_bytes_compressed
 from hathor.nanocontracts import Blueprint, Context, NCFail, public, utils as nc_utils, view
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
@@ -37,8 +38,13 @@ class MyBlueprint(Blueprint):
     def test_verify_ecdsa(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
         return nc_utils.verify_ecdsa(public_key, data, signature)
 
+    @view
+    def test_json_dumps(self) -> str:
+        obj = dict(a=[1, 2, 3], b=123, c='abc', d=ContractId(b'\x01' * 32))
+        return nc_utils.json_dumps(obj)
 
-class TestCryptoFunctions(BlueprintTestCase):
+
+class TestUtilsFunctions(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
 
@@ -75,3 +81,10 @@ class TestCryptoFunctions(BlueprintTestCase):
         signature = private_key.sign(data, ec.ECDSA(hashes.SHA256()))
 
         assert self.runner.call_view_method(self.contract_id, 'test_verify_ecdsa', public_key, data, signature)
+
+    def test_json_dumps(self) -> None:
+        result = self.runner.call_view_method(self.contract_id, 'test_json_dumps')
+
+        assert result == (
+            '{"a":[1,2,3],"b":123,"c":"abc","d":"0101010101010101010101010101010101010101010101010101010101010101"}'
+        )
