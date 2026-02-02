@@ -85,6 +85,7 @@ multidict = "=6.7.0"
 hathorlib = {path = "hathorlib"}
 cffi = "=1.17.1"
 zope-interface = "=8.2"
+packaging = "=26.0"
 
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]
