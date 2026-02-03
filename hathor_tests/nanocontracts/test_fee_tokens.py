@@ -201,7 +201,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             reason='InputOutputMismatch: Fee amount is different than expected. (amount=1, expected=0)',
         )
 
-    def test_postponed_verification_fail_less_htr_balance(self) -> None:
+    def test_postponed_verification_fail_melt_htr(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy
@@ -241,16 +241,19 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
-        # Verification of minting HTR is not postponed, so it fails in verification-time.
-        with pytest.raises(Exception) as e:
-            artifacts.propagate_with(self.manager, up_to='tx2')
+        artifacts.propagate_with(self.manager, up_to='b12')
+        assert tx2.get_metadata().first_block == b12.hash
+        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
 
-        assert isinstance(e.value.__cause__, InvalidNewTransaction)
-        assert e.value.__cause__.args[0] == (
-            'full validation failed: HTR balance is different than expected. (amount=-1000, expected=0)'
+        assert_nc_failure_reason(
+            manager=self.manager,
+            tx_id=tx2.hash,
+            block_id=b12.hash,
+            reason='InputOutputMismatch: There\'s an invalid deficit of HTR. (amount=-1000, expected=0)',
         )
 
-    def test_postponed_verification_fail_more_htr_balance(self) -> None:
+    def test_postponed_verification_fail_mint_htr(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy
@@ -263,7 +266,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             tx2.nc_method = create_fee_token()
             tx2.fee = 1 HTR
 
-            tx1 < tx2
+            tx1 < b11 < tx2
             tx1 <-- b11
             tx2 <-- b12
         ''')
@@ -288,16 +291,13 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
-        artifacts.propagate_with(self.manager, up_to='b12')
-        assert tx2.get_metadata().first_block == b12.hash
-        assert tx2.get_metadata().nc_execution == NCExecutionState.FAILURE
-        assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
+        # Verification of minting HTR is not postponed, so it fails in verification-time.
+        with pytest.raises(Exception) as e:
+            artifacts.propagate_with(self.manager, up_to='tx2')
 
-        assert_nc_failure_reason(
-            manager=self.manager,
-            tx_id=tx2.hash,
-            block_id=b12.hash,
-            reason='InputOutputMismatch: HTR balance is different than expected. (amount=1000, expected=0)',
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == (
+            'full validation failed: There\'s an invalid surplus of HTR. (amount=1000, expected=0)'
         )
 
     def test_postponed_verification_pay_fee_with_fbt(self) -> None:

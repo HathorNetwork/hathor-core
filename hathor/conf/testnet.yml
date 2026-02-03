@@ -51,11 +51,11 @@ FEATURE_ACTIVATION:
       version: 0.69.0
       signal_support_by_default: true
 
-    # current height: 316_075 at 2026-01-27 23:07:42 GMT
+    # current height: 335_348 at 2026-02-03 17:12:47 GMT
     OPCODES_V2:
       bit: 0
-      start_height: 316_080  # expected around 2026-01-27 23:12:42 GMT
-      timeout_height: 327_600  # 48 evaluation periods (4 days)
+      start_height: 335_520  # expected around 2026-02-03 18:38:47 GMT
+      timeout_height: 347_040  # 48 evaluation periods (96 hours)
       minimum_activation_height: 0
       lock_in_on_timeout: false
       version: 0.69.0
@@ -69,6 +69,18 @@ NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
 
 SOFT_VOIDED_TX_IDS:
   - 00000000e03c4aa950f87cb2c0317f0e5fbd58561ad9a30916126426dcd5f283
+  - 000002681b995cb043583f5a747c185d4db7b1ee6621ad75fc155c9e8ac12846
+  - 00000f69311fc345b9a8919282ef85da5adfaf10690568ed3fbc290de218a056
+  - 00000eea02e10b227ce1635a73714c4bcca207605d3d38fd44d0e8a26f4dc3f5
+  - 00000f5bda0cbfa1fbc05b021c7b7be8423bdc1663e83cef02c9db7dc9e2a664
+  - 0000065da27407862eb0fc5befc0611ce0b41120c3ef2b55ff51a71ec989028d
+  - 00000c14a7f11318bc362b58ad018e01f56f8c63def4e6bcda0555f6cef2ebc3
 
 SKIP_VERIFICATION:
   - 00000000e03c4aa950f87cb2c0317f0e5fbd58561ad9a30916126426dcd5f283
+  - 000002681b995cb043583f5a747c185d4db7b1ee6621ad75fc155c9e8ac12846
+  - 00000f69311fc345b9a8919282ef85da5adfaf10690568ed3fbc290de218a056
+  - 00000eea02e10b227ce1635a73714c4bcca207605d3d38fd44d0e8a26f4dc3f5
+  - 00000f5bda0cbfa1fbc05b021c7b7be8423bdc1663e83cef02c9db7dc9e2a664
+  - 0000065da27407862eb0fc5befc0611ce0b41120c3ef2b55ff51a71ec989028d
+  - 00000c14a7f11318bc362b58ad018e01f56f8c63def4e6bcda0555f6cef2ebc3
