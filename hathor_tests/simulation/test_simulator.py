@@ -115,7 +115,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for hashpower in [10e6, 8e6, 5e6]:
             manager = self.create_peer()
             for node in nodes:
-                conn = FakeConnection(manager, node, latency=0.085)
+                conn = FakeConnection(manager, node, latency=0.085, autoreconnect=True)
                 self.simulator.add_connection(conn)
             nodes.append(manager)
 

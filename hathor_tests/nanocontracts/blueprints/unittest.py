@@ -1,4 +1,4 @@
-from io import TextIOWrapper
+from io import StringIO, TextIOWrapper
 from typing import Sequence
 
 from hathor.crypto.util import decode_address
@@ -90,7 +90,7 @@ class BlueprintTestCase(unittest.TestCase):
 
     def _register_blueprint_contents(
         self,
-        contents: TextIOWrapper,
+        contents: TextIOWrapper | StringIO,
         blueprint_id: BlueprintId | None = None,
         *,
         skip_verification: bool = False,
@@ -123,7 +123,11 @@ class BlueprintTestCase(unittest.TestCase):
 
     def build_runner(self) -> TestRunner:
         """Create a Runner instance."""
-        return TestRunner(tx_storage=self.manager.tx_storage, settings=self._settings, reactor=self.reactor)
+        return TestRunner(
+            tx_storage=self.manager.tx_storage,
+            settings=self._settings,
+            reactor=self.reactor,
+        )
 
     def gen_random_token_uid(self) -> TokenUid:
         """Generate a random token UID (32 bytes)."""

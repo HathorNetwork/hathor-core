@@ -16,14 +16,13 @@ from __future__ import annotations
 
 import hashlib
 from types import ModuleType
-from typing import Callable, assert_never
+from typing import Any, Callable
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
 
-from hathor.conf.settings import HathorSettings, NanoContractsSetting
 from hathor.crypto.util import (
     decode_address,
     get_address_from_public_key_bytes,
@@ -31,10 +30,7 @@ from hathor.crypto.util import (
     get_public_key_from_bytes_compressed,
     is_pubkey_compressed,
 )
-from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
 from hathor.nanocontracts.types import NC_METHOD_TYPE_ATTR, BlueprintId, ContractId, NCMethodType, TokenUid, VertexId
-from hathor.transaction import Block
 from hathor.transaction.headers import NanoHeader
 from hathor.util import not_none
 
@@ -152,19 +148,6 @@ def sign_openssl_multisig(
     nano_header.nc_script = MultiSig.create_input_data(redeem_script, signatures)
 
 
-def is_nano_active(*, settings: HathorSettings, block: Block, feature_service: FeatureService) -> bool:
-    """Return whether the Nano Contracts feature is active according to the provided settings and block."""
-    match settings.ENABLE_NANO_CONTRACTS:
-        case NanoContractsSetting.DISABLED:
-            return False
-        case NanoContractsSetting.ENABLED:
-            return True
-        case NanoContractsSetting.FEATURE_ACTIVATION:
-            return feature_service.is_feature_active(vertex=block, feature=Feature.NANO_CONTRACTS)
-        case _:  # pragma: no cover
-            assert_never(settings.ENABLE_NANO_CONTRACTS)
-
-
 def sha3(data: bytes) -> bytes:
     """Calculate the SHA3-256 of some data."""
     return hashlib.sha3_256(data).digest()
@@ -186,3 +169,32 @@ def verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
         return True
     except InvalidSignature:
         return False
+
+
+def json_dumps(
+    obj: object,
+    *,
+    ensure_ascii: bool = True,
+    indent: int | str | None = None,
+    separators: tuple[str, str] | None = (',', ':'),
+    sort_keys: bool = False,
+) -> str:
+    """
+    Serialize obj as a JSON. Arguments are a subset of Python's `json.dumps`.
+    It automatically converts `bytes`-like values to their hex representation.
+    """
+    import json
+
+    def dump_bytes(data: Any) -> str:
+        if isinstance(data, bytes):
+            return data.hex()
+        raise TypeError(f'Object of type {type(data).__name__} is not JSON serializable')
+
+    return json.dumps(
+        obj,
+        ensure_ascii=ensure_ascii,
+        indent=indent,
+        separators=separators,
+        sort_keys=sort_keys,
+        default=dump_bytes,
+    )

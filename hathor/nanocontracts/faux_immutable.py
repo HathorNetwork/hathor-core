@@ -42,6 +42,8 @@ def _validate_faux_immutable_meta(name: str, bases: tuple[type, ...], attrs: dic
         '__doc__',
         '__init__',
         '__call__',
+        '__firstlineno__',
+        '__static_attributes__',
     }) | custom_allowed_dunder
 
     # pop the attribute so the created class doesn't have it and it isn't inherited
@@ -114,7 +116,7 @@ def create_with_shell(cls: Callable[P, T], *args: P.args, **kwargs: P.kwargs) ->
     shell_type: type[T] = type(name, bases, attrs)
 
     # Use it to instantiate the object, init it, and return it. This mimics the default `__call__` behavior.
-    obj: T = cls.__new__(shell_type)
+    obj: T = cls.__new__(shell_type)  # type: ignore[call-overload]
     shell_type.__init__(obj, *args, **kwargs)
     return obj
 

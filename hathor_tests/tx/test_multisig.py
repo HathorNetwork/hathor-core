@@ -6,6 +6,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from hathor_tests import unittest
@@ -123,6 +124,7 @@ class MultisigTestCase(unittest.TestCase):
 
         # Now we propagate the correct
         self.assertTrue(self.manager.propagate_tx(tx))
+        self.clock.advance(1)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
                          WalletBalance(0, first_block_amount + 300))
@@ -135,7 +137,7 @@ class MultisigTestCase(unittest.TestCase):
         expected_dict = {'type': 'MultiSig', 'address': self.multisig_address_b58, 'timelock': None}
         self.assertEqual(cls_script.to_human_readable(), expected_dict)
 
-        script_eval(tx, tx_input, tx1)
+        script_eval(tx, tx_input, tx1, version=OpcodesVersion.V2)
 
         # Script error
         with self.assertRaises(ScriptError):

@@ -12,17 +12,23 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
 import struct
 from dataclasses import dataclass
-from typing import NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
 from hathor.transaction import BaseTransaction, Transaction, TxInput
 from hathor.transaction.exceptions import DataIndexError, FinalStackInvalid, InvalidScriptError, OutOfData
+
+if TYPE_CHECKING:
+    from hathor.transaction.scripts.opcode import OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class ScriptExtras:
     tx: Transaction
+    version: OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -72,7 +78,7 @@ def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
             continue
 
         # this is an opcode manipulating the stack
-        execute_op_code(Opcode(opcode), context)
+        execute_op_code(Opcode(opcode), context, extras.version)
 
     evaluate_final_stack(stack, log)
 
@@ -94,7 +100,7 @@ def evaluate_final_stack(stack: Stack, log: list[str]) -> None:
         raise FinalStackInvalid('\n'.join(log))
 
 
-def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> None:
+def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, version: OpcodesVersion) -> None:
     """Evaluates the output script and input data according to
     a very limited subset of Bitcoin's scripting language.
 
@@ -112,7 +118,7 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction) -> No
     raw_script_eval(
         input_data=txin.data,
         output_script=spent_tx.outputs[txin.index].script,
-        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx),
+        extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=version),
     )
 
 

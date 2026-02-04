@@ -143,7 +143,7 @@ class MultiSig(BaseScript):
             timelock = None
             pushdata_timelock = groups[0]
             if pushdata_timelock:
-                timelock_bytes = pushdata_timelock[1:]
+                timelock_bytes = get_pushdata(pushdata_timelock)
                 timelock = struct.unpack('!I', timelock_bytes)[0]
             redeem_script_hash = get_pushdata(groups[1])
             address_b58 = get_address_b58_from_redeem_script_hash(redeem_script_hash)

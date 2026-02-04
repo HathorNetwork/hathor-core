@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Iterable, cast
 from structlog import get_logger
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.execution_manager import non_critical_code
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput
 from hathor.types import VertexId
 from hathor.util import classproperty
@@ -228,7 +229,9 @@ class TransactionConsensusAlgorithm:
         if voided_by:
             meta.voided_by = voided_by.copy()
             self.context.save(tx)
-            tx.storage.del_from_indexes(tx)
+            tx.storage.indexes.del_from_critical_indexes(tx)
+            with non_critical_code(self.log):
+                tx.storage.indexes.del_from_non_critical_indexes(tx)
 
         # Check conflicts of the transactions voiding us.
         for h in voided_by:
@@ -391,7 +394,7 @@ class TransactionConsensusAlgorithm:
 
             meta2 = tx2.get_metadata()
             if not (meta2.voided_by and voided_hash in meta2.voided_by):
-                bfs.skip_neighbors(tx2)
+                bfs.skip_neighbors()
                 continue
             if meta2.voided_by:
                 meta2.voided_by.discard(voided_hash)
@@ -399,9 +402,11 @@ class TransactionConsensusAlgorithm:
                 check_list.append(tx2)
             if not meta2.voided_by:
                 meta2.voided_by = None
-                tx.storage.add_to_indexes(tx2)
+                with non_critical_code(self.log):
+                    tx.storage.indexes.add_to_non_critical_indexes(tx2)
             self.context.save(tx2)
             self.assert_valid_consensus(tx2)
+            bfs.add_neighbors()
 
         from hathor.transaction import Transaction
         for tx2 in check_list:
@@ -502,8 +507,11 @@ class TransactionConsensusAlgorithm:
                 # All voided transactions with conflicts must have their accumulated weight calculated.
                 tx2.update_accumulated_weight(save_file=False)
             self.context.save(tx2)
-            tx2.storage.del_from_indexes(tx2, relax_assert=True)
+            tx2.storage.indexes.del_from_critical_indexes(tx2)
+            with non_critical_code(self.log):
+                tx2.storage.indexes.del_from_non_critical_indexes(tx2)
             self.assert_valid_consensus(tx2)
+            bfs.add_neighbors()
 
         for tx2 in check_list:
             self.check_conflicts(tx2)

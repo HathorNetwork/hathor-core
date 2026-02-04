@@ -1,5 +1,6 @@
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
+from hathor.indexes import RocksDBIndexesManager
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
@@ -31,11 +32,10 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1))
-        if self.manager.tx_storage.indexes.mempool_tips is not None:
-            self.assertEqual(
-                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-                {tx1.hash}
-            )
+        self.assertEqual(
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+            {tx1.hash}
+        )
 
         outputs = [WalletOutputInfo(address=decode_address(address), value=value, timelock=None)]
 
@@ -46,11 +46,10 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds()) + 1
         self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.propagate_tx(tx2))
-        if self.manager.tx_storage.indexes.mempool_tips is not None:
-            self.assertEqual(
-                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-                {tx2.hash}
-            )
+        self.assertEqual(
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+            {tx2.hash}
+        )
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.timestamp = tx2.timestamp + 1
@@ -59,14 +58,13 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertNotEqual(tx2.hash, tx3.hash)
         self.assertTrue(self.manager.propagate_tx(tx3))
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
-        if self.manager.tx_storage.indexes.mempool_tips is not None:
-            self.assertEqual(
-                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-                # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
-                # function using the index decide
-                # {tx1.hash, tx3.hash}
-                {tx1.hash}
-            )
+        self.assertEqual(
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+            # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
+            # function using the index decide
+            # {tx1.hash, tx3.hash}
+            {tx1.hash}
+        )
 
     def test_tx_tips_voided(self):
         from hathor.wallet.base_wallet import WalletOutputInfo
@@ -88,11 +86,10 @@ class BaseIndexesTest(unittest.TestCase):
         tx1.timestamp = int(self.clock.seconds())
         self.manager.cpu_mining_service.resolve(tx1)
         self.assertTrue(self.manager.propagate_tx(tx1))
-        if self.manager.tx_storage.indexes.mempool_tips is not None:
-            self.assertEqual(
-                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-                {tx1.hash}
-            )
+        self.assertEqual(
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+            {tx1.hash}
+        )
 
         tx2 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
         tx2.weight = 2.0
@@ -101,11 +98,10 @@ class BaseIndexesTest(unittest.TestCase):
         tx2.timestamp = int(self.clock.seconds()) + 1
         self.manager.cpu_mining_service.resolve(tx2)
         self.assertTrue(self.manager.propagate_tx(tx2))
-        if self.manager.tx_storage.indexes.mempool_tips is not None:
-            self.assertEqual(
-                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-                {tx2.hash}
-            )
+        self.assertEqual(
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+            {tx2.hash}
+        )
 
         tx3 = Transaction.create_from_struct(tx2.get_struct())
         tx3.weight = 3.0
@@ -117,13 +113,12 @@ class BaseIndexesTest(unittest.TestCase):
         self.assertTrue(self.manager.propagate_tx(tx3))
         # self.assertIn(tx3.hash, tx2.get_metadata().voided_by)
         self.assertIn(tx3.hash, tx2.get_metadata().conflict_with)
-        if self.manager.tx_storage.indexes.mempool_tips is not None:
-            self.assertEqual(
-                {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
-                # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
-                # function using the index decide
-                {tx1.hash, tx3.hash}
-            )
+        self.assertEqual(
+            {tx.hash for tx in self.manager.tx_storage.indexes.mempool_tips.iter(self.manager.tx_storage)},
+            # XXX: what should we expect here? I don't think we should exclude both tx2 and tx3, but maybe let the
+            # function using the index decide
+            {tx1.hash, tx3.hash}
+        )
 
     def test_genesis_not_in_mempool(self):
         mempool_txs = list(self.tx_storage.indexes.mempool_tips.iter_all(self.tx_storage))
@@ -135,8 +130,6 @@ class BaseIndexesTest(unittest.TestCase):
         from hathor_tests.utils import GENESIS_ADDRESS_B58
 
         HTR_UID = self._settings.HATHOR_TOKEN_UID
-
-        assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
         # let's check everything is alright, all UTXOs should currently be from just the mined blocks and genesis
@@ -177,8 +170,6 @@ class BaseIndexesTest(unittest.TestCase):
 
     def test_utxo_index_reorg(self):
         from hathor.indexes.utxo_index import UtxoIndexItem
-
-        assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
         add_new_blocks(self.manager, 5, advance_clock=15)
@@ -259,7 +250,7 @@ class BaseIndexesTest(unittest.TestCase):
         block2 = self.manager.generate_mining_block(parent_block_hash=block1.parents[0],
                                                     address=decode_address(address))
         block2.parents[1:] = [txA2.hash, txB2.hash]
-        block2.timestamp = block1.timestamp
+        block2.timestamp = block1.timestamp + 1
         block2.weight = 4
         self.manager.cpu_mining_service.resolve(block2)
         self.manager.propagate_tx(block2)
@@ -276,8 +267,6 @@ class BaseIndexesTest(unittest.TestCase):
 
     def test_utxo_index_simple(self):
         from hathor.indexes.utxo_index import UtxoIndexItem
-
-        assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
         address = self.get_address(0)
@@ -357,8 +346,6 @@ class BaseIndexesTest(unittest.TestCase):
         from hathor.indexes.utxo_index import UtxoIndexItem
 
         _debug = False
-
-        assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
         address = self.get_address(0)
@@ -437,8 +424,6 @@ class BaseIndexesTest(unittest.TestCase):
         from hathor.indexes.utxo_index import UtxoIndexItem
         from hathor.transaction import TxInput, TxOutput
         from hathor.transaction.scripts import P2PKH
-
-        assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
         address = self.get_address(0)
@@ -509,8 +494,6 @@ class BaseIndexesTest(unittest.TestCase):
         from hathor.indexes.utxo_index import UtxoIndexItem
         from hathor.transaction import TxInput, TxOutput
         from hathor.transaction.scripts import P2PKH
-
-        assert self.tx_storage.indexes is not None
         utxo_index = self.tx_storage.indexes.utxo
 
         address = self.get_address(0)
@@ -702,12 +685,15 @@ class RocksDBIndexesTest(BaseIndexesTest):
         parser = VertexParser(settings=self._settings)
         nc_storage_factory = NCRocksDBStorageFactory(rocksdb_storage)
         vertex_children_service = RocksDBVertexChildrenService(rocksdb_storage)
+        indexes = RocksDBIndexesManager(rocksdb_storage=rocksdb_storage, settings=self._settings)
         self.tx_storage = TransactionRocksDBStorage(
-            rocksdb_storage,
+            reactor=self.reactor,
+            rocksdb_storage=rocksdb_storage,
             settings=self._settings,
             vertex_parser=parser,
             nc_storage_factory=nc_storage_factory,
             vertex_children_service=vertex_children_service,
+            indexes=indexes,
         )
         self.genesis = self.tx_storage.get_all_genesis()
         self.genesis_blocks = [tx for tx in self.genesis if tx.is_block]

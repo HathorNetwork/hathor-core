@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from math import isinf, isnan
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -36,6 +36,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.utils import (
@@ -67,6 +68,8 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
+        self.verification_params = VerificationParams.default_for_mempool(best_block=Mock())
+
     def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]
 
@@ -86,7 +89,7 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -107,7 +110,7 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -147,7 +150,7 @@ class TransactionTest(unittest.TestCase):
         _input.data = data_wrong
 
         with self.assertRaises(InvalidInputData):
-            self._verifiers.tx.verify_inputs(tx)
+            self._verifiers.tx.verify_inputs(tx, params=self.verification_params)
 
     def test_too_many_inputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -776,10 +779,10 @@ class TransactionTest(unittest.TestCase):
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
-        self._verifiers.tx.verify_inputs(tx2)
+        self._verifiers.tx.verify_inputs(tx2, params=self.verification_params)
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.tx.verify_inputs(tx2)
+            self._verifiers.tx.verify_inputs(tx2, params=self.verification_params)
         tx2.timestamp = tx2_timestamp
 
         # Validate maximum distance between blocks
@@ -993,7 +996,7 @@ class TransactionTest(unittest.TestCase):
             outputs=[_output],
             storage=self.tx_storage
         )
-        self._verifiers.tx.verify_inputs(tx, skip_script=True)
+        self._verifiers.tx.verify_inputs(tx, skip_script=True, params=self.verification_params)
 
     def test_txin_data_limit_exceeded(self):
         with self.assertRaises(InvalidInputDataSize):

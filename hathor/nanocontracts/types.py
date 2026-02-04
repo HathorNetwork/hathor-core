@@ -32,6 +32,7 @@ from hathor.nanocontracts.blueprint_syntax_validation import (
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathor.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathor.serialization import SerializationError
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.util import bytes_to_int, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor.utils.typing import InnerTypeMixin
 
@@ -45,7 +46,7 @@ from hathor.utils.typing import InnerTypeMixin
 
 
 # Types to be used by blueprints.
-class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class Address(bytes, metaclass=FauxImmutableMeta):
     __allow_faux_inheritance__ = True
     __allow_faux_dunder__ = ('__str__', '__repr__')
     __slots__ = ()
@@ -66,27 +67,27 @@ class Address(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
         return f"Address.from_str({encoded_address!r})"
 
 
-class VertexId(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class VertexId(bytes, metaclass=FauxImmutableMeta):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class BlueprintId(VertexId):  # type: ignore[misc]
+class BlueprintId(VertexId):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class ContractId(VertexId):  # type: ignore[misc]
+class ContractId(VertexId):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class TokenUid(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class TokenUid(bytes, metaclass=FauxImmutableMeta):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
 
-class TxOutputScript(bytes, metaclass=FauxImmutableMeta):  # type: ignore[misc]
+class TxOutputScript(bytes, metaclass=FauxImmutableMeta):
     __slots__ = ()
     __allow_faux_inheritance__ = True
 
@@ -161,12 +162,10 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
         """Check if `self.script_input` satisfies the provided script."""
         from hathor.transaction.exceptions import ScriptError
         from hathor.transaction.scripts import ScriptExtras
-        from hathor.transaction.scripts.execute import execute_eval
-        full_data = self.script_input + script
-        log: list[str] = []
-        extras = ScriptExtras(tx=self)  # type: ignore[arg-type]
+        from hathor.transaction.scripts.execute import raw_script_eval
+        extras = ScriptExtras(tx=self, version=OpcodesVersion.V2)  # type: ignore[arg-type]
         try:
-            execute_eval(full_data, log, extras)
+            raw_script_eval(input_data=self.script_input, output_script=script, extras=extras)
         except ScriptError:
             return False
         else:

@@ -35,8 +35,8 @@ HATHOR_TOKEN_UID: bytes = b'\x00'
 
 
 @unique
-class NanoContractsSetting(StrEnum):
-    """Enum to configure the state of the Nano Contracts feature."""
+class FeatureSetting(StrEnum):
+    """Enum to configure the state of a feature."""
 
     # Completely disabled.
     DISABLED = auto()
@@ -49,14 +49,14 @@ class NanoContractsSetting(StrEnum):
 
     def __bool__(self) -> bool:
         """
-        >>> bool(NanoContractsSetting.DISABLED)
+        >>> bool(FeatureSetting.DISABLED)
         False
-        >>> bool(NanoContractsSetting.ENABLED)
+        >>> bool(FeatureSetting.ENABLED)
         True
-        >>> bool(NanoContractsSetting.FEATURE_ACTIVATION)
+        >>> bool(FeatureSetting.FEATURE_ACTIVATION)
         True
         """
-        return self in (NanoContractsSetting.ENABLED, NanoContractsSetting.FEATURE_ACTIVATION)
+        return self in (FeatureSetting.ENABLED, FeatureSetting.FEATURE_ACTIVATION)
 
 
 class HathorSettings(NamedTuple):
@@ -480,7 +480,13 @@ class HathorSettings(NamedTuple):
     MAX_UNVERIFIED_PEERS_PER_CONN: int = 100
 
     # Used to enable nano contracts.
-    ENABLE_NANO_CONTRACTS: NanoContractsSetting = NanoContractsSetting.DISABLED
+    ENABLE_NANO_CONTRACTS: FeatureSetting = FeatureSetting.DISABLED
+
+    # Used to enable fee-based tokens.
+    ENABLE_FEE_BASED_TOKENS: FeatureSetting = FeatureSetting.DISABLED
+
+    # Used to enable opcodes V2.
+    ENABLE_OPCODES_V2: FeatureSetting = FeatureSetting.DISABLED
 
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}

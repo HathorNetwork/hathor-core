@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
-from hathor.pubsub import PubSubManager
 from hathor.transaction import BaseTransaction, Block, Transaction
 
 if TYPE_CHECKING:
@@ -45,7 +44,6 @@ class ConsensusAlgorithmContext:
     """
     __slots__ = (
         'consensus',
-        'pubsub',
         'block_algorithm',
         'transaction_algorithm',
         'txs_affected',
@@ -55,7 +53,6 @@ class ConsensusAlgorithmContext:
     )
 
     consensus: 'ConsensusAlgorithm'
-    pubsub: PubSubManager
     block_algorithm: 'BlockConsensusAlgorithm'
     transaction_algorithm: 'TransactionConsensusAlgorithm'
     txs_affected: set[BaseTransaction]
@@ -63,9 +60,8 @@ class ConsensusAlgorithmContext:
     nc_events: list[tuple[Transaction, list[NCEvent]]] | None
     nc_exec_success: list[Transaction]
 
-    def __init__(self, consensus: 'ConsensusAlgorithm', pubsub: PubSubManager) -> None:
+    def __init__(self, consensus: 'ConsensusAlgorithm') -> None:
         self.consensus = consensus
-        self.pubsub = pubsub
         self.block_algorithm = self.consensus.block_algorithm_factory(self)
         self.transaction_algorithm = self.consensus.transaction_algorithm_factory(self)
         self.txs_affected = set()
