@@ -173,7 +173,7 @@ class NanoHeaderVerifier:
             allow_fallback = True
 
         try:
-            blueprint_class = self._tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class, _ = self._tx_storage.get_blueprint_class(blueprint_id)
         except NCFail as e:
             raise NCTxValidationError from e
 

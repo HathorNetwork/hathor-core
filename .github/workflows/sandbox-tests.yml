@@ -1,0 +1,73 @@
+# yamllint disable rule:line-length
+name: tests (cpython-sandbox)
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+      - dev
+    tags:
+      - v*
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180  # Building Python takes time
+    steps:
+      - name: Checkout hathor-core
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get -qy update
+          sudo apt-get -qy install build-essential libssl-dev zlib1g-dev \
+            libbz2-dev libreadline-dev libsqlite3-dev libncurses5-dev \
+            libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev \
+            graphviz librocksdb-dev libsnappy-dev liblz4-dev
+
+      - name: Cache custom Python build
+        uses: actions/cache@v4
+        id: python-cache
+        with:
+          path: ~/cpython-sandbox
+          key: cpython-sandbox-${{ hashFiles('.github/workflows/sandbox-tests.yml') }}
+
+      - name: Clone and build custom Python
+        if: steps.python-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 -b msbrogli/sandbox https://github.com/msbrogli/cpython.git ~/cpython-build
+          cd ~/cpython-build
+          ./configure --prefix=$HOME/cpython-sandbox --enable-optimizations
+          make -j$(nproc)
+          make install
+
+      - name: Setup custom Python in PATH
+        run: |
+          echo "$HOME/cpython-sandbox/bin" >> $GITHUB_PATH
+
+      - name: Install Poetry
+        run: |
+          $HOME/cpython-sandbox/bin/python3 -m pip install --upgrade pip
+          $HOME/cpython-sandbox/bin/python3 -m pip install poetry
+
+      - name: Cache mypy
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-sandbox-mypy-${{ github.head_ref || github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-sandbox-mypy-refs/heads/dev-
+            ${{ runner.os }}-sandbox-mypy-
+
+      - name: Install dependencies
+        run: |
+          poetry env use $HOME/cpython-sandbox/bin/python3
+          poetry install -n --no-root
+
+      - name: Run linters
+        run: poetry run make check
+
+      - name: Run tests
+        run: poetry run make tests

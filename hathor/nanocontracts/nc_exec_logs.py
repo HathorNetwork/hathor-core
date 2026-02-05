@@ -146,6 +146,21 @@ class NCCallEndEntry(_BaseNCEntry):
     """An entry representing a single method call ending in a NC execution."""
     type: Literal['CALL_END'] = Field(const=True, default='CALL_END')
     level: NCLogLevel = Field(const=True, default=NCLogLevel.DEBUG)
+    sandbox_counters: dict[str, int] | None = None
+
+    @staticmethod
+    def from_call_record(call_record: CallRecord, *, timestamp: float) -> NCCallEndEntry:
+        """Create a NCCallEndEntry from a CallRecord."""
+        sandbox_counters = None
+        if call_record.sandbox_counters is not None:
+            delta = call_record.sandbox_counters.delta
+            if delta:
+                sandbox_counters = delta.to_dict()
+
+        return NCCallEndEntry(
+            timestamp=timestamp,
+            sandbox_counters=sandbox_counters,
+        )
 
 
 class NCExecEntry(BaseModel):
@@ -249,9 +264,9 @@ class NCLogger:
         """Log the beginning of a call."""
         self.__entries__.append(NCCallBeginEntry.from_call_record(call_record, timestamp=self.__reactor__.seconds()))
 
-    def __log_call_end__(self) -> None:
+    def __log_call_end__(self, call_record: CallRecord) -> None:
         """Log the end of a call."""
-        self.__entries__.append(NCCallEndEntry(timestamp=self.__reactor__.seconds()))
+        self.__entries__.append(NCCallEndEntry.from_call_record(call_record, timestamp=self.__reactor__.seconds()))
 
 
 NC_EXEC_LOGS_DIR = 'nc_exec_logs'

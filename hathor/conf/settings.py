@@ -23,6 +23,7 @@ import pydantic
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
+from hathor.nanocontracts.sandbox import SandboxConfig
 from hathor.utils import yaml
 from hathor.utils.named_tuple import validated_named_tuple_from_dict
 
@@ -509,12 +510,22 @@ class HathorSettings(NamedTuple):
     # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
     NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
 
-    # TODO: align this with a realistic value later
-    # fuel units are arbitrary but it's roughly the number of opcodes, memory_limit is in bytes
-    NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE: int = 100_000  # 100K opcodes
-    NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE: int = 100 * 1024 * 1024  # 100MiB
-    NC_INITIAL_FUEL_TO_CALL_METHOD: int = 1_000_000  # 1M opcodes
-    NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
+    # Sandbox configuration for blueprint loading (consensus-critical).
+    # When enabled=False, sandbox protection is disabled during blueprint loading.
+    # When enabled=True, requires sandbox-enabled Python.
+    # In YAML, use "default" to enable sandbox with DEFAULT_CONFIG_LOADING (uses max_operations=100K for loading).
+    NC_SANDBOX_CONFIG_LOADING: SandboxConfig = SandboxConfig(enabled=False)
+
+    # Sandbox configuration for method execution (consensus-critical).
+    # When enabled=False, sandbox protection is disabled during method execution.
+    # When enabled=True, requires sandbox-enabled Python.
+    # In YAML, use "default" to enable sandbox with DEFAULT_CONFIG_EXECUTION (uses max_operations=1M for execution).
+    NC_SANDBOX_CONFIG_EXECUTION: SandboxConfig = SandboxConfig(enabled=False)
+
+    # Path to external YAML config file for API view sandbox settings (local, not consensus-critical).
+    # This config is reloadable at runtime via sysctl commands.
+    # When None, API views will use NC_SANDBOX_CONFIG_EXECUTION settings.
+    NC_SANDBOX_API_CONFIG_FILE: str | None = None
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
@@ -609,6 +620,42 @@ def _validate_token_deposit_percentage(token_deposit_percentage: float) -> float
     return token_deposit_percentage
 
 
+def _parse_sandbox_config_loading(value: Union[str, SandboxConfig, None]) -> SandboxConfig:
+    """Parse sandbox config for loading from YAML. Accepts 'default' string, SandboxConfig, or None."""
+    from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_LOADING, DISABLED_CONFIG
+
+    if value is None:
+        return DISABLED_CONFIG
+    if isinstance(value, SandboxConfig):
+        return value
+    if isinstance(value, str):
+        if value == 'default':
+            # Loading config uses lower operation limit (100K) for blueprint loading
+            return DEFAULT_CONFIG_LOADING
+        raise ValueError(f"NC_SANDBOX_CONFIG_LOADING must be 'default' or null, got: {value!r}")
+    raise TypeError(
+        f"NC_SANDBOX_CONFIG_LOADING must be 'default', SandboxConfig, or null, got: {type(value).__name__}"
+    )
+
+
+def _parse_sandbox_config_execution(value: Union[str, SandboxConfig, None]) -> SandboxConfig:
+    """Parse sandbox config for execution from YAML. Accepts 'default' string, SandboxConfig, or None."""
+    from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_EXECUTION, DISABLED_CONFIG
+
+    if value is None:
+        return DISABLED_CONFIG
+    if isinstance(value, SandboxConfig):
+        return value
+    if isinstance(value, str):
+        if value == 'default':
+            # Execution config uses default operation limit (1M)
+            return DEFAULT_CONFIG_EXECUTION
+        raise ValueError(f"NC_SANDBOX_CONFIG_EXECUTION must be 'default' or null, got: {value!r}")
+    raise TypeError(
+        f"NC_SANDBOX_CONFIG_EXECUTION must be 'default', SandboxConfig, or null, got: {type(value).__name__}"
+    )
+
+
 _VALIDATORS = dict(
     _parse_hex_str=pydantic.validator(
         'P2PKH_VERSION_BYTE',
@@ -649,4 +696,12 @@ _VALIDATORS = dict(
     _validate_token_deposit_percentage=pydantic.validator(
         'TOKEN_DEPOSIT_PERCENTAGE'
     )(_validate_token_deposit_percentage),
+    _parse_sandbox_config_loading=pydantic.validator(
+        'NC_SANDBOX_CONFIG_LOADING',
+        pre=True
+    )(_parse_sandbox_config_loading),
+    _parse_sandbox_config_execution=pydantic.validator(
+        'NC_SANDBOX_CONFIG_EXECUTION',
+        pre=True
+    )(_parse_sandbox_config_execution),
 )
