@@ -38,7 +38,7 @@ class SysctlBuilder:
 
         root.put_child('core', core)
         root.put_child('p2p', ConnectionsManagerSysctl(self.artifacts.p2p_manager))
-        root.put_child('storage', StorageSysctl(self.artifacts.manager.tx_storage))
+        root.put_child('storage', StorageSysctl(self.artifacts.rocksdb_storage))
 
         ws_factory = self.artifacts.manager.websocket_factory
         if ws_factory is not None:

@@ -17,18 +17,23 @@ from typing import TYPE_CHECKING
 from hathor.sysctl.sysctl import Sysctl, signal_handler_safe
 
 if TYPE_CHECKING:
-    from hathor.transaction.storage import TransactionStorage
+    from hathor.storage import RocksDBStorage
 
 
 class StorageSysctl(Sysctl):
-    def __init__(self, tx_storage: 'TransactionStorage') -> None:
+    def __init__(self, rocksdb_storage: 'RocksDBStorage') -> None:
         super().__init__()
 
-        self.tx_storage = tx_storage
+        self.rocksdb_storage = rocksdb_storage
         self.register(
             'rocksdb.flush',
             None,
             self.set_rocksdb_flush,
+        )
+        self.register(
+            'rocksdb.memtable_stats',
+            self.get_rocksdb_memtable_stats,
+            None,
         )
         self.register(
             'rocksdb.wal_stats',
@@ -43,75 +48,80 @@ class StorageSysctl(Sysctl):
         This forces RocksDB to write all in-memory data (memtables) to SST files on disk.
         Useful for ensuring data persistence or freeing up memory.
         """
-        # Check if we have a RocksDB storage
-        from hathor.transaction.storage import TransactionRocksDBStorage
+        db = self.rocksdb_storage.get_db()
+        # Flush all column families
+        # The flush method is available in python-rocksdb
+        try:
+            db.flush()
+            self.log.info('rocksdb flush completed successfully')
+        except AttributeError:
+            self.log.error('rocksdb flush method not available in this version of python-rocksdb')
+        except Exception as e:
+            self.log.error('error during rocksdb flush', error=str(e))
 
-        # Get the underlying storage
-        storage = self.tx_storage
-
-        # If it's a cache storage, get the underlying store
-        if hasattr(storage, 'store'):
-            storage = storage.store
-
-        # Only flush if it's a RocksDB storage
-        if isinstance(storage, TransactionRocksDBStorage):
-            db = storage._db
-            # Flush all column families
-            # The flush method is available in python-rocksdb
-            try:
-                db.flush()
-                self.log.info('rocksdb flush completed successfully')
-            except AttributeError:
-                self.log.error('rocksdb flush method not available in this version of python-rocksdb')
-            except Exception as e:
-                self.log.error('error during rocksdb flush', error=str(e))
-        else:
-            self.log.warn('rocksdb flush command called but storage is not RocksDB',
-                          storage_type=type(storage).__name__)
-
-    def get_rocksdb_wal_stats(self) -> dict[str, float | str | dict[str, float]]:
-        """Get WAL (Write-Ahead Log) statistics for RocksDB.
+    def get_rocksdb_memtable_stats(self) -> dict[str, float | str | dict[str, float]]:
+        """Get memtable statistics for RocksDB.
 
         Returns statistics including:
-        - total_wal_size: Total size of all WAL files in bytes
-        - wal_size_per_cf: Dictionary with WAL size per column family in bytes
+        - total_size_bytes: Total size of all memtables across all column families in bytes
+        - size_bytes_per_cf: Dictionary with memtable size per column family in bytes
 
-        This is useful to verify that flush operations are working correctly.
+        Memtable sizes are correlated with WAL sizes: flushing memtables to SST files
+        allows RocksDB to reclaim WAL disk space.
         """
-        from hathor.transaction.storage import TransactionRocksDBStorage
+        db = self.rocksdb_storage.get_db()
+        result: dict[str, float | str | dict[str, float]] = {}
 
-        # Get the underlying storage
-        storage = self.tx_storage
+        try:
+            # Get memtable size per column family
+            size_bytes_per_cf: dict[str, float] = {}
+            for cf in db.column_families:
+                cf_size = db.get_property(b'rocksdb.size-all-mem-tables', cf)
+                if cf_size:
+                    cf_name = cf.name.decode('utf-8')
+                    size_bytes_per_cf[cf_name] = float(cf_size.decode('utf-8'))
 
-        # If it's a cache storage, get the underlying store
-        if hasattr(storage, 'store'):
-            storage = storage.store
+            if size_bytes_per_cf:
+                result['size_bytes_per_cf'] = size_bytes_per_cf
+                result['total_size_bytes'] = sum(size_bytes_per_cf.values())
 
-        # Only get stats if it's a RocksDB storage
-        if isinstance(storage, TransactionRocksDBStorage):
-            db = storage._db
-            result: dict[str, float | str | dict[str, float]] = {}
+            return result
+        except Exception as e:
+            self.log.error('error getting rocksdb memtable stats', error=str(e))
+            return {'error': str(e)}
 
-            try:
-                # Get total WAL size across all column families
-                total_wal_size = db.get_property(b'rocksdb.total-wal-size')
-                if total_wal_size:
-                    result['total_wal_size'] = float(total_wal_size.decode('utf-8'))
+    def get_rocksdb_wal_stats(self) -> dict[str, float | str | list[dict[str, str | float]]]:
+        """Get WAL (Write-Ahead Log) file statistics for RocksDB.
 
-                # Get WAL size per column family
-                wal_per_cf: dict[str, float] = {}
-                for cf in db.column_families:
-                    cf_wal_size = db.get_property(b'rocksdb.size-all-mem-tables', cf)
-                    if cf_wal_size:
-                        cf_name = cf.name.decode('utf-8')
-                        wal_per_cf[cf_name] = float(cf_wal_size.decode('utf-8'))
+        Scans the RocksDB data directory for .log files (WAL files) and returns:
+        - total_size_bytes: Total size of all WAL files in bytes
+        - file_count: Number of WAL files
+        - files: List of dicts with 'name' and 'size_bytes' for each WAL file
 
-                if wal_per_cf:
-                    result['wal_size_per_cf'] = wal_per_cf
+        This is useful to monitor WAL file accumulation on disk.
+        """
+        import os
 
-                return result
-            except Exception as e:
-                self.log.error('error getting rocksdb wal stats', error=str(e))
-                return {'error': str(e)}
-        else:
-            return {'error': f'storage is not RocksDB: {type(storage).__name__}'}
+        db_path = os.path.join(self.rocksdb_storage.path, 'data_v2.db')
+        result: dict[str, float | str | list[dict[str, str | float]]] = {}
+
+        try:
+            files_info: list[dict[str, str | float]] = []
+            total_size_bytes = 0.0
+
+            if os.path.isdir(db_path):
+                for entry in os.listdir(db_path):
+                    if entry.endswith('.log'):
+                        full_path = os.path.join(db_path, entry)
+                        size_bytes = float(os.path.getsize(full_path))
+                        files_info.append({'name': entry, 'size_bytes': size_bytes})
+                        total_size_bytes += size_bytes
+
+            result['total_size_bytes'] = total_size_bytes
+            result['file_count'] = float(len(files_info))
+            result['files'] = files_info
+
+            return result
+        except Exception as e:
+            self.log.error('error getting rocksdb wal stats', error=str(e))
+            return {'error': str(e)}
