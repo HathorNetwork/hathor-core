@@ -23,4 +23,4 @@ def HathorSettings() -> Settings:
         module = importlib.import_module(config_file)
     except ModuleNotFoundError:
         module = importlib.import_module(default_file)
-    return module.SETTINGS
+    return module.SETTINGS  # type: ignore
