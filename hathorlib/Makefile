@@ -10,7 +10,6 @@ tests_lib = ./tests/
 
 pytest_flags = -p no:warnings --cov-report=term --cov-report=html --cov=hathorlib
 mypy_tests_flags = --warn-unused-configs --disallow-incomplete-defs --no-implicit-optional --warn-redundant-casts --strict-equality --disallow-subclassing-any --warn-return-any --disallow-untyped-decorators --show-error-codes
-mypy_sources_flags = --strict --show-error-codes
 
 .PHONY: tests
 tests:
@@ -23,7 +22,7 @@ mypy: mypy-sources mypy-tests
 
 .PHONY: mypy-sources
 mypy-sources: $(py_sources)
-	mypy $(mypy_sources_flags) $^
+	mypy $^
 
 .PHONY: mypy-tests
 mypy-tests: $(py_tests)

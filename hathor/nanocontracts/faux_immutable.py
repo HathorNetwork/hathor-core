@@ -16,9 +16,9 @@
 from hathorlib.nanocontracts.faux_immutable import (  # noqa: F401
     ALLOW_DUNDER_ATTR,
     ALLOW_INHERITANCE_ATTR,
+    SKIP_VALIDATION_ATTR,
     FauxImmutable,
     FauxImmutableMeta,
-    SKIP_VALIDATION_ATTR,
     __set_faux_immutable__,
     create_with_shell,
 )

@@ -13,9 +13,4 @@
 # limitations under the License.
 
 # Re-export from hathorlib for backward compatibility
-from hathorlib.utils.typing import (  # noqa: F401
-    InnerTypeMixin,
-    get_args,
-    get_origin,
-    is_subclass,
-)
+from hathorlib.utils.typing import InnerTypeMixin, get_args, get_origin, is_subclass  # noqa: F401

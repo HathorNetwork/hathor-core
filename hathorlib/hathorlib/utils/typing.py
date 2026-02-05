@@ -70,7 +70,7 @@ class InnerTypeMixin(Generic[T]):
 
     # You may write MyData[U] for signatures, but instantiation will reject a bare TypeVar:
     >>> MyData[U]    # no error
-    <class 'hathor.utils.typing.MyData'>
+    <class 'hathorlib.utils.typing.MyData'>
 
     >>> try:
     ...     MyData[U]()
@@ -105,7 +105,7 @@ class InnerTypeMixin(Generic[T]):
 
     @classmethod
     def __extract_inner_type__(cls, args: tuple[type, ...], /) -> type[T]:
-        """Defines how to convert the recived argument tuples into the stored type.
+        """Defines how to convert the received argument tuples into the stored type.
 
         If customization is needed, this class method is the place to do it. I could be used so only the origin-type is
         stored, or to accept multiple arguments and store a tuple of types, or to convert the arguments into different
