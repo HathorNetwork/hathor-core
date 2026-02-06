@@ -1,5 +1,6 @@
 import importlib
 import os
+from typing import cast
 
 from hathorlib.conf.settings import HathorSettings as Settings
 
@@ -23,4 +24,4 @@ def HathorSettings() -> Settings:
         module = importlib.import_module(config_file)
     except ModuleNotFoundError:
         module = importlib.import_module(default_file)
-    return module.SETTINGS  # type: ignore
+    return cast(Settings, module.SETTINGS)
