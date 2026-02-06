@@ -575,6 +575,18 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_data = response_history.json_value()
         self.assertFalse(response_data['success'])
 
+        # invalid tx_version parameter
+        address = self.get_address(0)
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': address.encode('utf-8'),
+                b'tx_version[]': b'INVALID'
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+        self.assertIn('Invalid tx_version parameter', response_data['message'])
+
     @inlineCallbacks
     def test_address_history_invalid_params_post(self):
         # missing param
@@ -590,6 +602,29 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         )
         response_data = response_history.json_value()
         self.assertFalse(response_data['success'])
+
+        # invalid tx_version parameter - non-integer
+        address = self.get_address(0)
+        response_history = yield self.web_address_history.post(
+            'thin_wallet/address_history', {
+                'addresses': [address],
+                'tx_version': ['INVALID']
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+        self.assertIn('Invalid tx_version parameter', response_data['message'])
+
+        # invalid tx_version parameter - string instead of list
+        response_history = yield self.web_address_history.post(
+            'thin_wallet/address_history', {
+                'addresses': [address],
+                'tx_version': 'NOT_A_NUMBER'
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+        self.assertIn('Invalid tx_version parameter', response_data['message'])
 
     @inlineCallbacks
     def test_send_tokens_invalid_params(self):
