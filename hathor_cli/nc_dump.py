@@ -36,6 +36,9 @@ def create_parser() -> ArgumentParser:
     parser.add_argument('--data', required=True, help='Data directory')
     parser.add_argument('--testnet', action='store_true', help='Connect to Hathor the default testnet')
     parser.add_argument('--peer', help='Json file with peer info')
+    parser.add_argument(
+        '--start-block', type=str, help='Start the dump at a specific block hash (in hex), defaults to best block'
+    )
 
     storage_group = parser.add_mutually_exclusive_group()
     storage_group.add_argument('--local', action='store_true', help='Dump the local storage from `--data` (default)')
@@ -46,7 +49,7 @@ def create_parser() -> ArgumentParser:
         '--until-complete', action='store_true', help='Stop the dump at the start of Nanos (default)'
     )
     stop_group.add_argument(
-        '--until-block', type=str, help='Stop the dump at a specific block hash (in hexa), inclusive'
+        '--until-block', type=str, help='Stop the dump at a specific block hash (in hex), inclusive'
     )
     stop_group.add_argument(
         '--until-height', type=int, help='Stop the dump at a specific block height, inclusive'
@@ -99,6 +102,15 @@ def main() -> None:
     dump_mode: DumpMode
     nc_dumper: NCDumper
 
+    start_block: bytes | None = None
+    if args.start_block:
+        start_block = bytes.fromhex(args.start_block)
+        try:
+            artifacts.tx_storage.get_block(start_block)
+        except TransactionDoesNotExist:
+            logger.error('local storage does not contain start block', block=args.start_block)
+            return
+
     if args.until_block:
         block_id = bytes.fromhex(args.until_block)
         try:
@@ -129,7 +141,7 @@ def main() -> None:
             settings=settings,
             reactor=reactor,
             tx_storage=artifacts.tx_storage,
-            start_block=None,
+            start_block=start_block,
             out=args.dump_to,
             mode=dump_mode,
             address=args.address,
@@ -139,7 +151,7 @@ def main() -> None:
         nc_dumper = LocalNCDumper(
             settings=settings,
             tx_storage=artifacts.tx_storage,
-            start_block=None,
+            start_block=start_block,
             out=args.dump_to,
             mode=dump_mode,
         )

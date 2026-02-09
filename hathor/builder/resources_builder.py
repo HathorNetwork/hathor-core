@@ -258,6 +258,7 @@ class ResourcesBuilder:
             from hathor.nanocontracts.resources import (
                 BlueprintInfoResource,
                 BlueprintSourceCodeResource,
+                NanoContractDumpResource,
                 NanoContractHistoryResource,
                 NanoContractStateResource,
             )
@@ -269,6 +270,7 @@ class ResourcesBuilder:
             blueprint_resource.putChild(b'builtin', BlueprintBuiltinResource(self.manager))
             blueprint_resource.putChild(b'on_chain', BlueprintOnChainResource(self.manager))
             blueprint_resource.putChild(b'source', BlueprintSourceCodeResource(self.manager))
+            nc_resource.putChild(b'dump', NanoContractDumpResource(self.manager))
             nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
             nc_resource.putChild(b'state', NanoContractStateResource(self.manager))
             nc_resource.putChild(b'creation', NCCreationResource(self.manager))
