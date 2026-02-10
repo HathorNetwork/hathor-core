@@ -137,6 +137,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
         location_params: dict[str, Any] = {
             'rate_limits': [],
             'path_vars_re': params.get('x-path-params-regex', {}),
+            'proxy_buffers': params.get('x-proxy-buffers'),
         }
 
         allowed_methods = {'OPTIONS'}
@@ -340,6 +341,9 @@ server {{
         out_file.write(' ' * 8 + f'limit_except {methods} {{ deny all; }}\n')
         for rate_limit in location_params.get('rate_limits', []):
             out_file.write(' ' * 8 + rate_limit.to_nginx_config())
+        proxy_buffers = location_params.get('proxy_buffers')
+        if proxy_buffers:
+            out_file.write(' ' * 8 + f'proxy_buffers {proxy_buffers};\n')
         out_file.write(location_close)
     out_file.write(server_close)
 
