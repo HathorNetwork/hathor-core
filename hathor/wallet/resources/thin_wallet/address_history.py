@@ -82,6 +82,7 @@ class AddressHistoryResource(Resource):
             try:
                 allowed_tx_versions = set(int(v) for v in tx_version_raw)
             except (ValueError, TypeError) as e:
+                request.setResponseCode(400)
                 return json_dumpb({
                     'success': False,
                     'message': f'Invalid tx_version parameter: must be integer(s), got {e}'
@@ -157,6 +158,7 @@ class AddressHistoryResource(Resource):
             try:
                 allowed_tx_versions = set([int(tx_version.decode('utf-8')) for tx_version in allowed_tx_versions_arg])
             except ValueError as e:
+                request.setResponseCode(400)
                 return json_dumpb({
                     'success': False,
                     'message': f'Invalid tx_version parameter: {e}'

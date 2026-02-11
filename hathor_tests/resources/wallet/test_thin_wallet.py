@@ -584,6 +584,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
             }
         )
         response_data = response_history.json_value()
+        self.assertEqual(response_history.responseCode, 400)
         self.assertFalse(response_data['success'])
         self.assertIn('Invalid tx_version parameter', response_data['message'])
 
@@ -612,6 +613,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
             }
         )
         response_data = response_history.json_value()
+        self.assertEqual(response_history.responseCode, 400)
         self.assertFalse(response_data['success'])
         self.assertIn('Invalid tx_version parameter', response_data['message'])
 
@@ -623,6 +625,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
             }
         )
         response_data = response_history.json_value()
+        self.assertEqual(response_history.responseCode, 400)
         self.assertFalse(response_data['success'])
         self.assertIn('Invalid tx_version parameter', response_data['message'])
 
