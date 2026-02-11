@@ -1,5 +1,5 @@
 # yamllint disable rule:line-length
-name: tests
+name: ci
 on: # yamllint disable-line rule:truthy
   push:
     branches:
@@ -52,14 +52,14 @@ jobs:
           echo $matrix
           echo $matrix | jq .
           echo $matrix | json2yaml
-  test:
-    name: python-${{ matrix.python }} (${{ matrix.os }})
+  lint:
+    name: lint py${{ matrix.python }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: matrix
-    timeout-minutes: 120  # default is 360
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.matrix.outputs.matrix)}}
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,10 +79,105 @@ jobs:
             ${{ runner.os }}-py${{ matrix.python }}-mypy-
       - name: Run linters
         run: poetry run make check
-      - name: Run tests
-        run: poetry run make tests
+  test-cli:
+    name: test-cli py${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: matrix
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: ${{ matrix.python }}
+          os: ${{ matrix.os }}
+      - name: Run CLI tests
+        run: poetry run make tests-cli
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
+        with:
+          flags: test-cli
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  test-lib:
+    name: test-lib py${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: matrix
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: ${{ matrix.python }}
+          os: ${{ matrix.os }}
+      - name: Run lib tests
+        run: poetry run make tests-lib
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
+        with:
+          flags: test-lib
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  test-other:
+    name: test-other py${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: matrix
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: ${{ matrix.python }}
+          os: ${{ matrix.os }}
+      - name: Run genesis tests
+        run: |
+          HATHOR_TEST_CONFIG_YAML='./hathor/conf/mainnet.yml' poetry run pytest -n0 --cov=hathor hathor_tests/tx/test_genesis.py
+          HATHOR_TEST_CONFIG_YAML='./hathor/conf/testnet.yml' poetry run pytest -n0 --cov=hathor --cov-append hathor_tests/tx/test_genesis.py
+          HATHOR_TEST_CONFIG_YAML='./hathor/conf/nano_testnet.yml' poetry run pytest -n0 --cov=hathor --cov-append hathor_tests/tx/test_genesis.py
+      - name: Run custom tests
+        run: poetry run bash ./extras/custom_tests.sh
+      - name: Run CI tests
+        run: poetry run pytest --cov=hathor --cov-append extras/github/
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
+        with:
+          flags: test-other
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  all-checks:
+    name: all-checks
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [lint, test-cli, test-lib, test-other]
+    steps:
+      - name: Check job results
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ||
+                "${{ needs.test-cli.result }}" != "success" ||
+                "${{ needs.test-lib.result }}" != "success" ||
+                "${{ needs.test-other.result }}" != "success" ]]; then
+            echo "One or more jobs failed or were cancelled:"
+            echo "  lint: ${{ needs.lint.result }}"
+            echo "  test-cli: ${{ needs.test-cli.result }}"
+            echo "  test-lib: ${{ needs.test-lib.result }}"
+            echo "  test-other: ${{ needs.test-other.result }}"
+            exit 1
+          fi
+          echo "All checks passed!"
