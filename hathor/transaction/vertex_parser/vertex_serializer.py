@@ -12,16 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-"""Public API for vertex binary serialization and deserialization.
+"""Public API for vertex binary serialization.
 
 All binary serialization is routed through this module. Vertex classes
 are pure data containers and do not implement serialization methods.
+For deserialization, see ``vertex_deserializer``.
 
 Usage:
     from hathor.transaction.vertex_parser import vertex_serializer
 
     data = vertex_serializer.serialize(tx)
-    tx = vertex_serializer.deserialize(data, storage=storage, settings=settings)
 """
 
 from __future__ import annotations
@@ -31,11 +31,10 @@ from typing import TYPE_CHECKING
 
 from hathor.serialization import Serializer
 from hathor.transaction.base_transaction import TxVersion
-from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathor.transaction.util import int_to_bytes
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import BaseTransaction, TxInput, TxOutput
-    from hathor.transaction.token_info import TokenVersion
     from hathor.transaction.transaction import Transaction
 
 
@@ -212,66 +211,6 @@ def serialize_token_info(tx: BaseTransaction) -> bytes:
     from hathor.transaction.vertex_parser._token_creation import _serialize_token_info
     assert isinstance(tx, TokenCreationTransaction)
     return _serialize_token_info(tx)
-
-
-# ---------------------------------------------------------------------------
-# Deserialization
-# ---------------------------------------------------------------------------
-
-
-def deserialize_tx_input(buf: bytes, *, verbose: VerboseCallback = None) -> tuple[TxInput, bytes]:
-    """Deserialize a TxInput from bytes. Replaces TxInput.create_from_bytes()."""
-    from hathor.serialization import Deserializer
-    from hathor.transaction.vertex_parser._common import _deserialize_tx_input
-
-    deserializer = Deserializer.build_bytes_deserializer(buf)
-    txin = _deserialize_tx_input(deserializer, verbose=verbose)
-    remaining = bytes(deserializer.read_all())
-    return txin, remaining
-
-
-def deserialize_tx_output(buf: bytes, *, verbose: VerboseCallback = None) -> tuple[TxOutput, bytes]:
-    """Deserialize a TxOutput from bytes. Replaces TxOutput.create_from_bytes()."""
-    from hathor.serialization import Deserializer
-    from hathor.transaction.vertex_parser._common import _deserialize_tx_output
-
-    deserializer = Deserializer.build_bytes_deserializer(buf)
-    txout = _deserialize_tx_output(deserializer, verbose=verbose)
-    remaining = bytes(deserializer.read_all())
-    return txout, remaining
-
-
-def deserialize_token_info(buf: bytes, *, verbose: VerboseCallback = None) -> tuple[str, str, TokenVersion, bytes]:
-    """Deserialize token info from bytes. Replaces TokenCreationTransaction.deserialize_token_info()."""
-    from hathor.transaction.token_info import TokenVersion
-    from hathor.transaction.util import decode_string_utf8, unpack, unpack_len
-
-    (raw_token_version,), buf = unpack('!B', buf)
-    if verbose:
-        verbose('token_version', raw_token_version)
-
-    try:
-        token_version = TokenVersion(raw_token_version)
-    except ValueError:
-        raise ValueError('unknown token version: {}'.format(raw_token_version))
-
-    (name_len,), buf = unpack('!B', buf)
-    if verbose:
-        verbose('token_name_len', name_len)
-    name, buf = unpack_len(name_len, buf)
-    if verbose:
-        verbose('token_name', name)
-    (symbol_len,), buf = unpack('!B', buf)
-    if verbose:
-        verbose('token_symbol_len', symbol_len)
-    symbol, buf = unpack_len(symbol_len, buf)
-    if verbose:
-        verbose('token_symbol', symbol)
-
-    decoded_name = decode_string_utf8(name, 'Token name')
-    decoded_symbol = decode_string_utf8(symbol, 'Token symbol')
-
-    return decoded_name, decoded_symbol, token_version, buf
 
 
 # ---------------------------------------------------------------------------

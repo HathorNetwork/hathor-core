@@ -16,12 +16,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from typing_extensions import Self, override
+from typing_extensions import override
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
-from hathor.transaction.util import VerboseCallback
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -58,22 +57,6 @@ class MergeMinedBlock(Block):
             settings=settings
         )
         self.aux_pow = aux_pow
-
-    @classmethod
-    @override
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
-        block = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
-        deserialize_block_funds(deserializer, block, verbose=verbose)
-        deserialize_block_graph_fields(deserializer, block, verbose=verbose)
-        block.aux_pow = BitcoinAuxPow.from_bytes(bytes(deserializer.read_all()))
-        deserializer.finalize()
-        block.hash = block.calculate_hash()
-        block.storage = storage
-        return block
 
     @override
     def get_struct_nonce(self) -> bytes:

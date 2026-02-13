@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.transaction.vertex_parser import vertex_serializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.transaction.vertex_parser._vertex_parser import VertexParser
 
-__all__ = ['VertexParser', 'vertex_serializer']
+__all__ = ['VertexParser', 'vertex_deserializer', 'vertex_serializer']

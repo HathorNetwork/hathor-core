@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar
 
-from typing_extensions import Self, override
+from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
@@ -29,7 +29,6 @@ from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
-from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
 
 T = TypeVar('T', bound=VertexBaseHeader)
@@ -99,30 +98,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         serializer = Serializer.build_bytes_serializer()
         serialize_graph_fields(serializer, self)
         return bytes(serializer.finalize())
-
-    @classmethod
-    @override
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
-        from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
-        from hathor.transaction.vertex_parser._headers import deserialize_headers
-        settings = get_global_settings()
-        tx = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
-        deserialize_tx_funds(deserializer, tx, verbose=verbose)
-        deserialize_graph_fields(deserializer, tx, verbose=verbose)
-        (tx.nonce,) = deserializer.read_struct('!I')
-        if verbose:
-            verbose('nonce', tx.nonce)
-        deserialize_headers(deserializer, tx, settings)
-        deserializer.finalize()
-        tx.update_hash()
-        if storage is not None:
-            tx.storage = storage
-        return tx
 
     def clear_sighash_cache(self) -> None:
         """Clear caches related to sighash calculation."""

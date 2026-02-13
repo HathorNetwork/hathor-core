@@ -5,7 +5,8 @@ import pytest
 from structlog.testing import capture_logs
 
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction, TransactionMetadata
+from hathor.transaction import TransactionMetadata
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.util import json_loadb
 from hathor_cli.twin_tx import create_parser, execute
 from hathor_tests import unittest
@@ -45,7 +46,7 @@ class TwinTxTest(unittest.TestCase):
         # Transforming prints str in array
         output = f.getvalue().strip().splitlines()
 
-        twin_tx = Transaction.create_from_struct(bytes.fromhex(output[0]))
+        twin_tx = vertex_deserializer.deserialize(bytes.fromhex(output[0]))
         # Parents are the same but in different order
         self.assertEqual(twin_tx.parents[0], self.tx.parents[1])
         self.assertEqual(twin_tx.parents[1], self.tx.parents[0])
@@ -100,7 +101,7 @@ class TwinTxTest(unittest.TestCase):
         # Transforming prints str in array
         output = f.getvalue().strip().splitlines()
 
-        twin_tx = Transaction.create_from_struct(bytes.fromhex(output[0]))
+        twin_tx = vertex_deserializer.deserialize(bytes.fromhex(output[0]))
         # Parents are differents
         self.assertNotEqual(twin_tx.parents[0], tx['parents'][0])
         self.assertNotEqual(twin_tx.parents[0], tx['parents'][1])

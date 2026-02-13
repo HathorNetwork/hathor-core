@@ -36,6 +36,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer  # noqa: F401
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import Wallet
 from hathor_tests import unittest
@@ -203,7 +204,7 @@ class TransactionTest(unittest.TestCase):
     def test_struct(self):
         tx = self._gen_tx_spending_genesis_block()
         data = tx.get_struct()
-        tx_read = Transaction.create_from_struct(data)
+        tx_read = vertex_deserializer.deserialize(data)
 
         self.assertEqual(tx, tx_read)
 
@@ -751,7 +752,7 @@ class TransactionTest(unittest.TestCase):
         self.assertTrue(isinstance(str_tx, str))
         self.assertEqual(bytes(tx), tx.get_struct())
 
-        tx_equal = Transaction.create_from_struct(tx.get_struct())
+        tx_equal = vertex_deserializer.deserialize(tx.get_struct())
         self.assertTrue(tx == tx_equal)
         self.assertFalse(tx == tx2)
 
@@ -864,14 +865,14 @@ class TransactionTest(unittest.TestCase):
         assert len_difference == 4, 'new struct is incorrect, len difference={}'.format(len_difference)
 
         with self.assertRaises(ValueError):
-            Transaction.create_from_struct(struct_bytes)
+            vertex_deserializer.deserialize(struct_bytes)
 
         # now use 8 bytes and make sure it's working
         outputs = [TxOutput(MAX_OUTPUT_VALUE, b'')]
         tx = Transaction(outputs=outputs, parents=parents)
         tx.update_hash()
         original_struct = tx.get_struct()
-        tx2 = Transaction.create_from_struct(original_struct)
+        tx2 = vertex_deserializer.deserialize(original_struct)
         tx2.update_hash()
         assert tx == tx2
 
@@ -943,7 +944,7 @@ class TransactionTest(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
         block = Block(
             signal_bits=0xF0,
-            version=0x0F,
+            version=TxVersion.REGULAR_BLOCK,
             nonce=100,
             weight=1,
             parents=[genesis_block.hash]

@@ -2,6 +2,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import PrivateKeyNotFound
 from hathor_tests import unittest
@@ -47,7 +48,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Change of parents only, so it's a twin.
         # With less weight, so the balance will continue because tx1 will be the winner
-        tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx2 = vertex_deserializer.deserialize(self.tx1.get_struct())
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         tx2.weight = 9
         self.manager.cpu_mining_service.resolve(tx2)
@@ -94,7 +95,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Change of parents only, so it's a twin.
         # Same weight, so both will be voided then the balance increases
-        tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx2 = vertex_deserializer.deserialize(self.tx1.get_struct())
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
 
@@ -122,7 +123,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
 
         # Change of parents only, so it's a twin.
         # With higher weight, so the balance will continue because tx2 will be the winner
-        tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx2 = vertex_deserializer.deserialize(self.tx1.get_struct())
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         tx2.weight = 13
         self.manager.cpu_mining_service.resolve(tx2)
@@ -178,7 +179,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                                                                   force=True, tx_storage=self.manager.tx_storage)
 
         # Change of parents only, so it's a twin.
-        tx3 = Transaction.create_from_struct(tx2.get_struct())
+        tx3 = vertex_deserializer.deserialize(tx2.get_struct())
         tx3.parents = [tx2.parents[1], tx2.parents[0]]
         self.manager.cpu_mining_service.resolve(tx3)
 
@@ -220,7 +221,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Change of parents only, so it's a twin.
-        tx3 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx3 = vertex_deserializer.deserialize(self.tx1.get_struct())
         tx3.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         self.manager.cpu_mining_service.resolve(tx3)
 
@@ -252,7 +253,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                          WalletBalance(0, self.initial_balance))
 
         # Change of parents only, so it's a twin.
-        tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx2 = vertex_deserializer.deserialize(self.tx1.get_struct())
         tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
 
@@ -300,7 +301,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx2)
 
         # Change of parents only, so it's a twin.
-        tx3 = Transaction.create_from_struct(self.tx1.get_struct())
+        tx3 = vertex_deserializer.deserialize(self.tx1.get_struct())
         tx3.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         tx3.weight = 14
         self.manager.cpu_mining_service.resolve(tx3)
@@ -366,7 +367,7 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
         self.run_to_completion()
 
         # Change of parents only, so it's a twin.
-        tx5 = Transaction.create_from_struct(tx4.get_struct())
+        tx5 = vertex_deserializer.deserialize(tx4.get_struct())
         tx5.parents = [tx4.parents[1], tx4.parents[0]]
         tx5.weight = 10
         self.manager.cpu_mining_service.resolve(tx5)
