@@ -33,7 +33,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.sandbox import MeteredExecutorFactory, SandboxAPIConfigLoader
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG, MeteredExecutorFactory, SandboxAPIConfigLoader
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -66,7 +66,7 @@ class CliBuilder:
     def __init__(self, args: RunNodeArgs) -> None:
         self.log = logger.new()
         self._args = args
-        self.sandbox_api_config_loader: SandboxAPIConfigLoader | None = None
+        self.sandbox_api_config_loader: SandboxAPIConfigLoader
 
     def check_or_raise(self, condition: bool, message: str) -> None:
         """Will exit printing `message` if `condition` is False."""
@@ -234,12 +234,11 @@ class CliBuilder:
 
         assert self.nc_storage_factory is not None
 
-        # Create SandboxAPIConfigLoader if nano contracts are enabled
-        if settings.ENABLE_NANO_CONTRACTS:
-            self.sandbox_api_config_loader = SandboxAPIConfigLoader(
-                default_config=settings.NC_SANDBOX_CONFIG_API,
-                config_file=self._args.nc_sandbox_api_config_file,
-            )
+        # Create SandboxAPIConfigLoader — always created, loader handles disabled state
+        self.sandbox_api_config_loader = SandboxAPIConfigLoader(
+            default_config=settings.NC_SANDBOX_CONFIG_API or DISABLED_CONFIG,
+            config_file=self._args.nc_sandbox_api_config_file,
+        )
 
         # Create executor factory with settings-based configs
         executor_factory = MeteredExecutorFactory(

@@ -19,14 +19,14 @@ This package provides all sandbox-related functionality for nano contract execut
   DEFAULT_CONFIG_EXECUTION, DEFAULT_CONFIG_API)
 - Execution counters (SandboxCounts, SandboxCounters)
 - Exception types (SandboxError, SandboxRuntimeError, etc.)
-- Allowlists (ALLOWED_OPCODES, ALLOWED_IMPORTS)
+- Allowlists (ALLOWED_OPCODES, get_allowed_imports_dict)
 - Runtime configuration loading (SandboxAPIConfigLoader)
 - Executor factory (MeteredExecutorFactory)
 """
 
 from hathor.nanocontracts.sandbox.allowlist import (
-    ALLOWED_IMPORTS,
     ALLOWED_OPCODES,
+    get_allowed_imports_dict,
     get_allowed_opcodes,
     get_sandbox_allowed_imports,
     get_sandbox_allowed_modules,
@@ -36,6 +36,7 @@ from hathor.nanocontracts.sandbox.config import (
     DEFAULT_CONFIG_EXECUTION,
     DEFAULT_CONFIG_LOADING,
     DISABLED_CONFIG,
+    DisabledSandboxConfig,
     SandboxConfig,
 )
 from hathor.nanocontracts.sandbox.config_loader import SandboxAPIConfigLoader
@@ -54,6 +55,7 @@ __all__ = [
     # Config
     'SandboxConfig',
     'DISABLED_CONFIG',
+    'DisabledSandboxConfig',
     'DEFAULT_CONFIG_LOADING',
     'DEFAULT_CONFIG_EXECUTION',
     'DEFAULT_CONFIG_API',
@@ -76,7 +78,7 @@ __all__ = [
     'MeteredExecutorFactory',
     # Allowlists
     'ALLOWED_OPCODES',
-    'ALLOWED_IMPORTS',
+    'get_allowed_imports_dict',
     'get_allowed_opcodes',
     'get_sandbox_allowed_imports',
     'get_sandbox_allowed_modules',

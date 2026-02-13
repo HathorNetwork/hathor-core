@@ -46,19 +46,17 @@ class MeteredExecutorFactory:
     the old ProductionMeteredExecutorFactory and TestMeteredExecutorFactory.
     """
 
-    __slots__ = ('_loading_config', '_execution_config', '_api_config', '_api_loader')
+    __slots__ = ('_loading_config', '_execution_config', '_api_loader')
 
     def __init__(
         self,
         *,
         loading_config: SandboxConfig = DISABLED_CONFIG,
         execution_config: SandboxConfig = DISABLED_CONFIG,
-        api_config: SandboxConfig = DISABLED_CONFIG,
-        api_config_loader: SandboxAPIConfigLoader | None = None,
+        api_config_loader: 'SandboxAPIConfigLoader | None' = None,
     ) -> None:
         self._loading_config = loading_config
         self._execution_config = execution_config
-        self._api_config = api_config
         self._api_loader = api_config_loader
 
     def for_loading(self) -> MeteredExecutor:
@@ -85,8 +83,9 @@ class MeteredExecutorFactory:
         API views use higher limits (e.g., 10M ops) and can be configured
         at runtime via external config files. This is local to each node
         and not consensus-critical.
+
+        Requires an api_config_loader to be set.
         """
         from hathor.nanocontracts.metered_exec import MeteredExecutor
-        if self._api_loader is not None:
-            return MeteredExecutor(config=self._api_loader.config)
-        return MeteredExecutor(config=self._api_config)
+        assert self._api_loader is not None, "api_config_loader must be set to create API executors"
+        return MeteredExecutor(config=self._api_loader.config)

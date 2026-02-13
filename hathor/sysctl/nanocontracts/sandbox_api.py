@@ -135,34 +135,13 @@ class SandboxAPISysctl(Sysctl):
                 - enabled: whether sandbox is enabled
                 - config: current config values (if enabled) or None
         """
+        import dataclasses
+
         config = self._loader.config
         config_dict = None
         if config is not None:
-            config_dict = {
-                'enabled': config.enabled,
-                'max_operations': config.max_operations,
-                'max_iterations': config.max_iterations,
-                'max_int_digits': config.max_int_digits,
-                'max_str_length': config.max_str_length,
-                'max_bytes_length': config.max_bytes_length,
-                'max_list_size': config.max_list_size,
-                'max_dict_size': config.max_dict_size,
-                'max_set_size': config.max_set_size,
-                'max_tuple_size': config.max_tuple_size,
-                'max_recursion_depth': config.max_recursion_depth,
-                'allow_float': config.allow_float,
-                'allow_complex': config.allow_complex,
-                'allow_dunder_access': config.allow_dunder_access,
-                'allow_io': config.allow_io,
-                'allow_class_creation': config.allow_class_creation,
-                'allow_magic_methods': config.allow_magic_methods,
-                'allow_metaclasses': config.allow_metaclasses,
-                'allow_unsafe': config.allow_unsafe,
-                'allow_specialized_opcodes': config.allow_specialized_opcodes,
-                'count_iterations_as_operations': config.count_iterations_as_operations,
-                'frozen_mode': config.frozen_mode,
-                'auto_mutable': config.auto_mutable,
-            }
+            config_dict = dataclasses.asdict(config)
+            config_dict['enabled'] = config.is_enabled
 
         return {
             'file': str(self._loader.config_file) if self._loader.config_file else None,

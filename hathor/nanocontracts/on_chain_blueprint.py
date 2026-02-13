@@ -212,37 +212,32 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code_exec(
         self,
-        executor: 'MeteredExecutor | None' = None,
+        executor: 'MeteredExecutor',
     ) -> tuple[object, dict[str, object], SandboxCounts]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES.
 
         Loads and executes the blueprint code, capturing sandbox loading costs.
 
         Args:
-            executor: A MeteredExecutor to use for loading. If None, a disabled
-                     executor is created (no sandbox protection).
+            executor: A MeteredExecutor to use for loading.
 
         Returns:
             A tuple of (blueprint_class, env, loading_costs) where loading_costs
             is a SandboxCounts with counter deltas (zero counts if sandbox not active).
         """
-        from hathor.nanocontracts.metered_exec import MeteredExecutor
-
-        if executor is None:
-            executor = MeteredExecutor(config=DISABLED_CONFIG)
         loading_costs = SandboxCounts()
 
         try:
             with executor:  # start()/end() via context manager
                 # Capture counts BEFORE exec to calculate delta
                 before_counts: SandboxCounts | None = None
-                if executor.config.enabled and hasattr(sys, 'sandbox'):
+                if executor.config.is_enabled and hasattr(sys, 'sandbox'):
                     before_counts = SandboxCounts.capture()
 
                 env = executor.exec(self.code.text)
 
                 # Capture counts AFTER exec and calculate delta
-                if executor.config.enabled and hasattr(sys, 'sandbox') and before_counts is not None:
+                if executor.config.is_enabled and hasattr(sys, 'sandbox') and before_counts is not None:
                     after_counts = SandboxCounts.capture()
                     loading_costs = after_counts - before_counts
         except SandboxError as e:
@@ -255,13 +250,12 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code(
         self,
-        executor: 'MeteredExecutor | None' = None,
+        executor: 'MeteredExecutor',
     ) -> BlueprintCache:
         """This method loads the on-chain code (if not loaded) and returns the cached result.
 
         Args:
-            executor: A MeteredExecutor to use for loading. If None, a disabled
-                     executor is created (no sandbox protection).
+            executor: A MeteredExecutor to use for loading.
 
         Returns:
             BlueprintCache containing the blueprint class, env, and loading costs.
@@ -279,36 +273,57 @@ class OnChainBlueprint(Transaction):
 
     def get_blueprint_object_bypass(self) -> object:
         """Loads the code and returns the object exported with @export"""
-        blueprint_class, _, _ = self._load_blueprint_code_exec()
+        from hathor.nanocontracts.metered_exec import MeteredExecutor
+        executor = MeteredExecutor(config=DISABLED_CONFIG)
+        blueprint_class, _, _ = self._load_blueprint_code_exec(executor)
         return blueprint_class
 
     def get_blueprint_class(
         self,
-        executor: 'MeteredExecutor | None' = None,
-        skip_loading_cost: bool = False,
+        executor: 'MeteredExecutor',
     ) -> type[Blueprint]:
-        """Returns the blueprint class, applies loading cost to sandbox.
+        """Returns the blueprint class, loading it if necessary.
+
+        Args:
+            executor: A MeteredExecutor to use for loading.
+        """
+        was_cached = self._blueprint_cache is not None
+        cache = self._load_blueprint_code(executor)
+        # Apply cached loading costs when sandbox is active
+        if was_cached and executor.config.is_enabled and cache.loading_costs:
+            if hasattr(sys, 'sandbox') and sys.sandbox.enabled and not sys.sandbox.suspended:
+                sys.sandbox.add_counts(**cache.loading_costs.to_dict())
+        return cache.blueprint_class
+
+    def get_blueprint_class_with_cost(
+        self,
+        executor: 'MeteredExecutor',
+    ) -> tuple[type[Blueprint], SandboxCounts | None]:
+        """Returns the blueprint class and loading cost.
 
         When blueprint is cached AND sandbox is active, the cached loading costs
         are applied to ensure consistent cost regardless of cache state.
 
         Args:
-            executor: A MeteredExecutor to use for loading. If None, a disabled
-                     executor is created (no sandbox protection).
-            skip_loading_cost: If True, skip applying cached loading costs. Used
-                              to deduplicate loading costs when the same blueprint
-                              is accessed multiple times in a single call chain.
+            executor: A MeteredExecutor to use for loading.
+
+        Returns:
+            A tuple of (blueprint_class, loading_cost).
+            loading_cost is the SandboxCounts or None if sandbox not active.
         """
         was_cached = self._blueprint_cache is not None
         cache = self._load_blueprint_code(executor)
 
-        # Apply cached costs when returning from cache with sandbox active
-        sandbox_enabled = executor is not None and executor.config.enabled
-        if was_cached and sandbox_enabled and cache.loading_costs and not skip_loading_cost:
-            if hasattr(sys, 'sandbox') and sys.sandbox.enabled and not sys.sandbox.suspended:
-                sys.sandbox.add_counts(**cache.loading_costs.to_dict())
+        loading_cost: SandboxCounts | None = None
+        sandbox_enabled = executor.config.is_enabled
+        if sandbox_enabled and cache.loading_costs:
+            loading_cost = cache.loading_costs
+            # Apply cached costs when returning from cache with sandbox active
+            if was_cached:
+                if hasattr(sys, 'sandbox') and sys.sandbox.enabled and not sys.sandbox.suspended:
+                    sys.sandbox.add_counts(**cache.loading_costs.to_dict())
 
-        return cache.blueprint_class
+        return cache.blueprint_class, loading_cost
 
     @property
     def loading_costs(self) -> SandboxCounts | None:
@@ -421,7 +436,9 @@ class OnChainBlueprint(Transaction):
 
     def get_method(self, method_name: str) -> Method:
         # XXX: possibly do this by analyzing the source AST instead of using the loaded code
-        blueprint_class = self.get_blueprint_class()
+        from hathor.nanocontracts.metered_exec import MeteredExecutor
+        executor = MeteredExecutor(config=DISABLED_CONFIG)
+        blueprint_class = self.get_blueprint_class(executor)
         return Method.from_callable(getattr(blueprint_class, method_name))
 
     def sign(self, private_key: ec.EllipticCurvePrivateKey) -> None:

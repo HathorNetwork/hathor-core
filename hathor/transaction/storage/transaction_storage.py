@@ -1053,38 +1053,48 @@ class TransactionStorage(ABC):
     def get_blueprint_class(
         self,
         blueprint_id: BlueprintId,
-        skip_loading_cost: bool = False,
         executor: 'MeteredExecutor | None' = None,
-    ) -> tuple[type['Blueprint'], 'SandboxCounts | None']:
-        """Returns the blueprint class and loading cost associated with the given blueprint_id.
+    ) -> type['Blueprint']:
+        """Returns the blueprint class associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
 
         Args:
             blueprint_id: The blueprint ID to look up.
-            skip_loading_cost: If True, skip applying cached loading costs for on-chain
-                              blueprints. Used to deduplicate loading costs when the same
-                              blueprint is accessed multiple times in a single call chain.
-            executor: A MeteredExecutor to use for loading on-chain blueprints. If None,
-                     a disabled executor is created (no sandbox protection).
+            executor: A MeteredExecutor to use for loading on-chain blueprints.
+                     If None, a disabled executor is created (no sandbox protection).
+        """
+        from hathor.nanocontracts import OnChainBlueprint
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            if executor is None:
+                from hathor.nanocontracts.metered_exec import MeteredExecutor
+                from hathor.nanocontracts.sandbox import DISABLED_CONFIG
+                executor = MeteredExecutor(config=DISABLED_CONFIG)
+            return blueprint.get_blueprint_class(executor)
+        else:
+            return blueprint
+
+    def get_blueprint_class_with_cost(
+        self,
+        blueprint_id: BlueprintId,
+        executor: 'MeteredExecutor',
+    ) -> tuple[type['Blueprint'], 'SandboxCounts | None']:
+        """Returns the blueprint class and loading cost associated with the given blueprint_id.
+
+        Args:
+            blueprint_id: The blueprint ID to look up.
+            executor: A MeteredExecutor to use for loading on-chain blueprints.
 
         Returns:
             A tuple of (blueprint_class, loading_cost).
-            - For on-chain blueprints: loading_cost is the SandboxCounts of costs charged (or None if skipped)
+            - For on-chain blueprints: loading_cost is the SandboxCounts of costs charged
             - For catalog blueprints: loading_cost is always None
         """
         from hathor.nanocontracts import OnChainBlueprint
         blueprint = self._get_blueprint(blueprint_id)
         if isinstance(blueprint, OnChainBlueprint):
-            blueprint_class = blueprint.get_blueprint_class(
-                executor=executor,
-                skip_loading_cost=skip_loading_cost,
-            )
-            # Return loading cost only if it was actually charged
-            loading_cost: SandboxCounts | None = None
-            if not skip_loading_cost:
-                loading_cost = blueprint.loading_costs
-            return blueprint_class, loading_cost
+            return blueprint.get_blueprint_class_with_cost(executor)
         else:
             return blueprint, None
 

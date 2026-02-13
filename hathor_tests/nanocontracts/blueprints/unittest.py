@@ -6,6 +6,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts import HATHOR_TOKEN_UID, Context
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.sandbox import DISABLED_CONFIG, SandboxConfig
@@ -73,7 +74,7 @@ class BlueprintTestCase(unittest.TestCase):
         nc_logger = NCLogger(__reactor__=runner.reactor, __nc_id__=contract_id)
         env = BlueprintEnvironment(runner, nc_logger, contract_storage, disable_cache=True)
         blueprint_id = runner.get_blueprint_id(contract_id)
-        blueprint_class, _ = runner.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = runner.tx_storage.get_blueprint_class(blueprint_id)
         contract = blueprint_class(env)
         return contract
 
@@ -121,7 +122,7 @@ class BlueprintTestCase(unittest.TestCase):
             verifier = OnChainBlueprintVerifier(settings=self._settings)
             verifier.verify_code(ocb)
 
-        blueprint_class = ocb.get_blueprint_class()
+        blueprint_class = ocb.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG))
         if inject_in_class is not None:
             for key, value in inject_in_class.items():
                 setattr(blueprint_class, key, value)

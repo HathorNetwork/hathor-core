@@ -352,7 +352,7 @@ class NoSandboxBlueprint(Blueprint):
         ocb = OnChainBlueprint(hash=b'\x03' * 32, code=code)
 
         # Load with sandbox disabled (DISABLED_CONFIG)
-        ocb.get_blueprint_class()
+        ocb.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG))
 
         # Verify loading_costs is None (zero counts → None via `or None`)
         self.assertIsNone(ocb.loading_costs)
@@ -662,11 +662,10 @@ class Blueprint2(Blueprint):
         )
 
     def test_ocb_loading_cost_deduplicated_per_call_chain(self) -> None:
-        """Verify that OCB loading costs are charged only once per call chain.
+        """Verify that OCB loading costs are charged on every cached access.
 
-        This test directly verifies the _charged_blueprint_ids tracking mechanism
-        by checking that when a blueprint is accessed multiple times in a single
-        call chain, its loading cost is only counted once.
+        Both get_blueprint_class() and get_blueprint_class_with_cost() apply
+        cached loading costs when sandbox is active.
         """
         import sys
 
@@ -702,19 +701,18 @@ class TestBlueprint(Blueprint):
         self.assertGreater(loading_cost, 0, "Blueprint should have loading cost")
 
         # Now test: accessing the cached blueprint twice with sandbox active
-        # First access (skip_loading_cost=False) should add loading cost
-        # Second access (skip_loading_cost=True) should NOT add loading cost
+        # Both accesses should add loading cost
 
         sys.sandbox.enable()
         sandbox_config.apply()
         sys.sandbox.reset_counts()
 
-        # First cached access with skip_loading_cost=False
-        ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config), skip_loading_cost=False)
+        # First cached access with cost
+        ocb.get_blueprint_class_with_cost(MeteredExecutor(config=sandbox_config))
         after_first = sys.sandbox.get_counts()['operation_count']
 
-        # Second cached access with skip_loading_cost=True
-        ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config), skip_loading_cost=True)
+        # Second cached access also adds loading cost
+        ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config))
         after_second = sys.sandbox.get_counts()['operation_count']
 
         sys.sandbox.reset()
@@ -726,21 +724,21 @@ class TestBlueprint(Blueprint):
             f"First access should add loading cost: expected={loading_cost}, got={after_first}"
         )
 
-        # Verify second access did NOT add loading cost (due to skip_loading_cost=True)
+        # Verify second access also added loading cost
         self.assertEqual(
             after_second,
-            loading_cost,  # Should still be the same as after first
-            f"Second access with skip should NOT add cost: expected={loading_cost}, got={after_second}"
+            2 * loading_cost,
+            f"Second access should also add cost: expected={2 * loading_cost}, got={after_second}"
         )
 
-        # For completeness, verify that without skip flag, cost would be doubled
+        # For completeness, verify that two get_blueprint_class_with_cost calls also double
         sys.sandbox.enable()
         sandbox_config.apply()
         sys.sandbox.reset_counts()
 
-        # Two accesses without skip
-        ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config), skip_loading_cost=False)
-        ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config), skip_loading_cost=False)
+        # Two accesses with cost
+        ocb.get_blueprint_class_with_cost(MeteredExecutor(config=sandbox_config))
+        ocb.get_blueprint_class_with_cost(MeteredExecutor(config=sandbox_config))
         after_both_without_skip = sys.sandbox.get_counts()['operation_count']
 
         sys.sandbox.reset()
@@ -749,7 +747,7 @@ class TestBlueprint(Blueprint):
         self.assertEqual(
             after_both_without_skip,
             2 * loading_cost,
-            f"Two accesses without skip should double cost: expected={2 * loading_cost}, got={after_both_without_skip}"
+            f"Two accesses with cost should double cost: expected={2 * loading_cost}, got={after_both_without_skip}"
         )
 
     def test_ocb_loading_cost_in_call_record(self) -> None:
@@ -793,17 +791,17 @@ class TestBlueprint(Blueprint):
         self.assertIsInstance(loading_costs, SandboxCounts)
         self.assertGreater(loading_costs.operation_count, 0)
 
-        # Verify that get_blueprint_class returns loading_cost when not skipped
+        # Verify that both methods charge loading_cost when cached
         sys.sandbox.enable()
         sandbox_config.apply()
         sys.sandbox.reset_counts()
 
-        # When skip_loading_cost=False, the cost should be charged and returned
-        blueprint_class1 = ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config), skip_loading_cost=False)
+        # When using get_blueprint_class_with_cost, the cost should be charged
+        blueprint_class1, _ = ocb.get_blueprint_class_with_cost(MeteredExecutor(config=sandbox_config))
         after_first_load = sys.sandbox.get_counts()['operation_count']
 
-        # When skip_loading_cost=True, the cost should NOT be charged
-        blueprint_class2 = ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config), skip_loading_cost=True)
+        # When using get_blueprint_class, the cost should also be charged
+        blueprint_class2 = ocb.get_blueprint_class(MeteredExecutor(config=sandbox_config))
         after_second_load = sys.sandbox.get_counts()['operation_count']
 
         sys.sandbox.reset()
@@ -811,8 +809,8 @@ class TestBlueprint(Blueprint):
         # First access should have added loading cost
         self.assertEqual(after_first_load, loading_costs.operation_count)
 
-        # Second access (with skip) should not have added any cost
-        self.assertEqual(after_second_load, after_first_load)
+        # Second access should also have added loading cost
+        self.assertEqual(after_second_load, 2 * loading_costs.operation_count)
 
         # Verify that both accesses return the same class
         self.assertIs(blueprint_class1, blueprint_class2)

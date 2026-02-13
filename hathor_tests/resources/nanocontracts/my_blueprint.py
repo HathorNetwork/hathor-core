@@ -47,7 +47,7 @@ class MyBlueprint(Blueprint):
         return 1
 
     @view
-    def my_private_method_2(self) -> dict[dict[str, int], tuple[bool, str, int, int]]:
+    def my_private_method_2(self) -> dict[str, tuple[bool, str, int, int]]:
         return {}
 
     @view
@@ -67,5 +67,5 @@ class MyBlueprint(Blueprint):
         return None
 
     @view
-    def my_private_method_7(self) -> str | int | bool | None:
+    def my_private_method_7(self) -> int | None:
         return 0
