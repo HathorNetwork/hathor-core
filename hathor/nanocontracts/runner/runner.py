@@ -1119,9 +1119,13 @@ class Runner:
         if allow_reentrancy:
             return
 
-        for call_record in self._call_info.stack:
-            if call_record.contract_id == contract_id:
-                raise NCForbiddenReentrancy(f'reentrancy is forbidden on method `{method_name}`')
+        change_trackers = self.change_trackers[contract_id]
+        if len(change_trackers) > 1:
+            raise NCForbiddenReentrancy(f'reentrancy is forbidden on method `{method_name}`')
+
+        # for call_record in self._call_info.stack:
+        #     if call_record.contract_id == contract_id:
+        #         raise NCForbiddenReentrancy(f'reentrancy is forbidden on method `{method_name}`')
 
     def _validate_actions(self, method: Any, method_name: str, ctx: Context) -> None:
         """Check whether actions are allowed."""
