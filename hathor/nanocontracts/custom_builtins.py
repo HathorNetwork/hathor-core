@@ -35,7 +35,7 @@ from typing_extensions import Self, TypeVarTuple
 
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
 from hathor.nanocontracts.faux_immutable import FauxImmutable
-from hathor.nanocontracts.sandbox import ALLOWED_IMPORTS
+from hathor.nanocontracts.sandbox import get_allowed_imports_dict
 from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME
 
 T = TypeVar('T')
@@ -503,7 +503,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: will trigger the execution of the imported module
     # (name: str, globals: Mapping[str, object] | None = None, locals: Mapping[str, object] | None = None,
     #  fromlist: Sequence[str] = (), level: int = 0) -> types.ModuleType
-    '__import__': _generate_restricted_import_function(ALLOWED_IMPORTS),
+    '__import__': _generate_restricted_import_function(get_allowed_imports_dict()),
 
     # XXX: also required to declare classes
     # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name otherwise,

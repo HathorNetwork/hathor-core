@@ -45,10 +45,7 @@ class SysctlBuilder:
         if ws_factory is not None:
             root.put_child('ws', WebsocketManagerSysctl(ws_factory))
 
-        # Add nano contracts sandbox API sysctl if nano contracts are enabled and loader exists
-        if self.artifacts.settings.ENABLE_NANO_CONTRACTS:
-            loader = self.artifacts.sandbox_api_config_loader
-            if loader is not None:
-                root.put_child('nc_sandbox_api', SandboxAPISysctl(loader))
+        # Add nano contracts sandbox API sysctl — always available, loader handles disabled state
+        root.put_child('nc_sandbox_api', SandboxAPISysctl(self.artifacts.sandbox_api_config_loader))
 
         return root
