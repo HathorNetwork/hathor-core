@@ -33,10 +33,22 @@ class RocksDBStorage:
         self,
         path: str | tempfile.TemporaryDirectory,
         cache_capacity: int | None = None,
+        secondary_path: str | None = None,
     ) -> None:
+        """Initialize RocksDB storage.
+
+        Args:
+            path: Path to the database directory.
+            cache_capacity: Optional LRU cache capacity in bytes.
+            secondary_path: If provided, open the database as a secondary instance
+                           (read-only). The secondary_path is where the secondary
+                           instance stores its temporary files. This allows multiple
+                           processes to read from the same database.
+        """
         self.log = logger.new()
         # We have to keep a reference to the TemporaryDirectory because it is cleaned up when garbage collected.
         self.path, self.temp_dir = self._get_path_and_temp_dir(path)
+        self._is_secondary = secondary_path is not None
 
         db_path = os.path.join(self.path, _DB_NAME)
         lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
@@ -58,6 +70,9 @@ class RocksDBStorage:
             # get the list of existing column families
             cf_names = rocksdb.list_column_families(db_path, options)
         except rocksdb.errors.RocksIOError:
+            if secondary_path is not None:
+                # Secondary instance requires the database to already exist
+                raise
             # this means the db doesn't exist, a repair will create one
             rocksdb.repair_db(db_path, options)
             cf_names = []
@@ -65,9 +80,20 @@ class RocksDBStorage:
         # we need to open all column families
         column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
 
-        # finally, open the database
-        self._db = rocksdb.DB(db_path, options, column_families=column_families)
-        self.log.info('starting rocksdb', path=self.path)
+        # Open the database
+        if secondary_path is not None:
+            # Open as secondary instance (read-only, can share with primary)
+            self._db = rocksdb.DB(
+                db_path,
+                options,
+                column_families=column_families,
+                read_only=True,
+            )
+            self.log.info('starting rocksdb (read-only)', path=self.path)
+        else:
+            # Open as primary instance (read-write)
+            self._db = rocksdb.DB(db_path, options, column_families=column_families)
+            self.log.info('starting rocksdb', path=self.path)
         self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
 
     @staticmethod

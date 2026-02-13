@@ -34,6 +34,7 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
@@ -245,17 +246,30 @@ class CliBuilder:
         )
         self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
-        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
-        consensus_algorithm = ConsensusAlgorithm(
-            self.nc_storage_factory,
-            soft_voided_tx_ids,
+        # Create block executors
+        block_executor = NCBlockExecutor(
             settings=settings,
             runner_factory=runner_factory,
-            nc_log_storage=nc_log_storage,
+            nc_storage_factory=self.nc_storage_factory,
             nc_calls_sorter=nc_calls_sorter,
-            feature_service=self.feature_service,
+        )
+        consensus_block_executor = NCConsensusBlockExecutor(
+            settings=settings,
+            block_executor=block_executor,
+            nc_storage_factory=self.nc_storage_factory,
+            nc_log_storage=nc_log_storage,
             nc_exec_fail_trace=self._args.nc_exec_fail_trace,
-            tx_storage=tx_storage,
+        )
+
+        soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
+        consensus_algorithm = ConsensusAlgorithm(
+            soft_voided_tx_ids=soft_voided_tx_ids,
+            pubsub=pubsub,
+            settings=settings,
+            nc_storage_factory=self.nc_storage_factory,
+            block_executor=block_executor,
+            consensus_block_executor=consensus_block_executor,
+            feature_service=self.feature_service,
         )
 
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
@@ -316,6 +330,7 @@ class CliBuilder:
             feature_service=self.feature_service,
             pubsub=pubsub,
             execution_manager=execution_manager,
+            wallet=self.wallet,
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 

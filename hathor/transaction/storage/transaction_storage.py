@@ -1106,7 +1106,7 @@ class BaseTransactionStorage(TransactionStorage):
         # Pubsub is used to publish tx voided and winner but it's optional
         self.pubsub = pubsub
 
-        # Either save or verify all genesis.
+        # Save or verify all genesis
         self._save_or_verify_genesis()
 
         self._latest_n_height_tips: list[HeightInfo] = []
