@@ -15,11 +15,16 @@
 import builtins
 from io import StringIO
 from textwrap import dedent
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 from unittest.mock import ANY, Mock, call, patch
 
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
-from hathor.nanocontracts.sandbox import ALLOWED_IMPORTS, get_sandbox_allowed_imports, get_sandbox_allowed_modules
+from hathor.nanocontracts.sandbox import (
+    SANDBOX_AVAILABLE,
+    get_allowed_imports_dict,
+    get_sandbox_allowed_imports,
+    get_sandbox_allowed_modules,
+)
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -149,15 +154,15 @@ class TestSandboxAllowedImports(TestCase):
         self.assertIn('hathor.export', result)
 
     def test_matches_allowed_imports_count(self) -> None:
-        """Verify the result has the same number of entries as ALLOWED_IMPORTS."""
+        """Verify the result has the same number of entries as get_allowed_imports_dict()."""
         result = get_sandbox_allowed_imports()
-        expected_count = sum(len(attrs) for attrs in ALLOWED_IMPORTS.values())
+        expected_count = sum(len(attrs) for attrs in get_allowed_imports_dict().values())
         self.assertEqual(len(result), expected_count)
 
     def test_all_allowed_imports_are_present(self) -> None:
-        """Verify every entry in ALLOWED_IMPORTS is present in the result."""
+        """Verify every entry in get_allowed_imports_dict() is present in the result."""
         result = get_sandbox_allowed_imports()
-        for module_name, attributes in ALLOWED_IMPORTS.items():
+        for module_name, attributes in get_allowed_imports_dict().items():
             for attr_name in attributes:
                 self.assertIn(
                     f'{module_name}.{attr_name}',
@@ -183,9 +188,9 @@ class TestSandboxAllowedModules(TestCase):
         self.assertIn('hathor', result)
 
     def test_matches_allowed_imports_keys(self) -> None:
-        """Verify the result matches the keys of ALLOWED_IMPORTS."""
+        """Verify the result matches the keys of get_allowed_imports_dict()."""
         result = get_sandbox_allowed_modules()
-        self.assertEqual(result, frozenset(ALLOWED_IMPORTS.keys()))
+        self.assertEqual(result, frozenset(get_allowed_imports_dict().keys()))
 
 
 class TestSandboxImportRestrictionsIntegration(BlueprintTestCase):
@@ -229,7 +234,7 @@ class TestSandboxImportRestrictionsIntegration(BlueprintTestCase):
             class MyBlueprint(Blueprint):
                 @public
                 def initialize(self, ctx: Context) -> None:
-                    from os import getcwd  # os is not in ALLOWED_IMPORTS
+                    from os import getcwd  # os is not in get_allowed_imports_dict()
         '''
 
         blueprint_id = self._register_blueprint_contents(
@@ -244,6 +249,7 @@ class TestSandboxImportRestrictionsIntegration(BlueprintTestCase):
         self.assertIn('os', str(cm.exception))
 
 
+@skipUnless(SANDBOX_AVAILABLE, "Requires CPython sandbox build")
 class TestSandboxConfigAppliesRestrictions(TestCase):
     """Tests that verify SandboxConfig.apply() correctly configures sandbox restrictions."""
 

@@ -33,7 +33,6 @@ class SandboxConfig:
     prevents accidental modifications.
 
     Attributes:
-        enabled: Whether sandbox protection is enabled. When False, apply() is a no-op.
         max_int_digits: Maximum digits allowed in integers (~10^N)
         max_str_length: Maximum string length in characters
         max_bytes_length: Maximum bytes length
@@ -56,9 +55,6 @@ class SandboxConfig:
         frozen_mode: Whether frozen mode is enabled
         auto_mutable: Whether auto_mutable mode is enabled
     """
-
-    # Master switch for sandbox protection
-    enabled: bool = True
 
     # Size limits (prevent DoS via large objects)
     max_int_digits: int = 100           # ~10^900, prevents huge integer DoS
@@ -100,6 +96,11 @@ class SandboxConfig:
     # Specialized opcodes (CPython 3.11+ adaptive specialization)
     allow_specialized_opcodes: bool = False
 
+    @property
+    def is_enabled(self) -> bool:
+        """Whether sandbox protection is enabled."""
+        return True
+
     def apply(self) -> None:
         """Apply this configuration to the CPython sandbox.
 
@@ -109,12 +110,7 @@ class SandboxConfig:
 
         This method explicitly sets ALL config parameters to ensure consistent
         behavior regardless of any previously set defaults.
-
-        If enabled=False, this method is a no-op (Null Object pattern).
         """
-        if not self.enabled:
-            return
-
         sys.sandbox.set_config(
             # Size limits
             max_int_digits=self.max_int_digits,
@@ -175,52 +171,75 @@ class SandboxConfig:
         sys.sandbox.allow_specialized_opcodes = self.allow_specialized_opcodes
 
     def check_available(self) -> None:
-        """Raise if enabled but sys.sandbox not available."""
-        if self.enabled and not hasattr(sys, 'sandbox'):
+        """Raise if sys.sandbox not available."""
+        if not hasattr(sys, 'sandbox'):
             from hathor.nanocontracts.exception import SandboxRequiredButNotAvailable
             raise SandboxRequiredButNotAvailable()
 
     def enable(self) -> None:
-        """Enable sandbox. No-op if disabled."""
-        if not self.enabled:
-            return
+        """Enable sandbox."""
         sys.sandbox.enable()
 
     def reset(self) -> None:
-        """Reset sandbox (suspend + clear). No-op if disabled."""
-        if not self.enabled:
-            return
+        """Reset sandbox (suspend + clear)."""
         sys.sandbox.reset()
 
     def reset_counts(self) -> None:
-        """Reset sandbox counters. No-op if disabled."""
-        if not self.enabled:
-            return
+        """Reset sandbox counters."""
         sys.sandbox.reset_counts()
 
     def get_counts(self) -> dict[str, int]:
-        """Get sandbox counters. Returns empty dict if disabled."""
-        if not self.enabled:
-            return {}
+        """Get sandbox counters."""
         return sys.sandbox.get_counts()
 
     def set_mutable(self, obj: object) -> None:
-        """Mark object as mutable in frozen mode. No-op if disabled."""
-        if not self.enabled:
-            return
+        """Mark object as mutable in frozen mode."""
         sys.sandbox.set_mutable(obj)
 
     def assert_active(self) -> None:
-        """Assert sandbox is enabled and not suspended. No-op if disabled."""
-        if not self.enabled:
-            return
+        """Assert sandbox is enabled and not suspended."""
         assert sys.sandbox.enabled, "Sandbox must be enabled"
         assert not sys.sandbox.suspended, "Sandbox must not be suspended for limits to be enforced"
 
 
+class DisabledSandboxConfig(SandboxConfig):
+    """Null Object pattern — all sandbox methods are no-ops.
+
+    Use this instead of None to indicate sandbox is disabled.
+    """
+
+    @property
+    def is_enabled(self) -> bool:
+        return False
+
+    def apply(self) -> None:
+        pass
+
+    def check_available(self) -> None:
+        pass
+
+    def enable(self) -> None:
+        pass
+
+    def reset(self) -> None:
+        pass
+
+    def reset_counts(self) -> None:
+        pass
+
+    def get_counts(self) -> dict[str, int]:
+        return {}
+
+    def set_mutable(self, obj: object) -> None:
+        pass
+
+    def assert_active(self) -> None:
+        pass
+
+
 # Disabled configuration singleton (Null Object pattern)
 # Use this instead of None to indicate sandbox is disabled
-DISABLED_CONFIG = SandboxConfig(enabled=False)
+DISABLED_CONFIG = DisabledSandboxConfig()
 
 # Default configuration for blueprint loading (consensus-critical)
 # Uses lower operation limit for blueprint loading

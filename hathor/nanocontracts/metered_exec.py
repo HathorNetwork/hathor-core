@@ -58,8 +58,8 @@ class MeteredExecutor:
         with MeteredExecutor(config=sandbox_config) as executor:
             result = executor.call(func, args=args)
 
-    If config.enabled is False, code will be executed without sandbox restrictions.
-    When config.enabled is True, the system must have a Python build with sandbox
+    If config.is_enabled is False, code will be executed without sandbox restrictions.
+    When config.is_enabled is True, the system must have a Python build with sandbox
     support (version suffix '-sandbox'), otherwise SandboxRequiredButNotAvailable
     will be raised.
     """
@@ -72,10 +72,10 @@ class MeteredExecutor:
         Args:
             config: Sandbox configuration. Stored as-is (SandboxConfig is frozen/immutable).
                    Once set, cannot be changed - create a new executor for different config.
-                   If config.enabled is False, code will be executed without sandbox restrictions.
+                   If config.is_enabled is False, code will be executed without sandbox restrictions.
 
         Raises:
-            SandboxRequiredButNotAvailable: If config.enabled is True but sys.sandbox is not available.
+            SandboxRequiredButNotAvailable: If config.is_enabled is True but sys.sandbox is not available.
         """
         self._config: SandboxConfig = config
         self._debug = False

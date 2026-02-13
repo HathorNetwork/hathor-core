@@ -18,18 +18,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_API, SandboxAPIConfigLoader
+from hathor.nanocontracts.sandbox import DEFAULT_CONFIG_API, DISABLED_CONFIG, SandboxAPIConfigLoader
 
 
 class SandboxAPIConfigLoaderTest(unittest.TestCase):
     """Tests for the SandboxAPIConfigLoader class."""
 
-    def test_init_with_no_args(self) -> None:
-        """Test initializing with no arguments."""
-        loader = SandboxAPIConfigLoader()
-        self.assertFalse(loader.config.enabled)  # DISABLED_CONFIG
+    def test_init_with_disabled_config(self) -> None:
+        """Test initializing with DISABLED_CONFIG."""
+        loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG)
+        self.assertFalse(loader.config.is_enabled)  # DISABLED_CONFIG
         self.assertIsNone(loader.config_file)
-        self.assertIsNone(loader.default_config)
+        self.assertEqual(loader.default_config, DISABLED_CONFIG)
 
     def test_init_with_default_config(self) -> None:
         """Test initializing with a default config."""
@@ -48,10 +48,13 @@ class SandboxAPIConfigLoaderTest(unittest.TestCase):
         self.assertEqual(loader.config, DEFAULT_CONFIG_API)
         self.assertEqual(loader.config_file, Path('/path/that/does/not/exist.yaml'))
 
-    def test_init_with_nonexistent_file_no_default(self) -> None:
-        """Test initializing with a nonexistent file and no default returns DISABLED_CONFIG."""
-        loader = SandboxAPIConfigLoader(config_file='/path/that/does/not/exist.yaml')
-        self.assertFalse(loader.config.enabled)  # DISABLED_CONFIG
+    def test_init_with_nonexistent_file_disabled_default(self) -> None:
+        """Test initializing with a nonexistent file and DISABLED_CONFIG returns DISABLED_CONFIG."""
+        loader = SandboxAPIConfigLoader(
+            default_config=DISABLED_CONFIG,
+            config_file='/path/that/does/not/exist.yaml',
+        )
+        self.assertFalse(loader.config.is_enabled)  # DISABLED_CONFIG
         self.assertEqual(loader.config_file, Path('/path/that/does/not/exist.yaml'))
 
     def test_load_from_valid_yaml(self) -> None:
@@ -77,7 +80,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             self.assertIsNotNone(loader.config)
             config = loader.config
             assert config is not None
@@ -108,8 +111,8 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertFalse(loader.config.enabled)  # Disabled configs have enabled=False
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            self.assertFalse(loader.config.is_enabled)  # DisabledSandboxConfig
         finally:
             Path(temp_path).unlink()
 
@@ -121,7 +124,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             # Empty file should load with default values since api_view section doesn't exist
             self.assertIsNotNone(loader.config)
         finally:
@@ -139,7 +142,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             self.assertIsNotNone(loader.config)
             config = loader.config
             assert config is not None
@@ -168,7 +171,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             self.assertIsNotNone(loader.config)
             assert loader.config is not None
             self.assertEqual(loader.config.max_operations, 1000000)
@@ -199,7 +202,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             changed = loader.reload()
             self.assertFalse(changed)  # No change
         finally:
@@ -218,11 +221,11 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertTrue(loader.config.enabled)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            self.assertTrue(loader.config.is_enabled)
 
             loader.disable()
-            self.assertFalse(loader.config.enabled)
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
@@ -249,7 +252,7 @@ api_view:
             temp_path_2 = f2.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path_1)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path_1)
             self.assertIsNotNone(loader.config)
             assert loader.config is not None
             self.assertEqual(loader.config.max_operations, 1000000)
@@ -277,7 +280,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             original_config = loader.config
 
             # Try to set a nonexistent file
@@ -331,12 +334,12 @@ api_view:
 
         try:
             # Create loader with no default config
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertTrue(loader.config.enabled)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            self.assertTrue(loader.config.is_enabled)
 
             success = loader.set_file(None)
             self.assertTrue(success)
-            self.assertFalse(loader.config.enabled)  # DISABLED_CONFIG
+            self.assertFalse(loader.config.is_enabled)  # DISABLED_CONFIG
             self.assertIsNone(loader.config_file)
         finally:
             Path(temp_path).unlink()
@@ -358,7 +361,7 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             self.assertIsNotNone(loader.config)
             assert loader.config is not None
             original_max_ops = loader.config.max_operations
@@ -389,11 +392,11 @@ api_view:
 
         try:
             # Test with string
-            loader_str = SandboxAPIConfigLoader(config_file=temp_path)
+            loader_str = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             self.assertIsNotNone(loader_str.config)
 
             # Test with Path
-            loader_path = SandboxAPIConfigLoader(config_file=Path(temp_path))
+            loader_path = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=Path(temp_path))
             self.assertIsNotNone(loader_path.config)
 
             # Both should have same config
@@ -405,10 +408,15 @@ api_view:
 
 
 class SandboxAPIConfigLoaderValidationTest(unittest.TestCase):
-    """Tests for YAML config validation (type checking and range validation)."""
+    """Tests for YAML config validation (Pydantic strict validation).
 
-    def test_string_value_for_int_field_uses_default(self) -> None:
-        """Test that a string value for an int field falls back to default."""
+    With Pydantic validation, any invalid field rejects the entire config
+    (keeping the previous config). This is stricter than per-field fallback
+    but provides clearer error messages and consistent behavior.
+    """
+
+    def test_string_value_for_int_field_rejects_config(self) -> None:
+        """Test that a string value for an int field rejects the entire config."""
         yaml_content = """
 api_view:
   enabled: true
@@ -420,14 +428,14 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            # Should use DEFAULT_CONFIG_API.max_operations as fallback
-            self.assertEqual(loader.config.max_operations, DEFAULT_CONFIG_API.max_operations)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            # Validation fails → keeps initial DISABLED_CONFIG
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
-    def test_negative_value_for_int_field_uses_default(self) -> None:
-        """Test that a negative value for an int field falls back to default."""
+    def test_negative_value_for_int_field_rejects_config(self) -> None:
+        """Test that a negative value for an int field rejects the entire config."""
         yaml_content = """
 api_view:
   enabled: true
@@ -439,13 +447,14 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertEqual(loader.config.max_operations, DEFAULT_CONFIG_API.max_operations)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            # Validation fails → keeps initial DISABLED_CONFIG
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
-    def test_bool_value_for_int_field_uses_default(self) -> None:
-        """Test that a boolean value for an int field falls back to default (bool is subclass of int)."""
+    def test_bool_value_for_int_field_rejects_config(self) -> None:
+        """Test that a boolean value for an int field rejects the config (strict mode)."""
         yaml_content = """
 api_view:
   enabled: true
@@ -457,13 +466,14 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertEqual(loader.config.max_operations, DEFAULT_CONFIG_API.max_operations)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            # Validation fails → keeps initial DISABLED_CONFIG
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
-    def test_string_value_for_bool_field_uses_default(self) -> None:
-        """Test that a string value for a bool field falls back to default."""
+    def test_string_value_for_bool_field_rejects_config(self) -> None:
+        """Test that a string value for a bool field rejects the config."""
         yaml_content = """
 api_view:
   enabled: true
@@ -475,13 +485,14 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertEqual(loader.config.allow_float, DEFAULT_CONFIG_API.allow_float)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            # Validation fails → keeps initial DISABLED_CONFIG
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
-    def test_int_value_for_bool_field_uses_default(self) -> None:
-        """Test that an int value for a bool field falls back to default."""
+    def test_int_value_for_bool_field_rejects_config(self) -> None:
+        """Test that an int value for a bool field rejects the config (strict mode)."""
         yaml_content = """
 api_view:
   enabled: true
@@ -493,8 +504,9 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            self.assertEqual(loader.config.allow_float, DEFAULT_CONFIG_API.allow_float)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            # Validation fails → keeps initial DISABLED_CONFIG
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
@@ -516,8 +528,7 @@ api_view:
                 config_file=temp_path,
             )
             # api_view is a list, not a dict → ValueError → keeps previous config (DISABLED_CONFIG at init)
-            # Since this is the first load and it fails, it stays at DISABLED_CONFIG
-            self.assertFalse(loader.config.enabled)
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 
@@ -534,19 +545,17 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
             self.assertEqual(loader.config.max_operations, 0)
         finally:
             Path(temp_path).unlink()
 
-    def test_multiple_invalid_fields_all_use_defaults(self) -> None:
-        """Test that multiple invalid fields each independently fall back to defaults."""
+    def test_invalid_fields_reject_entire_config(self) -> None:
+        """Test that any invalid field rejects the entire config."""
         yaml_content = """
 api_view:
   enabled: true
   max_operations: "bad"
-  max_iterations: -100
-  allow_float: 42
   max_int_digits: 500
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
@@ -555,14 +564,9 @@ api_view:
             temp_path = f.name
 
         try:
-            loader = SandboxAPIConfigLoader(config_file=temp_path)
-            config = loader.config
-            # Invalid fields should use defaults
-            self.assertEqual(config.max_operations, DEFAULT_CONFIG_API.max_operations)
-            self.assertEqual(config.max_iterations, DEFAULT_CONFIG_API.max_iterations)
-            self.assertEqual(config.allow_float, DEFAULT_CONFIG_API.allow_float)
-            # Valid field should be used
-            self.assertEqual(config.max_int_digits, 500)
+            loader = SandboxAPIConfigLoader(default_config=DISABLED_CONFIG, config_file=temp_path)
+            # Validation fails → keeps initial DISABLED_CONFIG (entire config rejected)
+            self.assertFalse(loader.config.is_enabled)
         finally:
             Path(temp_path).unlink()
 

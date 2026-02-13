@@ -108,7 +108,7 @@ class BuildArtifacts(NamedTuple):
     wallet: Optional[BaseWallet]
     rocksdb_storage: RocksDBStorage
     stratum_factory: Optional[StratumFactory]
-    sandbox_api_config_loader: Optional[SandboxAPIConfigLoader]
+    sandbox_api_config_loader: SandboxAPIConfigLoader
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
@@ -457,10 +457,11 @@ class Builder:
 
             if self._nc_sandbox_config is not None:
                 # Explicitly set via set_nc_sandbox_config() — use for all contexts
+                api_loader = SandboxAPIConfigLoader(default_config=self._nc_sandbox_config)
                 self._executor_factory = MeteredExecutorFactory(
                     loading_config=self._nc_sandbox_config,
                     execution_config=self._nc_sandbox_config,
-                    api_config=self._nc_sandbox_config,
+                    api_config_loader=api_loader,
                 )
             else:
                 # Use settings-based configs
@@ -485,23 +486,19 @@ class Builder:
             )
         return self._runner_factory
 
-    def _get_or_create_sandbox_api_config_loader(self) -> SandboxAPIConfigLoader | None:
+    def _get_or_create_sandbox_api_config_loader(self) -> SandboxAPIConfigLoader:
         """Get or create the SandboxAPIConfigLoader singleton.
 
-        The loader is created when nano contracts are enabled and either:
-        - A default config is specified in settings (NC_SANDBOX_CONFIG_API), or
-        - A config file is specified via CLI (--nc-sandbox-api-config-file)
-
-        Returns None if nano contracts are disabled.
+        Always creates a loader, even if nano contracts are disabled.
+        The loader handles disabled state internally via DISABLED_CONFIG.
         """
         if self._sandbox_api_config_loader is None:
             settings = self._get_or_create_settings()
-            if settings.ENABLE_NANO_CONTRACTS:
-                # Create loader with default config from settings and optional CLI file path
-                self._sandbox_api_config_loader = SandboxAPIConfigLoader(
-                    default_config=settings.NC_SANDBOX_CONFIG_API,
-                    config_file=self._sandbox_api_config_file,
-                )
+            from hathor.nanocontracts.sandbox import DISABLED_CONFIG
+            self._sandbox_api_config_loader = SandboxAPIConfigLoader(
+                default_config=settings.NC_SANDBOX_CONFIG_API or DISABLED_CONFIG,
+                config_file=self._sandbox_api_config_file,
+            )
         return self._sandbox_api_config_loader
 
     def _get_or_create_pubsub(self) -> PubSubManager:

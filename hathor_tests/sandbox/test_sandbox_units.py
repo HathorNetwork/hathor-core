@@ -20,7 +20,7 @@ from pathlib import Path
 
 from hathor.nanocontracts.sandbox import SandboxAPIConfigLoader
 from hathor.nanocontracts.sandbox.config import DISABLED_CONFIG, SandboxConfig
-from hathor.nanocontracts.sandbox.counts import SandboxCounts, SandboxCounters
+from hathor.nanocontracts.sandbox.counts import SandboxCounters, SandboxCounts
 from hathor.sysctl.nanocontracts.sandbox_api import SandboxAPISysctl
 
 
@@ -199,7 +199,7 @@ class SandboxAPISysctlPathValidationTest(unittest.TestCase):
     """Tests for sysctl set_file() path validation."""
 
     def setUp(self) -> None:
-        self.loader = SandboxAPIConfigLoader(None)
+        self.loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         self.sysctl = SandboxAPISysctl(self.loader)
 
     def test_set_file_rejects_relative_path(self) -> None:

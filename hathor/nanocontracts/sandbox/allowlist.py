@@ -27,6 +27,7 @@ import collections
 import dis
 import math
 import typing
+from functools import cache
 
 # =============================================================================
 # OPCODE ALLOWLIST
@@ -209,14 +210,12 @@ def get_allowed_opcodes() -> frozenset[int]:
 # IMPORT ALLOWLIST
 # =============================================================================
 
-# Cache for the allowed imports dict (built lazily to avoid circular imports)
-_ALLOWED_IMPORTS_CACHE: dict[str, dict[str, object]] | None = None
+@cache
+def get_allowed_imports_dict() -> dict[str, dict[str, object]]:
+    """Get the allowed imports dict, building it on first call.
 
-
-def _build_allowed_imports() -> dict[str, dict[str, object]]:
-    """Build the allowed imports dict.
-
-    This is done lazily to avoid circular import issues with the hathor module.
+    Uses @cache for lazy initialization to avoid circular import issues
+    with the hathor module at import time.
     """
     import hathor
 
@@ -270,46 +269,8 @@ def _build_allowed_imports() -> dict[str, dict[str, object]]:
     }
 
 
-def get_allowed_imports_dict() -> dict[str, dict[str, object]]:
-    """Get the allowed imports dict, building it if necessary."""
-    global _ALLOWED_IMPORTS_CACHE
-    if _ALLOWED_IMPORTS_CACHE is None:
-        _ALLOWED_IMPORTS_CACHE = _build_allowed_imports()
-    return _ALLOWED_IMPORTS_CACHE
-
-
-# For backward compatibility, ALLOWED_IMPORTS is a property-like object
-# that returns the cached dict when accessed
-class _AllowedImportsProxy:
-    """Proxy class that provides lazy access to ALLOWED_IMPORTS dict."""
-
-    def __getitem__(self, key: str) -> dict[str, object]:
-        return get_allowed_imports_dict()[key]
-
-    def __contains__(self, key: object) -> bool:
-        return key in get_allowed_imports_dict()
-
-    def __iter__(self):
-        return iter(get_allowed_imports_dict())
-
-    def keys(self):
-        return get_allowed_imports_dict().keys()
-
-    def values(self):
-        return get_allowed_imports_dict().values()
-
-    def items(self):
-        return get_allowed_imports_dict().items()
-
-    def get(self, key: str, default: dict[str, object] | None = None) -> dict[str, object] | None:
-        return get_allowed_imports_dict().get(key, default)
-
-
-ALLOWED_IMPORTS: dict[str, dict[str, object]] = _AllowedImportsProxy()  # type: ignore[assignment]
-
-
 def get_sandbox_allowed_imports() -> frozenset[str]:
-    """Convert ALLOWED_IMPORTS to the format expected by sys.sandbox.allowed_imports.
+    """Convert allowed imports to the format expected by sys.sandbox.allowed_imports.
 
     The sandbox API expects a set of dotted module.attribute strings to restrict
     which imports are allowed. This provides defense in depth - even if someone

@@ -22,7 +22,7 @@ from unittest.mock import Mock
 
 from hathor.builder import BuildArtifacts, Builder
 from hathor.builder.sysctl_builder import SysctlBuilder
-from hathor.nanocontracts.sandbox import SandboxAPIConfigLoader
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG, SandboxAPIConfigLoader
 from hathor.nanocontracts.sandbox.config import SandboxConfig
 from hathor.sysctl.nanocontracts.sandbox_api import SandboxAPISysctl
 
@@ -35,9 +35,9 @@ class BuildArtifactsSandboxConfigTest(unittest.TestCase):
         # Check the field exists in the NamedTuple
         self.assertIn('sandbox_api_config_loader', BuildArtifacts._fields)
 
-    def test_build_artifacts_allows_none_loader(self) -> None:
-        """Test that BuildArtifacts can have None for sandbox_api_config_loader."""
-        # Create a minimal mock artifacts to check the field
+    def test_build_artifacts_with_disabled_loader(self) -> None:
+        """Test that BuildArtifacts works with a DISABLED_CONFIG loader."""
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         artifacts = BuildArtifacts(
             peer=Mock(),
             settings=Mock(),
@@ -54,13 +54,13 @@ class BuildArtifactsSandboxConfigTest(unittest.TestCase):
             wallet=None,
             rocksdb_storage=Mock(),
             stratum_factory=None,
-            sandbox_api_config_loader=None,
+            sandbox_api_config_loader=loader,
         )
-        self.assertIsNone(artifacts.sandbox_api_config_loader)
+        self.assertFalse(artifacts.sandbox_api_config_loader.config.is_enabled)
 
     def test_build_artifacts_allows_loader_instance(self) -> None:
         """Test that BuildArtifacts can have a SandboxAPIConfigLoader instance."""
-        loader = SandboxAPIConfigLoader(None)
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         artifacts = BuildArtifacts(
             peer=Mock(),
             settings=Mock(),
@@ -88,7 +88,7 @@ class SysctlBuilderSandboxConfigTest(unittest.TestCase):
     def test_sysctl_builder_uses_artifacts_loader(self) -> None:
         """Test that SysctlBuilder uses the loader from artifacts."""
         # Create a mock loader
-        loader = SandboxAPIConfigLoader(None)
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
 
         # Create mock artifacts with the loader
         mock_settings = Mock()
@@ -129,9 +129,9 @@ class SysctlBuilderSandboxConfigTest(unittest.TestCase):
         assert isinstance(nc_sandbox_api, SandboxAPISysctl)  # for mypy
         self.assertIs(nc_sandbox_api.loader, loader)
 
-    def test_sysctl_builder_skips_sysctl_when_no_loader(self) -> None:
-        """Test that SysctlBuilder doesn't create nc_sandbox_api sysctl when loader is None."""
-        # Create mock artifacts without loader
+    def test_sysctl_builder_always_creates_sysctl(self) -> None:
+        """Test that SysctlBuilder always creates nc_sandbox_api sysctl, even with disabled config."""
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         mock_settings = Mock()
         mock_settings.ENABLE_NANO_CONTRACTS = True
         mock_manager = Mock()
@@ -153,20 +153,20 @@ class SysctlBuilderSandboxConfigTest(unittest.TestCase):
             wallet=None,
             rocksdb_storage=Mock(),
             stratum_factory=None,
-            sandbox_api_config_loader=None,
+            sandbox_api_config_loader=loader,
         )
 
         # Build sysctl
         sysctl_builder = SysctlBuilder(artifacts)
         sysctl = sysctl_builder.build()
 
-        # The nc_sandbox_api child should NOT exist
+        # The nc_sandbox_api child should always exist
         nc_sandbox_api = sysctl._children.get('nc_sandbox_api')
-        self.assertIsNone(nc_sandbox_api)
+        self.assertIsNotNone(nc_sandbox_api)
 
-    def test_sysctl_builder_skips_sysctl_when_nano_disabled(self) -> None:
-        """Test that SysctlBuilder doesn't create nc_sandbox_api when nano is disabled."""
-        loader = SandboxAPIConfigLoader(None)
+    def test_sysctl_builder_creates_sysctl_even_when_nano_disabled(self) -> None:
+        """Test that SysctlBuilder creates nc_sandbox_api even when nano is disabled."""
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
 
         mock_settings = Mock()
         mock_settings.ENABLE_NANO_CONTRACTS = False  # Nano contracts disabled
@@ -196,24 +196,26 @@ class SysctlBuilderSandboxConfigTest(unittest.TestCase):
         sysctl_builder = SysctlBuilder(artifacts)
         sysctl = sysctl_builder.build()
 
-        # The nc_sandbox_api child should NOT exist
+        # The nc_sandbox_api child should always exist (loader handles disabled state)
         nc_sandbox_api = sysctl._children.get('nc_sandbox_api')
-        self.assertIsNone(nc_sandbox_api)
+        self.assertIsNotNone(nc_sandbox_api)
 
 
 class BuilderSandboxConfigLoaderTest(unittest.TestCase):
     """Tests for Builder creating sandbox_api_config_loader."""
 
-    def test_builder_get_or_create_sandbox_api_config_loader_returns_none_when_disabled(self) -> None:
-        """Test that _get_or_create_sandbox_api_config_loader returns None when nano is disabled."""
+    def test_builder_get_or_create_sandbox_api_config_loader_returns_disabled_when_disabled(self) -> None:
+        """Test that _get_or_create_sandbox_api_config_loader returns a disabled loader when nano is disabled."""
         mock_settings = Mock()
         mock_settings.ENABLE_NANO_CONTRACTS = False
+        mock_settings.NC_SANDBOX_CONFIG_API = None
 
         builder = Builder()
         builder._settings = mock_settings
 
         result = builder._get_or_create_sandbox_api_config_loader()
-        self.assertIsNone(result)
+        self.assertIsNotNone(result)
+        self.assertFalse(result.config.is_enabled)
 
     def test_builder_get_or_create_sandbox_api_config_loader_creates_loader_with_no_config(self) -> None:
         """Test that _get_or_create_sandbox_api_config_loader creates loader even with no default config.
@@ -232,8 +234,8 @@ class BuilderSandboxConfigLoaderTest(unittest.TestCase):
         self.assertIsNotNone(result)
         assert result is not None  # for mypy
         self.assertIsInstance(result, SandboxAPIConfigLoader)
-        # Config should be DISABLED_CONFIG (enabled=False) when no default config
-        self.assertFalse(result.config.enabled)
+        # Config should be DISABLED_CONFIG when no default config
+        self.assertFalse(result.config.is_enabled)
 
     def test_builder_get_or_create_sandbox_api_config_loader_with_default_config(self) -> None:
         """Test that _get_or_create_sandbox_api_config_loader creates loader with default config."""
@@ -309,7 +311,7 @@ class SandboxAPISysctlGetStatusTest(unittest.TestCase):
         This test dynamically inspects SandboxConfig fields so it will automatically
         fail if a new field is added without updating get_status().
         """
-        loader = SandboxAPIConfigLoader(None)
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         sysctl = SandboxAPISysctl(loader)
 
         status = sysctl.get_status()
@@ -324,7 +326,7 @@ class SandboxAPISysctlGetStatusTest(unittest.TestCase):
 
     def test_get_status_returns_correct_values(self) -> None:
         """Test that get_status() returns the correct config values."""
-        loader = SandboxAPIConfigLoader(None)
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         sysctl = SandboxAPISysctl(loader)
 
         status = sysctl.get_status()
@@ -342,13 +344,13 @@ class SandboxAPISysctlGetStatusTest(unittest.TestCase):
             )
 
     def test_get_status_returns_disabled_config(self) -> None:
-        """Test that get_status() returns config with enabled=False when disabled."""
-        loader = SandboxAPIConfigLoader(None)
+        """Test that get_status() returns config with is_enabled=False when disabled."""
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         loader.disable()
         sysctl = SandboxAPISysctl(loader)
 
         status = sysctl.get_status()
-        # disable() sets DISABLED_CONFIG (enabled=False), not None
+        # disable() sets DISABLED_CONFIG, not None
         self.assertIsNotNone(status['config'])
         self.assertFalse(status['config']['enabled'])
 
@@ -357,7 +359,7 @@ class SandboxAPISysctlFrozensetCommandsTest(unittest.TestCase):
     """Tests for read-only sysctl commands that expose frozenset allowlists."""
 
     def setUp(self) -> None:
-        loader = SandboxAPIConfigLoader(None)
+        loader = SandboxAPIConfigLoader(DISABLED_CONFIG)
         self.sysctl = SandboxAPISysctl(loader)
 
     def test_allowed_opcodes_returns_sorted_list_of_strings(self) -> None:
