@@ -26,9 +26,10 @@ def create_parser() -> ArgumentParser:
 
 def execute(args: Namespace, priv_key_password: str) -> None:
     from hathor.transaction import Transaction
+    from hathor.transaction.vertex_parser import vertex_deserializer
     from hathor.wallet.util import generate_signature
 
-    tx = Transaction.create_from_struct(bytes.fromhex(args.partial_tx))
+    tx = vertex_deserializer.deserialize(bytes.fromhex(args.partial_tx))
     assert isinstance(tx, Transaction)
 
     signature = generate_signature(tx, bytes.fromhex(args.private_key), password=priv_key_password.encode())

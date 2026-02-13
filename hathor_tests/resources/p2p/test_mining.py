@@ -3,7 +3,7 @@ import base64
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
-from hathor.transaction import Block
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
@@ -26,7 +26,7 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         block_bytes_str = data_get.get('block_bytes')
 
         block_bytes = base64.b64decode(block_bytes_str)
-        block = Block.create_from_struct(block_bytes)
+        block = vertex_deserializer.deserialize(block_bytes)
         block.weight = 4
         self.manager.cpu_mining_service.resolve(block)
 
@@ -51,7 +51,7 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         block_bytes_str = data_get.get('block_bytes')
 
         block_bytes = base64.b64decode(block_bytes_str)
-        block = Block.create_from_struct(block_bytes)
+        block = vertex_deserializer.deserialize(block_bytes)
         block.weight = 4
         self.manager.cpu_mining_service.resolve(block)
 

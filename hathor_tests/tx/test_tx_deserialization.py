@@ -3,6 +3,7 @@ from unittest.mock import Mock
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor_tests import unittest
@@ -23,8 +24,7 @@ class _BaseTest:
             self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 
         def test_deserialize(self):
-            cls = self.get_tx_class()
-            tx = cls.create_from_struct(self.tx_bytes)
+            tx = vertex_deserializer.deserialize(self.tx_bytes)
             self.assertEqual(bytes(tx), self.tx_bytes)
 
         def test_deserialize_verbose(self):
@@ -33,15 +33,14 @@ class _BaseTest:
             def verbose(key, value):
                 v.append((key, value))
 
-            cls = self.get_tx_class()
-            tx = cls.create_from_struct(self.tx_bytes, verbose=verbose)
+            tx = vertex_deserializer.deserialize(self.tx_bytes, verbose=verbose)
             self._verification_service.verify_without_storage(tx, self.get_verification_params())
 
             key, version = v[1]
             self.assertEqual(key, 'version')
 
             tx_version = TxVersion(version)
-            self.assertEqual(tx_version.get_cls(), cls)
+            self.assertEqual(tx_version.get_cls(), self.get_tx_class())
             self.assertEqual(bytes(tx), self.tx_bytes)
 
 

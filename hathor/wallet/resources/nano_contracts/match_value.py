@@ -23,6 +23,7 @@ from hathor.api_util import Resource, get_missing_params_msg, render_options, se
 from hathor.crypto.util import decode_address
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, NanoContractMatchValues
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.util import json_dumpb, json_loadb
 from hathor.wallet.exceptions import InvalidAddress
 
@@ -182,7 +183,7 @@ class NanoContractMatchValueResource(Resource):
             return json_dumpb({'success': False, 'message': e.message})
 
         try:
-            tx = Transaction.create_from_struct(decoded_params.tx_bytes)
+            tx = vertex_deserializer.deserialize(decoded_params.tx_bytes)
         except struct.error:
             return json_dumpb({'success': False, 'message': 'Could not decode hex transaction'})
 

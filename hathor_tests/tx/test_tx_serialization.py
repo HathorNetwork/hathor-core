@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
@@ -36,7 +37,7 @@ class BaseSerializationTest(unittest.TestCase):
 
         # Change of parents only, so it's a twin.
         # With less weight, so the balance will continue because tx1 will be the winner
-        self.tx2 = Transaction.create_from_struct(self.tx1.get_struct())
+        self.tx2 = vertex_deserializer.deserialize(self.tx1.get_struct())
         self.tx2.parents = [self.tx1.parents[1], self.tx1.parents[0]]
         self.tx2.weight = 9
         self.manager.cpu_mining_service.resolve(self.tx2)
@@ -91,9 +92,8 @@ class StructSerializationTest(BaseSerializationTest):
     __test__ = True
 
     def _reserialize(self, tx):
-        cls = tx.__class__
         tx_struct = tx.get_struct()
-        return cls.create_from_struct(tx_struct)
+        return vertex_deserializer.deserialize(tx_struct)
 
     def _assertTxEq(self, tx1, tx2):
         self.log.info('assertEqual tx without metadata', a=tx1.to_json(), b=tx2.to_json())

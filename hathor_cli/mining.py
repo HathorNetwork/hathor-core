@@ -56,6 +56,7 @@ def execute(args: Namespace) -> None:
 
     from hathor.transaction import Block
     from hathor.transaction.exceptions import HathorError
+    from hathor.transaction.vertex_parser import vertex_deserializer
 
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
@@ -118,7 +119,7 @@ def execute(args: Namespace) -> None:
             continue
 
         block_bytes = base64.b64decode(data['block_bytes'])
-        block = Block.create_from_struct(block_bytes)
+        block = vertex_deserializer.deserialize(block_bytes)
         assert isinstance(block, Block)
         print('Mining block with weight {}'.format(block.weight))
 

@@ -28,10 +28,10 @@ def create_parser() -> ArgumentParser:
 
 def execute(args: Namespace) -> None:
     from hathor.mining.cpu_mining_service import CpuMiningService
-    from hathor.transaction import Transaction
     from hathor.transaction.scripts import MultiSig
+    from hathor.transaction.vertex_parser import vertex_deserializer
 
-    tx = Transaction.create_from_struct(bytes.fromhex(args.partial_tx))
+    tx = vertex_deserializer.deserialize(bytes.fromhex(args.partial_tx))
 
     signatures = [bytes.fromhex(signature) for signature in args.signatures.split(',')]
     input_data = MultiSig.create_input_data(bytes.fromhex(args.redeem_script), signatures)

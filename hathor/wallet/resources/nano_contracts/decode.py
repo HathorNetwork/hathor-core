@@ -17,8 +17,8 @@ import struct
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
-from hathor.transaction import Transaction
 from hathor.transaction.scripts import NanoContractMatchValues
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.util import json_dumpb
 
 
@@ -54,7 +54,7 @@ class NanoContractDecodeResource(Resource):
             tx_bytes = bytes.fromhex(requested_decode)
 
             try:
-                tx = Transaction.create_from_struct(tx_bytes)
+                tx = vertex_deserializer.deserialize(tx_bytes)
             except struct.error:
                 data = {'success': False, 'message': 'Invalid transaction'}
                 return json_dumpb(data)

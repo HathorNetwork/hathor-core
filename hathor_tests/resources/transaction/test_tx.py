@@ -1,12 +1,11 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
 from hathor.transaction.static_metadata import TransactionStaticMetadata
-from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions
 
@@ -47,7 +46,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         tx = add_new_transactions(self.manager, 1)[0]
 
-        tx2 = Transaction.create_from_struct(tx.get_struct())
+        tx2 = vertex_deserializer.deserialize(tx.get_struct())
         tx2.parents = [tx.parents[1], tx.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
 
@@ -81,7 +80,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                   'ac0000000402001976a914b9987a3866a7c26225c57a62b14e901377e2f9e288ac000002b602001976a91479ae26cf2f'
                   '2dc703120a77192fc16eda9ed22e1b88ac40200000218def416095b08602003d3c40fb04737e1a2a848cfd2592490a71cd'
                   '0248b9e7d6a626f45dec86975b00f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226fdff3e09a1000002be')
-        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        tx = vertex_deserializer.deserialize(bytes.fromhex(tx_hex), self.manager.tx_storage)
         tx.get_metadata().validation = ValidationState.FULL
         tx.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx)
@@ -94,7 +93,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                           'c5bf509661f53f009321b031299d0bc32a192a88ac40200000218def416095ae650200f4dd53f84f1f009112'
                           '5250b044e49023fbbd0f74f6093cdd2226fdff3e09a1001f16fe62e3433bcc74b262c11a1fa94fcb38484f4d'
                           '8fb080f53a0c9c57ddb000000120')
-        tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
+        tx_parent1 = vertex_deserializer.deserialize(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
         tx_parent1.get_metadata().validation = ValidationState.FULL
         tx_parent1.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent1)
@@ -107,7 +106,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                           'b06f76a91434b13dc4351400faf5025bd29d6ddcc0a98366d188ac40200000218def416095a16502001f16fe'
                           '62e3433bcc74b262c11a1fa94fcb38484f4d8fb080f53a0c9c57ddb00065329457d13410ac711318bd941e16'
                           'd57709926b76e64763bf19c3f13eeac30000016d')
-        tx_parent2 = Transaction.create_from_struct(bytes.fromhex(tx_parent2_hex), self.manager.tx_storage)
+        tx_parent2 = vertex_deserializer.deserialize(bytes.fromhex(tx_parent2_hex), self.manager.tx_storage)
         tx_parent2.get_metadata().validation = ValidationState.FULL
         tx_parent2.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent2)
@@ -123,7 +122,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                         '14b098e763d0d5e3017022389b38955e339a485df688ac0000000100001976a914cec7c7f37a01b66dc63776a2'
                         '5e95ac369b31f46188ac40200000218def416082eba802000e4e54b2922c1fa34b5d427f1e96885612e28673ac'
                         'cfaf6e7ceb2ba91c9c84009c8174d4a46ebcc789d1989e3dec5b68cffeef239fd8cf86ef62728e2eacee000001b6')
-        tx_input = Transaction.create_from_struct(bytes.fromhex(tx_input_hex), self.manager.tx_storage)
+        tx_input = vertex_deserializer.deserialize(bytes.fromhex(tx_input_hex), self.manager.tx_storage)
         tx_input.get_metadata().validation = ValidationState.FULL
         tx_input.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_input)
@@ -200,7 +199,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                   '588ac0000000281001976a914ee216186a0fad459df6f067f9bfa51ce913e1b0588ac4030c398b4620e3161087c07020000'
                   '7851af043c11e19f28675b010e8cf4d8da3278f126d2429490a804a7fb2c000023b318c91dcfd4b967b205dc938f9f5e2fd'
                   '5114256caacfb8f6dd13db33000020393')
-        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        tx = vertex_deserializer.deserialize(bytes.fromhex(tx_hex), self.manager.tx_storage)
         tx.get_metadata().validation = ValidationState.FULL
         tx.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx)
@@ -216,7 +215,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                           '3f04ee680c996ebbc80af79330c4071288ac0000000800001976a914ed9c36b495444302885969447f0fae5e256'
                           '08ef288ac40311513e4fef9d161087be202000023b318c91dcfd4b967b205dc938f9f5e2fd5114256caacfb8f6d'
                           'd13db3300038c3d3b69ce90bb88c0c4d6a87b9f0c349e5b10c9b7ce6714f996e512ac16400021261')
-        tx_parent1 = Transaction.create_from_struct(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
+        tx_parent1 = vertex_deserializer.deserialize(bytes.fromhex(tx_parent1_hex), self.manager.tx_storage)
         tx_parent1.get_metadata().validation = ValidationState.FULL
         tx_parent1.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent1)
@@ -231,7 +230,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                           '10c9b7ce6714f996e512ac1640000476810205cb3625d62897fcdad620e01d66649869329640f5504d77e960d00'
                           '00d810')
         tx_parent2_bytes = bytes.fromhex(tx_parent2_hex)
-        tx_parent2 = TokenCreationTransaction.create_from_struct(tx_parent2_bytes, self.manager.tx_storage)
+        tx_parent2 = vertex_deserializer.deserialize(tx_parent2_bytes, self.manager.tx_storage)
         tx_parent2.get_metadata().validation = ValidationState.FULL
         tx_parent2.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         self.manager.tx_storage.save_transaction(tx_parent2)
@@ -517,7 +516,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
                   'ac0000000402001976a914b9987a3866a7c26225c57a62b14e901377e2f9e288ac000002b602001976a91479ae26cf2f'
                   '2dc703120a77192fc16eda9ed22e1b88ac40200000218def416095b08602003d3c40fb04737e1a2a848cfd2592490a71cd'
                   '0248b9e7d6a626f45dec86975b00f4dd53f84f1f0091125250b044e49023fbbd0f74f6093cdd2226fdff3e09a1000002be')
-        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), self.manager.tx_storage)
+        tx = vertex_deserializer.deserialize(bytes.fromhex(tx_hex), self.manager.tx_storage)
         tx.set_validation(ValidationState.BASIC)
         tx.set_static_metadata(TransactionStaticMetadata(min_height=0, closest_ancestor_block=b''))
         with self.manager.tx_storage.allow_partially_validated_context():
