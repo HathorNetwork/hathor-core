@@ -52,8 +52,9 @@ class VertexParser:
 
     def deserialize(self, data: bytes, storage: TransactionStorage | None = None) -> BaseTransaction:
         """Creates the correct tx subclass from a sequence of bytes."""
-        # version field takes up the second byte only
         from hathor.transaction import TxVersion
+
+        # version field takes up the second byte only
         version = data[1]
         try:
             tx_version = TxVersion(version)
@@ -66,7 +67,7 @@ class VertexParser:
             if not is_valid:
                 raise StructError(f"invalid vertex version: {tx_version}")
 
-            cls = tx_version.get_cls()
-            return cls.create_from_struct(data, storage=storage)
+            from hathor.transaction.vertex_parser import vertex_deserializer
+            return vertex_deserializer.deserialize(data, storage=storage, settings=self._settings)
         except ValueError as e:
             raise StructError('Invalid bytes to create transaction subclass.') from e

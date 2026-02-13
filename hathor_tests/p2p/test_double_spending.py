@@ -4,6 +4,7 @@ from hathor.crypto.util import decode_address
 from hathor.manager import HathorManager
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.util import not_none
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
@@ -49,14 +50,14 @@ class SyncMethodsTestCase(unittest.TestCase):
         tx1.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx1)
 
-        tx2 = Transaction.create_from_struct(tx1.get_struct())
+        tx2 = vertex_deserializer.deserialize(tx1.get_struct())
         tx2.weight = 10
         tx2.parents = tx2.parents[::-1]
         tx2.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)
 
-        tx3 = Transaction.create_from_struct(tx1.get_struct())
+        tx3 = vertex_deserializer.deserialize(tx1.get_struct())
         tx3.weight = 11
         tx3.timestamp = int(self.clock.seconds())
         self.manager1.cpu_mining_service.resolve(tx3)
@@ -247,7 +248,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         # ---
 
         self.clock.advance(1)
-        tx6 = Transaction.create_from_struct(tx3.get_struct())
+        tx6 = vertex_deserializer.deserialize(tx3.get_struct())
         tx6.weight = 1
         tx6.parents = [tx4.hash, tx5.hash]
         tx6.timestamp = int(self.clock.seconds())

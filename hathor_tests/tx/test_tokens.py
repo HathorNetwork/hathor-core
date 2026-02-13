@@ -11,6 +11,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
 
@@ -417,7 +418,7 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(400, tokens_index.get_total())
 
         # create conflicting tx by changing parents
-        tx3 = Transaction.create_from_struct(tx2.get_struct())
+        tx3 = vertex_deserializer.deserialize(tx2.get_struct())
         tx3.parents = [tx.parents[1], tx.parents[0]]
         tx3.weight = 3
         self.manager.cpu_mining_service.resolve(tx3)
@@ -520,7 +521,7 @@ class TokenTest(unittest.TestCase):
 
     def test_token_struct(self):
         tx = create_tokens(self.manager, self.address_b58, mint_amount=500)
-        tx2 = TokenCreationTransaction.create_from_struct(tx.get_struct())
+        tx2 = vertex_deserializer.deserialize(tx.get_struct())
         self.assertEqual(tx.hash, tx2.hash)
 
     def test_unknown_authority(self):

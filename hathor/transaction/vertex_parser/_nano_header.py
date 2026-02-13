@@ -22,11 +22,11 @@ from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
 from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
 from hathor.transaction.headers.nano_header import (
+    _NC_SCRIPT_LEN_MAX_BYTES,
     ADDRESS_LEN_BYTES,
     ADDRESS_SEQNUM_SIZE,
     NanoHeader,
     NanoHeaderAction,
-    _NC_SCRIPT_LEN_MAX_BYTES,
 )
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes

@@ -12,9 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any, Optional
+from typing import Any
 
-from typing_extensions import Self, override
+from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
@@ -22,7 +22,6 @@ from hathor.consensus.consensus_settings import PoaSettings
 from hathor.serialization import Serializer
 from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
-from hathor.transaction.util import VerboseCallback
 
 
 class PoaBlock(Block):
@@ -58,29 +57,6 @@ class PoaBlock(Block):
         )
         self.signer_id = signer_id
         self.signature = signature
-
-    @classmethod
-    @override
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional[TransactionStorage] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_poa_block_graph_fields
-        from hathor.transaction.vertex_parser._headers import deserialize_headers
-        settings = get_global_settings()
-        block = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
-        deserialize_block_funds(deserializer, block, verbose=verbose)
-        deserialize_poa_block_graph_fields(
-            deserializer, block, signer_id_len=poa.SIGNER_ID_LEN, max_signature_len=100, verbose=verbose,
-        )
-        block.nonce = int.from_bytes(deserializer.read_bytes(cls.SERIALIZATION_NONCE_SIZE), byteorder='big')
-        deserialize_headers(deserializer, block, settings)
-        deserializer.finalize()
-        block.update_hash()
-        if storage is not None:
-            block.storage = storage
-        return block
 
     @override
     def get_graph_struct(self) -> bytes:

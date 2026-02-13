@@ -191,31 +191,6 @@ class OnChainBlueprint(Transaction):
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
         return blueprint_id_from_bytes(self.hash)
 
-    @classmethod
-    @override
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
-        from hathor.transaction.vertex_parser._on_chain_blueprint import deserialize_ocb_extra_fields
-        from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
-        from hathor.transaction.vertex_parser._headers import deserialize_headers
-        settings = get_global_settings()
-        tx = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
-        deserialize_tx_funds(deserializer, tx, verbose=verbose)
-        deserialize_ocb_extra_fields(deserializer, tx, verbose=verbose)
-        deserialize_graph_fields(deserializer, tx, verbose=verbose)
-        (tx.nonce,) = deserializer.read_struct('!I')
-        if verbose:
-            verbose('nonce', tx.nonce)
-        deserialize_headers(deserializer, tx, settings)
-        deserializer.finalize()
-        tx.update_hash()
-        if storage is not None:
-            tx.storage = storage
-        return tx
-
     @override
     def get_funds_struct(self) -> bytes:
         from hathor.transaction.vertex_parser._on_chain_blueprint import serialize_ocb_extra_fields

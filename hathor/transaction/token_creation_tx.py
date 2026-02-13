@@ -14,7 +14,7 @@
 
 from typing import Any, Optional
 
-from typing_extensions import Self, override
+from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.storage import NCBlockStorage
@@ -83,30 +83,6 @@ class TokenCreationTransaction(Transaction):
         super().update_hash()
         self.tokens = [self.hash]
 
-    @classmethod
-    @override
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
-        from hathor.transaction.vertex_parser._token_creation import deserialize_token_creation_funds
-        from hathor.transaction.vertex_parser._headers import deserialize_headers
-        settings = get_global_settings()
-        tx = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
-        deserialize_token_creation_funds(deserializer, tx, verbose=verbose)
-        deserialize_graph_fields(deserializer, tx, verbose=verbose)
-        (tx.nonce,) = deserializer.read_struct('!I')
-        if verbose:
-            verbose('nonce', tx.nonce)
-        deserialize_headers(deserializer, tx, settings)
-        deserializer.finalize()
-        tx.update_hash()
-        if storage is not None:
-            tx.storage = storage
-        return tx
-
     @override
     def get_funds_struct(self) -> bytes:
         from hathor.transaction.vertex_parser._token_creation import serialize_token_creation_funds
@@ -128,8 +104,8 @@ class TokenCreationTransaction(Transaction):
             verbose: VerboseCallback = None) -> tuple[str, str, TokenVersion, bytes]:
         """ Gets the token name, symbol and version from serialized format
         """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_token_info(buf, verbose=verbose)
+        from hathor.transaction.vertex_parser import vertex_deserializer
+        return vertex_deserializer.deserialize_token_info(buf, verbose=verbose)
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)

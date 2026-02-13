@@ -256,21 +256,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return the maximum number of headers for this vertex."""
         return 2
 
-    @classmethod
-    @abstractmethod
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        """ Create a transaction from its bytes.
-
-        :param struct_bytes: Bytes of a serialized transaction
-        :type struct_bytes: bytes
-
-        :return: A transaction or a block, depending on the class `cls`
-
-        :raises ValueError: when the sequence of bytes is incorrect
-        """
-        raise NotImplementedError
-
     def __eq__(self, other: object) -> bool:
         """Two transactions are equal when their hash matches
 
@@ -810,10 +795,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :return: Transaction or Block copy
         """
-        new_tx = self.create_from_struct(
+        from hathor.transaction.vertex_parser import vertex_deserializer
+        new_tx = vertex_deserializer.deserialize(
             self.get_struct(),
             storage=self.storage if include_storage else None,
         )
+        assert isinstance(new_tx, type(self))
         # static_metadata can be safely copied as it is a frozen dataclass
         new_tx.set_static_metadata(self._static_metadata)
         if hasattr(self, '_metadata') and include_metadata:
@@ -907,8 +894,8 @@ class TxInput:
         """ Creates a TxInput from a serialized input. Returns the input
         and remaining bytes
         """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_input(buf, verbose=verbose)
+        from hathor.transaction.vertex_parser import vertex_deserializer
+        return vertex_deserializer.deserialize_tx_input(buf, verbose=verbose)
 
     @classmethod
     def create_from_dict(cls, data: dict) -> 'TxInput':
@@ -991,8 +978,8 @@ class TxOutput:
         """ Creates a TxOutput from a serialized output. Returns the output
         and remaining bytes
         """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_output(buf, verbose=verbose)
+        from hathor.transaction.vertex_parser import vertex_deserializer
+        return vertex_deserializer.deserialize_tx_output(buf, verbose=verbose)
 
     def get_token_index(self) -> int:
         """The token uid index in the list"""

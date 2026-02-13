@@ -17,7 +17,7 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
-from typing_extensions import Self, override
+from typing_extensions import override
 
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
@@ -27,7 +27,6 @@ from hathor.transaction import TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
-from hathor.transaction.util import VerboseCallback
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
@@ -86,27 +85,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
         serializer = Serializer.build_bytes_serializer()
         serialize_block_graph_fields(serializer, self)
         return bytes(serializer.finalize())
-
-    @classmethod
-    @override
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
-        from hathor.transaction.vertex_parser._headers import deserialize_headers
-        settings = get_global_settings()
-        block = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
-        deserialize_block_funds(deserializer, block, verbose=verbose)
-        deserialize_block_graph_fields(deserializer, block, verbose=verbose)
-        block.nonce = int.from_bytes(deserializer.read_bytes(cls.SERIALIZATION_NONCE_SIZE), byteorder='big')
-        deserialize_headers(deserializer, block, settings)
-        deserializer.finalize()
-        block.update_hash()
-        if storage is not None:
-            block.storage = storage
-        return block
 
     @property
     def is_block(self) -> bool:

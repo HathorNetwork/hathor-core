@@ -4,9 +4,9 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.daa import TestMode
 from hathor.simulator.utils import add_new_blocks
-from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
 
@@ -102,7 +102,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data = resp['data']
         hex_data = resp['hex_data']
         struct_bytes = bytes.fromhex(hex_data)
-        tx = Transaction.create_from_struct(struct_bytes)
+        tx = vertex_deserializer.deserialize(struct_bytes)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']
@@ -139,7 +139,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data = resp['data']
         hex_data = resp['hex_data']
         struct_bytes = bytes.fromhex(hex_data)
-        tx = Transaction.create_from_struct(struct_bytes)
+        tx = vertex_deserializer.deserialize(struct_bytes)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']
@@ -177,7 +177,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data = resp['data']
         hex_data = resp['hex_data']
         struct_bytes = bytes.fromhex(hex_data)
-        tx = Transaction.create_from_struct(struct_bytes)
+        tx = vertex_deserializer.deserialize(struct_bytes)
         tx_data = tx.to_json()
         del tx_data['hash']
         del tx_data['nonce']
@@ -214,7 +214,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data = resp['data']
         hex_data = resp['hex_data']
         struct_bytes = bytes.fromhex(hex_data)
-        orig_tx = Transaction.create_from_struct(struct_bytes)
+        orig_tx = vertex_deserializer.deserialize(struct_bytes)
         tx = orig_tx.clone()
         tx_data = tx.to_json()
         del tx_data['hash']
@@ -259,7 +259,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data = resp['data']
         hex_data = resp['hex_data']
         struct_bytes = bytes.fromhex(hex_data)
-        orig_tx = Transaction.create_from_struct(struct_bytes)
+        orig_tx = vertex_deserializer.deserialize(struct_bytes)
         tx = orig_tx.clone()
         tx_data = tx.to_json()
         del tx_data['hash']

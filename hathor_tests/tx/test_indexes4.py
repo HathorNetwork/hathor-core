@@ -1,6 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor.transaction import Transaction
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
@@ -38,7 +39,7 @@ class SimulatorIndexesTestCase(unittest.TestCase):
         manager.cpu_mining_service.resolve(tx2)
         assert manager.propagate_tx(tx2)
 
-        tx3 = Transaction.create_from_struct(tx2.get_struct())
+        tx3 = vertex_deserializer.deserialize(tx2.get_struct())
         tx3.weight = 3.0
         tx3.parents = tx1.parents
         manager.cpu_mining_service.resolve(tx3)

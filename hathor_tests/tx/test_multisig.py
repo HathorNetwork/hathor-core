@@ -7,6 +7,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import ScriptError
 from hathor.transaction.scripts import P2PKH, MultiSig, create_output_script, parse_address_script, script_eval
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathor.transaction.vertex_parser import vertex_deserializer
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from hathor_tests import unittest
@@ -78,7 +79,7 @@ class MultisigTestCase(unittest.TestCase):
                          WalletBalance(0, first_block_amount))
 
         # Then we create a new tx that spends this tokens from multisig wallet
-        tx = Transaction.create_from_struct(tx1.get_struct())
+        tx = vertex_deserializer.deserialize(tx1.get_struct())
         tx.weight = 10
         tx.parents = self.manager.get_new_tx_parents()
         tx.timestamp = int(self.clock.seconds())
@@ -116,7 +117,7 @@ class MultisigTestCase(unittest.TestCase):
         pubkey_obj = private_key_obj.public_key()
         public_key_compressed = get_public_key_bytes_compressed(pubkey_obj)
         p2pkh_input_data = P2PKH.create_input_data(public_key_compressed, signatures[0])
-        tx2 = Transaction.create_from_struct(tx.get_struct())
+        tx2 = vertex_deserializer.deserialize(tx.get_struct())
         tx2.inputs[0].data = p2pkh_input_data
         self.manager.cpu_mining_service.resolve(tx2)
         with self.assertRaises(InvalidNewTransaction):
