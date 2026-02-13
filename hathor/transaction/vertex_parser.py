@@ -26,10 +26,13 @@ if TYPE_CHECKING:
 
 
 class VertexParser:
-    __slots__ = ('_settings',)
+    __slots__ = ('_settings', '_parse_genesis')
 
-    def __init__(self, *, settings: HathorSettings) -> None:
+    def __init__(self, *, settings: HathorSettings, parse_genesis: bool = True) -> None:
+        # the parser can be tuned to not accept parsing genesis, which is expected to be the case for parsing network
+        # vertices, since it wouldn't be a valid vertices for p2p protocols
         self._settings = settings
+        self._parse_genesis = parse_genesis
 
     @staticmethod
     def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[VertexBaseHeader]]:
@@ -60,13 +63,16 @@ class VertexParser:
             tx_version = TxVersion(version)
             is_valid = self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(
                 tx_version,
-                include_genesis=True,
+                include_genesis=self._parse_genesis,
                 settings=self._settings,
             )
 
             if not is_valid:
                 raise StructError(f"invalid vertex version: {tx_version}")
             cls = tx_version.get_cls()
-            return cls.create_from_struct(data, storage=storage)
+            vertex = cls.create_from_struct(data, storage=storage)
+            if not self._parse_genesis and len(vertex.parents) == 0:
+                raise StructError(f'genesis vertex not allowed: {vertex.is_genesis}')
+            return vertex
         except ValueError as e:
             raise StructError('Invalid bytes to create transaction subclass.') from e
