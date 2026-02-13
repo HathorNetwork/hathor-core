@@ -12,24 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from struct import pack
 from typing import Any, Optional
 
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.storage import NCBlockStorage
+from hathor.serialization import Serializer
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.transaction import Transaction
-from hathor.transaction.util import VerboseCallback, decode_string_utf8, int_to_bytes, unpack, unpack_len
-
-# Signal bits (B), version (B), inputs len (B), outputs len (B)
-_FUNDS_FORMAT_STRING = '!BBBB'
-
-# Signal bist (B), version (B), inputs len (B), outputs len (B)
-_SIGHASH_ALL_FORMAT_STRING = '!BBBB'
+from hathor.transaction.util import VerboseCallback
 
 
 class TokenCreationTransaction(Transaction):
@@ -89,116 +83,42 @@ class TokenCreationTransaction(Transaction):
         super().update_hash()
         self.tokens = [self.hash]
 
-    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all funds fields for a transaction from a buffer.
-
-        :param buf: Bytes of a serialized transaction
-        :type buf: bytes
-
-        :return: A buffer containing the remaining struct
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorrect
-        """
-        (self.signal_bits, self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+    @classmethod
+    @override
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> Self:
+        from hathor.conf.get_settings import get_global_settings
+        from hathor.serialization import Deserializer
+        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
+        from hathor.transaction.vertex_parser._token_creation import deserialize_token_creation_funds
+        from hathor.transaction.vertex_parser._headers import deserialize_headers
+        settings = get_global_settings()
+        tx = cls(storage=storage)
+        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserialize_token_creation_funds(deserializer, tx, verbose=verbose)
+        deserialize_graph_fields(deserializer, tx, verbose=verbose)
+        (tx.nonce,) = deserializer.read_struct('!I')
         if verbose:
-            verbose('signal_bits', self.signal_bits)
-            verbose('version', self.version)
-            verbose('inputs_len', inputs_len)
-            verbose('outputs_len', outputs_len)
+            verbose('nonce', tx.nonce)
+        deserialize_headers(deserializer, tx, settings)
+        deserializer.finalize()
+        tx.update_hash()
+        if storage is not None:
+            tx.storage = storage
+        return tx
 
-        for _ in range(inputs_len):
-            txin, buf = TxInput.create_from_bytes(buf, verbose=verbose)
-            self.inputs.append(txin)
-
-        for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
-            self.outputs.append(txout)
-
-        # token name, symbol and version
-        (self.token_name, self.token_symbol, self.token_version, buf) = (
-            TokenCreationTransaction.deserialize_token_info(buf, verbose=verbose))
-
-        return buf
-
+    @override
     def get_funds_struct(self) -> bytes:
-        """ Returns the funds data serialization of the transaction
-
-        :return: funds data serialization of the transaction
-        :rtype: bytes
-        """
-        struct_bytes = pack(
-            _FUNDS_FORMAT_STRING,
-            self.signal_bits,
-            self.version,
-            len(self.inputs),
-            len(self.outputs)
-        )
-
-        tx_inputs = []
-        for tx_input in self.inputs:
-            tx_inputs.append(bytes(tx_input))
-        struct_bytes += b''.join(tx_inputs)
-
-        tx_outputs = []
-        for tx_output in self.outputs:
-            tx_outputs.append(bytes(tx_output))
-        struct_bytes += b''.join(tx_outputs)
-
-        struct_bytes += self.serialize_token_info()
-
-        return struct_bytes
-
-    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
-        """ Returns a serialization of the inputs and outputs without including any other field
-
-        :return: Serialization of the inputs, outputs and tokens
-        :rtype: bytes
-        """
-        if not skip_cache and self._sighash_cache:
-            return self._sighash_cache
-
-        struct_bytes = pack(
-            _SIGHASH_ALL_FORMAT_STRING,
-            self.signal_bits,
-            self.version,
-            len(self.inputs),
-            len(self.outputs)
-        )
-
-        tx_inputs = []
-        for tx_input in self.inputs:
-            tx_inputs.append(tx_input.get_sighash_bytes())
-        struct_bytes += b''.join(tx_inputs)
-
-        tx_outputs = []
-        for tx_output in self.outputs:
-            tx_outputs.append(bytes(tx_output))
-        struct_bytes += b''.join(tx_outputs)
-
-        struct_bytes += self.serialize_token_info()
-
-        for header in self.headers:
-            struct_bytes += header.get_sighash_bytes()
-
-        self._sighash_cache = struct_bytes
-
-        return struct_bytes
+        from hathor.transaction.vertex_parser._token_creation import serialize_token_creation_funds
+        serializer = Serializer.build_bytes_serializer()
+        serialize_token_creation_funds(serializer, self)
+        return bytes(serializer.finalize())
 
     def serialize_token_info(self) -> bytes:
         """ Returns the serialization for token name and symbol
         """
-        encoded_name = self.token_name.encode('utf-8')
-        encoded_symbol = self.token_symbol.encode('utf-8')
-
-        ret = b''
-        ret += int_to_bytes(self.token_version, 1)
-        ret += int_to_bytes(len(encoded_name), 1)
-        ret += encoded_name
-        ret += int_to_bytes(len(encoded_symbol), 1)
-        ret += encoded_symbol
-
-        return ret
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize_token_info(self)
 
     @classmethod
     def deserialize_token_info(
@@ -208,33 +128,8 @@ class TokenCreationTransaction(Transaction):
             verbose: VerboseCallback = None) -> tuple[str, str, TokenVersion, bytes]:
         """ Gets the token name, symbol and version from serialized format
         """
-        (raw_token_version,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('token_version', raw_token_version)
-
-        try:
-            token_version = TokenVersion(raw_token_version)
-        except ValueError:
-            raise ValueError('unknown token version: {}'.format(raw_token_version))
-
-        (name_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('token_name_len', name_len)
-        name, buf = unpack_len(name_len, buf)
-        if verbose:
-            verbose('token_name', name)
-        (symbol_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('token_symbol_len', symbol_len)
-        symbol, buf = unpack_len(symbol_len, buf)
-        if verbose:
-            verbose('token_symbol', symbol)
-
-        # Token name and symbol can be only utf-8 valid strings for now
-        decoded_name = decode_string_utf8(name, 'Token name')
-        decoded_symbol = decode_string_utf8(symbol, 'Token symbol')
-
-        return decoded_name, decoded_symbol, token_version, buf
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.deserialize_token_info(buf, verbose=verbose)
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)

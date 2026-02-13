@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from typing_extensions import Self
+from typing_extensions import Self, override
 
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
@@ -59,6 +59,28 @@ class MergeMinedBlock(Block):
         )
         self.aux_pow = aux_pow
 
+    @classmethod
+    @override
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> Self:
+        from hathor.serialization import Deserializer
+        from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
+        block = cls(storage=storage)
+        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserialize_block_funds(deserializer, block, verbose=verbose)
+        deserialize_block_graph_fields(deserializer, block, verbose=verbose)
+        block.aux_pow = BitcoinAuxPow.from_bytes(bytes(deserializer.read_all()))
+        deserializer.finalize()
+        block.hash = block.calculate_hash()
+        block.storage = storage
+        return block
+
+    @override
+    def get_struct_nonce(self) -> bytes:
+        if not self.aux_pow:
+            return bytes(BitcoinAuxPow.dummy())
+        return bytes(self.aux_pow)
+
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         from hathor.util import abbrev
         d = super()._get_formatted_fields_dict(short)
@@ -67,26 +89,9 @@ class MergeMinedBlock(Block):
             d.update(aux_pow=abbrev(bytes(self.aux_pow).hex().encode('ascii'), 128).decode('ascii'))
         return d
 
-    @classmethod
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        blc = cls()
-        buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
-        blc.aux_pow = BitcoinAuxPow.from_bytes(buf)
-        blc.hash = blc.calculate_hash()
-        blc.storage = storage
-        return blc
-
     def calculate_hash(self) -> bytes:
         assert self.aux_pow is not None
         return self.aux_pow.calculate_hash(self.get_mining_base_hash())
-
-    def get_struct_nonce(self) -> bytes:
-        if not self.aux_pow:
-            # FIXME: this happens sometimes, why?
-            dummy_bytes = bytes(BitcoinAuxPow.dummy())
-            return dummy_bytes
-        return bytes(self.aux_pow)
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
