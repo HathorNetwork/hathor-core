@@ -102,7 +102,8 @@ class NanoContractExecuteResource(Resource):
         self.manager.cpu_mining_service.resolve(tx)
         success = self.manager.propagate_tx(tx)
 
-        ret = {'success': success, 'hex_tx': tx.get_struct().hex()}
+        from hathor.transaction.vertex_parser import vertex_serializer
+        ret = {'success': success, 'hex_tx': vertex_serializer.serialize(tx).hex()}
         return json_dumpb(ret)
 
     def render_OPTIONS(self, request):

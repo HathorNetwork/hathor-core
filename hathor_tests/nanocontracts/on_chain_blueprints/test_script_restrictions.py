@@ -479,7 +479,8 @@ class Foo():
         code.extend(code_type)
         code.extend(ZLIB_BOMB)
         blueprint.serialize_code = lambda: code  # type: ignore[method-assign]
-        serialized_blueprint = bytes(blueprint)
+        from hathor.transaction.vertex_parser import vertex_serializer
+        serialized_blueprint = vertex_serializer.serialize(blueprint)
         parser = VertexParser(settings=self._settings)
         with self.assertRaises(StructError) as cm:
             _ = parser.deserialize(serialized_blueprint)

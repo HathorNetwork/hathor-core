@@ -21,6 +21,7 @@ from typing import Iterable, NamedTuple, Optional, TypeVar, cast
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor.util import Random
 
 T = TypeVar('T', bound=Block)
@@ -96,7 +97,9 @@ class BlockTemplate(NamedTuple):
 
     def to_dict(self) -> dict:
         return {
-            'data': self.generate_minimally_valid_block().get_struct_without_nonce().hex(),
+            'data': vertex_serializer.serialize_without_nonce_bytes(
+                self.generate_minimally_valid_block()
+            ).hex(),
             'versions': sorted(self.versions),
             'reward': self.reward,
             'weight': self.weight,

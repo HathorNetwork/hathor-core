@@ -842,7 +842,8 @@ class HathorManager:
         # to identify a nft creation transaction was created on the lib
         # to be used in the full node and tx mining service
         # TODO: avoid reparsing when hathorlib is fully compatible
-        tx_from_lib = lib_tx_or_block_from_bytes(bytes(tx))
+        from hathor.transaction.vertex_parser import vertex_serializer
+        tx_from_lib = lib_tx_or_block_from_bytes(vertex_serializer.serialize(tx))
         if not tx_from_lib.is_standard(max_output_script_size, not allow_non_standard_script):
             raise NonStandardTxError('Transaction is non standard.')
 

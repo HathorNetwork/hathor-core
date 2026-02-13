@@ -267,13 +267,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return self.hash == other.hash
         return False
 
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the transaction
-
-        :rtype: bytes
-        """
-        return self.get_struct()
-
     def __hash__(self) -> int:
         return hash(self.hash)
 
@@ -346,57 +339,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return False
         from hathor.transaction.genesis import is_genesis
         return is_genesis(self.hash, settings=self._settings)
-
-    @abstractmethod
-    def get_funds_struct(self) -> bytes:
-        """Return the funds data serialization of the vertex.
-
-        :return: funds data serialization of the vertex
-        :rtype: bytes
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_graph_struct(self) -> bytes:
-        """Return the graph data serialization of the transaction, without including the nonce field
-
-        :return: graph data serialization of the transaction
-        :rtype: bytes
-        """
-        raise NotImplementedError
-
-    def get_headers_struct(self) -> bytes:
-        """Return the serialization of the headers only."""
-        from hathor.serialization import Serializer
-        from hathor.transaction.vertex_parser.vertex_serializer import serialize_headers
-        serializer = Serializer.build_bytes_serializer()
-        serialize_headers(serializer, self)
-        return bytes(serializer.finalize())
-
-    def get_struct_without_nonce(self) -> bytes:
-        """Return a partial serialization of the transaction, without including the nonce field
-
-        :return: Partial serialization of the transaction
-        :rtype: bytes
-        """
-        return self.get_funds_struct() + self.get_graph_struct()
-
-    def get_struct_nonce(self) -> bytes:
-        """Return a partial serialization of the transaction's proof-of-work, which is usually the nonce field
-
-        :return: Partial serialization of the transaction's proof-of-work
-        :rtype: bytes
-        """
-        from hathor.transaction.util import int_to_bytes
-        assert self.SERIALIZATION_NONCE_SIZE is not None
-        return int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
-
-    def get_struct(self) -> bytes:
-        """Return the complete serialization of the transaction
-
-        :rtype: bytes
-        """
-        return self.get_struct_without_nonce() + self.get_struct_nonce() + self.get_headers_struct()
 
     def get_all_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
@@ -489,8 +431,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: the hash of the funds data
         :rtype: bytes
         """
+        from hathor.transaction.vertex_parser import vertex_serializer
         funds_hash = hashlib.sha256()
-        funds_hash.update(self.get_funds_struct())
+        funds_hash.update(vertex_serializer.serialize_funds_bytes(self))
         return funds_hash.digest()
 
     def get_graph_and_headers_hash(self) -> bytes:
@@ -499,9 +442,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: the hash of the graph and headers data
         :rtype: bytes
         """
+        from hathor.transaction.vertex_parser import vertex_serializer
         h = hashlib.sha256()
-        h.update(self.get_graph_struct())
-        h.update(self.get_headers_struct())
+        h.update(vertex_serializer.serialize_graph_bytes(self))
+        h.update(vertex_serializer.serialize_headers_bytes(self))
         return h.digest()
 
     def get_mining_header_without_nonce(self) -> bytes:
@@ -527,7 +471,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def calculate_hash2(self, part1: 'HASH') -> bytes:
         """Return the hash of the transaction, starting from a partial hash
 
-        The hash of the transactions is the `sha256(sha256(bytes(tx))`.
+        The hash of the transactions is the `sha256(sha256(vertex_serializer.serialize(tx)))`.
 
         :param part1: A partial hash of the transaction, usually from `calculate_hash1`
         :type part1: :py:class:`_hashlib.HASH`
@@ -795,9 +739,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :return: Transaction or Block copy
         """
-        from hathor.transaction.vertex_parser import vertex_deserializer
+        from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
         new_tx = vertex_deserializer.deserialize(
-            self.get_struct(),
+            vertex_serializer.serialize(self),
             storage=self.storage if include_storage else None,
         )
         assert isinstance(new_tx, type(self))

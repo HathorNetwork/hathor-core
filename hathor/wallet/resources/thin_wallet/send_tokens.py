@@ -232,8 +232,10 @@ class SendTokensResource(Resource):
 
         result.value = 'Timeout: error resolving transaction proof of work'
 
-        self.log.warn('stratum timeout: error resolving transaction proof of work', tx=tx.get_struct().hex(),
-                      stratum_tx=stratum_tx.get_struct().hex() if stratum_tx else '')
+        from hathor.transaction.vertex_parser import vertex_serializer
+        self.log.warn('stratum timeout: error resolving transaction proof of work',
+                      tx=vertex_serializer.serialize(tx).hex(),
+                      stratum_tx=vertex_serializer.serialize(stratum_tx).hex() if stratum_tx else '')
 
         # start new job in stratum, so the miner doesn't waste more time on this tx
         self.manager.stratum_factory.update_jobs()

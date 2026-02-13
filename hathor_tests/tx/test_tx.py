@@ -203,7 +203,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_struct(self):
         tx = self._gen_tx_spending_genesis_block()
-        data = tx.get_struct()
+        data = vertex_serializer.serialize(tx)
         tx_read = vertex_deserializer.deserialize(data)
 
         self.assertEqual(tx, tx_read)
@@ -349,7 +349,7 @@ class TransactionTest(unittest.TestCase):
             header_tail,
         )
 
-        assert bytes(b1) != bytes(b2)
+        assert vertex_serializer.serialize(b1) != vertex_serializer.serialize(b2)
         assert b1.calculate_hash() == b2.calculate_hash()
 
         b1.init_static_metadata_from_storage(self._settings, self.tx_storage)
@@ -750,9 +750,7 @@ class TransactionTest(unittest.TestCase):
         tx2 = txs[1]
         str_tx = str(tx)
         self.assertTrue(isinstance(str_tx, str))
-        self.assertEqual(bytes(tx), tx.get_struct())
-
-        tx_equal = vertex_deserializer.deserialize(tx.get_struct())
+        tx_equal = vertex_deserializer.deserialize(vertex_serializer.serialize(tx))
         self.assertTrue(tx == tx_equal)
         self.assertFalse(tx == tx2)
 
@@ -849,8 +847,8 @@ class TransactionTest(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis_txs]
         outputs = [TxOutput(1, b'')]
         tx = Transaction(outputs=outputs, parents=parents)
-        original_struct = tx.get_struct()
-        struct_bytes = tx.get_funds_struct()
+        original_struct = vertex_serializer.serialize(tx)
+        struct_bytes = vertex_serializer.serialize_funds_bytes(tx)
 
         # we'll get the struct without the last output bytes and add it ourselves
         struct_bytes = struct_bytes[:-7]
@@ -858,7 +856,7 @@ class TransactionTest(unittest.TestCase):
         struct_bytes += (-1).to_bytes(8, byteorder='big', signed=True)
         struct_bytes += int_to_bytes(0, 1)
         struct_bytes += int_to_bytes(0, 2)
-        struct_bytes += tx.get_graph_struct()
+        struct_bytes += vertex_serializer.serialize_graph_bytes(tx)
         struct_bytes += int_to_bytes(tx.nonce, tx.SERIALIZATION_NONCE_SIZE)
 
         len_difference = len(struct_bytes) - len(original_struct)
@@ -871,7 +869,7 @@ class TransactionTest(unittest.TestCase):
         outputs = [TxOutput(MAX_OUTPUT_VALUE, b'')]
         tx = Transaction(outputs=outputs, parents=parents)
         tx.update_hash()
-        original_struct = tx.get_struct()
+        original_struct = vertex_serializer.serialize(tx)
         tx2 = vertex_deserializer.deserialize(original_struct)
         tx2.update_hash()
         assert tx == tx2

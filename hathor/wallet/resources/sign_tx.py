@@ -69,7 +69,8 @@ class SignTxResource(Resource):
                     tx.weight = self.manager.daa.minimum_tx_weight(tx)
                     self.manager.cpu_mining_service.resolve(tx)
 
-                data = {'hex_tx': tx.get_struct().hex(), 'success': True}
+                from hathor.transaction.vertex_parser import vertex_serializer
+                data = {'hex_tx': vertex_serializer.serialize(tx).hex(), 'success': True}
             except struct.error:
                 data = {'success': False, 'message': 'Transaction invalid'}
 

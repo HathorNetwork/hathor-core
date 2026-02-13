@@ -176,7 +176,8 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         return tx
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
-        return bytes(tx)
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize(tx)
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
         key = migration_name.encode('ascii')

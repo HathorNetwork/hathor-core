@@ -96,7 +96,8 @@ class CreateTxResource(Resource):
         if tx.is_double_spending():
             raise InvalidNewTransaction('At least one of your inputs has already been spent.')
 
-        hex_data = bytes(tx).hex()
+        from hathor.transaction.vertex_parser import vertex_serializer
+        hex_data = vertex_serializer.serialize(tx).hex()
         data = tx.to_json()
         data.pop('hash', None)
         data.pop('nonce', None)

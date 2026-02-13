@@ -8,6 +8,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.token_info import TokenVersion
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -68,7 +69,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         tx.timestamp = int(self.clock.seconds())
         tx.weight = 0
 
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx.get_struct().hex()})
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': vertex_serializer.serialize(tx).hex()})
         data = response.json_value()
         self.assertFalse(data['success'])
 
@@ -83,7 +84,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         tx2.timestamp = int(self.clock.seconds())
         tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
 
-        response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
+        tx2_hex = vertex_serializer.serialize(tx2).hex()
+        response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2_hex})
         data_wrong_amount = response_wrong_amount.json_value()
         self.assertFalse(data_wrong_amount['success'])
 
@@ -99,14 +101,14 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         tx3.weight = self.manager.daa.minimum_tx_weight(tx3)
 
         # Then send tokens
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': vertex_serializer.serialize(tx3).hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 
         # Trying to send a double spending will not have success
         self.clock.advance(5)
         tx3.timestamp = int(self.clock.seconds())
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': vertex_serializer.serialize(tx3).hex()})
         data_error = response.json_value()
         self.assertFalse(data_error['success'])
         self.clock.advance(5)
@@ -130,7 +132,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         tx4 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
         tx4.nonce = 0
         tx4.timestamp = int(self.clock.seconds())
-        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx4.get_struct().hex()})
+        response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': vertex_serializer.serialize(tx4).hex()})
         data = response.json_value()
         self.assertTrue(data['success'])
 #
@@ -146,7 +148,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 #            if weight == 0:
 #                weight = minimum_tx_weight(tx)
 #            tx.weight = weight
-#            return tx.get_struct().hex()
+#            return vertex_serializer.serialize(tx).hex()
 #
 #        # Making pow threads full
 #        deferreds = []

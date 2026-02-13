@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from typing_extensions import override
-
 from hathor.transaction.aux_pow import BitcoinAuxPow
 from hathor.transaction.base_transaction import TxOutput, TxVersion
 from hathor.transaction.block import Block
@@ -57,12 +55,6 @@ class MergeMinedBlock(Block):
             settings=settings
         )
         self.aux_pow = aux_pow
-
-    @override
-    def get_struct_nonce(self) -> bytes:
-        if not self.aux_pow:
-            return bytes(BitcoinAuxPow.dummy())
-        return bytes(self.aux_pow)
 
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         from hathor.util import abbrev

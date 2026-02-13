@@ -156,8 +156,9 @@ class HathorClient(IHathorClient):
             return block
 
     async def submit_block(self, block: Block) -> bool:
+        from hathor.transaction.vertex_parser import vertex_serializer
         data = {
-            'hexdata': bytes(block).hex(),
+            'hexdata': vertex_serializer.serialize(block).hex(),
         }
         async with self.session.post(self._get_url('submit_block'), json=data) as resp:
             resp.raise_for_status()
@@ -248,8 +249,9 @@ class MiningChannel(IMiningChannel):
         await self._ws.close()
 
     async def submit(self, block: Block) -> Optional[BlockTemplate]:
+        from hathor.transaction.vertex_parser import vertex_serializer
         resp: Union[bool, dict] = await self._do_request('mining.submit', {
-            'hexdata': bytes(block).hex(),
+            'hexdata': vertex_serializer.serialize(block).hex(),
         })
         if isinstance(resp, dict):
             error = resp.get('error')

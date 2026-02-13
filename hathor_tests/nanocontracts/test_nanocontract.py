@@ -39,7 +39,7 @@ from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT, MAX_NC_SCRIPT_SIZE
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
@@ -141,13 +141,13 @@ class NCNanoContractTestCase(unittest.TestCase):
     def test_serialization(self) -> None:
         nc = self._get_nc()
 
-        nc_bytes = bytes(nc)
+        nc_bytes = vertex_serializer.serialize(nc)
         nc2 = vertex_deserializer.deserialize(nc_bytes, verbose=print)
-        self.assertEqual(nc_bytes, bytes(nc2))
+        self.assertEqual(nc_bytes, vertex_serializer.serialize(nc2))
 
         nc2 = vertex_deserializer.deserialize(nc_bytes)
         assert isinstance(nc2, Transaction)
-        self.assertEqual(nc_bytes, bytes(nc2))
+        self.assertEqual(nc_bytes, vertex_serializer.serialize(nc2))
 
         nc_header = nc.get_nano_header()
         nc2_header = nc2.get_nano_header()

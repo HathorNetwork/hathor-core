@@ -5,7 +5,7 @@ from hathor.transaction.resources import TransactionResource
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.validation_state import ValidationState
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions
 
@@ -23,7 +23,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data_success = response_success.json_value()
         self.assertTrue(data_success['success'])
         dict_test = genesis_tx.to_json(decode_script=True)
-        dict_test['raw'] = genesis_tx.get_struct().hex()
+        dict_test['raw'] = vertex_serializer.serialize(genesis_tx).hex()
         dict_test['nonce'] = str(dict_test['nonce'])
         if genesis_tx.is_block:
             dict_test['height'] = genesis_tx.static_metadata.height
@@ -46,7 +46,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         tx = add_new_transactions(self.manager, 1)[0]
 
-        tx2 = vertex_deserializer.deserialize(tx.get_struct())
+        tx2 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx))
         tx2.parents = [tx.parents[1], tx.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
 

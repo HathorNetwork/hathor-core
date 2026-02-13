@@ -2,7 +2,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import GraphvizFullResource, GraphvizNeighboursResource
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor_tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions
 
@@ -24,7 +24,7 @@ class BaseGraphvizTest(_BaseResourceTest._ResourceTest):
         txs = add_new_transactions(self.manager, 2, advance_clock=2)
         tx = txs[0]
 
-        self.tx2 = vertex_deserializer.deserialize(tx.get_struct())
+        self.tx2 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx))
         self.tx2.parents = [tx.parents[1], tx.parents[0]]
         self.manager.cpu_mining_service.resolve(self.tx2)
 

@@ -280,7 +280,8 @@ class VertexHandler:
             }
         }
         if self._log_vertex_bytes:
-            kwargs['bytes'] = bytes(tx).hex()
+            from hathor.transaction.vertex_parser import vertex_serializer
+            kwargs['bytes'] = vertex_serializer.serialize(tx).hex()
         if isinstance(tx, Block):
             if not metadata.voided_by:
                 message = message_fmt.format('block')

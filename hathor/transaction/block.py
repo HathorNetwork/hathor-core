@@ -22,7 +22,6 @@ from typing_extensions import override
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.serialization import Serializer
 from hathor.transaction import TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
@@ -71,20 +70,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
         if not short:
             d.update(data=self.data.hex())
         return d
-
-    @override
-    def get_funds_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._block import serialize_block_funds
-        serializer = Serializer.build_bytes_serializer()
-        serialize_block_funds(serializer, self)
-        return bytes(serializer.finalize())
-
-    @override
-    def get_graph_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._block import serialize_block_graph_fields
-        serializer = Serializer.build_bytes_serializer()
-        serialize_block_graph_fields(serializer, self)
-        return bytes(serializer.finalize())
 
     @property
     def is_block(self) -> bool:

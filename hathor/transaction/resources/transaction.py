@@ -60,7 +60,8 @@ def get_tx_extra_data(
     assert tx.storage is not None
     settings = get_global_settings()
     serialized = tx.to_json(decode_script=True)
-    serialized['raw'] = tx.get_struct().hex()
+    from hathor.transaction.vertex_parser import vertex_serializer
+    serialized['raw'] = vertex_serializer.serialize(tx).hex()
     serialized['nonce'] = str(tx.nonce)
 
     # Update tokens array

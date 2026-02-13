@@ -109,7 +109,8 @@ class NanoContractMatchValueResource(Resource):
 
         tx = Transaction(inputs=tx_inputs, outputs=tx_outputs)
 
-        ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
+        from hathor.transaction.vertex_parser import vertex_serializer
+        ret = {'success': True, 'hex_tx': vertex_serializer.serialize(tx).hex()}
         return json_dumpb(ret)
 
     def decode_post_params(self, data: dict[str, Any]) -> DecodedPostParams:
@@ -218,7 +219,8 @@ class NanoContractMatchValueResource(Resource):
         for txin in inputs:
             tx.inputs.append(TxInput(txin.tx_id, txin.index, b''))
 
-        ret = {'success': True, 'hex_tx': tx.get_struct().hex()}
+        from hathor.transaction.vertex_parser import vertex_serializer
+        ret = {'success': True, 'hex_tx': vertex_serializer.serialize(tx).hex()}
         return json_dumpb(ret)
 
     def decode_put_params(self, data: dict[str, Any]) -> DecodedPutParams:

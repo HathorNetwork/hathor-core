@@ -1,7 +1,7 @@
 from itertools import chain
 
 from hathor.simulator.utils import add_new_block, add_new_blocks
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
@@ -46,7 +46,7 @@ class TipsTestCase(unittest.TestCase):
         # tx2 will be the tip now
         self.assertCountEqual(self.get_tips(), set([tx2.hash]))
 
-        tx3 = vertex_deserializer.deserialize(tx2.get_struct())
+        tx3 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx2))
         tx3.parents = [tx2.parents[1], tx2.parents[0]]
         self.manager.cpu_mining_service.resolve(tx3)
 
@@ -142,7 +142,7 @@ class TipsTestCase(unittest.TestCase):
         self.assertCountEqual(self.get_tips(), set([tx4.hash, tx3.hash]))
 
         # A twin tx with tx4, that will be voided initially, then won't change the tips
-        tx5 = vertex_deserializer.deserialize(tx4.get_struct())
+        tx5 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx4))
         tx5.parents = [tx2.hash, tx3.hash]
         self.manager.cpu_mining_service.resolve(tx5)
         self.manager.propagate_tx(tx5)

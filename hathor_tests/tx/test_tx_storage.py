@@ -12,6 +12,7 @@ from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor_tests import unittest
 from hathor_tests.unittest import TestBuilder
 from hathor_tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, create_tokens
@@ -161,8 +162,11 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertTrue(self.tx_storage.transaction_exists(obj.hash))
 
         self.assertEqual(obj, loaded_obj1)
-        self.assertEqual(len(obj.get_funds_struct()), len(loaded_obj1.get_funds_struct()))
-        self.assertEqual(bytes(obj), bytes(loaded_obj1))
+        self.assertEqual(
+            len(vertex_serializer.serialize_funds_bytes(obj)),
+            len(vertex_serializer.serialize_funds_bytes(loaded_obj1)),
+        )
+        self.assertEqual(vertex_serializer.serialize(obj), vertex_serializer.serialize(loaded_obj1))
         self.assertEqual(obj.to_json(), loaded_obj1.to_json())
         self.assertEqual(obj.is_block, loaded_obj1.is_block)
 

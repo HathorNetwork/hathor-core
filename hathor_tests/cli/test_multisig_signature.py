@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from structlog.testing import capture_logs
 
 from hathor.simulator.utils import add_new_blocks
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor.wallet import Wallet
 from hathor_cli.multisig_signature import create_parser, execute
 from hathor_tests import unittest
@@ -45,7 +46,7 @@ class SignatureTest(unittest.TestCase):
         parser = create_parser()
 
         # Generate signature to validate
-        args = parser.parse_args([tx.get_struct().hex(), private_key_hex])
+        args = parser.parse_args([vertex_serializer.serialize(tx).hex(), private_key_hex])
         f = StringIO()
         with capture_logs():
             with redirect_stdout(f):

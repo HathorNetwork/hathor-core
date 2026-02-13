@@ -121,7 +121,8 @@ class DbExport(RunNode):
             # write tx
             if tx.is_genesis:
                 continue
-            tx_bytes = bytes(tx)
+            from hathor.transaction.vertex_parser import vertex_serializer
+            tx_bytes = vertex_serializer.serialize(tx)
             self.out_file.write(struct.pack('!I', len(tx_bytes)))
             self.out_file.write(tx_bytes)
             # stop as soon as we reach our target height (if any) and after writing it

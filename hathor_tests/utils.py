@@ -46,11 +46,11 @@ def resolve_block_bytes(*, block_bytes: bytes, cpu_mining_service: CpuMiningServ
         Return block bytes with hash and nonce after pow
         :rtype: bytes
     """
-    from hathor.transaction.vertex_parser import vertex_deserializer
+    from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
     block_bytes = base64.b64decode(block_bytes)
     block = vertex_deserializer.deserialize(block_bytes)
     cpu_mining_service.resolve(block)
-    return block.get_struct()
+    return vertex_serializer.serialize(block)
 
 
 def add_custom_tx(
