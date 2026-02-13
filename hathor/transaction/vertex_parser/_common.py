@@ -41,7 +41,7 @@ def serialize_graph_fields(
 ) -> None:
     """Serialize the common graph fields (weight, timestamp, parents).
 
-    This matches the output of GenericVertex.get_graph_struct().
+    Replaces the former GenericVertex.get_graph_struct().
     """
     serializer.write_struct((vertex.weight, vertex.timestamp, len(vertex.parents)), _GRAPH_FORMAT_STRING)
     for parent in vertex.parents:

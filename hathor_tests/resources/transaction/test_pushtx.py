@@ -7,6 +7,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput
 from hathor.transaction.resources import PushTxResource
 from hathor.transaction.scripts import P2PKH, parse_address_script
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -81,7 +82,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx = create_fee_tokens(self.manager, address_b58=address, propagate=False)
 
         self.assertTrue(tx.has_fees())
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
 
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
@@ -94,7 +95,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         add_blocks_unlock_reward(self.manager)
         tx = self.get_tx()
 
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -107,7 +108,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         tx.weight += 0.1
         self.manager.cpu_mining_service.resolve(tx)
 
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response_success: Any = yield self.push_tx({'hex_tx': tx_hex})
         data_success = response_success.json_value()
         self.assertFalse(data_success['success'])
@@ -122,20 +123,20 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         public_key_bytes, signature_bytes = self.manager.wallet.get_input_aux_data(data_to_sign, private_key)
         tx.inputs[0].data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
 
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # force
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response = yield self.push_tx({'hex_tx': tx_hex, 'force': True})
         data = response.json_value()
         self.assertFalse(data['success'])
 
         # Invalid tx (don't have inputs)
         genesis_tx = next(x for x in self.manager.tx_storage.get_all_genesis() if x.is_transaction)
-        genesis_hex = genesis_tx.get_struct().hex()
+        genesis_hex = vertex_serializer.serialize(genesis_tx).hex()
         response_genesis: Any = yield self.push_tx({'tx_hex': genesis_hex})
         data_genesis = response_genesis.json_value()
         self.assertFalse(data_genesis['success'])
@@ -145,7 +146,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         assert script_type_out is not None
         address = script_type_out.address
         tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=False)
-        tx2_hex = tx2.get_struct().hex()
+        tx2_hex = vertex_serializer.serialize(tx2).hex()
         response = yield self.push_tx({'hex_tx': tx2_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -160,7 +161,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         assert script_type_out is not None
         address = script_type_out.address
         tx3 = create_tokens(self.manager, address, mint_amount=100, propagate=False, nft_data='test')
-        tx3_hex = tx3.get_struct().hex()
+        tx3_hex = vertex_serializer.serialize(tx3).hex()
         response: Any = yield self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -197,7 +198,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         # Invalid tx (output script is too long)
         tx.outputs[0].script = b'*' * (self._settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
         self.manager.cpu_mining_service.resolve(tx)
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
@@ -213,7 +214,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         # Invalid tx (output script is too long)
         tx.outputs[0].script = b'*' * 5
         self.manager.cpu_mining_service.resolve(tx)
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
@@ -228,7 +229,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # Push a first tx
         tx = self.get_tx()
-        tx_hex = tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(tx).hex()
         response: Any = yield self.push_tx({'hex_tx': tx_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -243,7 +244,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         inputs = [WalletInputInfo(tx_id=tx.hash, index=0, private_key=private_key)]
         outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
         tx2 = self.get_tx(inputs, outputs)
-        tx2_hex = tx2.get_struct().hex()
+        tx2_hex = vertex_serializer.serialize(tx2).hex()
         response = yield self.push_tx({'hex_tx': tx2_hex})
         data = response.json_value()
         self.assertTrue(data['success'])
@@ -259,7 +260,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         inputs = [WalletInputInfo(tx_id=tx2.hash, index=0, private_key=private_key)]
         outputs = [WalletOutputInfo(address=decode_address(p2pkh.address), value=txout.value, timelock=None), ]
         tx3 = self.get_tx(inputs, outputs)
-        tx3_hex = tx3.get_struct().hex()
+        tx3_hex = vertex_serializer.serialize(tx3).hex()
         response = yield self.push_tx({'hex_tx': tx3_hex})
         data = response.json_value()
         self.assertFalse(data['success'])
@@ -291,7 +292,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
 
         # First a tx with one data script output
         tx1 = add_tx_with_data_script(self.manager, ['test'], propagate=False)
-        tx1_hex = tx1.get_struct().hex()
+        tx1_hex = vertex_serializer.serialize(tx1).hex()
 
         response: Any = yield self.push_tx({'hex_tx': tx1_hex})
         data = response.json_value()
@@ -302,7 +303,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         # Now a tx with 25 data script outputs
         data25 = ['test{}'.format(i) for i in range(25)]
         tx25 = add_tx_with_data_script(self.manager, data25, propagate=False)
-        tx25_hex = tx25.get_struct().hex()
+        tx25_hex = vertex_serializer.serialize(tx25).hex()
 
         response = yield self.push_tx({'hex_tx': tx25_hex})
         data = response.json_value()
@@ -313,7 +314,7 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         # Now a tx with 26 data script outputs and it must fail
         data26 = ['test{}'.format(i) for i in range(26)]
         tx26 = add_tx_with_data_script(self.manager, data26, propagate=False)
-        tx26_hex = tx26.get_struct().hex()
+        tx26_hex = vertex_serializer.serialize(tx26).hex()
 
         response = yield self.push_tx({'hex_tx': tx26_hex})
         data = response.json_value()

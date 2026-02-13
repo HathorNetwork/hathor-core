@@ -46,7 +46,7 @@ def serialize_token_creation_funds(
     Format: signal_bits(B) + version(B) + inputs_len(B) + outputs_len(B)
             + inputs + outputs + token_info
 
-    This matches the output of TokenCreationTransaction.get_funds_struct().
+    Replaces the former TokenCreationTransaction.get_funds_struct().
     """
     serializer.write_struct(
         (tx.signal_bits, tx.version, len(tx.inputs), len(tx.outputs)),

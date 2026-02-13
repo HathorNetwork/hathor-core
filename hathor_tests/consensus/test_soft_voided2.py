@@ -73,7 +73,8 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
         print(f'!! txB-{i}: {txB.hash.hex()}')
         print(f'!! txC-{i}: {txC.hash.hex()}', txC.outputs[0].script.hex())
         print(f'!! txD1-{i}: {txD1.hash.hex()}')
-        print(f'!! txD2-{i}: {txD2.hash.hex()}', bytes(txD2).hex())
+        from hathor.transaction.vertex_parser import vertex_serializer
+        print(f'!! txD2-{i}: {txD2.hash.hex()}', vertex_serializer.serialize(txD2).hex())
         print(f'!! txE-{i}: {txE.hash.hex()}')
 
         print(f'!! txF1-{i}: {txF1.hash.hex()}')

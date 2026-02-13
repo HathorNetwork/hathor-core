@@ -31,7 +31,6 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME, BlueprintId, blueprint_id_from_bytes
-from hathor.serialization import Serializer
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -190,15 +189,6 @@ class OnChainBlueprint(Transaction):
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
         return blueprint_id_from_bytes(self.hash)
-
-    @override
-    def get_funds_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._on_chain_blueprint import serialize_ocb_extra_fields
-        from hathor.transaction.vertex_parser._transaction import serialize_tx_funds
-        serializer = Serializer.build_bytes_serializer()
-        serialize_tx_funds(serializer, self)
-        serialize_ocb_extra_fields(serializer, self, skip_signature=False)
-        return bytes(serializer.finalize())
 
     def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""

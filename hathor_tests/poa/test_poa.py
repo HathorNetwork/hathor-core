@@ -27,7 +27,7 @@ from hathor.transaction import Block, TxOutput
 from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.static_metadata import BlockStaticMetadata
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 
 
@@ -43,7 +43,7 @@ def test_get_hashed_poa_data() -> None:
     )
 
     def clone_block() -> PoaBlock:
-        result = vertex_deserializer.deserialize(block.get_struct())
+        result = vertex_deserializer.deserialize(vertex_serializer.serialize(block))
         assert isinstance(result, PoaBlock)
         return result
 

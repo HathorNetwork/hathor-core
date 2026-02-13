@@ -7,7 +7,7 @@ from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from hathor_cli.multisig_spend import create_parser, execute
@@ -82,7 +82,7 @@ class MultiSigSpendTest(unittest.TestCase):
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID], wallet_balance)
 
         # Then we create a new tx that spends this tokens from multisig wallet
-        tx = vertex_deserializer.deserialize(tx1.get_struct())
+        tx = vertex_deserializer.deserialize(vertex_serializer.serialize(tx1))
         tx.weight = 10
         tx.parents = self.manager.get_new_tx_parents()
         tx.timestamp = int(self.clock.seconds())
@@ -106,7 +106,7 @@ class MultiSigSpendTest(unittest.TestCase):
         parser = create_parser()
         # Generate spend tx
         args = parser.parse_args([
-            tx.get_struct().hex(), '{},{}'.format(signatures[0].hex(), signatures[1].hex()),
+            vertex_serializer.serialize(tx).hex(), '{},{}'.format(signatures[0].hex(), signatures[1].hex()),
             self.redeem_script.hex()
         ])
         f = StringIO()

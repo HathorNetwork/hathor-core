@@ -36,9 +36,9 @@ SIGNER_ID_LEN = 2
 def get_hashed_poa_data(block: PoaBlock) -> bytes:
     """Get the data to be signed for the Proof-of-Authority."""
     from hathor.transaction.vertex_parser import vertex_serializer
-    poa_data = block.get_funds_struct()
+    poa_data = vertex_serializer.serialize_funds_bytes(block)
     poa_data += vertex_serializer.serialize_block_base_graph(block)  # Block-level graph without poa fields
-    poa_data += block.get_struct_nonce()
+    poa_data += vertex_serializer.serialize_nonce_bytes(block)
     hashed_poa_data = hashlib.sha256(poa_data).digest()
     return hashed_poa_data
 

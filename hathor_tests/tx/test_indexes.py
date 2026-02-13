@@ -5,7 +5,7 @@ from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
-from hathor.transaction.vertex_parser import VertexParser, vertex_deserializer
+from hathor.transaction.vertex_parser import VertexParser, vertex_deserializer, vertex_serializer
 from hathor.util import initialize_hd_wallet, iwindows
 from hathor.wallet import Wallet
 from hathor_tests import unittest
@@ -51,7 +51,7 @@ class BaseIndexesTest(unittest.TestCase):
             {tx2.hash}
         )
 
-        tx3 = vertex_deserializer.deserialize(tx2.get_struct())
+        tx3 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx2))
         tx3.timestamp = tx2.timestamp + 1
         self.assertIn(tx1.hash, tx3.parents)
         self.manager.cpu_mining_service.resolve(tx3)
@@ -103,7 +103,7 @@ class BaseIndexesTest(unittest.TestCase):
             {tx2.hash}
         )
 
-        tx3 = vertex_deserializer.deserialize(tx2.get_struct())
+        tx3 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx2))
         tx3.weight = 3.0
         # tx3.timestamp = tx2.timestamp + 1
         tx3.parents = tx1.parents

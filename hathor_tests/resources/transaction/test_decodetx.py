@@ -2,6 +2,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.transaction.resources import DecodeTxResource
 from hathor.transaction.scripts import parse_address_script
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens
 
@@ -20,12 +21,13 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
             self.assertTrue(tx.is_transaction)
 
         genesis_tx = genesis[1]
-        response_success = yield self.web.get("decode_tx", {b'hex_tx': bytes(genesis_tx.get_struct().hex(), 'utf-8')})
+        hex_tx = vertex_serializer.serialize(genesis_tx).hex()
+        response_success = yield self.web.get("decode_tx", {b'hex_tx': bytes(hex_tx, 'utf-8')})
         data_success = response_success.json_value()
 
         self.assertTrue(data_success['success'])
         data_genesis = genesis_tx.to_json(decode_script=True)
-        data_genesis['raw'] = genesis_tx.get_struct().hex()
+        data_genesis['raw'] = vertex_serializer.serialize(genesis_tx).hex()
         data_genesis['nonce'] = str(data_genesis['nonce'])
         self.assertEqual(data_success['tx'], data_genesis)
         self.assertTrue('meta' in data_success)
@@ -48,6 +50,7 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
         address = script_type_out.address
         add_blocks_unlock_reward(self.manager)
         tx2 = create_tokens(self.manager, address, mint_amount=100, propagate=True)
-        response = yield self.web.get('decode_tx', {b'hex_tx': bytes(tx2.get_struct().hex(), 'utf-8')})
+        hex_tx2 = vertex_serializer.serialize(tx2).hex()
+        response = yield self.web.get('decode_tx', {b'hex_tx': bytes(hex_tx2, 'utf-8')})
         data = response.json_value()
         self.assertTrue(data['success'])

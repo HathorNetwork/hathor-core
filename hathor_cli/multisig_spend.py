@@ -38,7 +38,8 @@ def execute(args: Namespace) -> None:
     tx.inputs[0].data = input_data
 
     CpuMiningService().resolve(tx)
-    print('Transaction after POW: ', tx.get_struct().hex())
+    from hathor.transaction.vertex_parser import vertex_serializer
+    print('Transaction after POW: ', vertex_serializer.serialize(tx).hex())
 
 
 def main():

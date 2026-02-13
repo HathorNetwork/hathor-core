@@ -499,8 +499,9 @@ class TransactionStorage(ABC):
         # XXX: we have to accept any scope because we only want to know what bytes we have stored
         with tx_allow_context(self, allow_scope=TxAllowScope.ALL):
             local_tx = self.get_transaction(tx.hash)
-        local_tx_bytes = bytes(local_tx)
-        tx_bytes = bytes(tx)
+        from hathor.transaction.vertex_parser import vertex_serializer
+        local_tx_bytes = vertex_serializer.serialize(local_tx)
+        tx_bytes = vertex_serializer.serialize(tx)
         if tx_bytes == local_tx_bytes:
             return True
         self.log.critical('non-equal transactions with same id', tx_id=tx.hash.hex(),

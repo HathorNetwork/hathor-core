@@ -9,6 +9,7 @@ from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES, NanoHeaderAction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.util import VerboseCallback
+from hathor.transaction.vertex_parser import vertex_serializer
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 
@@ -185,7 +186,7 @@ class VertexHeadersTest(unittest.TestCase):
             assert self.has_nano_header(vertex) == should_have_nano_header
             vertex.storage = self.manager.tx_storage
             clone = vertex.clone(include_metadata=False, include_storage=True)
-            assert bytes(clone) == bytes(vertex)
+            assert vertex_serializer.serialize(clone) == vertex_serializer.serialize(vertex)
             assert self.manager.on_new_tx(vertex)
 
         expected_to_fail: list[tuple[str, type[BaseTransaction], bool]] = [

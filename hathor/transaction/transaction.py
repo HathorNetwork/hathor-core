@@ -21,7 +21,6 @@ from typing_extensions import override
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.exception import InvalidNewTransaction
-from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
@@ -84,20 +83,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self.tokens = tokens or []
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
-
-    @override
-    def get_funds_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._transaction import serialize_tx_funds
-        serializer = Serializer.build_bytes_serializer()
-        serialize_tx_funds(serializer, self)
-        return bytes(serializer.finalize())
-
-    @override
-    def get_graph_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._common import serialize_graph_fields
-        serializer = Serializer.build_bytes_serializer()
-        serialize_graph_fields(serializer, self)
-        return bytes(serializer.finalize())
 
     def clear_sighash_cache(self) -> None:
         """Clear caches related to sighash calculation."""

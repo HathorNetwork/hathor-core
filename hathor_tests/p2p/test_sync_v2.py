@@ -467,7 +467,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # end up on an AlreadyCalledError because the deferred.errback will be called twice
         for fake_tx in fake_txs:
             sync_node2 = conn12.proto2.state.sync_agent
-            sync_node2.handle_transaction(base64.b64encode(fake_tx.get_struct()).decode())
+            from hathor.transaction.vertex_parser import vertex_serializer
+            sync_node2.handle_transaction(base64.b64encode(vertex_serializer.serialize(fake_tx)).decode())
 
         # force the processing of async code, nothing should break
         self.simulator.run(0)

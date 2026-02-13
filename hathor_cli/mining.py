@@ -163,7 +163,8 @@ def execute(args: Namespace) -> None:
         except HathorError:
             print('[{}] ERROR: Block has not been pushed because it is not valid.'.format(datetime.datetime.now()))
         else:
-            block_bytes = block.get_struct()
+            from hathor.transaction.vertex_parser import vertex_serializer
+            block_bytes = vertex_serializer.serialize(block)
             response = requests.post(args.url, json={'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
             if not response.ok:
                 print('[{}] ERROR: Block has been rejected. Unknown exception.'.format(datetime.datetime.now()))

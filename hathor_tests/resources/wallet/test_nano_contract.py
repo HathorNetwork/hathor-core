@@ -3,7 +3,7 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import DecodeTxResource, PushTxResource
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.util import json_loadb
 from hathor.wallet.resources import SignTxResource
 from hathor.wallet.resources.nano_contracts import (
@@ -83,8 +83,9 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         genesis_output = [tx for tx in self.manager.tx_storage.get_all_genesis() if tx.is_block][0].outputs[0]
         partial_tx = vertex_deserializer.deserialize(bytes.fromhex(nano_contract_hex))
         partial_tx.outputs.append(genesis_output)
-        response_decode = yield decode_resource.get("wallet/nano_contracts/decode",
-                                                    {b'hex_tx': bytes(partial_tx.get_struct().hex(), 'utf-8')})
+        partial_hex = vertex_serializer.serialize(partial_tx).hex().encode()
+        response_decode = yield decode_resource.get(
+            "wallet/nano_contracts/decode", {b'hex_tx': partial_hex})
         data = response_decode.json_value()
         self.assertTrue(data['success'])
         nano_contract = data['nano_contract']
@@ -104,16 +105,16 @@ class NanoContractsTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data_error['message'], 'Missing parameter: hex_tx')
 
         # update
-        data_put['hex_tx'] = partial_tx.get_struct().hex()
+        data_put['hex_tx'] = vertex_serializer.serialize(partial_tx).hex()
         response = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
         data = response.json_value()
         self.assertTrue(data['success'])
         self.assertIsNotNone(data['hex_tx'])
 
         # Error nano contract not found
-        new_tx = vertex_deserializer.deserialize(partial_tx.get_struct())
+        new_tx = vertex_deserializer.deserialize(vertex_serializer.serialize(partial_tx))
         new_tx.outputs = []
-        data_put['hex_tx'] = new_tx.get_struct().hex()
+        data_put['hex_tx'] = vertex_serializer.serialize(new_tx).hex()
         response = yield match_value_resource.put("wallet/nano_contracts/match_value", data_put)
         data = response.json_value()
         self.assertFalse(data['success'])

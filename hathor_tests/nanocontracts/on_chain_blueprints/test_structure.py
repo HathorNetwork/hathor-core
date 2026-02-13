@@ -37,9 +37,10 @@ def test_ocb_recompress():
     ocb.weight = 1.234
     ocb.sign(get_ocb_private_key())
     ocb.update_hash()
-    ocb_bytes = bytes(ocb)
+    from hathor.transaction.vertex_parser import vertex_serializer
+    ocb_bytes = vertex_serializer.serialize(ocb)
     parser = VertexParser(settings=settings)
     ocb2 = parser.deserialize(ocb_bytes)
     assert ocb == ocb2
-    ocb_bytes2 = bytes(ocb2)
+    ocb_bytes2 = vertex_serializer.serialize(ocb2)
     assert ocb_bytes == ocb_bytes2

@@ -127,6 +127,41 @@ def serialize_without_nonce(serializer: Serializer, vertex: BaseTransaction) -> 
     serialize_graph(serializer, vertex)
 
 
+def serialize_funds_bytes(vertex: BaseTransaction) -> bytes:
+    """Serialize just the funds part of a vertex. Replaces vertex.get_funds_struct()."""
+    serializer = Serializer.build_bytes_serializer()
+    serialize_funds(serializer, vertex)
+    return bytes(serializer.finalize())
+
+
+def serialize_graph_bytes(vertex: BaseTransaction) -> bytes:
+    """Serialize just the graph part of a vertex. Replaces vertex.get_graph_struct()."""
+    serializer = Serializer.build_bytes_serializer()
+    serialize_graph(serializer, vertex)
+    return bytes(serializer.finalize())
+
+
+def serialize_nonce_bytes(vertex: BaseTransaction) -> bytes:
+    """Serialize just the nonce part of a vertex. Replaces vertex.get_struct_nonce()."""
+    serializer = Serializer.build_bytes_serializer()
+    serialize_nonce(serializer, vertex)
+    return bytes(serializer.finalize())
+
+
+def serialize_headers_bytes(vertex: BaseTransaction) -> bytes:
+    """Serialize just the headers of a vertex. Replaces vertex.get_headers_struct()."""
+    serializer = Serializer.build_bytes_serializer()
+    serialize_headers(serializer, vertex)
+    return bytes(serializer.finalize())
+
+
+def serialize_without_nonce_bytes(vertex: BaseTransaction) -> bytes:
+    """Serialize funds + graph (no nonce). Replaces vertex.get_struct_without_nonce()."""
+    serializer = Serializer.build_bytes_serializer()
+    serialize_without_nonce(serializer, vertex)
+    return bytes(serializer.finalize())
+
+
 def serialize_block_base_graph(block: BaseTransaction) -> bytes:
     """Serialize Block-level graph fields (without PoA extras). Used by PoA signing."""
     from hathor.transaction.block import Block

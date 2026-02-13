@@ -47,7 +47,7 @@ def serialize_tx_funds(
     Format: signal_bits(B) + version(B) + tokens_len(B) + inputs_len(B) + outputs_len(B)
             + token_uids + inputs + outputs
 
-    This matches the output of Transaction.get_funds_struct().
+    Replaces the former Transaction.get_funds_struct().
     """
     serializer.write_struct(
         (tx.signal_bits, tx.version, len(tx.tokens), len(tx.inputs), len(tx.outputs)),

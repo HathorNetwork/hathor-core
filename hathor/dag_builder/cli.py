@@ -56,7 +56,8 @@ def main(filename: str, genesis_seed: str) -> None:
         print('//', node)
         print('//', repr(vertex))
         print('//', node.name)
-        print(bytes(vertex).hex())
+        from hathor.transaction.vertex_parser import vertex_serializer
+        print(vertex_serializer.serialize(vertex).hex())
         print()
 
 

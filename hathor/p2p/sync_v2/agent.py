@@ -725,7 +725,8 @@ class NodeBlockSync(SyncAgent):
 
         This message is called from a streamer for each block to being sent.
         """
-        payload = base64.b64encode(bytes(blk)).decode('ascii')
+        from hathor.transaction.vertex_parser import vertex_serializer
+        payload = base64.b64encode(vertex_serializer.serialize(blk)).decode('ascii')
         self.send_message(ProtocolMessages.BLOCKS, payload)
 
     def send_blocks_end(self, response_code: StreamEnd) -> None:
@@ -984,8 +985,8 @@ class NodeBlockSync(SyncAgent):
     def send_transaction(self, tx: Transaction) -> None:
         """ Send a TRANSACTION message.
         """
-        # payload = bytes(tx).hex()  # fails for big transactions
-        payload = base64.b64encode(bytes(tx)).decode('ascii')
+        from hathor.transaction.vertex_parser import vertex_serializer
+        payload = base64.b64encode(vertex_serializer.serialize(tx)).decode('ascii')
         self.send_message(ProtocolMessages.TRANSACTION, payload)
 
     def send_transactions_end(self, response_code: StreamEnd) -> None:
@@ -1084,7 +1085,8 @@ class NodeBlockSync(SyncAgent):
         """ Send a DATA message.
         """
         self.log.debug('send tx', tx=tx.hash_hex)
-        tx_payload = base64.b64encode(tx.get_struct()).decode('ascii')
+        from hathor.transaction.vertex_parser import vertex_serializer
+        tx_payload = base64.b64encode(vertex_serializer.serialize(tx)).decode('ascii')
         if not origin:
             payload = tx_payload
         else:

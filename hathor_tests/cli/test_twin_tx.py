@@ -6,7 +6,7 @@ from structlog.testing import capture_logs
 
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import TransactionMetadata
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.util import json_loadb
 from hathor_cli.twin_tx import create_parser, execute
 from hathor_tests import unittest
@@ -35,7 +35,7 @@ class TwinTxTest(unittest.TestCase):
 
     def test_twin(self):
         # Normal twin
-        params = ['--raw_tx', self.tx.get_struct().hex()]
+        params = ['--raw_tx', vertex_serializer.serialize(self.tx).hex()]
         args = self.parser.parse_args(params)
 
         f = StringIO()
@@ -115,7 +115,7 @@ class TwinTxTest(unittest.TestCase):
 
     def test_twin_human(self):
         # Twin in human form
-        params = ['--raw_tx', self.tx.get_struct().hex(), '--human']
+        params = ['--raw_tx', vertex_serializer.serialize(self.tx).hex(), '--human']
         args = self.parser.parse_args(params)
 
         f = StringIO()
@@ -139,7 +139,7 @@ class TwinTxTest(unittest.TestCase):
 
     def test_struct_error(self):
         # Struct error
-        tx_hex = self.tx.get_struct().hex()
+        tx_hex = vertex_serializer.serialize(self.tx).hex()
         params = ['--raw_tx', tx_hex + 'aa']
         args = self.parser.parse_args(params)
 

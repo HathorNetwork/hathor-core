@@ -45,7 +45,7 @@ def serialize_block_funds(
 
     Format: signal_bits(B) + version(B) + outputs_len(B) + outputs
 
-    This matches the output of Block.get_funds_struct().
+    Replaces the former Block.get_funds_struct().
     """
     serializer.write_struct((block.signal_bits, block.version, len(block.outputs)), '!BBB')
     for tx_output in block.outputs:
@@ -58,7 +58,7 @@ def serialize_block_graph_fields(
 ) -> None:
     """Serialize the graph fields for a Block (includes data field after parents).
 
-    This matches the output of Block.get_graph_struct().
+    Replaces the former Block.get_graph_struct().
     """
     serialize_graph_fields(serializer, block)
     serializer.write_bytes(int_to_bytes(len(block.data), 1))
@@ -71,7 +71,7 @@ def serialize_poa_block_graph_fields(
 ) -> None:
     """Serialize the graph fields for a PoaBlock (block graph + signer_id + signature).
 
-    This matches the output of PoaBlock.get_graph_struct().
+    Replaces the former PoaBlock.get_graph_struct().
     """
     serialize_block_graph_fields(serializer, block)
     serializer.write_bytes(block.signer_id)

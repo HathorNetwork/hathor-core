@@ -31,7 +31,7 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.verification.nano_header_verifier import MAX_SEQNUM_DIFF_MEMPOOL
 from hathor.verification.transaction_verifier import MAX_BETWEEN_CONFLICTS, MAX_WITHIN_CONFLICTS
 from hathor.verification.vertex_verifier import MAX_PAST_TIMESTAMP_ALLOWED
@@ -443,7 +443,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         # blueprint does not exist
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
-        tx1_copy = vertex_deserializer.deserialize(bytes(tx1))
+        tx1_copy = vertex_deserializer.deserialize(vertex_serializer.serialize(tx1))
         assert isinstance(tx1_copy, Transaction)
         tx1_copy.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(tx1_copy)
@@ -479,7 +479,7 @@ class VertexHeadersTest(unittest.TestCase):
 
         # contract does not exist
         tx2 = artifacts.get_typed_vertex('tx2', Transaction)
-        tx2_copy = vertex_deserializer.deserialize(bytes(tx2))
+        tx2_copy = vertex_deserializer.deserialize(vertex_serializer.serialize(tx2))
         assert isinstance(tx2_copy, Transaction)
         tx2_copy.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(tx2_copy)
@@ -552,7 +552,7 @@ class VertexHeadersTest(unittest.TestCase):
         # contract has been confirmed
         # try to call an non-existent method but it will be accepted because the blueprint has fallback
         tx2 = artifacts.get_typed_vertex('tx2', Transaction)
-        tx2_copy = vertex_deserializer.deserialize(bytes(tx2))
+        tx2_copy = vertex_deserializer.deserialize(vertex_serializer.serialize(tx2))
         tx2_copy.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(tx2_copy)
         self.manager.vertex_handler.on_new_mempool_transaction(tx2_copy)

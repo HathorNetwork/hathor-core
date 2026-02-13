@@ -95,7 +95,8 @@ def execute(args: Namespace) -> None:
         if args.human:
             print(twin.to_json())
         else:
-            print(twin.get_struct().hex())
+            from hathor.transaction.vertex_parser import vertex_serializer
+            print(vertex_serializer.serialize(twin).hex())
     except (struct.error, ValueError):
         print('Error getting transaction from bytes')
         return

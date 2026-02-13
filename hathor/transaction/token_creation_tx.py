@@ -18,7 +18,6 @@ from typing_extensions import override
 
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.storage import NCBlockStorage
-from hathor.serialization import Serializer
 from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage  # noqa: F401
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
@@ -82,13 +81,6 @@ class TokenCreationTransaction(Transaction):
         """
         super().update_hash()
         self.tokens = [self.hash]
-
-    @override
-    def get_funds_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._token_creation import serialize_token_creation_funds
-        serializer = Serializer.build_bytes_serializer()
-        serialize_token_creation_funds(serializer, self)
-        return bytes(serializer.finalize())
 
     def serialize_token_info(self) -> bytes:
         """ Returns the serialization for token name and symbol

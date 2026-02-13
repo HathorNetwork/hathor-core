@@ -1,7 +1,7 @@
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
@@ -34,7 +34,7 @@ class WalletIndexTest(unittest.TestCase):
         self.manager.cpu_mining_service.resolve(tx1)
 
         # Change of parents only, so it's a twin
-        tx2 = vertex_deserializer.deserialize(tx1.get_struct())
+        tx2 = vertex_deserializer.deserialize(vertex_serializer.serialize(tx1))
         tx2.parents = [tx1.parents[1], tx1.parents[0]]
         self.manager.cpu_mining_service.resolve(tx2)
         self.assertNotEqual(tx1.hash, tx2.hash)

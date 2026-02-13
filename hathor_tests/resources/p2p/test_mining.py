@@ -3,7 +3,7 @@ import base64
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.p2p.resources import MiningResource
-from hathor.transaction.vertex_parser import vertex_deserializer
+from hathor.transaction.vertex_parser import vertex_deserializer, vertex_serializer
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 
 
@@ -30,14 +30,14 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         block.weight = 4
         self.manager.cpu_mining_service.resolve(block)
 
-        block_bytes = bytes(block)
+        block_bytes = vertex_serializer.serialize(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
         response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
         self.assertEqual(response_post.written[0], b'1')
 
         block.weight = 100
-        block_bytes = bytes(block)
+        block_bytes = vertex_serializer.serialize(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
         response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
@@ -55,7 +55,7 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         block.weight = 4
         self.manager.cpu_mining_service.resolve(block)
 
-        block_bytes = bytes(block)
+        block_bytes = vertex_serializer.serialize(block)
         block_bytes_str = base64.b64encode(block_bytes).decode('ascii')
 
         # missing post data

@@ -195,7 +195,8 @@ class DifficultyAdjustmentAlgorithm:
         if tx.is_genesis:
             return self._settings.MIN_TX_WEIGHT
 
-        tx_size = len(tx.get_struct())
+        from hathor.transaction.vertex_parser import vertex_serializer
+        tx_size = len(vertex_serializer.serialize(tx))
 
         # We need to take into consideration the decimal places because it is inside the amount.
         # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.

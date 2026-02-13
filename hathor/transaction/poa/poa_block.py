@@ -19,7 +19,6 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings
-from hathor.serialization import Serializer
 from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
 
@@ -57,14 +56,6 @@ class PoaBlock(Block):
         )
         self.signer_id = signer_id
         self.signature = signature
-
-    @override
-    def get_graph_struct(self) -> bytes:
-        from hathor.transaction.vertex_parser._block import serialize_poa_block_graph_fields
-        assert len(self.signer_id) == poa.SIGNER_ID_LEN
-        serializer = Serializer.build_bytes_serializer()
-        serialize_poa_block_graph_fields(serializer, self)
-        return bytes(serializer.finalize())
 
     @override
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:

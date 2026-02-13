@@ -96,7 +96,8 @@ class MiningResource(Resource):
                 return json_dumpb({'success': False, 'message': 'Invalid address'})
 
         block = self.manager.generate_mining_block(address=address)
-        block_bytes = block.get_struct()
+        from hathor.transaction.vertex_parser import vertex_serializer
+        block_bytes = vertex_serializer.serialize(block)
 
         data = {
             'parents': [x.hex() for x in block.parents],
