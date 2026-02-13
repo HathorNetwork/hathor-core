@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
+from structlog import get_logger
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.get_settings import get_global_settings
@@ -31,8 +32,9 @@ from hathor.conf.settings import HathorSettings
 from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.p2p.peer_endpoint import PeerEndpoint
-from hathor.p2p.peer_id import PeerId
 from hathor.transaction.genesis import get_representation_for_all_genesis
+
+logger = get_logger()
 
 
 def discover_hostname(timeout: float | None = None) -> Optional[str]:
@@ -141,28 +143,6 @@ def parse_file(text: str, *, header: Optional[str] = None) -> list[str]:
     stripped_lines = (line.strip() for line in lines)
     nonblank_lines = filter(lambda line: line and not line.startswith('#'), stripped_lines)
     return list(nonblank_lines)
-
-
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[PeerId]:
-    """ Parses the list of whitelist peer ids
-
-    Example:
-
-    parse_whitelist('''hathor-whitelist
-# node1
- 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-
-# node3
-G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-''')
-    {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
-
-    """
-    lines = parse_file(text, header=header)
-    return {PeerId(line.split()[0]) for line in lines}
 
 
 def format_address(addr: IAddress) -> str:
