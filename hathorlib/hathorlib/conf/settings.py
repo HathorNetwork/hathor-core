@@ -380,7 +380,11 @@ class HathorSettings(BaseModel):
     # Max Number of each connection slot (int):
     P2P_PEER_MAX_INCOMING_CONNECTIONS: int = 50
     P2P_PEER_MAX_OUTGOING_CONNECTIONS: int = 60
-    P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 15
+    P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 10
+    P2P_PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
+
+    # Queue size for each connection slot:
+    P2P_QUEUE_SIZE: int = 100
 
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
