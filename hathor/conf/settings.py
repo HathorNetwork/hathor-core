@@ -321,11 +321,17 @@ class HathorSettings(NamedTuple):
     # Number max of connections in the p2p network
     PEER_MAX_CONNECTIONS: int = 125
 
+    # Max Number of each connection slot (int):
+    PEER_MAX_ENTRYPOINTS: int = 40
+    PEER_MAX_OUTGOING_CONNECTIONS: int = 40
+    PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 40
+    PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
+
+    # Queue size for each connection slot:
+    QUEUE_SIZE: int = 100
+
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
-
-    # Maximum number of entrypoints that we accept that a peer broadcasts
-    PEER_MAX_ENTRYPOINTS: int = 30
 
     # Filepath of ca certificate file to generate connection certificates
     CA_FILEPATH: str = os.path.join(os.path.dirname(__file__), '../p2p/ca.crt')
