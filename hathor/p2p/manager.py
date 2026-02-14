@@ -87,7 +87,7 @@ class Slot:
             self.max_slot_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
 
         if self.type == HathorProtocol.ConnectionType.INCOMING:
-            self.max_slot_connections = _settings.PEER_MAX_ENTRYPOINTS
+            self.max_slot_connections = _settings.PEER_MAX_INCOMING_CONNECTIONS
 
         if self.type == HathorProtocol.ConnectionType.DISCOVERED:
             self.max_slot_connections = _settings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
@@ -1024,9 +1024,15 @@ class ConnectionsManager:
         assert protocol.peer.id is not None
         assert protocol.my_peer.id is not None
         other_connection = self.connected_peers[protocol.peer.id]
+        _outbound_types = (
+            HathorProtocol.ConnectionType.OUTGOING,
+            HathorProtocol.ConnectionType.DISCOVERED,
+            HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS,
+        )
+        is_outbound = protocol.connection_type in _outbound_types
         if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):
             # connection started by me is kept
-            if not protocol.connection_type:
+            if is_outbound:
                 # other connection is dropped
                 return other_connection
             else:
@@ -1034,7 +1040,7 @@ class ConnectionsManager:
                 return protocol
         else:
             # connection started by peer is kept
-            if not protocol.connection_type:
+            if is_outbound:
                 return protocol
             else:
                 return other_connection
