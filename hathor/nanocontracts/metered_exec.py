@@ -260,7 +260,9 @@ class MeteredExecutor:
         except NCFail:
             # Blueprint explicitly raised NCFail, preserve it
             raise
-        except Exception as e:
+        except BaseException as e:
+            # Catch BaseException to prevent malicious contracts from crashing
+            # the node via SystemExit, KeyboardInterrupt, or GeneratorExit.
             # Sandbox exceptions (SandboxOverflowError, SandboxTypeError,
             # SandboxMemoryError, SandboxRuntimeError) and any other exceptions
             # get converted to NCFail. Include exception type for debugging.

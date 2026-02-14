@@ -19,9 +19,8 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
-from hathorlib.conf.settings import HathorSettings as LibSettings
-
 from hathor.nanocontracts.sandbox import DISABLED_CONFIG, SandboxConfig
+from hathorlib.conf.settings import HathorSettings as LibSettings
 
 DECIMAL_PLACES = 2
 
@@ -102,16 +101,16 @@ class HathorSettings(LibSettings):
         return _resolve_sandbox_config(value)
 
     # Sandbox configuration for API view method calls (local, not consensus-critical).
-    # Use None or DISABLED_CONFIG to disable sandbox protection during API calls.
+    # Use DISABLED_CONFIG to disable sandbox protection during API calls.
     # Use DEFAULT_CONFIG_API (or a custom SandboxConfig) to enable it.
     # Runtime config file override can be specified via CLI --nc-sandbox-api-config-file argument.
-    NC_SANDBOX_CONFIG_API: SandboxConfig | None = None
+    NC_SANDBOX_CONFIG_API: SandboxConfig = DISABLED_CONFIG
 
     @field_validator('NC_SANDBOX_CONFIG_API', mode='before')
     @classmethod
-    def _parse_sandbox_config_api(cls, value: Union[str, SandboxConfig, None]) -> SandboxConfig | None:
+    def _parse_sandbox_config_api(cls, value: Union[str, SandboxConfig, None]) -> SandboxConfig:
         """Parse sandbox config for API views from YAML."""
-        return _resolve_sandbox_config_optional(value)
+        return _resolve_sandbox_config(value)
 
 
 def _resolve_sandbox_config(value: Union[str, SandboxConfig, None]) -> SandboxConfig:
@@ -132,13 +131,6 @@ def _resolve_sandbox_config(value: Union[str, SandboxConfig, None]) -> SandboxCo
     raise TypeError(
         f"sandbox config must be a dotted path string, SandboxConfig, or null, got: {type(value).__name__}"
     )
-
-
-def _resolve_sandbox_config_optional(value: Union[str, SandboxConfig, None]) -> SandboxConfig | None:
-    """Like _resolve_sandbox_config but allows None to pass through."""
-    if value is None:
-        return None
-    return _resolve_sandbox_config(value)
 
 
 def _import_sandbox_config(dotted_path: str) -> SandboxConfig:

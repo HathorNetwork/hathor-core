@@ -614,3 +614,115 @@ class HashConsistency(Blueprint):
         # Both hash operations should produce the same result
         contract = self.get_readonly_contract(contract_id)
         self.assertEqual(contract.hash1, contract.hash2)
+
+    # =========================================================================
+    # Category E: BaseException Escape Attacks
+    #
+    # Defense layers:
+    # 1. SystemExit/KeyboardInterrupt/GeneratorExit removed from EXEC_BUILTINS
+    #    (contract code gets NameError when trying to reference them)
+    # 2. except BaseException in MeteredExecutor.call() catches everything
+    #    (even if layer 1 is bypassed)
+    # =========================================================================
+
+    @timeout(10)
+    def test_e1_system_exit_not_in_builtins(self) -> None:
+        """E1: SystemExit must not be accessible to contract code.
+
+        SystemExit is removed from EXEC_BUILTINS. Attempting to reference it
+        should result in a NameError, converted to NCFail.
+        """
+        code = '''
+from hathor import Blueprint, Context, export, public
+
+@export
+class SystemExitAttack(Blueprint):
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def attack(self, ctx: Context) -> None:
+        raise SystemExit(0)
+'''
+        blueprint_id = self._register_blueprint_contents(
+            StringIO(code),
+            skip_verification=True,
+        )
+        contract_id = self.gen_random_contract_id()
+        self.runner = self.build_runner(sandbox_config=SandboxConfig(max_operations=1000))
+        self.runner.create_contract(contract_id, blueprint_id, self.create_context())
+
+        # SystemExit is not in builtins, so contract gets NameError -> NCFail
+        with self.assertRaises(NCFail) as cm:
+            self.runner.call_public_method(contract_id, 'attack', self.create_context())
+
+        self.assertIn('NameError', str(cm.exception))
+
+    @timeout(10)
+    def test_e2_keyboard_interrupt_not_in_builtins(self) -> None:
+        """E2: KeyboardInterrupt must not be accessible to contract code.
+
+        KeyboardInterrupt is removed from EXEC_BUILTINS. Attempting to
+        reference it should result in a NameError, converted to NCFail.
+        """
+        code = '''
+from hathor import Blueprint, Context, export, public
+
+@export
+class KeyboardInterruptAttack(Blueprint):
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def attack(self, ctx: Context) -> None:
+        raise KeyboardInterrupt()
+'''
+        blueprint_id = self._register_blueprint_contents(
+            StringIO(code),
+            skip_verification=True,
+        )
+        contract_id = self.gen_random_contract_id()
+        self.runner = self.build_runner(sandbox_config=SandboxConfig(max_operations=1000))
+        self.runner.create_contract(contract_id, blueprint_id, self.create_context())
+
+        # KeyboardInterrupt is not in builtins, so contract gets NameError -> NCFail
+        with self.assertRaises(NCFail) as cm:
+            self.runner.call_public_method(contract_id, 'attack', self.create_context())
+
+        self.assertIn('NameError', str(cm.exception))
+
+    @timeout(10)
+    def test_e3_generator_exit_not_in_builtins(self) -> None:
+        """E3: GeneratorExit must not be accessible to contract code.
+
+        GeneratorExit is removed from EXEC_BUILTINS. Attempting to
+        reference it should result in a NameError, converted to NCFail.
+        """
+        code = '''
+from hathor import Blueprint, Context, export, public
+
+@export
+class GeneratorExitAttack(Blueprint):
+    @public
+    def initialize(self, ctx: Context) -> None:
+        pass
+
+    @public
+    def attack(self, ctx: Context) -> None:
+        raise GeneratorExit()
+'''
+        blueprint_id = self._register_blueprint_contents(
+            StringIO(code),
+            skip_verification=True,
+        )
+        contract_id = self.gen_random_contract_id()
+        self.runner = self.build_runner(sandbox_config=SandboxConfig(max_operations=1000))
+        self.runner.create_contract(contract_id, blueprint_id, self.create_context())
+
+        # GeneratorExit is not in builtins, so contract gets NameError -> NCFail
+        with self.assertRaises(NCFail) as cm:
+            self.runner.call_public_method(contract_id, 'attack', self.create_context())
+
+        self.assertIn('NameError', str(cm.exception))

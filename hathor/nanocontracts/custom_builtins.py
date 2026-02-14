@@ -752,11 +752,14 @@ EXEC_BUILTINS: dict[str, Any] = {
     # 'BaseExceptionGroup': builtins.BaseExceptionGroup,
     # 'ExceptionGroup': builtins.ExceptionGroup,
 
-    # expose all other exception types:
+    # expose Exception-derived exception types only:
+    # SECURITY: BaseException, SystemExit, KeyboardInterrupt, and GeneratorExit
+    # are intentionally excluded. These are BaseException subclasses (not Exception
+    # subclasses) that could be used to crash the host process or interfere with
+    # the sandbox runtime. Contract code should only use Exception-derived types.
     'ArithmeticError': builtins.ArithmeticError,
     'AssertionError': builtins.AssertionError,
     'AttributeError': builtins.AttributeError,
-    'BaseException': builtins.BaseException,
     'BlockingIOError': builtins.BlockingIOError,
     'BrokenPipeError': builtins.BrokenPipeError,
     'BufferError': builtins.BufferError,
@@ -771,7 +774,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'FileExistsError': builtins.FileExistsError,
     'FileNotFoundError': builtins.FileNotFoundError,
     'FloatingPointError': builtins.FloatingPointError,
-    'GeneratorExit': builtins.GeneratorExit,
     'IOError': builtins.IOError,
     'ImportError': builtins.ImportError,
     'IndentationError': builtins.IndentationError,
@@ -779,7 +781,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'InterruptedError': builtins.InterruptedError,
     'IsADirectoryError': builtins.IsADirectoryError,
     'KeyError': builtins.KeyError,
-    'KeyboardInterrupt': builtins.KeyboardInterrupt,
     'LookupError': builtins.LookupError,
     'MemoryError': builtins.MemoryError,
     'ModuleNotFoundError': builtins.ModuleNotFoundError,
@@ -797,7 +798,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'StopIteration': builtins.StopIteration,
     'SyntaxError': builtins.SyntaxError,
     'SystemError': builtins.SystemError,
-    'SystemExit': builtins.SystemExit,
     'TabError': builtins.TabError,
     'TimeoutError': builtins.TimeoutError,
     'TypeError': builtins.TypeError,

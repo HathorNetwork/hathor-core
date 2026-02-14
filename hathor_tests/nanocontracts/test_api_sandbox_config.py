@@ -208,7 +208,7 @@ class BuilderSandboxConfigLoaderTest(unittest.TestCase):
         """Test that _get_or_create_sandbox_api_config_loader returns a disabled loader when nano is disabled."""
         mock_settings = Mock()
         mock_settings.ENABLE_NANO_CONTRACTS = False
-        mock_settings.NC_SANDBOX_CONFIG_API = None
+        mock_settings.NC_SANDBOX_CONFIG_API = DISABLED_CONFIG
 
         builder = Builder()
         builder._settings = mock_settings
@@ -225,7 +225,7 @@ class BuilderSandboxConfigLoaderTest(unittest.TestCase):
         """
         mock_settings = Mock()
         mock_settings.ENABLE_NANO_CONTRACTS = True
-        mock_settings.NC_SANDBOX_CONFIG_API = None  # No default config
+        mock_settings.NC_SANDBOX_CONFIG_API = DISABLED_CONFIG  # No default config
 
         builder = Builder()
         builder._settings = mock_settings
