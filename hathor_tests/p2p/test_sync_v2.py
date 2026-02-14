@@ -6,8 +6,10 @@ from unittest.mock import patch
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
+from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient
@@ -471,3 +473,224 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # force the processing of async code, nothing should break
         self.simulator.run(0)
+
+    def test_update_of_slots(self) -> None:
+
+        """
+            Tests whether the slot mechanism is updating with each extra connection.
+        """
+        # Number of peers to connect
+        max_total_peers = 5
+
+        # Create peer list
+        peerList = []
+        for _ in range(max_total_peers):
+            peerList.append(self.create_peer())
+
+        # Generate incoming connections - peerList[0] is the target.
+        in_connList = []
+        for i in range(1, max_total_peers):
+            in_connList.append(FakeConnection(peerList[0], peerList[i]))
+
+        for i in range(len(in_connList)):
+            self.simulator.add_connection(in_connList[i])
+
+        self.simulator.run(15)
+
+        # Checks whether it is updating incoming slot
+        self.assertTrue(len(peerList[0].connections.incoming_slot.connection_slot) == len(in_connList))
+
+        # Generate outgoing_connections - we'll make a new peer to be the outgoing reference.
+        # Add new peer:
+
+        newPeer = self.create_peer()
+        out_connList = []
+        for i in range(max_total_peers):
+            out_connList.append(FakeConnection(peerList[i], newPeer))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        self.simulator.run(15)
+
+        # Checks whether it is updating outgoing_slot
+        self.assertTrue(len(newPeer.connections.outgoing_slot.connection_slot) == len(out_connList))
+
+    def test_slot_limit(self) -> None:
+        """
+            Tests whether the slots and the pool stop increasing connections after cap is reached.
+        """
+
+        # Get the settings of the max_connections allowed. Put dummy values in HathorSettings.
+        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+
+        # Number of peers and thresholds of connections in slots and pool
+        max_number_outgoing_connections = 45  # Note: After around 100, no more peer ids in the pool ?
+        max_connections = _settings.PEER_MAX_CONNECTIONS
+        max_incoming_connections = _settings.PEER_MAX_ENTRYPOINTS
+        max_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_entrypoints = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+
+        # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
+        full_node = self.create_peer()
+
+        # -- Check incoming connections slot -- #
+
+        # Create peer list for incoming connections
+        in_peerList = []
+        for _ in range(max_number_outgoing_connections):
+            in_peerList.append(self.create_peer())
+
+        # Generate incoming connections - full_node is the target.
+        in_connList = []
+        for i in range(0, max_number_outgoing_connections):
+            in_connList.append(FakeConnection(full_node, in_peerList[i]))
+
+        for i in range(len(in_connList)):
+            self.simulator.add_connection(in_connList[i])
+
+        self.simulator.run(10)
+
+        number_incoming_slot = len(full_node.connections.incoming_slot.connection_slot)
+        # Checks whether the connection has capped on its limit size.
+        self.assertTrue(number_incoming_slot == max_incoming_connections)
+
+        # -- Check outgoing connections slot -- #
+
+        # Create peer list for outgoing connections
+        out_peerList = []
+        for _ in range(max_number_outgoing_connections):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(0, max_number_outgoing_connections):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        # Assure the outgoing connections cap at the threshold.
+        self.simulator.run(10)
+        number_outgoing_slot = len(full_node.connections.outgoing_slot.connection_slot)
+        self.assertTrue(number_outgoing_slot == max_outgoing_connections)
+
+        # Finally, assure the number of connected peers is the same as the sum of both.
+        # We put a "5" in assert due to the check_entrypoints slot.
+        connection_pool = full_node.connections.connections
+        self.assertTrue(number_outgoing_slot + number_incoming_slot + max_check_entrypoints == len(connection_pool))
+        self.assertTrue(len(connection_pool) <= max_connections)
+
+    def test_check_ep_update(self) -> None:
+        """
+            Checks whether the check_entrypoints slot gets updated after outgoing slot full.
+        """
+
+        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+
+        # Create exactly the amount of peers that the slot can handle
+        max_number_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_ep_connections = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+        full_node = self.create_peer()
+
+        out_peerList = []
+        for _ in range(max_number_outgoing_connections):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(0, max_number_outgoing_connections):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        # Assure the outgoing connections cap at the threshold.
+        self.simulator.run(10)
+
+        # Now, increase in one more connection, and see if the protocol is check_entrypoints type.
+        new_peer = self.create_peer()
+        out_peerList.append(new_peer)
+        conn = FakeConnection(new_peer, full_node)
+        out_connList.append(conn)
+        self.simulator.add_connection(conn)
+
+        self.simulator.run(2)
+
+        # Check if indeed a connection was updated into check_entrypoints after outgoing full
+        self.assertTrue(len(full_node.connections.check_entrypoints_slot.connection_slot) == 1)
+
+        # Let's keep adding more outgoing connections to the full node until it caps the check_entrypoints.
+        for _ in range(10):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(max_check_ep_connections + 5):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            self.simulator.add_connection(out_connList[i])
+
+        self.simulator.run(2)
+
+        # Amount of established connections in check_ep slot.
+        amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
+
+        # It passed through the cap of check_entrypoints. It mush be capped.
+        self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
+
+        # Assert the numbers add up to the max of connections.
+        total_conn = len(full_node.connections.connections)
+        self.assertTrue(amount_check_ep_conn + max_number_outgoing_connections == total_conn)
+
+    def test_check_ep_overflow(self) -> None:
+        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+
+        # Create exactly the amount of peers that the outgoing slot can handle
+        max_number_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_ep_connections = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+        full_node = self.create_peer()
+
+        out_peerList = []
+        for _ in range(max_number_outgoing_connections):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(0, max_number_outgoing_connections):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            if out_connList[i] not in self.simulator._connections:
+                self.simulator.add_connection(out_connList[i])
+
+        # Assure the outgoing connections cap at the threshold.
+        self.simulator.run(10)
+
+        # Let's keep adding more outgoing connections to the full node until it caps the check_entrypoints.
+        for _ in range(max_check_ep_connections):
+            out_peerList.append(self.create_peer())
+
+        # Generate outgoing connections - out_peerList[i] is the target.
+        out_connList = []
+        for i in range(max_check_ep_connections):
+            out_connList.append(FakeConnection(out_peerList[i], full_node))
+
+        for i in range(len(out_connList)):
+            if out_connList[i] not in self.simulator._connections:
+                self.simulator.add_connection(out_connList[i])
+
+        self.simulator.run(2)
+
+        # Amount of established connections in check_ep slot.
+        amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
+        print(amount_check_ep_conn)
+
+        self.simulator.run(30)
+
+        for conn in full_node.connections.check_entrypoints_slot.connection_slot:
+            self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)
+
+        # It passed through the cap of check_entrypoints. It mush be capped.
+        self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
