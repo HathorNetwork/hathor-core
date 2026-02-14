@@ -2,6 +2,8 @@ import pytest
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
+from hathor.nanocontracts.metered_exec import MeteredExecutor
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
 from hathor.transaction import Block, Transaction
@@ -407,17 +409,17 @@ if foo:
         assert nc2.is_nano_contract()
         assert nc3.is_nano_contract()
 
-        assert ocb1.get_blueprint_class().__name__ == 'Bet'
+        assert ocb1.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG)).__name__ == 'Bet'
         assert nc1.get_nano_header().nc_id == ocb1.hash
         blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb1.hash)
         assert blueprint_class.__name__ == 'Bet'
 
-        assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert ocb2.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG)).__name__ == 'TestBlueprint1'
         assert nc2.get_nano_header().nc_id == ocb2.hash
         blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb2.hash)
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
-        assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
+        assert ocb3.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG)).__name__ == 'MyBlueprint'
         assert nc3.get_nano_header().nc_id == ocb3.hash
         blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
         assert blueprint_class.__name__ == 'MyBlueprint'

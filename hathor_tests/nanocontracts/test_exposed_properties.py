@@ -4,8 +4,8 @@ from types import MethodType
 from typing import Any
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+from hathor.nanocontracts.sandbox import get_allowed_imports_dict
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 MAX_DEPTH = 20
@@ -261,7 +261,7 @@ class MyBlueprint(Blueprint):
         mutable_props.extend(search_writeable_properties(self, 'self'))
         mutable_props.extend(search_writeable_properties(ctx, 'ctx'))
         custom_import = EXEC_BUILTINS['__import__']
-        for module_name, import_names in ALLOWED_IMPORTS.items():
+        for module_name, import_names in get_allowed_imports_dict().items():
             module = custom_import(module_name, fromlist=list(import_names))
             for import_name in import_names:
                 obj = getattr(module, import_name)
