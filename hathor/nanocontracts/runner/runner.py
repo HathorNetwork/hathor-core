@@ -130,8 +130,7 @@ class Runner:
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
-        loading_executor: MeteredExecutor,
-        execution_executor: MeteredExecutor,
+        executor: MeteredExecutor,
     ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
@@ -139,8 +138,7 @@ class Runner:
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
-        self._loading_executor = loading_executor
-        self._execution_executor = execution_executor
+        self._executor = executor
 
         # Flag indicating to keep record of all calls.
         self._enable_call_trace = True
@@ -298,7 +296,7 @@ class Runner:
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        self._execution_executor.start()  # Enable sandbox at entry
+        self._executor.start()  # Enable sandbox at entry
 
         try:
             blueprint_id = self.get_blueprint_id(contract_id)
@@ -315,7 +313,7 @@ class Runner:
             self._commit_all_changes_to_storage()
             return ret
         finally:
-            self._execution_executor.end()  # Suspend sandbox at exit
+            self._executor.end()  # Suspend sandbox at exit
             # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
             self._updated_tokens_totals = defaultdict(int)
             self._paid_actions_fees = defaultdict(int)
@@ -659,7 +657,7 @@ class Runner:
 
         # Create sandbox counters tracker if sandbox is active
         sandbox_counters: SandboxCounters | None = None
-        if self._execution_executor.config.is_enabled:
+        if self._executor.config.is_enabled:
             sandbox_counters = SandboxCounters()
 
         call_record = CallRecord(
@@ -694,7 +692,7 @@ class Runner:
         #
         # Note: Counter reset happens at the entry point (_unsafe_call_public_method), not here.
         # This ensures nested/cross-contract calls accumulate operation counts correctly.
-        ret = self._execution_executor.call(method, args=(ctx.copy(), *args), reset_counters=False)
+        ret = self._executor.call(method, args=(ctx.copy(), *args), reset_counters=False)
 
         # Capture sandbox counters after the call
         if sandbox_counters is not None:
@@ -750,7 +748,7 @@ class Runner:
         # Reset charged blueprints for new call chain
         self._charged_blueprint_ids.clear()
 
-        self._execution_executor.start()  # Enable sandbox at entry
+        self._executor.start()  # Enable sandbox at entry
 
         try:
             return self._unsafe_call_view_method(
@@ -761,7 +759,7 @@ class Runner:
                 kwargs=kwargs,
             )
         finally:
-            self._execution_executor.end()  # Suspend sandbox at exit
+            self._executor.end()  # Suspend sandbox at exit
             self._reset_all_change_trackers()
 
     def _handle_index_update(self, action: NCAction) -> None:
@@ -837,7 +835,7 @@ class Runner:
 
         # Create sandbox counters tracker if sandbox is active
         sandbox_counters: SandboxCounters | None = None
-        if self._execution_executor.config.is_enabled:
+        if self._executor.config.is_enabled:
             sandbox_counters = SandboxCounters()
 
         call_record = CallRecord(
@@ -861,7 +859,7 @@ class Runner:
 
         # Note: Counter reset happens at the entry point (call_view_method), not here.
         # This ensures nested/cross-contract calls accumulate operation counts correctly.
-        ret = self._execution_executor.call(method, args=args, reset_counters=False)
+        ret = self._executor.call(method, args=args, reset_counters=False)
 
         # Capture sandbox counters after the call
         if sandbox_counters is not None:
@@ -1202,7 +1200,7 @@ class Runner:
 
         blueprint_class, loading_cost = self.tx_storage.get_blueprint_class_with_cost(
             blueprint_id,
-            executor=self._loading_executor,
+            executor=self._executor,
         )
         # Deduplicate: return None cost if already charged
         if already_charged:
@@ -1333,7 +1331,7 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.tx_storage.get_blueprint_class(blueprint_id, executor=self._loading_executor)
+        self.tx_storage.get_blueprint_class(blueprint_id, executor=self._executor)
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
@@ -1541,8 +1539,7 @@ class RunnerFactory:
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,
             seed=seed,
-            loading_executor=self.executor_factory.for_loading(),
-            execution_executor=self.executor_factory.for_execution(),
+            executor=self.executor_factory.for_execution(),
         )
 
     def create_for_api(
@@ -1564,6 +1561,5 @@ class RunnerFactory:
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,
             seed=None,  # API views don't need RNG
-            loading_executor=self.executor_factory.for_loading(),
-            execution_executor=self.executor_factory.for_api(),
+            executor=self.executor_factory.for_api(),
         )

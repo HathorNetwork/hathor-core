@@ -47,8 +47,7 @@ class TestRunner(Runner):
             settings=settings,
             reactor=reactor,
             seed=seed,
-            loading_executor=MeteredExecutor(config=DISABLED_CONFIG),
-            execution_executor=MeteredExecutor(config=sandbox_config),
+            executor=MeteredExecutor(config=sandbox_config),
         )
 
 
