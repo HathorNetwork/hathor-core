@@ -89,7 +89,7 @@ class Slot:
             self.max_slot_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
 
         if self.type == HathorProtocol.ConnectionType.INCOMING:
-            self.max_slot_connections = _settings.PEER_MAX_ENTRYPOINTS
+            self.max_slot_connections = _settings.PEER_MAX_INCOMING_CONNECTIONS
 
         if self.type == HathorProtocol.ConnectionType.DISCOVERED:
             self.max_slot_connections = _settings.PEER_MAX_DISCOVERED_PEERS_CONNECTIONS

@@ -522,12 +522,12 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         """
 
         # Get the settings of the max_connections allowed. Put dummy values in HathorSettings.
-        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
 
         # Number of peers and thresholds of connections in slots and pool
         max_number_outgoing_connections = 45  # Note: After around 100, no more peer ids in the pool ?
         max_connections = _settings.PEER_MAX_CONNECTIONS
-        max_incoming_connections = _settings.PEER_MAX_ENTRYPOINTS
+        max_incoming_connections = _settings.PEER_MAX_INCOMING_CONNECTIONS
         max_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
         max_check_entrypoints = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
 
@@ -586,7 +586,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             Checks whether the check_entrypoints slot gets updated after outgoing slot full.
         """
 
-        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
 
         # Create exactly the amount of peers that the slot can handle
         max_number_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
@@ -645,7 +645,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(amount_check_ep_conn + max_number_outgoing_connections == total_conn)
 
     def test_check_ep_overflow(self) -> None:
-        _settings = HathorSettings(bytes(1), bytes(1), "testnet")
+        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
 
         # Create exactly the amount of peers that the outgoing slot can handle
         max_number_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
