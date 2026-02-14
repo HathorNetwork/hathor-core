@@ -521,10 +521,10 @@ class HathorSettings(NamedTuple):
     NC_SANDBOX_CONFIG_EXECUTION: SandboxConfig = DISABLED_CONFIG
 
     # Sandbox configuration for API view method calls (local, not consensus-critical).
-    # Use None or DISABLED_CONFIG to disable sandbox protection during API calls.
+    # Use DISABLED_CONFIG to disable sandbox protection during API calls.
     # Use DEFAULT_CONFIG_API (or a custom SandboxConfig) to enable it.
     # Runtime config file override can be specified via CLI --nc-sandbox-api-config-file argument.
-    NC_SANDBOX_CONFIG_API: SandboxConfig | None = None
+    NC_SANDBOX_CONFIG_API: SandboxConfig = DISABLED_CONFIG
 
     @classmethod
     def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
@@ -632,13 +632,6 @@ def _resolve_sandbox_config(value: Union[str, SandboxConfig, None]) -> SandboxCo
     )
 
 
-def _resolve_sandbox_config_optional(value: Union[str, SandboxConfig, None]) -> SandboxConfig | None:
-    """Like _resolve_sandbox_config but allows None to pass through."""
-    if value is None:
-        return None
-    return _resolve_sandbox_config(value)
-
-
 def _import_sandbox_config(dotted_path: str) -> SandboxConfig:
     """Import a SandboxConfig from a fully-qualified Python dotted path.
 
@@ -718,5 +711,5 @@ _VALIDATORS = dict(
     _parse_sandbox_config_api=pydantic.field_validator(
         'NC_SANDBOX_CONFIG_API',
         mode='before',
-    )(_resolve_sandbox_config_optional),
+    )(_resolve_sandbox_config),
 )

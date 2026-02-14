@@ -33,7 +33,7 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.sandbox import DISABLED_CONFIG, MeteredExecutorFactory, SandboxAPIConfigLoader
+from hathor.nanocontracts.sandbox import MeteredExecutorFactory, SandboxAPIConfigLoader
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -236,7 +236,7 @@ class CliBuilder:
 
         # Create SandboxAPIConfigLoader — always created, loader handles disabled state
         self.sandbox_api_config_loader = SandboxAPIConfigLoader(
-            default_config=settings.NC_SANDBOX_CONFIG_API or DISABLED_CONFIG,
+            default_config=settings.NC_SANDBOX_CONFIG_API,
             config_file=self._args.nc_sandbox_api_config_file,
         )
 

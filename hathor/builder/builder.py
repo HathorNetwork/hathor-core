@@ -494,9 +494,8 @@ class Builder:
         """
         if self._sandbox_api_config_loader is None:
             settings = self._get_or_create_settings()
-            from hathor.nanocontracts.sandbox import DISABLED_CONFIG
             self._sandbox_api_config_loader = SandboxAPIConfigLoader(
-                default_config=settings.NC_SANDBOX_CONFIG_API or DISABLED_CONFIG,
+                default_config=settings.NC_SANDBOX_CONFIG_API,
                 config_file=self._sandbox_api_config_file,
             )
         return self._sandbox_api_config_loader
