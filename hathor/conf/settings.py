@@ -77,8 +77,8 @@ class HathorSettings(LibSettings):
     # Fee rate settings
     FEE_PER_OUTPUT: int = 1
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    @computed_field
     def FEE_DIVISOR(self) -> int:
         """Divisor used for evaluating fee amounts"""
         result = 1 / self.TOKEN_DEPOSIT_PERCENTAGE
@@ -92,13 +92,13 @@ class HathorSettings(LibSettings):
     INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
     MINIMUM_TOKEN_UNITS_PER_BLOCK: int = 8
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    @computed_field
     def INITIAL_TOKENS_PER_BLOCK(self) -> int:
         return self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES)
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    @computed_field
     def MINIMUM_TOKENS_PER_BLOCK(self) -> int:
         return self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES)
 
@@ -110,8 +110,8 @@ class HathorSettings(LibSettings):
     # Applying log to both sides:
     #   n > log2(initial / minimum)
     #   n > log2(initial) - log2(minimum)
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    @computed_field
     def MAXIMUM_NUMBER_OF_HALVINGS(self) -> int:
         return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
 
@@ -135,14 +135,14 @@ class HathorSettings(LibSettings):
     # Timestamp used for the genesis block
     GENESIS_BLOCK_TIMESTAMP: int = 1572636343
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    @computed_field
     def GENESIS_TX1_TIMESTAMP(self) -> int:
         """Timestamp used for the first genesis transaction."""
         return self.GENESIS_BLOCK_TIMESTAMP + 1
 
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    @computed_field
     def GENESIS_TX2_TIMESTAMP(self) -> int:
         """Timestamp used for the second genesis transaction."""
         return self.GENESIS_BLOCK_TIMESTAMP + 2
