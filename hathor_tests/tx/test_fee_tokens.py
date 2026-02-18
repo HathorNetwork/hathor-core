@@ -634,7 +634,7 @@ class FeeTokenTest(unittest.TestCase):
             'testnet',
             unlock_wallet=True,
             wallet_index=True,
-            settings=self._settings._replace(ENABLE_FEE_BASED_TOKENS=FeatureSetting.DISABLED),
+            settings=self._settings.model_copy(update={'ENABLE_FEE_BASED_TOKENS': FeatureSetting.DISABLED}),
         )
         with pytest.raises(InvalidNewTransaction) as e:
             create_fee_tokens(custom_manager, self.address_b58)

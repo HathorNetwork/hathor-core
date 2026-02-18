@@ -95,7 +95,7 @@ def get_settings(*, features: dict[Feature, Criteria]) -> HathorSettings:
         default_threshold=3,
         features=features,
     )
-    settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+    settings = get_global_settings().model_copy(update={'FEATURE_ACTIVATION': feature_settings})
     return settings
 
 
@@ -223,7 +223,7 @@ def test_get_state_from_started_to_locked_in_on_default_threshold(
             )
         }
     )
-    settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+    settings = get_global_settings().model_copy(update={'FEATURE_ACTIVATION': feature_settings})
     storage = get_storage(settings, up_to_height=block_height)
     service = FeatureService(settings=settings, tx_storage=storage)
     service.bit_signaling_service = Mock()
@@ -647,7 +647,7 @@ def test_check_must_signal(
             )
         }
     )
-    settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+    settings = get_global_settings().model_copy(update={'FEATURE_ACTIVATION': feature_settings})
     storage = get_storage(settings, up_to_height=block_height)
     service = FeatureService(settings=settings, tx_storage=storage)
     service.bit_signaling_service = Mock()

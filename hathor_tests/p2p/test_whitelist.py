@@ -16,7 +16,7 @@ from hathor_tests import unittest
 class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings().model_copy(update={'ENABLE_PEER_WHITELIST': True})
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -38,7 +38,7 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings().model_copy(update={'ENABLE_PEER_WHITELIST': True})
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -62,7 +62,7 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings().model_copy(update={'ENABLE_PEER_WHITELIST': True})
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})

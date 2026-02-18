@@ -11,8 +11,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from hathorlib.utils.yaml import model_from_yaml
-
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
@@ -24,6 +22,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf import MAINNET_SETTINGS_FILEPATH
 from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
 from hathor.conf.settings import DECIMAL_PLACES, GENESIS_TOKEN_UNITS, GENESIS_TOKENS, HathorSettings
+from hathorlib.utils.yaml import model_from_yaml
 
 
 @pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])

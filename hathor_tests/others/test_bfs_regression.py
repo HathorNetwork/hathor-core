@@ -21,7 +21,7 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder
 class TestBfsRegression(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)  # for simplicity
+        settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})  # for simplicity
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
         self.manager = self.create_peer_from_builder(builder)

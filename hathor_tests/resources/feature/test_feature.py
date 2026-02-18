@@ -69,15 +69,17 @@ def web() -> StubSite:
         Feature.NOP_FEATURE_2: FeatureInfo(state=FeatureState.LOCKED_IN, criteria=nop_feature_2_criteria),
     })
 
-    settings = get_global_settings()._replace(
-        FEATURE_ACTIVATION=FeatureSettings(
-            evaluation_interval=4,
-            default_threshold=3,
-            features={
-                Feature.NOP_FEATURE_1: nop_feature_1_criteria,
-                Feature.NOP_FEATURE_2: nop_feature_2_criteria
-            }
-        )
+    settings = get_global_settings().model_copy(
+        update={
+            'FEATURE_ACTIVATION': FeatureSettings(
+                evaluation_interval=4,
+                default_threshold=3,
+                features={
+                    Feature.NOP_FEATURE_1: nop_feature_1_criteria,
+                    Feature.NOP_FEATURE_2: nop_feature_2_criteria
+                }
+            )
+        }
     )
 
     feature_resource = FeatureResource(
