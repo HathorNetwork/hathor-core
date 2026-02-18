@@ -5,18 +5,24 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
-from typing import NamedTuple
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict
+
+from hathorlib.conf.utils import parse_hex_str
 
 
-class HathorSettings(NamedTuple):
+class HathorSettings(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
     # Name of the network: "mainnet", "testnet-alpha", "testnet-bravo", ...
     NETWORK_NAME: str
 
     # Version byte of the address in P2PKH
-    P2PKH_VERSION_BYTE: bytes
+    P2PKH_VERSION_BYTE: Annotated[bytes, BeforeValidator(parse_hex_str)]
 
     # Version byte of the address in MultiSig
-    MULTISIG_VERSION_BYTE: bytes
+    MULTISIG_VERSION_BYTE: Annotated[bytes, BeforeValidator(parse_hex_str)]
 
     # HTR Token UID
     HATHOR_TOKEN_UID: bytes = b'\x00'

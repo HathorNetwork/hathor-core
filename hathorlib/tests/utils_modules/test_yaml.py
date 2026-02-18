@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from structlog import get_logger
 
-from hathor.utils.yaml import dict_from_extended_yaml, dict_from_yaml
+from hathorlib.utils.yaml import dict_from_extended_yaml, dict_from_yaml
 
 logger = get_logger()
 
@@ -143,3 +143,4 @@ def test_dict_from_yaml_mainnet_extends():
     result = dict_from_extended_yaml(filepath=filepath, custom_root=Path(MAINNET_SETTINGS_FILEPATH).parent)
 
     assert result == dict(**mainnet_dict, a='aa', b=dict(d='dd', e='ee'))
+

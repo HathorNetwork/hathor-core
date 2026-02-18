@@ -11,20 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import os
 from enum import StrEnum, auto, unique
 from math import log
-from pathlib import Path
-from typing import NamedTuple, Optional, Union
+from typing import Annotated, Any, Optional, Union
 
-import pydantic
+from pydantic import BeforeValidator, computed_field, field_validator, model_validator
+from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
-from hathor.utils import yaml
-from hathor.utils.named_tuple import validated_named_tuple_from_dict
+from hathorlib.conf.settings import HathorSettings as LibSettings
+from hathorlib.conf.utils import parse_hex_str
 
 DECIMAL_PLACES = 2
 
@@ -59,16 +58,7 @@ class FeatureSetting(StrEnum):
         return self in (FeatureSetting.ENABLED, FeatureSetting.FEATURE_ACTIVATION)
 
 
-class HathorSettings(NamedTuple):
-    # Version byte of the address in P2PKH
-    P2PKH_VERSION_BYTE: bytes
-
-    # Version byte of the address in MultiSig
-    MULTISIG_VERSION_BYTE: bytes
-
-    # Name of the network: "mainnet", "testnet-alpha", "testnet-bravo", ...
-    NETWORK_NAME: str
-
+class HathorSettings(LibSettings):
     # Initial bootstrap servers
     BOOTSTRAP_DNS: list[str] = []
 
@@ -79,8 +69,6 @@ class HathorSettings(NamedTuple):
     # always be enabled for sync-v1 if it is enabled
     USE_PEER_WHITELIST_ON_SYNC_V2: bool = True
 
-    DECIMAL_PLACES: int = DECIMAL_PLACES
-
     # Genesis pre-mined tokens
     GENESIS_TOKEN_UNITS: int = GENESIS_TOKEN_UNITS
 
@@ -90,6 +78,7 @@ class HathorSettings(NamedTuple):
     FEE_PER_OUTPUT: int = 1
 
     @property
+    @computed_field
     def FEE_DIVISOR(self) -> int:
         """Divisor used for evaluating fee amounts"""
         result = 1 / self.TOKEN_DEPOSIT_PERCENTAGE
@@ -104,12 +93,14 @@ class HathorSettings(NamedTuple):
     MINIMUM_TOKEN_UNITS_PER_BLOCK: int = 8
 
     @property
+    @computed_field
     def INITIAL_TOKENS_PER_BLOCK(self) -> int:
-        return self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10 ** DECIMAL_PLACES)
+        return self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES)
 
     @property
+    @computed_field
     def MINIMUM_TOKENS_PER_BLOCK(self) -> int:
-        return self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10 ** DECIMAL_PLACES)
+        return self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES)
 
     # Assume that: amount < minimum
     # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
@@ -120,6 +111,7 @@ class HathorSettings(NamedTuple):
     #   n > log2(initial / minimum)
     #   n > log2(initial) - log2(minimum)
     @property
+    @computed_field
     def MAXIMUM_NUMBER_OF_HALVINGS(self) -> int:
         return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
 
@@ -134,7 +126,9 @@ class HathorSettings(NamedTuple):
     # >>> import base58
     # >>> address = base58.b58decode('HMcJymyctyhnWsWTXqhP9txDwgNZaMWf42')
     # >>> P2PKH.create_output_script(address=address).hex()
-    GENESIS_OUTPUT_SCRIPT: bytes = bytes.fromhex('76a914a584cf48b161e4a49223ed220df30037ab740e0088ac')
+    GENESIS_OUTPUT_SCRIPT: Annotated[bytes, BeforeValidator(parse_hex_str)] = (
+        bytes.fromhex("76a914a584cf48b161e4a49223ed220df30037ab740e0088ac")
+    )
 
     # Genesis timestamps, nonces and hashes
 
@@ -142,28 +136,35 @@ class HathorSettings(NamedTuple):
     GENESIS_BLOCK_TIMESTAMP: int = 1572636343
 
     @property
+    @computed_field
     def GENESIS_TX1_TIMESTAMP(self) -> int:
         """Timestamp used for the first genesis transaction."""
         return self.GENESIS_BLOCK_TIMESTAMP + 1
 
     @property
+    @computed_field
     def GENESIS_TX2_TIMESTAMP(self) -> int:
         """Timestamp used for the second genesis transaction."""
         return self.GENESIS_BLOCK_TIMESTAMP + 2
 
     GENESIS_BLOCK_NONCE: int = 3526202
-    GENESIS_BLOCK_HASH: bytes = bytes.fromhex('000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038')
+    GENESIS_BLOCK_HASH: Annotated[bytes, BeforeValidator(parse_hex_str)] = (
+        bytes.fromhex(
+            "000007eb968a6cdf0499e2d033faf1e163e0dc9cf41876acad4d421836972038"
+        )
+    )
     GENESIS_TX1_NONCE: int = 12595
-    GENESIS_TX1_HASH: bytes = bytes.fromhex('00025d75e44804a6a6a099f4320471c864b38d37b79b496ee26080a2a1fd5b7b')
+    GENESIS_TX1_HASH: Annotated[bytes, BeforeValidator(parse_hex_str)] = bytes.fromhex(
+        "00025d75e44804a6a6a099f4320471c864b38d37b79b496ee26080a2a1fd5b7b"
+    )
     GENESIS_TX2_NONCE: int = 21301
-    GENESIS_TX2_HASH: bytes = bytes.fromhex('0002c187ab30d4f61c11a5dc43240bdf92dba4d19f40f1e883b0a5fdac54ef53')
+    GENESIS_TX2_HASH: Annotated[bytes, BeforeValidator(parse_hex_str)] = bytes.fromhex(
+        "0002c187ab30d4f61c11a5dc43240bdf92dba4d19f40f1e883b0a5fdac54ef53"
+    )
 
     # Weight of genesis and minimum weight of a tx/block
     MIN_BLOCK_WEIGHT: int = 21
-    MIN_TX_WEIGHT: int = 14
     MIN_SHARE_WEIGHT: int = 21
-
-    HATHOR_TOKEN_UID: bytes = HATHOR_TOKEN_UID
 
     # Maximum distance between two consecutive blocks (in seconds), except for genesis.
     # This prevent some DoS attacks exploiting the calculation of the score of a side chain.
@@ -282,9 +283,6 @@ class HathorSettings(NamedTuple):
     # If should use stratum to resolve pow of transactions in send tokens resource
     SEND_TOKENS_STRATUM: bool = True
 
-    # Maximum size of the tx output's script allowed by the /push-tx API.
-    PUSHTX_MAX_OUTPUT_SCRIPT_SIZE: int = 256
-
     # Maximum number of subscribed addresses per websocket connection
     WS_MAX_SUBS_ADDRS_CONN: Optional[int] = None
 
@@ -298,6 +296,18 @@ class HathorSettings(NamedTuple):
     # The same percentage is used to calculate the number of HTR that must be withdraw when melting tokens
     # See for further information, see [rfc 0011-token-deposit].
     TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
+
+    @field_validator('TOKEN_DEPOSIT_PERCENTAGE', mode='after')
+    @classmethod
+    def _validate_token_deposit_percentage(cls, token_deposit_percentage: float) -> float:
+        """Validate that TOKEN_DEPOSIT_PERCENTAGE results in an integer FEE_DIVISOR."""
+        result = 1 / token_deposit_percentage
+        if not result.is_integer():
+            raise ValueError(
+                f'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR. '
+                f'Got TOKEN_DEPOSIT_PERCENTAGE={token_deposit_percentage}, FEE_DIVISOR={result}'
+            )
+        return token_deposit_percentage
 
     # Array with the settings parameters that are used when calculating the settings hash
     P2P_SETTINGS_HASH_FIELDS: list[str] = [
@@ -339,18 +349,6 @@ class HathorSettings(NamedTuple):
     # Number of retries for downloading a tx from a peer (in the downloader)
     GET_DATA_RETRIES: int = 5
 
-    # Maximum number of characters in a token name
-    MAX_LENGTH_TOKEN_NAME: int = 30
-
-    # Maximum number of characters in a token symbol
-    MAX_LENGTH_TOKEN_SYMBOL: int = 5
-
-    # Name of the Hathor token
-    HATHOR_TOKEN_NAME: str = 'Hathor'
-
-    # Symbol of the Hathor token
-    HATHOR_TOKEN_SYMBOL: str = 'HTR'
-
     # After how many blocks can a reward be spent
     REWARD_SPEND_MIN_BLOCKS: int = 300
 
@@ -389,12 +387,6 @@ class HathorSettings(NamedTuple):
     # Maximum number of TXs that will be sent by the Mempool API.
     MEMPOOL_API_TX_LIMIT: int = 100
 
-    # Multiplier coefficient to adjust the minimum weight of a normal tx to 18
-    MIN_TX_WEIGHT_COEFFICIENT: float = 1.6
-
-    # Amount in which tx min weight reaches the middle point between the minimum and maximum weight
-    MIN_TX_WEIGHT_K: int = 100
-
     # Capabilities
     CAPABILITY_WHITELIST: str = 'whitelist'
     CAPABILITY_SYNC_VERSION: str = 'sync-version'
@@ -423,14 +415,29 @@ class HathorSettings(NamedTuple):
     # Block checkpoints
     CHECKPOINTS: list[Checkpoint] = []
 
+    @field_validator('CHECKPOINTS', mode='before')
+    @classmethod
+    def _parse_checkpoints(cls, checkpoints: Union[dict[int, str], list[Checkpoint]]) -> list[Checkpoint]:
+        """Parse a dictionary of raw checkpoint data into a list of checkpoints."""
+        if isinstance(checkpoints, dict):
+            return [
+                Checkpoint(height, bytes.fromhex(_hash))
+                for height, _hash in checkpoints.items()
+            ]
+
+        if not isinstance(checkpoints, list):
+            raise TypeError(f'expected \'dict[int, str]\' or \'list[Checkpoint]\', got {checkpoints}')
+
+        return checkpoints
+
     # Used on testing to enable slow asserts that help catch bugs but we don't want to run in production
     SLOW_ASSERTS: bool = False
 
     # List of soft voided transaction.
-    SOFT_VOIDED_TX_IDS: list[bytes] = []
+    SOFT_VOIDED_TX_IDS: list[Annotated[bytes, BeforeValidator(parse_hex_str)]] = []
 
     # List of transactions to skip verification.
-    SKIP_VERIFICATION: list[bytes] = []
+    SKIP_VERIFICATION: list[Annotated[bytes, BeforeValidator(parse_hex_str)]] = []
 
     # Identifier used in metadata's voided_by to mark a tx as soft-voided.
     SOFT_VOIDED_ID: bytes = b'tx-non-grata'
@@ -452,6 +459,14 @@ class HathorSettings(NamedTuple):
 
     # All settings related to Feature Activation
     FEATURE_ACTIVATION: FeatureActivationSettings = FeatureActivationSettings()
+
+    @field_validator('FEATURE_ACTIVATION', mode='before')
+    @classmethod
+    def parse_feature_activation(cls, v: dict[str, Any]) -> FeatureActivationSettings:
+        if isinstance(v, dict):
+            return FeatureActivationSettings.model_validate(v)
+        else:
+            return v
 
     # Maximum number of GET_TIPS delayed calls per connection while running sync.
     MAX_GET_TIPS_DELAYED_CALLS: int = 5
@@ -491,6 +506,18 @@ class HathorSettings(NamedTuple):
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}
 
+    @field_validator('BLUEPRINTS', mode='before')
+    @classmethod
+    def _parse_blueprints(cls, blueprints_raw: dict[str, str]) -> dict[bytes, str]:
+        """Parse dict[str, str] into dict[bytes, str]."""
+        blueprints: dict[bytes, str] = {}
+        for _id_str, _name in blueprints_raw.items():
+            _id = bytes.fromhex(_id_str)
+            if _id in blueprints:
+                raise TypeError(f'Duplicate blueprint id: {_id_str}')
+            blueprints[_id] = _name
+        return blueprints
+
     # The consensus algorithm protocol settings.
     CONSENSUS_ALGORITHM: ConsensusSettings = PowSettings()
 
@@ -503,12 +530,6 @@ class HathorSettings(NamedTuple):
     NC_ON_CHAIN_BLUEPRINT_RESTRICTED: bool = True
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES: list[str] = []
 
-    # Max length in bytes allowed for on-chain blueprint code after decompression, 240KB (not KiB)
-    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_UNCOMPRESSED: int = 240_000
-
-    # Max length in bytes allowed for on-chain blueprint code inside the transaction, 24KB (not KiB)
-    NC_ON_CHAIN_BLUEPRINT_CODE_MAX_SIZE_COMPRESSED: int = 24_000
-
     # TODO: align this with a realistic value later
     # fuel units are arbitrary but it's roughly the number of opcodes, memory_limit is in bytes
     NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE: int = 100_000  # 100K opcodes
@@ -516,130 +537,29 @@ class HathorSettings(NamedTuple):
     NC_INITIAL_FUEL_TO_CALL_METHOD: int = 1_000_000  # 1M opcodes
     NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
 
-    @classmethod
-    def from_yaml(cls, *, filepath: str) -> 'HathorSettings':
-        """Takes a filepath to a yaml file and returns a validated HathorSettings instance."""
-        settings_dict = yaml.dict_from_extended_yaml(filepath=filepath, custom_root=Path(__file__).parent)
+    @model_validator(mode='after')
+    def _validate_consensus_algorithm(self) -> Self:
+        """Validate that if Proof-of-Authority is enabled, block rewards must not be set."""
+        consensus_algorithm = self.CONSENSUS_ALGORITHM
+        if consensus_algorithm.is_pow():
+            return self
 
-        return validated_named_tuple_from_dict(
-            HathorSettings,
-            settings_dict,
-            validators=_VALIDATORS
-        )
+        if (self.BLOCKS_PER_HALVING is not None or
+            self.INITIAL_TOKEN_UNITS_PER_BLOCK != 0 or
+                self.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
+            raise ValueError('PoA networks do not support block rewards')
+        return self
 
+    @model_validator(mode='after')
+    def _validate_genesis_tokens(self) -> Self:
+        """Validate genesis tokens."""
+        genesis_tokens = self.GENESIS_TOKENS
+        genesis_token_units = self.GENESIS_TOKEN_UNITS
+        decimal_places = self.DECIMAL_PLACES
 
-def _parse_checkpoints(checkpoints: Union[dict[int, str], list[Checkpoint]]) -> list[Checkpoint]:
-    """Parse a dictionary of raw checkpoint data into a list of checkpoints."""
-    if isinstance(checkpoints, dict):
-        return [
-            Checkpoint(height, bytes.fromhex(_hash))
-            for height, _hash in checkpoints.items()
-        ]
-
-    if not isinstance(checkpoints, list):
-        raise TypeError(f'expected \'dict[int, str]\' or \'list[Checkpoint]\', got {checkpoints}')
-
-    return checkpoints
-
-
-def _parse_blueprints(blueprints_raw: dict[str, str]) -> dict[bytes, str]:
-    """Parse dict[str, str] into dict[bytes, str]."""
-    blueprints: dict[bytes, str] = {}
-    for _id_str, _name in blueprints_raw.items():
-        _id = bytes.fromhex(_id_str)
-        if _id in blueprints:
-            raise TypeError(f'Duplicate blueprint id: {_id_str}')
-        blueprints[_id] = _name
-    return blueprints
-
-
-def parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
-    """Parse a raw hex string into bytes."""
-    if isinstance(hex_str, str):
-        return bytes.fromhex(hex_str.lstrip('x'))
-
-    if not isinstance(hex_str, bytes):
-        raise ValueError(f'expected \'str\' or \'bytes\', got {hex_str}')
-
-    return hex_str
-
-
-def _validate_consensus_algorithm(model: HathorSettings) -> HathorSettings:
-    """Validate that if Proof-of-Authority is enabled, block rewards must not be set."""
-    consensus_algorithm = model.CONSENSUS_ALGORITHM
-    if consensus_algorithm.is_pow():
-        return model
-
-    if (model.BLOCKS_PER_HALVING is not None or
-        model.INITIAL_TOKEN_UNITS_PER_BLOCK != 0 or
-            model.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
-        raise ValueError('PoA networks do not support block rewards')
-    return model
-
-
-def _validate_tokens(model: HathorSettings) -> HathorSettings:
-    """Validate genesis tokens."""
-    genesis_tokens = model.GENESIS_TOKENS
-    genesis_token_units = model.GENESIS_TOKEN_UNITS
-    decimal_places = model.DECIMAL_PLACES
-
-    if genesis_tokens != genesis_token_units * (10 ** decimal_places):
-        raise ValueError(
-            f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
-            f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
-        )
-    return model
-
-
-def _validate_token_deposit_percentage(token_deposit_percentage: float) -> float:
-    """Validate that TOKEN_DEPOSIT_PERCENTAGE results in an integer FEE_DIVISOR."""
-    result = 1 / token_deposit_percentage
-    if not result.is_integer():
-        raise ValueError(
-            f'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR. '
-            f'Got TOKEN_DEPOSIT_PERCENTAGE={token_deposit_percentage}, FEE_DIVISOR={result}'
-        )
-    return token_deposit_percentage
-
-
-_VALIDATORS = dict(
-    _parse_hex_str=pydantic.field_validator(
-        'P2PKH_VERSION_BYTE',
-        'MULTISIG_VERSION_BYTE',
-        'GENESIS_OUTPUT_SCRIPT',
-        'GENESIS_BLOCK_HASH',
-        'GENESIS_TX1_HASH',
-        'GENESIS_TX2_HASH',
-        mode='before',
-    )(parse_hex_str),
-    _parse_soft_voided_tx_id=pydantic.field_validator(
-        'SOFT_VOIDED_TX_IDS',
-        mode='before',
-    )(lambda v: [parse_hex_str(x) for x in v] if isinstance(v, list) else v),
-    _parse_skipped_verification_tx_id=pydantic.field_validator(
-        'SKIP_VERIFICATION',
-        mode='before',
-    )(lambda v: [parse_hex_str(x) for x in v] if isinstance(v, list) else v),
-    _parse_checkpoints=pydantic.field_validator(
-        'CHECKPOINTS',
-        mode='before',
-    )(_parse_checkpoints),
-    _parse_blueprints=pydantic.field_validator(
-        'BLUEPRINTS',
-        mode='before',
-    )(_parse_blueprints),
-    _validate_consensus_algorithm=pydantic.model_validator(
-        mode='after',
-    )(_validate_consensus_algorithm),
-    _validate_tokens=pydantic.model_validator(
-        mode='after',
-    )(_validate_tokens),
-    _validate_token_deposit_percentage=pydantic.field_validator(
-        'TOKEN_DEPOSIT_PERCENTAGE',
-        mode='after',
-    )(_validate_token_deposit_percentage),
-    _parse_feature_activation=pydantic.field_validator(
-        'FEATURE_ACTIVATION',
-        mode='before',
-    )(lambda v: FeatureActivationSettings.model_validate(v) if isinstance(v, dict) else v),
-)
+        if genesis_tokens != genesis_token_units * (10 ** decimal_places):
+            raise ValueError(
+                f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
+                f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
+            )
+        return self

@@ -40,14 +40,14 @@ def get_settings(
         signers.append(poa_settings)
 
     settings = get_global_settings()
-    settings = settings._replace(
-        AVG_TIME_BETWEEN_BLOCKS=time_between_blocks or settings.AVG_TIME_BETWEEN_BLOCKS,
-        BLOCKS_PER_HALVING=None,
-        INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-        MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-        CONSENSUS_ALGORITHM=PoaSettings(
+    settings = settings.model_copy(update={
+        'AVG_TIME_BETWEEN_BLOCKS': time_between_blocks or settings.AVG_TIME_BETWEEN_BLOCKS,
+        'BLOCKS_PER_HALVING': None,
+        'INITIAL_TOKEN_UNITS_PER_BLOCK': 0,
+        'MINIMUM_TOKEN_UNITS_PER_BLOCK': 0,
+        'CONSENSUS_ALGORITHM': PoaSettings(
             type=ConsensusType.PROOF_OF_AUTHORITY,
             signers=tuple(signers),
         ),
-    )
+    })
     return settings

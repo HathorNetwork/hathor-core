@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from hathorlib.utils.yaml import model_from_yaml
 
 from pathlib import Path
 from typing import Any
@@ -66,7 +67,7 @@ def test_valid_hathor_settings_from_yaml(filepath):
         BLOCK_DIFFICULTY_N_BLOCKS=20,
     )
 
-    assert expected_hathor_settings == HathorSettings.from_yaml(filepath=settings_filepath)
+    assert expected_hathor_settings == model_from_yaml(HathorSettings, filepath=settings_filepath)
 
 
 @pytest.mark.parametrize(
@@ -84,7 +85,7 @@ def test_invalid_hathor_settings_from_yaml(filepath, error):
     settings_filepath = str(parent_dir / filepath)
 
     with pytest.raises(ValidationError) as e:
-        HathorSettings.from_yaml(filepath=settings_filepath)
+        model_from_yaml(HathorSettings, filepath=settings_filepath)
 
     errors = e.value.errors()
     assert errors[0]['msg'] == error
@@ -96,7 +97,7 @@ def test_missing_hathor_settings_from_yaml(filepath):
     settings_filepath = str(parent_dir / filepath)
 
     with pytest.raises(TypeError) as e:
-        HathorSettings.from_yaml(filepath=settings_filepath)
+        model_from_yaml(HathorSettings, filepath=settings_filepath)
 
     assert "missing 1 required positional argument: 'NETWORK_NAME'" in str(e.value)
 
@@ -115,7 +116,7 @@ def test_tokens() -> None:
             GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
             DECIMAL_PLACES=DECIMAL_PLACES,
         ))
-        HathorSettings.from_yaml(filepath='some_path')
+        model_from_yaml(HathorSettings, filepath='some_path')
 
         # Test failures
         mock_settings(dict(
@@ -124,7 +125,7 @@ def test_tokens() -> None:
             DECIMAL_PLACES=DECIMAL_PLACES,
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert (
             'invalid tokens: GENESIS_TOKENS=100000000001, GENESIS_TOKEN_UNITS=1000000000, DECIMAL_PLACES=2'
         ) in str(e.value)
@@ -135,7 +136,7 @@ def test_tokens() -> None:
             DECIMAL_PLACES=DECIMAL_PLACES,
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert (
             'invalid tokens: GENESIS_TOKENS=100000000000, GENESIS_TOKEN_UNITS=1000000001, DECIMAL_PLACES=2'
         ) in str(e.value)
@@ -146,7 +147,7 @@ def test_tokens() -> None:
             DECIMAL_PLACES=DECIMAL_PLACES + 1,
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert (
             'invalid tokens: GENESIS_TOKENS=100000000000, GENESIS_TOKEN_UNITS=1000000000, DECIMAL_PLACES=3'
         ) in str(e.value)
@@ -162,19 +163,19 @@ def test_token_deposit_percentage() -> None:
     with patch('hathor.conf.settings.yaml', yaml_mock):
         # Test default value passes (0.01 results in FEE_DIVISOR=100)
         mock_settings(dict(TOKEN_DEPOSIT_PERCENTAGE=0.01))
-        HathorSettings.from_yaml(filepath='some_path')
+        model_from_yaml(HathorSettings, filepath='some_path')
 
         # Test fails when TOKEN_DEPOSIT_PERCENTAGE results in non-integer FEE_DIVISOR (0.03 -> 33.333...)
         mock_settings(dict(TOKEN_DEPOSIT_PERCENTAGE=0.03))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR' in str(e.value)
         assert 'TOKEN_DEPOSIT_PERCENTAGE=0.03' in str(e.value)
 
         # Test fails when TOKEN_DEPOSIT_PERCENTAGE results in non-integer FEE_DIVISOR (0.07 -> 14.285...)
         mock_settings(dict(TOKEN_DEPOSIT_PERCENTAGE=0.07))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR' in str(e.value)
         assert 'TOKEN_DEPOSIT_PERCENTAGE=0.07' in str(e.value)
 
@@ -189,7 +190,7 @@ def test_consensus_algorithm() -> None:
     with patch('hathor.conf.settings.yaml', yaml_mock):
         # Test passes when PoA is disabled with default settings
         mock_settings(dict())
-        HathorSettings.from_yaml(filepath='some_path')
+        model_from_yaml(HathorSettings, filepath='some_path')
 
         # Test fails when PoA is enabled with default settings
         mock_settings(dict(
@@ -199,7 +200,7 @@ def test_consensus_algorithm() -> None:
             )
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
 
         # Test passes when PoA is enabled without block rewards
@@ -209,7 +210,7 @@ def test_consensus_algorithm() -> None:
             MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
-        HathorSettings.from_yaml(filepath='some_path')
+        model_from_yaml(HathorSettings, filepath='some_path')
 
         # Test fails when no signer is provided
         mock_settings(dict(
@@ -219,7 +220,7 @@ def test_consensus_algorithm() -> None:
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=()),
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'At least one signer must be provided in PoA networks' in str(e.value)
 
         # Test fails when PoA is enabled with BLOCKS_PER_HALVING
@@ -230,7 +231,7 @@ def test_consensus_algorithm() -> None:
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
 
         # Test fails when PoA is enabled with INITIAL_TOKEN_UNITS_PER_BLOCK
@@ -241,7 +242,7 @@ def test_consensus_algorithm() -> None:
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
 
         # Test fails when PoA is enabled with MINIMUM_TOKEN_UNITS_PER_BLOCK
@@ -252,7 +253,7 @@ def test_consensus_algorithm() -> None:
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
-            HathorSettings.from_yaml(filepath='some_path')
+            model_from_yaml(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
 
 
@@ -261,4 +262,4 @@ def test_consensus_algorithm() -> None:
 
 
 def test_mainnet_settings_migration():
-    assert MAINNET_SETTINGS == HathorSettings.from_yaml(filepath=MAINNET_SETTINGS_FILEPATH)
+    assert MAINNET_SETTINGS == model_from_yaml(HathorSettings, filepath=MAINNET_SETTINGS_FILEPATH)
