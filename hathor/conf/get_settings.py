@@ -30,17 +30,17 @@ logger = get_logger()
 class _SettingsMetadata(NamedTuple):
     source: str
     is_yaml: bool
-    settings: Settings
+    settings: 'Settings'
 
 
 _settings_singleton: Optional[_SettingsMetadata] = None
 
 
-def get_global_settings() -> Settings:
+def get_global_settings() -> 'Settings':
     return HathorSettings()
 
 
-def HathorSettings() -> Settings:
+def HathorSettings() -> 'Settings':
     """
     Returns the configuration named tuple.
 
@@ -69,7 +69,7 @@ def get_settings_source() -> str:
     return _settings_singleton.source
 
 
-def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:
+def _load_settings_singleton(source: str, *, is_yaml: bool) -> 'Settings':
     global _settings_singleton
 
     if _settings_singleton is not None:
@@ -86,6 +86,8 @@ def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:
             "Setting a config module via the 'HATHOR_CONFIG_FILE' env var will be deprecated soon. "
             "Use the '--config-yaml' CLI option or the 'HATHOR_CONFIG_YAML' env var to set a yaml filepath instead."
         )
+    from hathor.conf.settings import HathorSettings as Settings
+
     settings_loader = _load_yaml_settings if is_yaml else _load_module_settings
     _settings_singleton = _SettingsMetadata(
         source=source,

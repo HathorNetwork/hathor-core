@@ -22,7 +22,6 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
-
 from hathorlib.conf.settings import HathorSettings as LibSettings
 from hathorlib.conf.utils import parse_hex_str
 

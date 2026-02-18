@@ -57,7 +57,9 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
         possible_scenarios = [scenario.name for scenario in Scenario]
         raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
-    settings = get_global_settings()._replace(REWARD_SPEND_MIN_BLOCKS=scenario.get_reward_spend_min_blocks())
+    settings = get_global_settings().model_copy(
+        update={"REWARD_SPEND_MIN_BLOCKS": scenario.get_reward_spend_min_blocks()}
+    )
     log = logger.new()
     simulator = Simulator(args.seed)
     simulator.start()

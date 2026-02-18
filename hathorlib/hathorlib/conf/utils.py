@@ -9,8 +9,6 @@ from pydantic import BaseModel
 
 from typing import Union, TypeVar
 
-from hathorlib.utils.yaml import model_from_yaml
-
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -33,4 +31,5 @@ def _load_module_settings(model: type[T], module_path: str) -> T:
 
 
 def _load_yaml_settings(model: type[T], filepath: str) -> T:
+    from hathorlib.utils.yaml import model_from_yaml
     return model_from_yaml(model, filepath=filepath)
