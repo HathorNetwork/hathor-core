@@ -108,9 +108,9 @@ class BaseNCExecLogs(unittest.TestCase):
         ]
 
     def _prepare(self, nc_log_config: NCLogConfig = NCLogConfig.ALL) -> None:
-        settings = self._settings._replace(
-            REWARD_SPEND_MIN_BLOCKS=1,  # to make tests quicker
-        )
+        settings = self._settings.model_copy(update={
+            'REWARD_SPEND_MIN_BLOCKS': 1,  # to make tests quicker
+        })
         artifacts = self.get_builder() \
             .set_settings(settings) \
             .set_nc_log_config(nc_log_config) \

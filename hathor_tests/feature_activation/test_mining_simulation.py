@@ -20,7 +20,6 @@ from unittest.mock import Mock
 from twisted.internet.testing import StringTransport
 
 from hathor.conf import HathorSettings as get_settings
-from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureSettings
@@ -35,9 +34,8 @@ from hathor_tests.simulation.base import SimulatorTestCase
 
 class MiningSimulationTest(SimulatorTestCase):
     def test_signal_bits_in_mining(self) -> None:
-        settings_dict = get_settings()._asdict()
-        settings_dict.update(
-            FEATURE_ACTIVATION=FeatureSettings(
+        settings = get_settings().model_copy(update={
+            'FEATURE_ACTIVATION': FeatureSettings(
                 evaluation_interval=4,
                 default_threshold=3,
                 features={
@@ -56,8 +54,7 @@ class MiningSimulationTest(SimulatorTestCase):
                     ),
                 }
             )
-        )
-        settings = HathorSettings(**settings_dict)
+        })
 
         builder = self.simulator.get_default_builder() \
             .set_settings(settings) \

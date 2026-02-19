@@ -56,7 +56,9 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = get_global_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
+        self.settings = get_global_settings().model_copy(
+            update={"AVG_TIME_BETWEEN_BLOCKS": SIMULATOR_AVG_TIME_BETWEEN_BLOCKS}
+        )
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []

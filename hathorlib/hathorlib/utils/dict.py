@@ -13,9 +13,12 @@
 #  limitations under the License.
 
 from copy import deepcopy
+from typing import Any, TypeVar
+
+K = TypeVar('K')
 
 
-def deep_merge(first_dict: dict, second_dict: dict) -> dict:
+def deep_merge(first_dict: dict[K, Any], second_dict: dict[K, Any]) -> dict[K, Any]:
     """
     Recursively merges two dicts, returning a new one with the merged values. Keeps both input dicts intact.
 
@@ -33,7 +36,7 @@ def deep_merge(first_dict: dict, second_dict: dict) -> dict:
     """
     merged = deepcopy(first_dict)
 
-    def do_deep_merge(first: dict, second: dict) -> dict:
+    def do_deep_merge(first: dict[K, Any], second: dict[K, Any]) -> dict[K, Any]:
         for key in second:
             if key in first and isinstance(first[key], dict) and isinstance(second[key], dict):
                 do_deep_merge(first[key], second[key])
