@@ -90,7 +90,7 @@ class WhitelistTestCase(unittest.TestCase):
         manager: HathorManager = self.create_peer(network)
         connections_manager = manager.connections
 
-        settings_mock = Mock(spec_set=HathorSettings)
+        settings_mock = Mock()
         settings_mock.WHITELIST_URL = 'some_url'
         connections_manager._settings = settings_mock
 

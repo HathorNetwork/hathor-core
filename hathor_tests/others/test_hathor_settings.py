@@ -159,7 +159,7 @@ def test_token_deposit_percentage() -> None:
     def mock_settings(mock: Mock, settings_: dict[str, Any]) -> None:
         mock.return_value = required_settings | settings_
 
-    with patch('hathorlib.utils.yaml.dict_from_extended_yaml', yaml_mock.dict_from_extended_yaml):
+    with patch('hathorlib.utils.yaml.dict_from_extended_yaml', yaml_mock):
         # Test default value passes (0.01 results in FEE_DIVISOR=100)
         mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE=0.01))
         load_yaml_settings(HathorSettings, filepath='some_path')
