@@ -18,7 +18,6 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from pydantic import ValidationError
 
-from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa.poa_signer import PoaSigner, PoaSignerFile
