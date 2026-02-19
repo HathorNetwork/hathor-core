@@ -51,6 +51,7 @@ class VerificationParams:
                 nanocontracts=True,
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V2,
+                transfer_headers=False,
             )
 
         return cls(
