@@ -19,7 +19,7 @@ def parse_hex_str(hex_str: Union[str, bytes]) -> bytes:
         return bytes.fromhex(hex_str.lstrip('x'))
 
     if not isinstance(hex_str, bytes):
-        raise TypeError(f'expected \'str\' or \'bytes\', got {hex_str}')
+        raise ValueError(f'expected \'str\' or \'bytes\', got {hex_str}')
 
     return hex_str
 
