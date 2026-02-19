@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from structlog import get_logger
 
-from hathorlib.conf.utils import _load_module_settings, _load_yaml_settings
+from hathorlib.conf.utils import load_module_settings, load_yaml_settings
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings as Settings
@@ -88,7 +88,7 @@ def _load_settings_singleton(source: str, *, is_yaml: bool) -> 'Settings':
         )
     from hathor.conf.settings import HathorSettings as Settings
 
-    settings_loader = _load_yaml_settings if is_yaml else _load_module_settings
+    settings_loader = load_yaml_settings if is_yaml else load_module_settings
     _settings_singleton = _SettingsMetadata(
         source=source,
         is_yaml=is_yaml,

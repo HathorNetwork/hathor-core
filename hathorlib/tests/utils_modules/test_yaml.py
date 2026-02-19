@@ -136,11 +136,9 @@ def test_dict_from_extended_yaml_valid_extends():
 
 
 def test_dict_from_yaml_mainnet_extends():
-    from hathor.conf import MAINNET_SETTINGS_FILEPATH
-
+    from hathorlib.conf import MAINNET_SETTINGS_FILEPATH
     filepath = _get_absolute_filepath('fixtures/mainnet_extends.yml')
     mainnet_dict = dict_from_yaml(filepath=MAINNET_SETTINGS_FILEPATH)
     result = dict_from_extended_yaml(filepath=filepath, custom_root=Path(MAINNET_SETTINGS_FILEPATH).parent)
 
     assert result == dict(**mainnet_dict, a='aa', b=dict(d='dd', e='ee'))
-

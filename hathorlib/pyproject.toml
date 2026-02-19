@@ -49,6 +49,7 @@ mypy = {version = "^1.9.0", markers = "implementation_name == 'cpython'"}
 pytest = "~8.1.1"
 pytest-cov = "~5.0.0"
 flake8 = "~7.0.0"
+types-pyyaml = "=6.0.12.9"
 
 [tool.poetry.extras]
 client = ["aiohttp", "structlog"]
@@ -73,6 +74,9 @@ warn_unused_ignores = true
 namespace_packages = true
 show_error_codes = true
 show_error_context = true
+plugins = [
+    "pydantic.mypy",
+]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

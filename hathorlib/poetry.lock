@@ -1587,6 +1587,18 @@ files = [
 ]
 
 [[package]]
+name = "types-pyyaml"
+version = "6.0.12.9"
+description = "Typing stubs for PyYAML"
+optional = false
+python-versions = "*"
+groups = ["dev"]
+files = [
+    {file = "types-PyYAML-6.0.12.9.tar.gz", hash = "sha256:c51b1bd6d99ddf0aa2884a7a328810ebf70a4262c292195d3f4f9a0005f9eeb6"},
+    {file = "types_PyYAML-6.0.12.9-py3-none-any.whl", hash = "sha256:5aed5aa66bd2d2e158f75dda22b059570ede988559f030cf294871d3b647e3e8"},
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 description = "Backported and Experimental Type Hints for Python 3.9+"
@@ -1766,4 +1778,4 @@ client = ["aiohttp", "structlog"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<4"
-content-hash = "d04f19507ebfa92693433a183f228bd81b0f194d6eceb61b66884366a097b2f4"
+content-hash = "cb6fbc4ed90b7ea52a057875667cd77963ed45b6db27a8d51d9700d8029593ec"
