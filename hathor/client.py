@@ -347,7 +347,8 @@ def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
     import base64
 
     from hathor.transaction.aux_pow import BitcoinAuxPow
-    from hathor.transaction.base_transaction import TxInput, TxOutput, TxVersion
+    from hathor.transaction.base_transaction import TxInput, TxOutput
+    from hathor.transaction.tx_version import TxVersion, get_vertex_cls
 
     hash_bytes = bytes.fromhex(data['hash']) if 'hash' in data else None
     if 'data' in data:
@@ -390,7 +391,7 @@ def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
     if storage:
         data['storage'] = storage
 
-    cls = TxVersion(data['version']).get_cls()
+    cls = get_vertex_cls(TxVersion(data['version']))
     metadata = data.pop('metadata', None)
     tx = cls(**data)
     if update_hash:

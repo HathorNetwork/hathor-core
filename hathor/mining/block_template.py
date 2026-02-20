@@ -41,8 +41,9 @@ class BlockTemplate(NamedTuple):
 
     def generate_minimally_valid_block(self) -> BaseTransaction:
         """ Generates a block, without any extra information that is valid for this template. No random choices."""
-        from hathor.transaction import TxOutput, TxVersion
-        return TxVersion(min(self.versions)).get_cls()(
+        from hathor.transaction import TxOutput
+        from hathor.transaction.tx_version import TxVersion, get_vertex_cls
+        return get_vertex_cls(TxVersion(min(self.versions)))(
             timestamp=self.timestamp_min,
             parents=self.parents[:] + sorted(self.parents_any)[:(3 - len(self.parents))],
             outputs=[TxOutput(self.reward, b'')],

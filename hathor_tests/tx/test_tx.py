@@ -901,7 +901,7 @@ class TransactionTest(unittest.TestCase):
             TxOutput(-1, script)
 
     def test_tx_version_and_signal_bits(self):
-        from hathor.transaction.base_transaction import TxVersion
+        from hathor.transaction.tx_version import TxVersion, get_vertex_cls
 
         # test invalid type
         with self.assertRaises(AssertionError) as cm:
@@ -923,9 +923,9 @@ class TransactionTest(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_vertex_cls(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_vertex_cls(version), Transaction)
 
         # test Block.__init__() fails
         with self.assertRaises(AssertionError) as cm:

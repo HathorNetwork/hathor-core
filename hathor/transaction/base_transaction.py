@@ -20,7 +20,6 @@ import hashlib
 import time
 import weakref
 from abc import ABC, abstractmethod
-from enum import IntEnum
 from itertools import chain
 from math import isfinite, log
 from struct import pack
@@ -32,6 +31,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
+from hathor.transaction.tx_version import TxVersion  # noqa: F401
 from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -93,51 +93,6 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
         # We could use float('-inf'), but it is not serializable.
         return a
     return a + log(1 + 2**(b - a) * multiplier, 2)
-
-
-# Versions are sequential for blocks and transactions
-class TxVersion(IntEnum):
-    REGULAR_BLOCK = 0
-    REGULAR_TRANSACTION = 1
-    TOKEN_CREATION_TRANSACTION = 2
-    MERGE_MINED_BLOCK = 3
-    # DEPRECATED_NANO_CONTRACT = 4  # XXX: Temporary to keep compatibility
-    POA_BLOCK = 5
-    ON_CHAIN_BLUEPRINT = 6
-
-    @classmethod
-    def _missing_(cls, value: Any) -> None:
-        assert isinstance(value, int), f"Value '{value}' must be an integer"
-        assert value <= _ONE_BYTE, f'Value {hex(value)} must not be larger than one byte'
-
-        raise ValueError(f'Invalid version: {value}')
-
-    def get_cls(self) -> type['BaseTransaction']:
-        from hathor.transaction.block import Block
-        from hathor.transaction.merge_mined_block import MergeMinedBlock
-        from hathor.transaction.poa import PoaBlock
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
-        from hathor.transaction.transaction import Transaction
-
-        cls_map: dict[TxVersion, type[BaseTransaction]] = {
-            TxVersion.REGULAR_BLOCK: Block,
-            TxVersion.REGULAR_TRANSACTION: Transaction,
-            TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
-            TxVersion.MERGE_MINED_BLOCK: MergeMinedBlock,
-            TxVersion.POA_BLOCK: PoaBlock
-        }
-
-        settings = get_global_settings()
-        if settings.ENABLE_NANO_CONTRACTS:
-            from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
-            cls_map[TxVersion.ON_CHAIN_BLUEPRINT] = OnChainBlueprint
-
-        cls = cls_map.get(self)
-
-        if cls is None:
-            raise ValueError('Invalid version.')
-        else:
-            return cls
 
 
 _base_transaction_log = logger.new()
