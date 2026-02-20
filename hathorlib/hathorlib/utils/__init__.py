@@ -13,13 +13,20 @@ import base58
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidAddress
 from hathorlib.serialization import Deserializer, SerializationError, Serializer
 from hathorlib.serialization.adapters import MaxBytesExceededError
 from hathorlib.serialization.encoding.leb128 import decode_leb128, encode_leb128
 
-settings = HathorSettings()
+settings = None
+
+
+def _get_settings():
+    global settings
+    if settings is None:
+        from hathorlib.conf import HathorSettings as _factory
+        settings = _factory()
+    return settings
 
 
 def int_to_bytes(number: int, size: int, signed: bool = False) -> bytes:
@@ -102,7 +109,7 @@ def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
 
 
 def get_address_from_public_key_hash(public_key_hash: bytes,
-                                     version_byte: bytes = settings.P2PKH_VERSION_BYTE) -> bytes:
+                                     version_byte: bytes | None = None) -> bytes:
     """Gets the address in bytes from the public key hash
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -114,6 +121,8 @@ def get_address_from_public_key_hash(public_key_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    if version_byte is None:
+        version_byte = _get_settings().P2PKH_VERSION_BYTE
     address = b''
     # Version byte
     address += version_byte
@@ -125,7 +134,7 @@ def get_address_from_public_key_hash(public_key_hash: bytes,
 
 
 def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
-                                            version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> str:
+                                            version_byte: bytes | None = None) -> str:
     """Gets the b58 address from the hash of the redeem script in multisig.
 
         :param redeem_script_hash: hash of the redeem script (sha256 and ripemd160)
@@ -139,7 +148,7 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
 
 
 def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
-                                        version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> bytes:
+                                        version_byte: bytes | None = None) -> bytes:
     """Gets the address in bytes from the redeem script hash
 
         :param redeem_script_hash: hash of redeem script (sha256 and ripemd160)
@@ -151,6 +160,8 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    if version_byte is None:
+        version_byte = _get_settings().MULTISIG_VERSION_BYTE
     address = b''
     # Version byte
     address += version_byte

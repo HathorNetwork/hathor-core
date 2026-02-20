@@ -23,7 +23,6 @@ from pydantic import Discriminator, NonNegativeInt, PrivateAttr, Tag, field_vali
 from typing_extensions import override
 
 from hathorlib.tx_version import TxVersion
-from hathorlib.utils.json import json_dumpb
 from hathorlib.utils.pydantic import BaseModel, Hex
 
 if TYPE_CHECKING:
@@ -146,6 +145,7 @@ class PoaSettings(_BaseConsensusSettings):
 
     @override
     def _calculate_peer_hello_hash(self) -> str | None:
+        from hathorlib.utils.json import json_dumpb
         data = b''
         for signer in self.signers:
             data += json_dumpb(signer.to_json_dict())
