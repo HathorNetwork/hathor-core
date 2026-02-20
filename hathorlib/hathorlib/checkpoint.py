@@ -12,4 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib.checkpoint import Checkpoint  # noqa: F401
+from typing import NamedTuple
+
+
+class Checkpoint(NamedTuple):
+    height: int
+    hash: bytes

@@ -12,4 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib.checkpoint import Checkpoint  # noqa: F401
+import json as _json
+
+
+def json_dumpb(obj: object) -> bytes:
+    """Compact formating obj as JSON to UTF-8 encoded bytes."""
+    return json_dumps(obj).encode('utf-8')
+
+
+def json_dumps(obj: object) -> str:
+    """Compact formating obj as JSON to UTF-8 encoded string."""
+    return _json.dumps(obj, separators=(',', ':'), ensure_ascii=False)

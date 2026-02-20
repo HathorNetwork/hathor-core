@@ -201,9 +201,7 @@ def json_loadb(raw: bytes) -> dict:
 json_loads = cast(Callable[[str], dict], json_loadb)
 
 
-def json_dumpb(obj: object) -> bytes:
-    """Compact formating obj as JSON to UTF-8 encoded bytes."""
-    return json_dumps(obj).encode('utf-8')
+from hathorlib.utils.json import json_dumpb  # noqa: F401
 
 
 def json_dumps(obj: object) -> str:

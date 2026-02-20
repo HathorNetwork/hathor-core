@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib.checkpoint import Checkpoint  # noqa: F401
+# Valid formats: 1.2.3, 1.2.3-rc.1 and nightly-ab49c20f
+BUILD_VERSION_REGEX = r"^(\d+\.\d+\.\d+(-(rc|alpha|beta)\.\d+)?|nightly-[a-f0-9]{7,8})$"

@@ -24,8 +24,7 @@ BASE_VERSION = '0.70.0'
 DEFAULT_VERSION_SUFFIX = "local"
 BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
 
-# Valid formats: 1.2.3, 1.2.3-rc.1 and nightly-ab49c20f
-BUILD_VERSION_REGEX = r"^(\d+\.\d+\.\d+(-(rc|alpha|beta)\.\d+)?|nightly-[a-f0-9]{7,8})$"
+from hathorlib.version import BUILD_VERSION_REGEX  # noqa: F401
 
 
 logger = get_logger()
