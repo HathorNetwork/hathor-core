@@ -43,7 +43,7 @@ class PeersWhitelist(ABC):
         self._current: set[PeerId] = set()
         self._policy: WhitelistPolicy = WhitelistPolicy.ONLY_WHITELISTED_PEERS
         self._on_remove_callback: OnRemoveCallbackType = None
-        self._is_running: bool = False
+        self._is_updating: bool = False
         self._consecutive_failures: int = 0
         self._has_successful_fetch: bool = False
         self._bootstrap_peers: set[PeerId] = set()
@@ -83,17 +83,17 @@ class PeersWhitelist(ABC):
         """Called when whitelist update fails. Increments backoff counter."""
         self._consecutive_failures += 1
 
-    def _handle_refresh_err(self, *args: Any, **kwargs: Any) -> None:
+    def _handle_refresh_err(self, failure: Any) -> None:
         """This method will be called when an exception happens inside the whitelist update
            and ends up stopping the looping call.
            We log the error and start the looping call again with exponential backoff.
         """
         self._on_update_failure()
         retry_interval = self._get_retry_interval()
-        self.log.error(
+        self.log.warning(
             'whitelist refresh had an exception. Start looping call again.',
-            args=args,
-            kwargs=kwargs,
+            error=failure.getErrorMessage(),
+            traceback=failure.getTraceback(),
             retry_interval=retry_interval,
             consecutive_failures=self._consecutive_failures
         )
@@ -101,15 +101,15 @@ class PeersWhitelist(ABC):
 
     def update(self) -> Deferred[None]:
         # Avoiding re-entrancy. If running, should not update once more.
-        if self._is_running:
+        if self._is_updating:
             self.log.warning('whitelist update already running, skipping execution.')
             d: Deferred[None] = Deferred()
             d.callback(None)
             return d
 
-        self._is_running = True
+        self._is_updating = True
         d = self._unsafe_update()
-        d.addBoth(lambda _: setattr(self, '_is_running', False))
+        d.addBoth(lambda _: setattr(self, '_is_updating', False))
         return d
 
     def add_peer(self, peer_id: PeerId) -> None:
@@ -126,7 +126,7 @@ class PeersWhitelist(ABC):
         """ Returns the current whitelist policy."""
         return self._policy
 
-    def is_peer_whitelisted(self, peer_id: PeerId) -> bool:
+    def is_peer_allowed(self, peer_id: PeerId) -> bool:
         """ Returns True if peer is whitelisted or policy is ALLOW_ALL.
 
         During the grace period (before first successful fetch), only bootstrap peers

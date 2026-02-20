@@ -137,18 +137,11 @@ class BuilderTestCase(unittest.TestCase):
         self.assertTrue(manager._enable_event_queue)
 
     def test_whitelist_cli_args(self):
-        """Test --x-p2p-whitelist and --x-p2p-whitelist-only CLI arguments."""
+        """Test --x-p2p-whitelist CLI argument."""
         # Test with whitelist URL
         manager = self._build(['--temp-data', '--x-p2p-whitelist', 'https://example.com/whitelist'])
         self.assertIsNotNone(manager.connections.peers_whitelist)
         self.assertIsInstance(manager.connections.peers_whitelist, URLPeersWhitelist)
-
-        # Test with whitelist-only flag (now a no-op, whitelist always enforces)
-        manager2 = self._build([
-            '--temp-data', '--x-p2p-whitelist', 'https://example.com/whitelist',
-            '--x-p2p-whitelist-only',
-        ])
-        self.assertIsNotNone(manager2.connections.peers_whitelist)
 
         # Test with disabled whitelist
         manager3 = self._build(['--temp-data', '--x-p2p-whitelist', 'none'])

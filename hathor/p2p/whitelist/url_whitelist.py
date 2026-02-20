@@ -34,7 +34,7 @@ class URLPeersWhitelist(PeersWhitelist):
 
         if self._url is None:
             return
-        if self._url.lower() == 'none':
+        if self._url.lower().strip() == 'none':
             self._url = None
             return
 

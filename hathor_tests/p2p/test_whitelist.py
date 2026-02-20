@@ -241,7 +241,7 @@ class ParseWhitelistWithPolicyTestCase(unittest.TestCase):
     def test_parse_allow_all_policy(self) -> None:
         """Test parsing whitelist with allow-all policy."""
         content = """hathor-whitelist
-policy: allow-all
+#policy: allow-all
 """
         peers, policy = parse_whitelist_with_policy(content)
         self.assertEqual(policy, WhitelistPolicy.ALLOW_ALL)
@@ -250,7 +250,7 @@ policy: allow-all
     def test_parse_only_whitelisted_peers_policy(self) -> None:
         """Test parsing whitelist with only-whitelisted-peers policy."""
         content = """hathor-whitelist
-policy: only-whitelisted-peers
+#policy: only-whitelisted-peers
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 """
         peers, policy = parse_whitelist_with_policy(content)
@@ -271,7 +271,7 @@ policy: only-whitelisted-peers
         """Test parsing whitelist with policy and comments."""
         content = """hathor-whitelist
 # This whitelist allows all peers
-policy: allow-all
+#policy: allow-all
 # More comments here
 """
         peers, policy = parse_whitelist_with_policy(content)
@@ -282,25 +282,45 @@ policy: allow-all
         """Test that policy line after peer IDs raises ValueError."""
         content = """hathor-whitelist
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-policy: allow-all
+#policy: allow-all
 """
         with self.assertRaises(ValueError) as context:
             parse_whitelist_with_policy(content)
         self.assertIn('policy must be defined in the header', str(context.exception))
 
-    def test_parse_invalid_policy(self) -> None:
-        """Test that invalid policy raises ValueError."""
+    def test_parse_invalid_policy_uses_default(self) -> None:
+        """Test that invalid policy logs a warning and uses the default."""
         content = """hathor-whitelist
-policy: invalid-policy
+#policy: invalid-policy
 """
-        with self.assertRaises(ValueError) as context:
-            parse_whitelist_with_policy(content)
-        self.assertIn('invalid whitelist policy', str(context.exception))
+        peers, policy = parse_whitelist_with_policy(content)
+        self.assertEqual(policy, WhitelistPolicy.ONLY_WHITELISTED_PEERS)
+        self.assertEqual(peers, set())
+
+    def test_parse_policy_with_space_after_hash(self) -> None:
+        """Test parsing whitelist with '# policy:' (space after #)."""
+        content = """hathor-whitelist
+# policy: allow-all
+2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+"""
+        peers, policy = parse_whitelist_with_policy(content)
+        self.assertEqual(policy, WhitelistPolicy.ALLOW_ALL)
+        self.assertEqual(len(peers), 1)
+        self.assertIn(PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'), peers)
+
+    def test_parse_policy_no_space_after_hash(self) -> None:
+        """Test parsing whitelist with '#policy:' (no space after #) still works."""
+        content = """hathor-whitelist
+#policy: allow-all
+"""
+        peers, policy = parse_whitelist_with_policy(content)
+        self.assertEqual(policy, WhitelistPolicy.ALLOW_ALL)
+        self.assertEqual(peers, set())
 
     def test_parse_policy_case_insensitive(self) -> None:
         """Test that policy values are case-insensitive."""
         content = """hathor-whitelist
-policy: ALLOW-ALL
+#policy: ALLOW-ALL
 """
         peers, policy = parse_whitelist_with_policy(content)
         self.assertEqual(policy, WhitelistPolicy.ALLOW_ALL)
@@ -309,8 +329,8 @@ policy: ALLOW-ALL
 class WhitelistPolicyBehaviorTestCase(unittest.TestCase):
     """Tests for WhitelistPolicy behavior in PeersWhitelist."""
 
-    def test_is_peer_whitelisted_with_allow_all(self) -> None:
-        """Test that is_peer_whitelisted returns True with ALLOW_ALL policy after grace period."""
+    def test_is_peer_allowed_with_allow_all(self) -> None:
+        """Test that is_peer_allowed returns True with ALLOW_ALL policy after grace period."""
         network = 'testnet'
         manager = self.create_peer(network, url_whitelist='https://whitelist.com')
         whitelist = manager.connections.peers_whitelist
@@ -323,10 +343,10 @@ class WhitelistPolicyBehaviorTestCase(unittest.TestCase):
 
         # Even with an empty whitelist, any peer should be allowed with ALLOW_ALL policy
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertTrue(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(random_peer_id))
 
-    def test_is_peer_whitelisted_with_only_whitelisted_peers(self) -> None:
-        """Test that is_peer_whitelisted checks whitelist with ONLY_WHITELISTED_PEERS policy after grace period."""
+    def test_is_peer_allowed_with_only_whitelisted_peers(self) -> None:
+        """Test that is_peer_allowed checks whitelist with ONLY_WHITELISTED_PEERS policy after grace period."""
         network = 'testnet'
         manager = self.create_peer(network, url_whitelist='https://whitelist.com')
         whitelist = manager.connections.peers_whitelist
@@ -342,11 +362,11 @@ class WhitelistPolicyBehaviorTestCase(unittest.TestCase):
         whitelist.add_peer(whitelisted_peer_id)
 
         # Whitelisted peer should be allowed
-        self.assertTrue(whitelist.is_peer_whitelisted(whitelisted_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(whitelisted_peer_id))
 
         # Non-whitelisted peer should not be allowed after grace period
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_policy_method(self) -> None:
         """Test the policy() method returns correct policy."""
@@ -368,7 +388,7 @@ class FilePeersWhitelistTestCase(unittest.TestCase):
     def test_file_whitelist_reads_valid_file(self) -> None:
         """Test that FilePeersWhitelist correctly reads a valid whitelist file."""
         content = """hathor-whitelist
-policy: only-whitelisted-peers
+#policy: only-whitelisted-peers
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
 """
@@ -448,7 +468,7 @@ policy: only-whitelisted-peers
     def test_file_whitelist_refresh_returns_deferred(self) -> None:
         """Test that FilePeersWhitelist.refresh() returns a Deferred."""
         content = """hathor-whitelist
-policy: allow-all
+#policy: allow-all
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write(content)
@@ -622,7 +642,7 @@ class SysctlWhitelistTestCase(unittest.TestCase):
 
         # Create a temporary file whitelist
         content = """hathor-whitelist
-policy: allow-all
+#policy: allow-all
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write(content)
@@ -754,7 +774,7 @@ class EmptyWhitelistPolicyTestCase(unittest.TestCase):
 
         # Any peer should NOT be whitelisted with empty list + restrictive policy after grace period
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_empty_whitelist_with_allow_all_allows_all(self) -> None:
         """Test that empty whitelist with ALLOW_ALL policy allows all peers after grace period."""
@@ -773,7 +793,7 @@ class EmptyWhitelistPolicyTestCase(unittest.TestCase):
 
         # Any peer should be whitelisted with ALLOW_ALL policy
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertTrue(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(random_peer_id))
 
     def test_empty_whitelist_blocks_connection_with_restrictive_policy(self) -> None:
         """Test that empty whitelist blocks connections when policy is ONLY_WHITELISTED_PEERS after grace period."""
@@ -954,7 +974,7 @@ class WhitelistLifecycleTestCase(unittest.TestCase):
 
         # Test FilePeersWhitelist
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write("hathor-whitelist\npolicy: allow-all\n")
+            f.write("hathor-whitelist\n#policy: allow-all\n")
             f.flush()
             path = f.name
 
@@ -978,7 +998,7 @@ class GracePeriodTestCase(unittest.TestCase):
 
         # Random peers should NOT be allowed during grace period (only bootstrap peers allowed)
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_grace_period_allows_bootstrap_peers_before_first_fetch(self) -> None:
         """Test that bootstrap peers are allowed before first successful whitelist fetch."""
@@ -996,11 +1016,11 @@ class GracePeriodTestCase(unittest.TestCase):
         whitelist.add_bootstrap_peer(bootstrap_peer_id)
 
         # Bootstrap peer should be allowed during grace period
-        self.assertTrue(whitelist.is_peer_whitelisted(bootstrap_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(bootstrap_peer_id))
 
         # Non-bootstrap peer should still be rejected
         random_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_grace_period_ends_after_successful_fetch(self) -> None:
         """Test that grace period ends after first successful whitelist fetch."""
@@ -1019,11 +1039,11 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertTrue(whitelist._has_successful_fetch)
 
         # Now the whitelist should enforce - whitelisted peer is allowed
-        self.assertTrue(whitelist.is_peer_whitelisted(whitelisted_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(whitelisted_peer_id))
 
         # Non-whitelisted peer should be blocked after grace period
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_bootstrap_peer_allowed_during_grace_period_but_normal_rules_after(self) -> None:
         """Test that bootstrap peers follow normal whitelist rules after successful fetch."""
@@ -1039,7 +1059,7 @@ class GracePeriodTestCase(unittest.TestCase):
         whitelist.add_bootstrap_peer(bootstrap_peer_id)
 
         # Bootstrap peer should be allowed during grace period
-        self.assertTrue(whitelist.is_peer_whitelisted(bootstrap_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(bootstrap_peer_id))
 
         # Simulate a successful whitelist update that does NOT include the bootstrap peer
         other_peer_id = PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367')
@@ -1049,10 +1069,10 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertTrue(whitelist._has_successful_fetch)
 
         # Bootstrap peer should NOT be allowed anymore (not in whitelist)
-        self.assertFalse(whitelist.is_peer_whitelisted(bootstrap_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(bootstrap_peer_id))
 
         # Peer in whitelist should be allowed
-        self.assertTrue(whitelist.is_peer_whitelisted(other_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(other_peer_id))
 
     def test_grace_period_connections_rejected_without_bootstrap(self) -> None:
         """Test that connections are rejected during grace period without bootstrap registration."""
@@ -1124,7 +1144,7 @@ class GracePeriodTestCase(unittest.TestCase):
     def test_file_whitelist_grace_period(self) -> None:
         """Test that file whitelist also has grace period behavior."""
         content = """hathor-whitelist
-policy: only-whitelisted-peers
+#policy: only-whitelisted-peers
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -1139,12 +1159,12 @@ policy: only-whitelisted-peers
 
         # During grace period, non-bootstrap peers should NOT be allowed
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
         # But bootstrap peers should be allowed
         bootstrap_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
         whitelist.add_bootstrap_peer(bootstrap_peer_id)
-        self.assertTrue(whitelist.is_peer_whitelisted(bootstrap_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(bootstrap_peer_id))
 
         # Perform an update
         with patch('hathor.p2p.whitelist.file_whitelist.threads.deferToThread') as mock_defer:
@@ -1163,14 +1183,14 @@ policy: only-whitelisted-peers
         self.assertTrue(whitelist._has_successful_fetch)
 
         # Now the random peer should not be allowed
-        self.assertFalse(whitelist.is_peer_whitelisted(random_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
         # Bootstrap peer should also NOT be allowed anymore (not in whitelist)
-        self.assertFalse(whitelist.is_peer_whitelisted(bootstrap_peer_id))
+        self.assertFalse(whitelist.is_peer_allowed(bootstrap_peer_id))
 
         # But the whitelisted peer should be allowed
         whitelisted_peer_id = PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367')
-        self.assertTrue(whitelist.is_peer_whitelisted(whitelisted_peer_id))
+        self.assertTrue(whitelist.is_peer_allowed(whitelisted_peer_id))
 
 
 class WhitelistSpecConstantsTestCase(unittest.TestCase):
