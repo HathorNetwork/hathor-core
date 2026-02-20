@@ -47,7 +47,7 @@ def create_peers_whitelist(
         PeersWhitelist instance or None if disabled
     """
     peers_whitelist: PeersWhitelist | None = None
-    spec_lower = whitelist_spec.lower()
+    spec_lower = whitelist_spec.lower().strip()
 
     if spec_lower in (WHITELIST_SPEC_DEFAULT, WHITELIST_SPEC_HATHORLABS):
         peers_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
@@ -55,6 +55,8 @@ def create_peers_whitelist(
         peers_whitelist = None
     elif os.path.isfile(whitelist_spec):
         peers_whitelist = FilePeersWhitelist(reactor, whitelist_spec)
+    elif whitelist_spec.startswith('/') or whitelist_spec.startswith('.'):
+        raise ValueError(f'whitelist file not found: {whitelist_spec}')
     else:
         # URLPeersWhitelist class rejects non-url paths.
         peers_whitelist = URLPeersWhitelist(reactor, whitelist_spec, True)
