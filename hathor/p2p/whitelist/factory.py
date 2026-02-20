@@ -14,6 +14,7 @@
 
 import os
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from hathor.p2p.whitelist.file_whitelist import FilePeersWhitelist
 from hathor.p2p.whitelist.peers_whitelist import PeersWhitelist
@@ -28,6 +29,11 @@ WHITELIST_SPEC_DEFAULT = 'default'
 WHITELIST_SPEC_HATHORLABS = 'hathorlabs'
 WHITELIST_SPEC_NONE = 'none'
 WHITELIST_SPEC_DISABLED = 'disabled'
+
+
+def _looks_like_url(spec: str) -> bool:
+    parsed = urlparse(spec)
+    return parsed.scheme in ('http', 'https')
 
 
 def create_peers_whitelist(
@@ -53,12 +59,11 @@ def create_peers_whitelist(
         peers_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
     elif spec_lower in (WHITELIST_SPEC_NONE, WHITELIST_SPEC_DISABLED):
         peers_whitelist = None
+    elif _looks_like_url(whitelist_spec):
+        peers_whitelist = URLPeersWhitelist(reactor, whitelist_spec, True)
     elif os.path.isfile(whitelist_spec):
         peers_whitelist = FilePeersWhitelist(reactor, whitelist_spec)
-    elif whitelist_spec.startswith('/') or whitelist_spec.startswith('.'):
-        raise ValueError(f'whitelist file not found: {whitelist_spec}')
     else:
-        # URLPeersWhitelist class rejects non-url paths.
-        peers_whitelist = URLPeersWhitelist(reactor, whitelist_spec, True)
+        raise ValueError(f'whitelist spec is not a URL and file does not exist: {whitelist_spec}')
 
     return peers_whitelist
