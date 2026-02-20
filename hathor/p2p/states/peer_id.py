@@ -166,4 +166,4 @@ class PeerIdState(BaseState):
         peers_whitelist = self.protocol.connections.peers_whitelist
         if peers_whitelist is None:
             return True
-        return peers_whitelist.is_peer_whitelisted(peer_id)
+        return peers_whitelist.is_peer_allowed(peer_id)

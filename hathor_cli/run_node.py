@@ -172,8 +172,6 @@ class RunNode:
         parser.add_argument('--x-disable-ipv4', action='store_true',
                             help='Disables connecting to IPv4 peers')
 
-        parser.add_argument("--x-p2p-whitelist-only", action="store_true",
-                            help="Node will only connect to peers on the whitelist")
         parser.add_argument("--x-p2p-whitelist", help="Add whitelist to follow from since boot.")
 
         possible_nc_exec_logs = [config.value for config in NCLogConfig]

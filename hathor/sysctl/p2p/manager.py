@@ -319,37 +319,39 @@ class ConnectionsManagerSysctl(Sysctl):
         the whitelist object, following it by default.
         It does not support eliminating the whitelist (passing None)."""
 
+        connections = self.connections
         option: str = new_whitelist.lower().strip()
         if option == 'on':
             if self._suspended_whitelist is None:
                 return
-            self.connections.set_peers_whitelist(self._suspended_whitelist)
+            connections.set_peers_whitelist(self._suspended_whitelist)
             self._suspended_whitelist = None
             return
         if option == 'off':
-            if self.connections.peers_whitelist is None:
+            if connections.peers_whitelist is None:
                 return
-            self._suspended_whitelist = self.connections.peers_whitelist
-            self.connections.set_peers_whitelist(None)
+            self._suspended_whitelist = connections.peers_whitelist
+            connections.set_peers_whitelist(None)
             return
 
         from hathor.p2p.whitelist import create_peers_whitelist
         whitelist = create_peers_whitelist(
-            self.connections.reactor,
+            connections.reactor,
             new_whitelist,
-            self.connections._settings,
+            connections._settings,
         )
 
         if whitelist is None:
             raise SysctlException('Sysctl does not allow whitelist swap to None. Use "off" to disable it.')
 
         self._suspended_whitelist = None
-        self.connections.set_peers_whitelist(whitelist)
+        connections.set_peers_whitelist(whitelist)
 
     def whitelist_status(self) -> WhitelistStatus:
         """Return structured status information about the whitelist."""
-        if self.connections.peers_whitelist is not None:
-            whitelist = self.connections.peers_whitelist
+        connections = self.connections
+        if connections.peers_whitelist is not None:
+            whitelist = connections.peers_whitelist
             return WhitelistStatus(
                 state=WhitelistState.ON,
                 policy=whitelist.policy(),

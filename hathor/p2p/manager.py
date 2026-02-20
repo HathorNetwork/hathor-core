@@ -892,7 +892,8 @@ class ConnectionsManager:
 
     def _disconnect_non_whitelisted_peers(self) -> None:
         """Disconnect all connected peers that are not in the current whitelist."""
-        if not self.peers_whitelist:
+        whitelist = self.peers_whitelist
+        if not whitelist:
             return
         self.log.info('Whitelist ON: disconnecting non-whitelisted peers...')
         connections_snapshot = list(self.connections)
@@ -900,5 +901,5 @@ class ConnectionsManager:
             peer_id = conn.get_peer_id()
             if peer_id is None:
                 continue
-            if not self.peers_whitelist.is_peer_whitelisted(peer_id):
+            if not whitelist.is_peer_allowed(peer_id):
                 conn.disconnect(reason='Whitelist updated', force=True)
