@@ -35,6 +35,7 @@ class RunNodeArgs(BaseModel):
     testnet_hotel: bool
     testnet_golf: bool
     test_mode_tx_weight: bool
+    test_mode_block_weight: bool
     dns: Optional[str]
     peer: Optional[str]
     sysctl: Optional[str]
