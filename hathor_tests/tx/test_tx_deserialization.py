@@ -2,8 +2,8 @@ from unittest.mock import Mock
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
-from hathor.transaction.tx_version import get_vertex_cls
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathor.transaction.tx_version import get_vertex_cls
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor_tests import unittest

@@ -31,7 +31,7 @@ class TxVersion(IntEnum):
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
-    NANO_CONTRACT = 4
+    # DEPRECATED: NANO_CONTRACT = 4
     POA_BLOCK = 5
     ON_CHAIN_BLUEPRINT = 6
 
@@ -51,14 +51,12 @@ def get_vertex_cls(version: TxVersion) -> 'Type[BaseTransaction]':
     use hathor.transaction.tx_version.get_vertex_cls instead.
     """
     from hathorlib import Block, TokenCreationTransaction, Transaction
-    from hathorlib.nanocontracts.nanocontract import DeprecatedNanoContract
     from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
     cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
         TxVersion.REGULAR_BLOCK: Block,
         TxVersion.REGULAR_TRANSACTION: Transaction,
         TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
-        TxVersion.NANO_CONTRACT: DeprecatedNanoContract,
         TxVersion.ON_CHAIN_BLUEPRINT: OnChainBlueprint,
     }
 

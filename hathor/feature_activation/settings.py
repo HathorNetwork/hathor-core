@@ -13,8 +13,8 @@
 #  limitations under the License.
 
 from hathorlib.feature_activation.settings import (  # noqa: F401
-    FeatureInterval,
-    Settings,
-    _find_overlap,
-    _get_intervals_by_bit,
+    FeatureInterval as FeatureInterval,
+    Settings as Settings,
+    _find_overlap as _find_overlap,
+    _get_intervals_by_bit as _get_intervals_by_bit,
 )

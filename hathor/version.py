@@ -19,12 +19,12 @@ from typing import Optional
 
 from structlog import get_logger
 
+from hathorlib.version import BUILD_VERSION_REGEX  # noqa: F401
+
 BASE_VERSION = '0.70.0'
 
 DEFAULT_VERSION_SUFFIX = "local"
 BUILD_VERSION_FILE_PATH = "./BUILD_VERSION"
-
-from hathorlib.version import BUILD_VERSION_REGEX  # noqa: F401
 
 
 logger = get_logger()

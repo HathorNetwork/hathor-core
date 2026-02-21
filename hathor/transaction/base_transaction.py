@@ -31,10 +31,10 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
-from hathor.transaction.tx_version import TxVersion  # noqa: F401
 from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.tx_version import TxVersion  # noqa: F401
 from hathor.transaction.util import (
     VerboseCallback,
     bytes_to_output_value,

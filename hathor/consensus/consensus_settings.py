@@ -13,9 +13,9 @@
 # limitations under the License.
 
 from hathorlib.consensus.consensus_settings import (  # noqa: F401
-    ConsensusSettings,
-    ConsensusType,
-    PoaSettings,
-    PoaSignerSettings,
-    PowSettings,
+    ConsensusSettings as ConsensusSettings,
+    ConsensusType as ConsensusType,
+    PoaSettings as PoaSettings,
+    PoaSignerSettings as PoaSignerSettings,
+    PowSettings as PowSettings,
 )

@@ -12,4 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathorlib.feature_activation.model.criteria import Criteria, ValidatedCriteria  # noqa: F401
+from hathorlib.feature_activation.model.criteria import (  # noqa: F401
+    Criteria as Criteria,
+    ValidatedCriteria as ValidatedCriteria,
+)

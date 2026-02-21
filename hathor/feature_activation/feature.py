@@ -12,4 +12,4 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathorlib.feature_activation.feature import Feature  # noqa: F401
+from hathorlib.feature_activation.feature import Feature as Feature  # noqa: F401
