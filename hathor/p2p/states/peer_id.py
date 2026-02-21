@@ -163,6 +163,8 @@ class PeerIdState(BaseState):
 
     def _is_peer_allowed(self, peer_id: PeerId) -> bool:
         """Return True if peer is allowed to connect; False otherwise."""
+        if peer_id in self.protocol.connections._bootstrap_peer_ids:
+            return True
         peers_whitelist = self.protocol.connections.peers_whitelist
         if peers_whitelist is None:
             return True

@@ -46,12 +46,6 @@ class PeersWhitelist(ABC):
         self._is_updating: bool = False
         self._consecutive_failures: int = 0
         self._has_successful_fetch: bool = False
-        self._bootstrap_peers: set[PeerId] = set()
-
-    def add_bootstrap_peer(self, peer_id: PeerId) -> None:
-        """Add a bootstrap peer ID. These are allowed during grace period."""
-        self._bootstrap_peers.add(peer_id)
-        self.log.debug('Bootstrap peer added', peer_id=peer_id)
 
     def start(self, on_remove_callback: OnRemoveCallbackType) -> None:
         self._on_remove_callback = on_remove_callback
@@ -129,12 +123,11 @@ class PeersWhitelist(ABC):
     def is_peer_allowed(self, peer_id: PeerId) -> bool:
         """ Returns True if peer is whitelisted or policy is ALLOW_ALL.
 
-        During the grace period (before first successful fetch), only bootstrap peers
-        are allowed to prevent connecting to arbitrary peers before the whitelist is loaded.
+        During the grace period (before first successful fetch), all peers are blocked
+        to prevent connecting to arbitrary peers before the whitelist is loaded.
         """
-        # Grace period: only allow bootstrap peers until first successful fetch
         if not self._has_successful_fetch:
-            return peer_id in self._bootstrap_peers
+            return False
         if self._policy == WhitelistPolicy.ALLOW_ALL:
             return True
         return peer_id in self._current
