@@ -18,7 +18,6 @@ from hathor.transaction.base_transaction import (
     BaseTransaction,
     TxInput,
     TxOutput,
-    TxVersion,
     Vertex,
     sum_weights,
 )
@@ -26,6 +25,7 @@ from hathor.transaction.block import Block
 from hathor.transaction.merge_mined_block import MergeMinedBlock
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
+from hathor.transaction.tx_version import TxVersion as TxVersion
 
 __all__ = [
     'Transaction',

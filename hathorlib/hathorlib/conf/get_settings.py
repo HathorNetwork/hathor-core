@@ -16,6 +16,10 @@ class _SettingsMetadata(NamedTuple):
 _settings_singleton: Optional[_SettingsMetadata] = None
 
 
+def get_global_settings() -> 'Settings':
+    return HathorSettings()
+
+
 def HathorSettings() -> Settings:
     """ Return configuration file namedtuple
         Get the file from environment variable 'TXMINING_CONFIG_FILE'
@@ -30,6 +34,16 @@ def HathorSettings() -> Settings:
         return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
 
     return _load_settings_singleton('hathorlib.conf.mainnet', is_yaml=False)
+
+
+def get_settings_source() -> str:
+    """ Returns the path of the settings module or YAML file that was loaded.
+
+    XXX: Will raise an assertion error if HathorSettings() wasn't used before.
+    """
+    global _settings_singleton
+    assert _settings_singleton is not None, 'HathorSettings() not called before'
+    return _settings_singleton.source
 
 
 def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:

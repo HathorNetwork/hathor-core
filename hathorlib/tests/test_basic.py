@@ -235,7 +235,7 @@ class HathorCommonsTestCase(unittest.TestCase):
         self.assertEqual(nano_header.nc_method, 'noop')
 
     def test_tx_version_and_signal_bits(self):
-        from hathorlib.base_transaction import TxVersion
+        from hathorlib.tx_version import TxVersion, get_vertex_cls
 
         # test invalid type
         with self.assertRaises(AssertionError) as cm:
@@ -257,9 +257,9 @@ class HathorCommonsTestCase(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_vertex_cls(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_vertex_cls(version), Transaction)
 
         # test serialization doesn't mess up with signal_bits and version
         data = bytes.fromhex('f00001ffffffe8b789180000001976a9147fd4ae0e4fb2d2854e76d359029d8078bb9'

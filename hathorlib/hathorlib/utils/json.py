@@ -1,4 +1,4 @@
-# Copyright 2024 Hathor Labs
+# Copyright 2021 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib.consensus.consensus_settings import (  # noqa: F401
-    ConsensusSettings as ConsensusSettings,
-    ConsensusType as ConsensusType,
-    PoaSettings as PoaSettings,
-    PoaSignerSettings as PoaSignerSettings,
-    PowSettings as PowSettings,
-)
+import json as _json
+
+
+def json_dumpb(obj: object) -> bytes:
+    """Compact formating obj as JSON to UTF-8 encoded bytes."""
+    return json_dumps(obj).encode('utf-8')
+
+
+def json_dumps(obj: object) -> str:
+    """Compact formating obj as JSON to UTF-8 encoded string."""
+    return _json.dumps(obj, separators=(',', ':'), ensure_ascii=False)

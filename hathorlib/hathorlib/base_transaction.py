@@ -8,7 +8,6 @@ import base64
 import datetime
 import hashlib
 from abc import ABC, abstractmethod
-from enum import IntEnum
 from math import isfinite, log
 from struct import error as StructError, pack
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
@@ -18,6 +17,7 @@ from _hashlib import HASH
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidOutputValue, WeightError
 from hathorlib.scripts import P2PKH, DataScript, MultiSig, parse_address_script
+from hathorlib.tx_version import TxVersion, get_vertex_cls
 from hathorlib.utils import int_to_bytes, unpack, unpack_len
 from hathorlib.vertex_parser import VertexParser
 
@@ -39,9 +39,6 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 # Weight (d), timestamp (I), and parents len (B)
 _GRAPH_FORMAT_STRING = '!dIB'
 
-# The int value of one byte
-_ONE_BYTE = 0xFF
-
 
 def sum_weights(w1: float, w2: float) -> float:
     return aux_calc_weight(w1, w2, 1)
@@ -61,44 +58,6 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
         # We could use float('-inf'), but it is not serializable.
         return a
     return a + log(1 + 2**(b - a) * multiplier, 2)
-
-
-class TxVersion(IntEnum):
-    """Versions are sequential for blocks and transactions"""
-
-    REGULAR_BLOCK = 0
-    REGULAR_TRANSACTION = 1
-    TOKEN_CREATION_TRANSACTION = 2
-    MERGE_MINED_BLOCK = 3
-    NANO_CONTRACT = 4
-    ON_CHAIN_BLUEPRINT = 6
-
-    @classmethod
-    def _missing_(cls, value: Any) -> None:
-        assert isinstance(value, int), f"Value '{value}' must be an integer"
-        assert value <= _ONE_BYTE, f'Value {hex(value)} must not be larger than one byte'
-
-        raise ValueError(f'Invalid version: {value}')
-
-    def get_cls(self) -> Type['BaseTransaction']:
-        from hathorlib import Block, TokenCreationTransaction, Transaction
-        from hathorlib.nanocontracts.nanocontract import DeprecatedNanoContract
-        from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
-
-        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
-            TxVersion.REGULAR_BLOCK: Block,
-            TxVersion.REGULAR_TRANSACTION: Transaction,
-            TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
-            TxVersion.NANO_CONTRACT: DeprecatedNanoContract,
-            TxVersion.ON_CHAIN_BLUEPRINT: OnChainBlueprint,
-        }
-
-        cls = cls_map.get(self)
-
-        if cls is None:
-            raise ValueError('Invalid version.')
-        else:
-            return cls
 
 
 class BaseTransaction(ABC):
@@ -724,7 +683,7 @@ def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     version = data[1]
     try:
         tx_version = TxVersion(version)
-        cls = tx_version.get_cls()
+        cls = get_vertex_cls(tx_version)
         return cls.create_from_struct(data)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')
