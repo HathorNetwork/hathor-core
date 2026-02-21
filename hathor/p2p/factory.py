@@ -24,8 +24,7 @@ from hathor.p2p.protocol import HathorLineReceiver
 
 
 class _HathorLineReceiverFactory(ABC, protocol.Factory):
-    connection_type: HathorLineReceiver.ConnectionType  # HLR inherits HathorProtocol, which has ConnectionType.
-
+    connection_type: HathorLineReceiver.ConnectionType
     def __init__(
         self,
         my_peer: PrivatePeer,
