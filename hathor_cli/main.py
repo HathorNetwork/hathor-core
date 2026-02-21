@@ -61,7 +61,6 @@ class CliManager:
             side_dag,
             stratum_mining,
             top,
-            twin_tx,
             tx_generator,
             wallet,
         )

@@ -168,21 +168,7 @@ class BlockConsensusAlgorithm:
 
         # Union of voided_by of parents
         voided_by: set[bytes] = self.union_voided_by_from_parents(block)
-
-        # Update accumulated weight of the transactions voiding us.
         assert block.hash not in voided_by
-        for h in voided_by:
-            tx = storage.get_transaction(h)
-            tx_meta = tx.get_metadata()
-            tx_meta.accumulated_weight += weight_to_work(block.weight)
-            self.context.save(tx)
-
-        # Check conflicts of the transactions voiding us.
-        for h in voided_by:
-            tx = storage.get_transaction(h)
-            if not tx.is_block:
-                assert isinstance(tx, Transaction)
-                self.context.transaction_algorithm.check_conflicts(tx)
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
