@@ -609,4 +609,7 @@ class VertexExporter:
         ocb = self._vertice_per_id.get(blueprint_id)
         if ocb is None or not isinstance(ocb, OnChainBlueprint):
             raise SyntaxError(f'{blueprint_id.hex()} is not a valid blueprint id')
-        return ocb.get_blueprint_class()
+        from hathor.nanocontracts.metered_exec import MeteredExecutor
+        from hathor.nanocontracts.sandbox import DISABLED_CONFIG
+        executor = MeteredExecutor(config=DISABLED_CONFIG)
+        return ocb.get_blueprint_class(executor)

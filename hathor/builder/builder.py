@@ -38,6 +38,7 @@ from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
+from hathor.nanocontracts.sandbox import MeteredExecutorFactory, SandboxAPIConfigLoader, SandboxConfig
 from hathor.nanocontracts.sorter.types import NCSorterCallable
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
@@ -107,6 +108,7 @@ class BuildArtifacts(NamedTuple):
     wallet: Optional[BaseWallet]
     rocksdb_storage: RocksDBStorage
     stratum_factory: Optional[StratumFactory]
+    sandbox_api_config_loader: SandboxAPIConfigLoader
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
@@ -197,6 +199,10 @@ class Builder:
         self._nc_log_storage: NCLogStorage | None = None
         self._runner_factory: RunnerFactory | None = None
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
+        self._nc_sandbox_config: SandboxConfig | None = None  # None means use settings default
+        self._sandbox_api_config_loader: SandboxAPIConfigLoader | None = None
+        self._sandbox_api_config_file: str | None = None
+        self._executor_factory: MeteredExecutorFactory | None = None
 
         self._vertex_json_serializer: VertexJsonSerializer | None = None
 
@@ -290,6 +296,8 @@ class Builder:
         if self._enable_stratum_server:
             stratum_factory = self._create_stratum_server(manager)
 
+        sandbox_api_config_loader = self._get_or_create_sandbox_api_config_loader()
+
         self.artifacts = BuildArtifacts(
             peer=peer,
             settings=settings,
@@ -306,6 +314,7 @@ class Builder:
             stratum_factory=stratum_factory,
             feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
+            sandbox_api_config_loader=sandbox_api_config_loader,
         )
 
         return self.artifacts
@@ -413,10 +422,11 @@ class Builder:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
             nc_calls_sorter = self._get_nc_calls_sorter()
+            settings = self._get_or_create_settings()
             self._consensus = ConsensusAlgorithm(
                 nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
-                settings=self._get_or_create_settings(),
+                settings=settings,
                 runner_factory=self._get_or_create_runner_factory(),
                 nc_log_storage=self._get_or_create_nc_log_storage(),
                 nc_calls_sorter=nc_calls_sorter,
@@ -431,15 +441,64 @@ class Builder:
         settings = self._get_or_create_settings()
         return generate_catalog_from_settings(settings)
 
+    def _get_or_create_executor_factory(self) -> MeteredExecutorFactory:
+        """Get or create the MeteredExecutorFactory.
+
+        The factory centralizes sandbox config selection for different contexts:
+        - for_loading(): Uses NC_SANDBOX_CONFIG_LOADING from settings
+        - for_execution(): Uses NC_SANDBOX_CONFIG_EXECUTION from settings
+        - for_api(): Uses SandboxAPIConfigLoader (runtime-reloadable)
+
+        If _nc_sandbox_config is explicitly set (e.g., via set_nc_sandbox_config),
+        it overrides the default configs.
+        """
+        if self._executor_factory is None:
+            settings = self._get_or_create_settings()
+
+            if self._nc_sandbox_config is not None:
+                # Explicitly set via set_nc_sandbox_config() — use for all contexts
+                api_loader = SandboxAPIConfigLoader(default_config=self._nc_sandbox_config)
+                self._executor_factory = MeteredExecutorFactory(
+                    loading_config=self._nc_sandbox_config,
+                    execution_config=self._nc_sandbox_config,
+                    api_config_loader=api_loader,
+                )
+            else:
+                # Use settings-based configs
+                api_loader = self._get_or_create_sandbox_api_config_loader()
+                self._executor_factory = MeteredExecutorFactory(
+                    loading_config=settings.NC_SANDBOX_CONFIG_LOADING,
+                    execution_config=settings.NC_SANDBOX_CONFIG_EXECUTION,
+                    api_config_loader=api_loader,
+                )
+
+        return self._executor_factory
+
     def _get_or_create_runner_factory(self) -> RunnerFactory:
         if self._runner_factory is None:
+            settings = self._get_or_create_settings()
             self._runner_factory = RunnerFactory(
                 reactor=self._get_reactor(),
-                settings=self._get_or_create_settings(),
+                settings=settings,
                 tx_storage=self._get_or_create_tx_storage(),
                 nc_storage_factory=self._get_or_create_nc_storage_factory(),
+                executor_factory=self._get_or_create_executor_factory(),
             )
         return self._runner_factory
+
+    def _get_or_create_sandbox_api_config_loader(self) -> SandboxAPIConfigLoader:
+        """Get or create the SandboxAPIConfigLoader singleton.
+
+        Always creates a loader, even if nano contracts are disabled.
+        The loader handles disabled state internally via DISABLED_CONFIG.
+        """
+        if self._sandbox_api_config_loader is None:
+            settings = self._get_or_create_settings()
+            self._sandbox_api_config_loader = SandboxAPIConfigLoader(
+                default_config=settings.NC_SANDBOX_CONFIG_API,
+                config_file=self._sandbox_api_config_file,
+            )
+        return self._sandbox_api_config_loader
 
     def _get_or_create_pubsub(self) -> PubSubManager:
         if self._pubsub is None:
@@ -890,4 +949,25 @@ class Builder:
     def set_nc_log_config(self, config: NCLogConfig) -> 'Builder':
         self.check_if_can_modify()
         self._nc_log_config = config
+        return self
+
+    def set_nc_sandbox_config(self, config: SandboxConfig | None) -> 'Builder':
+        """Set the sandbox configuration for nano contract execution.
+
+        If None, nano contracts will execute without sandbox protection.
+        If a SandboxConfig is provided, the system must have a Python build
+        with sandbox support (version suffix '-sandbox').
+        """
+        self.check_if_can_modify()
+        self._nc_sandbox_config = config
+        return self
+
+    def set_sandbox_api_config_file(self, file_path: str | None) -> 'Builder':
+        """Set the config file path for API sandbox configuration.
+
+        This file path is used for runtime-reloadable API sandbox configuration.
+        The file can be changed and reloaded at runtime via sysctl commands.
+        """
+        self.check_if_can_modify()
+        self._sandbox_api_config_file = file_path
         return self

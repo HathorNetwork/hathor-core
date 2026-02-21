@@ -58,6 +58,8 @@ if TYPE_CHECKING:
     from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.blueprint import Blueprint
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.metered_exec import MeteredExecutor
+    from hathor.nanocontracts.sandbox import SandboxCounts
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
     from hathor.nanocontracts.types import BlueprintId, ContractId
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -1048,17 +1050,53 @@ class TransactionStorage(ABC):
             assert module is not None
             return inspect.getsource(module)
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+    def get_blueprint_class(
+        self,
+        blueprint_id: BlueprintId,
+        executor: 'MeteredExecutor | None' = None,
+    ) -> type['Blueprint']:
         """Returns the blueprint class associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+
+        Args:
+            blueprint_id: The blueprint ID to look up.
+            executor: A MeteredExecutor to use for loading on-chain blueprints.
+                     If None, a disabled executor is created (no sandbox protection).
         """
         from hathor.nanocontracts import OnChainBlueprint
         blueprint = self._get_blueprint(blueprint_id)
         if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
+            if executor is None:
+                from hathor.nanocontracts.metered_exec import MeteredExecutor
+                from hathor.nanocontracts.sandbox import DISABLED_CONFIG
+                executor = MeteredExecutor(config=DISABLED_CONFIG)
+            return blueprint.get_blueprint_class(executor)
         else:
             return blueprint
+
+    def get_blueprint_class_with_cost(
+        self,
+        blueprint_id: BlueprintId,
+        executor: 'MeteredExecutor',
+    ) -> tuple[type['Blueprint'], 'SandboxCounts | None']:
+        """Returns the blueprint class and loading cost associated with the given blueprint_id.
+
+        Args:
+            blueprint_id: The blueprint ID to look up.
+            executor: A MeteredExecutor to use for loading on-chain blueprints.
+
+        Returns:
+            A tuple of (blueprint_class, loading_cost).
+            - For on-chain blueprints: loading_cost is the SandboxCounts of costs charged
+            - For catalog blueprints: loading_cost is always None
+        """
+        from hathor.nanocontracts import OnChainBlueprint
+        blueprint = self._get_blueprint(blueprint_id)
+        if isinstance(blueprint, OnChainBlueprint):
+            return blueprint.get_blueprint_class_with_cost(executor)
+        else:
+            return blueprint, None
 
     def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
         """Return an on-chain blueprint transaction."""
