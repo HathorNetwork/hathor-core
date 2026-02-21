@@ -23,13 +23,14 @@ from typing_extensions import Self, override
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.exception import InvalidNewTransaction
-from hathor.transaction import TxInput, TxOutput, TxVersion
+from hathor.transaction import TxInput, TxOutput
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
+from hathor.transaction.tx_version import TxVersion
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
 from hathor.types import TokenUid, VertexId
 

@@ -23,10 +23,11 @@ from typing_extensions import Self, override
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.transaction import TxOutput, TxVersion
+from hathor.transaction import TxOutput
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
+from hathor.transaction.tx_version import TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 from hathor.utils.int import get_bit_list
 
