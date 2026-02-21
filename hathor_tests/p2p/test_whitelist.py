@@ -1001,7 +1001,11 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_grace_period_allows_bootstrap_peers_before_first_fetch(self) -> None:
-        """Test that bootstrap peers are allowed before first successful whitelist fetch."""
+        """Test that bootstrap peers are allowed before first successful whitelist fetch.
+
+        Bootstrap exemption is now handled by the manager, not the whitelist.
+        The manager's _is_peer_allowed checks _bootstrap_peer_ids before consulting the whitelist.
+        """
         network = 'testnet'
         manager = self.create_peer(network, url_whitelist='https://whitelist.com')
         whitelist = manager.connections.peers_whitelist
@@ -1011,14 +1015,18 @@ class GracePeriodTestCase(unittest.TestCase):
 
         self.assertEqual(whitelist.policy(), WhitelistPolicy.ONLY_WHITELISTED_PEERS)
 
-        # Register a bootstrap peer
+        # Register a bootstrap peer on the manager (not on the whitelist)
         bootstrap_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        whitelist.add_bootstrap_peer(bootstrap_peer_id)
+        manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id)
 
-        # Bootstrap peer should be allowed during grace period
-        self.assertTrue(whitelist.is_peer_allowed(bootstrap_peer_id))
+        # Bootstrap peer is in manager's _bootstrap_peer_ids, so the manager would allow it.
+        # The whitelist itself does NOT know about bootstrap peers anymore.
+        self.assertIn(bootstrap_peer_id, manager.connections._bootstrap_peer_ids)
 
-        # Non-bootstrap peer should still be rejected
+        # Whitelist still rejects everyone during grace period (no bootstrap awareness)
+        self.assertFalse(whitelist.is_peer_allowed(bootstrap_peer_id))
+
+        # Non-bootstrap peer should also be rejected
         random_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
         self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
@@ -1045,21 +1053,19 @@ class GracePeriodTestCase(unittest.TestCase):
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
         self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
-    def test_bootstrap_peer_allowed_during_grace_period_but_normal_rules_after(self) -> None:
-        """Test that bootstrap peers follow normal whitelist rules after successful fetch."""
+    def test_bootstrap_peer_always_allowed(self) -> None:
+        """Test that bootstrap peers are always allowed via manager's _bootstrap_peer_ids.
+
+        Bootstrap exemption is now handled by the manager, not the whitelist.
+        The whitelist's is_peer_allowed does NOT know about bootstrap peers.
+        """
         network = 'testnet'
         manager = self.create_peer(network, url_whitelist='https://whitelist.com')
         whitelist = manager.connections.peers_whitelist
 
-        # Verify initial state: no successful fetch yet
-        self.assertFalse(whitelist._has_successful_fetch)
-
-        # Register a bootstrap peer
+        # Register a bootstrap peer on the manager
         bootstrap_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
-        whitelist.add_bootstrap_peer(bootstrap_peer_id)
-
-        # Bootstrap peer should be allowed during grace period
-        self.assertTrue(whitelist.is_peer_allowed(bootstrap_peer_id))
+        manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id)
 
         # Simulate a successful whitelist update that does NOT include the bootstrap peer
         other_peer_id = PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367')
@@ -1068,8 +1074,11 @@ class GracePeriodTestCase(unittest.TestCase):
         # Verify grace period has ended
         self.assertTrue(whitelist._has_successful_fetch)
 
-        # Bootstrap peer should NOT be allowed anymore (not in whitelist)
+        # Whitelist does NOT know about bootstrap peers — it rejects non-whitelisted peers
         self.assertFalse(whitelist.is_peer_allowed(bootstrap_peer_id))
+
+        # But the manager would allow it via _bootstrap_peer_ids check
+        self.assertIn(bootstrap_peer_id, manager.connections._bootstrap_peer_ids)
 
         # Peer in whitelist should be allowed
         self.assertTrue(whitelist.is_peer_allowed(other_peer_id))
@@ -1108,9 +1117,9 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertFalse(manager1.connections.peers_whitelist._has_successful_fetch)
         self.assertFalse(manager2.connections.peers_whitelist._has_successful_fetch)
 
-        # Register each peer as a bootstrap peer on the other's whitelist
-        manager1.connections.peers_whitelist.add_bootstrap_peer(manager2.my_peer.id)
-        manager2.connections.peers_whitelist.add_bootstrap_peer(manager1.my_peer.id)
+        # Register each peer as a bootstrap peer on the other's manager
+        manager1.connections._bootstrap_peer_ids.add(manager2.my_peer.id)
+        manager2.connections._bootstrap_peer_ids.add(manager1.my_peer.id)
 
         conn = FakeConnection(manager1, manager2)
 
@@ -1142,7 +1151,10 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertTrue(whitelist._has_successful_fetch)
 
     def test_file_whitelist_grace_period(self) -> None:
-        """Test that file whitelist also has grace period behavior."""
+        """Test that file whitelist also has grace period behavior.
+
+        Bootstrap exemption is now handled by the manager, not the whitelist.
+        """
         content = """hathor-whitelist
 #policy: only-whitelisted-peers
 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
@@ -1157,14 +1169,9 @@ class GracePeriodTestCase(unittest.TestCase):
         # Initial state: no successful fetch
         self.assertFalse(whitelist._has_successful_fetch)
 
-        # During grace period, non-bootstrap peers should NOT be allowed
+        # During grace period, all peers are blocked (whitelist has no bootstrap awareness)
         random_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
         self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
-
-        # But bootstrap peers should be allowed
-        bootstrap_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
-        whitelist.add_bootstrap_peer(bootstrap_peer_id)
-        self.assertTrue(whitelist.is_peer_allowed(bootstrap_peer_id))
 
         # Perform an update
         with patch('hathor.p2p.whitelist.file_whitelist.threads.deferToThread') as mock_defer:
@@ -1182,15 +1189,99 @@ class GracePeriodTestCase(unittest.TestCase):
         # After successful fetch, grace period ends
         self.assertTrue(whitelist._has_successful_fetch)
 
-        # Now the random peer should not be allowed
+        # Now the random peer should not be allowed (not in whitelist)
         self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
-        # Bootstrap peer should also NOT be allowed anymore (not in whitelist)
-        self.assertFalse(whitelist.is_peer_allowed(bootstrap_peer_id))
-
-        # But the whitelisted peer should be allowed
+        # The whitelisted peer should be allowed
         whitelisted_peer_id = PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367')
         self.assertTrue(whitelist.is_peer_allowed(whitelisted_peer_id))
+
+    def test_bootstrap_peers_survive_late_whitelist_activation(self) -> None:
+        """Test that bootstrap peers are preserved when whitelist is activated after they connected.
+
+        Bootstrap peer IDs live on the manager, not the whitelist, so they naturally
+        survive whitelist swaps without any transfer logic.
+        """
+        network = 'testnet'
+        # Start without a whitelist
+        manager = self.create_peer(network, url_whitelist='')
+        self.assertIsNone(manager.connections.peers_whitelist)
+
+        # Simulate bootstrap peers connecting via do_discovery (manually register)
+        bootstrap_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
+        manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id)
+
+        # Later, activate a whitelist via sysctl (simulated with set_peers_whitelist)
+        new_whitelist = URLPeersWhitelist(self.clock, 'https://whitelist.com')
+        manager.connections.set_peers_whitelist(new_whitelist)
+
+        # Bootstrap peer IDs remain on the manager (not on the whitelist)
+        self.assertIn(bootstrap_peer_id, manager.connections._bootstrap_peer_ids)
+
+        # Non-bootstrap peer should NOT be allowed during grace period
+        random_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
+        self.assertFalse(new_whitelist.is_peer_allowed(random_peer_id))
+
+    def test_drop_connection_by_peer_id_skips_bootstrap_peers(self) -> None:
+        """Test that drop_connection_by_peer_id does not disconnect bootstrap peers."""
+        network = 'testnet'
+        manager = self.create_peer(network, url_whitelist='')
+
+        # Register a bootstrap peer
+        bootstrap_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
+        manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id)
+
+        # Create a mock protocol for the bootstrap peer
+        mock_protocol = Mock()
+        mock_protocol.peer = Mock()
+        mock_protocol.peer.id = bootstrap_peer_id
+        manager.connections.connected_peers[bootstrap_peer_id] = mock_protocol
+
+        # Attempt to drop the bootstrap peer connection
+        manager.connections.drop_connection_by_peer_id(bootstrap_peer_id)
+
+        # The connection should NOT have been dropped
+        mock_protocol.send_error_and_close_connection.assert_not_called()
+        self.assertIn(bootstrap_peer_id, manager.connections.connected_peers)
+
+        # But dropping a non-bootstrap peer should work
+        other_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
+        other_protocol = Mock()
+        other_protocol.peer = Mock()
+        other_protocol.peer.id = other_peer_id
+        manager.connections.connected_peers[other_peer_id] = other_protocol
+
+        manager.connections.drop_connection_by_peer_id(other_peer_id)
+        other_protocol.send_error_and_close_connection.assert_called_once()
+
+    def test_whitelist_swap_preserves_bootstrap_peer_ids_on_manager(self) -> None:
+        """Test that swapping whitelists preserves bootstrap peer IDs on the manager.
+
+        Bootstrap peer IDs live on the manager, not the whitelist, so they
+        naturally survive whitelist swaps.
+        """
+        network = 'testnet'
+        manager = self.create_peer(network, url_whitelist='https://whitelist1.com')
+
+        # Register bootstrap peers on the manager
+        bootstrap_peer_id_1 = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
+        bootstrap_peer_id_2 = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
+        manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id_1)
+        manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id_2)
+
+        old_whitelist = manager.connections.peers_whitelist
+        self.assertIsNotNone(old_whitelist)
+
+        # Swap to a new whitelist
+        new_whitelist = URLPeersWhitelist(self.clock, 'https://whitelist2.com')
+        manager.connections.set_peers_whitelist(new_whitelist)
+
+        # Both bootstrap peers should still be on the manager
+        self.assertIn(bootstrap_peer_id_1, manager.connections._bootstrap_peer_ids)
+        self.assertIn(bootstrap_peer_id_2, manager.connections._bootstrap_peer_ids)
+
+        # Old whitelist should have been stopped
+        self.assertFalse(old_whitelist.lc_refresh.running)
 
 
 class WhitelistSpecConstantsTestCase(unittest.TestCase):

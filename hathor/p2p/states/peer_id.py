@@ -19,7 +19,6 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PublicPeer
-from hathor.p2p.peer_id import PeerId
 from hathor.p2p.states.base import BaseState
 from hathor.util import json_dumps, json_loads
 
@@ -116,7 +115,7 @@ class PeerIdState(BaseState):
             return
 
         # is it on the whitelist?
-        if not self._is_peer_allowed(peer.id):
+        if not self.protocol.connections.is_peer_allowed(peer.id):
             if self._settings.WHITELIST_WARN_BLOCKED_PEERS:
                 protocol.send_error_and_close_connection(f'Blocked (by {peer.id}). Get in touch with Hathor team.')
             else:
@@ -160,10 +159,3 @@ class PeerIdState(BaseState):
             return
 
         self.send_ready()
-
-    def _is_peer_allowed(self, peer_id: PeerId) -> bool:
-        """Return True if peer is allowed to connect; False otherwise."""
-        peers_whitelist = self.protocol.connections.peers_whitelist
-        if peers_whitelist is None:
-            return True
-        return peers_whitelist.is_peer_allowed(peer_id)

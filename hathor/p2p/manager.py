@@ -187,6 +187,9 @@ class ConnectionsManager:
         # Whitelisted peers.
         self.peers_whitelist: PeersWhitelist | None = peers_whitelist
 
+        # Bootstrap peer IDs tracked independently of any whitelist object.
+        self._bootstrap_peer_ids: set[PeerId] = set()
+
         # Pubsub object to publish events
         self.pubsub = pubsub
 
@@ -267,8 +270,8 @@ class ConnectionsManager:
         for peer_discovery in self.peer_discoveries:
             # Wrap connect_to_endpoint to register bootstrap peer IDs
             def connect_with_bootstrap_registration(entrypoint: PeerEndpoint) -> None:
-                if self.peers_whitelist and entrypoint.peer_id is not None:
-                    self.peers_whitelist.add_bootstrap_peer(entrypoint.peer_id)
+                if entrypoint.peer_id is not None:
+                    self._bootstrap_peer_ids.add(entrypoint.peer_id)
                 self.connect_to_endpoint(entrypoint)
 
             coro = peer_discovery.discover_and_connect(connect_with_bootstrap_registration)
@@ -789,6 +792,9 @@ class ConnectionsManager:
     def drop_connection_by_peer_id(self, peer_id: PeerId) -> None:
         """ Drop a connection by peer id
         """
+        if peer_id in self._bootstrap_peer_ids:
+            self.log.debug('skipping disconnect of bootstrap peer', peer_id=peer_id)
+            return
         protocol = self.connected_peers.get(peer_id)
         if protocol:
             self.drop_connection(protocol)
@@ -890,10 +896,17 @@ class ConnectionsManager:
             whitelist.start(self.drop_connection_by_peer_id)
             self._disconnect_non_whitelisted_peers()
 
+    def is_peer_allowed(self, peer_id: PeerId) -> bool:
+        """Return True if peer is allowed to connect; False otherwise."""
+        if peer_id in self._bootstrap_peer_ids:
+            return True
+        if self.peers_whitelist is None:
+            return True
+        return self.peers_whitelist.is_peer_allowed(peer_id)
+
     def _disconnect_non_whitelisted_peers(self) -> None:
         """Disconnect all connected peers that are not in the current whitelist."""
-        whitelist = self.peers_whitelist
-        if not whitelist:
+        if not self.peers_whitelist:
             return
         self.log.info('Whitelist ON: disconnecting non-whitelisted peers...')
         connections_snapshot = list(self.connections)
@@ -901,5 +914,6 @@ class ConnectionsManager:
             peer_id = conn.get_peer_id()
             if peer_id is None:
                 continue
-            if not whitelist.is_peer_allowed(peer_id):
-                conn.disconnect(reason='Whitelist updated', force=True)
+            if not self.is_peer_allowed(peer_id):
+                self.log.info('Disconnecting non-whitelisted peer.', peer_id=str(peer_id))
+                conn.disconnect(reason='Blocked', force=True)
