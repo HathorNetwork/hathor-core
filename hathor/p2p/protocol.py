@@ -74,17 +74,21 @@ class HathorProtocol:
         READY = ReadyState
 
     class ConnectionType(Enum):
-        # Types of Connection as inputs for an instance of the Hathor Protocol
+        """ Types of Connection as inputs for an instance of the Hathor Protocol. """
         OUTGOING = 0
         INCOMING = 1
-        DISCOVERED = 2
+        BOOTSTRAP = 2
         CHECK_ENTRYPOINTS = 3
 
+        def is_outbound(self) -> bool:
+            """ If value is 1, then the connection is inbound. If not, outbound."""
+            return self.value != self.INCOMING
+
     class ConnectionState(Enum):
-        # State of connection of two peers - either in a slot queue or active.
-        INIT = -1               # The INIT state is for when the protocol is first instatiated.
-        CONNECTING = 0
-        READY = 1
+        """ State of connection of two peers - either in a slot queue or active. """
+        CREATED = 0
+        CONNECTING = 1
+        READY = 2
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'

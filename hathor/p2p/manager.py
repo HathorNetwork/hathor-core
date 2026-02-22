@@ -24,7 +24,6 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
-from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.connect_classes import ConnectionAllowed, ConnectionRejected, ConnectionState, ConnectionType
@@ -66,9 +65,6 @@ class _SyncRotateInfo(NamedTuple):
 class _ConnectingPeer(NamedTuple):
     entrypoint: PeerEndpoint
     endpoint_deferred: Deferred
-
-
-
 
 
 class PeerConnectionsMetrics(NamedTuple):
@@ -512,10 +508,6 @@ class ConnectionsManager:
         # Notify other peers about this new peer connection.
         self.relay_peer_to_ready_connections(protocol.peer)
 
-        # If it is a connection for checking entrypoint only, we must disconnect now.
-        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            protocol.disconnect(reason="READY connection for check_entrypoint slot.")
-
     def relay_peer_to_ready_connections(self, peer: PublicPeer) -> None:
         """Relay peer to all ready connections."""
         for conn in self.iter_ready_connections():
@@ -531,7 +523,11 @@ class ConnectionsManager:
         self.connections.discard(protocol)
 
         # Each conn is from a slot - discard from it as well.
-        self.slots_manager.remove_from_slot(protocol)
+        status = self.slots_manager.remove_from_slot(protocol)
+
+        # If there is some entrypoint popped from queue, we attempt to connect.
+        if status.entrypoint:
+            self.connect_to_endpoint(status.entrypoint)
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
@@ -736,13 +732,13 @@ class ConnectionsManager:
         """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
             if discovery_call:
-                protocol.connection_type = HathorProtocol.ConnectionType.DISCOVERED
+                protocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
             protocol.on_outbound_connect(entrypoint, peer)
         else:
             assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
             if discovery_call:
-                protocol.wrappedProtocol.connection_type = HathorProtocol.ConnectionType.DISCOVERED
+                protocol.wrappedProtocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
             protocol.wrappedProtocol.on_outbound_connect(entrypoint, peer)
         self.connecting_peers.pop(endpoint)
 

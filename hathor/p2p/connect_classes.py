@@ -22,6 +22,7 @@ class ConnectionType(Enum):
     OUTGOING = 0
     INCOMING = 1
     BOOTSTRAP = 2
+    CHECK_ENTRYPOINTS = 3
 
     def is_outbound(self) -> bool:
         """ If value is 1, then the connection is inbound. If not, outbound."""
