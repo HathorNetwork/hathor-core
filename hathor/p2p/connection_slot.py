@@ -16,8 +16,8 @@ from collections import deque
 from typing import Optional
 
 from hathor.conf.settings import HathorSettings
+from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.protocol import HathorProtocol
-from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 
 
 class Slot:
@@ -96,7 +96,7 @@ class Slot:
                 return False
 
             # Check_EP is disconnected too, as we only queue endpoints of ready/valid peers.
-            protocol.disconnect(reason="Connect attempt to slot full, no queue.")
+            protocol.disconnect(reason="Connection Slot if full. Try again later.")
             return False
 
         # If not full, add to slot if types match.
