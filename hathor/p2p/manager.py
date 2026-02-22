@@ -24,6 +24,7 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.connect_classes import ConnectionAllowed, ConnectionRejected, ConnectionState, ConnectionType
