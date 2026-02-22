@@ -15,6 +15,8 @@
 from collections import deque
 from typing import Optional
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.protocol import HathorProtocol
@@ -31,7 +33,7 @@ class Slot:
     queue_size_entrypoints: int
     entrypoint_set: set[PeerAddress | None]
 
-    def __init__(self, type: HathorProtocol.ConnectionType, _settings: HathorSettings, max_connections: int):
+    def __init__(self, type: HathorProtocol.ConnectionType, settings: HathorSettings, max_connections: int):
         self.type = type
         self.connection_slot = set()
         self.entrypoint_queue_slot = deque()
@@ -40,30 +42,35 @@ class Slot:
         if max_connections <= 0:
             raise ValueError("Slot max number must allow at least one connection")
         
-        max_outgoing: int = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
-        max_incoming: int = _settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
-        max_discovered: int = _settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
-        max_check_ep: int = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
+        max_discovered: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
+        max_check_ep: int = settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
 
         type = self.type
 
         # For each type of slot, there is a maximum of connections allowed.
-        if type == HathorProtocol.ConnectionType.OUTGOING:
-            assert max_connections <= max_outgoing
+        match type:
+            case HathorProtocol.ConnectionType.OUTGOING:
+                assert max_connections <= max_outgoing
 
-        if type == HathorProtocol.ConnectionType.INCOMING:
-            assert max_connections <= max_incoming
+            case HathorProtocol.ConnectionType.INCOMING:
+                assert max_connections <= max_incoming
 
-        if type == HathorProtocol.ConnectionType.DISCOVERED:
-            assert max_connections <= max_discovered
+            case HathorProtocol.ConnectionType.DISCOVERED:
+                assert max_connections <= max_discovered
 
-        if type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            assert max_connections <= max_check_ep
+            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+                assert max_connections <= max_check_ep
+
+            case _:
+                assert_never(type)
+                
 
         self.max_slot_connections = max_connections
         # All slots have the same maximum size.
         # Only valid for check_entrypoin
-        self.queue_size_entrypoints = _settings.QUEUE_SIZE
+        self.queue_size_entrypoints = settings.QUEUE_SIZE
 
     def add_connection(self, protocol: HathorProtocol) -> bool:
         """

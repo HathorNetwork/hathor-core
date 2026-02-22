@@ -24,6 +24,7 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.connection_slot import Slot
@@ -444,19 +445,26 @@ class ConnectionsManager:
 
         connection_allowed = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
         # Next block sends the connection to the appropriate slot.
-        if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
-            # Here, it can happend that the protocol changes to Check Entrypoints.
-            connection_allowed = self.outgoing_slot.add_connection(protocol)
-            # The check is done so discovered connections are not added doubly.
+        conn_type = protocol.connection_type
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
-            connection_allowed = self.incoming_slot.add_connection(protocol)
+        match conn_type:
+            case HathorProtocol.ConnectionType.OUTGOING:
+                # Here, it can happen that the protocol changes to Check Entrypoints.
+                connection_allowed = self.outgoing_slot.add_connection(protocol)
+                # The check is done so discovered connections are not added doubly.
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            connection_allowed = self.bootstrap_slot.add_connection(protocol)
+            case HathorProtocol.ConnectionType.INCOMING:
+                connection_allowed = self.incoming_slot.add_connection(protocol)
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            connection_allowed = self.check_entrypoints_slot.add_connection(protocol)
+            case HathorProtocol.ConnectionType.DISCOVERED:
+                connection_allowed = self.bootstrap_slot.add_connection(protocol)
+
+            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+                connection_allowed = self.check_entrypoints_slot.add_connection(protocol)
+
+            case _:
+                assert_never(conn_type)
+
 
         # Regardless of the slot sent, the total connections increases.
         # A connection waiting in queue is not added (yet) to the whole pool, only if another disconnects.
