@@ -1,0 +1,203 @@
+# yamllint disable rule:line-length
+name: publish-nginx
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+      - dev
+    tags:
+      - v*
+  pull_request:
+    paths:
+      - 'hathor_cli/nginx_config.py'
+      - 'extras/nginx_docker/**'
+      - '.github/workflows/publish-nginx.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate nginx config generation
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    if: "!startsWith(github.ref, 'refs/tags/v')"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: '3.12'
+          os: 'ubuntu-22.04'
+
+      - name: Generate all configs
+        working-directory: extras/nginx_docker
+        run: poetry run make generate-all VERSION=test
+
+      - name: Verify expected files
+        working-directory: extras/nginx_docker
+        run: |
+          expected_count=18
+          actual_count=$(find dist/test -type f -name '*.conf' | wc -l)
+          echo "Found $actual_count config files (expected $expected_count)"
+          if [ "$actual_count" -ne "$expected_count" ]; then
+            echo "ERROR: Expected $expected_count files but found $actual_count"
+            find dist/test -type f
+            exit 1
+          fi
+
+  release:
+    name: Release nginx configs and image
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: '3.12'
+          os: 'ubuntu-22.04'
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
+          aws-region: us-east-1
+
+      - name: Generate and upload configs
+        working-directory: extras/nginx_docker
+        run: poetry run make release VERSION=${{ steps.version.outputs.version }}
+
+      - name: Generate set_real_ip_from_cloudfront
+        working-directory: extras/nginx_docker
+        run: |
+          curl -s https://ip-ranges.amazonaws.com/ip-ranges.json | \
+            python -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for prefix in data['prefixes']:
+              if prefix['service'] == 'CLOUDFRONT':
+                  print(f\"set_real_ip_from {prefix['ip_prefix']};\")
+          for prefix in data['ipv6_prefixes']:
+              if prefix['service'] == 'CLOUDFRONT':
+                  print(f\"set_real_ip_from {prefix['ipv6_prefix']};\")
+          " > set_real_ip_from_cloudfront
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # --- AWS ECR ---
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: extras/nginx_docker
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: |
+            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:nginx-${{ steps.version.outputs.version }}
+            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:nginx-latest
+
+      # --- GCP Artifact Registries ---
+
+      # standalone-fullnodes
+      - name: Authenticate to GCP (standalone-fullnodes)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.SF_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: ''
+        id: gcp-auth-sf
+
+      - name: Configure Docker for Artifact Registry (standalone-fullnodes)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to standalone-fullnodes
+        uses: docker/build-push-action@v5
+        with:
+          context: extras/nginx_docker
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: |
+            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:nginx-latest
+
+      # hathor-testnet
+      - name: Authenticate to GCP (hathor-testnet)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.HT_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: ''
+        id: gcp-auth-ht
+
+      - name: Configure Docker for Artifact Registry (hathor-testnet)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to hathor-testnet
+        uses: docker/build-push-action@v5
+        with:
+          context: extras/nginx_docker
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: |
+            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:nginx-latest
+
+      # ekvilibro
+      - name: Authenticate to GCP (ekvilibro)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.EKV_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: ''
+        id: gcp-auth-ekv
+
+      - name: Configure Docker for Artifact Registry (ekvilibro)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to ekvilibro
+        uses: docker/build-push-action@v5
+        with:
+          context: extras/nginx_docker
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: |
+            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:nginx-latest
+
+      # hathor-testnet-playground
+      - name: Authenticate to GCP (hathor-testnet-playground)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.HTP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: ''
+        id: gcp-auth-htp
+
+      - name: Configure Docker for Artifact Registry (hathor-testnet-playground)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to hathor-testnet-playground
+        uses: docker/build-push-action@v5
+        with:
+          context: extras/nginx_docker
+          push: true
+          platforms: linux/amd64,linux/arm64/v8
+          tags: |
+            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:nginx-latest
