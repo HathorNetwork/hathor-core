@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from collections import deque
+from dataclasses import dataclass
 from typing import Optional
 
 from typing_extensions import assert_never
@@ -21,6 +22,19 @@ from hathor.conf.settings import HathorSettings
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.protocol import HathorProtocol
 
+
+class ConnectionAllowed:
+    pass
+
+@dataclass
+class ConnectionChanged:
+    shift: str
+
+@dataclass
+class ConnectionRejected:
+    reason: str 
+
+ConnectionResult = ConnectionAllowed | ConnectionChanged | ConnectionRejected
 
 class Slot:
     """
@@ -72,7 +86,7 @@ class Slot:
         # Only valid for check_entrypoin
         self.queue_size_entrypoints = settings.QUEUE_SIZE
 
-    def add_connection(self, protocol: HathorProtocol) -> bool:
+    def add_connection(self, protocol: HathorProtocol) -> ConnectionResult:
         """
             Adds connection protocol to the slot. Checks whether the slot is full or not. If full,
             disconnects the protocol. If the type is 'check_entrypoints', the returns peers of it
@@ -83,7 +97,7 @@ class Slot:
         assert self.type == protocol.connection_type
 
         if protocol in self.connection_slot:
-            return False
+            return ConnectionRejected("Protocol already in Slot.")
 
         # If check_entrypoints, there is a set.
         # If set minus queue >= 1, a dequeued entrypoint in remove_connection is being connected
@@ -91,7 +105,7 @@ class Slot:
         if len(self.entrypoint_set) > len(self.entrypoint_queue_slot):
             if len(self.connection_slot) == self.max_slot_connections - 1:
                 protocol.disconnect(reason="Dequeued connection being added. Leaving space for it.")
-                return False
+                return ConnectionRejected("Queue is full.")
 
         # Check if slot is full. If type is check_entrypoints, there is a queue.
         if len(self.connection_slot) >= self.max_slot_connections:
@@ -100,17 +114,17 @@ class Slot:
                 # The connection must be turned into CHECK_ENTRYPOINTS.
                 # Will return to on_peer_connect and slot it into check_entrypoints.
                 protocol.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
-                return False
+                return ConnectionChanged("Outgoing -> Check Entrypoints")
 
             # Check_EP is disconnected too, as we only queue endpoints of ready/valid peers.
             protocol.disconnect(reason="Connection Slot if full. Try again later.")
-            return False
+            return ConnectionRejected(f"Slot {self.type} is full")
 
         # If not full, add to slot if types match.
         assert protocol.connection_type == self.type
         self.connection_slot.add(protocol)
 
-        return True
+        return ConnectionAllowed
 
     def remove_connection(self, protocol: HathorProtocol, revisit: bool = False,
                           previous_entrypoint: PeerAddress | None = None) -> Optional[PeerAddress] | None:

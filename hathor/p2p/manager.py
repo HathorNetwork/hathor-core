@@ -27,7 +27,7 @@ from twisted.web.client import Agent
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import Slot
+from hathor.p2p.connection_slot import ConnectionAllowed, ConnectionRejected, ConnectionResult, Slot
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -434,7 +434,7 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_connect(self, protocol: HathorProtocol) -> None:
+    def on_peer_connect(self, protocol: HathorProtocol) -> ConnectionResult:
         """Called when a new connection is established."""
 
         # Checks whether connections in the network are at limit.
@@ -468,18 +468,20 @@ class ConnectionsManager:
 
         # Regardless of the slot sent, the total connections increases.
         # A connection waiting in queue is not added (yet) to the whole pool, only if another disconnects.
-        if connection_allowed:
-            self.connections.add(protocol)
-            self.handshaking_peers.add(protocol)
+        if connection_allowed.isinstance(ConnectionRejected):
+            return connection_allowed
 
-            # If not queued, connection state is "CONNECTING", as it is not ready yet, added to handshaking.
-            protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
+        self.connections.add(protocol)
+        self.handshaking_peers.add(protocol)
 
-            self.pubsub.publish(
-                HathorEvents.NETWORK_PEER_CONNECTED,
-                protocol=protocol,
-                peers_count=self._get_peers_count()
-            )
+        # If not queued, connection state is "CONNECTING", as it is not ready yet, added to handshaking.
+        protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
+
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTED,
+            protocol=protocol,
+            peers_count=self._get_peers_count()
+        )
 
     def on_peer_ready(self, protocol: HathorProtocol) -> None:
         """Called when a peer is ready."""
