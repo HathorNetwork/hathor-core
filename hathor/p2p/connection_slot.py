@@ -58,6 +58,24 @@ class ConnectionSlots:
         if self.is_full():
             return ConnectionRejected(f"Slot {self.type} is full")
 
+<<<<<<< HEAD
+=======
+        # Check if slot is full. If type is check_entrypoints, there is a queue.
+        if len(self.connection_slot) >= self.max_slot_connections:
+            if self.type == HathorProtocol.ConnectionType.OUTGOING:
+
+                # The connection must be turned into CHECK_ENTRYPOINTS.
+                # Will return to on_peer_connect and slot it into check_entrypoints.
+                protocol.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
+                return False
+
+            # Check_EP is disconnected too, as we only queue endpoints of ready/valid peers.
+            protocol.disconnect(reason="Connection Slot if full. Try again later.")
+            return False
+
+        # If not full, add to slot if types match.
+        assert protocol.connection_type == self.type
+>>>>>>> 7000c352 (Update: Linting and Import fixes)
         self.connection_slot.add(protocol)
 
         return ConnectionAllowed(f"Added to slot {self.type}.")

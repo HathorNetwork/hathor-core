@@ -7,6 +7,7 @@ from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
+from hathor.p2p.connection_slot import Slot
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorProtocol
