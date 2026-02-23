@@ -27,7 +27,7 @@ from twisted.web.client import Agent
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import ConnectionAllowed, ConnectionRejected, ConnectionResult, Slot
+from hathor.p2p.connection_slot import ConnectionRejected, ConnectionResult, Slot
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -65,9 +65,6 @@ class _SyncRotateInfo(NamedTuple):
 class _ConnectingPeer(NamedTuple):
     entrypoint: PeerEndpoint
     endpoint_deferred: Deferred
-
-
-
 
 
 class PeerConnectionsMetrics(NamedTuple):
@@ -465,7 +462,6 @@ class ConnectionsManager:
             case _:
                 assert_never(conn_type)
 
-
         # Regardless of the slot sent, the total connections increases.
         # A connection waiting in queue is not added (yet) to the whole pool, only if another disconnects.
         if connection_allowed.isinstance(ConnectionRejected):
@@ -552,26 +548,28 @@ class ConnectionsManager:
         dequeued_ep = None
 
         # Each conn is from a slot - discard from it as well.
-        if protocol.connection_type == HathorProtocol.ConnectionType.OUTGOING:
-            self.outgoing_slot.remove_connection(protocol)
+        match protocol.connection_type:
+            case HathorProtocol.ConnectionType.OUTGOING:
+                self.outgoing_slot.remove_connection(protocol)
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.INCOMING:
-            self.incoming_slot.remove_connection(protocol)
+            case HathorProtocol.ConnectionType.INCOMING:
+                self.incoming_slot.remove_connection(protocol)
 
-        if protocol.connection_type == HathorProtocol.ConnectionType.DISCOVERED:
-            self.bootstrap_slot.remove_connection(protocol)
+            case HathorProtocol.ConnectionType.DISCOVERED:
+                self.bootstrap_slot.remove_connection(protocol)
 
-        # The only connection type that may pop from a queue is CHECK_ENTRYPOINTS
-        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            dequeued_ep = self.check_entrypoints_slot.remove_connection(protocol)
-            # For a given ep, check if some verified peer has it. If so, pop it off and restart.
-            while dequeued_ep:
-                for peer in self.verified_peer_storage.values():
-                    if dequeued_ep in peer.info.entrypoints:
-                        dequeued_ep = self.check_entrypoints_slot.remove_connection(protocol, True, dequeued_ep)
-                        break
-                if dequeued_ep and dequeued_ep not in peer.info.entrypoints:
-                    self.connect_to_endpoint(entrypoint=dequeued_ep.with_id(None))
+            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+                dequeued_ep = self.check_entrypoints_slot.remove_connection(protocol)
+                # For a given ep, check if some verified peer has it. If so, pop it off and restart.
+                while dequeued_ep:
+                    for peer in self.verified_peer_storage.values():
+                        if dequeued_ep in peer.info.entrypoints:
+                            dequeued_ep = self.check_entrypoints_slot.remove_connection(protocol, True, dequeued_ep)
+                            break
+                    if dequeued_ep and dequeued_ep not in peer.info.entrypoints:
+                        self.connect_to_endpoint(entrypoint=dequeued_ep.with_id(None))
+            case _:
+                assert_never()
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)

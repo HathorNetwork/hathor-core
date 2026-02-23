@@ -61,7 +61,6 @@ class DNSPeerDiscovery(PeerDiscovery):
             for entrypoint in (await self.dns_seed_lookup(host)):
                 connect_to_endpoint(entrypoint, discovery_call=True)
 
-
     async def dns_seed_lookup(self, host: str) -> set[PeerEndpoint]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
         """

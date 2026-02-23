@@ -695,3 +695,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # It passed through the cap of check_entrypoints. It mush be capped.
         self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
+
+    def test_example_usage_of_Slot(self) -> None:
+        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
+        slot = Slot(HathorProtocol.ConnectionType.OUTGOING, _settings, max_connections=50)
+        assert slot.max_slot_connections == 50

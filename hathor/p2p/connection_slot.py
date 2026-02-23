@@ -26,20 +26,23 @@ from hathor.p2p.protocol import HathorProtocol
 class ConnectionAllowed:
     pass
 
+
 @dataclass
 class ConnectionChanged:
     shift: str
 
+
 @dataclass
 class ConnectionRejected:
-    reason: str 
+    reason: str
+
 
 ConnectionResult = ConnectionAllowed | ConnectionChanged | ConnectionRejected
 
+
 class Slot:
-    """
-        Class of a connection pool slot - outgoing, incoming, discovered or check_entrypoints connections.
-    """
+    """ Class of a connection pool slot - outgoing, incoming, discovered or
+    check_entrypoints connections. """
     connection_slot: set[HathorProtocol]
     entrypoint_queue_slot: deque[PeerAddress]
     type: HathorProtocol.ConnectionType
@@ -55,7 +58,7 @@ class Slot:
 
         if max_connections <= 0:
             raise ValueError("Slot max number must allow at least one connection")
-        
+
         max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
         max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
         max_discovered: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
@@ -79,7 +82,6 @@ class Slot:
 
             case _:
                 assert_never(type)
-                
 
         self.max_slot_connections = max_connections
         # All slots have the same maximum size.
@@ -141,21 +143,24 @@ class Slot:
             # If protocol READY, the peer was verified. We take its EP's to the queue.
             # If protocol e.p. not in set, it is a new protocol with new e.p.'s to check.
             # If in set, it is a connection from a previously dequeued entrypoint.
-            if protocol.connection_state == HathorProtocol.ConnectionState.READY:
-                if protocol.entrypoint and protocol.entrypoint.addr not in self.entrypoint_set:
-                    entrypoints = protocol.peer.info.entrypoints
-                    # Unpack the entrypoints and put them in the queue and the set.
-                    for each_entrypoint in entrypoints:
-                        if protocol.entrypoint and each_entrypoint != protocol.entrypoint.addr:
-                            if len(self.entrypoint_queue_slot) == self.queue_size_entrypoints:
-                                # Limit achieved for QUEUE
-                                break
 
-                            if each_entrypoint not in self.entrypoint_queue_slot:
-                                self.entrypoint_queue_slot.appendleft(each_entrypoint)
+            if protocol.connection_state != HathorProtocol.ConnectionState.READY:
+                return None
 
-                            if each_entrypoint not in self.entrypoint_set:
-                                self.entrypoint_set.add(each_entrypoint)
+            if protocol.entrypoint and protocol.entrypoint.addr not in self.entrypoint_set:
+                entrypoints = protocol.peer.info.entrypoints
+                # Unpack the entrypoints and put them in the queue and the set.
+                for each_entrypoint in entrypoints:
+                    if protocol.entrypoint and each_entrypoint != protocol.entrypoint.addr:
+                        if len(self.entrypoint_queue_slot) == self.queue_size_entrypoints:
+                            # Limit achieved for QUEUE
+                            break
+
+                        if each_entrypoint not in self.entrypoint_queue_slot:
+                            self.entrypoint_queue_slot.appendleft(each_entrypoint)
+
+                        if each_entrypoint not in self.entrypoint_set:
+                            self.entrypoint_set.add(each_entrypoint)
 
         # If protocol not READY, it was a timeout.
         # Take one from the queue and turn it into a connection.
