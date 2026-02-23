@@ -19,6 +19,7 @@ from typing import Callable, TypeAlias
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred, gatherResults
+from twisted.internet.interfaces import IProtocol
 from twisted.names.client import lookupAddress, lookupText
 from twisted.names.dns import Record_A, Record_TXT, RRHeader
 from typing_extensions import override
@@ -53,7 +54,10 @@ class DNSPeerDiscovery(PeerDiscovery):
         return lookupText(host)
 
     @override
-    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(
+        self,
+        connect_to_endpoint: Callable[[PeerEndpoint], Deferred[IProtocol] | None],
+    ) -> None:
         """ Run DNS lookup for host and connect to it
             This is executed when starting the DNS Peer Discovery and first connecting to the network
         """

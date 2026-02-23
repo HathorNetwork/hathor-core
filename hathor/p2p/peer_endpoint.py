@@ -170,7 +170,7 @@ instead, compare the addr attribute explicitly, and if relevant, the peer_id too
 
     @classmethod
     def from_address(cls, address: IAddress) -> Self:
-        """Create an Entrypoint from a Twisted IAddress."""
+        """Create a PeerAddress from a Twisted IAddress."""
         if not isinstance(address, (IPv4Address, IPv6Address)):
             raise NotImplementedError(f'address: {address}')
         return cls.parse(f'{address.type}://{address.host}:{address.port}')

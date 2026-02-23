@@ -15,6 +15,9 @@
 from abc import ABC, abstractmethod
 from typing import Callable
 
+from twisted.internet.defer import Deferred
+from twisted.internet.interfaces import IProtocol
+
 from hathor.p2p.peer_endpoint import PeerEndpoint
 
 
@@ -23,7 +26,10 @@ class PeerDiscovery(ABC):
     """
 
     @abstractmethod
-    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(
+        self,
+        connect_to_endpoint: Callable[[PeerEndpoint], Deferred[IProtocol] | None],
+    ) -> None:
         """ This method must discover the peers and call `connect_to_endpoint` for each of them.
 
         :param connect_to_endpoint: Function which will be called for each discovered peer.

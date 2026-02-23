@@ -104,6 +104,14 @@ class FakeConnection:
         return entrypoint.with_id(self._fake_bootstrap_id)
 
     @property
+    def peer_addr1(self) -> PeerAddress:
+        return PeerAddress.from_address(self.addr1)
+
+    @property
+    def peer_addr2(self) -> PeerAddress:
+        return PeerAddress.from_address(self.addr2)
+
+    @property
     def proto1(self):
         return self._proto1
 
@@ -275,15 +283,11 @@ class FakeConnection:
         self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
         self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
 
-        # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls
-        # connect_to_endpoint()
+        # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls connect_to()
         peer = self._proto1.my_peer.to_unverified_peer() if self._fake_bootstrap_id is False else None
-        self.manager2.connections.connect_to_endpoint(self.entrypoint, peer)
-
-        connecting_peers = list(self.manager2.connections.connecting_peers.values())
-        for connecting_peer in connecting_peers:
-            if connecting_peer.entrypoint.addr == self.entrypoint.addr:
-                connecting_peer.endpoint_deferred.callback(self._proto2)
+        deferred = self.manager2.connections.connect_to(self.entrypoint, peer)
+        assert deferred is not None
+        deferred.callback(self._proto2)
 
         self.tr1 = HathorStringTransport(self._proto2.my_peer, peer_address=self.addr2)
         self.tr2 = HathorStringTransport(self._proto1.my_peer, peer_address=self.addr1)

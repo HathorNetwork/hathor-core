@@ -137,9 +137,6 @@ class PeerIdState(BaseState):
             protocol.send_error_and_close_connection('Connection string is not in the entrypoints.')
             return
 
-        if protocol.entrypoint is not None and protocol.entrypoint.peer_id is not None:
-            assert protocol.entrypoint.peer_id == peer.id
-
         if protocol.use_ssl:
             certificate_valid = peer.validate_certificate(protocol)
             if not certificate_valid:

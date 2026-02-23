@@ -146,31 +146,15 @@ class PeerInfo:
         # Entrypoint validation with connection string and connection host
         # Entrypoints have the format tcp://IP|name:port
         for entrypoint in self.entrypoints:
-            if protocol.entrypoint is not None:
-                # Connection string has the format tcp://IP:port
-                # So we must consider that the entrypoint could be in name format
-                if protocol.entrypoint.addr == entrypoint:
-                    return True
-                # TODO: don't use `daa.TEST_MODE` for this
-                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
-                result = await discover_dns(entrypoint.host, test_mode)
-                if protocol.entrypoint.addr in [endpoint.addr for endpoint in result]:
-                    return True
-            else:
-                # When the peer is the server part of the connection we don't have the full entrypoint description
-                # So we can only validate the host from the protocol
-                assert protocol.transport is not None
-                connection_remote = protocol.transport.getPeer()
-                connection_host = getattr(connection_remote, 'host', None)
-                if connection_host is None:
-                    continue
-                # Connection host has only the IP
-                # So we must consider that the entrypoint could be in name format and we just validate the host
-                if connection_host == entrypoint.host:
-                    return True
-                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
-                result = await discover_dns(entrypoint.host, test_mode)
-                if connection_host in [entrypoint.addr.host for entrypoint in result]:
+            # Connection string has the format tcp://IP:port
+            # So we must consider that the entrypoint could be in name format
+            if protocol.addr == entrypoint:
+                return True
+            # TODO: don't use `daa.TEST_MODE` for this
+            test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+            result = await discover_dns(entrypoint.host, test_mode)
+            for endpoint in result:
+                if protocol.addr == endpoint.addr:
                     return True
 
         return False
