@@ -1,4 +1,4 @@
-#  Copyright 2025 Hathor Labs
+#  Copyright 2026 Hathor Labs
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ def serialize(vertex: BaseTransaction) -> bytes:
 
 def serialize_funds(serializer: Serializer, vertex: BaseTransaction) -> None:
     """Serialize the funds part of a vertex into the given Serializer."""
-    match _try_tx_version(vertex.version):
+    match TxVersion(vertex.version):
         case TxVersion.ON_CHAIN_BLUEPRINT:
             from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
             from hathor.transaction.vertex_parser._on_chain_blueprint import serialize_ocb_extra_fields
@@ -73,13 +73,11 @@ def serialize_funds(serializer: Serializer, vertex: BaseTransaction) -> None:
             from hathor.transaction.vertex_parser._transaction import serialize_tx_funds
             assert isinstance(vertex, Transaction)
             serialize_tx_funds(serializer, vertex)
-        case None:
-            _write_funds_fallback(serializer, vertex)
 
 
 def serialize_graph(serializer: Serializer, vertex: BaseTransaction) -> None:
     """Serialize the graph part of a vertex into the given Serializer."""
-    match _try_tx_version(vertex.version):
+    match TxVersion(vertex.version):
         case TxVersion.POA_BLOCK:
             from hathor.consensus import poa
             from hathor.transaction.poa.poa_block import PoaBlock
@@ -95,13 +93,11 @@ def serialize_graph(serializer: Serializer, vertex: BaseTransaction) -> None:
         case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION | TxVersion.ON_CHAIN_BLUEPRINT:
             from hathor.transaction.vertex_parser._common import serialize_graph_fields
             serialize_graph_fields(serializer, vertex)
-        case None:
-            _write_graph_fallback(serializer, vertex)
 
 
 def serialize_nonce(serializer: Serializer, vertex: BaseTransaction) -> None:
     """Serialize the nonce/PoW part of a vertex into the given Serializer."""
-    match _try_tx_version(vertex.version):
+    match TxVersion(vertex.version):
         case TxVersion.MERGE_MINED_BLOCK:
             from hathor.transaction.merge_mined_block import MergeMinedBlock
             assert isinstance(vertex, MergeMinedBlock)
@@ -149,7 +145,7 @@ def serialize_sighash(tx: Transaction, *, skip_cache: bool = False) -> bytes:
 
     serializer = Serializer.build_bytes_serializer()
 
-    match _try_tx_version(tx.version):
+    match TxVersion(tx.version):
         case TxVersion.ON_CHAIN_BLUEPRINT:
             from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
             from hathor.transaction.vertex_parser._on_chain_blueprint import serialize_ocb_extra_fields_bytes
@@ -272,42 +268,3 @@ def deserialize_token_info(buf: bytes, *, verbose: VerboseCallback = None) -> tu
     decoded_symbol = decode_string_utf8(symbol, 'Token symbol')
 
     return decoded_name, decoded_symbol, token_version, buf
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _try_tx_version(version: int) -> TxVersion | None:
-    """Convert a version int to TxVersion, returning None for unknown versions."""
-    try:
-        return TxVersion(version)
-    except (ValueError, AssertionError):
-        return None
-
-
-def _write_funds_fallback(serializer: Serializer, vertex: BaseTransaction) -> None:
-    """Fallback for unknown versions: use isinstance to pick the right serializer."""
-    from hathor.transaction.block import Block
-    from hathor.transaction.transaction import Transaction
-    from hathor.transaction.vertex_parser._block import serialize_block_funds
-    from hathor.transaction.vertex_parser._transaction import serialize_tx_funds
-
-    if isinstance(vertex, Block):
-        serialize_block_funds(serializer, vertex)
-    else:
-        assert isinstance(vertex, Transaction)
-        serialize_tx_funds(serializer, vertex)
-
-
-def _write_graph_fallback(serializer: Serializer, vertex: BaseTransaction) -> None:
-    """Fallback for unknown versions: use isinstance to pick the right serializer."""
-    from hathor.transaction.block import Block
-    from hathor.transaction.vertex_parser._block import serialize_block_graph_fields
-    from hathor.transaction.vertex_parser._common import serialize_graph_fields
-
-    if isinstance(vertex, Block):
-        serialize_block_graph_fields(serializer, vertex)
-    else:
-        serialize_graph_fields(serializer, vertex)

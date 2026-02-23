@@ -104,8 +104,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
         deserialize_headers(deserializer, block, settings)
         deserializer.finalize()
         block.update_hash()
-        if storage is not None:
-            block.storage = storage
         return block
 
     @property

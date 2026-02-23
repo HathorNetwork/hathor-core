@@ -24,6 +24,8 @@ from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.util import VerboseCallback
 
+_MAX_POA_SIGNATURE_LEN: int = 100
+
 
 class PoaBlock(Block):
     """A Proof-of-Authority block."""
@@ -72,14 +74,13 @@ class PoaBlock(Block):
         deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
         deserialize_block_funds(deserializer, block, verbose=verbose)
         deserialize_poa_block_graph_fields(
-            deserializer, block, signer_id_len=poa.SIGNER_ID_LEN, max_signature_len=100, verbose=verbose,
+            deserializer, block, signer_id_len=poa.SIGNER_ID_LEN, max_signature_len=_MAX_POA_SIGNATURE_LEN,
+            verbose=verbose,
         )
         block.nonce = int.from_bytes(deserializer.read_bytes(cls.SERIALIZATION_NONCE_SIZE), byteorder='big')
         deserialize_headers(deserializer, block, settings)
         deserializer.finalize()
         block.update_hash()
-        if storage is not None:
-            block.storage = storage
         return block
 
     @override

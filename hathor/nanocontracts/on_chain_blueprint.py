@@ -197,9 +197,9 @@ class OnChainBlueprint(Transaction):
                            *, verbose: VerboseCallback = None) -> Self:
         from hathor.serialization import Deserializer
         from hathor.transaction.vertex_parser._common import deserialize_graph_fields
+        from hathor.transaction.vertex_parser._headers import deserialize_headers
         from hathor.transaction.vertex_parser._on_chain_blueprint import deserialize_ocb_extra_fields
         from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
-        from hathor.transaction.vertex_parser._headers import deserialize_headers
         settings = get_global_settings()
         tx = cls(storage=storage)
         deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
@@ -212,8 +212,6 @@ class OnChainBlueprint(Transaction):
         deserialize_headers(deserializer, tx, settings)
         deserializer.finalize()
         tx.update_hash()
-        if storage is not None:
-            tx.storage = storage
         return tx
 
     @override

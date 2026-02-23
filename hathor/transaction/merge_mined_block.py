@@ -72,7 +72,6 @@ class MergeMinedBlock(Block):
         block.aux_pow = BitcoinAuxPow.from_bytes(bytes(deserializer.read_all()))
         deserializer.finalize()
         block.hash = block.calculate_hash()
-        block.storage = storage
         return block
 
     @override

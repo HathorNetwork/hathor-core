@@ -411,7 +411,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         :rtype: bytes
         """
-        return self.get_struct_without_nonce() + self.get_struct_nonce() + self.get_headers_struct()
+        from hathor.transaction.vertex_parser.vertex_serializer import serialize
+        return serialize(self)
 
     def get_all_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""

@@ -943,7 +943,7 @@ class TransactionTest(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
         block = Block(
             signal_bits=0xF0,
-            version=0x0F,
+            version=TxVersion.REGULAR_BLOCK,
             nonce=100,
             weight=1,
             parents=[genesis_block.hash]

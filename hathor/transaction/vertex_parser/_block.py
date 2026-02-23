@@ -1,4 +1,4 @@
-#  Copyright 2025 Hathor Labs
+#  Copyright 2026 Hathor Labs
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ from hathor.transaction.vertex_parser._common import (
 )
 
 if TYPE_CHECKING:
+    from hathor.transaction.base_transaction import TxOutput
     from hathor.transaction.block import Block
     from hathor.transaction.poa.poa_block import PoaBlock
 
@@ -94,8 +95,6 @@ def deserialize_block_funds(
 
     Sets block.signal_bits, block.version, block.outputs directly.
     """
-    from hathor.transaction.base_transaction import TxOutput
-
     (signal_bits, version, outputs_len) = deserializer.read_struct('!BBB')
     if verbose:
         verbose('signal_bits', signal_bits)

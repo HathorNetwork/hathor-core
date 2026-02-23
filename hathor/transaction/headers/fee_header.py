@@ -61,9 +61,12 @@ class FeeHeader(VertexBaseHeader):
         verbose: VerboseCallback = None
     ) -> tuple[FeeHeader, bytes]:
         from hathor.serialization import Deserializer
+        from hathor.transaction import Transaction
         from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header
         deserializer = Deserializer.build_bytes_deserializer(buf)
-        header = deserialize_fee_header(deserializer, tx, verbose=verbose)
+        fees = deserialize_fee_header(deserializer, verbose=verbose)
+        assert isinstance(tx, Transaction)
+        header = cls(settings=tx._settings, tx=tx, fees=fees)
         return header, bytes(deserializer.read_all())
 
     def serialize(self) -> bytes:

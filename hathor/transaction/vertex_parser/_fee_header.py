@@ -1,4 +1,4 @@
-#  Copyright 2025 Hathor Labs
+#  Copyright 2026 Hathor Labs
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,17 +16,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-
-if TYPE_CHECKING:
-    from hathor.transaction.base_transaction import BaseTransaction
-
 
 # ---------------------------------------------------------------------------
 # Deserialization
@@ -35,14 +29,10 @@ if TYPE_CHECKING:
 
 def deserialize_fee_header(
     deserializer: Deserializer,
-    tx: BaseTransaction,
     *,
     verbose: VerboseCallback = None,
-) -> FeeHeader:
-    """Deserialize a FeeHeader from the deserializer."""
-    from hathor.transaction import Transaction
-    assert isinstance(tx, Transaction)
-
+) -> list[FeeHeaderEntry]:
+    """Deserialize fee header data from the deserializer."""
     header_id = bytes(deserializer.read_bytes(1))
     if verbose:
         verbose('header_id', header_id)
@@ -60,11 +50,7 @@ def deserialize_fee_header(
             amount=amount,
         ))
 
-    return FeeHeader(
-        settings=tx._settings,
-        tx=tx,
-        fees=fees,
-    )
+    return fees
 
 
 # ---------------------------------------------------------------------------

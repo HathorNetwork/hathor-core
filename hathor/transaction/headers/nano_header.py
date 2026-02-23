@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING
 
 from typing_extensions import assert_never
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
+    from hathor.transaction.vertex_parser._nano_header import NanoHeaderData
 
 ADDRESS_LEN_BYTES: int = 25
 ADDRESS_SEQNUM_SIZE: int = 8  # bytes
@@ -111,6 +112,11 @@ class NanoHeader(VertexBaseHeader):
     nc_script: bytes
 
     @classmethod
+    def create_from_data(cls, tx: Transaction, data: NanoHeaderData) -> NanoHeader:
+        """Create a NanoHeader from a NanoHeaderData instance."""
+        return cls(tx=tx, **{f.name: getattr(data, f.name) for f in fields(data)})
+
+    @classmethod
     def deserialize(
         cls,
         tx: BaseTransaction,
@@ -119,9 +125,12 @@ class NanoHeader(VertexBaseHeader):
         verbose: VerboseCallback = None
     ) -> tuple[NanoHeader, bytes]:
         from hathor.serialization import Deserializer
+        from hathor.transaction import Transaction
         from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header
         deserializer = Deserializer.build_bytes_deserializer(buf)
-        header = deserialize_nano_header(deserializer, tx, verbose=verbose)
+        data = deserialize_nano_header(deserializer, verbose=verbose)
+        assert isinstance(tx, Transaction)
+        header = cls.create_from_data(tx, data)
         return header, bytes(deserializer.read_all())
 
     def serialize(self) -> bytes:

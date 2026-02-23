@@ -1,4 +1,4 @@
-#  Copyright 2024 Hathor Labs
+#  Copyright 2026 Hathor Labs
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -44,11 +44,19 @@ def deserialize_headers(
         header: VertexBaseHeader
         match header_id:
             case VertexHeaderId.NANO_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import NanoHeader
                 from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header
-                header = deserialize_nano_header(deserializer, vertex)
+                assert isinstance(vertex, Transaction)
+                data = deserialize_nano_header(deserializer)
+                header = NanoHeader.create_from_data(vertex, data)
             case VertexHeaderId.FEE_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import FeeHeader
                 from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header
-                header = deserialize_fee_header(deserializer, vertex)
+                assert isinstance(vertex, Transaction)
+                fees = deserialize_fee_header(deserializer)
+                header = FeeHeader(settings=settings, tx=vertex, fees=fees)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)

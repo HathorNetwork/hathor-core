@@ -1,4 +1,4 @@
-#  Copyright 2025 Hathor Labs
+#  Copyright 2026 Hathor Labs
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -16,23 +16,32 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
 from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
 from hathor.transaction.headers.nano_header import (
+    _NC_SCRIPT_LEN_MAX_BYTES,
     ADDRESS_LEN_BYTES,
     ADDRESS_SEQNUM_SIZE,
     NanoHeader,
     NanoHeaderAction,
-    _NC_SCRIPT_LEN_MAX_BYTES,
 )
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
 
-if TYPE_CHECKING:
-    from hathor.transaction.base_transaction import BaseTransaction
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class NanoHeaderData:
+    """Raw deserialized data for a NanoHeader, decoupled from domain models."""
+    nc_seqnum: int
+    nc_id: bytes
+    nc_method: str
+    nc_args_bytes: bytes
+    nc_actions: list[NanoHeaderAction]
+    nc_address: bytes
+    nc_script: bytes
 
 
 # ---------------------------------------------------------------------------
@@ -42,14 +51,10 @@ if TYPE_CHECKING:
 
 def deserialize_nano_header(
     deserializer: Deserializer,
-    tx: BaseTransaction,
     *,
     verbose: VerboseCallback = None,
-) -> NanoHeader:
-    """Deserialize a NanoHeader from the deserializer."""
-    from hathor.transaction import Transaction
-    assert isinstance(tx, Transaction)
-
+) -> NanoHeaderData:
+    """Deserialize nano header data from the deserializer."""
     header_id = bytes(deserializer.read_bytes(1))
     if verbose:
         verbose('header_id', header_id)
@@ -101,8 +106,7 @@ def deserialize_nano_header(
 
     decoded_nc_method = nc_method.decode('ascii')
 
-    return NanoHeader(
-        tx=tx,
+    return NanoHeaderData(
         nc_seqnum=nc_seqnum,
         nc_id=nc_id,
         nc_method=decoded_nc_method,
