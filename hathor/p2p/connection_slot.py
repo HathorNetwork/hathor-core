@@ -23,8 +23,9 @@ from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.protocol import HathorProtocol
 
 
+@dataclass
 class ConnectionAllowed:
-    pass
+    confirmation: str
 
 
 @dataclass
@@ -86,9 +87,9 @@ class Slot:
         self.max_slot_connections = max_connections
         # All slots have the same maximum size.
         # Only valid for check_entrypoin
-        self.queue_size_entrypoints = settings.QUEUE_SIZE
+        self.queue_size_entrypoints = settings.P2P_QUEUE_SIZE
 
-    def add_connection(self, protocol: HathorProtocol) -> ConnectionResult:
+    def add_connection(self, protocol: HathorProtocol) -> ConnectionAllowed | ConnectionChanged | ConnectionRejected:
         """
             Adds connection protocol to the slot. Checks whether the slot is full or not. If full,
             disconnects the protocol. If the type is 'check_entrypoints', the returns peers of it
@@ -97,6 +98,7 @@ class Slot:
         """
         # Make sure connection types match
         assert self.type == protocol.connection_type
+        connection_status: ConnectionResult
 
         if protocol in self.connection_slot:
             return ConnectionRejected("Protocol already in Slot.")
@@ -126,7 +128,8 @@ class Slot:
         assert protocol.connection_type == self.type
         self.connection_slot.add(protocol)
 
-        return ConnectionAllowed
+        connection_status = ConnectionAllowed(f"Type {self.type} added, slot length: {len(self.connection_slot)}")
+        return connection_status
 
     def remove_connection(self, protocol: HathorProtocol, revisit: bool = False,
                           previous_entrypoint: PeerAddress | None = None) -> Optional[PeerAddress] | None:

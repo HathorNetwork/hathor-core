@@ -528,9 +528,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         # Number of peers and thresholds of connections in slots and pool
         max_number_outgoing_connections = 45  # Note: After around 100, no more peer ids in the pool ?
         max_connections = _settings.PEER_MAX_CONNECTIONS
-        max_incoming_connections = _settings.PEER_MAX_INCOMING_CONNECTIONS
-        max_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
-        max_check_entrypoints = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_incoming_connections = _settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
+        max_outgoing_connections = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_entrypoints = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
 
         # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
         full_node = self.create_peer()
@@ -590,8 +590,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
 
         # Create exactly the amount of peers that the slot can handle
-        max_number_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
-        max_check_ep_connections = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_number_outgoing_connections = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_ep_connections = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
         full_node = self.create_peer()
 
         out_peerList = []
@@ -649,8 +649,8 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
 
         # Create exactly the amount of peers that the outgoing slot can handle
-        max_number_outgoing_connections = _settings.PEER_MAX_OUTGOING_CONNECTIONS
-        max_check_ep_connections = _settings.PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_number_outgoing_connections = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_check_ep_connections = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
         full_node = self.create_peer()
 
         out_peerList = []

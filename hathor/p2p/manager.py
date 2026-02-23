@@ -431,7 +431,7 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def on_peer_connect(self, protocol: HathorProtocol) -> ConnectionResult:
+    def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
 
         # Checks whether connections in the network are at limit.
@@ -440,7 +440,8 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
-        connection_allowed = False  # If protocol is added to slot, True. If to Queue or disconnected, False.
+        connection_allowed: ConnectionResult
+        # If protocol is added to slot, True. If to Queue or disconnected, False.
         # Next block sends the connection to the appropriate slot.
         conn_type = protocol.connection_type
 
@@ -464,8 +465,8 @@ class ConnectionsManager:
 
         # Regardless of the slot sent, the total connections increases.
         # A connection waiting in queue is not added (yet) to the whole pool, only if another disconnects.
-        if connection_allowed.isinstance(ConnectionRejected):
-            return connection_allowed
+        if isinstance(connection_allowed, ConnectionRejected):
+            return
 
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)

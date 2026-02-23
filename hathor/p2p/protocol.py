@@ -139,7 +139,7 @@ class HathorProtocol:
         self.connection_type = connection_type
 
         # Connection State
-        self.connection_state = HathorProtocol.ConnectionState.INIT
+        self.connection_state = HathorProtocol.ConnectionState.CREATED
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT

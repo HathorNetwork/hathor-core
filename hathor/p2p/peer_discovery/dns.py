@@ -53,7 +53,7 @@ class DNSPeerDiscovery(PeerDiscovery):
         return lookupText(host)
 
     @override
-    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(self, connect_to_endpoint: Callable[..., None]) -> None:
         """ Run DNS lookup for host and connect to it
             This is executed when starting the DNS Peer Discovery and first connecting to the network
         """
