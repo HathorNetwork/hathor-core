@@ -5,7 +5,7 @@ from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
-from hathor.p2p.peer_endpoint import PeerEndpoint
+from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.protocol import HathorProtocol
 from hathor.pubsub import HathorEvents
 from hathor.simulator.utils import add_new_blocks
@@ -40,7 +40,7 @@ class MetricsTest(unittest.TestCase):
         # Assertion
         self.assertEquals(manager.metrics.connecting_peers, 3)
         self.assertEquals(manager.metrics.handshaking_peers, 4)
-        self.assertEquals(manager.metrics.connected_peers, 5)
+        self.assertEquals(manager.metrics.ready_peers, 5)
         self.assertEquals(manager.metrics.known_peers, 6)
 
         manager.metrics.stop()
@@ -58,25 +58,35 @@ class MetricsTest(unittest.TestCase):
         wallet = Wallet(directory=tmpdir)
         wallet.unlock(b'teste')
         manager = self.create_peer('testnet', tx_storage=tx_storage, wallet=wallet)
+        p2p_manager = manager.connections
 
-        manager.connections.verified_peer_storage.update({
+        p2p_manager.verified_peer_storage.update({
             "1": PrivatePeer.auto_generated(),
             "2": PrivatePeer.auto_generated(),
             "3": PrivatePeer.auto_generated(),
         })
-        manager.connections.connected_peers.update({"1": Mock(), "2": Mock()})
-        manager.connections.handshaking_peers.update({Mock()})
+        peer1 = Mock()
+        peer1.addr = PeerAddress.parse('tcp://localhost:40403')
+        peer2 = Mock()
+        peer2.addr = PeerAddress.parse('tcp://localhost:40404')
+        peer3 = Mock()
+        peer3.addr = PeerAddress.parse('tcp://localhost:40405')
+        p2p_manager._connections.on_connected(protocol=peer1)
+        p2p_manager._connections.on_connected(protocol=peer2)
+        p2p_manager._connections.on_connected(protocol=peer3)
+        p2p_manager._connections.on_ready(addr=peer1.addr, peer_id=Mock())
+        p2p_manager._connections.on_ready(addr=peer2.addr, peer_id=Mock())
 
         # Execution
         endpoint = PeerEndpoint.parse('tcp://127.0.0.1:8005')
         # This will trigger sending to the pubsub one of the network events
-        manager.connections.connect_to_endpoint(endpoint, use_ssl=True)
+        manager.connections.connect_to(endpoint)
 
         self.run_to_completion()
 
         # Assertion
         self.assertEquals(manager.metrics.known_peers, 3)
-        self.assertEquals(manager.metrics.connected_peers, 2)
+        self.assertEquals(manager.metrics.ready_peers, 2)
         self.assertEquals(manager.metrics.handshaking_peers, 1)
         self.assertEquals(manager.metrics.connecting_peers, 1)
 
@@ -201,18 +211,21 @@ class MetricsTest(unittest.TestCase):
         """
         # Preparation
         manager = self.create_peer('testnet')
-
-        my_peer = manager.my_peer
+        self.assertIsInstance(manager.tx_storage, TransactionMemoryStorage)
+        port = 40403
 
         def build_hathor_protocol():
+            nonlocal port
             protocol = HathorProtocol(
-                my_peer=my_peer,
+                my_peer=manager.my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
                 inbound=False,
-                settings=self._settings
+                settings=self._settings,
+                addr=PeerAddress.parse(f'tcp://localhost:{port}')
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()
+            port += 1
 
             return protocol
 
@@ -232,9 +245,12 @@ class MetricsTest(unittest.TestCase):
         fake_peers[2].metrics.discarded_blocks = 3
         fake_peers[2].metrics.discarded_txs = 3
 
-        manager.connections.connections.add(fake_peers[0])
-        manager.connections.connections.add(fake_peers[1])
-        manager.connections.connections.add(fake_peers[2])
+        manager.connections._connections._addr_by_id[fake_peers[0].peer.id] = fake_peers[0].addr
+        manager.connections._connections._addr_by_id[fake_peers[1].peer.id] = fake_peers[1].addr
+        manager.connections._connections._addr_by_id[fake_peers[2].peer.id] = fake_peers[2].addr
+        manager.connections._connections._ready[fake_peers[0].addr] = fake_peers[0]
+        manager.connections._connections._ready[fake_peers[1].addr] = fake_peers[1]
+        manager.connections._connections._ready[fake_peers[2].addr] = fake_peers[2]
 
         # Execution
         manager.metrics._collect_data()

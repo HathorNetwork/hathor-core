@@ -2,6 +2,7 @@ import os
 import tempfile
 from unittest.mock import MagicMock
 
+from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.sysctl import ConnectionsManagerSysctl
 from hathor.sysctl.exception import SysctlException
@@ -168,7 +169,9 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         peer_id = '0e2bd0d8cd1fb6d040801c32ec27e8986ce85eb8810b6c878dcad15bce3b5b1e'
         conn = MagicMock()
-        p2p_manager.connected_peers[PeerId(peer_id)] = conn
+        conn.addr = PeerAddress.parse('tcp://localhost:40403')
+        p2p_manager._connections.on_connected(protocol=conn)
+        p2p_manager._connections.on_ready(addr=conn.addr, peer_id=PeerId(peer_id))
         self.assertEqual(conn.disconnect.call_count, 0)
         sysctl.unsafe_set('kill_connection', peer_id)
         self.assertEqual(conn.disconnect.call_count, 1)

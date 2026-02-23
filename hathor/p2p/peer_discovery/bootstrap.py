@@ -39,9 +39,6 @@ class BootstrapPeerDiscovery(PeerDiscovery):
         self.entrypoints = entrypoints
 
     @override
-    async def discover_and_connect(
-        self,
-        connect_to_endpoint: Callable[[PeerEndpoint], Deferred[IProtocol] | None],
-    ) -> None:
+    async def discover_and_connect(self, connect_to: Callable[[PeerEndpoint], Deferred[IProtocol] | None]) -> None:
         for entrypoint in self.entrypoints:
             connect_to_endpoint(entrypoint)

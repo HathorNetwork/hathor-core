@@ -1,4 +1,3 @@
-from twisted.internet import endpoints
 from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks
 
@@ -64,18 +63,18 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(server_data['network'], 'testnet')
         self.assertGreater(server_data['uptime'], 0)
 
-        handshake_peer = self.conn1.proto1.transport.getPeer()
-        handshake_address = '{}:{}'.format(handshake_peer.host, handshake_peer.port)
-
         self.assertEqual(len(known_peers), 0)
         self.assertEqual(len(connections['connected_peers']), 0)
         self.assertEqual(len(connections['handshaking_peers']), 1)
-        self.assertEqual(connections['handshaking_peers'][0]['address'], handshake_address)
+        self.assertEqual(connections['handshaking_peers'][0]['address'], str(self.conn1.proto1.addr))
 
     @inlineCallbacks
     def test_get_with_one_peer(self):
+        assert self.conn1.peek_tr1_value().startswith(b'HELLO')
         self.conn1.run_one_step()  # HELLO
+        assert self.conn1.peek_tr1_value().startswith(b'PEER-ID')
         self.conn1.run_one_step()  # PEER-ID
+        assert self.conn1.peek_tr1_value().startswith(b'READY')
         self.conn1.run_one_step()  # READY
         self.conn1.run_one_step()  # BOTH PEERS ARE READY NOW
 
@@ -96,14 +95,24 @@ class StatusTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_connecting_peers(self):
-        address = '192.168.1.1:54321'
-        endpoint = endpoints.clientFromString(self.manager.reactor, 'tcp:{}'.format(address))
-        deferred = endpoint.connect
-        self.manager.connections.connecting_peers[endpoint] = deferred
+        peer_address = PeerAddress.parse('tcp://192.168.1.1:54321')
+        self.manager.connections._connections._connecting_outbound.add(peer_address)
 
         response = yield self.web.get("status")
         data = response.json_value()
         connecting = data['connections']['connecting_peers']
         self.assertEqual(len(connecting), 1)
-        self.assertEqual(connecting[0]['address'], address)
-        self.assertIsNotNone(connecting[0]['deferred'])
+        self.assertEqual(connecting[0]['address'], str(peer_address))
+
+
+class SyncV1StatusTest(unittest.SyncV1Params, BaseStatusTest):
+    __test__ = True
+
+
+class SyncV2StatusTest(unittest.SyncV2Params, BaseStatusTest):
+    __test__ = True
+
+
+# sync-bridge should behave like sync-v2
+class SyncBridgeStatusTest(unittest.SyncBridgeParams, SyncV2StatusTest):
+    pass

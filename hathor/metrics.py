@@ -108,8 +108,8 @@ class Metrics:
     # Variables to store the last block when we updated the RocksDB storage metrics
     last_txstorage_data_block: Optional[int] = None
 
-    # Peers connected
-    connected_peers: int = 0
+    # Peers ready
+    ready_peers: int = 0
     # Peers handshaking
     handshaking_peers: int = 0
     # Peers connecting
@@ -203,7 +203,7 @@ class Metrics:
         ):
             peers_connection_metrics: PeerConnectionsMetrics = data["peers_count"]
 
-            self.connected_peers = peers_connection_metrics.connected_peers_count
+            self.ready_peers = peers_connection_metrics.ready_peers_count
             self.connecting_peers = peers_connection_metrics.connecting_peers_count
             self.handshaking_peers = peers_connection_metrics.handshaking_peers_count
             self.known_peers = peers_connection_metrics.known_peers_count
@@ -250,14 +250,14 @@ class Metrics:
         """
         self.peer_connection_metrics.clear()
 
-        for connection in self.connections.connections:
+        for connection in self.connections.get_connected_peers():
             if not connection._peer:
                 # A connection without peer will not be able to communicate
                 # So we can just discard it for the sake of the metrics
                 continue
 
             metric = PeerConnectionMetrics(
-                connection_string=str(connection.entrypoint) if connection.entrypoint else "",
+                connection_string=str(connection.addr),
                 peer_id=str(connection.peer.id),
                 network=settings.NETWORK_NAME,
                 received_messages=connection.metrics.received_messages,

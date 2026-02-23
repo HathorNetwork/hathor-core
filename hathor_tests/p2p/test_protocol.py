@@ -2,6 +2,7 @@ import json
 from typing import Optional
 from unittest.mock import Mock, patch
 
+import pytest
 from twisted.internet import defer
 from twisted.internet.address import IPv4Address
 from twisted.internet.protocol import Protocol
@@ -116,8 +117,11 @@ class HathorProtocolTestCase(unittest.TestCase):
 
         # Test empty disconnect
         self.conn.proto1.state = None
-        self.conn.proto1.connections = None
-        self.conn.proto1.on_disconnect(Failure(Exception()))
+        with pytest.raises(AssertionError):
+            # TODO: This raises because we are trying to disconnect a protocol with no state, but it's not possible
+            #  for a protocol to have no state after it's handshaking. We have to update this when we introduce the
+            #  new non-None initial state for protocols.
+            self.conn.proto1.on_disconnect(Failure(Exception()))
 
     def test_invalid_size(self) -> None:
         self.conn.tr1.clear()
@@ -281,6 +285,44 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertTrue('192.168.1.1' in map(lambda x: x.host, conn.proto2.peer.info.entrypoints))
         self.assertEqual(next(iter(conn.proto1.peer.info.entrypoints)).host, '192.168.1.1')
 
+    def test_invalid_duplicate_addr(self) -> None:
+        """
+        We try to connect to an already connected entrypoint in each state,
+        and it should never add the new connection to connecting_outbound_peers.
+        """
+        # We also specifically compare localhost with 127.0.0.1, because they are considered the same.
+        assert self.conn.addr2.type == 'TCP' and self.conn.addr2.host == '127.0.0.1'
+        entrypoint = PeerEndpoint.parse(f'tcp://localhost:{self.conn.addr2.port}')
+
+        self.manager1.connections.connect_to(entrypoint)
+        assert self.manager1.connections._connections.connecting_outbound_peers() == set()
+        assert self.manager1.connections._connections.handshaking_peers() == {self.conn.peer_addr2: self.conn.proto1}
+        assert self.manager1.connections._connections.ready_peers() == {}
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'HELLO')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'HELLO')
+
+        self.conn.run_one_step()  # HELLO
+        self.manager1.connections.connect_to(entrypoint)
+        assert self.manager1.connections._connections.connecting_outbound_peers() == set()
+        assert self.manager1.connections._connections.handshaking_peers() == {self.conn.peer_addr2: self.conn.proto1}
+        assert self.manager1.connections._connections.ready_peers() == {}
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'PEER-ID')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'PEER-ID')
+
+        self.conn.run_one_step()  # PEER-ID
+        self.manager1.connections.connect_to(entrypoint)
+        assert self.manager1.connections._connections.connecting_outbound_peers() == set()
+        assert self.manager1.connections._connections.handshaking_peers() == {self.conn.peer_addr2: self.conn.proto1}
+        assert self.manager1.connections._connections.ready_peers() == {}
+        self._check_result_only_cmd(self.conn.peek_tr1_value(), b'READY')
+        self._check_result_only_cmd(self.conn.peek_tr2_value(), b'READY')
+
+        self.conn.run_one_step()  # READY
+        self.manager1.connections.connect_to(entrypoint)
+        assert self.manager1.connections._connections.connecting_outbound_peers() == set()
+        assert self.manager1.connections._connections.handshaking_peers() == {}
+        assert self.manager1.connections._connections.ready_peers() == {self.conn.peer_addr2: self.conn.proto1}
+
     def test_invalid_same_peer_id(self) -> None:
         manager3 = self.create_peer(self.network, peer=self.peer1)
         conn = FakeConnection(self.manager1, manager3)
@@ -331,21 +373,24 @@ class HathorProtocolTestCase(unittest.TestCase):
         # one of the peers will close the connection. We don't know which one, as it depends
         # on the peer ids
 
-        if self.conn.tr1.disconnecting or self.conn.tr2.disconnecting:
-            conn_dead = self.conn
+        if bytes(self.peer1.id) > bytes(self.peer2.id):
+            tr_dead = self.conn.tr1
+            tr_dead_value = self.conn.peek_tr1_value()
+            proto_alive = conn.proto2
             conn_alive = conn
-        elif conn.tr1.disconnecting or conn.tr2.disconnecting:
-            conn_dead = conn
-            conn_alive = self.conn
         else:
-            raise Exception('It should never happen.')
-        self._check_result_only_cmd(conn_dead.peek_tr1_value() + conn_dead.peek_tr2_value(), b'ERROR')
+            tr_dead = conn.tr2
+            tr_dead_value = conn.peek_tr2_value()
+            proto_alive = self.conn.proto1
+            conn_alive = self.conn
+
+        self._check_result_only_cmd(tr_dead_value, b'ERROR')
         # at this point, the connection must be closing as the error was detected on READY state
-        self.assertIn(True, [conn_dead.tr1.disconnecting, conn_dead.tr2.disconnecting])
-        # check connected_peers
-        connected_peers = list(self.manager1.connections.connected_peers.values())
-        self.assertEquals(1, len(connected_peers))
-        self.assertIn(connected_peers[0], [conn_alive.proto1, conn_alive.proto2])
+        self.assertTrue(tr_dead.disconnecting)
+        # check ready_peers
+        ready_peers = list(self.manager1.connections.iter_ready_connections())
+        self.assertEquals(1, len(ready_peers))
+        self.assertEquals(ready_peers[0], proto_alive)
         # connection is still up
         self.assertIsConnected(conn_alive)
 
@@ -425,32 +470,32 @@ class HathorProtocolTestCase(unittest.TestCase):
         self.assertTrue(self.conn.tr1.disconnecting)
 
     def test_on_disconnect(self) -> None:
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
         self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
 
     def test_on_disconnect_after_hello(self) -> None:
         self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
         self.conn.disconnect(Failure(Exception('testing')))
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
 
     def test_on_disconnect_after_peer(self) -> None:
         self.conn.run_one_step()  # HELLO
-        self.assertIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
         # No peer id in the peer_storage (known_peers)
         self.assertNotIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
         # The peer READY now depends on a message exchange from both peers, so we need one more step
         self.conn.run_one_step()  # PEER-ID
         self.conn.run_one_step()  # READY
-        self.assertIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        self.assertIn(self.conn.proto1, self.manager1.connections.iter_ready_connections())
         # Peer id 2 in the peer_storage (known_peers) after connection
         self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.handshaking_peers)
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.iter_handshaking_peers())
         self.conn.disconnect(Failure(Exception('testing')))
         # Peer id 2 in the peer_storage (known_peers) after disconnection but before looping call
         self.assertIn(self.peer2.id, self.manager1.connections.verified_peer_storage)
-        self.assertNotIn(self.conn.proto1, self.manager1.connections.connected_peers.values())
+        self.assertNotIn(self.conn.proto1, self.manager1.connections.iter_ready_connections())
 
         self.clock.advance(10)
         # Peer id 2 removed from peer_storage (known_peers) after disconnection and after looping call
@@ -466,9 +511,9 @@ class HathorProtocolTestCase(unittest.TestCase):
         p2p_manager: ConnectionsManager = self.manager2.connections
 
         # Initially, manager1 and manager2 are handshaking, from the setup
-        assert p2p_manager.connecting_peers == {}
-        assert p2p_manager.handshaking_peers == {self.conn.proto2}
-        assert p2p_manager.connected_peers == {}
+        assert p2p_manager._connections.connecting_outbound_peers() == set()
+        assert p2p_manager._connections.handshaking_peers() == {self.conn.peer_addr1: self.conn.proto2}
+        assert p2p_manager._connections.ready_peers() == {}
 
         # We change our peer id (on manager1)
         new_peer = PrivatePeer.auto_generated()
@@ -486,9 +531,9 @@ class HathorProtocolTestCase(unittest.TestCase):
         p2p_manager: ConnectionsManager = self.manager1.connections
 
         # Initially, manager1 and manager2 are handshaking, from the setup
-        assert p2p_manager.connecting_peers == {}
-        assert p2p_manager.handshaking_peers == {self.conn.proto1}
-        assert p2p_manager.connected_peers == {}
+        assert p2p_manager._connections.connecting_outbound_peers() == set()
+        assert p2p_manager._connections.handshaking_peers() == {self.conn.peer_addr2: self.conn.proto1}
+        assert p2p_manager._connections.ready_peers() == {}
 
         # We create a new manager3, and use it as a bootstrap in manager1
         peer3 = PrivatePeer.auto_generated()
@@ -496,9 +541,12 @@ class HathorProtocolTestCase(unittest.TestCase):
         conn = FakeConnection(manager1=manager3, manager2=self.manager1, fake_bootstrap_id=peer3.id)
 
         # Now manager1 and manager3 are handshaking
-        assert p2p_manager.connecting_peers == {}
-        assert p2p_manager.handshaking_peers == {self.conn.proto1, conn.proto2}
-        assert p2p_manager.connected_peers == {}
+        assert p2p_manager._connections.connecting_outbound_peers() == set()
+        assert p2p_manager._connections.handshaking_peers() == {
+            self.conn.peer_addr2: self.conn.proto1,
+            conn.peer_addr1: conn.proto2,
+        }
+        assert p2p_manager._connections.ready_peers() == {}
 
         # We change our peer id (on manager3)
         new_peer = PrivatePeer.auto_generated()
@@ -516,18 +564,21 @@ class HathorProtocolTestCase(unittest.TestCase):
         p2p_manager: ConnectionsManager = self.manager1.connections
 
         # Initially, manager1 and manager2 are handshaking, from the setup
-        assert p2p_manager.connecting_peers == {}
-        assert p2p_manager.handshaking_peers == {self.conn.proto1}
-        assert p2p_manager.connected_peers == {}
+        assert p2p_manager._connections.connecting_outbound_peers() == set()
+        assert p2p_manager._connections.handshaking_peers() == {self.conn.peer_addr2: self.conn.proto1}
+        assert p2p_manager._connections.ready_peers() == {}
 
         # We create a new manager3, and use it as a bootstrap in manager1, but without the peer_id
         manager3: HathorManager = self.create_peer(self.network)
         conn = FakeConnection(manager1=manager3, manager2=self.manager1, fake_bootstrap_id=None)
 
         # Now manager1 and manager3 are handshaking
-        assert p2p_manager.connecting_peers == {}
-        assert p2p_manager.handshaking_peers == {self.conn.proto1, conn.proto2}
-        assert p2p_manager.connected_peers == {}
+        assert p2p_manager._connections.connecting_outbound_peers() == set()
+        assert p2p_manager._connections.handshaking_peers() == {
+            self.conn.peer_addr2: self.conn.proto1,
+            conn.peer_addr1: conn.proto2,
+        }
+        assert p2p_manager._connections.ready_peers() == {}
 
         # We change our peer id (on manager3)
         new_peer = PrivatePeer.auto_generated()

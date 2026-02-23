@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.messages import ProtocolMessages
-from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
+from hathor.p2p.peer import PrivatePeer, PublicPeer
 from hathor.p2p.peer_endpoint import PeerAddress
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.peer_storage import UnverifiedPeerStorage
@@ -299,11 +299,33 @@ class HathorProtocol:
             self._idle_timeout_call_later = None
         self.aborting = True
         self.update_log_context()
-        if self.state:
-            self.state.on_exit()
+
+        if not self.state:
+            # TODO: This should never happen, it can only happen if an exception was raised in the middle of our
+            #  connection callback (connectionMade/on_connect). In that case, we may have not initialized our state
+            #  yet. We should improve this by making an initial non-None state.
+            self.log.error(
+                'disconnecting protocol with no state. check for previous exceptions',
+                addr=str(self.addr),
+                peer_id=str(self.get_peer_id()),
+            )
+            self.connections.on_unknown_disconnect(addr=self.addr)
+            return
+        self.state.on_exit()
+        state_name = self.state.state_name
+
+        if self.is_state(self.PeerState.HELLO) or self.is_state(self.PeerState.PEER_ID):
             self.state = None
-        if self.connections:
-            self.connections.on_peer_disconnect(self)
+            self.connections.on_handshake_disconnect(addr=self.addr)
+            return
+
+        if self.is_state(self.PeerState.READY):
+            self.state = None
+            self.connections.on_ready_disconnect(addr=self.addr, peer_id=self.peer.id)
+            return
+
+        self.state = None
+        raise AssertionError(f'disconnected in unexpected state: {state_name or "unknown"}')
 
     def send_message(self, cmd: ProtocolMessages, payload: Optional[str] = None) -> None:
         """ A generic message which must be implemented to send a message

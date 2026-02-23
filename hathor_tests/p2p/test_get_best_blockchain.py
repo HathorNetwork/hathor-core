@@ -40,8 +40,8 @@ class GetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.add_connection(conn12)
         self.simulator.run(3600)
 
-        connected_peers1 = list(manager1.connections.connected_peers.values())
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers1 = list(manager1.connections.iter_ready_connections())
+        connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         self.assertEqual(1, len(connected_peers2))
 
@@ -102,13 +102,13 @@ class GetBestBlockchainTestCase(SimulatorTestCase):
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         miner.stop()
 
-        connected_peers1 = list(manager1.connections.connected_peers.values())
+        connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
         state2 = protocol2.state
         assert isinstance(state2, ReadyState)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
@@ -142,7 +142,7 @@ class GetBestBlockchainTestCase(SimulatorTestCase):
         self.assertFalse(conn12.tr1.disconnecting)
         self.assertFalse(conn12.tr2.disconnecting)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
@@ -161,13 +161,13 @@ class GetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.add_connection(conn12)
         self.simulator.run(60)
 
-        connected_peers1 = list(manager1.connections.connected_peers.values())
+        connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
         state2 = protocol2.state
         assert isinstance(state2, ReadyState)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state
@@ -223,9 +223,9 @@ class GetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.run(60)
 
         # assert the nodes are connected
-        connected_peers1 = list(manager1.connections.connected_peers.values())
+        connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
 
         # assert the peers have the proper capabilities
@@ -321,13 +321,13 @@ class GetBestBlockchainTestCase(SimulatorTestCase):
         self.simulator.add_connection(conn12)
         self.simulator.run(60)
 
-        connected_peers1 = list(manager1.connections.connected_peers.values())
+        connected_peers1 = list(manager1.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers1))
         protocol2 = connected_peers1[0]
         state2 = protocol2.state
         assert isinstance(state2, ReadyState)
 
-        connected_peers2 = list(manager2.connections.connected_peers.values())
+        connected_peers2 = list(manager2.connections.iter_ready_connections())
         self.assertEqual(1, len(connected_peers2))
         protocol1 = connected_peers2[0]
         state1 = protocol1.state

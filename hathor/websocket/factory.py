@@ -158,7 +158,7 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
             'blocks': self.metrics.blocks,
             'best_block_height': self.metrics.best_block_height,
             'hash_rate': self.metrics.hash_rate,
-            'peers': self.metrics.connected_peers,
+            'peers': self.metrics.ready_peers,
             'type': 'dashboard:metrics',
             'time': self.reactor.seconds(),
         })

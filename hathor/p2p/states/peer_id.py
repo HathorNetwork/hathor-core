@@ -128,7 +128,7 @@ class PeerIdState(BaseState):
             return
 
         if protocol.connections is not None:
-            if protocol.connections.is_peer_connected(peer.id):
+            if protocol.connections.is_peer_ready(peer.id):
                 protocol.send_error_and_close_connection('We are already connected.')
                 return
 

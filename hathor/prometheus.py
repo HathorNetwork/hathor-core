@@ -192,7 +192,11 @@ class PrometheusMetricsExporter:
         """ Update metric_gauges dict with new data from metrics
         """
         for metric_name in METRIC_INFO.keys():
-            self.metric_gauges[metric_name].set(getattr(self.metrics, metric_name))
+            metric_attr = metric_name
+            if metric_attr == 'connected_peers':
+                # TODO: Improve this. Temporary backwards compatibility workaround after a rename in metrics.
+                metric_attr = 'ready_peers'
+            self.metric_gauges[metric_name].set(getattr(self.metrics, metric_attr))
 
         self._set_rocksdb_tx_storage_metrics()
         self._set_new_peer_connection_metrics()

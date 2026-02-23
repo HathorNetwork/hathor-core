@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from twisted.web.http import Request
+
 import hathor
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
@@ -34,7 +36,7 @@ class StatusResource(Resource):
         self.manager = manager
         self.reactor = manager.reactor
 
-    def render_GET(self, request):
+    def render_GET(self, request: Request) -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
         set_cors(request, 'GET')
 
@@ -42,17 +44,14 @@ class StatusResource(Resource):
 
         connecting_peers = []
         # TODO: refactor as not to use a private item
-        for endpoint, deferred in self.manager.connections.connecting_peers.items():
-            host = getattr(endpoint, '_host', '')
-            port = getattr(endpoint, '_port', '')
-            connecting_peers.append({'deferred': str(deferred), 'address': '{}:{}'.format(host, port)})
+        for address in self.manager.connections.iter_connecting_outbound_peers():
+            connecting_peers.append({'address': str(address)})
 
         handshaking_peers = []
         # TODO: refactor as not to use a private item
-        for conn in self.manager.connections.handshaking_peers:
-            remote = conn.transport.getPeer()
+        for conn in self.manager.connections.iter_handshaking_peers():
             handshaking_peers.append({
-                'address': '{}:{}'.format(remote.host, remote.port),
+                'address': str(conn.addr),
                 'state': conn.state.state_name,
                 'uptime': now - conn.connection_time,
                 'app_version': conn.app_version,
@@ -60,7 +59,6 @@ class StatusResource(Resource):
 
         connected_peers = []
         for conn in self.manager.connections.iter_ready_connections():
-            remote = conn.transport.getPeer()
             status = {}
             status[conn.state.sync_agent.name] = conn.state.sync_agent.get_status()
             connected_peers.append({
@@ -68,7 +66,7 @@ class StatusResource(Resource):
                 'app_version': conn.app_version,
                 'current_time': now,
                 'uptime': now - conn.connection_time,
-                'address': '{}:{}'.format(remote.host, remote.port),
+                'address': str(conn.addr),
                 'state': conn.state.state_name,
                 # 'received_bytes': conn.received_bytes,
                 'rtt': list(conn.state.rtt_window),
@@ -130,7 +128,7 @@ _openapi_connected_peer = {
     'id': '5578ab3bcaa861fb9d07135b8b167dd230d4487b147be8fd2c94a79bd349d123',
     'app_version': 'Hathor v0.14.0-beta',
     'uptime': 118.37029600143433,
-    'address': '192.168.1.1:54321',
+    'address': 'tcp://192.168.1.1:54321',
     'state': 'READY',
     'last_message': 1539271481,
     'plugins': {
@@ -145,8 +143,7 @@ _openapi_connected_peer = {
     'peer_best_blockchain': [_openapi_height_info]
 }
 _openapi_connecting_peer = {
-    'deferred': '<bound method TCP4ClientEndpoint.connect of <twisted.internet.endpoints.TCP4ClientEndpoint object at 0x10b16b470>>',  # noqa
-    'address': '192.168.1.1:54321'
+    'address': 'tcp://192.168.1.1:54321'
 }
 
 StatusResource.openapi = {
@@ -199,7 +196,7 @@ StatusResource.openapi = {
                                             'connected_peers': [_openapi_connected_peer],
                                             'handshaking_peers': [
                                                 {
-                                                    'address': '192.168.1.1:54321',
+                                                    'address': 'tcp://192.168.1.1:54321',
                                                     'state': 'HELLO',
                                                     'uptime': 0.0010249614715576172,
                                                     'app_version': 'Unknown'
