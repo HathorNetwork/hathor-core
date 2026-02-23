@@ -14,9 +14,23 @@
 
 """Base classes for API request and response models."""
 
-from typing import Literal
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import ClassVar, Literal
 
 from hathor.utils.pydantic import BaseModel
+
+
+@dataclass(frozen=True)
+class OpenAPIExample:
+    """An OpenAPI example with a summary and a validated model instance.
+
+    Using actual model instances ensures examples are validated against the schema
+    at definition time.
+    """
+    summary: str
+    value: BaseModel
 
 
 class RequestModel(BaseModel):
@@ -31,8 +45,18 @@ class ResponseModel(BaseModel):
     """Base class for all API responses.
 
     Inherits from BaseModel with extra='forbid' and frozen=True.
+    The http_status_code ClassVar determines the HTTP status code returned
+    by the auto-serialization decorator.
+
+    Subclasses can set:
+    - response_description: Custom OpenAPI response description (e.g., "Healthy").
+      Defaults to None, in which case the generator uses "Success"/"Error".
+    - openapi_examples: Dict of named OpenAPIExample instances for the OpenAPI spec.
+      Must be assigned after the class definition since examples reference the class itself.
     """
-    pass
+    http_status_code: ClassVar[int] = 200
+    response_description: ClassVar[str | None] = None
+    openapi_examples: ClassVar[dict[str, OpenAPIExample] | None] = None
 
 
 class SuccessResponse(ResponseModel):
@@ -42,3 +66,22 @@ class SuccessResponse(ResponseModel):
     consistent response format with success=True.
     """
     success: Literal[True] = True
+
+
+class ErrorResponseModel(ResponseModel):
+    """Base class for error responses with no predefined fields.
+
+    Returns HTTP 400 by default. Use this when you need a custom error
+    shape that differs from the standard ErrorResponse fields.
+    """
+    http_status_code: ClassVar[int] = 400
+
+
+class ErrorResponse(ErrorResponseModel):
+    """Standard error response.
+
+    Returns HTTP 400 by default. Subclass and override http_status_code
+    for other error status codes.
+    """
+    success: Literal[False] = False
+    error: str
