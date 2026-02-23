@@ -17,8 +17,8 @@ from pydantic import Field
 import hathor
 from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
-from hathor.api.schemas import ResponseModel
-from hathor.api_util import Resource, set_cors
+from hathor.api.schemas import OpenAPIExample, ResponseModel
+from hathor.api_util import Resource
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import Features
@@ -53,6 +53,31 @@ class VersionResponse(ResponseModel):
     native_token: NativeTokenInfo = Field(description="Native token information")
 
 
+VersionResponse.openapi_examples = {
+    'success': OpenAPIExample(
+        summary='Success',
+        value=VersionResponse(
+            version='0.16.0-beta',
+            network='testnet-bravo',
+            nano_contracts_enabled=False,
+            min_weight=14,
+            min_tx_weight=14,
+            min_tx_weight_coefficient=1.6,
+            min_tx_weight_k=100,
+            token_deposit_percentage=0.01,
+            reward_spend_min_blocks=300,
+            max_number_inputs=256,
+            max_number_outputs=256,
+            decimal_places=2,
+            genesis_block_hash=BlockId(b'\x00' * 32),
+            genesis_tx1_hash=TransactionId(b'\x00' * 31 + b'\x01'),
+            genesis_tx2_hash=TransactionId(b'\x00' * 31 + b'\x02'),
+            native_token=NativeTokenInfo(name='Hathor', symbol='HTR'),
+        ),
+    ),
+}
+
+
 @register_resource
 class VersionResource(Resource):
     """ Implements a web server API with POST to return the api version and some configuration
@@ -85,16 +110,13 @@ class VersionResource(Resource):
 
             :rtype: string (json)
         """
-        request.setHeader(b'content-type', b'application/json; charset=utf-8')
-        set_cors(request, 'GET')
-
         best_block = self.manager.tx_storage.get_best_block()
         features = Features.from_vertex(
             settings=self._settings, vertex=best_block, feature_service=self.feature_service
         )
         nano_contracts_enabled = features.nanocontracts
 
-        response = VersionResponse(
+        return VersionResponse(
             version=hathor.__version__,
             network=self.manager.network,
             nano_contracts_enabled=nano_contracts_enabled,
@@ -115,4 +137,3 @@ class VersionResource(Resource):
                 symbol=self._settings.NATIVE_TOKEN_SYMBOL,
             ),
         )
-        return response.json_dumpb()

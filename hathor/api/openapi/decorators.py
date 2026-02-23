@@ -14,10 +14,17 @@
 
 """Decorators for OpenAPI endpoint documentation and validation."""
 
+import functools
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, TypeVar
+from typing import Any, Callable, ClassVar, Literal, TypeVar
 
+import structlog
 from pydantic import BaseModel
+from twisted.web.http import Request
+
+from hathor.api.schemas.base import ErrorResponse, ResponseModel
+
+logger = structlog.get_logger()
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -47,10 +54,10 @@ class EndpointMetadata:
     rate_limit_per_ip: list[RateLimitConfig]
     query_params_model: type[BaseModel] | None
     request_model: type[BaseModel] | None
-    response_model: type[BaseModel] | None
-    error_responses: list[type[BaseModel]]
+    response_model: Any  # Single model or Union of models
     deprecated: bool
     path_params_regex: dict[str, str]
+    path_params_descriptions: dict[str, str]
 
 
 # Global registry of endpoint metadata
@@ -67,6 +74,52 @@ def clear_endpoint_registry() -> None:
     _endpoint_registry.clear()
 
 
+def _serialize_response(result: Any, request: Request) -> bytes:
+    """Serialize a response model and set appropriate headers.
+
+    If result is a ResponseModel, serialize it and set the HTTP status code.
+    If result is bytes, pass through unchanged.
+    """
+    if isinstance(result, ResponseModel):
+        if not getattr(request, '_api_status_set', False):
+            request.setResponseCode(result.http_status_code)
+        return result.json_dumpb()
+    # Fallback: raw bytes pass through
+    return result
+
+
+class InternalErrorResponse(ResponseModel):
+    """500 error response for unhandled Deferred failures."""
+    http_status_code: ClassVar[int] = 500
+    error: str
+
+
+def _handle_deferred_error(failure: Any, request: Request) -> None:
+    """Errback for Deferred results: log error, write 500 response, finish request."""
+    logger.error('unhandled error in deferred endpoint', error=str(failure))
+    request.setResponseCode(500)
+    response = InternalErrorResponse(error=f'Internal Server Error: {failure.getErrorMessage()}')
+    request.write(response.json_dumpb())
+    request.finish()
+
+
+def _handle_deferred_result(result: Any, request: Request) -> None:
+    """Callback for Deferred results: serialize and write to request.
+
+    If result is None (e.g., from an errback that already handled the request),
+    we skip writing/finishing since the request was already completed.
+    """
+    if result is None:
+        return
+    if isinstance(result, ResponseModel):
+        if not getattr(request, '_api_status_set', False):
+            request.setResponseCode(result.http_status_code)
+        request.write(result.json_dumpb())
+    else:
+        request.write(result)
+    request.finish()
+
+
 def api_endpoint(
     *,
     path: str,
@@ -80,16 +133,28 @@ def api_endpoint(
     rate_limit_per_ip: list[dict[str, Any]] | None = None,
     query_params_model: type[BaseModel] | None = None,
     request_model: type[BaseModel] | None = None,
-    response_model: type[BaseModel] | None = None,
-    error_responses: list[type[BaseModel]] | None = None,
+    response_model: Any = None,
     deprecated: bool = False,
     path_params_regex: dict[str, str] | None = None,
+    path_params_descriptions: dict[str, str] | None = None,
 ) -> Callable[[F], F]:
-    """Decorator to register an endpoint with OpenAPI metadata.
+    """Decorator to register an endpoint with OpenAPI metadata and auto-validate/serialize.
 
     This decorator:
     1. Registers the endpoint metadata for OpenAPI spec generation
-    2. Can be used to auto-validate requests (future enhancement)
+    2. Auto-validates query params and request body
+    3. Auto-serializes response models and sets HTTP status codes
+
+    The wrapped handler receives:
+    - `request` as the first positional arg (Twisted contract)
+    - `params=` keyword arg if query_params_model is set
+    - `body=` keyword arg if request_model is set
+
+    The handler can return:
+    - A ResponseModel instance (auto-serialized, status code set from http_status_code)
+    - A Deferred that resolves to a ResponseModel (auto-serialized via callback)
+    - Raw bytes (passed through unchanged)
+    - NOT_DONE_YET (passed through unchanged)
 
     Args:
         path: The URL path for this endpoint (e.g., '/version', '/block_at_height')
@@ -103,22 +168,10 @@ def api_endpoint(
         rate_limit_per_ip: Per-IP rate limit configuration
         query_params_model: Pydantic model for query parameters (GET)
         request_model: Pydantic model for request body (POST/PUT)
-        response_model: Pydantic model for successful response
-        error_responses: List of Pydantic models for error responses
+        response_model: Pydantic model(s) for response (single or Union)
         deprecated: Whether this endpoint is deprecated
         path_params_regex: Regex patterns for path parameters
-
-    Example:
-        @api_endpoint(
-            path='/version',
-            method='GET',
-            operation_id='version',
-            summary='Get Hathor version info',
-            response_model=VersionResponse,
-            tags=['general'],
-        )
-        def render_GET(self, request):
-            ...
+        path_params_descriptions: Descriptions for path parameters
     """
     def decorator(func: F) -> F:
         # Parse rate limit configs
@@ -144,17 +197,71 @@ def api_endpoint(
             query_params_model=query_params_model,
             request_model=request_model,
             response_model=response_model,
-            error_responses=error_responses or [],
             deprecated=deprecated,
             path_params_regex=path_params_regex or {},
+            path_params_descriptions=path_params_descriptions or {},
         )
 
-        # Store metadata on the function for later retrieval
-        func._openapi_metadata = metadata  # type: ignore[attr-defined]
+        @functools.wraps(func)
+        def wrapper(self: Any, request: Request, *args: Any, **kwargs: Any) -> Any:
+            from twisted.internet.defer import Deferred
+            from twisted.web.server import NOT_DONE_YET as _NOT_DONE_YET
+
+            from hathor.api_util import set_cors
+
+            # Set standard headers
+            request.setHeader(b'content-type', b'application/json; charset=utf-8')
+            set_cors(request, method)
+
+            # Auto-validate query params
+            if query_params_model is not None:
+                from hathor.utils.api import ErrorResponse as _LegacyErrorResponse
+
+                params = query_params_model.from_request(request)  # type: ignore[attr-defined]
+                if isinstance(params, _LegacyErrorResponse):
+                    # Validation failed — return 400 error
+                    error = ErrorResponse(error=params.error)
+                    request.setResponseCode(400)
+                    return error.json_dumpb()
+                kwargs['params'] = params
+
+            # Auto-validate request body
+            if request_model is not None:
+                import json as _json
+
+                from pydantic import ValidationError
+
+                try:
+                    assert request.content is not None
+                    body_bytes = request.content.read()
+                    body_data = _json.loads(body_bytes)
+                    body = request_model.model_validate(body_data)
+                except (ValidationError, _json.JSONDecodeError, UnicodeDecodeError) as e:
+                    error = ErrorResponse(error=str(e))
+                    request.setResponseCode(400)
+                    return error.json_dumpb()
+                kwargs['body'] = body
+
+            # Call the actual handler
+            result = func(self, request, *args, **kwargs)
+
+            # Auto-serialize response
+            if isinstance(result, Deferred):
+                result.addCallback(_handle_deferred_result, request)
+                result.addErrback(_handle_deferred_error, request)
+                return _NOT_DONE_YET
+            elif isinstance(result, ResponseModel):
+                return _serialize_response(result, request)
+            else:
+                # Fallback: raw bytes or NOT_DONE_YET pass through
+                return result
+
+        # Store metadata on the wrapper for later retrieval
+        wrapper._openapi_metadata = metadata  # type: ignore[attr-defined]
 
         # Register in global registry
         _endpoint_registry.append(metadata)
 
-        return func
+        return wrapper  # type: ignore[return-value]
 
     return decorator

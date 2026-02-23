@@ -19,8 +19,8 @@ from pydantic import Field
 
 from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
-from hathor.api.schemas import ResponseModel
-from hathor.api_util import Resource, set_cors
+from hathor.api.schemas import ErrorResponseModel, OpenAPIExample, ResponseModel
+from hathor.api_util import Resource
 from hathor.manager import HathorManager
 from hathor.transaction.scripts import create_base_script
 from hathor.util import api_catch_exceptions
@@ -31,10 +31,23 @@ class ValidateAddressSuccessResponse(ResponseModel):
     valid: Literal[True] = Field(description="Whether the address is valid")
     script: str = Field(description="Base64-encoded output script")
     address: str = Field(description="Base58-encoded address")
-    type: str = Field(description="Address type (e.g., 'p2pkh', 'multisig')")
+    type: Literal['p2pkh', 'multisig'] = Field(description="Address type")
 
 
-class ValidateAddressErrorResponse(ResponseModel):
+ValidateAddressSuccessResponse.openapi_examples = {
+    'valid_address': OpenAPIExample(
+        summary='Valid P2PKH address response',
+        value=ValidateAddressSuccessResponse(
+            valid=True,
+            script='dqkUr6YAVWv0Ps6bjgSGuqMb1GqCw6+IrA==',
+            address='HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
+            type='p2pkh',
+        ),
+    ),
+}
+
+
+class ValidateAddressErrorResponse(ErrorResponseModel):
     """Response model for invalid address."""
     valid: Literal[False] = Field(description="Whether the address is valid")
     error: str = Field(description="Error type name")
@@ -83,31 +96,26 @@ class _ValidateAddressResource(Resource):
         visibility='public',
         rate_limit_global=[{'rate': '2000r/s', 'burst': 200, 'delay': 100}],
         rate_limit_per_ip=[{'rate': '50r/s', 'burst': 10, 'delay': 3}],
-        response_model=ValidateAddressSuccessResponse,
-        error_responses=[ValidateAddressErrorResponse],
+        response_model=Union[ValidateAddressSuccessResponse, ValidateAddressErrorResponse],
         path_params_regex={'address': '.*'},
+        path_params_descriptions={'address': 'Base58 address to be decoded'},
     )
     @api_catch_exceptions
     def render_GET(self, request):
         """ Get request /validate_address/<address> that returns a script if address is valid.
         """
-        request.setHeader(b'content-type', b'application/json; charset=utf-8')
-        set_cors(request, 'GET')
-
         try:
             base_script = create_base_script(self.address)
         except Exception as e:
-            error_response = ValidateAddressErrorResponse(
+            return ValidateAddressErrorResponse(
                 valid=False,
                 error=type(e).__name__,
                 msg=str(e),
             )
-            return error_response.json_dumpb()
 
-        success_response = ValidateAddressSuccessResponse(
+        return ValidateAddressSuccessResponse(
             valid=True,
             script=base64.b64encode(base_script.get_script()).decode('ascii'),
             address=base_script.get_address(),
             type=base_script.get_type().lower(),
         )
-        return success_response.json_dumpb()
