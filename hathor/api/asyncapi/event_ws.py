@@ -23,7 +23,7 @@ Protocol: Custom JSON messages over WebSocket with sliding window flow control
 Path: /event_ws
 """
 
-from hathor.api.asyncapi.generator import ChannelDefinition, MessageDefinition, MessageDirection
+from hathor.api.asyncapi.generator import ChannelDefinition
 from hathor.event.websocket.request import AckRequest, StartStreamRequest, StopStreamRequest
 from hathor.event.websocket.response import EventResponse, InvalidRequestResponse
 
@@ -82,81 +82,12 @@ set to the last successfully processed event ID.
 ''',
         tags=['websocket', 'events', 'streaming'],
         messages=[
-            # =====================================================================
             # Client Commands (Receive from client)
-            # =====================================================================
-            MessageDefinition(
-                name='startStream',
-                model=StartStreamRequest,
-                direction=MessageDirection.RECEIVE,
-                summary='Start event streaming',
-                description='''
-Start receiving events from the server.
-
-- `last_ack_event_id`: Resume from this event ID (null to start from beginning)
-- `window_size`: Maximum pending events before requiring ACK
-''',
-                tags=['flow-control'],
-            ),
-            MessageDefinition(
-                name='ack',
-                model=AckRequest,
-                direction=MessageDirection.RECEIVE,
-                summary='Acknowledge events',
-                description='''
-Acknowledge processed events and adjust the window.
-
-- `ack_event_id`: Last event ID successfully processed
-- `window_size`: New window size (can be adjusted dynamically)
-''',
-                tags=['flow-control'],
-            ),
-            MessageDefinition(
-                name='stopStream',
-                model=StopStreamRequest,
-                direction=MessageDirection.RECEIVE,
-                summary='Stop event streaming',
-                description='Stop receiving events. Can be resumed later with START_STREAM.',
-                tags=['flow-control'],
-            ),
-
-            # =====================================================================
+            StartStreamRequest,
+            AckRequest,
+            StopStreamRequest,
             # Server Events (Send to client)
-            # =====================================================================
-            MessageDefinition(
-                name='event',
-                model=EventResponse,
-                direction=MessageDirection.SEND,
-                summary='Event notification',
-                description='''
-An event from the full node.
-
-Contains:
-- `peer_id`: Unique full node identifier
-- `network`: Network name (mainnet, testnet, etc.)
-- `event`: The event data with type, timestamp, and payload
-- `latest_event_id`: Most recent event ID known by server
-- `stream_id`: Current stream identifier
-''',
-                tags=['events'],
-            ),
-            MessageDefinition(
-                name='invalidRequest',
-                model=InvalidRequestResponse,
-                direction=MessageDirection.SEND,
-                summary='Invalid request error',
-                description='''
-Sent when the client sends an invalid request.
-
-Error types:
-- `EVENT_WS_NOT_RUNNING`: Event WebSocket is disabled
-- `STREAM_IS_ACTIVE`: START_STREAM sent while already streaming
-- `STREAM_IS_INACTIVE`: ACK/STOP sent without active stream
-- `VALIDATION_ERROR`: Request failed validation
-- `ACK_TOO_SMALL`: ack_event_id less than last acknowledged
-- `ACK_TOO_LARGE`: ack_event_id greater than last sent event
-''',
-                tags=['error'],
-            ),
+            EventResponse,
+            InvalidRequestResponse,
         ],
     )

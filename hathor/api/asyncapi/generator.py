@@ -16,9 +16,11 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Union
 
 from pydantic import BaseModel
+
+from hathor.api.schema_utils import SchemaRegistryMixin
 
 
 class MessageDirection(Enum):
@@ -40,17 +42,22 @@ class MessageDefinition:
 
 @dataclass
 class ChannelDefinition:
-    """Definition of a WebSocket channel (endpoint)."""
+    """Definition of a WebSocket channel (endpoint).
+
+    The ``messages`` list can contain either:
+    - ``MessageDefinition`` instances (explicit metadata), or
+    - Pydantic model classes decorated with ``@ws_message`` (metadata read from decorator).
+    """
     channel_id: str
     address: str
     title: str
     description: str
-    messages: list[MessageDefinition] = field(default_factory=list)
+    messages: list[Union[MessageDefinition, type[BaseModel]]] = field(default_factory=list)
     protocol: str = 'ws'
     tags: list[str] = field(default_factory=list)
 
 
-class AsyncAPIGenerator:
+class AsyncAPIGenerator(SchemaRegistryMixin):
     """Generates AsyncAPI 3.0 specification from channel definitions.
 
     This generator collects channel and message definitions and produces
@@ -73,14 +80,32 @@ class AsyncAPIGenerator:
         """Register a channel definition."""
         self._channels.append(channel)
 
-    def _get_schema_ref(self, model: type[BaseModel]) -> dict[str, str]:
-        """Get a $ref to a schema, registering it if needed."""
-        schema_name = model.__name__
-        if schema_name not in self._schemas:
-            self._schemas[schema_name] = model.model_json_schema(
-                ref_template='#/components/schemas/{model}'
+    @staticmethod
+    def _resolve_message(entry: MessageDefinition | type[BaseModel]) -> MessageDefinition:
+        """Convert a channel message entry to a MessageDefinition.
+
+        If the entry is already a MessageDefinition, return it as-is.
+        If it's a model class decorated with @ws_message, build a MessageDefinition from its metadata.
+        """
+        if isinstance(entry, MessageDefinition):
+            return entry
+
+        from hathor.api.asyncapi.decorators import get_ws_message_meta
+
+        meta = get_ws_message_meta(entry)
+        if meta is None:
+            raise ValueError(
+                f"Model class {entry.__name__} passed to ChannelDefinition.messages "
+                f"but is not decorated with @ws_message"
             )
-        return {'$ref': f'#/components/schemas/{schema_name}'}
+        return MessageDefinition(
+            name=meta.name,
+            model=entry,
+            direction=meta.direction,
+            summary=meta.summary,
+            description=meta.description,
+            tags=list(meta.tags),
+        )
 
     def _build_message(self, msg: MessageDefinition) -> dict[str, Any]:
         """Build an AsyncAPI message object."""
@@ -95,8 +120,12 @@ class AsyncAPIGenerator:
             message['tags'] = [{'name': tag} for tag in msg.tags]
         return message
 
-    def _build_channel(self, channel: ChannelDefinition) -> dict[str, Any]:
-        """Build an AsyncAPI channel object."""
+    def _build_channel(self, channel: ChannelDefinition) -> tuple[dict[str, Any], list[MessageDefinition]]:
+        """Build an AsyncAPI channel object.
+
+        Returns:
+            Tuple of (channel_obj, resolved_messages).
+        """
         channel_obj: dict[str, Any] = {
             'address': channel.address,
             'title': channel.title,
@@ -104,21 +133,24 @@ class AsyncAPIGenerator:
             'messages': {},
         }
 
-        for msg in channel.messages:
+        resolved: list[MessageDefinition] = []
+        for entry in channel.messages:
+            msg = self._resolve_message(entry)
+            resolved.append(msg)
             channel_obj['messages'][msg.name] = self._build_message(msg)
 
         if channel.tags:
             channel_obj['tags'] = [{'name': tag} for tag in channel.tags]
 
-        return channel_obj
+        return channel_obj, resolved
 
-    def _build_operations(self, channel: ChannelDefinition) -> dict[str, Any]:
+    def _build_operations(self, channel: ChannelDefinition, messages: list[MessageDefinition]) -> dict[str, Any]:
         """Build AsyncAPI operations for a channel."""
         operations: dict[str, Any] = {}
 
         # Group messages by direction
-        receive_msgs = [m for m in channel.messages if m.direction == MessageDirection.RECEIVE]
-        send_msgs = [m for m in channel.messages if m.direction == MessageDirection.SEND]
+        receive_msgs = [m for m in messages if m.direction == MessageDirection.RECEIVE]
+        send_msgs = [m for m in messages if m.direction == MessageDirection.SEND]
 
         if receive_msgs:
             operations[f'{channel.channel_id}Receive'] = {
@@ -158,8 +190,9 @@ class AsyncAPIGenerator:
         operations: dict[str, Any] = {}
 
         for channel in self._channels:
-            channels[channel.channel_id] = self._build_channel(channel)
-            operations.update(self._build_operations(channel))
+            channel_obj, resolved_msgs = self._build_channel(channel)
+            channels[channel.channel_id] = channel_obj
+            operations.update(self._build_operations(channel, resolved_msgs))
 
         # Build complete spec
         spec: dict[str, Any] = {
@@ -175,17 +208,7 @@ class AsyncAPIGenerator:
 
         # Add components/schemas if any were registered
         if self._schemas:
-            # Process schemas to handle nested $defs
-            components_schemas: dict[str, Any] = {}
-            for name, schema in self._schemas.items():
-                # Extract $defs to top-level schemas
-                if '$defs' in schema:
-                    for def_name, def_schema in schema['$defs'].items():
-                        components_schemas[def_name] = def_schema
-                    del schema['$defs']
-                components_schemas[name] = schema
-
-            spec['components'] = {'schemas': components_schemas}
+            spec['components'] = {'schemas': self._flatten_schemas()}
 
         return spec
 

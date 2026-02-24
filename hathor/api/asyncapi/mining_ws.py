@@ -26,7 +26,8 @@ from typing import Any, Literal, Optional, Union
 
 from pydantic import Field
 
-from hathor.api.asyncapi.generator import ChannelDefinition, MessageDefinition, MessageDirection
+from hathor.api.asyncapi.decorators import ws_message
+from hathor.api.asyncapi.generator import ChannelDefinition, MessageDirection
 from hathor.utils.pydantic import BaseModel
 
 
@@ -52,6 +53,13 @@ class JsonRpcError(BaseModel):
     data: Optional[Any] = Field(default=None, description='Additional error data')
 
 
+@ws_message(
+    name='jsonRpcError',
+    direction=MessageDirection.SEND,
+    summary='JSON-RPC error response',
+    description='Error response for failed requests.',
+    tags=['error'],
+)
 class JsonRpcResponse(BaseModel):
     """JSON-RPC 2.0 response."""
     id: JsonRpcId = Field(description='Request identifier this is responding to')
@@ -119,6 +127,13 @@ class BlockTemplateSchema(BaseModel):
 # =============================================================================
 
 
+@ws_message(
+    name='miningRefresh',
+    direction=MessageDirection.RECEIVE,
+    summary='Get current block templates',
+    description='Request the current block template(s) for mining.',
+    tags=['mining', 'request'],
+)
 class MiningRefreshRequest(JsonRpcRequest):
     """Request current block template(s) for mining.
 
@@ -129,6 +144,13 @@ class MiningRefreshRequest(JsonRpcRequest):
     params: list[Any] = Field(default_factory=list, description='Empty params list')
 
 
+@ws_message(
+    name='miningRefreshResponse',
+    direction=MessageDirection.SEND,
+    summary='Block templates response',
+    description='Response containing current block template(s).',
+    tags=['mining', 'response'],
+)
 class MiningRefreshResponse(JsonRpcResponse):
     """Response to mining.refresh request."""
     result: Optional[list[BlockTemplateSchema]] = Field(
@@ -146,6 +168,13 @@ class MiningSubmitParams(BaseModel):
     )
 
 
+@ws_message(
+    name='miningSubmit',
+    direction=MessageDirection.RECEIVE,
+    summary='Submit mined block',
+    description='Submit a mined block to the network.',
+    tags=['mining', 'request'],
+)
 class MiningSubmitRequest(JsonRpcRequest):
     """Submit a mined block to the network.
 
@@ -159,6 +188,13 @@ class MiningSubmitRequest(JsonRpcRequest):
     params: MiningSubmitParams
 
 
+@ws_message(
+    name='miningSubmitResponse',
+    direction=MessageDirection.SEND,
+    summary='Block submission result',
+    description='Response indicating success/failure of block submission.',
+    tags=['mining', 'response'],
+)
 class MiningSubmitResponse(JsonRpcResponse):
     """Response to mining.submit request."""
     result: Optional[Union[bool, BlockTemplateSchema]] = Field(
@@ -172,6 +208,13 @@ class MiningSubmitResponse(JsonRpcResponse):
 # =============================================================================
 
 
+@ws_message(
+    name='miningNotify',
+    direction=MessageDirection.SEND,
+    summary='New templates notification',
+    description='Notification sent when new block templates are available.',
+    tags=['mining', 'notification'],
+)
 class MiningNotifyNotification(JsonRpcNotification):
     """Server notification when new block templates are available.
 
@@ -286,60 +329,13 @@ Fatal errors will close the connection after sending the error response.
 ''',
         tags=['websocket', 'mining', 'json-rpc'],
         messages=[
-            # =====================================================================
             # Client Requests (Receive from client)
-            # =====================================================================
-            MessageDefinition(
-                name='miningRefresh',
-                model=MiningRefreshRequest,
-                direction=MessageDirection.RECEIVE,
-                summary='Get current block templates',
-                description='Request the current block template(s) for mining.',
-                tags=['mining', 'request'],
-            ),
-            MessageDefinition(
-                name='miningSubmit',
-                model=MiningSubmitRequest,
-                direction=MessageDirection.RECEIVE,
-                summary='Submit mined block',
-                description='Submit a mined block to the network.',
-                tags=['mining', 'request'],
-            ),
-
-            # =====================================================================
+            MiningRefreshRequest,
+            MiningSubmitRequest,
             # Server Responses/Notifications (Send to client)
-            # =====================================================================
-            MessageDefinition(
-                name='miningRefreshResponse',
-                model=MiningRefreshResponse,
-                direction=MessageDirection.SEND,
-                summary='Block templates response',
-                description='Response containing current block template(s).',
-                tags=['mining', 'response'],
-            ),
-            MessageDefinition(
-                name='miningSubmitResponse',
-                model=MiningSubmitResponse,
-                direction=MessageDirection.SEND,
-                summary='Block submission result',
-                description='Response indicating success/failure of block submission.',
-                tags=['mining', 'response'],
-            ),
-            MessageDefinition(
-                name='miningNotify',
-                model=MiningNotifyNotification,
-                direction=MessageDirection.SEND,
-                summary='New templates notification',
-                description='Notification sent when new block templates are available.',
-                tags=['mining', 'notification'],
-            ),
-            MessageDefinition(
-                name='jsonRpcError',
-                model=JsonRpcResponse,
-                direction=MessageDirection.SEND,
-                summary='JSON-RPC error response',
-                description='Error response for failed requests.',
-                tags=['error'],
-            ),
+            MiningRefreshResponse,
+            MiningSubmitResponse,
+            MiningNotifyNotification,
+            JsonRpcResponse,
         ],
     )
