@@ -18,7 +18,6 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from pydantic import ValidationError
 
-from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa.poa_signer import PoaSigner, PoaSignerFile
@@ -94,7 +93,7 @@ def test_verify_poa() -> None:
         return file.get_signer(), public_key_bytes
 
     poa_signer, public_key_bytes = get_signer()
-    settings = Mock(spec_set=HathorSettings)
+    settings = Mock()
     settings.CONSENSUS_ALGORITHM = PoaSettings.model_construct(signers=())
     settings.AVG_TIME_BETWEEN_BLOCKS = 30
     block_verifier = PoaBlockVerifier(settings=settings)

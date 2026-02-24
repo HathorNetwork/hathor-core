@@ -24,7 +24,7 @@ DEBUG: bool = False
 class TestConsensus6(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)  # for simplicity
+        settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})  # for simplicity
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
 

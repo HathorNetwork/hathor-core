@@ -759,12 +759,13 @@ optional = false
 python-versions = ">=3.9,<4"
 groups = ["main"]
 files = []
-develop = false
+develop = true
 
 [package.dependencies]
 base58 = "~2.1.1"
 cryptography = "~42.0.5"
 pycoin = "~0.92"
+pydantic = "^2.0"
 
 [package.extras]
 client = ["aiohttp (>=3.9.3,<3.10.0)", "structlog (>=22.3.0,<22.4.0)"]
@@ -2826,4 +2827,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "fc5cc4688627fc05c28ce3491cbfd35fa34b46299ae1d8dc24c0a3edd742ad6d"
+content-hash = "7c0832c1a10d81282c4994b7ea8488570484f3046fab0f3624708130dbc73220"

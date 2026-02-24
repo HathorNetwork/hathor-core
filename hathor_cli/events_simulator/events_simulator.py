@@ -44,7 +44,7 @@ def create_parser() -> ArgumentParser:
 
 
 def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
-    from hathor.conf import UNITTESTS_SETTINGS_FILEPATH
+    from hathorlib.conf import UNITTESTS_SETTINGS_FILEPATH
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
     from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
     from hathor_cli.events_simulator.scenario import Scenario
@@ -57,7 +57,9 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
         possible_scenarios = [scenario.name for scenario in Scenario]
         raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
-    settings = get_global_settings()._replace(REWARD_SPEND_MIN_BLOCKS=scenario.get_reward_spend_min_blocks())
+    settings = get_global_settings().model_copy(
+        update={"REWARD_SPEND_MIN_BLOCKS": scenario.get_reward_spend_min_blocks()}
+    )
     log = logger.new()
     simulator = Simulator(args.seed)
     simulator.start()

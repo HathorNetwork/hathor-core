@@ -77,7 +77,12 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings, REWARD_SPEND_MIN_BLOCKS=0)
+        settings = get_global_settings().model_copy(
+            update={
+                "FEATURE_ACTIVATION": feature_settings,
+                "REWARD_SPEND_MIN_BLOCKS": 0,
+            }
+        )
         self.simulator.settings = settings
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
@@ -468,7 +473,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             }
         )
 
-        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings().model_copy(update={'FEATURE_ACTIVATION': feature_settings})
         builder = self.get_simulator_builder().set_settings(settings)
         artifacts = self.simulator.create_artifacts(builder)
         feature_service = artifacts.feature_service
@@ -701,7 +706,7 @@ class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
             }
         )
 
-        settings = get_global_settings()._replace(FEATURE_ACTIVATION=feature_settings)
+        settings = get_global_settings().model_copy(update={'FEATURE_ACTIVATION': feature_settings})
         rocksdb_dir = self.get_rocksdb_directory()
         builder1 = self.get_simulator_builder_from_dir(rocksdb_dir).set_settings(settings)
         artifacts1 = self.simulator.create_artifacts(builder1)

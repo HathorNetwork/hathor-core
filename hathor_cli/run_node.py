@@ -499,7 +499,7 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
-        from hathor.conf import (
+        from hathorlib.conf import (
             LOCALNET_SETTINGS_FILEPATH,
             NANO_TESTNET_SETTINGS_FILEPATH,
             TESTNET_INDIA_SETTINGS_FILEPATH,
