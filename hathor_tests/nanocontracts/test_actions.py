@@ -126,6 +126,7 @@ class TestActions(unittest.TestCase):
                 nanocontracts=True,
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
+                shielded_transactions=False,
             )
         )
 

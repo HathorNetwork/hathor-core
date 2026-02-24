@@ -108,6 +108,9 @@ class AddressBalanceResource(Resource):
                 # We consider the spent/received values only if is not voided by
                 for tx_input in tx.inputs:
                     tx2 = self.manager.tx_storage.get_transaction(tx_input.tx_id)
+                    # CONS-021: skip shielded outputs — hidden amounts
+                    if tx2.is_shielded_output(tx_input.index):
+                        continue
                     tx2_output = tx2.outputs[tx_input.index]
                     if self.has_address(tx2_output, requested_address):
                         # We just consider the address that was requested

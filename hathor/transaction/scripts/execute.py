@@ -115,9 +115,20 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, versi
 
     :raises ScriptError: if script verification fails
     """
+    # VULN-002: Handle shielded output references
+    # CONS-007: Bounds-check shielded index to raise InvalidScriptError, not IndexError
+    if txin.index < len(spent_tx.outputs):
+        output_script = spent_tx.outputs[txin.index].script
+    elif spent_tx.shielded_outputs:
+        shielded_idx = txin.index - len(spent_tx.outputs)
+        if shielded_idx >= len(spent_tx.shielded_outputs):
+            raise InvalidScriptError(f'input index {txin.index} out of range')
+        output_script = spent_tx.shielded_outputs[shielded_idx].script
+    else:
+        raise InvalidScriptError(f'input index {txin.index} out of range')
     raw_script_eval(
         input_data=txin.data,
-        output_script=spent_tx.outputs[txin.index].script,
+        output_script=output_script,
         extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=version),
     )
 

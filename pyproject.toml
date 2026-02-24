@@ -129,6 +129,7 @@ module = [
     'pycoin.*',
     'pympler',
     'rocksdb',
+    'hathor_ct_crypto',
     'sentry_sdk',
     'setproctitle',
     'sortedcontainers',

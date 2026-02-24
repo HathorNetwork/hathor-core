@@ -88,6 +88,8 @@ class HathorSettings(NamedTuple):
 
     # Fee rate settings
     FEE_PER_OUTPUT: int = 1
+    FEE_PER_AMOUNT_SHIELDED_OUTPUT: int = 1
+    FEE_PER_FULL_SHIELDED_OUTPUT: int = 2
 
     @property
     def FEE_DIVISOR(self) -> int:
@@ -484,6 +486,9 @@ class HathorSettings(NamedTuple):
 
     # Used to enable fee-based tokens.
     ENABLE_FEE_BASED_TOKENS: FeatureSetting = FeatureSetting.DISABLED
+
+    # Used to enable shielded transactions.
+    ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
     # Used to enable opcodes V2.
     ENABLE_OPCODES_V2: FeatureSetting = FeatureSetting.DISABLED

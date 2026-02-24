@@ -149,6 +149,7 @@ def execute(args: Namespace) -> None:
                 nanocontracts=False,
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V2,
+                shielded_transactions=False,
             ))
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),

@@ -278,3 +278,31 @@ class InvalidFeeAmount(InvalidFeeHeader):
 
 class TokenNotFound(TxValidationError):
     """Token not found."""
+
+
+class InvalidRangeProofError(TxValidationError):
+    """Range proof is invalid."""
+
+
+class InvalidSurjectionProofError(TxValidationError):
+    """Surjection proof is invalid."""
+
+
+class ShieldedBalanceMismatchError(TxValidationError):
+    """Shielded balance equation does not hold."""
+
+
+class TrivialCommitmentError(TxValidationError):
+    """Rule 4: All transparent inputs require >= 2 shielded outputs."""
+
+
+class ShieldedAuthorityError(TxValidationError):
+    """Rule 7: Authority outputs cannot be shielded."""
+
+
+class ShieldedMintMeltForbiddenError(TxValidationError):
+    """Mint/melt operations are not allowed in transactions with shielded outputs."""
+
+
+class InvalidShieldedOutputError(TxValidationError):
+    """Generic invalid shielded output error."""

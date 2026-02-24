@@ -515,7 +515,11 @@ def op_find_p2pkh(context: ScriptContext) -> None:
     spent_tx = context.extras.spent_tx
     txin = context.extras.txin
     tx = context.extras.tx
-    contract_value = spent_tx.outputs[txin.index].value
+    # CONS-020: use resolve_spent_output for shielded-aware lookup
+    resolved = spent_tx.resolve_spent_output(txin.index)
+    if not hasattr(resolved, 'value'):
+        raise VerifyFailed
+    contract_value = resolved.value
 
     address = context.stack.pop()
     address_b58 = get_address_b58_from_bytes(address)

@@ -26,8 +26,9 @@ from hathor.exception import InvalidNewTransaction
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, ShieldedOutputsHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
+from hathor.transaction.shielded_tx_output import ShieldedOutput
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback, unpack, unpack_len
@@ -132,6 +133,26 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def get_fee_header(self) -> FeeHeader:
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
+
+    def has_shielded_outputs(self) -> bool:
+        """Returns true if this transaction has a shielded outputs header."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        return self._get_header(ShieldedOutputsHeader)
+
+    @property
+    def shielded_outputs(self) -> list[ShieldedOutput]:
+        """Return the list of shielded outputs, or empty list if no header."""
+        if self.has_shielded_outputs():
+            return self.get_shielded_outputs_header().shielded_outputs
+        return []
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
@@ -410,7 +431,24 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+
+            # CONS-002: Handle shielded output references.
+            # When the input references a shielded output (index >= len(outputs)),
+            # skip it for token accounting — shielded amounts are hidden in commitments
+            # and verified by the homomorphic balance equation instead.
+            if tx_input.index < len(spent_tx.outputs):
+                spent_output = spent_tx.outputs[tx_input.index]
+            elif spent_tx.shielded_outputs:
+                shielded_idx = tx_input.index - len(spent_tx.outputs)
+                if shielded_idx < len(spent_tx.shielded_outputs):
+                    # Shielded input: skip for token info (amount is hidden)
+                    continue
+                else:
+                    # Out of bounds — will be caught by _verify_inputs
+                    continue
+            else:
+                # No shielded outputs and index out of bounds — will be caught by _verify_inputs
+                continue
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)

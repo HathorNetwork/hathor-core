@@ -119,10 +119,20 @@ class TransactionVerifier:
                 spent_tx = tx.get_spent_tx(tx_input)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            if tx_input.index >= len(spent_tx.outputs):
+            # VULN-002: Handle shielded output references
+            if tx_input.index < len(spent_tx.outputs):
+                script = spent_tx.outputs[tx_input.index].script
+            elif spent_tx.shielded_outputs:
+                shielded_idx = tx_input.index - len(spent_tx.outputs)
+                if shielded_idx < len(spent_tx.shielded_outputs):
+                    script = spent_tx.shielded_outputs[shielded_idx].script
+                else:
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        tx_input.tx_id.hex(), tx_input.index))
+            else:
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+            n_txops += counter.get_sigops_count(tx_input.data, script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
@@ -149,7 +159,19 @@ class TransactionVerifier:
                 ))
 
             spent_tx = tx.get_spent_tx(input_tx)
-            assert input_tx.index < len(spent_tx.outputs)
+
+            # VULN-002: Handle shielded output references instead of asserting
+            if input_tx.index < len(spent_tx.outputs):
+                # Standard transparent output
+                pass
+            elif spent_tx.shielded_outputs:
+                shielded_idx = input_tx.index - len(spent_tx.outputs)
+                if shielded_idx >= len(spent_tx.shielded_outputs):
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        input_tx.tx_id.hex(), input_tx.index))
+            else:
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    input_tx.tx_id.hex(), input_tx.index))
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
@@ -261,6 +283,8 @@ class TransactionVerifier:
         tx: Transaction,
         token_dict: TokenInfoDict,
         allow_nonexistent_tokens: bool = False,
+        *,
+        shielded_fee: int = 0,
     ) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
@@ -321,7 +345,7 @@ class TransactionVerifier:
             assert tx.is_nano_contract()
             return
 
-        expected_fee = token_dict.calculate_fee(settings)
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
@@ -333,6 +357,69 @@ class TransactionVerifier:
             ))
 
         assert htr_info.amount == htr_expected_amount
+
+    @classmethod
+    def verify_token_rules(
+        cls,
+        settings: HathorSettings,
+        token_dict: TokenInfoDict,
+        *,
+        shielded_fee: int = 0,
+    ) -> None:
+        """Verify token authority permissions, deposit requirements, and fee correctness.
+
+        This method extracts the non-balance checks from verify_sum so they can be enforced
+        for shielded transactions too (where verify_sum's balance equation is replaced by
+        verify_shielded_balance, but these rules must still apply).
+
+        :raises ForbiddenMint: if tokens were minted without authority
+        :raises ForbiddenMelt: if tokens were melted without authority
+        :raises InputOutputMismatch: if HTR deposit or fee amounts are incorrect
+        """
+        deposit = 0
+        withdraw = 0
+
+        for token_uid, token_info in token_dict.items():
+            cls._check_token_permissions(token_uid, token_info)
+            match token_info.version:
+                case None:
+                    # Nonexistent tokens are not expected here (shielded txs are not nanos)
+                    pass
+
+                case TokenVersion.NATIVE:
+                    continue
+
+                case TokenVersion.DEPOSIT:
+                    if token_info.has_been_melted():
+                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                    if token_info.has_been_minted():
+                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+
+                case TokenVersion.FEE:
+                    continue
+
+                case _:
+                    assert_never(token_info.version)
+
+        # check whether the deposit/withdraw amount is correct
+        htr_expected_amount = withdraw - deposit
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
+        if htr_info.amount > htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
+
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
+        if expected_fee != token_dict.fees_from_fee_header:
+            raise InputOutputMismatch(f"Fee amount is different than expected. "
+                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
+
+        if htr_info.amount < htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
@@ -376,6 +463,12 @@ class TransactionVerifier:
         seen_token_indexes = set()
         for txout in tx.outputs:
             seen_token_indexes.add(txout.get_token_index())
+
+        # VULN-013: Consider shielded output token indexes
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput
+        for shielded_out in tx.shielded_outputs:
+            if isinstance(shielded_out, AmountShieldedOutput):
+                seen_token_indexes.add(shielded_out.token_data & 0x7F)
 
         if tx.is_nano_contract():
             nano_header = tx.get_nano_header()

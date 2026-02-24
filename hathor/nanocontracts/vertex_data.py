@@ -40,7 +40,9 @@ def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
     except TransactionDoesNotExist:
         assert False, f'missing dependency: {txin.tx_id.hex()}'
 
-    assert len(vertex2.outputs) > txin.index, 'invalid output index'
+    # CONS-024: return None for shielded output indices instead of crashing
+    if txin.index >= len(vertex2.outputs):
+        return None
 
     txin_output = vertex2.outputs[txin.index]
     return txin_output

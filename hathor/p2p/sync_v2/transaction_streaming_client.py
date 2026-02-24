@@ -61,6 +61,7 @@ class TransactionStreamingClient:
                 nanocontracts=False,
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
+                shielded_transactions=True,
             )
         )
 

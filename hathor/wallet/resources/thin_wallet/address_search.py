@@ -46,6 +46,9 @@ class AddressSearchResource(Resource):
         """
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
+            # CONS-022: skip shielded outputs
+            if spent_tx.is_shielded_output(tx_input.index):
+                continue
             spent_output = spent_tx.outputs[tx_input.index]
 
             input_token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
