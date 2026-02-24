@@ -29,14 +29,7 @@ The generated specification can be used with:
 """
 
 import json
-from pathlib import Path
 from typing import Any
-
-
-def get_default_output_path() -> Path:
-    """Get the default output path for the AsyncAPI specification."""
-    from hathor.api import asyncapi as asyncapi_module
-    return Path(asyncapi_module.__file__).parent / 'asyncapi.json'
 
 
 def get_asyncapi_dict() -> dict[str, Any]:
@@ -66,9 +59,9 @@ def main():
     parser.add_argument(
         'out',
         type=argparse.FileType('w', encoding='UTF-8'),
-        default=get_default_output_path(),
+        default='-',
         nargs='?',
-        help='Output file where AsyncAPI JSON will be written'
+        help='Output file where AsyncAPI JSON will be written (default: stdout)'
     )
     args = parser.parse_args()
 
