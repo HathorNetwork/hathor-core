@@ -190,20 +190,27 @@ endif
 	@echo "Generated all configs in dist/$(VERSION)/"
 
 .PHONY: upload-to-s3
-upload-to-s3: ## Upload generated configs to S3 (requires VERSION)
+upload-to-s3: ## Upload generated configs to S3 versioned path (requires VERSION)
 ifndef VERSION
 	$(error VERSION is required. Usage: make upload-to-s3 VERSION=v0.69.0)
 endif
 	@echo "Uploading configs to s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/..."
 	aws s3 cp --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/ \
 		--metadata hathor-core-version=$(VERSION)
-	@echo "Copying to s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/..."
+	@echo "Upload complete."
+
+.PHONY: upload-to-s3-as-latest
+upload-to-s3-as-latest: ## Copy generated configs to S3 latest path (requires VERSION)
+ifndef VERSION
+	$(error VERSION is required. Usage: make upload-to-s3-as-latest VERSION=v0.69.0)
+endif
+	@echo "Copying configs to s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/..."
 	aws s3 cp --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/ \
 		--metadata hathor-core-version=$(VERSION)
 	@echo "Upload complete."
 
 .PHONY: release
-release: generate-all upload-to-s3 ## Generate and upload all nginx configs (requires VERSION)
+release: generate-all upload-to-s3 upload-to-s3-as-latest ## Generate and upload all nginx configs (requires VERSION)
 	@echo "Release complete for $(VERSION)."
 
 # Generate nginx.conf only (for testing or manual use).
@@ -235,7 +242,8 @@ help:
 	@echo ""
 	@echo "Config Generation & Release:"
 	@echo "  generate-all              - Generate all nginx config variants (requires VERSION)"
-	@echo "  upload-to-s3             - Upload generated configs to S3 (requires VERSION)"
+	@echo "  upload-to-s3             - Upload generated configs to S3 versioned path (requires VERSION)"
+	@echo "  upload-to-s3-as-latest   - Copy generated configs to S3 latest path (requires VERSION)"
 	@echo "  release                  - Generate and upload all nginx configs (requires VERSION)"
 	@echo ""
 	@echo "Utility Commands:"
