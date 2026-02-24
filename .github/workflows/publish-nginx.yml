@@ -77,9 +77,17 @@ jobs:
           role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
           aws-region: us-east-1
 
-      - name: Generate and upload configs
+      - name: Generate all nginx configs
         working-directory: extras/nginx_docker
-        run: poetry run make release VERSION=${{ steps.version.outputs.version }}
+        run: poetry run make generate-all VERSION=${{ steps.version.outputs.version }}
+
+      - name: Upload configs to S3 (versioned)
+        working-directory: extras/nginx_docker
+        run: make upload-to-s3 VERSION=${{ steps.version.outputs.version }}
+
+      - name: Upload configs to S3 (latest)
+        working-directory: extras/nginx_docker
+        run: make upload-to-s3-as-latest VERSION=${{ steps.version.outputs.version }}
 
       - name: Generate set_real_ip_from_cloudfront
         working-directory: extras/nginx_docker
@@ -113,8 +121,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:nginx-${{ steps.version.outputs.version }}
-            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:nginx-latest
+            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:${{ steps.version.outputs.version }}
+            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
 
       # --- GCP Artifact Registries ---
 
@@ -136,8 +144,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:nginx-latest
+            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:latest
 
       # hathor-testnet
       - name: Authenticate to GCP (hathor-testnet)
@@ -157,8 +165,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:nginx-latest
+            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:latest
 
       # ekvilibro
       - name: Authenticate to GCP (ekvilibro)
@@ -178,8 +186,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:nginx-latest
+            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:latest
 
       # hathor-testnet-playground
       - name: Authenticate to GCP (hathor-testnet-playground)
@@ -199,5 +207,5 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:nginx-${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:nginx-latest
+            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:latest
