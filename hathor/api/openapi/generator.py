@@ -21,9 +21,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from hathor.api.openapi.decorators import EndpointMetadata, get_endpoint_registry
+from hathor.api.schema_utils import SchemaRegistryMixin
 
 
-class OpenAPIGenerator:
+class OpenAPIGenerator(SchemaRegistryMixin):
     """Generates OpenAPI 3.1 specification from registered endpoints.
 
     This generator collects metadata from @api_endpoint decorated methods
@@ -40,15 +41,6 @@ class OpenAPIGenerator:
         self.version = version
         self.description = description
         self._schemas: dict[str, Any] = {}
-
-    def _get_schema_ref(self, model: type[BaseModel]) -> dict[str, Any]:
-        """Get a $ref to a schema, registering it if needed."""
-        schema_name = model.__name__
-        if schema_name not in self._schemas:
-            self._schemas[schema_name] = model.model_json_schema(
-                ref_template='#/components/schemas/{model}'
-            )
-        return {'$ref': f'#/components/schemas/{schema_name}'}
 
     def _build_parameters(self, metadata: EndpointMetadata) -> list[dict[str, Any]]:
         """Build OpenAPI parameters from query params model and path params."""
@@ -276,16 +268,6 @@ class OpenAPIGenerator:
 
         # Add components/schemas if any were registered
         if self._schemas:
-            # Process schemas to handle nested $defs
-            components_schemas: dict[str, Any] = {}
-            for name, schema in self._schemas.items():
-                # Extract $defs to top-level schemas
-                if '$defs' in schema:
-                    for def_name, def_schema in schema['$defs'].items():
-                        components_schemas[def_name] = def_schema
-                    del schema['$defs']
-                components_schemas[name] = schema
-
-            spec['components'] = {'schemas': components_schemas}
+            spec['components'] = {'schemas': self._flatten_schemas()}
 
         return spec
