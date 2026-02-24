@@ -1,3 +1,86 @@
 P2PKH_VERSION_BYTE: x49
 MULTISIG_VERSION_BYTE: x87
 NETWORK_NAME: testnet-india
+BOOTSTRAP_DNS:
+  - india.testnet.hathor.network
+
+# Genesis stuff
+GENESIS_OUTPUT_SCRIPT: 76a914a584cf48b161e4a49223ed220df30037ab740e0088ac
+GENESIS_BLOCK_TIMESTAMP: 1759950000
+GENESIS_BLOCK_NONCE: 1791023
+GENESIS_BLOCK_HASH: 000001b7d5abc44d3828529654e8d830eeca1cd0e313032be1b8e9dfe31052ee
+GENESIS_TX1_NONCE: 844
+GENESIS_TX1_HASH: 00768e4df506979bb14e0efc16748d9306fa176de54e86069d115e74b26957df
+GENESIS_TX2_NONCE: 111
+GENESIS_TX2_HASH: 00306abcedddfa21707e7920fe324a997e3a311a959a18724c7e8cfd0468c164
+
+# tx weight parameters. With these settings tx weight is always 8
+MIN_TX_WEIGHT_K: 0
+MIN_TX_WEIGHT_COEFFICIENT: 0
+MIN_TX_WEIGHT: 8
+
+FEATURE_ACTIVATION:
+  evaluation_interval: 240  # 2 hours
+  default_threshold: 180  # 75% of evaluation_interval
+  features:
+    COUNT_CHECKDATASIG_OP:
+      bit: 0
+      start_height: 0
+      timeout_height: 1440  # 12 hours
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.67.0
+      signal_support_by_default: true
+
+    NANO_CONTRACTS:
+      bit: 0
+      start_height: 14_400
+      timeout_height: 23_040  # 36 evaluation periods (72 hours)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.67.0
+      signal_support_by_default: true
+
+    # current height: 295_587 at 2026-01-20 19:45:03 UTC
+    FEE_TOKENS:
+      bit: 1
+      start_height: 295_680  # expected around 2026-01-20 20:31:33 UTC
+      timeout_height: 304_320  # 36 evaluation periods (72 hours)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.69.0
+      signal_support_by_default: true
+
+    # current height: 335_348 at 2026-02-03 17:12:47 GMT
+    OPCODES_V2:
+      bit: 0
+      start_height: 335_520  # expected around 2026-02-03 18:38:47 GMT
+      timeout_height: 347_040  # 48 evaluation periods (96 hours)
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.69.0
+      signal_support_by_default: true
+
+ENABLE_NANO_CONTRACTS: feature_activation
+ENABLE_FEE_BASED_TOKENS: feature_activation
+NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
+  - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
+  - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY
+
+SOFT_VOIDED_TX_IDS:
+  - 00000000e03c4aa950f87cb2c0317f0e5fbd58561ad9a30916126426dcd5f283
+  - 000002681b995cb043583f5a747c185d4db7b1ee6621ad75fc155c9e8ac12846
+  - 00000f69311fc345b9a8919282ef85da5adfaf10690568ed3fbc290de218a056
+  - 00000eea02e10b227ce1635a73714c4bcca207605d3d38fd44d0e8a26f4dc3f5
+  - 00000f5bda0cbfa1fbc05b021c7b7be8423bdc1663e83cef02c9db7dc9e2a664
+  - 0000065da27407862eb0fc5befc0611ce0b41120c3ef2b55ff51a71ec989028d
+  - 00000c14a7f11318bc362b58ad018e01f56f8c63def4e6bcda0555f6cef2ebc3
+
+SKIP_VERIFICATION:
+  - 00000000e03c4aa950f87cb2c0317f0e5fbd58561ad9a30916126426dcd5f283
+  - 000002681b995cb043583f5a747c185d4db7b1ee6621ad75fc155c9e8ac12846
+  - 00000f69311fc345b9a8919282ef85da5adfaf10690568ed3fbc290de218a056
+  - 00000eea02e10b227ce1635a73714c4bcca207605d3d38fd44d0e8a26f4dc3f5
+  - 00000f5bda0cbfa1fbc05b021c7b7be8423bdc1663e83cef02c9db7dc9e2a664
+  - 0000065da27407862eb0fc5befc0611ce0b41120c3ef2b55ff51a71ec989028d
+  - 00000c14a7f11318bc362b58ad018e01f56f8c63def4e6bcda0555f6cef2ebc3

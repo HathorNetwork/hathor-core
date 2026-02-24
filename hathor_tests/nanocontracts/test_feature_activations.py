@@ -14,7 +14,6 @@
 
 import pytest
 
-from hathor.conf.settings import FeatureSetting
 from hathor.crypto.util import decode_address, get_address_from_public_key_hash
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
@@ -29,6 +28,7 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.scripts import P2PKH, Opcode
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.conf.settings import FeatureSetting
 
 
 class MyBluprint(Blueprint):

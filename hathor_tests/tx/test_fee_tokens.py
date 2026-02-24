@@ -14,7 +14,6 @@
 
 import pytest
 
-from hathor.conf.settings import FeatureSetting
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.indexes.tokens_index import TokenUtxoInfo
@@ -29,6 +28,7 @@ from hathor.transaction.util import get_deposit_token_withdraw_amount
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.utils import add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key
+from hathorlib.conf.settings import FeatureSetting
 
 
 class FeeTokenTest(unittest.TestCase):
