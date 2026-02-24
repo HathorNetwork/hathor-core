@@ -766,6 +766,7 @@ base58 = "~2.1.1"
 cryptography = "~42.0.5"
 pycoin = "~0.92"
 pydantic = "^2.0"
+pyyaml = "^6.0.1"
 
 [package.extras]
 client = ["aiohttp (>=3.9.3,<3.10.0)", "structlog (>=22.3.0,<22.4.0)"]
@@ -2563,6 +2564,7 @@ files = [
     {file = "typing_extensions-4.12.2-py3-none-any.whl", hash = "sha256:04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d"},
     {file = "typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8"},
 ]
+markers = {dev = "implementation_name == \"cpython\""}
 
 [[package]]
 name = "typing-inspection"
@@ -2791,6 +2793,7 @@ files = [
     {file = "zope_interface-8.2-cp314-cp314-win_amd64.whl", hash = "sha256:561ce42390bee90bae51cf1c012902a8033b2aaefbd0deed81e877562a116d48"},
     {file = "zope_interface-8.2.tar.gz", hash = "sha256:afb20c371a601d261b4f6edb53c3c418c249db1a9717b0baafc9a9bb39ba1224"},
 ]
+markers = {dev = "implementation_name == \"cpython\""}
 
 [package.extras]
 docs = ["Sphinx", "furo", "repoze.sphinx.autointerface"]
