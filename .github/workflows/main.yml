@@ -147,9 +147,9 @@ jobs:
           os: ${{ matrix.os }}
       - name: Run genesis tests
         run: |
-          HATHOR_TEST_CONFIG_YAML='./hathorlib/conf/mainnet.yml' poetry run pytest -n0 --cov=hathor hathor_tests/tx/test_genesis.py
-          HATHOR_TEST_CONFIG_YAML='./hathorlib/conf/testnet.yml' poetry run pytest -n0 --cov=hathor --cov-append hathor_tests/tx/test_genesis.py
-          HATHOR_TEST_CONFIG_YAML='./hathorlib/conf/nano_testnet.yml' poetry run pytest -n0 --cov=hathor --cov-append hathor_tests/tx/test_genesis.py
+          HATHOR_TEST_CONFIG_YAML='./hathorlib/hathorlib/conf/mainnet.yml' poetry run pytest -n0 --cov=hathor hathor_tests/tx/test_genesis.py
+          HATHOR_TEST_CONFIG_YAML='./hathorlib/hathorlib/conf/testnet.yml' poetry run pytest -n0 --cov=hathor --cov-append hathor_tests/tx/test_genesis.py
+          HATHOR_TEST_CONFIG_YAML='./hathorlib/hathorlib/conf/nano_testnet.yml' poetry run pytest -n0 --cov=hathor --cov-append hathor_tests/tx/test_genesis.py
       - name: Run custom tests
         run: poetry run bash ./extras/custom_tests.sh
       - name: Run CI tests
