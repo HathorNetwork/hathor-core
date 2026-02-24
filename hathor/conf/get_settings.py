@@ -54,7 +54,7 @@ def HathorSettings() -> 'Settings':
     if settings_module_filepath is not None:
         return _load_settings_singleton(settings_module_filepath, is_yaml=False)
 
-    from hathor import conf
+    from hathorlib import conf
     settings_yaml_filepath = os.environ.get('HATHOR_CONFIG_YAML', conf.MAINNET_SETTINGS_FILEPATH)
     return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
 

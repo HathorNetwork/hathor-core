@@ -19,9 +19,9 @@ import pytest
 from pydantic import ValidationError
 
 from hathor.checkpoint import Checkpoint
-from hathor.conf import MAINNET_SETTINGS_FILEPATH
 from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
 from hathor.conf.settings import DECIMAL_PLACES, GENESIS_TOKEN_UNITS, GENESIS_TOKENS, HathorSettings
+from hathorlib.conf import MAINNET_SETTINGS_FILEPATH
 from hathorlib.conf.utils import load_yaml_settings
 
 
