@@ -192,43 +192,33 @@ requires = ["poetry-core >= 1.3.2", "cython < 0.30"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.towncrier]
-package = "hathor"
+name = "hathor"
 filename = "CHANGELOG.md"
 directory = "changelogs/unreleased"
 title_format = "## [{version}] - {project_date}"
 issue_format = "[#{issue}](https://github.com/HathorNetwork/hathor-core/pull/{issue})"
 
 [[tool.towncrier.type]]
-directory = "feature"
-name = "Features"
+directory = "added"
+name = "Added"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "fix"
-name = "Bug Fixes"
+directory = "changed"
+name = "Changed"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "docs"
-name = "Documentation"
+directory = "removed"
+name = "Removed"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "style"
-name = "Style"
-showcontent = false
-
-[[tool.towncrier.type]]
-directory = "refactor"
-name = "Refactoring"
+directory = "fixed"
+name = "Fixed"
 showcontent = true
 
 [[tool.towncrier.type]]
-directory = "test"
-name = "Tests"
-showcontent = false
-
-[[tool.towncrier.type]]
-directory = "chore"
-name = "Chores"
-showcontent = false
+directory = "packaging"
+name = "Packaging"
+showcontent = true

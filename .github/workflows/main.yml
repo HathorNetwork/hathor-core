@@ -92,7 +92,7 @@ jobs:
             echo "Found changelog fragment for PR #${PR}"
           else
             echo "::error::Missing changelog fragment: changelogs/unreleased/${PR}.<type>.md"
-            echo "Valid types: breaking, security, feat, fix, perf, deprecation, docs, misc"
+            echo "Valid types: added, changed, removed, fixed, packaging"
             echo "Or add 'skip-changelog' label to skip this check."
             exit 1
           fi

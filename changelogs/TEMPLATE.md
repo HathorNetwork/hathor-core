@@ -4,16 +4,14 @@ CHANGELOG FRAGMENT TEMPLATE
 
 HOW TO USE:
 1. Copy this file to: changelogs/unreleased/<PR_NUMBER>.<type>.md
-   Example: changelogs/unreleased/1234.feat.md
+   Example: changelogs/unreleased/1234.added.md
 
-2. Choose <type> based on your change (matches semantic commit prefixes):
-   - feature  → New user-facing features
-   - fix      → Bug fixes for users
-   - docs     → Documentation changes
-   - style    → Formatting, no code change (hidden from public changelog)
-   - refactor → Refactoring production code
-   - test     → Test changes, no production code (hidden from public changelog)
-   - chore    → Admin/build/config changes (hidden from public changelog)
+2. Choose <type> based on your change:
+   - added      New user-facing features or capabilities
+   - changed    Changes to existing functionality
+   - removed    Features or functionality that were removed
+   - fixed      Bug fixes
+   - packaging  Build system, CI, dependency, or tooling changes
 
    Note: Breaking changes should be noted in the fragment description, not as a separate type.
 
@@ -22,35 +20,26 @@ HOW TO USE:
 
 EXAMPLES:
 
-  Simple feature (feature):
+  New feature (added):
     Add rate limiting support for API endpoints
 
-  Bug fix (fix):
+  Behavior change (changed):
+    Increase default WebSocket timeout from 30s to 60s
+
+  Removal (removed):
+    Remove deprecated `get_tx()` method from storage API
+
+  Bug fix (fixed):
     Fix WebSocket reconnection failing after timeout
 
-  Refactoring (refactor):
-    Simplify transaction validation logic
+  Packaging (packaging):
+    Add towncrier for changelog generation
 
-  Breaking change (feature with migration note):
+  Breaking change (changed with migration note):
     Rename `get_tx()` to `get_vertex()` in storage API
 
     **BREAKING:** Replace all calls to `storage.get_tx(hash)`
     with `storage.get_vertex(hash)`
-
-  With code examples (feature with breaking change):
-    Change configuration format from YAML to TOML
-
-    **BREAKING:**
-    ```yaml
-    # Before (config.yml)
-    server:
-      port: 8080
-    ```
-    ```toml
-    # After (config.toml)
-    [server]
-    port = 8080
-    ```
 
 GUIDELINES:
 - Write for end users, not developers
