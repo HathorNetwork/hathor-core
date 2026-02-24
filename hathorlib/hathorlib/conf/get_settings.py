@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import NamedTuple, Optional
 
 from hathorlib.conf.settings import HathorSettings as Settings
@@ -25,11 +26,9 @@ def HathorSettings() -> Settings:
     if settings_module_filepath is not None:
         return _load_settings_singleton(settings_module_filepath, is_yaml=False)
 
-    settings_yaml_filepath = os.environ.get('HATHOR_CONFIG_YAML')
-    if settings_yaml_filepath is not None:
-        return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
-
-    return _load_settings_singleton('hathorlib.conf.mainnet', is_yaml=False)
+    default_settings = str(Path(__file__).parent / 'mainnet.yml')
+    settings_yaml_filepath = os.environ.get('HATHOR_CONFIG_YAML', default_settings)
+    return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
 
 
 def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:
