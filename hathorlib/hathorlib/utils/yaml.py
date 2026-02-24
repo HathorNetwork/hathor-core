@@ -11,16 +11,18 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
 import os
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, TypeVar, Union
 
 import yaml
+from pydantic import BaseModel
 
-from hathor.utils.dict import deep_merge
+from hathorlib.utils.dict import deep_merge
 
 _EXTENDS_KEY = 'extends'
+
+T = TypeVar('T', bound=BaseModel)
 
 
 def dict_from_yaml(*, filepath: Union[Path, str]) -> dict[str, Any]:
@@ -70,3 +72,10 @@ def dict_from_extended_yaml(*, filepath: Union[Path, str], custom_root: Optional
     extended_dict = deep_merge(dict_to_extend, extension_dict)
 
     return extended_dict
+
+
+def model_from_extended_yaml(model: type[T], *, filepath: str, custom_root: Optional[Path] = None) -> T:
+    """Takes a pydantic model and a filepath to a yaml file and returns a validated model instance."""
+    settings_dict = dict_from_extended_yaml(filepath=filepath, custom_root=custom_root)
+
+    return model.model_validate(settings_dict)

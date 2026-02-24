@@ -22,7 +22,7 @@ from enum import IntEnum, StrEnum, auto, unique
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, assert_never
 
-from pydantic import Field, validator
+from pydantic import Field, field_serializer, field_validator
 from typing_extensions import override
 
 from hathor.nanocontracts import NCFail
@@ -31,7 +31,7 @@ from hathor.nanocontracts.types import ContractId
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.types import VertexId
-from hathor.utils.pydantic import BaseModel
+from hathor.utils.pydantic import BaseModel, Hex
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -76,13 +76,13 @@ class _BaseNCEntry(BaseModel):
     level: NCLogLevel
     timestamp: float
 
-    @override
-    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        json_dict = super().dict(*args, **kwargs)
-        json_dict['level'] = self.level.name
-        return json_dict
+    @field_serializer('level')
+    @classmethod
+    def _serialize_level(cls, level: NCLogLevel) -> str:
+        return level.name
 
-    @validator('level', pre=True)
+    @field_validator('level', mode='before')
+    @classmethod
     def _parse_level(cls, level: NCLogLevel | int | str) -> NCLogLevel:
         if isinstance(level, NCLogLevel):
             return level
@@ -95,16 +95,16 @@ class _BaseNCEntry(BaseModel):
 
 class NCLogEntry(_BaseNCEntry):
     """An entry representing a single log in a NC execution."""
-    type: Literal['LOG'] = Field(const=True, default='LOG')
+    type: Literal['LOG'] = 'LOG'
     message: str
     key_values: dict[str, str] = Field(default_factory=dict)
 
 
 class NCCallBeginEntry(_BaseNCEntry):
     """An entry representing a single method call beginning in a NC execution."""
-    type: Literal['CALL_BEGIN'] = Field(const=True, default='CALL_BEGIN')
-    level: NCLogLevel = Field(const=True, default=NCLogLevel.DEBUG)
-    nc_id: VertexId
+    type: Literal['CALL_BEGIN'] = 'CALL_BEGIN'
+    level: Literal[NCLogLevel.DEBUG] = NCLogLevel.DEBUG
+    nc_id: Hex[ContractId]
     call_type: CallType
     method_name: str
     str_args: str = '()'
@@ -127,25 +127,11 @@ class NCCallBeginEntry(_BaseNCEntry):
             actions=actions
         )
 
-    @override
-    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        json_dict = super().dict(*args, **kwargs)
-        json_dict['nc_id'] = self.nc_id.hex()
-        return json_dict
-
-    @validator('nc_id', pre=True)
-    def _parse_nc_id(cls, vertex_id: VertexId | str) -> VertexId:
-        if isinstance(vertex_id, VertexId):
-            return vertex_id
-        if isinstance(vertex_id, str):
-            return bytes.fromhex(vertex_id)
-        raise TypeError(f'invalid vertex_id type: {type(vertex_id)}')
-
 
 class NCCallEndEntry(_BaseNCEntry):
     """An entry representing a single method call ending in a NC execution."""
-    type: Literal['CALL_END'] = Field(const=True, default='CALL_END')
-    level: NCLogLevel = Field(const=True, default=NCLogLevel.DEBUG)
+    type: Literal['CALL_END'] = 'CALL_END'
+    level: Literal[NCLogLevel.DEBUG] = NCLogLevel.DEBUG
 
 
 class NCExecEntry(BaseModel):
@@ -166,7 +152,7 @@ class NCExecEntry(BaseModel):
 
     def filter(self, log_level: NCLogLevel) -> NCExecEntry:
         """Create a new NCExecEntry while keeping logs with the provided log level or higher."""
-        return self.copy(
+        return self.model_copy(
             update=dict(
                 logs=[log for log in self.logs if log.level >= log_level],
             ),
@@ -183,15 +169,15 @@ class NCExecEntries(BaseModel):
     @staticmethod
     def from_json(json_dict: dict[str, Any]) -> NCExecEntries:
         entries = {
-            bytes.fromhex(block_id_hex): [NCExecEntry.parse_obj(entry) for entry in entries]
+            bytes.fromhex(block_id_hex): [NCExecEntry.model_validate(entry) for entry in entries]
             for block_id_hex, entries in json_dict.items()
         }
         return NCExecEntries(entries=entries)
 
     @override
-    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return {
-            block_id.hex(): [entry.dict(*args, **kwargs) for entry in block_entries]
+            block_id.hex(): [entry.model_dump(*args, **kwargs) for entry in block_entries]
             for block_id, block_entries in self.entries.items()
         }
 
@@ -298,7 +284,7 @@ class NCLogStorage:
                 assert_never(self._config)
 
         new_entry = NCExecEntry.from_call_info(call_info, tb)
-        new_line_dict = {meta.first_block.hex(): new_entry.dict()}
+        new_line_dict = {meta.first_block.hex(): new_entry.model_dump()}
         path = self._get_file_path(tx.hash)
 
         with path.open(mode='a') as f:
@@ -365,4 +351,4 @@ class NCLogStorage:
     ) -> dict[str, Any] | None:
         """Return NC execution logs to the provided NC ID as json."""
         logs = self.get_logs(nano_contract_id, log_level=log_level, block_id=block_id)
-        return None if logs is None else logs.dict()
+        return None if logs is None else logs.model_dump()

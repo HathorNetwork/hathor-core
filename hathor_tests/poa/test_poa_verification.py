@@ -35,14 +35,16 @@ class PoaVerificationTest(unittest.TestCase):
         public_key = self.signer.get_public_key()
         public_key_bytes = get_public_key_bytes_compressed(public_key)
 
-        settings = self._settings._replace(
-            BLOCKS_PER_HALVING=None,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
-            CONSENSUS_ALGORITHM=PoaSettings(
-                type=ConsensusType.PROOF_OF_AUTHORITY,
-                signers=(PoaSignerSettings(public_key=public_key_bytes),),
-            ),
+        settings = self._settings.model_copy(
+            update={
+                'BLOCKS_PER_HALVING': None,
+                'INITIAL_TOKEN_UNITS_PER_BLOCK': 0,
+                'MINIMUM_TOKEN_UNITS_PER_BLOCK': 0,
+                'CONSENSUS_ALGORITHM': PoaSettings(
+                    type=ConsensusType.PROOF_OF_AUTHORITY,
+                    signers=(PoaSignerSettings(public_key=public_key_bytes),),
+                )
+            },
         )
 
         builder = self.get_builder().set_settings(settings)

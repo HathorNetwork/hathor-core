@@ -17,7 +17,6 @@ from unittest.mock import Mock
 import pytest
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.transaction import Block
@@ -139,7 +138,7 @@ def test_get_feature_activation_bit_value() -> None:
 
 
 def test_verify_must_signal() -> None:
-    settings = Mock(spec_set=HathorSettings)
+    settings = Mock()
     settings.CHECKPOINTS = []
     feature_service = Mock(spec_set=FeatureService)
     feature_service.is_signaling_mandatory_features = Mock(
@@ -155,7 +154,7 @@ def test_verify_must_signal() -> None:
 
 
 def test_verify_must_not_signal() -> None:
-    settings = Mock(spec_set=HathorSettings)
+    settings = Mock()
     settings.CHECKPOINTS = []
     feature_service = Mock(spec_set=FeatureService)
     feature_service.is_signaling_mandatory_features = Mock(return_value=BlockIsSignaling())

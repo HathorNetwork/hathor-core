@@ -499,7 +499,7 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
-        from hathor.conf import (
+        from hathorlib.conf import (
             LOCALNET_SETTINGS_FILEPATH,
             NANO_TESTNET_SETTINGS_FILEPATH,
             TESTNET_INDIA_SETTINGS_FILEPATH,
@@ -586,7 +586,7 @@ class RunNode:
 
     def _parse_args_obj(self, args: dict[str, Any]) -> 'RunNodeArgs':
         from hathor_cli.run_node_args import RunNodeArgs
-        return RunNodeArgs.parse_obj(args)
+        return RunNodeArgs.model_validate(args)
 
     def run(self) -> None:
         self.reactor.run()

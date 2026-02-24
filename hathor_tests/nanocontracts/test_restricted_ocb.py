@@ -89,7 +89,7 @@ class TestRestrictedOCB(unittest.TestCase):
 
     def test_ocb_unrestricted(self) -> None:
         builder = self.get_builder() \
-            .set_settings(self._settings._replace(NC_ON_CHAIN_BLUEPRINT_RESTRICTED=False))
+            .set_settings(self._settings.model_copy(update={'NC_ON_CHAIN_BLUEPRINT_RESTRICTED': False}))
         manager = self.create_peer_from_builder(builder)
         dag_builder = TestDAGBuilder.from_manager(manager)
         password = b'abc'
@@ -124,7 +124,7 @@ class TestRestrictedOCB(unittest.TestCase):
 
     def test_ocb_invalid_pubkey(self) -> None:
         builder = self.get_builder() \
-            .set_settings(self._settings._replace(NC_ON_CHAIN_BLUEPRINT_RESTRICTED=False))
+            .set_settings(self._settings.model_copy(update={'NC_ON_CHAIN_BLUEPRINT_RESTRICTED': False}))
         manager = self.create_peer_from_builder(builder)
         dag_builder = TestDAGBuilder.from_manager(manager)
         private_key = unittest.OCB_TEST_PRIVKEY.hex()

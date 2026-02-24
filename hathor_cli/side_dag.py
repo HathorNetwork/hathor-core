@@ -48,7 +48,7 @@ KILL_WAIT_DELAY = 300
 
 
 class SideDagArgs(RunNodeArgs):
-    poa_signer_file: str | None
+    poa_signer_file: str | None = None
 
 
 class SideDagRunNode(RunNode):
@@ -56,7 +56,7 @@ class SideDagRunNode(RunNode):
 
     @override
     def _parse_args_obj(self, args: dict[str, Any]) -> RunNodeArgs:
-        return SideDagArgs.parse_obj(args)
+        return SideDagArgs.model_validate(args)
 
     @classmethod
     @override

@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, Union
 
-from pydantic import Field, NonNegativeInt
+from pydantic import Discriminator, NonNegativeInt, RootModel, Tag
 
 from hathor.utils.pydantic import BaseModel
 
@@ -28,7 +28,7 @@ class StartStreamRequest(BaseModel):
         window_size: The amount of events the client is able to process.
     """
     type: Literal['START_STREAM']
-    last_ack_event_id: Optional[NonNegativeInt]
+    last_ack_event_id: Optional[NonNegativeInt] = None
     window_size: NonNegativeInt
 
 
@@ -54,13 +54,19 @@ class StopStreamRequest(BaseModel):
     type: Literal['STOP_STREAM']
 
 
-Request = Annotated[StartStreamRequest | AckRequest | StopStreamRequest, Field(discriminator='type')]
+Request = Annotated[
+    Union[
+        Annotated[StartStreamRequest, Tag('START_STREAM')],
+        Annotated[AckRequest, Tag('ACK')],
+        Annotated[StopStreamRequest, Tag('STOP_STREAM')],
+    ],
+    Discriminator('type')
+]
 
 
-class RequestWrapper(BaseModel):
+class RequestWrapper(RootModel[Request]):
     """Class that wraps the Request union type for parsing."""
-    __root__: Request
 
     @classmethod
     def parse_raw_request(cls, raw: bytes) -> Request:
-        return cls.parse_raw(raw).__root__
+        return cls.model_validate_json(raw).root

@@ -72,7 +72,7 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
         group_id=group_id
     )
 
-    assert event.dict() == expected
+    assert event.model_dump() == expected
 
 
 @pytest.mark.parametrize('event_id', [-1, -1000])

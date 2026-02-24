@@ -13,10 +13,11 @@
 # limitations under the License.
 
 from hathor.checkpoint import Checkpoint as cp
-from hathor.conf.settings import FeatureSetting, HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
+from hathorlib.conf.settings import FeatureSetting
 
 SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x28',

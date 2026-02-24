@@ -14,6 +14,7 @@
 
 from typing import Optional
 
+from pydantic import ConfigDict
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
@@ -131,7 +132,9 @@ class GetBlockFeaturesParams(QueryParams):
     block: str
 
 
-class GetBlockFeatureResponse(Response, use_enum_values=True):
+class GetBlockFeatureResponse(Response):
+    model_config = ConfigDict(use_enum_values=True)
+
     bit: int
     signal: int
     feature: Feature
@@ -142,7 +145,9 @@ class GetBlockFeaturesResponse(Response):
     signal_bits: list[GetBlockFeatureResponse]
 
 
-class GetFeatureResponse(Response, use_enum_values=True):
+class GetFeatureResponse(Response):
+    model_config = ConfigDict(use_enum_values=True)
+
     name: Feature
     state: str
     acceptance: Optional[float]
