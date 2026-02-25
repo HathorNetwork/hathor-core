@@ -27,7 +27,7 @@ from twisted.web.client import Agent
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import ConnectionRejected, ConnectionResult, Slot
+from hathor.p2p.connection_slot import ConnectionChanged, ConnectionRejected, ConnectionResult, Slot
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -449,16 +449,16 @@ class ConnectionsManager:
             case HathorProtocol.ConnectionType.OUTGOING:
                 # Here, it can happen that the protocol changes to Check Entrypoints.
                 connection_allowed = self.outgoing_slot.add_connection(protocol)
-                # The check is done so discovered connections are not added doubly.
+
+                # If connection changes from outgoing -> check_ep, we add it here.
+                if isinstance(connection_allowed, ConnectionChanged):
+                    connection_allowed = self.check_entrypoints_slot.add_connection(protocol)
 
             case HathorProtocol.ConnectionType.INCOMING:
                 connection_allowed = self.incoming_slot.add_connection(protocol)
 
             case HathorProtocol.ConnectionType.DISCOVERED:
                 connection_allowed = self.bootstrap_slot.add_connection(protocol)
-
-            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-                connection_allowed = self.check_entrypoints_slot.add_connection(protocol)
 
             case _:
                 assert_never(conn_type)

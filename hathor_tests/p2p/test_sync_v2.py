@@ -518,33 +518,42 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(len(newPeer.connections.outgoing_slot.connection_slot) == len(out_connList))
 
     def test_slot_limit(self) -> None:
-        """
-            Tests whether the slots and the pool stop increasing connections after cap is reached.
-        """
+        """ Tests whether the slots and the pool stop increasing connections after cap is reached.
 
-        # Get the settings of the max_connections allowed. Put dummy values in HathorSettings.
-        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
-
-        # Number of peers and thresholds of connections in slots and pool
-        max_number_outgoing_connections = 45  # Note: After around 100, no more peer ids in the pool ?
-        max_connections = _settings.PEER_MAX_CONNECTIONS
-        max_incoming_connections = _settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
-        max_outgoing_connections = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
-        max_check_entrypoints = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+            Important note: create_peer caps the peer pool at 100. Hence, if more than 100 connections
+            are opened (if settings.P2P_..._OUTGOING + settings.P2P_...INCOMING _+ ... exceed 100)
+            then the tests will fail."""
 
         # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
+        # If the total amount of connections exceeds 100, create_peer will not yield more than 100 peers as well.
         full_node = self.create_peer()
 
-        # -- Check incoming connections slot -- #
+        # Set the limits for each slot:
+        max_outgoing_connections = 20
+        max_incoming_connections = 20
+        max_check_entrypoints = 5
+        max_connections = max_check_entrypoints + max_incoming_connections + max_outgoing_connections
 
+        # Change all max_slot values so they do not exceed 100 (limit of create_peer.)
+        outgoing_slot = full_node.connections.outgoing_slot
+        outgoing_slot.max_slot_connections = max_outgoing_connections
+
+        incoming_slot = full_node.connections.incoming_slot
+        incoming_slot.max_slot_connections = max_incoming_connections
+
+        check_ep_slot = full_node.connections.check_entrypoints_slot
+        check_ep_slot.max_slot_connections = max_check_entrypoints
+
+        # -- Check connections slot -- #
+        # For each connection type we add more peers than necessary to see if the slot limits function.
         # Create peer list for incoming connections
         in_peerList = []
-        for _ in range(max_number_outgoing_connections):
+        for _ in range(max_incoming_connections + 5):
             in_peerList.append(self.create_peer())
 
         # Generate incoming connections - full_node is the target.
         in_connList = []
-        for i in range(0, max_number_outgoing_connections):
+        for i in range(0, max_incoming_connections + 5):
             in_connList.append(FakeConnection(full_node, in_peerList[i]))
 
         for i in range(len(in_connList)):
@@ -552,20 +561,19 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         self.simulator.run(10)
 
-        number_incoming_slot = len(full_node.connections.incoming_slot.connection_slot)
+        number_incoming_slot = len(incoming_slot.connection_slot)
         # Checks whether the connection has capped on its limit size.
         self.assertTrue(number_incoming_slot == max_incoming_connections)
 
         # -- Check outgoing connections slot -- #
-
         # Create peer list for outgoing connections
         out_peerList = []
-        for _ in range(max_number_outgoing_connections):
+        for _ in range(max_outgoing_connections + 5):
             out_peerList.append(self.create_peer())
 
         # Generate outgoing connections - out_peerList[i] is the target.
         out_connList = []
-        for i in range(0, max_number_outgoing_connections):
+        for i in range(0, max_outgoing_connections + 5):
             out_connList.append(FakeConnection(out_peerList[i], full_node))
 
         for i in range(len(out_connList)):
@@ -573,13 +581,13 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # Assure the outgoing connections cap at the threshold.
         self.simulator.run(10)
-        number_outgoing_slot = len(full_node.connections.outgoing_slot.connection_slot)
+        number_outgoing_slot = len(outgoing_slot.connection_slot)
         self.assertTrue(number_outgoing_slot == max_outgoing_connections)
 
-        # Finally, assure the number of connected peers is the same as the sum of both.
-        # We put a "5" in assert due to the check_entrypoints slot.
+        # Finally, assure the number of connected peers is the same as the sum of all (no discovered connections).
         connection_pool = full_node.connections.connections
-        self.assertTrue(number_outgoing_slot + number_incoming_slot + max_check_entrypoints == len(connection_pool))
+        number_check_ep = len(check_ep_slot.connection_slot)
+        self.assertTrue(number_outgoing_slot + number_incoming_slot + number_check_ep == len(connection_pool))
         self.assertTrue(len(connection_pool) <= max_connections)
 
     def test_check_ep_update(self) -> None:
@@ -587,20 +595,32 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             Checks whether the check_entrypoints slot gets updated after outgoing slot full.
         """
 
-        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
-
-        # Create exactly the amount of peers that the slot can handle
-        max_number_outgoing_connections = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
-        max_check_ep_connections = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+        # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
+        # If the total amount of connections exceeds 100, create_peer will not yield more than 100 peers as well.
         full_node = self.create_peer()
 
+        # Set the limits for each slot:
+        max_outgoing_connections = 20
+        max_incoming_connections = 20
+        max_check_entrypoints = 5
+
+        # Change all max_slot values so they do not exceed 100 (limit of create_peer.)
+        outgoing_slot = full_node.connections.outgoing_slot
+        outgoing_slot.max_slot_connections = max_outgoing_connections
+
+        incoming_slot = full_node.connections.incoming_slot
+        incoming_slot.max_slot_connections = max_incoming_connections
+
+        check_ep_slot = full_node.connections.check_entrypoints_slot
+        check_ep_slot.max_slot_connections = max_check_entrypoints
+
         out_peerList = []
-        for _ in range(max_number_outgoing_connections):
+        for _ in range(max_outgoing_connections):
             out_peerList.append(self.create_peer())
 
         # Generate outgoing connections - out_peerList[i] is the target.
         out_connList = []
-        for i in range(0, max_number_outgoing_connections):
+        for i in range(0, max_outgoing_connections):
             out_connList.append(FakeConnection(out_peerList[i], full_node))
 
         for i in range(len(out_connList)):
@@ -619,15 +639,15 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(2)
 
         # Check if indeed a connection was updated into check_entrypoints after outgoing full
-        self.assertTrue(len(full_node.connections.check_entrypoints_slot.connection_slot) == 1)
+        self.assertTrue(len(check_ep_slot.connection_slot) == 1)
 
         # Let's keep adding more outgoing connections to the full node until it caps the check_entrypoints.
-        for _ in range(10):
+        for _ in range(max_check_entrypoints + 5):
             out_peerList.append(self.create_peer())
 
         # Generate outgoing connections - out_peerList[i] is the target.
         out_connList = []
-        for i in range(max_check_ep_connections + 5):
+        for i in range(max_check_entrypoints + 5):
             out_connList.append(FakeConnection(out_peerList[i], full_node))
 
         for i in range(len(out_connList)):
@@ -636,30 +656,41 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(2)
 
         # Amount of established connections in check_ep slot.
-        amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
+        amount_check_ep_conn = len(check_ep_slot.connection_slot)
 
         # It passed through the cap of check_entrypoints. It mush be capped.
-        self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
+        self.assertTrue(amount_check_ep_conn == max_check_entrypoints)
 
         # Assert the numbers add up to the max of connections.
         total_conn = len(full_node.connections.connections)
-        self.assertTrue(amount_check_ep_conn + max_number_outgoing_connections == total_conn)
+        self.assertTrue(amount_check_ep_conn + max_outgoing_connections == total_conn)
 
     def test_check_ep_overflow(self) -> None:
-        _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
-
-        # Create exactly the amount of peers that the outgoing slot can handle
-        max_number_outgoing_connections = _settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
-        max_check_ep_connections = _settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+        # Full-Node: May receive incoming connections, deliver outgoing connections, etc.
+        # If the total amount of connections exceeds 100, create_peer will not yield more than 100 peers as well.
         full_node = self.create_peer()
 
+        # Set the limits for each slot:
+        max_outgoing_connections = 20
+        max_incoming_connections = 20
+        max_check_entrypoints = 5
+
+        # Change all max_slot values so they do not exceed 100 (limit of create_peer.)
+        outgoing_slot = full_node.connections.outgoing_slot
+        outgoing_slot.max_slot_connections = max_outgoing_connections
+
+        incoming_slot = full_node.connections.incoming_slot
+        incoming_slot.max_slot_connections = max_incoming_connections
+
+        check_ep_slot = full_node.connections.check_entrypoints_slot
+        check_ep_slot.max_slot_connections = max_check_entrypoints
         out_peerList = []
-        for _ in range(max_number_outgoing_connections):
+        for _ in range(max_outgoing_connections):
             out_peerList.append(self.create_peer())
 
         # Generate outgoing connections - out_peerList[i] is the target.
         out_connList = []
-        for i in range(0, max_number_outgoing_connections):
+        for i in range(0, max_outgoing_connections):
             out_connList.append(FakeConnection(out_peerList[i], full_node))
 
         for i in range(len(out_connList)):
@@ -670,12 +701,12 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(10)
 
         # Let's keep adding more outgoing connections to the full node until it caps the check_entrypoints.
-        for _ in range(max_check_ep_connections):
+        for _ in range(max_check_entrypoints):
             out_peerList.append(self.create_peer())
 
         # Generate outgoing connections - out_peerList[i] is the target.
         out_connList = []
-        for i in range(max_check_ep_connections):
+        for i in range(max_check_entrypoints):
             out_connList.append(FakeConnection(out_peerList[i], full_node))
 
         for i in range(len(out_connList)):
@@ -685,8 +716,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.simulator.run(2)
 
         # Amount of established connections in check_ep slot.
-        amount_check_ep_conn = len(full_node.connections.check_entrypoints_slot.connection_slot)
-        print(amount_check_ep_conn)
+        amount_check_ep_conn = len(check_ep_slot.connection_slot)
 
         self.simulator.run(30)
 
@@ -694,9 +724,10 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             self.assertTrue(conn.connection_state == HathorProtocol.ConnectionState.CONNECTING)
 
         # It passed through the cap of check_entrypoints. It mush be capped.
-        self.assertTrue(amount_check_ep_conn == max_check_ep_connections)
+        self.assertTrue(amount_check_ep_conn == max_check_entrypoints)
 
     def test_example_usage_of_Slot(self) -> None:
         _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
-        slot = Slot(HathorProtocol.ConnectionType.OUTGOING, _settings, max_connections=50)
-        assert slot.max_slot_connections == 50
+        max_connections = 15
+        slot = Slot(HathorProtocol.ConnectionType.OUTGOING, _settings, max_connections=max_connections)
+        assert slot.max_slot_connections == max_connections
