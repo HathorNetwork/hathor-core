@@ -33,9 +33,9 @@ from typing import (
 
 from typing_extensions import Self, TypeVarTuple
 
-from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.exception import NCDisabledBuiltinError
 from hathor.nanocontracts.faux_immutable import FauxImmutable
+from hathor.nanocontracts.sandbox import get_allowed_imports_dict
 from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME
 
 T = TypeVar('T')
@@ -503,7 +503,7 @@ EXEC_BUILTINS: dict[str, Any] = {
     # XXX: will trigger the execution of the imported module
     # (name: str, globals: Mapping[str, object] | None = None, locals: Mapping[str, object] | None = None,
     #  fromlist: Sequence[str] = (), level: int = 0) -> types.ModuleType
-    '__import__': _generate_restricted_import_function(ALLOWED_IMPORTS),
+    '__import__': _generate_restricted_import_function(get_allowed_imports_dict()),
 
     # XXX: also required to declare classes
     # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name otherwise,
@@ -752,11 +752,14 @@ EXEC_BUILTINS: dict[str, Any] = {
     # 'BaseExceptionGroup': builtins.BaseExceptionGroup,
     # 'ExceptionGroup': builtins.ExceptionGroup,
 
-    # expose all other exception types:
+    # expose Exception-derived exception types only:
+    # SECURITY: BaseException, SystemExit, KeyboardInterrupt, and GeneratorExit
+    # are intentionally excluded. These are BaseException subclasses (not Exception
+    # subclasses) that could be used to crash the host process or interfere with
+    # the sandbox runtime. Contract code should only use Exception-derived types.
     'ArithmeticError': builtins.ArithmeticError,
     'AssertionError': builtins.AssertionError,
     'AttributeError': builtins.AttributeError,
-    'BaseException': builtins.BaseException,
     'BlockingIOError': builtins.BlockingIOError,
     'BrokenPipeError': builtins.BrokenPipeError,
     'BufferError': builtins.BufferError,
@@ -771,7 +774,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'FileExistsError': builtins.FileExistsError,
     'FileNotFoundError': builtins.FileNotFoundError,
     'FloatingPointError': builtins.FloatingPointError,
-    'GeneratorExit': builtins.GeneratorExit,
     'IOError': builtins.IOError,
     'ImportError': builtins.ImportError,
     'IndentationError': builtins.IndentationError,
@@ -779,7 +781,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'InterruptedError': builtins.InterruptedError,
     'IsADirectoryError': builtins.IsADirectoryError,
     'KeyError': builtins.KeyError,
-    'KeyboardInterrupt': builtins.KeyboardInterrupt,
     'LookupError': builtins.LookupError,
     'MemoryError': builtins.MemoryError,
     'ModuleNotFoundError': builtins.ModuleNotFoundError,
@@ -797,7 +798,6 @@ EXEC_BUILTINS: dict[str, Any] = {
     'StopIteration': builtins.StopIteration,
     'SyntaxError': builtins.SyntaxError,
     'SystemError': builtins.SystemError,
-    'SystemExit': builtins.SystemExit,
     'TabError': builtins.TabError,
     'TimeoutError': builtins.TimeoutError,
     'TypeError': builtins.TypeError,

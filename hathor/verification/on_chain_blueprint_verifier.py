@@ -22,10 +22,10 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_from_bytes_compressed
 from hathor.nanocontracts import OnChainBlueprint
-from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import AST_NAME_BLACKLIST
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathor.nanocontracts.sandbox import get_allowed_imports_dict
 
 
 class _RestrictionsVisitor(ast.NodeVisitor):
@@ -42,9 +42,10 @@ class _RestrictionsVisitor(ast.NodeVisitor):
         raise SyntaxError('Import statements are not allowed.')
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if node.module not in ALLOWED_IMPORTS:
+        allowed_imports = get_allowed_imports_dict()
+        if node.module not in allowed_imports:
             raise SyntaxError(f'Importing from "{node.module}" is not allowed.')
-        allowed_fromlist = ALLOWED_IMPORTS[node.module]
+        allowed_fromlist = allowed_imports[node.module]
         for import_what in node.names:
             if import_what.name not in allowed_fromlist:
                 raise SyntaxError(f'Importing "{import_what.name}" from "{node.module}" is not allowed.')

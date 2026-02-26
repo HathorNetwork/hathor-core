@@ -18,6 +18,8 @@ from cryptography.exceptions import InvalidSignature
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.exception import NCInvalidSignature
+from hathor.nanocontracts.metered_exec import MeteredExecutor
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG
 from hathor.nanocontracts.types import BlueprintId, VertexId
 from hathor.transaction import Transaction
 from hathor.util import not_none
@@ -55,7 +57,7 @@ class TestRestrictedOCB(unittest.TestCase):
 
         assert nc.is_nano_contract()
 
-        assert ocb.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert ocb.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG)).__name__ == 'TestBlueprint1'
         assert nc.get_nano_header().nc_id == ocb.hash
         blueprint_class = manager.tx_storage.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
         assert blueprint_class.__name__ == 'TestBlueprint1'
@@ -117,7 +119,7 @@ class TestRestrictedOCB(unittest.TestCase):
 
         assert nc.is_nano_contract()
 
-        assert ocb.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert ocb.get_blueprint_class(MeteredExecutor(config=DISABLED_CONFIG)).__name__ == 'TestBlueprint1'
         assert nc.get_nano_header().nc_id == ocb.hash
         blueprint_class = manager.tx_storage.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
         assert blueprint_class.__name__ == 'TestBlueprint1'

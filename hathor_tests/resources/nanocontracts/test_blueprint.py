@@ -105,7 +105,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
             },
             'my_private_method_2': {
                 'args': [],
-                'return_type': 'dict[dict[str, int], tuple[bool, str, int, int]]',
+                'return_type': 'dict[str, tuple[bool, str, int, int]]',
                 'docstring': None,
             },
             'my_private_method_3': {
@@ -130,7 +130,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
             },
             'my_private_method_7': {
                 'args': [],
-                'return_type': 'union[str, int, bool, null]',
+                'return_type': 'int?',
                 'docstring': None,
             },
         }

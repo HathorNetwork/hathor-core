@@ -23,6 +23,9 @@ class TestExceptions(unittest.TestCase):
             nano_exceptions.HathorError,
             nano_exceptions.NCFail,
             nano_exceptions.TxValidationError,
+            # SandboxRequiredButNotAvailable is a configuration-time error raised
+            # at node startup, not a transaction execution failure.
+            nano_exceptions.SandboxRequiredButNotAvailable,
         }
 
         for name, obj in nano_exceptions.__dict__.items():

@@ -71,7 +71,8 @@ class BlueprintOnChainResource(Resource):
                 except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
                     pass
                 else:
-                    bp_class = bp_tx.get_blueprint_class()
+                    executor = self.manager.runner_factory.executor_factory.for_loading()
+                    bp_class = bp_tx.get_blueprint_class(executor)
                     bp_item = OnChainBlueprintItem(
                         id=search,
                         name=bp_class.__name__,
@@ -118,7 +119,8 @@ class BlueprintOnChainResource(Resource):
             except OCBBlueprintNotConfirmed:
                 # unconfirmed OCBs are simply not added to the response
                 continue
-            bp_class = bp_tx.get_blueprint_class()
+            executor = self.manager.runner_factory.executor_factory.for_loading()
+            bp_class = bp_tx.get_blueprint_class(executor)
             bp_item = OnChainBlueprintItem(
                 id=bp_id.hex(),
                 name=bp_class.__name__,

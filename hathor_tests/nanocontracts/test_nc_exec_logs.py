@@ -104,7 +104,7 @@ class BaseNCExecLogs(unittest.TestCase):
                 message=f'initialize() called on {blueprint_class.__name__}',
                 timestamp=ANY,
             ),
-            NCCallEndEntry.model_construct(timestamp=ANY),
+            NCCallEndEntry.model_construct(timestamp=ANY, sandbox_counters=ANY),
         ]
 
     def _prepare(self, nc_log_config: NCLogConfig = NCLogConfig.ALL) -> None:
@@ -310,7 +310,7 @@ class TestNCExecLogs(BaseNCExecLogs):
                         key_values=dict(test4='4'),
                         timestamp=ANY,
                     ),
-                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY, sandbox_counters=ANY),
                 ],
             )],
         }
@@ -436,7 +436,8 @@ class TestNCExecLogs(BaseNCExecLogs):
             The above exception was the direct cause of the following exception:\n
             Traceback (most recent call last):
         """) in error_tb
-        assert error_tb.endswith('hathor.nanocontracts.exception.NCFail\n')
+        expected_suffix = 'hathor.nanocontracts.exception.NCFail: Execution failed: ValueError: some value error\n'
+        assert error_tb.endswith(expected_suffix)
 
     def test_reexecution_on_reorgs(self) -> None:
         self._prepare()
@@ -581,7 +582,7 @@ class TestNCExecLogs(BaseNCExecLogs):
                         key_values=dict(a='1', b='2'),
                         timestamp=ANY
                     ),
-                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY, sandbox_counters=ANY),
                     NCCallBeginEntry.model_construct(
                         nc_id=ContractId(nc2.hash),
                         call_type=CallType.VIEW,
@@ -594,14 +595,14 @@ class TestNCExecLogs(BaseNCExecLogs):
                         message='hello_world() called on MyBlueprint2',
                         timestamp=ANY,
                     ),
-                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY, sandbox_counters=ANY),
                     NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='results on MyBlueprint1',
                         key_values=dict(result1='3', result2='hello world'),
                         timestamp=ANY
                     ),
-                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY, sandbox_counters=ANY),
                 ],
             )],
         }

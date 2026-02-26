@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 from __future__ import annotations
 
 import ast
+import sys
 import zlib
 from dataclasses import InitVar, dataclass, field
 from enum import IntEnum, unique
@@ -28,14 +30,16 @@ from typing_extensions import Self, override
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
 from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
+from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading
 from hathor.nanocontracts.method import Method
+from hathor.nanocontracts.sandbox import DISABLED_CONFIG, SandboxCounts, SandboxError
 from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME, BlueprintId, blueprint_id_from_bytes
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.metered_exec import MeteredExecutor
     from hathor.nanocontracts.storage import NCContractStorage  # noqa: F401
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
 
@@ -152,6 +156,22 @@ class Code:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class BlueprintCache:
+    """Cached result of loading an on-chain blueprint.
+
+    Attributes:
+        blueprint_class: The loaded Blueprint subclass.
+        env: The execution environment from loading.
+        loading_costs: Sandbox counter deltas from loading.
+                       Default (zero counts) when sandbox was not active during loading.
+    """
+
+    blueprint_class: type[Blueprint]
+    env: dict[str, object]
+    loading_costs: SandboxCounts = field(default_factory=SandboxCounts)
+
+
 class OnChainBlueprint(Transaction):
     """On-chain blueprint vertex to be placed on the DAG of transactions."""
 
@@ -184,47 +204,133 @@ class OnChainBlueprint(Transaction):
 
         self.code: Code = code if code is not None else Code(CodeKind.PYTHON_ZLIB, b'', self._settings)
         self._ast_cache: Optional[ast.Module] = None
-        self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
+        self._blueprint_cache: BlueprintCache | None = None
 
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
         return blueprint_id_from_bytes(self.hash)
 
-    def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
-        """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
-        from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
-        fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
-        memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
-        metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
-        try:
-            env = metered_executor.exec(self.code.text)
-        except OutOfFuelError as e:
-            self.log.error('loading blueprint module failed, fuel limit exceeded')
-            raise OCBOutOfFuelDuringLoading from e
-        except OutOfMemoryError as e:
-            self.log.error('loading blueprint module failed, memory limit exceeded')
-            raise OCBOutOfMemoryDuringLoading from e
-        blueprint_class = env[BLUEPRINT_EXPORT_NAME]
-        return blueprint_class, env
+    def _load_blueprint_code_exec(
+        self,
+        executor: 'MeteredExecutor',
+    ) -> tuple[object, dict[str, object], SandboxCounts]:
+        """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES.
 
-    def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
-        """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
-        if self._blueprint_loaded_env is None:
-            blueprint_class, env = self._load_blueprint_code_exec()
+        Loads and executes the blueprint code, capturing sandbox loading costs.
+
+        Args:
+            executor: A MeteredExecutor to use for loading.
+
+        Returns:
+            A tuple of (blueprint_class, env, loading_costs) where loading_costs
+            is a SandboxCounts with counter deltas (zero counts if sandbox not active).
+        """
+        loading_costs = SandboxCounts()
+
+        try:
+            with executor:  # start()/end() via context manager
+                # Capture counts BEFORE exec to calculate delta
+                before_counts: SandboxCounts | None = None
+                if executor.config.is_enabled and hasattr(sys, 'sandbox'):
+                    before_counts = SandboxCounts.capture()
+
+                env = executor.exec(self.code.text)
+
+                # Capture counts AFTER exec and calculate delta
+                if executor.config.is_enabled and hasattr(sys, 'sandbox') and before_counts is not None:
+                    after_counts = SandboxCounts.capture()
+                    loading_costs = after_counts - before_counts
+        except SandboxError as e:
+            # Any sandbox limit exceeded (operations, iterations, memory, etc.)
+            self.log.error('loading blueprint module failed, sandbox limit exceeded', error=str(e))
+            raise OCBOutOfFuelDuringLoading from e
+
+        blueprint_class = env[BLUEPRINT_EXPORT_NAME]
+        return blueprint_class, env, loading_costs
+
+    def _load_blueprint_code(
+        self,
+        executor: 'MeteredExecutor',
+    ) -> BlueprintCache:
+        """This method loads the on-chain code (if not loaded) and returns the cached result.
+
+        Args:
+            executor: A MeteredExecutor to use for loading.
+
+        Returns:
+            BlueprintCache containing the blueprint class, env, and loading costs.
+        """
+        if self._blueprint_cache is None:
+            blueprint_class, env, loading_costs = self._load_blueprint_code_exec(executor)
             assert isinstance(blueprint_class, type)
             assert issubclass(blueprint_class, Blueprint)
-            self._blueprint_loaded_env = blueprint_class, env
-        return self._blueprint_loaded_env
+            self._blueprint_cache = BlueprintCache(
+                blueprint_class=blueprint_class,
+                env=env,
+                loading_costs=loading_costs,
+            )
+        return self._blueprint_cache
 
     def get_blueprint_object_bypass(self) -> object:
         """Loads the code and returns the object exported with @export"""
-        blueprint_class, _ = self._load_blueprint_code_exec()
+        from hathor.nanocontracts.metered_exec import MeteredExecutor
+        executor = MeteredExecutor(config=DISABLED_CONFIG)
+        blueprint_class, _, _ = self._load_blueprint_code_exec(executor)
         return blueprint_class
 
-    def get_blueprint_class(self) -> type[Blueprint]:
-        """Returns the blueprint class, loads and executes the code as needed."""
-        blueprint_class, _ = self._load_blueprint_code()
-        return blueprint_class
+    def get_blueprint_class(
+        self,
+        executor: 'MeteredExecutor',
+    ) -> type[Blueprint]:
+        """Returns the blueprint class, loading it if necessary.
+
+        Args:
+            executor: A MeteredExecutor to use for loading.
+        """
+        was_cached = self._blueprint_cache is not None
+        cache = self._load_blueprint_code(executor)
+        # Apply cached loading costs when sandbox is active
+        if was_cached and executor.config.is_enabled and cache.loading_costs:
+            if hasattr(sys, 'sandbox') and sys.sandbox.enabled and not sys.sandbox.suspended:
+                sys.sandbox.add_counts(**cache.loading_costs.to_dict())
+        return cache.blueprint_class
+
+    def get_blueprint_class_with_cost(
+        self,
+        executor: 'MeteredExecutor',
+    ) -> tuple[type[Blueprint], SandboxCounts | None]:
+        """Returns the blueprint class and loading cost.
+
+        When blueprint is cached AND sandbox is active, the cached loading costs
+        are applied to ensure consistent cost regardless of cache state.
+
+        Args:
+            executor: A MeteredExecutor to use for loading.
+
+        Returns:
+            A tuple of (blueprint_class, loading_cost).
+            loading_cost is the SandboxCounts or None if sandbox not active.
+        """
+        was_cached = self._blueprint_cache is not None
+        cache = self._load_blueprint_code(executor)
+
+        loading_cost: SandboxCounts | None = None
+        sandbox_enabled = executor.config.is_enabled
+        if sandbox_enabled and cache.loading_costs:
+            loading_cost = cache.loading_costs
+            # Apply cached costs when returning from cache with sandbox active
+            if was_cached:
+                if hasattr(sys, 'sandbox') and sys.sandbox.enabled and not sys.sandbox.suspended:
+                    sys.sandbox.add_counts(**cache.loading_costs.to_dict())
+
+        return cache.blueprint_class, loading_cost
+
+    @property
+    def loading_costs(self) -> SandboxCounts | None:
+        """Return cached loading costs, or None if blueprint hasn't been loaded yet."""
+        if self._blueprint_cache is None:
+            return None
+        return self._blueprint_cache.loading_costs or None
 
     def serialize_code(self) -> bytes:
         """Serialization of self.code, to be used for the serialization of this transaction type."""
@@ -330,7 +436,9 @@ class OnChainBlueprint(Transaction):
 
     def get_method(self, method_name: str) -> Method:
         # XXX: possibly do this by analyzing the source AST instead of using the loaded code
-        blueprint_class = self.get_blueprint_class()
+        from hathor.nanocontracts.metered_exec import MeteredExecutor
+        executor = MeteredExecutor(config=DISABLED_CONFIG)
+        blueprint_class = self.get_blueprint_class(executor)
         return Method.from_callable(getattr(blueprint_class, method_name))
 
     def sign(self, private_key: ec.EllipticCurvePrivateKey) -> None:
