@@ -4,8 +4,8 @@ all: help
 DEFAULT_LATEST_TAG = latest
 DEFAULT_NO_RATE_LIMIT_TAG = no-rate-limit-latest
 
-# Build and Push Commands
-# =======================
+# Build and Push Commands (DEPRECATED — use 'make release VERSION=vX.Y.Z' instead)
+# ===================================================================================
 
 # GCP / Hathor Testnet
 HATHOR_TESTNET_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank
@@ -144,6 +144,74 @@ define generate_nginx_conf
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
 	python -m hathor generate_nginx_config $(1) - > nginx.conf
 endef
+# $(1) = extra CLI args (override, rate limits, api-proxy, trusted IPs)
+# $(2) = output file path (relative, placed under dist/$(VERSION)/)
+define generate_config
+	@mkdir -p $(dir dist/$(VERSION)/$(2))
+	poetry run python -m hathor generate_nginx_config $(1) - > dist/$(VERSION)/$(2)
+endef
+
+# S3 Upload Settings
+S3_BUCKET := hathor-public-files
+S3_PREFIX := nginx-configs
+
+# Config Generation & Release Targets
+# ====================================
+
+.PHONY: generate-all
+generate-all: ## Generate all nginx config variants (requires VERSION=x.y.z)
+ifndef VERSION
+	$(error VERSION is required. Usage: make generate-all VERSION=v0.69.0)
+endif
+	@echo "Generating all nginx config variants into dist/$(VERSION)/..."
+	# standalone-fullnodes
+	$(call generate_config,$(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx.conf)
+	$(call generate_config,--disable-rate-limits True $(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy $(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx_api_proxy.conf)
+	# hathor-testnet
+	$(call generate_config,$(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx.conf)
+	$(call generate_config,--disable-rate-limits True $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_api_proxy.conf)
+	$(call generate_config,--override hathor-testnet-india $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india.conf)
+	$(call generate_config,--override hathor-testnet-india --disable-rate-limits True $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_no_rate_limit.conf)
+	$(call generate_config,--override hathor-testnet-india --enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_api_proxy.conf)
+	# ekvilibro
+	$(call generate_config,$(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx.conf)
+	$(call generate_config,--disable-rate-limits True $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_api_proxy.conf)
+	# hathor-testnet-playground
+	$(call generate_config,--override hathor-testnet-playground $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx.conf)
+	$(call generate_config,--override hathor-testnet-playground --disable-rate-limits True $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
+	$(call generate_config,--override hathor-testnet-playground --enable-api-proxy $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_api_proxy.conf)
+	# aws-main
+	$(call generate_config,,aws-main/nginx.conf)
+	$(call generate_config,--disable-rate-limits True,aws-main/nginx_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy,aws-main/nginx_api_proxy.conf)
+	@echo "Generated all configs in dist/$(VERSION)/"
+
+.PHONY: upload-to-s3
+upload-to-s3: ## Upload generated configs to S3 versioned path (requires VERSION)
+ifndef VERSION
+	$(error VERSION is required. Usage: make upload-to-s3 VERSION=v0.69.0)
+endif
+	@echo "Uploading configs to s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/..."
+	aws s3 cp --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/ \
+		--metadata hathor-core-version=$(VERSION)
+	@echo "Upload complete."
+
+.PHONY: upload-to-s3-as-latest
+upload-to-s3-as-latest: ## Copy generated configs to S3 latest path (requires VERSION)
+ifndef VERSION
+	$(error VERSION is required. Usage: make upload-to-s3-as-latest VERSION=v0.69.0)
+endif
+	@echo "Copying configs to s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/..."
+	aws s3 cp --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/ \
+		--metadata hathor-core-version=$(VERSION)
+	@echo "Upload complete."
+
+.PHONY: release
+release: generate-all upload-to-s3 upload-to-s3-as-latest ## Generate and upload all nginx configs (requires VERSION)
+	@echo "Release complete for $(VERSION)."
 
 # Generate nginx.conf only (for testing or manual use).
 # Usage:
@@ -164,37 +232,32 @@ set_real_ip_from_cloudfront:
 # ===============
 
 .PHONY: clean
-clean:
+clean: ## Remove generated files
 	rm -f nginx.conf set_real_ip_from_cloudfront
+	rm -rf dist/
 
 .PHONY: help
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "Project/Account Commands:"
-	@echo "  hathor-testnet             		- Build and push all images for GCP Project Hathor Testnet"
-	@echo "  hathor-testnet-default     		- Build and push default image for GCP Project Hathor Testnet"
-	@echo "  hathor-testnet-no-rate-limit		- Build and push no-rate-limit image for GCP Project Hathor Testnet"
-	@echo "  hathor-testnet-india-default		- Build and push india image for GCP Project Hathor Testnet"
-	@echo "  hathor-testnet-india-no-rate-limit - Build and push no-rate-limit india image for GCP Project Hathor Testnet"
-	@echo "  standalone-fullnodes	   			- Build and push all images for GCP Project Standalone Fullnodes"
-	@echo "  standalone-fullnodes-default 		- Build and push default image for GCP Project Standalone Fullnodes"
-	@echo "  standalone-fullnodes-no-rate-limit - Build and push no-rate-limit image for GCP Project Standalone Fullnodes"
-	@echo "  ekvilibro                 			- Build and push all images for GCP Project Ekvilibro"
-	@echo "  ekvilibro-default         			- Build and push default image for GCP Project Ekvilibro"
-	@echo "  ekvilibro-no-rate-limit   			- Build and push no-rate-limit image for GCP Project Ekvilibro"
-	@echo "  hathor-testnet-playground                 - Build and push all images for GCP Project Hathor Testnet Playground"
-	@echo "  hathor-testnet-playground-default         - Build and push default image for GCP Project Hathor Testnet Playground"
-	@echo "  hathor-testnet-playground-no-rate-limit   - Build and push no-rate-limit image for GCP Project Hathor Testnet Playground"
-	@echo "  aws-main                  			- Build and push all images for AWS Main Account"
-	@echo "  aws-main-default          			- Build and push default image for AWS Main Account"
-	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
+	@echo "Config Generation & Release:"
+	@echo "  generate-all              - Generate all nginx config variants (requires VERSION)"
+	@echo "  upload-to-s3             - Upload generated configs to S3 versioned path (requires VERSION)"
+	@echo "  upload-to-s3-as-latest   - Copy generated configs to S3 latest path (requires VERSION)"
+	@echo "  release                  - Generate and upload all nginx configs (requires VERSION)"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "  nginx.conf                - Generate nginx.conf only (use NGINX_ARGS for extra options)"
-	@echo "  build-all                 - Build and push all active project images"
 	@echo "  clean                     - Remove generated files"
 	@echo "  help                      - Show this help message"
+	@echo ""
+	@echo "DEPRECATED Docker Build Commands (use 'make release VERSION=vX.Y.Z' instead):"
+	@echo "  hathor-testnet             - Build and push all images for GCP Project Hathor Testnet"
+	@echo "  standalone-fullnodes       - Build and push all images for GCP Project Standalone Fullnodes"
+	@echo "  ekvilibro                  - Build and push all images for GCP Project Ekvilibro"
+	@echo "  hathor-testnet-playground  - Build and push all images for GCP Project Hathor Testnet Playground"
+	@echo "  aws-main                   - Build and push all images for AWS Main Account"
+	@echo "  build-all                  - Build and push all active project images"
 	@echo ""
 	@echo "Legacy Commands (for backward compatibility):"
 	@echo "  docker                    - Alias for aws-main"

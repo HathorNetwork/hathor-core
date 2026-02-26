@@ -114,7 +114,8 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
                           fallback_visibility: Visibility = Visibility.PRIVATE,
                           disable_rate_limits: bool = False,
                           override: str = "",
-                          trusted_proxy_ips: list[str] | None = None) -> None:
+                          trusted_proxy_ips: list[str] | None = None,
+                          enable_api_proxy: bool = False) -> None:
     """ Entry point of the functionality provided by the cli
     """
     from datetime import datetime
@@ -265,11 +266,18 @@ limit_conn_zone $global_key zone=global__event_ws:32k;
 limit_conn_zone $per_ip_key zone=per_ip__event_ws:10m;
 '''
 
+    api_proxy_upstream = ''
+    if enable_api_proxy:
+        api_proxy_upstream = """
+upstream api_proxy {
+    server 127.0.0.1:5000;
+}"""
+
     server_open = f'''
 upstream backend {{
     server 127.0.0.1:8080;
 }}
-
+{api_proxy_upstream}
 server {{
     listen 80;
     listen [::]:80;
@@ -351,16 +359,17 @@ server {{
 
     out_file.write(server_open)
     # server level settings
-    for location_path, location_params in locations.items():
-        location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
+    for original_path, location_params in locations.items():
+        location_path = original_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
+        proxy_target = 'api_proxy' if (enable_api_proxy and original_path == '/push_tx') else 'backend'
         location_open = f'''
     location ~ ^/{api_prefix}/{location_path}/?$ {{
         include cors_params;
         include proxy_params;
 '''
-        location_close = '''\
-        proxy_pass http://backend;
-    }'''
+        location_close = f'''\
+        proxy_pass http://{proxy_target};
+    }}'''
         out_file.write(location_open)
         methods = ' '.join(location_params['allowed_methods'])
         out_file.write(' ' * 8 + f'limit_except {methods} {{ deny all; }}\n')
@@ -393,6 +402,9 @@ def main():
     parser.add_argument('--trusted-proxy-ip', type=str, action='append', default=None,
                         help='IP address of a trusted proxy (e.g. a load balancer) to add to set_real_ip_from and '
                              'the rate-limit whitelist. Can be specified multiple times.')
+    parser.add_argument('--enable-api-proxy', action='store_true', default=False,
+                        help='Route /push_tx to the api_proxy upstream (127.0.0.1:5000) '
+                             'instead of the regular backend')
     parser.add_argument('out', type=argparse.FileType('w', encoding='UTF-8'), default=sys.stdout, nargs='?',
                         help='Output file where nginx config will be written')
     args = parser.parse_args()
@@ -402,4 +414,5 @@ def main():
                           fallback_visibility=args.fallback_visibility,
                           disable_rate_limits=args.disable_rate_limits,
                           override=args.override,
-                          trusted_proxy_ips=args.trusted_proxy_ip)
+                          trusted_proxy_ips=args.trusted_proxy_ip,
+                          enable_api_proxy=args.enable_api_proxy)
