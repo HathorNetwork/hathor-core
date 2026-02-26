@@ -2,7 +2,6 @@ P2PKH_VERSION_BYTE: x28
 MULTISIG_VERSION_BYTE: '64'
 BOOTSTRAP_DNS:
   - mainnet.hathor.network
-ENABLE_PEER_WHITELIST: true
 WHITELIST_URL: https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids
 
 GENESIS_OUTPUT_SCRIPT: 76a9147fd4ae0e4fb2d2854e76d359029d8078bb99649e88ac

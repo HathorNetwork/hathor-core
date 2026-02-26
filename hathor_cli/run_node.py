@@ -171,6 +171,9 @@ class RunNode:
                             help='Enables listening on IPv6 interface and connecting to IPv6 peers')
         parser.add_argument('--x-disable-ipv4', action='store_true',
                             help='Disables connecting to IPv4 peers')
+
+        parser.add_argument("--x-p2p-whitelist", help="Add whitelist to follow from since boot.")
+
         possible_nc_exec_logs = [config.value for config in NCLogConfig]
         parser.add_argument('--nc-exec-logs', default=NCLogConfig.NONE, choices=possible_nc_exec_logs,
                             help=f'Enable saving Nano Contracts execution logs. One of {possible_nc_exec_logs}')

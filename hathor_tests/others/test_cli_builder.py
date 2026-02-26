@@ -8,6 +8,7 @@ from hathor.exception import BuilderError
 from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.sync_version import SyncVersion
+from hathor.p2p.whitelist import URLPeersWhitelist
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.wallet import HDWallet, Wallet
 from hathor_cli.builder import CliBuilder
@@ -55,7 +56,6 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
         self.assertFalse(self.resources_builder._built_prometheus)
         self.assertFalse(self.resources_builder._built_status)
@@ -76,7 +76,6 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_sync_default(self):
         manager = self._build(['--temp-data'])
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_bridge(self):
@@ -87,12 +86,10 @@ class BuilderTestCase(unittest.TestCase):
 
     def test_sync_v2_only(self):
         manager = self._build(['--temp-data', '--x-sync-v2-only'])
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_v2_only2(self):
         manager = self._build(['--temp-data', '--sync-v2-only'])
-        self.assertFalse(manager.connections.is_sync_version_enabled(SyncVersion.V1_1))
         self.assertTrue(manager.connections.is_sync_version_enabled(SyncVersion.V2))
 
     def test_sync_v1_only(self):
@@ -138,3 +135,14 @@ class BuilderTestCase(unittest.TestCase):
         self.assertIsInstance(manager._event_manager._event_storage, EventRocksDBStorage)
         self.assertIsInstance(manager._event_manager._event_ws_factory, EventWebsocketFactory)
         self.assertTrue(manager._enable_event_queue)
+
+    def test_whitelist_cli_args(self):
+        """Test --x-p2p-whitelist CLI argument."""
+        # Test with whitelist URL
+        manager = self._build(['--temp-data', '--x-p2p-whitelist', 'https://example.com/whitelist'])
+        self.assertIsNotNone(manager.connections.peers_whitelist)
+        self.assertIsInstance(manager.connections.peers_whitelist, URLPeersWhitelist)
+
+        # Test with disabled whitelist
+        manager3 = self._build(['--temp-data', '--x-p2p-whitelist', 'none'])
+        self.assertIsNone(manager3.connections.peers_whitelist)

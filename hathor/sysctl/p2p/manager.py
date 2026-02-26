@@ -13,13 +13,40 @@
 # limitations under the License.
 
 import os
+from dataclasses import dataclass
+from enum import Enum
 
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import discover_hostname
+from hathor.p2p.whitelist import PeersWhitelist, WhitelistPolicy
 from hathor.sysctl.exception import SysctlException
 from hathor.sysctl.sysctl import Sysctl, signal_handler_safe
+
+
+class WhitelistState(Enum):
+    """State of the whitelist."""
+    DISABLED = 'disabled'  # No whitelist configured
+    OFF = 'off'            # Whitelist configured but not being followed
+    ON = 'on'              # Whitelist configured and being followed
+
+
+@dataclass(frozen=True)
+class WhitelistStatus:
+    """Status information for the whitelist.
+
+    Attributes:
+        state: Current state of the whitelist (disabled/off/on)
+        policy: The whitelist policy (only set when state is not DISABLED)
+        peer_count: Number of peers in the whitelist
+        source: The source URL or file path (only set when state is not DISABLED)
+    """
+    state: WhitelistState
+    policy: WhitelistPolicy | None = None
+    peer_count: int = 0
+    source: str | None = None
+
 
 AUTO_HOSTNAME_TIMEOUT_SECONDS: float = 5
 
@@ -39,8 +66,6 @@ def parse_text(text: str) -> list[str]:
 
 def parse_sync_version(name: str) -> SyncVersion:
     match name.strip():
-        case 'v1':
-            return SyncVersion.V1_1
         case 'v2':
             return SyncVersion.V2
         case _:
@@ -49,8 +74,6 @@ def parse_sync_version(name: str) -> SyncVersion:
 
 def pretty_sync_version(sync_version: SyncVersion) -> str:
     match sync_version:
-        case SyncVersion.V1_1:
-            return 'v1'
         case SyncVersion.V2:
             return 'v2'
         case _:
@@ -62,6 +85,7 @@ class ConnectionsManagerSysctl(Sysctl):
         super().__init__()
 
         self.connections = connections
+        self._suspended_whitelist: PeersWhitelist | None = None
         self.register(
             'max_enabled_sync',
             self.get_max_enabled_sync,
@@ -121,6 +145,17 @@ class ConnectionsManagerSysctl(Sysctl):
             'reload_entrypoints_and_connections',
             None,
             self.reload_entrypoints_and_connections,
+        )
+        self.register(
+            'whitelist',
+            self.get_whitelist,
+            self.set_whitelist,
+        )
+
+        self.register(
+            'whitelist.status',
+            self.whitelist_status,
+            None,
         )
 
     def set_force_sync_rotate(self) -> None:
@@ -269,3 +304,68 @@ class ConnectionsManagerSysctl(Sysctl):
     def reload_entrypoints_and_connections(self) -> None:
         """Kill all connections and reload entrypoints from the peer config file."""
         self.connections.reload_entrypoints_and_connections()
+
+    def get_whitelist(self) -> str:
+        """Get source of current whitelist (URL or path)."""
+        whitelist = self.connections.peers_whitelist
+        if whitelist is not None:
+            source = whitelist.source()
+            return source if source is not None else 'none'
+        return 'none'
+
+    def set_whitelist(self, new_whitelist: str) -> None:
+        """Set the whitelist-only mode. If 'on' or 'off', simply changes the
+        following status of current whitelist. If an URL or Filepath, changes
+        the whitelist object, following it by default.
+        It does not support eliminating the whitelist (passing None)."""
+
+        connections = self.connections
+        option: str = new_whitelist.lower().strip()
+        if option == 'on':
+            if self._suspended_whitelist is None:
+                return
+            connections.set_peers_whitelist(self._suspended_whitelist)
+            self._suspended_whitelist = None
+            return
+        if option == 'off':
+            if connections.peers_whitelist is None:
+                return
+            self._suspended_whitelist = connections.peers_whitelist
+            connections.set_peers_whitelist(None)
+            return
+
+        from hathor.p2p.whitelist import create_peers_whitelist
+        whitelist = create_peers_whitelist(
+            connections.reactor,
+            new_whitelist,
+            connections._settings,
+        )
+
+        if whitelist is None:
+            raise SysctlException('Sysctl does not allow whitelist swap to None. Use "off" to disable it.')
+
+        self._suspended_whitelist = None
+        connections.set_peers_whitelist(whitelist)
+
+    def whitelist_status(self) -> WhitelistStatus:
+        """Return structured status information about the whitelist."""
+        connections = self.connections
+        if connections.peers_whitelist is not None:
+            whitelist = connections.peers_whitelist
+            return WhitelistStatus(
+                state=WhitelistState.ON,
+                policy=whitelist.policy(),
+                peer_count=len(whitelist.current_whitelist()),
+                source=whitelist.source(),
+            )
+
+        if self._suspended_whitelist is not None:
+            whitelist = self._suspended_whitelist
+            return WhitelistStatus(
+                state=WhitelistState.OFF,
+                policy=whitelist.policy(),
+                peer_count=len(whitelist.current_whitelist()),
+                source=whitelist.source(),
+            )
+
+        return WhitelistStatus(state=WhitelistState.DISABLED)
