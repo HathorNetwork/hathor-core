@@ -366,7 +366,16 @@ class HathorSettings(BaseModel):
     PEER_CONNECTION_RETRY_MAX_RETRY_INTERVAL: int = 300
 
     # Number max of connections in the p2p network
-    PEER_MAX_CONNECTIONS: int = 125
+    PEER_MAX_CONNECTIONS: int = 85
+
+    # Max Number of each connection slot (int):
+    P2P_PEER_MAX_INCOMING_CONNECTIONS: int = 50
+    P2P_PEER_MAX_OUTGOING_CONNECTIONS: int = 60
+    P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 10
+    P2P_PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
+
+    # Queue size for each connection slot:
+    P2P_QUEUE_SIZE: int = 100
 
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60

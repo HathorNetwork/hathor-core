@@ -53,13 +53,13 @@ class DNSPeerDiscovery(PeerDiscovery):
         return lookupText(host)
 
     @override
-    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(self, connect_to_endpoint: Callable[..., None]) -> None:
         """ Run DNS lookup for host and connect to it
             This is executed when starting the DNS Peer Discovery and first connecting to the network
         """
         for host in self.hosts:
             for entrypoint in (await self.dns_seed_lookup(host)):
-                connect_to_endpoint(entrypoint)
+                connect_to_endpoint(entrypoint, discovery_call=True)
 
     async def dns_seed_lookup(self, host: str) -> set[PeerEndpoint]:
         """ Run a DNS lookup for TXT, A, and AAAA records and return a list of connection strings.
