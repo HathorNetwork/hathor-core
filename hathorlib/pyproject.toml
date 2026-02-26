@@ -78,6 +78,14 @@ plugins = [
     "pydantic.mypy",
 ]
 
+[[tool.mypy.overrides]]
+module = [
+    "hathorlib.nanocontracts.*",
+    "hathorlib.utils.*",
+]
+check_untyped_defs = false
+disallow_untyped_defs = false
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]

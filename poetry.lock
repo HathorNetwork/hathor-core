@@ -766,6 +766,7 @@ base58 = "~2.1.1"
 cryptography = "~42.0.5"
 pycoin = "~0.92"
 pydantic = "^2.0"
+pyyaml = "^6.0.1"
 
 [package.extras]
 client = ["aiohttp (>=3.9.3,<3.10.0)", "structlog (>=22.3.0,<22.4.0)"]
