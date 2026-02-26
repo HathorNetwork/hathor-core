@@ -6,7 +6,11 @@ LICENSE file in the root directory of this source tree.
 """
 import re
 import struct
-from typing import Any, Tuple, Union
+from math import ceil, floor
+from typing import TYPE_CHECKING, Any, Tuple, Union
+
+if TYPE_CHECKING:
+    from hathorlib.conf.settings import HathorSettings
 
 from hathorlib.serialization import Deserializer, SerializationError, Serializer
 from hathorlib.serialization.adapters import MaxBytesExceededError
@@ -160,3 +164,11 @@ def decode_unsigned(data: bytes, *, max_bytes: Union[int, None] = None) -> tuple
     remaining_data = bytes(deserializer.read_all())
     deserializer.finalize()
     return (value, remaining_data)
+
+
+def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: int) -> int:
+    return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
+
+
+def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: int) -> int:
+    return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))

@@ -43,12 +43,35 @@ def validate_method_types(fn: Callable) -> None:
     if 'return' not in arg_spec.annotations:
         raise BlueprintSyntaxError(f'missing return type on method `{fn.__name__}`')
 
+    # TODO: This currently fails for types such as unions, probably because this is the wrong
+    #  parsing function to use. Fix this.
+    # from hathorlib.nanocontracts.fields import get_field_class_for_attr
+    # return_type = arg_spec.annotations['return']
+    # if return_type is not None:
+    #     try:
+    #         get_field_class_for_attr(return_type)
+    #     except UnknownFieldType:
+    #         raise BlueprintSyntaxError(
+    #             f'unsupported return type `{return_type}` on method `{fn.__name__}`'
+    #         )
+
     for arg_name in arg_spec.args:
         if arg_name in special_args:
             continue
 
         if arg_name not in arg_spec.annotations:
             raise BlueprintSyntaxError(f'argument `{arg_name}` on method `{fn.__name__}` must be typed')
+
+        # TODO: This currently fails for @view methods with NamedTuple as args for example,
+        #  because API calls use a different parsing function. Fix this.
+        # arg_type = arg_spec.annotations[arg_name]
+        # try:
+        #     from hathorlib.nanocontracts.fields import get_field_class_for_attr
+        #     get_field_class_for_attr(arg_type)
+        # except UnknownFieldType:
+        #     raise BlueprintSyntaxError(
+        #         f'unsupported type `{arg_type.__name__}` on argument `{arg_name}` of method `{fn.__name__}`'
+        #     )
 
 
 def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:

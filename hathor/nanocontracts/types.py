@@ -50,5 +50,28 @@ from hathorlib.nanocontracts.types import (  # noqa: F401
     export,
     fallback,
     public,
+    set_checksig_backend,
     view,
 )
+
+
+def _checksig_impl(sighash_all_data: bytes, script_input: bytes, script: bytes) -> bool:
+    from hathor.transaction.exceptions import ScriptError
+    from hathor.transaction.scripts import ScriptExtras
+    from hathor.transaction.scripts.execute import raw_script_eval
+    from hathor.transaction.scripts.opcode import OpcodesVersion
+
+    class _FakeTx:
+        def get_sighash_all_data(self) -> bytes:
+            return sighash_all_data
+
+    extras = ScriptExtras(tx=_FakeTx(), version=OpcodesVersion.V2)  # type: ignore[arg-type]
+    try:
+        raw_script_eval(input_data=script_input, output_script=script, extras=extras)
+    except ScriptError:
+        return False
+    else:
+        return True
+
+
+set_checksig_backend(_checksig_impl)

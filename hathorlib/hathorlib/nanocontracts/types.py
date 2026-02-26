@@ -17,7 +17,6 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from math import floor
 from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
@@ -32,6 +31,7 @@ from hathorlib.nanocontracts.blueprint_syntax_validation import (
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathorlib.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathorlib.serialization import SerializationError
+from hathorlib.utils import get_deposit_token_withdraw_amount
 from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import InnerTypeMixin
 
@@ -131,6 +131,20 @@ def blueprint_id_from_bytes(data: bytes) -> BlueprintId:
     return BlueprintId(VertexId(data))
 
 
+# Injectable backend for RawSignedData.checksig.
+# hathorlib raises NotImplementedError by default; hathor-core registers the real implementation.
+_checksig_backend: Callable[[bytes, bytes, bytes], bool] | None = None
+
+
+def set_checksig_backend(fn: Callable[[bytes, bytes, bytes], bool]) -> None:
+    """Register the checksig implementation. Must be called by hathor-core during initialization.
+
+    The callable receives (sighash_all_data: bytes, script_input: bytes, script: bytes) -> bool.
+    """
+    global _checksig_backend
+    _checksig_backend = fn
+
+
 class RawSignedData(InnerTypeMixin[T], Generic[T]):
     """A wrapper class to sign data.
 
@@ -162,20 +176,9 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
     def checksig(self, script: bytes) -> bool:
         """Check if `self.script_input` satisfies the provided script."""
-        try:
-            from hathor.transaction.exceptions import ScriptError
-            from hathor.transaction.scripts import ScriptExtras
-            from hathor.transaction.scripts.execute import raw_script_eval
-            from hathor.transaction.scripts.opcode import OpcodesVersion
-        except ImportError:
+        if _checksig_backend is None:
             raise NotImplementedError('checksig requires hathor-core to be installed')
-        extras = ScriptExtras(tx=self, version=OpcodesVersion.V2)  # type: ignore[arg-type]
-        try:
-            raw_script_eval(input_data=self.script_input, output_script=script, extras=extras)
-        except ScriptError:
-            return False
-        else:
-            return True
+        return _checksig_backend(self.get_sighash_all_data(), self.script_input, script)
 
 
 class SignedData(InnerTypeMixin[T], Generic[T]):
@@ -537,4 +540,4 @@ class NCFee:
         if self.token_uid == HATHOR_TOKEN_UID:
             return self.amount
         else:
-            return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * self.amount))
+            return get_deposit_token_withdraw_amount(settings, self.amount)
