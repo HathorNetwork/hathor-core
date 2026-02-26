@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from hathor.transaction.exceptions import TxValidationError
 # Re-export all exceptions from hathorlib for backward compatibility
 from hathorlib.nanocontracts.exception import (  # noqa: F401
     BlueprintDoesNotExist,
@@ -28,8 +29,8 @@ from hathorlib.nanocontracts.exception import (  # noqa: F401
     NCForbiddenReentrancy,
     NCInsufficientFunds,
     NCInvalidAction,
-    NCInvalidContractId,
     NCInvalidContext,
+    NCInvalidContractId,
     NCInvalidFee,
     NCInvalidFeePaymentToken,
     NCInvalidInitializeMethodCall,
@@ -52,8 +53,6 @@ from hathorlib.nanocontracts.exception import (  # noqa: F401
     OCBPubKeyNotAllowed,
     UnknownFieldType,
 )
-
-from hathor.transaction.exceptions import TxValidationError
 
 # hathor-specific exceptions that depend on TxValidationError
 

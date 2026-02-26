@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 from hathorlib.serialization import Deserializer, SerializationError, Serializer
 from hathorlib.serialization.adapters import MaxBytesExceededError
 from hathorlib.serialization.encoding.leb128 import decode_leb128, encode_leb128
-
 # Re-export address utilities from the dedicated module for backward compatibility
 from hathorlib.utils.address import (  # noqa: F401
     decode_address,

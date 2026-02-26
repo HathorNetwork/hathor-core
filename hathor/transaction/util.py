@@ -20,10 +20,7 @@ from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.transaction.exceptions import InvalidFeeAmount, InvalidOutputValue, TransactionDataError
-from hathorlib.utils import (  # noqa: F401
-    get_deposit_token_deposit_amount,
-    get_deposit_token_withdraw_amount,
-)
+from hathorlib.utils import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount  # noqa: F401
 
 if TYPE_CHECKING:
     from hathor import TokenUid
@@ -57,7 +54,6 @@ def unpack(fmt: str, buf: bytes | memoryview) -> tuple[Any, bytes | memoryview]:
 def unpack_len(n: int, buf: bytes | memoryview) -> tuple[bytes, bytes | memoryview]:
     ret = buf[:n] if isinstance(buf, bytes) else bytes(buf[:n])
     return ret, buf[n:]
-
 
 
 def clean_token_string(string: str) -> str:
