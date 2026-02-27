@@ -84,8 +84,6 @@ class VertexVerifier:
 
         my_parents_txs = 0      # number of tx parents
         my_parents_blocks = 0   # number of block parents
-        min_timestamp: Optional[int] = None
-
         for parent_hash in vertex.parents:
             try:
                 parent = vertex.storage.get_transaction(parent_hash)
@@ -104,23 +102,8 @@ class VertexVerifier:
                                                  ' ({} seconds)'.format(vertex.timestamp - parent.timestamp))
                     if my_parents_txs > 0:
                         raise IncorrectParents('Parents which are blocks must come before transactions')
-                    for pi_hash in parent.parents:
-                        pi = vertex.storage.get_transaction(parent_hash)
-                        if not pi.is_block:
-                            min_timestamp = (
-                                min(min_timestamp, pi.timestamp) if min_timestamp is not None
-                                else pi.timestamp
-                            )
                     my_parents_blocks += 1
                 else:
-                    if min_timestamp and parent.timestamp < min_timestamp:
-                        raise TimestampError('tx={} timestamp={}, parent={} timestamp={}, min_timestamp={}'.format(
-                            vertex.hash_hex,
-                            vertex.timestamp,
-                            parent.hash_hex,
-                            parent.timestamp,
-                            min_timestamp
-                        ))
                     my_parents_txs += 1
             except TransactionDoesNotExist:
                 raise ParentDoesNotExist('tx={} parent={}'.format(vertex.hash_hex, parent_hash.hex()))
