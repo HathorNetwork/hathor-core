@@ -322,6 +322,12 @@ class TransactionConsensusAlgorithm:
             if not conflict_tx_meta.voided_by or conflict_tx_meta.voided_by == {conflict_tx.hash}:
                 candidates.append(conflict_tx)
 
+        # If any candidate has been confirmed by a block, then tx cannot win.
+        for candidate in candidates:
+            tx_meta = candidate.get_metadata()
+            if tx_meta.first_block is not None:
+                return
+
         # Check whether we have the highest accumulated weight.
         # First with the voided transactions.
         is_highest = True
