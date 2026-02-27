@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterator, NamedTuple, TypeAlias
 
+from sortedcontainers import SortedSet
+
 from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
@@ -47,7 +49,7 @@ class DAGNode:
     attrs: dict[str, Any] = field(default_factory=dict)
     inputs: set[DAGInput] = field(default_factory=set)
     outputs: list[DAGOutput | None] = field(default_factory=list)
-    parents: set[str] = field(default_factory=set)
+    parents: SortedSet[str] = field(default_factory=SortedSet)
     deps: set[str] = field(default_factory=set)
 
     # expected balance of inputs and outputs per token
