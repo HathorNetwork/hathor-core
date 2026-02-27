@@ -19,7 +19,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
-from hathorlib.conf.settings import HathorSettings as LibSettings
+from hathorlib.conf.settings import FeatureSetting, HathorSettings as LibSettings
 
 DECIMAL_PLACES = 2
 
@@ -31,6 +31,13 @@ HATHOR_TOKEN_UID: bytes = b'\x00'
 
 class HathorSettings(LibSettings):
     model_config = ConfigDict(extra='forbid')
+
+    # Fee rate settings for shielded outputs
+    FEE_PER_AMOUNT_SHIELDED_OUTPUT: int = 1
+    FEE_PER_FULL_SHIELDED_OUTPUT: int = 2
+
+    # Used to enable shielded transactions.
+    ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
     # Block checkpoints
     CHECKPOINTS: list[Checkpoint] = []

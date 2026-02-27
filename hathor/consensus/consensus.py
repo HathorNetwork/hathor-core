@@ -25,6 +25,7 @@ from hathor.consensus.context import ConsensusAlgorithmContext
 from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithmFactory
 from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCInvalidSignature
 from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
 from hathor.profiler import get_cpu_profiler
@@ -456,6 +457,9 @@ class ConsensusAlgorithm:
                 case Feature.OPCODES_V2:
                     if not self._opcodes_v2_activation_rule(tx, new_best_block):
                         return False
+                case Feature.SHIELDED_TRANSACTIONS:
+                    if not self._shielded_activation_rule(tx, is_active):
+                        return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.NOP_FEATURE_1
@@ -506,6 +510,16 @@ class ConsensusAlgorithm:
 
         return True
 
+    def _shielded_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
+        """Check whether a tx became invalid because the reorg changed the shielded feature activation state."""
+        if is_active:
+            return True
+
+        if tx.has_shielded_outputs():
+            return False
+
+        return True
+
     def _checkdatasig_count_rule(self, tx: Transaction) -> bool:
         """Check whether a tx became invalid because of the count checkdatasig feature."""
         from hathor.verification.vertex_verifier import VertexVerifier
@@ -530,7 +544,12 @@ class ConsensusAlgorithm:
         # We check all txs regardless of the feature state, because this rule
         # already prohibited mempool txs before the block feature activation.
 
-        params = VerificationParams.default_for_mempool(best_block=new_best_block)
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self.feature_service,
+            vertex=new_best_block,
+        )
+        params = VerificationParams.default_for_mempool(best_block=new_best_block, features=features)
 
         # Any exception in the inputs verification will be considered
         # a fail and the tx will be removed from the mempool.

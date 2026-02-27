@@ -27,6 +27,7 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
+from hathor.feature_activation.utils import Features
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
@@ -215,7 +216,12 @@ class SendTokensResource(Resource):
         """ Method to verify the transaction that runs in a separated thread
         """
         best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.default_for_mempool(best_block=best_block)
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self.manager.feature_service,
+            vertex=best_block,
+        )
+        params = VerificationParams.default_for_mempool(best_block=best_block, features=features)
         self.manager.verification_service.verify(context.tx, params)
         return context
 
@@ -274,7 +280,12 @@ class SendTokensResource(Resource):
         context.tx.update_hash()
         context.tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.default_for_mempool(best_block=best_block)
+        features = Features.from_vertex(
+            settings=self._settings,
+            feature_service=self.manager.feature_service,
+            vertex=best_block,
+        )
+        params = VerificationParams.default_for_mempool(best_block=best_block, features=features)
         self.manager.verification_service.verify(context.tx, params)
         return context
 

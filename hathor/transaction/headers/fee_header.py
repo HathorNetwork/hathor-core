@@ -49,6 +49,10 @@ class FeeEntry:
 
 @dataclass(slots=True, kw_only=True)
 class FeeHeader(VertexBaseHeader):
+    @classmethod
+    def get_header_id(cls) -> bytes:
+        return VertexHeaderId.FEE_HEADER.value
+
     # transaction that contains the fee header
     tx: 'Transaction'
     # list of tokens and amounts that will be used to pay fees in the transaction

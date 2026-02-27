@@ -18,6 +18,7 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
+from hathor.feature_activation.utils import Features
 from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
@@ -118,7 +119,12 @@ class CreateTxResource(Resource):
         verifiers.vertex.verify_sigops_output(tx, enable_checkdatasig_count=True)
         verifiers.tx.verify_sigops_input(tx, enable_checkdatasig_count=True)
         best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.default_for_mempool(best_block=best_block)
+        features = Features.from_vertex(
+            settings=self.manager._settings,
+            feature_service=self.manager.feature_service,
+            vertex=best_block,
+        )
+        params = VerificationParams.default_for_mempool(best_block=best_block, features=features)
         # need to run verify_inputs first to check if all inputs exist
         verifiers.tx.verify_inputs(tx, params, skip_script=True)
         verifiers.vertex.verify_parents(tx)
