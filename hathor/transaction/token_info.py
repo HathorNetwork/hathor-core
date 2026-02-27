@@ -75,7 +75,7 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
         super().__init__(*args, **kwargs)
         self.fees_from_fee_header: int = 0
 
-    def calculate_fee(self, settings: 'HathorSettings') -> int:
+    def calculate_fee(self, settings: 'HathorSettings', *, shielded_fee: int = 0) -> int:
         """
          Calculate the total fee based on the number of chargeable
          outputs and inputs for each token in the transaction.
@@ -87,15 +87,17 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
            as `chargeable_outputs * settings.FEE_PER_OUTPUT`.
          - If a token has zero chargeable outputs but one or more chargeable inputs,
            a flat fee of `settings.FEE_PER_OUTPUT` is applied.
+         - An additional shielded_fee is added for shielded outputs.
 
          Args:
              settings (HathorSettings): The configuration object containing fee-related
                  parameters, such as `FEE_PER_OUTPUT`.
+             shielded_fee: Additional fee for shielded outputs (default 0).
 
          Returns:
              int: The total transaction fee
          """
-        fee = 0
+        fee = shielded_fee
 
         for token_uid, token_info in self.items():
             if token_info.chargeable_outputs > 0:

@@ -142,13 +142,18 @@ class VertexExporter:
         *,
         token_creation: bool = False
     ) -> tuple[list[bytes], list[TxOutput]]:
-        """Create TxOutput objects for a node."""
+        """Create TxOutput objects for a node. Shielded outputs are skipped here."""
         tokens: list[bytes] = []
         outputs: list[TxOutput] = []
 
         for txout in node.outputs:
             assert txout is not None
             amount, token_name, attrs = txout
+
+            # Skip shielded outputs — they are handled by add_shielded_outputs_header_if_needed
+            if attrs.get('shielded') or attrs.get('full-shielded'):
+                continue
+
             if token_name == 'HTR':
                 index = 0
             elif token_creation:
@@ -330,6 +335,8 @@ class VertexExporter:
         """Add the configured headers."""
         self.add_nano_header_if_needed(node, vertex)
         self.add_fee_header_if_needed(node, vertex)
+        self.add_shielded_outputs_header_if_needed(node, vertex)
+        self._add_or_augment_shielded_fee(node, vertex)
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
@@ -455,6 +462,66 @@ class VertexExporter:
             fees=entries,
         )
         vertex.headers.append(fee_header)
+
+    def _add_or_augment_shielded_fee(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Add or augment a FeeHeader with the shielded output fee."""
+        if not isinstance(vertex, Transaction):
+            return
+
+        from hathor.verification.transaction_verifier import TransactionVerifier
+        shielded_fee = TransactionVerifier.calculate_shielded_fee(self._settings, vertex)
+        if shielded_fee == 0:
+            return
+
+        # Look for an existing FeeHeader
+        existing_fee_header: FeeHeader | None = None
+        for header in vertex.headers:
+            if isinstance(header, FeeHeader):
+                existing_fee_header = header
+                break
+
+        if existing_fee_header is not None:
+            # Augment the existing FeeHeader: find HTR entry and add shielded fee
+            new_fees: list[FeeHeaderEntry] = []
+            found_htr = False
+            for entry in existing_fee_header.fees:
+                if entry.token_index == 0 and not found_htr:
+                    # Augment the HTR fee entry
+                    new_fees.append(FeeHeaderEntry(token_index=0, amount=entry.amount + shielded_fee))
+                    found_htr = True
+                else:
+                    new_fees.append(entry)
+            if not found_htr:
+                new_fees.append(FeeHeaderEntry(token_index=0, amount=shielded_fee))
+            existing_fee_header.fees = new_fees
+        else:
+            # Create a new FeeHeader with just the shielded fee
+            fee_header = FeeHeader(
+                settings=vertex._settings,
+                tx=vertex,
+                fees=[FeeHeaderEntry(token_index=0, amount=shielded_fee)],
+            )
+            vertex.headers.append(fee_header)
+
+    def add_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Collect outputs with [shielded] or [full-shielded] attrs into a ShieldedOutputsHeader."""
+        # TODO: For each output with [shielded] or [full-shielded] attrs, generate an
+        # ephemeral keypair for ECDH recovery, derive Pedersen commitments using
+        # create_commitment/create_asset_commitment from hathor.crypto.shielded, create
+        # Bulletproof range proofs with create_range_proof, and for FullShieldedOutput also
+        # create surjection proofs. Assemble into AmountShieldedOutput/FullShieldedOutput
+        # dataclasses and attach as a ShieldedOutputsHeader.
+        return
+
+    def _get_recipient_pubkey_from_script(self, script: bytes) -> bytes | None:
+        """Extract the recipient's compressed public key from a P2PKH script.
+
+        Looks up the address in all wallets to find the corresponding public key.
+        Returns None if the public key cannot be determined.
+        """
+        # TODO: Parse P2PKH script to get address, look up in wallets, extract
+        # compressed public key using extract_key_bytes from hathor.crypto.shielded.ecdh.
+        return None
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""

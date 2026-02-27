@@ -1,9 +1,6 @@
-from unittest.mock import Mock
-
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_block
 from hathor.transaction import Transaction
-from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
@@ -42,7 +39,7 @@ class WalletHDTest(unittest.TestCase):
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, [out], self.tx_storage)
         tx1.update_hash()
         verifier = self.manager.verification_service.verifiers.tx
-        params = VerificationParams.default_for_mempool(best_block=Mock())
+        params = self.get_verification_params()
         verifier.verify_script(tx=tx1, input_tx=tx1.inputs[0], spent_tx=block, params=params)
         tx1.storage = self.tx_storage
         tx1.get_metadata().validation = ValidationState.FULL
