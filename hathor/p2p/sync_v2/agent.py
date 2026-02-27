@@ -770,8 +770,13 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         blk_bytes = base64.b64decode(payload)
-        blk = self.vertex_parser.deserialize(blk_bytes)
+        try:
+            blk = self.vertex_parser.deserialize(blk_bytes)
+        except struct.error:
+            self.log.warn('received invalid block')
+            return
         if not isinstance(blk, Block):
+            self.log.warn('not a block', hash=blk.hash_hex)
             # Not a block. Punish peer?
             return
         blk.storage = self.tx_storage
@@ -1020,7 +1025,11 @@ class NodeBlockSync(SyncAgent):
 
         # tx_bytes = bytes.fromhex(payload)
         tx_bytes = base64.b64decode(payload)
-        tx = self.vertex_parser.deserialize(tx_bytes)
+        try:
+            tx = self.vertex_parser.deserialize(tx_bytes)
+        except struct.error:
+            self.log.warn('received invalid transaction')
+            return
         if not isinstance(tx, Transaction):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
@@ -1138,7 +1147,7 @@ class NodeBlockSync(SyncAgent):
         try:
             tx = self.vertex_parser.deserialize(data)
         except struct.error:
-            # Invalid data for tx decode
+            self.log.warn('received invalid vertex')
             return
 
         if origin:

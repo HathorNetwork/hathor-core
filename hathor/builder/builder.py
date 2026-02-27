@@ -182,6 +182,7 @@ class Builder:
 
         self._execution_manager: ExecutionManager | None = None
         self._vertex_handler: VertexHandler | None = None
+        self._network_vertex_parser: VertexParser | None = None
         self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
@@ -483,7 +484,7 @@ class Builder:
             self._get_or_create_settings(),
             self._p2p_manager,
             self._sync_v2_support,
-            self._get_or_create_vertex_parser(),
+            self._get_or_create_network_vertex_parser(),
             self._get_or_create_vertex_handler(),
         )
         return self._p2p_manager
@@ -659,10 +660,19 @@ class Builder:
 
         return self._vertex_handler
 
+    def _get_or_create_network_vertex_parser(self) -> VertexParser:
+        if self._network_vertex_parser is None:
+            self._network_vertex_parser = VertexParser(
+                settings=self._get_or_create_settings(),
+                parse_genesis=False,
+            )
+
+        return self._network_vertex_parser
+
     def _get_or_create_vertex_parser(self) -> VertexParser:
         if self._vertex_parser is None:
             self._vertex_parser = VertexParser(
-                settings=self._get_or_create_settings()
+                settings=self._get_or_create_settings(),
             )
 
         return self._vertex_parser
