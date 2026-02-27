@@ -1,6 +1,6 @@
 # Hathor core (full node)
 
-[![Codecov](https://img.shields.io/codecov/c/github/HathorNetwork/hathor-core?logo=codecov)](https://codecov.io/gh/hathornetwork/hathor-core)
+[![Codecov](https://img.shields.io/codecov/c/github/AdekunleBamz/hathor-core?logo=codecov)](https://codecov.io/gh/AdekunleBamz/hathor-core)
 
 ## Description
 
@@ -20,13 +20,13 @@ If you observe an incorrect behavior while using Hathor core, see [the "Issues" 
 
 ### Issues
 
-If you observe an incorrect behavior while using Hathor core, we encourage you to [open an issue to report this failure](https://github.com/HathorNetwork/hathor-core/issues/new).
+If you observe an incorrect behavior while using Hathor core, we encourage you to [open an issue to report this failure](https://github.com/AdekunleBamz/hathor-core/issues/new).
 
-You can also [open an issue to request a new feature you wish to see](https://github.com/HathorNetwork/hathor-core/issues/new).
+You can also [open an issue to request a new feature you wish to see](https://github.com/AdekunleBamz/hathor-core/issues/new).
 
 ### Pull requests
 
-To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [submit a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/HathorNetwork/hathor-core/compare).
+To contribute to the development of Hathor core, we encourage you to fork the `master` branch, implement your code, and then [submit a pull request to merge it into `master`, selecting the "feature branch template"](https://github.com/AdekunleBamz/hathor-core/compare).
 
 ### Security
 
