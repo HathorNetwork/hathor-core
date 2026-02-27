@@ -12,18 +12,18 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any
+from typing import Any, Optional
 
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings
+from hathor.serialization import Serializer
 from hathor.transaction import Block, TxOutput, TxVersion
 from hathor.transaction.storage import TransactionStorage
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback
 
-# Size limit in bytes for signature field
 _MAX_POA_SIGNATURE_LEN: int = 100
 
 
@@ -61,33 +61,35 @@ class PoaBlock(Block):
         self.signer_id = signer_id
         self.signature = signature
 
+    @classmethod
     @override
-    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        buf = super().get_graph_fields_from_struct(buf, verbose=verbose)
-
-        self.signer_id, buf = unpack_len(poa.SIGNER_ID_LEN, buf)
-        if verbose:
-            verbose('signer_id', self.signer_id.hex())
-
-        (signature_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('signature_len', signature_len)
-
-        if signature_len > _MAX_POA_SIGNATURE_LEN:
-            raise ValueError(f'invalid signature length: {signature_len}')
-
-        self.signature, buf = unpack_len(signature_len, buf)
-        if verbose:
-            verbose('signature', self.signature.hex())
-
-        return buf
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional[TransactionStorage] = None,
+                           *, verbose: VerboseCallback = None) -> Self:
+        from hathor.conf.get_settings import get_global_settings
+        from hathor.serialization import Deserializer
+        from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_poa_block_graph_fields
+        from hathor.transaction.vertex_parser._headers import deserialize_headers
+        settings = get_global_settings()
+        block = cls(storage=storage)
+        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserialize_block_funds(deserializer, block, verbose=verbose)
+        deserialize_poa_block_graph_fields(
+            deserializer, block, signer_id_len=poa.SIGNER_ID_LEN, max_signature_len=_MAX_POA_SIGNATURE_LEN,
+            verbose=verbose,
+        )
+        block.nonce = int.from_bytes(deserializer.read_bytes(cls.SERIALIZATION_NONCE_SIZE), byteorder='big')
+        deserialize_headers(deserializer, block, settings)
+        deserializer.finalize()
+        block.update_hash()
+        return block
 
     @override
     def get_graph_struct(self) -> bytes:
+        from hathor.transaction.vertex_parser._block import serialize_poa_block_graph_fields
         assert len(self.signer_id) == poa.SIGNER_ID_LEN
-        struct_bytes_without_poa = super().get_graph_struct()
-        signature_len = int_to_bytes(len(self.signature), 1)
-        return struct_bytes_without_poa + self.signer_id + signature_len + self.signature
+        serializer = Serializer.build_bytes_serializer()
+        serialize_poa_block_graph_fields(serializer, self)
+        return bytes(serializer.finalize())
 
     @override
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:

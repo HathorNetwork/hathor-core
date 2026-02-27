@@ -17,16 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.headers.base import VertexBaseHeader
-from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.util import (
-    VerboseCallback,
-    get_deposit_token_withdraw_amount,
-    int_to_bytes,
-    output_value_to_bytes,
-)
+from hathor.transaction.util import VerboseCallback, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
 
 if TYPE_CHECKING:
@@ -68,43 +60,20 @@ class FeeHeader(VertexBaseHeader):
         *,
         verbose: VerboseCallback = None
     ) -> tuple[FeeHeader, bytes]:
-        deserializer = Deserializer.build_bytes_deserializer(buf)
-
-        header_id = deserializer.read_bytes(1)
-        if verbose:
-            verbose('header_id', header_id)
-        assert header_id == VertexHeaderId.FEE_HEADER.value
-
-        fees: list[FeeHeaderEntry] = []
-        fees_len = deserializer.read_byte()
-        if verbose:
-            verbose('fees_len', fees_len)
-        for _ in range(fees_len):
-            token_index = deserializer.read_byte()
-            amount = decode_output_value(deserializer)
-            fees.append(FeeHeaderEntry(
-                token_index=token_index,
-                amount=amount,
-            ))
-
+        from hathor.serialization import Deserializer
         from hathor.transaction import Transaction
+        from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header
+        deserializer = Deserializer.build_bytes_deserializer(buf)
+        fees = deserialize_fee_header(deserializer, verbose=verbose)
         assert isinstance(tx, Transaction)
-        remaining_bytes = bytes(deserializer.read_all())
-        return cls(
-            settings=tx._settings,
-            tx=tx,
-            fees=fees,
-        ), remaining_bytes
+        header = cls(settings=tx._settings, tx=tx, fees=fees)
+        return header, bytes(deserializer.read_all())
 
     def serialize(self) -> bytes:
+        from hathor.serialization import Serializer
+        from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
         serializer = Serializer.build_bytes_serializer()
-        serializer.write_bytes(VertexHeaderId.FEE_HEADER.value)
-        serializer.write_bytes(int_to_bytes(len(self.fees), 1))
-
-        for fee in self.fees:
-            serializer.write_bytes(int_to_bytes(fee.token_index, 1))
-            serializer.write_bytes(output_value_to_bytes(fee.amount))
-
+        serialize_fee_header(serializer, self)
         return bytes(serializer.finalize())
 
     def get_sighash_bytes(self) -> bytes:

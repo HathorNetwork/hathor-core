@@ -824,7 +824,8 @@ class TransactionTest(unittest.TestCase):
 
     def test_output_serialization(self):
         from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
-        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE, bytes_to_output_value, output_value_to_bytes
+        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE
+        from hathor.transaction.util import bytes_to_output_value, output_value_to_bytes
         max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
         self.assertEqual(len(max_32), 4)
         value, buf = bytes_to_output_value(max_32)
@@ -841,7 +842,7 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
-        from hathor.transaction.base_transaction import bytes_to_output_value
+        from hathor.transaction.util import bytes_to_output_value
 
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
@@ -942,7 +943,7 @@ class TransactionTest(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
         block = Block(
             signal_bits=0xF0,
-            version=0x0F,
+            version=TxVersion.REGULAR_BLOCK,
             nonce=100,
             weight=1,
             parents=[genesis_block.hash]
@@ -1089,12 +1090,15 @@ class TransactionTest(unittest.TestCase):
     def test_sighash_cache(self):
         from unittest import mock
 
+        from hathor.transaction.vertex_parser import _transaction
+
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(5, script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
-        with mock.patch('hathor.transaction.transaction.bytearray') as mocked:
+        original = _transaction.serialize_tx_sighash
+        with mock.patch.object(_transaction, 'serialize_tx_sighash', wraps=original) as mocked:
             for _ in range(10):
                 tx.get_sighash_all()
 
@@ -1108,7 +1112,8 @@ class TransactionTest(unittest.TestCase):
         output = TxOutput(5, script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
-        with mock.patch('hathor.transaction.transaction.hashlib') as mocked:
+        with mock.patch('hathor.transaction.vertex_parser.vertex_serializer.hashlib') as mocked:
+            mocked.sha256.return_value.digest.return_value = b'\x00' * 32
             for _ in range(10):
                 tx.get_sighash_all_data()
 

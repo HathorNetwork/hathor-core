@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import base64
-from struct import pack
 from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from typing_extensions import Self, override
@@ -23,23 +22,18 @@ from typing_extensions import Self, override
 from hathor.checkpoint import Checkpoint
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.serialization import Serializer
 from hathor.transaction import TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
-from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback
 from hathor.utils.int import get_bit_list
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
-
-# Signal bits (B), version (B), outputs len (B)
-_FUNDS_FORMAT_STRING = '!BBB'
-
-# Signal bits (B), version (B), inputs len (B) and outputs len (B)
-_SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 
 
 class Block(GenericVertex[BlockStaticMetadata]):
@@ -79,6 +73,39 @@ class Block(GenericVertex[BlockStaticMetadata]):
             d.update(data=self.data.hex())
         return d
 
+    @override
+    def get_funds_struct(self) -> bytes:
+        from hathor.transaction.vertex_parser._block import serialize_block_funds
+        serializer = Serializer.build_bytes_serializer()
+        serialize_block_funds(serializer, self)
+        return bytes(serializer.finalize())
+
+    @override
+    def get_graph_struct(self) -> bytes:
+        from hathor.transaction.vertex_parser._block import serialize_block_graph_fields
+        serializer = Serializer.build_bytes_serializer()
+        serialize_block_graph_fields(serializer, self)
+        return bytes(serializer.finalize())
+
+    @classmethod
+    @override
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> Self:
+        from hathor.conf.get_settings import get_global_settings
+        from hathor.serialization import Deserializer
+        from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
+        from hathor.transaction.vertex_parser._headers import deserialize_headers
+        settings = get_global_settings()
+        block = cls(storage=storage)
+        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserialize_block_funds(deserializer, block, verbose=verbose)
+        deserialize_block_graph_fields(deserializer, block, verbose=verbose)
+        block.nonce = int.from_bytes(deserializer.read_bytes(cls.SERIALIZATION_NONCE_SIZE), byteorder='big')
+        deserialize_headers(deserializer, block, settings)
+        deserializer.finalize()
+        block.update_hash()
+        return block
+
     @property
     def is_block(self) -> bool:
         """Returns true if this is a block"""
@@ -88,26 +115,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
     def is_transaction(self) -> bool:
         """Returns true if this is a transaction"""
         return False
-
-    @classmethod
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        blc = cls()
-        buf = blc.get_fields_from_struct(struct_bytes, verbose=verbose)
-
-        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
-            raise ValueError('Invalid sequence of bytes')
-
-        blc.nonce = int.from_bytes(buf[:cls.SERIALIZATION_NONCE_SIZE], byteorder='big')
-        buf = buf[cls.SERIALIZATION_NONCE_SIZE:]
-
-        while buf:
-            buf = blc.get_header_from_bytes(buf, verbose=verbose)
-
-        blc.hash = blc.calculate_hash()
-        blc.storage = storage
-
-        return blc
 
     def get_next_block_best_chain_hash(self) -> Optional[bytes]:
         """Return the hash of the next block in the best blockchain. The blockchain is
@@ -175,72 +182,6 @@ class Block(GenericVertex[BlockStaticMetadata]):
         block_parent = self.storage.get_transaction(self.get_block_parent_hash())
         assert isinstance(block_parent, Block)
         return block_parent
-
-    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all funds fields for a block from a buffer.
-
-        :param buf: Bytes of a serialized block
-        :type buf: bytes
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        (self.signal_bits, self.version, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
-        if verbose:
-            verbose('signal_bits', self.signal_bits)
-            verbose('version', self.version)
-            verbose('outputs_len', outputs_len)
-
-        for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
-            self.outputs.append(txout)
-
-        return buf
-
-    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets graph fields for a block from a buffer.
-
-        :param buf: Bytes of a serialized transaction
-        :type buf: bytes
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        buf = super().get_graph_fields_from_struct(buf, verbose=verbose)
-        (data_bytes,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('data_len', data_bytes)
-        self.data, buf = unpack_len(data_bytes, buf)
-        if verbose:
-            verbose('data', self.data.hex())
-        return buf
-
-    def get_funds_struct(self) -> bytes:
-        """Return the funds data serialization of the block
-
-        :return: funds data serialization of the block
-        :rtype: bytes
-        """
-        struct_bytes = pack(_FUNDS_FORMAT_STRING, self.signal_bits, self.version, len(self.outputs))
-
-        for tx_output in self.outputs:
-            struct_bytes += bytes(tx_output)
-
-        return struct_bytes
-
-    def get_graph_struct(self) -> bytes:
-        """Return the graph data serialization of the block, without including the nonce field
-
-        :return: graph data serialization of the transaction
-        :rtype: bytes
-        """
-        struct_bytes_without_data = super().get_graph_struct()
-        data_bytes = int_to_bytes(len(self.data), 1)
-        return struct_bytes_without_data + data_bytes + self.data
 
     def get_token_uid(self, index: int) -> bytes:
         """Returns the token uid with corresponding index from the tx token uid list.

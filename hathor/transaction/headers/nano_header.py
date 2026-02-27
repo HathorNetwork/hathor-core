@@ -14,24 +14,14 @@
 
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING
 
 from typing_extensions import assert_never
 
 from hathor.transaction.headers.base import VertexBaseHeader
-from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.util import (
-    VerboseCallback,
-    bytes_to_output_value,
-    int_to_bytes,
-    output_value_to_bytes,
-    unpack,
-    unpack_len,
-)
+from hathor.transaction.util import VerboseCallback
 from hathor.types import VertexId
-from hathor.utils import leb128
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.context import Context
@@ -39,6 +29,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
+    from hathor.transaction.vertex_parser._nano_header import NanoHeaderData
 
 ADDRESS_LEN_BYTES: int = 25
 ADDRESS_SEQNUM_SIZE: int = 8  # bytes
@@ -121,17 +112,9 @@ class NanoHeader(VertexBaseHeader):
     nc_script: bytes
 
     @classmethod
-    def _deserialize_action(cls, buf: bytes) -> tuple[NanoHeaderAction, bytes]:
-        from hathor.nanocontracts.types import NCActionType
-        type_bytes, buf = buf[:1], buf[1:]
-        action_type = NCActionType.from_bytes(type_bytes)
-        (token_index,), buf = unpack('!B', buf)
-        amount, buf = bytes_to_output_value(buf)
-        return NanoHeaderAction(
-            type=action_type,
-            token_index=token_index,
-            amount=amount,
-        ), buf
+    def create_from_data(cls, tx: Transaction, data: NanoHeaderData) -> NanoHeader:
+        """Create a NanoHeader from a NanoHeaderData instance."""
+        return cls(tx=tx, **{f.name: getattr(data, f.name) for f in fields(data)})
 
     @classmethod
     def deserialize(
@@ -141,103 +124,28 @@ class NanoHeader(VertexBaseHeader):
         *,
         verbose: VerboseCallback = None
     ) -> tuple[NanoHeader, bytes]:
+        from hathor.serialization import Deserializer
         from hathor.transaction import Transaction
+        from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header
+        deserializer = Deserializer.build_bytes_deserializer(buf)
+        data = deserialize_nano_header(deserializer, verbose=verbose)
         assert isinstance(tx, Transaction)
-        buf = memoryview(buf)
-
-        header_id, buf = buf[:1], buf[1:]
-        if verbose:
-            verbose('header_id', header_id)
-        assert header_id == VertexHeaderId.NANO_HEADER.value
-
-        nc_id, buf = unpack_len(32, buf)
-        if verbose:
-            verbose('nc_id', nc_id)
-        nc_seqnum, buf = leb128.decode_unsigned(buf, max_bytes=ADDRESS_SEQNUM_SIZE)
-        if verbose:
-            verbose('nc_seqnum', nc_seqnum)
-        (nc_method_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('nc_method_len', nc_method_len)
-        nc_method, buf = unpack_len(nc_method_len, buf)
-        if verbose:
-            verbose('nc_method', nc_method)
-        (nc_args_bytes_len,), buf = unpack('!H', buf)
-        if verbose:
-            verbose('nc_args_bytes_len', nc_args_bytes_len)
-        nc_args_bytes, buf = unpack_len(nc_args_bytes_len, buf)
-        if verbose:
-            verbose('nc_args_bytes', nc_args_bytes)
-
-        nc_actions: list[NanoHeaderAction] = []
-        (nc_actions_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('nc_actions_len', nc_actions_len)
-        for _ in range(nc_actions_len):
-            action, buf = cls._deserialize_action(buf)
-            nc_actions.append(action)
-
-        nc_address, buf = unpack_len(ADDRESS_LEN_BYTES, buf)
-        if verbose:
-            verbose('nc_address', nc_address)
-        nc_script_len, buf = leb128.decode_unsigned(buf, max_bytes=_NC_SCRIPT_LEN_MAX_BYTES)
-        if verbose:
-            verbose('nc_script_len', nc_script_len)
-        nc_script, buf = unpack_len(nc_script_len, buf)
-        if verbose:
-            verbose('nc_script', nc_script)
-
-        decoded_nc_method = nc_method.decode('ascii')
-
-        return cls(
-            tx=tx,
-            nc_seqnum=nc_seqnum,
-            nc_id=nc_id,
-            nc_method=decoded_nc_method,
-            nc_args_bytes=nc_args_bytes,
-            nc_actions=nc_actions,
-            nc_address=nc_address,
-            nc_script=nc_script,
-        ), bytes(buf)
-
-    def _serialize_action(self, action: NanoHeaderAction) -> bytes:
-        ret = [
-            action.type.to_bytes(),
-            int_to_bytes(action.token_index, 1),
-            output_value_to_bytes(action.amount),
-        ]
-        return b''.join(ret)
-
-    def _serialize(self, *, skip_signature: bool) -> bytes:
-        """Serialize the header with the option to skip the signature."""
-        encoded_method = self.nc_method.encode('ascii')
-
-        ret: deque[bytes] = deque()
-        ret.append(self.nc_id)
-        ret.append(leb128.encode_unsigned(self.nc_seqnum, max_bytes=ADDRESS_SEQNUM_SIZE))
-        ret.append(int_to_bytes(len(encoded_method), 1))
-        ret.append(encoded_method)
-        ret.append(int_to_bytes(len(self.nc_args_bytes), 2))
-        ret.append(self.nc_args_bytes)
-
-        ret.append(int_to_bytes(len(self.nc_actions), 1))
-        for action in self.nc_actions:
-            ret.append(self._serialize_action(action))
-
-        ret.append(self.nc_address)
-        if not skip_signature:
-            ret.append(leb128.encode_unsigned(len(self.nc_script), max_bytes=_NC_SCRIPT_LEN_MAX_BYTES))
-            ret.append(self.nc_script)
-        else:
-            ret.append(leb128.encode_unsigned(0, max_bytes=_NC_SCRIPT_LEN_MAX_BYTES))
-        ret.appendleft(VertexHeaderId.NANO_HEADER.value)
-        return b''.join(ret)
+        header = cls.create_from_data(tx, data)
+        return header, bytes(deserializer.read_all())
 
     def serialize(self) -> bytes:
-        return self._serialize(skip_signature=False)
+        from hathor.serialization import Serializer
+        from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
+        serializer = Serializer.build_bytes_serializer()
+        serialize_nano_header(serializer, self)
+        return bytes(serializer.finalize())
 
     def get_sighash_bytes(self) -> bytes:
-        return self._serialize(skip_signature=True)
+        from hathor.serialization import Serializer
+        from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
+        serializer = Serializer.build_bytes_serializer()
+        serialize_nano_header(serializer, self, skip_signature=True)
+        return bytes(serializer.finalize())
 
     def is_creating_a_new_contract(self) -> bool:
         """Return true if this transaction is creating a new contract."""
