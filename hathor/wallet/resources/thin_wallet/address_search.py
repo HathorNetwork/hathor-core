@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from twisted.web.http import Request
 
@@ -46,6 +46,9 @@ class AddressSearchResource(Resource):
         """
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
+            # CONS-022: skip shielded outputs
+            if spent_tx.is_shielded_output(tx_input.index):
+                continue
             spent_output = spent_tx.outputs[tx_input.index]
 
             input_token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
@@ -132,12 +135,15 @@ class AddressSearchResource(Resource):
         # we must get all transactions and sort them
         # This is not optimal for performance
         transactions = []
+        has_shielded = False
         for tx_hash in hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
             if token_uid_bytes and not self.has_token_and_address(tx, address, token_uid_bytes):
                 # Request wants to filter by token but tx does not have this token
                 # so we don't add it to the transactions array
                 continue
+            if tx.shielded_outputs:
+                has_shielded = True
             transactions.append(tx.to_json_extended())
 
         sorted_transactions = sorted(transactions, key=lambda tx: tx['timestamp'], reverse=True)
@@ -186,12 +192,14 @@ class AddressSearchResource(Resource):
             ret_transactions = sorted_transactions[:count]
             has_more = len(sorted_transactions) > count
 
-        data = {
+        data: dict[str, Any] = {
             'success': True,
             'transactions': ret_transactions,
             'has_more': has_more,
             'total': len(sorted_transactions),
         }
+        if has_shielded:
+            data['has_shielded'] = True
         return json_dumpb(data)
 
 

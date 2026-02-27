@@ -99,6 +99,10 @@ class NanoHeaderAction:
 
 @dataclass(slots=True, kw_only=True)
 class NanoHeader(VertexBaseHeader):
+    @classmethod
+    def get_header_id(cls) -> bytes:
+        return VertexHeaderId.NANO_HEADER.value
+
     tx: Transaction
 
     # Sequence number for the caller.

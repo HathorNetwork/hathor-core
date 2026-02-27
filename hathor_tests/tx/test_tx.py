@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from math import isinf, isnan
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -36,7 +36,6 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
-from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.utils import (
@@ -68,7 +67,7 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-        self.verification_params = VerificationParams.default_for_mempool(best_block=Mock())
+        self.verification_params = self.get_verification_params()
 
     def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]

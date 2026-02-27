@@ -530,5 +530,15 @@ class TestCase(unittest.TestCase):
 
     @staticmethod
     def get_verification_params(manager: HathorManager | None = None) -> VerificationParams:
+        from hathor.feature_activation.utils import Features
+        from hathor.transaction.scripts.opcode import OpcodesVersion
+
         best_block = manager.tx_storage.get_best_block() if manager else None
-        return VerificationParams.default_for_mempool(best_block=best_block or Mock())
+        features = Features(
+            count_checkdatasig_op=True,
+            nanocontracts=True,
+            fee_tokens=False,
+            opcodes_version=OpcodesVersion.V2,
+            shielded_transactions=False,
+        )
+        return VerificationParams.default_for_mempool(best_block=best_block or Mock(), features=features)
