@@ -32,6 +32,7 @@ from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
 from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
+from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.types import AddressB58, Amount, TokenUid
@@ -655,24 +656,110 @@ class BaseWallet:
 
         Raises ValueError if the token UID is inconsistent.
         """
-        # TODO: Reconstruct the expected asset_commitment from the recovered token_id and
-        # asset_blinding_factor using derive_tag() and create_asset_commitment() from
-        # hathor.crypto.shielded.asset_tag. Compare against the actual asset_commitment.
-        pass
+        from hathor.crypto.shielded.asset_tag import create_asset_commitment, derive_tag
+        expected_tag = derive_tag(token_id)
+        expected_commitment = create_asset_commitment(expected_tag, asset_bf)
+        if expected_commitment != asset_commitment:
+            raise ValueError(
+                'recovered token UID does not match asset_commitment — '
+                'the sender may have embedded a fraudulent token UID'
+            )
 
     def _process_shielded_outputs_on_new_tx(self, tx: BaseTransaction) -> bool:
         """Try to recover shielded outputs that belong to this wallet via ECDH + rewind.
 
         Returns True if any shielded output was recovered.
         """
-        # TODO: For each shielded output matching a wallet address, use ECDH
-        # (derive_ecdh_shared_secret, derive_rewind_nonce from hathor.crypto.shielded.ecdh)
-        # with the output's ephemeral_pubkey and the wallet's private key to derive a nonce.
-        # Then call rewind_range_proof() to recover (value, blinding, message).
-        # For AmountShieldedOutput, token is known from token_data.
-        # For FullShieldedOutput, token_uid is in message[:32], asset_blinding in message[32:64].
-        # Track recovered outputs as unspent UTXOs in self.unspent_txs.
-        return False
+        from hathor.crypto.shielded import derive_asset_tag, rewind_range_proof
+        from hathor.crypto.shielded.ecdh import derive_ecdh_shared_secret, derive_rewind_nonce, extract_key_bytes
+
+        found_any = False
+        for shielded_idx, output in enumerate(tx.shielded_outputs):
+            # Index in the combined output list (transparent + shielded)
+            actual_index = len(tx.outputs) + shielded_idx
+
+            # Check if the script matches a wallet address
+            script_type_out = parse_address_script(output.script)
+            if not script_type_out:
+                continue
+            if script_type_out.address not in self.keys:
+                continue
+
+            # Need ephemeral pubkey for ECDH
+            if not output.ephemeral_pubkey:
+                continue
+
+            try:
+                # Get wallet private key for this address
+                private_key = self.get_private_key(script_type_out.address)
+                privkey_bytes, _ = extract_key_bytes(private_key)
+
+                # ECDH shared secret and deterministic nonce
+                shared_secret = derive_ecdh_shared_secret(privkey_bytes, output.ephemeral_pubkey)
+                nonce = derive_rewind_nonce(shared_secret)
+
+                # Determine generator for range proof rewind
+                if isinstance(output, AmountShieldedOutput):
+                    token_index = output.token_data & 0x7F
+                    token_uid = tx.get_token_uid(token_index)
+                    generator = derive_asset_tag(token_uid)
+                elif isinstance(output, FullShieldedOutput):
+                    generator = output.asset_commitment
+                else:
+                    continue
+
+                # Rewind range proof to recover value, blinding, and message
+                value, blinding, message = rewind_range_proof(
+                    output.range_proof, output.commitment, nonce, generator
+                )
+
+                # Determine token_id for the wallet's balance tracking
+                if isinstance(output, AmountShieldedOutput):
+                    token_id = tx.get_token_uid(output.token_data & 0x7F)
+                elif isinstance(output, FullShieldedOutput):
+                    # Token UID is embedded in the first 32 bytes of the message,
+                    # asset blinding factor in the next 32 bytes.
+                    token_id = bytes(message[:32])
+                    # AUDIT-C015: Cross-check the recovered token UID against the
+                    # asset_commitment by reconstructing it from the recovered secrets.
+                    if len(message) >= 64:
+                        asset_bf = bytes(message[32:64])
+                        self._verify_recovered_token_uid(token_id, asset_bf, output.asset_commitment)
+                else:
+                    continue
+
+                # Add as unspent output
+                utxo = UnspentTx(
+                    tx.hash, actual_index, value, tx.timestamp,
+                    script_type_out.address, 0,
+                    timelock=script_type_out.timelock,
+                )
+                self.unspent_txs[token_id][(tx.hash, actual_index)] = utxo
+                self.tokens_received(script_type_out.address)
+                found_any = True
+
+                self.log.debug(
+                    'recovered shielded output',
+                    tx=tx.hash_hex,
+                    index=actual_index,
+                    recovered=True,
+                    address=script_type_out.address,
+                )
+                self.publish_update(
+                    HathorEvents.WALLET_OUTPUT_RECEIVED,
+                    total=self.get_total_tx(),
+                    output=utxo,
+                )
+            except (ValueError, TypeError, OverflowError):
+                # Rewind failed — output is not for this wallet or different ECDH key
+                self.log.info(
+                    'shielded output rewind failed (not ours?)',
+                    tx=tx.hash_hex,
+                    index=actual_index,
+                )
+                continue
+
+        return found_any
 
     def on_tx_update(self, tx: Transaction) -> None:
         """This method is called when a tx is updated by the consensus algorithm."""

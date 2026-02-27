@@ -98,13 +98,38 @@ def recover_shielded_secrets(
     Raises:
         ValueError: If ECDH recovery fails or the output has no ephemeral pubkey.
     """
-    # TODO: Use ECDH shared secret derivation (derive_ecdh_shared_secret, derive_rewind_nonce
-    # from hathor.crypto.shielded.ecdh) with the output's ephemeral_pubkey and the recipient's
-    # private key. Then determine the generator (derive_asset_tag for AmountShielded, or
-    # asset_commitment for FullShielded). Finally call rewind_range_proof from
-    # hathor.crypto.shielded to extract (value, blinding_factor, message). For FullShieldedOutput,
-    # the token UID is embedded in the first 32 bytes of the recovered message.
-    raise NotImplementedError('requires hathor-ct-crypto library')
+    from hathor.crypto.shielded import derive_asset_tag, rewind_range_proof
+    from hathor.crypto.shielded.ecdh import derive_ecdh_shared_secret, derive_rewind_nonce
+
+    if not output.ephemeral_pubkey:
+        raise ValueError('output has no ephemeral_pubkey for ECDH recovery')
+
+    shared_secret = derive_ecdh_shared_secret(private_key_bytes, output.ephemeral_pubkey)
+    nonce = derive_rewind_nonce(shared_secret)
+
+    if isinstance(output, AmountShieldedOutput):
+        token_uid = get_token_uid(output.token_data & 0x7F)
+        generator = derive_asset_tag(token_uid)
+    elif isinstance(output, FullShieldedOutput):
+        generator = output.asset_commitment
+        token_uid = b''  # Will be recovered from message
+    else:
+        raise ValueError(f'unknown shielded output type: {type(output).__name__}')
+
+    value, blinding_factor, message = rewind_range_proof(
+        output.range_proof, output.commitment, nonce, generator
+    )
+
+    # For FullShieldedOutput, token UID is embedded in the message
+    if isinstance(output, FullShieldedOutput) and len(message) >= 32:
+        token_uid = bytes(message[:32])
+
+    return ShieldedOutputSecrets(
+        value=value,
+        blinding_factor=blinding_factor,
+        message=message,
+        token_uid=token_uid,
+    )
 
 
 def serialize_shielded_output(output: ShieldedOutput) -> bytes:

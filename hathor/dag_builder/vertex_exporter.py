@@ -505,13 +505,123 @@ class VertexExporter:
 
     def add_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         """Collect outputs with [shielded] or [full-shielded] attrs into a ShieldedOutputsHeader."""
-        # TODO: For each output with [shielded] or [full-shielded] attrs, generate an
-        # ephemeral keypair for ECDH recovery, derive Pedersen commitments using
-        # create_commitment/create_asset_commitment from hathor.crypto.shielded, create
-        # Bulletproof range proofs with create_range_proof, and for FullShieldedOutput also
-        # create surjection proofs. Assemble into AmountShieldedOutput/FullShieldedOutput
-        # dataclasses and attach as a ShieldedOutputsHeader.
-        return
+        import os
+
+        from hathor.crypto.shielded import (
+            create_asset_commitment,
+            create_commitment,
+            create_range_proof,
+            create_surjection_proof,
+            derive_asset_tag,
+            derive_tag,
+        )
+        from hathor.crypto.shielded.ecdh import (
+            derive_ecdh_shared_secret,
+            derive_rewind_nonce,
+            generate_ephemeral_keypair,
+        )
+        from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput, ShieldedOutput
+
+        shielded_outputs: list[ShieldedOutput] = []
+
+        for txout in node.outputs:
+            if txout is None:
+                continue
+            amount, token_name, attrs = txout
+
+            if not attrs.get('shielded') and not attrs.get('full-shielded'):
+                continue
+
+            assert isinstance(vertex, Transaction)
+
+            token_uid = self._settings.HATHOR_TOKEN_UID if token_name == 'HTR' else self._get_token_id(token_name)
+            # Normalize token UID to 32 bytes for the crypto library
+            if len(token_uid) < 32:
+                token_uid = token_uid.ljust(32, b'\x00')
+            script = self.get_next_p2pkh_script()
+            blinding = os.urandom(32)
+
+            # Generate ephemeral keypair for ECDH-based recovery
+            ephemeral_privkey, ephemeral_pubkey = generate_ephemeral_keypair()
+
+            # Get recipient's public key from the script (P2PKH)
+            # In the DAG builder, we own the recipient wallet, so we can get the pubkey
+            recipient_pubkey = self._get_recipient_pubkey_from_script(script)
+            if recipient_pubkey is not None:
+                shared_secret = derive_ecdh_shared_secret(ephemeral_privkey, recipient_pubkey)
+                nonce = derive_rewind_nonce(shared_secret)
+            else:
+                nonce = None
+                ephemeral_pubkey = b''  # No ECDH possible without recipient pubkey
+
+            if attrs.get('full-shielded'):
+                # FullShieldedOutput: both amount and token hidden
+                raw_tag = derive_tag(token_uid)
+                asset_blinding = os.urandom(32)
+                asset_comm = create_asset_commitment(raw_tag, asset_blinding)
+                commitment = create_commitment(amount, blinding, asset_comm)
+
+                # Embed token_uid(32B) + asset_blinding(32B) in range proof message
+                message = token_uid + asset_blinding
+                range_proof = create_range_proof(
+                    amount, blinding, commitment, asset_comm,
+                    message=message, nonce=nonce,
+                )
+
+                # Build domain for surjection proof from inputs
+                domain: list[tuple[bytes, bytes, bytes]] = []
+                # For DAG builder, create a trivial surjection (input is same token, zero blinding)
+                input_asset_blinding = bytes(32)  # zero blinding = unblinded
+                input_gen = derive_asset_tag(token_uid)
+                domain.append((input_gen, raw_tag, input_asset_blinding))
+
+                surjection_proof = create_surjection_proof(raw_tag, asset_blinding, domain)
+
+                output: ShieldedOutput = FullShieldedOutput(
+                    commitment=commitment,
+                    range_proof=range_proof,
+                    script=script,
+                    asset_commitment=asset_comm,
+                    surjection_proof=surjection_proof,
+                    ephemeral_pubkey=ephemeral_pubkey,
+                )
+            else:
+                # AmountShieldedOutput: amount hidden, token visible
+                asset_tag = derive_asset_tag(token_uid)
+                commitment = create_commitment(amount, blinding, asset_tag)
+                range_proof = create_range_proof(
+                    amount, blinding, commitment, asset_tag,
+                    nonce=nonce,
+                )
+
+                # Resolve token_data index
+                if token_name == 'HTR':
+                    token_data = 0
+                else:
+                    token_id = self._get_token_id(token_name)
+                    if token_id in vertex.tokens:
+                        token_data = 1 + vertex.tokens.index(token_id)
+                    else:
+                        vertex.tokens.append(token_id)
+                        token_data = len(vertex.tokens)
+
+                output = AmountShieldedOutput(
+                    commitment=commitment,
+                    range_proof=range_proof,
+                    script=script,
+                    token_data=token_data,
+                    ephemeral_pubkey=ephemeral_pubkey,
+                )
+
+            shielded_outputs.append(output)
+
+        if not shielded_outputs:
+            return
+
+        assert isinstance(vertex, Transaction)
+        header = ShieldedOutputsHeader(tx=vertex, shielded_outputs=shielded_outputs)
+        vertex.headers.append(header)
 
     def _get_recipient_pubkey_from_script(self, script: bytes) -> bytes | None:
         """Extract the recipient's compressed public key from a P2PKH script.
@@ -519,8 +629,21 @@ class VertexExporter:
         Looks up the address in all wallets to find the corresponding public key.
         Returns None if the public key cannot be determined.
         """
-        # TODO: Parse P2PKH script to get address, look up in wallets, extract
-        # compressed public key using extract_key_bytes from hathor.crypto.shielded.ecdh.
+        from hathor.transaction.scripts.p2pkh import P2PKH as P2PKHScript
+
+        p2pkh = P2PKHScript.parse_script(script)
+        if p2pkh is None:
+            return None
+
+        for wallet_name, wallet in self._wallets.items():
+            if p2pkh.address in wallet.keys:
+                try:
+                    from hathor.crypto.shielded.ecdh import extract_key_bytes
+                    private_key = wallet.get_private_key(p2pkh.address)
+                    _, pubkey_bytes = extract_key_bytes(private_key)
+                    return pubkey_bytes
+                except Exception:
+                    continue
         return None
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
