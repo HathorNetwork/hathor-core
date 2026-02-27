@@ -109,6 +109,14 @@ isort:
 
 # generation:
 
+.PHONY: changelog-draft
+changelog-draft:
+	towncrier build --draft --version next
+
+.PHONY: changelog-build
+changelog-build:
+	towncrier build --version $(version)
+
 .PHONY: clean-pyc
 clean-pyc:
 	find hathor hathor_tests -name \*.pyc -delete
