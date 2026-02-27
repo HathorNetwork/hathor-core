@@ -128,6 +128,20 @@ class DefaultFiller:
 
         return balance
 
+    def _account_for_shielded_fee(self, node: DAGNode) -> None:
+        """Subtract shielded output fees from the node's HTR balance."""
+        fee = 0
+        for txout in node.outputs:
+            if txout is None:
+                continue
+            _, _, attrs = txout
+            if attrs.get('full-shielded'):
+                fee += self._settings.FEE_PER_FULL_SHIELDED_OUTPUT
+            elif attrs.get('shielded'):
+                fee += self._settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT
+        if fee > 0:
+            node.balances['HTR'] = node.balances.get('HTR', 0) - fee
+
     def balance_node_inputs_and_outputs(self, node: DAGNode) -> None:
         """Balance the inputs and outputs of a node."""
         balance = self.calculate_balance(node)
@@ -222,6 +236,7 @@ class DefaultFiller:
                         continue
 
                     self.fill_parents(node)
+                    self._account_for_shielded_fee(node)
                     self.balance_node_inputs_and_outputs(node)
 
                 case DAGNodeType.OnChainBlueprint:

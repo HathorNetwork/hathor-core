@@ -1,5 +1,4 @@
 from typing import Any
-from unittest.mock import Mock
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -40,7 +39,6 @@ from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT, MAX_NC_SCRIPT_SIZE
-from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
 
@@ -86,7 +84,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.genesis = self.peer.tx_storage.get_all_genesis()
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-        self.verification_params = VerificationParams.default_for_mempool(best_block=Mock())
+        self.verification_params = self.get_verification_params()
 
     def _create_nc(
         self,
