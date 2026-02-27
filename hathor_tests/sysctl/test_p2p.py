@@ -180,3 +180,156 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         with self.assertRaises(SysctlException):
             sysctl.unsafe_set('kill_connection', 'unknown-peer-id')
+
+    def test_blacklist_add_peers_with_list(self):
+        """Test adding peers to blacklist with a list."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Initially empty
+        self.assertEqual(sysctl.get('blacklist.list_peers'), [])
+
+        # Add peers (using valid 64-char hex peer IDs)
+        peer_ids = [
+            '0000000000000000000000000000000000000000000000000000000000000001',
+            '0000000000000000000000000000000000000000000000000000000000000002',
+            '0000000000000000000000000000000000000000000000000000000000000003',
+        ]
+        sysctl.unsafe_set('blacklist.add_peers', peer_ids)
+
+        # Check they were added
+        blacklisted = sysctl.get('blacklist.list_peers')
+        self.assertEqual(sorted(blacklisted), sorted(peer_ids))
+
+    def test_blacklist_add_peers_with_string(self):
+        """Test adding a single peer to blacklist with a string."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Add single peer (using valid 64-char hex peer ID)
+        peer_id = '0000000000000000000000000000000000000000000000000000000000000001'
+        sysctl.unsafe_set('blacklist.add_peers', peer_id)
+
+        # Check it was added
+        blacklisted = sysctl.get('blacklist.list_peers')
+        self.assertEqual(blacklisted, [peer_id])
+
+    def test_blacklist_remove_peers_with_list(self):
+        """Test removing peers from blacklist with a list."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Add peers first (using valid 64-char hex peer IDs)
+        peer_ids = [
+            '0000000000000000000000000000000000000000000000000000000000000001',
+            '0000000000000000000000000000000000000000000000000000000000000002',
+            '0000000000000000000000000000000000000000000000000000000000000003',
+        ]
+        sysctl.unsafe_set('blacklist.add_peers', peer_ids)
+        self.assertEqual(sorted(sysctl.get('blacklist.list_peers')), sorted(peer_ids))
+
+        # Remove some
+        to_remove = [peer_ids[0], peer_ids[2]]
+        sysctl.unsafe_set('blacklist.remove_peers', to_remove)
+
+        # Check they were removed
+        blacklisted = sysctl.get('blacklist.list_peers')
+        self.assertEqual(blacklisted, [peer_ids[1]])
+
+    def test_blacklist_remove_peers_with_string(self):
+        """Test removing a single peer from blacklist with a string."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Add peers first (using valid 64-char hex peer IDs)
+        peer1 = '0000000000000000000000000000000000000000000000000000000000000001'
+        peer2 = '0000000000000000000000000000000000000000000000000000000000000002'
+        sysctl.unsafe_set('blacklist.add_peers', [peer1, peer2])
+
+        # Remove one
+        sysctl.unsafe_set('blacklist.remove_peers', peer1)
+
+        # Check it was removed
+        blacklisted = sysctl.get('blacklist.list_peers')
+        self.assertEqual(blacklisted, [peer2])
+
+    def test_blacklist_list_peers(self):
+        """Test listing blacklisted peers."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Initially empty
+        self.assertEqual(sysctl.get('blacklist.list_peers'), [])
+
+        # Add some peers (using valid 64-char hex peer IDs)
+        peer1 = '0000000000000000000000000000000000000000000000000000000000000001'
+        peer2 = '0000000000000000000000000000000000000000000000000000000000000002'
+        peer3 = '0000000000000000000000000000000000000000000000000000000000000003'
+        sysctl.unsafe_set('blacklist.add_peers', [peer1, peer2])
+        self.assertEqual(sorted(sysctl.get('blacklist.list_peers')), sorted([peer1, peer2]))
+
+        # Add more
+        sysctl.unsafe_set('blacklist.add_peers', peer3)
+        self.assertEqual(sorted(sysctl.get('blacklist.list_peers')), sorted([peer1, peer2, peer3]))
+
+        # Remove all
+        sysctl.unsafe_set('blacklist.remove_peers', [peer1, peer2, peer3])
+        self.assertEqual(sysctl.get('blacklist.list_peers'), [])
+
+    def test_blacklist_add_peers_invalid_peer_id(self):
+        """Test that adding invalid peer IDs raises an exception."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Too short
+        with self.assertRaises(SysctlException) as cm:
+            sysctl.unsafe_set('blacklist.add_peers', 'invalid')
+        self.assertIn('Invalid peer-id format', str(cm.exception))
+
+        # Too long (more than 64 hex chars)
+        with self.assertRaises(SysctlException) as cm:
+            sysctl.unsafe_set('blacklist.add_peers', 'a' * 65)
+        self.assertIn('Invalid peer-id format', str(cm.exception))
+
+        # Invalid hex characters
+        with self.assertRaises(SysctlException) as cm:
+            sysctl.unsafe_set('blacklist.add_peers', 'g' * 64)
+        self.assertIn('Invalid peer-id format', str(cm.exception))
+
+        # Valid length but odd number of hex chars
+        with self.assertRaises(SysctlException) as cm:
+            sysctl.unsafe_set('blacklist.add_peers', 'a' * 63)
+        self.assertIn('Invalid peer-id format', str(cm.exception))
+
+        # List with some invalid
+        with self.assertRaises(SysctlException) as cm:
+            sysctl.unsafe_set('blacklist.add_peers', ['0' * 64, 'invalid'])
+        self.assertIn('Invalid peer-id format', str(cm.exception))
+
+        # Ensure nothing was added
+        self.assertEqual(sysctl.get('blacklist.list_peers'), [])
+
+    def test_blacklist_remove_peers_invalid_peer_id(self):
+        """Test that removing invalid peer IDs raises an exception."""
+        manager = self.create_peer()
+        connections = manager.connections
+        sysctl = ConnectionsManagerSysctl(connections)
+
+        # Add a valid peer first
+        valid_peer_id = '0' * 64
+        sysctl.unsafe_set('blacklist.add_peers', valid_peer_id)
+        self.assertEqual(sysctl.get('blacklist.list_peers'), [valid_peer_id])
+
+        # Try to remove with invalid peer ID
+        with self.assertRaises(SysctlException) as cm:
+            sysctl.unsafe_set('blacklist.remove_peers', 'invalid')
+        self.assertIn('Invalid peer-id format', str(cm.exception))
+
+        # Ensure the valid peer is still there
+        self.assertEqual(sysctl.get('blacklist.list_peers'), [valid_peer_id])
