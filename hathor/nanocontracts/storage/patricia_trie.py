@@ -268,7 +268,8 @@ class PatriciaTrie:
         This encoding mechanism is utilized to limit the maximum number of children a node can have."""
         return key.hex().encode('ascii')
 
-    def _decode_key(self, key: bytes) -> bytes:
+    @staticmethod
+    def _decode_key(key: bytes) -> bytes:
         """Decode key from internal format to the provided one.
 
         During the trie operation, keys are split and they might not be a valid hex string.
