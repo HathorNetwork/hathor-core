@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Iterable, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from structlog import get_logger
 
@@ -49,7 +49,6 @@ class TransactionConsensusAlgorithm:
     def update_consensus(self, tx: Transaction) -> None:
         self.mark_inputs_as_used(tx)
         self.update_voided_info(tx)
-        self.set_conflict_twins(tx)
         self.execute_nano_contracts(tx)
 
     def execute_nano_contracts(self, tx: Transaction) -> None:
@@ -105,74 +104,6 @@ class TransactionConsensusAlgorithm:
         # Add ourselves to meta.spent_by of our input.
         spent_by.append(tx.hash)
         self.context.save(spent_tx)
-
-    def set_conflict_twins(self, tx: Transaction) -> None:
-        """ Get all transactions that conflict with self
-            and check if they are also a twin of self
-        """
-        assert tx.storage is not None
-
-        meta = tx.get_metadata()
-        if not meta.conflict_with:
-            return
-
-        conflict_txs = [tx.storage.get_transaction(h) for h in meta.conflict_with]
-        self.check_twins(tx, conflict_txs)
-
-    def check_twins(self, tx: Transaction, transactions: Iterable[BaseTransaction]) -> None:
-        """ Check if the tx has any twins in transactions list
-            A twin tx is a tx that has the same inputs and outputs
-            We add all the hashes of the twin txs in the metadata
-
-        :param transactions: list of transactions to be checked if they are twins with self
-        """
-        assert tx.storage is not None
-
-        # Getting tx metadata to save the new twins
-        meta = tx.get_metadata()
-
-        # Sorting inputs and outputs for easier validation
-        sorted_inputs = sorted(tx.inputs, key=lambda x: (x.tx_id, x.index, x.data))
-        sorted_outputs = sorted(tx.outputs, key=lambda x: (x.script, x.value))
-
-        for candidate in transactions:
-
-            # If quantity of inputs is different, it's not a twin.
-            if len(candidate.inputs) != len(tx.inputs):
-                continue
-
-            # If quantity of outputs is different, it's not a twin.
-            if len(candidate.outputs) != len(tx.outputs):
-                continue
-
-            # If the hash is the same, it's not a twin.
-            if candidate.hash == tx.hash:
-                continue
-
-            # Verify if all the inputs are the same
-            equal = True
-            for index, tx_input in enumerate(sorted(candidate.inputs, key=lambda x: (x.tx_id, x.index, x.data))):
-                if (tx_input.tx_id != sorted_inputs[index].tx_id or tx_input.data != sorted_inputs[index].data
-                        or tx_input.index != sorted_inputs[index].index):
-                    equal = False
-                    break
-
-            # Verify if all the outputs are the same
-            if equal:
-                for index, tx_output in enumerate(sorted(candidate.outputs, key=lambda x: (x.script, x.value))):
-                    if (tx_output.value != sorted_outputs[index].value
-                            or tx_output.script != sorted_outputs[index].script):
-                        equal = False
-                        break
-
-            # If everything is equal we add in both metadatas
-            if equal:
-                meta.twins.append(candidate.hash)
-                tx_meta = candidate.get_metadata()
-                tx_meta.twins.append(tx.hash)
-                self.context.save(candidate)
-
-        self.context.save(tx)
 
     def update_voided_info(self, tx: Transaction) -> None:
         """ This method should be called only once when the transactions is added to the DAG.
