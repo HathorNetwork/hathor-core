@@ -153,7 +153,10 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
     def __init__(self, data: T, script_input: bytes) -> None:
         # mypy: disable-error-code="import-not-found"
-        from hathor.nanocontracts.nc_types import make_nc_type_for_return_type as make_nc_type
+        from hathor.nanocontracts.nc_types import (  # type: ignore[import-not-found]
+            make_nc_type_for_return_type as make_nc_type,
+        )
+
         self.data = data
         self.script_input = script_input
         self.__nc_type = make_nc_type(self.__inner_type__)
@@ -512,7 +515,7 @@ class NCRawArgs:
 
     def try_parse_as(self, arg_types: tuple[type, ...]) -> tuple[Any, ...] | None:
         # mypy: disable-error-code="import-not-found"
-        from hathor.nanocontracts.method import ArgsOnly
+        from hathor.nanocontracts.method import ArgsOnly  # type: ignore[import-not-found]
         try:
             args_parser = ArgsOnly.from_arg_types(arg_types)
             return args_parser.deserialize_args_bytes(self.args_bytes)

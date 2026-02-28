@@ -83,7 +83,7 @@ def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:
             f'@{annotation_name} method must have `Context` argument: `{fn.__name__}()`'
         )
 
-    from hathor.nanocontracts.context import Context
+    from hathor.nanocontracts.context import Context  # type: ignore
     second_arg = arg_spec.args[1]
     if arg_spec.annotations[second_arg] is not Context:
         raise BlueprintSyntaxError(
@@ -94,7 +94,7 @@ def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:
 
 def validate_has_not_ctx_arg(fn: Callable, annotation_name: str) -> None:
     """Validate that a callable doesn't have a `Context` arg."""
-    from hathor.nanocontracts.context import Context
+    from hathor.nanocontracts.context import Context  # type: ignore[import-not-found]
     arg_spec = inspect.getfullargspec(fn)
     if Context in arg_spec.annotations.values():
         raise BlueprintSyntaxError(f'@{annotation_name} method cannot have arg with type `Context`: `{fn.__name__}()`')

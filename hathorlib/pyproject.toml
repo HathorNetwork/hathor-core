@@ -80,13 +80,14 @@ plugins = [
 
 [[tool.mypy.overrides]]
 module = [
+    "hathorlib.nanocontracts.method",
     "hathorlib.nanocontracts.*",
     "hathorlib.utils.*",
 ]
 check_untyped_defs = false
 disallow_untyped_defs = false
 warn_return_any = false
-ignore_missing_imports = true
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 minversion = "6.0"
