@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for shielded transaction output types and header serialization.
-
-These tests use dummy bytes (not real cryptographic values) to verify that the
-data models, serialization, and sighash logic work correctly as infrastructure.
-"""
+"""Tests for shielded transaction output types and header serialization."""
 
 import os
 
+import hathor_ct_crypto as lib
 import pytest
 
 from hathor.transaction.shielded_tx_output import (
@@ -32,24 +29,45 @@ from hathor.transaction.shielded_tx_output import (
 )
 
 
-def _make_amount_shielded_output(token_data: int = 0) -> AmountShieldedOutput:
-    """Create an AmountShieldedOutput with dummy bytes for serialization testing."""
+def _make_amount_shielded_output(amount: int = 1000, token_data: int = 0) -> AmountShieldedOutput:
+    """Create a valid AmountShieldedOutput for testing."""
+    gen = lib.htr_asset_tag()
+    blinding = os.urandom(32)
+    commitment = lib.create_commitment(amount, blinding, gen)
+    range_proof = lib.create_range_proof(amount, blinding, commitment, gen)
+    script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'  # P2PKH-like
     return AmountShieldedOutput(
-        commitment=os.urandom(33),
-        range_proof=os.urandom(675),
-        script=b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac',
+        commitment=commitment,
+        range_proof=range_proof,
+        script=script,
         token_data=token_data,
     )
 
 
-def _make_full_shielded_output() -> FullShieldedOutput:
-    """Create a FullShieldedOutput with dummy bytes for serialization testing."""
+def _make_full_shielded_output(amount: int = 500) -> FullShieldedOutput:
+    """Create a valid FullShieldedOutput for testing."""
+    token_uid = bytes(32)
+    raw_tag = lib.derive_tag(token_uid)
+    asset_bf = os.urandom(32)
+    asset_comm = lib.create_asset_commitment(raw_tag, asset_bf)
+
+    blinding = os.urandom(32)
+    commitment = lib.create_commitment(amount, blinding, asset_comm)
+    range_proof = lib.create_range_proof(amount, blinding, commitment, asset_comm)
+
+    # Create surjection proof with trivial domain
+    input_gen = lib.derive_asset_tag(token_uid)
+    surjection_proof = lib.create_surjection_proof(
+        raw_tag, asset_bf, [(input_gen, raw_tag, bytes(32))]
+    )
+
+    script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'
     return FullShieldedOutput(
-        commitment=os.urandom(33),
-        range_proof=os.urandom(675),
-        script=b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac',
-        asset_commitment=os.urandom(33),
-        surjection_proof=os.urandom(256),
+        commitment=commitment,
+        range_proof=range_proof,
+        script=script,
+        asset_commitment=asset_comm,
+        surjection_proof=surjection_proof,
     )
 
 
@@ -67,7 +85,7 @@ class TestOutputMode:
 
 class TestAmountShieldedOutput:
     def test_fields(self) -> None:
-        output = _make_amount_shielded_output(token_data=1)
+        output = _make_amount_shielded_output(amount=42, token_data=1)
         assert len(output.commitment) == 33
         assert len(output.range_proof) > 0
         assert len(output.script) > 0
@@ -106,7 +124,7 @@ class TestFullShieldedOutput:
 
 class TestSerialization:
     def test_amount_shielded_roundtrip(self) -> None:
-        output = _make_amount_shielded_output(token_data=2)
+        output = _make_amount_shielded_output(amount=42, token_data=2)
         data = serialize_shielded_output(output)
         restored, remaining = deserialize_shielded_output(data)
         assert remaining == b''
@@ -129,8 +147,8 @@ class TestSerialization:
         assert restored.surjection_proof == output.surjection_proof
 
     def test_multiple_outputs_concatenated(self) -> None:
-        o1 = _make_amount_shielded_output()
-        o2 = _make_full_shielded_output()
+        o1 = _make_amount_shielded_output(amount=100)
+        o2 = _make_full_shielded_output(amount=200)
         data = serialize_shielded_output(o1) + serialize_shielded_output(o2)
         r1, remaining = deserialize_shielded_output(data)
         r2, remaining = deserialize_shielded_output(remaining)
@@ -179,13 +197,20 @@ class TestEphemeralPubkeySerialization:
 
     def test_amount_shielded_with_ephemeral_pubkey_roundtrip(self) -> None:
         ephemeral = self._make_ephemeral_pubkey()
+        gen = lib.htr_asset_tag()
+        blinding = os.urandom(32)
+        commitment = lib.create_commitment(1000, blinding, gen)
+        range_proof = lib.create_range_proof(1000, blinding, commitment, gen)
+        script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'
+
         output = AmountShieldedOutput(
-            commitment=os.urandom(33),
-            range_proof=os.urandom(675),
-            script=b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac',
+            commitment=commitment,
+            range_proof=range_proof,
+            script=script,
             token_data=0,
             ephemeral_pubkey=ephemeral,
         )
+
         data = serialize_shielded_output(output)
         restored, remaining = deserialize_shielded_output(data)
         assert remaining == b''
@@ -196,14 +221,30 @@ class TestEphemeralPubkeySerialization:
 
     def test_full_shielded_with_ephemeral_pubkey_roundtrip(self) -> None:
         ephemeral = self._make_ephemeral_pubkey()
+        token_uid = bytes(32)
+        raw_tag = lib.derive_tag(token_uid)
+        asset_bf = os.urandom(32)
+        asset_comm = lib.create_asset_commitment(raw_tag, asset_bf)
+
+        blinding = os.urandom(32)
+        commitment = lib.create_commitment(500, blinding, asset_comm)
+        range_proof = lib.create_range_proof(500, blinding, commitment, asset_comm)
+
+        input_gen = lib.derive_asset_tag(token_uid)
+        surjection_proof = lib.create_surjection_proof(
+            raw_tag, asset_bf, [(input_gen, raw_tag, bytes(32))]
+        )
+        script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'
+
         output = FullShieldedOutput(
-            commitment=os.urandom(33),
-            range_proof=os.urandom(675),
-            script=b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac',
-            asset_commitment=os.urandom(33),
-            surjection_proof=os.urandom(256),
+            commitment=commitment,
+            range_proof=range_proof,
+            script=script,
+            asset_commitment=asset_comm,
+            surjection_proof=surjection_proof,
             ephemeral_pubkey=ephemeral,
         )
+
         data = serialize_shielded_output(output)
         restored, remaining = deserialize_shielded_output(data)
         assert remaining == b''
@@ -213,8 +254,10 @@ class TestEphemeralPubkeySerialization:
 
     def test_sighash_includes_ephemeral_pubkey(self) -> None:
         """Sighash with ephemeral pubkey differs from sighash without."""
-        commitment = os.urandom(33)
-        range_proof = os.urandom(675)
+        gen = lib.htr_asset_tag()
+        blinding = os.urandom(32)
+        commitment = lib.create_commitment(100, blinding, gen)
+        range_proof = lib.create_range_proof(100, blinding, commitment, gen)
         script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'
 
         without = AmountShieldedOutput(
