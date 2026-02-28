@@ -382,7 +382,7 @@ class TestNCExecLogs(BaseNCExecLogs):
         error_tb = result.entries[b2.hash][0].error_traceback
         assert error_tb is not None
         assert error_tb.startswith('Traceback (most recent call last):')
-        assert error_tb.endswith('hathor.nanocontracts.exception.NCFail: some fail\n')
+        assert error_tb.endswith('hathorlib.nanocontracts.exception.NCFail: some fail\n')
 
     def test_value_error(self) -> None:
         self._prepare()
@@ -436,7 +436,7 @@ class TestNCExecLogs(BaseNCExecLogs):
             The above exception was the direct cause of the following exception:\n
             Traceback (most recent call last):
         """) in error_tb
-        assert error_tb.endswith('hathor.nanocontracts.exception.NCFail\n')
+        assert error_tb.endswith('hathorlib.nanocontracts.exception.NCFail\n')
 
     def test_reexecution_on_reorgs(self) -> None:
         self._prepare()

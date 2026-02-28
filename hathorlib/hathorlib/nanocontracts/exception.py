@@ -17,8 +17,10 @@ All exceptions in this module MUST inherit from NCFail so they're
 correctly caught by the block consensus to fail NC transactions.
 """
 
+from hathorlib.exceptions import HathorError
 
-class NCFail(Exception):
+
+class NCFail(HathorError):
     """Raised by Blueprint's methods to fail execution."""
 
 
