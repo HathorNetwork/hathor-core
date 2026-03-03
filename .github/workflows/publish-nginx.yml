@@ -11,6 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  SF_PROJECT_NUMBER: '840538782933'   # standalone-fullnodes
+  HT_PROJECT_NUMBER: '479738554605'   # hathor-testnet
+  EKV_PROJECT_NUMBER: '292005442741'  # ekvilibro
+  HTP_PROJECT_NUMBER: '44050351828'  # hathor-testnet-playground
+
 jobs:
   release:
     name: Release nginx configs and image
@@ -94,7 +100,7 @@ jobs:
       - name: Authenticate to GCP (standalone-fullnodes)
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          workload_identity_provider: projects/${{ vars.SF_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          workload_identity_provider: projects/${{ env.SF_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
           service_account: ''
         id: gcp-auth-sf
 
@@ -115,7 +121,7 @@ jobs:
       - name: Authenticate to GCP (hathor-testnet)
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          workload_identity_provider: projects/${{ vars.HT_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          workload_identity_provider: projects/${{ env.HT_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
           service_account: ''
         id: gcp-auth-ht
 
@@ -136,7 +142,7 @@ jobs:
       - name: Authenticate to GCP (ekvilibro)
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          workload_identity_provider: projects/${{ vars.EKV_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          workload_identity_provider: projects/${{ env.EKV_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
           service_account: ''
         id: gcp-auth-ekv
 
@@ -157,7 +163,7 @@ jobs:
       - name: Authenticate to GCP (hathor-testnet-playground)
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          workload_identity_provider: projects/${{ vars.HTP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          workload_identity_provider: projects/${{ env.HTP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
           service_account: ''
         id: gcp-auth-htp
 
