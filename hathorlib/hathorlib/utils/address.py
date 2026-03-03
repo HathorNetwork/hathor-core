@@ -82,7 +82,9 @@ def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: Optional[bytes] = None) -> bytes:
+def get_address_from_public_key_hash(
+    public_key_hash: bytes, version_byte: bytes = settings.P2PKH_VERSION_BYTE
+) -> bytes:
     """Gets the address in bytes from the public key hash
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -94,11 +96,9 @@ def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: Optio
         :return: address in bytes
         :rtype: bytes
     """
-    settings = HathorSettings()
     address = b''
-    actual_version_byte: bytes = version_byte if version_byte is not None else settings.P2PKH_VERSION_BYTE
     # Version byte
-    address += actual_version_byte
+    address += version_byte
     # Pubkey hash
     address += public_key_hash
     checksum = get_checksum(address)
