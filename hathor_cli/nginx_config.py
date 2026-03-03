@@ -395,7 +395,7 @@ def main():
                         help='Input file with OpenAPI json, if not specified the spec is generated on-the-fly')
     parser.add_argument('--fallback-visibility', type=Visibility, default=Visibility.PRIVATE,
                         help='Set the visibility for paths without `x-visibility`, defaults to private')
-    parser.add_argument('--disable-rate-limits', type=bool, default=False,
+    parser.add_argument('--disable-rate-limits', action='store_true', default=False,
                         help='Disable including rate-limits in the config, defaults to False')
     parser.add_argument('--override', type=str, default='',
                         help='Override visibility for paths with `x-visibility-override` for the given value')
