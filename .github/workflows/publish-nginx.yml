@@ -92,7 +92,7 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           tags: |
             769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:${{ steps.version.outputs.version }}
-            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
+#            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
 
       # --- GCP Artifact Registries ---
 
@@ -115,7 +115,7 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           tags: |
             us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:latest
+#            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:latest
 
       # hathor-testnet
       - name: Authenticate to GCP (hathor-testnet)
@@ -136,7 +136,7 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           tags: |
             us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:latest
+#            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:latest
 
       # ekvilibro
       - name: Authenticate to GCP (ekvilibro)
@@ -157,7 +157,7 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           tags: |
             us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:latest
+#            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:latest
 
       # hathor-testnet-playground
       - name: Authenticate to GCP (hathor-testnet-playground)
@@ -178,4 +178,4 @@ jobs:
           platforms: linux/amd64,linux/arm64/v8
           tags: |
             us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:${{ steps.version.outputs.version }}
-            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:latest
+#            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:latest
