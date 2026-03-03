@@ -21,7 +21,9 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-hathor-env
         name: Setup Hathor node environment
@@ -34,39 +36,45 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
         with:
           role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
           aws-region: us-east-1
 
       - name: Generate all nginx configs
         working-directory: extras/nginx_docker
-        run: poetry run make generate-all VERSION=${{ steps.version.outputs.version }}
+        run: poetry run make generate-all VERSION="$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
 
       - name: Upload configs to S3 (versioned)
         working-directory: extras/nginx_docker
-        run: make upload-to-s3 VERSION=${{ steps.version.outputs.version }}
+        run: make upload-to-s3 VERSION="$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
 
       - name: Upload configs to S3 (latest)
         working-directory: extras/nginx_docker
-        run: make upload-to-s3-as-latest VERSION=${{ steps.version.outputs.version }}
+        run: make upload-to-s3-as-latest VERSION="$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
 
       - name: Generate set_real_ip_from_cloudfront
         working-directory: extras/nginx_docker
         run: make set_real_ip_from_cloudfront
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       # --- AWS ECR ---
       - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
 
       - name: Build and push to ECR
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: extras/nginx_docker
           push: true
@@ -79,7 +87,7 @@ jobs:
 
       # standalone-fullnodes
       - name: Authenticate to GCP (standalone-fullnodes)
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: projects/${{ vars.SF_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ''
@@ -89,7 +97,7 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to standalone-fullnodes
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: extras/nginx_docker
           push: true
@@ -100,7 +108,7 @@ jobs:
 
       # hathor-testnet
       - name: Authenticate to GCP (hathor-testnet)
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: projects/${{ vars.HT_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ''
@@ -110,7 +118,7 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to hathor-testnet
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: extras/nginx_docker
           push: true
@@ -121,7 +129,7 @@ jobs:
 
       # ekvilibro
       - name: Authenticate to GCP (ekvilibro)
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: projects/${{ vars.EKV_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ''
@@ -131,7 +139,7 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to ekvilibro
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: extras/nginx_docker
           push: true
@@ -142,7 +150,7 @@ jobs:
 
       # hathor-testnet-playground
       - name: Authenticate to GCP (hathor-testnet-playground)
-        uses: google-github-actions/auth@v3
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: projects/${{ vars.HTP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ''
@@ -152,7 +160,7 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to hathor-testnet-playground
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: extras/nginx_docker
           push: true
