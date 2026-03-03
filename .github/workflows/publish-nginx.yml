@@ -4,6 +4,8 @@ on: # yamllint disable-line rule:truthy
   push:
     tags:
       - v*
+    branches:
+      - feat/nginx-config-as-artifact
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
