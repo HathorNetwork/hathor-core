@@ -518,6 +518,8 @@ def op_find_p2pkh(context: ScriptContext) -> None:
     contract_value = spent_tx.outputs[txin.index].value
 
     address = context.stack.pop()
+    if not isinstance(address, bytes):
+        raise VerifyFailed
     address_b58 = get_address_b58_from_bytes(address)
     for output in tx.outputs:
         p2pkh_out = P2PKH.parse_script(output.script)

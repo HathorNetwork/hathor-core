@@ -29,6 +29,11 @@ from cryptography.hazmat.primitives.serialization import (
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.util import not_none
+from hathorlib.utils.address import (  # noqa: F401
+    get_address_b58_from_bytes,
+    get_address_b58_from_public_key_hash,
+    get_address_from_public_key_hash,
+)
 
 _BACKEND = default_backend()
 
@@ -104,43 +109,6 @@ def get_address_b58_from_public_key(public_key: ec.EllipticCurvePublicKey) -> st
     return get_address_b58_from_public_key_bytes(public_key_bytes)
 
 
-def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
-    """Gets the b58 address from the hash of a public key.
-
-        :param public_key_hash: hash of public key (sha256 and ripemd160)
-        :param public_key_hash: bytes
-
-        :return: address in base 58
-        :rtype: string
-    """
-    address = get_address_from_public_key_hash(public_key_hash)
-    return base58.b58encode(address).decode('utf-8')
-
-
-def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: Optional[bytes] = None) -> bytes:
-    """Gets the address in bytes from the public key hash
-
-        :param public_key_hash: hash of public key (sha256 and ripemd160)
-        :param public_key_hash: bytes
-
-        :param version_byte: first byte of address to define the version of this address
-        :param version_byte: bytes
-
-        :return: address in bytes
-        :rtype: bytes
-    """
-    settings = get_global_settings()
-    address = b''
-    actual_version_byte: bytes = version_byte if version_byte is not None else settings.P2PKH_VERSION_BYTE
-    # Version byte
-    address += actual_version_byte
-    # Pubkey hash
-    address += public_key_hash
-    checksum = get_checksum(address)
-    address += checksum
-    return address
-
-
 def get_checksum(address_bytes: bytes) -> bytes:
     """ Calculate double sha256 of address and gets first 4 bytes
 
@@ -164,17 +132,6 @@ def get_address_b58_from_public_key_bytes(public_key_bytes: bytes) -> str:
     """
     public_key_hash = get_hash160(public_key_bytes)
     return get_address_b58_from_public_key_hash(public_key_hash)
-
-
-def get_address_b58_from_bytes(address):
-    """Gets the b58 address from the address in bytes
-
-        :param address: bytes
-
-        :return: address in base 58
-        :rtype: string
-    """
-    return base58.b58encode(address).decode('utf-8')
 
 
 def get_public_key_bytes_compressed(public_key: ec.EllipticCurvePublicKey) -> bytes:

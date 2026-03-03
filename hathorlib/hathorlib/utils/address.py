@@ -5,7 +5,7 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 import hashlib
-from typing import cast
+from typing import cast, Optional
 
 import base58
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -82,8 +82,7 @@ def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
     return base58.b58encode(address).decode('utf-8')
 
 
-def get_address_from_public_key_hash(public_key_hash: bytes,
-                                     version_byte: bytes = settings.P2PKH_VERSION_BYTE) -> bytes:
+def get_address_from_public_key_hash(public_key_hash: bytes, version_byte: Optional[bytes] = None) -> bytes:
     """Gets the address in bytes from the public key hash
 
         :param public_key_hash: hash of public key (sha256 and ripemd160)
@@ -95,9 +94,11 @@ def get_address_from_public_key_hash(public_key_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    settings = HathorSettings()
     address = b''
+    actual_version_byte: bytes = version_byte if version_byte is not None else settings.P2PKH_VERSION_BYTE
     # Version byte
-    address += version_byte
+    address += actual_version_byte
     # Pubkey hash
     address += public_key_hash
     checksum = get_checksum(address)

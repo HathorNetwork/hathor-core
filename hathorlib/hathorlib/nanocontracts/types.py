@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, Self, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
@@ -131,12 +131,16 @@ def blueprint_id_from_bytes(data: bytes) -> BlueprintId:
     return BlueprintId(VertexId(data))
 
 
+class ChecksigBackend(Protocol):
+    def __call__(self, sighash_all_data: bytes, script_input: bytes, script: bytes) -> bool: ...
+
+
 # Injectable backend for RawSignedData.checksig.
 # hathorlib raises NotImplementedError by default; hathor-core registers the real implementation.
-_checksig_backend: Callable[[bytes, bytes, bytes], bool] | None = None
+_checksig_backend: ChecksigBackend | None = None
 
 
-def set_checksig_backend(fn: Callable[[bytes, bytes, bytes], bool]) -> None:
+def set_checksig_backend(fn: ChecksigBackend) -> None:
     """Register the checksig implementation. Must be called by hathor-core during initialization.
 
     The callable receives (sighash_all_data: bytes, script_input: bytes, script: bytes) -> bool.
