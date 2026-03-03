@@ -36,6 +36,7 @@ class Features:
     nanocontracts: bool
     fee_tokens: bool
     opcodes_version: OpcodesVersion
+    shielded_transactions: bool
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
@@ -47,6 +48,7 @@ class Features:
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
+            Feature.SHIELDED_TRANSACTIONS: settings.ENABLE_SHIELDED_TRANSACTIONS,
         }
 
         feature_is_active: dict[Feature, bool] = {
@@ -61,6 +63,7 @@ class Features:
             nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
+            shielded_transactions=feature_is_active[Feature.SHIELDED_TRANSACTIONS],
         )
 
 

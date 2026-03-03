@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import Transaction
+    from hathor.transaction.shielded_tx_output import OutputMode, ShieldedOutput
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
 
@@ -269,6 +270,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return whether this transaction has a fee header."""
         return False
 
+    def has_shielded_outputs(self) -> bool:
+        """Return whether this vertex has shielded outputs."""
+        return False
+
     def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
         """ Gets all common fields for a Transaction and a Block from a buffer.
 
@@ -298,7 +303,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
-        return 2
+        return 3
 
     @classmethod
     @abstractmethod
@@ -352,6 +357,29 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return self.hash.hex()
         else:
             return ''
+
+    @property
+    def shielded_outputs(self) -> list['ShieldedOutput']:
+        """Return the list of shielded outputs. Empty for non-Transaction vertices."""
+        return []
+
+    def resolve_spent_output(self, index: int) -> 'TxOutput | ShieldedOutput':
+        """Resolve an output by index, checking both transparent and shielded outputs.
+
+        CONS-017: 3-way lookup: transparent outputs first, then shielded, then raise.
+        """
+        if index < len(self.outputs):
+            return self.outputs[index]
+        shielded_idx = index - len(self.outputs)
+        shielded = self.shielded_outputs
+        if shielded_idx < len(shielded):
+            return shielded[shielded_idx]
+        raise IndexError(f'output index {index} out of range (transparent={len(self.outputs)}, '
+                         f'shielded={len(shielded)})')
+
+    def is_shielded_output(self, index: int) -> bool:
+        """Return True if `index` refers to a shielded output (i.e. index >= len(self.outputs))."""
+        return index >= len(self.outputs) and index < len(self.outputs) + len(self.shielded_outputs)
 
     @property
     def sum_outputs(self) -> int:
@@ -513,8 +541,12 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for txin in self.inputs:
             tx2 = self.storage.get_transaction(txin.tx_id)
-            txout = tx2.outputs[txin.index]
-            add_address_from_output(txout)
+            # CONS-017: use resolve_spent_output for shielded-aware lookup
+            resolved = tx2.resolve_spent_output(txin.index)
+            from hathor.transaction.scripts import parse_address_script as _parse
+            script_type = _parse(resolved.script)
+            if script_type:
+                addresses.add(script_type.address)
 
         for txout in self.outputs:
             add_address_from_output(txout)
@@ -862,11 +894,22 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for index, tx_in in enumerate(self.inputs):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
-            tx2_out = tx2.outputs[tx_in.index]
-            output = serialize_output(tx2, tx2_out)
-            output['tx_id'] = tx2.hash_hex
-            output['index'] = tx_in.index
-            ret['inputs'].append(output)
+            # CONS-019: use resolve_spent_output for shielded-aware lookup
+            if tx2.is_shielded_output(tx_in.index):
+                shielded_out = tx2.resolve_spent_output(tx_in.index)
+                output_data: dict[str, Any] = {
+                    'type': 'shielded',
+                    'commitment': shielded_out.commitment.hex(),  # type: ignore[union-attr]
+                    'script': shielded_out.script.hex(),
+                    'tx_id': tx2.hash_hex,
+                    'index': tx_in.index,
+                }
+            else:
+                tx2_out = tx2.outputs[tx_in.index]
+                output_data = serialize_output(tx2, tx2_out)
+                output_data['tx_id'] = tx2.hash_hex
+                output_data['index'] = tx_in.index
+            ret['inputs'].append(output_data)
 
         for index, tx_out in enumerate(self.outputs):
             spent_by = meta.get_output_spent_by(index)
@@ -1099,6 +1142,12 @@ class TxOutput:
     def get_token_index(self) -> int:
         """The token uid index in the list"""
         return self.token_data & self.TOKEN_INDEX_MASK
+
+    @staticmethod
+    def mode() -> OutputMode:
+        """Return the output mode (TRANSPARENT for standard TxOutput)."""
+        from hathor.transaction.shielded_tx_output import OutputMode as _OutputMode
+        return _OutputMode.TRANSPARENT
 
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
