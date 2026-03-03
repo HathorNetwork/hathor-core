@@ -25,6 +25,10 @@ class MyTestBlueprint(Blueprint):
 
 class FakeHeader(VertexBaseHeader):
     @classmethod
+    def get_header_id(cls) -> bytes:
+        return b'\xff'
+
+    @classmethod
     def deserialize(
         cls,
         tx: BaseTransaction,

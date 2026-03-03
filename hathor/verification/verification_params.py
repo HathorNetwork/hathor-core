@@ -18,7 +18,6 @@ from dataclasses import dataclass
 
 from hathor.feature_activation.utils import Features
 from hathor.transaction import Block
-from hathor.transaction.scripts.opcode import OpcodesVersion
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -36,22 +35,17 @@ class VerificationParams:
     reject_conflicts_with_confirmed_txs: bool = False
 
     @classmethod
-    def default_for_mempool(cls, *, best_block: Block, features: Features | None = None) -> VerificationParams:
+    def default_for_mempool(cls, *, best_block: Block, features: Features) -> VerificationParams:
         """This is the appropriate parameters for verifying mempool transactions, realtime blocks and API pushes.
+
+        Callers MUST compute features via Features.from_vertex() to ensure
+        feature activation state (including shielded_transactions) is correct.
 
         Other cases should instantiate `VerificationParams` manually with the appropriate parameter values.
         """
         best_block_meta = best_block.get_metadata()
         if best_block_meta.nc_block_root_id is None:
             assert best_block.is_genesis
-
-        if features is None:
-            features = Features(
-                count_checkdatasig_op=True,
-                nanocontracts=True,
-                fee_tokens=False,
-                opcodes_version=OpcodesVersion.V2,
-            )
 
         return cls(
             nc_block_root_id=best_block_meta.nc_block_root_id,
