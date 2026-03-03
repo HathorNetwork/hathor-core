@@ -43,17 +43,16 @@ def validate_method_types(fn: Callable) -> None:
     if 'return' not in arg_spec.annotations:
         raise BlueprintSyntaxError(f'missing return type on method `{fn.__name__}`')
 
-    # TODO: This currently fails for types such as unions, probably because this is the wrong
-    #  parsing function to use. Fix this.
-    # from hathor.nanocontracts.fields import get_field_class_for_attr
-    # return_type = arg_spec.annotations['return']
-    # if return_type is not None:
-    #     try:
-    #         get_field_class_for_attr(return_type)
-    #     except UnknownFieldType:
-    #         raise BlueprintSyntaxError(
-    #             f'unsupported return type `{return_type}` on method `{fn.__name__}`'
-    #         )
+    return_type = arg_spec.annotations['return']
+    if return_type is not None:
+        from hathor.nanocontracts.nc_types import make_nc_type_for_return_type
+        try:
+            make_nc_type_for_return_type(return_type)
+        except (TypeError, KeyError):
+            type_name = getattr(return_type, '__name__', str(return_type))
+            raise BlueprintSyntaxError(
+                f'unsupported return type `{type_name}` on method `{fn.__name__}`'
+            )
 
     for arg_name in arg_spec.args:
         if arg_name in special_args:
@@ -62,15 +61,23 @@ def validate_method_types(fn: Callable) -> None:
         if arg_name not in arg_spec.annotations:
             raise BlueprintSyntaxError(f'argument `{arg_name}` on method `{fn.__name__}` must be typed')
 
-        # TODO: This currently fails for @view methods with NamedTuple as args for example,
-        #  because API calls use a different parsing function. Fix this.
-        # arg_type = arg_spec.annotations[arg_name]
-        # try:
-        #     get_field_class_for_attr(arg_type)
-        # except UnknownFieldType:
-        #     raise BlueprintSyntaxError(
-        #         f'unsupported type `{arg_type.__name__}` on argument `{arg_name}` of method `{fn.__name__}`'
-        #     )
+        arg_type = arg_spec.annotations[arg_name]
+        # Skip Context type - it's validated separately by validate_has_ctx_arg
+        from hathor.nanocontracts import Context
+        if arg_type is Context:
+            continue
+        # Skip NCArgs type - it's a special type for fallback methods
+        from hathor.nanocontracts.types import NCArgs
+        if arg_type is NCArgs:
+            continue
+        from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type
+        try:
+            make_nc_type_for_arg_type(arg_type)
+        except (TypeError, KeyError):
+            type_name = getattr(arg_type, '__name__', str(arg_type))
+            raise BlueprintSyntaxError(
+                f'unsupported type `{type_name}` on argument `{arg_name}` of method `{fn.__name__}`'
+            )
 
 
 def validate_has_ctx_arg(fn: Callable, annotation_name: str) -> None:

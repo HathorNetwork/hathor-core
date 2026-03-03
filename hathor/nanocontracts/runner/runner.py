@@ -57,6 +57,7 @@ from hathor.nanocontracts.runner.index_records import (
     UpdateTokenBalanceRecord,
 )
 from hathor.nanocontracts.runner.token_fees import calculate_melt_fee, calculate_mint_fee
+from hathor.nanocontracts.sandbox import MeteredExecutorFactory, SandboxCounters, SandboxCounts
 from hathor.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
@@ -129,6 +130,7 @@ class Runner:
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
+        executor: MeteredExecutor,
     ) -> None:
         self.tx_storage = tx_storage
         self.storage_factory = storage_factory
@@ -136,11 +138,7 @@ class Runner:
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
-
-        # For tracking fuel and memory usage
-        self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
-        self._memory_limit = self._settings.NC_MEMORY_LIMIT_TO_CALL_METHOD
-        self._metered_executor: MeteredExecutor | None = None
+        self._executor = executor
 
         # Flag indicating to keep record of all calls.
         self._enable_call_trace = True
@@ -159,6 +157,10 @@ class Runner:
 
         # Information about fees paid during execution inter-contract calls.
         self._paid_actions_fees: defaultdict[TokenUid, int] = defaultdict(int)
+
+        # Track blueprint IDs whose loading costs have been charged in current call chain.
+        # This deduplicates OCB loading costs when the same blueprint is accessed multiple times.
+        self._charged_blueprint_ids: set[BlueprintId] = set()
 
     def execute_from_tx(self, tx: Transaction) -> None:
         """Execute the contract's method call."""
@@ -288,28 +290,33 @@ class Runner:
         assert self._call_info is None
         self._call_info = self._build_call_info(contract_id)
 
+        # Reset charged blueprints for new call chain
+        self._charged_blueprint_ids.clear()
+
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+        self._executor.start()  # Enable sandbox at entry
 
-        blueprint_id = self.get_blueprint_id(contract_id)
+        try:
+            blueprint_id = self.get_blueprint_id(contract_id)
 
-        ret = self._execute_public_method_call(
-            contract_id=contract_id,
-            blueprint_id=blueprint_id,
-            method_name=method_name,
-            ctx=ctx,
-            nc_args=nc_args,
-        )
+            ret = self._execute_public_method_call(
+                contract_id=contract_id,
+                blueprint_id=blueprint_id,
+                method_name=method_name,
+                ctx=ctx,
+                nc_args=nc_args,
+            )
 
-        self._validate_balances(ctx)
-        self._commit_all_changes_to_storage()
-
-        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
-        self._updated_tokens_totals = defaultdict(int)
-        self._paid_actions_fees = defaultdict(int)
-        return ret
+            self._validate_balances(ctx)
+            self._commit_all_changes_to_storage()
+            return ret
+        finally:
+            self._executor.end()  # Suspend sandbox at exit
+            # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
+            self._updated_tokens_totals = defaultdict(int)
+            self._paid_actions_fees = defaultdict(int)
 
     def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
         """ Invoked after the initialize method is called to initialize uninitialized containers.
@@ -617,12 +624,11 @@ class Runner:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
         """
-        assert self._metered_executor is not None
         assert self._call_info is not None
 
         self._validate_context(ctx)
         changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        blueprint, ocb_loading_cost = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
         called_method_name: str = method_name
@@ -649,6 +655,11 @@ class Runner:
         if not skip_reentrancy_validation:
             self._validate_reentrancy(contract_id, called_method_name, method)
 
+        # Create sandbox counters tracker if sandbox is active
+        sandbox_counters: SandboxCounters | None = None
+        if self._executor.config.is_enabled:
+            sandbox_counters = SandboxCounters()
+
         call_record = CallRecord(
             type=CallType.PUBLIC,
             depth=self._call_info.depth,
@@ -659,6 +670,8 @@ class Runner:
             args=args,
             changes_tracker=changes_tracker,
             index_updates=[],
+            sandbox_counters=sandbox_counters,
+            ocb_loading_cost=ocb_loading_cost,
         )
         self._call_info.pre_call(call_record)
 
@@ -668,11 +681,22 @@ class Runner:
             rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
+        # Capture sandbox counters before the call
+        if sandbox_counters is not None:
+            sandbox_counters.capture_before()
+
         # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
         # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
         # impact the original context. Since the runner relies on the context for other critical checks, any
         # unauthorized modification would pose a serious security risk.
-        ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
+        #
+        # Note: Counter reset happens at the entry point (_unsafe_call_public_method), not here.
+        # This ensures nested/cross-contract calls accumulate operation counts correctly.
+        ret = self._executor.call(method, args=(ctx.copy(), *args), reset_counters=False)
+
+        # Capture sandbox counters after the call
+        if sandbox_counters is not None:
+            sandbox_counters.capture_after()
 
         # All calls must end with non-negative balances.
         call_record.changes_tracker.validate_balances_are_positive()
@@ -720,6 +744,12 @@ class Runner:
         """Call a contract view method."""
         assert self._call_info is None
         self._call_info = self._build_call_info(contract_id)
+
+        # Reset charged blueprints for new call chain
+        self._charged_blueprint_ids.clear()
+
+        self._executor.start()  # Enable sandbox at entry
+
         try:
             return self._unsafe_call_view_method(
                 contract_id=contract_id,
@@ -729,6 +759,7 @@ class Runner:
                 kwargs=kwargs,
             )
         finally:
+            self._executor.end()  # Suspend sandbox at exit
             self._reset_all_change_trackers()
 
     def _handle_index_update(self, action: NCAction) -> None:
@@ -790,11 +821,8 @@ class Runner:
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        if self._metered_executor is None:
-            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
-
         changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        blueprint, ocb_loading_cost = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
         if method is None:
@@ -804,6 +832,11 @@ class Runner:
 
         parser = Method.from_callable(method)
         args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
+
+        # Create sandbox counters tracker if sandbox is active
+        sandbox_counters: SandboxCounters | None = None
+        if self._executor.config.is_enabled:
+            sandbox_counters = SandboxCounters()
 
         call_record = CallRecord(
             type=CallType.VIEW,
@@ -815,10 +848,22 @@ class Runner:
             args=args,
             changes_tracker=changes_tracker,
             index_updates=None,
+            sandbox_counters=sandbox_counters,
+            ocb_loading_cost=ocb_loading_cost,
         )
         self._call_info.pre_call(call_record)
 
-        ret = self._metered_executor.call(method, args=args)
+        # Capture sandbox counters before the call
+        if sandbox_counters is not None:
+            sandbox_counters.capture_before()
+
+        # Note: Counter reset happens at the entry point (call_view_method), not here.
+        # This ensures nested/cross-contract calls accumulate operation counts correctly.
+        ret = self._executor.call(method, args=args, reset_counters=False)
+
+        # Capture sandbox counters after the call
+        if sandbox_counters is not None:
+            sandbox_counters.capture_after()
 
         if not changes_tracker.is_empty():
             raise NCViewMethodError('view methods cannot change the state')
@@ -1133,12 +1178,34 @@ class Runner:
                 if action.type not in allowed_actions:
                     raise NCForbiddenAction(f'action {action.name} is forbidden on method `{method_name}`')
 
-    def _create_blueprint_instance(self, blueprint_id: BlueprintId, changes_tracker: NCChangesTracker) -> Blueprint:
-        """Create a new blueprint instance."""
+    def _create_blueprint_instance(
+        self,
+        blueprint_id: BlueprintId,
+        changes_tracker: NCChangesTracker,
+    ) -> tuple[Blueprint, SandboxCounts | None]:
+        """Create a new blueprint instance.
+
+        Returns:
+            A tuple of (blueprint_instance, loading_cost).
+            loading_cost is the SandboxCounts of costs charged for loading the blueprint,
+            or None if no loading cost was charged (either sandbox not active,
+            catalog blueprint, or already loaded in this call chain).
+        """
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
-        return blueprint_class(env)
+
+        # Always calculate loading cost, but only charge when not already charged in this call chain
+        already_charged = blueprint_id in self._charged_blueprint_ids
+        self._charged_blueprint_ids.add(blueprint_id)
+
+        blueprint_class, loading_cost = self.tx_storage.get_blueprint_class_with_cost(
+            blueprint_id,
+            executor=self._executor,
+        )
+        # Deduplicate: return None cost if already charged
+        if already_charged:
+            loading_cost = None
+        return blueprint_class(env), loading_cost
 
     @_forbid_syscall_from_view('create_deposit_token')
     def syscall_create_child_deposit_token(
@@ -1264,7 +1331,7 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.tx_storage.get_blueprint_class(blueprint_id)
+        self.tx_storage.get_blueprint_class(blueprint_id, executor=self._executor)
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
@@ -1436,7 +1503,7 @@ class Runner:
 
 
 class RunnerFactory:
-    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory')
+    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory', 'executor_factory')
 
     def __init__(
         self,
@@ -1445,11 +1512,13 @@ class RunnerFactory:
         settings: HathorSettings,
         tx_storage: TransactionStorage,
         nc_storage_factory: NCStorageFactory,
+        executor_factory: MeteredExecutorFactory,
     ) -> None:
         self.reactor = reactor
         self.settings = settings
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
+        self.executor_factory = executor_factory
 
     def create(
         self,
@@ -1457,6 +1526,12 @@ class RunnerFactory:
         block_storage: NCBlockStorage,
         seed: bytes | None = None,
     ) -> Runner:
+        """Create a new Runner instance for consensus execution.
+
+        Args:
+            block_storage: The block storage for the runner.
+            seed: Optional seed for RNG.
+        """
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
@@ -1464,4 +1539,27 @@ class RunnerFactory:
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,
             seed=seed,
+            executor=self.executor_factory.for_execution(),
+        )
+
+    def create_for_api(
+        self,
+        *,
+        block_storage: NCBlockStorage,
+    ) -> Runner:
+        """Create a new Runner instance for API views.
+
+        API runners use the API sandbox config instead of execution config.
+
+        Args:
+            block_storage: The block storage for the runner.
+        """
+        return Runner(
+            reactor=self.reactor,
+            settings=self.settings,
+            tx_storage=self.tx_storage,
+            storage_factory=self.nc_storage_factory,
+            block_storage=block_storage,
+            seed=None,  # API views don't need RNG
+            executor=self.executor_factory.for_api(),
         )

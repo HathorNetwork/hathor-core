@@ -221,3 +221,19 @@ class OCBOutOfMemoryDuringLoading(NCFail):
 class NCDisabledBuiltinError(NCFail):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """
+
+
+class SandboxRequiredButNotAvailable(Exception):
+    """Raised when sandbox config is provided but sys.sandbox is not available.
+
+    This error indicates that the code requires a custom Python build with sandbox support.
+    The Python version should have the suffix '-sandbox' (e.g., '3.12.0-sandbox').
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Sandbox is required but not available. "
+            "This requires a custom Python build with sandbox support. "
+            "Check that `python -V` shows a version with the '-sandbox' suffix "
+            "(e.g., 'Python 3.12.0-sandbox')."
+        )
