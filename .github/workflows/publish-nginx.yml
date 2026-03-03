@@ -16,6 +16,10 @@ jobs:
     name: Release nginx configs and image
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    # This environment is tied to the AWS Role assumed by this workflow.
+    # The Role will only allow to be assumed if the workflow is set with this environment.
+    # We also have additional protection rules on this environment.
+    environment: publish-nginx
     permissions:
       id-token: write
       contents: read
@@ -33,7 +37,8 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        # run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+        run: echo "version=test1" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
