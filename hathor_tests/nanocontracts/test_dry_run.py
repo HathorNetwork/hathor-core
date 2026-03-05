@@ -197,54 +197,52 @@ class DryRunResultSerializationTest(BlueprintTestCase):
         call_record = DryRunCallRecord(
             type='public',
             depth=0,
-            contract_id=b'\xab\xc1\x23',
-            blueprint_id=b'\xde\xf4\x56',
+            contract_id=b'\xab' * 32,
+            blueprint_id=b'\xde' * 32,
             method_name='test_method',
             index_updates=[{'type': 'update_token_balance', 'amount': 100}],
             changes=[{'key': 'abc', 'value': '123'}],
         )
 
         tx_result = DryRunTxResult(
-            tx_hash=b'\xaa\xbb\xcc',
-            rng_seed=b'\xdd\xee\xff',
+            tx_hash=b'\xaa' * 32,
+            rng_seed=b'\xdd' * 32,
             execution_status=ExecutionStatus.SUCCESS,
             call_records=[call_record],
             events=[{'nc_id': 'nc1', 'data': 'event_data'}],
         )
 
         result = DryRunResult(
-            success=True,
-            block_hash=b'\x11\x22\x33',
+            block_hash=b'\x11' * 32,
             block_height=100,
-            initial_block_root_id=b'\x44\x55',
-            final_block_root_id=b'\x66\x77',
-            expected_block_root_id=b'\x66\x77',
+            initial_block_root_id=b'\x44' * 32,
+            final_block_root_id=b'\x66' * 32,
+            expected_block_root_id=b'\x66' * 32,
             root_id_matches=True,
-            nc_sorted_calls=[b'\xaa\xbb\xcc'],
+            nc_sorted_calls=[b'\xaa' * 32],
             transactions=[tx_result],
-            target_tx_hash=b'\xaa\xbb\xcc',
+            target_tx_hash=b'\xaa' * 32,
             warning=None,
         )
 
         result_dict = result.model_dump()
 
         self.assertEqual(result_dict['success'], True)
-        self.assertEqual(result_dict['block_hash'], '112233')
+        self.assertEqual(result_dict['block_hash'], '11' * 32)
         self.assertEqual(result_dict['block_height'], 100)
         self.assertEqual(result_dict['root_id_matches'], True)
         self.assertEqual(len(result_dict['transactions']), 1)
-        self.assertEqual(result_dict['transactions'][0]['tx_hash'], 'aabbcc')
+        self.assertEqual(result_dict['transactions'][0]['tx_hash'], 'aa' * 32)
         self.assertEqual(len(result_dict['transactions'][0]['call_records']), 1)
 
     def test_result_json_serialization(self) -> None:
         """Test DryRunResult.json_dumpb() produces valid JSON."""
         result = DryRunResult(
-            success=True,
-            block_hash=b'\x11\x22\x33',
+            block_hash=b'\x11' * 32,
             block_height=100,
-            initial_block_root_id=b'\x44\x55',
-            final_block_root_id=b'\x66\x77',
-            expected_block_root_id=b'\x66\x77',
+            initial_block_root_id=b'\x44' * 32,
+            final_block_root_id=b'\x66' * 32,
+            expected_block_root_id=b'\x66' * 32,
             root_id_matches=True,
             nc_sorted_calls=[],
             transactions=[],
@@ -252,17 +250,16 @@ class DryRunResultSerializationTest(BlueprintTestCase):
 
         json_bytes = result.json_dumpb()
         self.assertIsInstance(json_bytes, bytes)
-        self.assertIn(b'112233', json_bytes)
+        self.assertIn(b'11' * 32, json_bytes)
 
     def test_result_model_dump_json(self) -> None:
         """Test DryRunResult.model_dump_json() produces valid JSON string (used by CLI)."""
         result = DryRunResult(
-            success=True,
-            block_hash=b'\x11\x22\x33',
+            block_hash=b'\x11' * 32,
             block_height=100,
-            initial_block_root_id=b'\x44\x55',
-            final_block_root_id=b'\x66\x77',
-            expected_block_root_id=b'\x66\x77',
+            initial_block_root_id=b'\x44' * 32,
+            final_block_root_id=b'\x66' * 32,
+            expected_block_root_id=b'\x66' * 32,
             root_id_matches=True,
             nc_sorted_calls=[],
             transactions=[],
@@ -270,7 +267,7 @@ class DryRunResultSerializationTest(BlueprintTestCase):
 
         json_str = result.model_dump_json(indent=2)
         self.assertIsInstance(json_str, str)
-        self.assertIn('112233', json_str)
+        self.assertIn('11' * 32, json_str)
 
 
 class FormatDryRunTextTest(BlueprintTestCase):
@@ -281,29 +278,28 @@ class FormatDryRunTextTest(BlueprintTestCase):
         call_record = DryRunCallRecord(
             type='public',
             depth=0,
-            contract_id=b'\xab\xc1\x23',
-            blueprint_id=b'\xde\xf4\x56',
+            contract_id=b'\xab' * 32,
+            blueprint_id=b'\xde' * 32,
             method_name='test_method',
             index_updates=[],
         )
 
         tx_result = DryRunTxResult(
-            tx_hash=b'\xaa\xbb\xcc',
-            rng_seed=b'\xdd\xee\xff',
+            tx_hash=b'\xaa' * 32,
+            rng_seed=b'\xdd' * 32,
             execution_status=ExecutionStatus.SUCCESS,
             call_records=[call_record],
             events=[],
         )
 
         result = DryRunResult(
-            success=True,
-            block_hash=b'\x11\x22\x33',
+            block_hash=b'\x11' * 32,
             block_height=100,
-            initial_block_root_id=b'\x44\x55',
-            final_block_root_id=b'\x66\x77',
-            expected_block_root_id=b'\x66\x77',
+            initial_block_root_id=b'\x44' * 32,
+            final_block_root_id=b'\x66' * 32,
+            expected_block_root_id=b'\x66' * 32,
             root_id_matches=True,
-            nc_sorted_calls=[b'\xaa\xbb\xcc'],
+            nc_sorted_calls=[b'\xaa' * 32],
             transactions=[tx_result],
         )
 
@@ -317,8 +313,8 @@ class FormatDryRunTextTest(BlueprintTestCase):
     def test_format_failure(self) -> None:
         """Test format_dry_run_text with failure."""
         tx_result = DryRunTxResult(
-            tx_hash=b'\xaa\xbb\xcc',
-            rng_seed=b'\xdd\xee\xff',
+            tx_hash=b'\xaa' * 32,
+            rng_seed=b'\xdd' * 32,
             execution_status=ExecutionStatus.FAILURE,
             exception_type='NCFail',
             exception_message='Test error',
@@ -326,14 +322,13 @@ class FormatDryRunTextTest(BlueprintTestCase):
         )
 
         result = DryRunResult(
-            success=True,
-            block_hash=b'\x11\x22\x33',
+            block_hash=b'\x11' * 32,
             block_height=100,
-            initial_block_root_id=b'\x44\x55',
-            final_block_root_id=b'\x66\x77',
-            expected_block_root_id=b'\x88\x99',
+            initial_block_root_id=b'\x44' * 32,
+            final_block_root_id=b'\x66' * 32,
+            expected_block_root_id=b'\x88' * 32,
             root_id_matches=False,
-            nc_sorted_calls=[b'\xaa\xbb\xcc'],
+            nc_sorted_calls=[b'\xaa' * 32],
             transactions=[tx_result],
             warning='Non-deterministic execution detected',
         )
