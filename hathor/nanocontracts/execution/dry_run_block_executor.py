@@ -78,8 +78,12 @@ class DryRunResult(ResponseModel):
     final_block_root_id: Hex[bytes] = Field(description="NC root ID after execution")
     expected_block_root_id: Hex[bytes] = Field(description="Expected NC root ID from block metadata")
     root_id_matches: bool = Field(description="Whether computed root matches expected root")
-    nc_sorted_calls: list[Hex[bytes]] = Field(description="TX hashes in execution order")
-    transactions: list[DryRunTxResult] = Field(description="Results for each transaction")
+    nc_sorted_calls: list[Hex[bytes]] = Field(
+        description="TX hashes in execution order (same order as 'transactions' list)"
+    )
+    transactions: list[DryRunTxResult] = Field(
+        description="Execution results for each NC transaction, in the same order as 'nc_sorted_calls'"
+    )
     target_tx_hash: Optional[Hex[bytes]] = Field(default=None, description="Target TX hash when queried via tx_hash")
     warning: Optional[str] = Field(default=None, description="Warning message (e.g., non-determinism detected)")
 
