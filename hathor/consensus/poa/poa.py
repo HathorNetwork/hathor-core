@@ -24,7 +24,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor.consensus.consensus_settings import PoaSettings
 from hathor.crypto.util import get_public_key_from_bytes_compressed
-from hathor.transaction import Block
 
 if TYPE_CHECKING:
     from hathor.transaction.poa import PoaBlock
@@ -36,8 +35,9 @@ SIGNER_ID_LEN = 2
 
 def get_hashed_poa_data(block: PoaBlock) -> bytes:
     """Get the data to be signed for the Proof-of-Authority."""
+    from hathor.transaction.vertex_parser import vertex_serializer
     poa_data = block.get_funds_struct()
-    poa_data += Block.get_graph_struct(block)  # We call Block's to exclude poa fields
+    poa_data += vertex_serializer.serialize_block_base_graph(block)  # Block-level graph without poa fields
     poa_data += block.get_struct_nonce()
     hashed_poa_data = hashlib.sha256(poa_data).digest()
     return hashed_poa_data

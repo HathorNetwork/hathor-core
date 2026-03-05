@@ -17,6 +17,7 @@ from __future__ import annotations
 from struct import error as StructError
 from typing import TYPE_CHECKING, Type
 
+from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
 
 if TYPE_CHECKING:
@@ -51,8 +52,7 @@ class VertexParser:
         return supported_headers[header_id]
 
     def deserialize(self, data: bytes, storage: TransactionStorage | None = None) -> BaseTransaction:
-        """ Creates the correct tx subclass from a sequence of bytes
-        """
+        """Creates the correct tx subclass from a sequence of bytes."""
         # version field takes up the second byte only
         from hathor.transaction import TxVersion
         version = data[1]
@@ -66,7 +66,8 @@ class VertexParser:
 
             if not is_valid:
                 raise StructError(f"invalid vertex version: {tx_version}")
+
             cls = tx_version.get_cls()
             return cls.create_from_struct(data, storage=storage)
-        except ValueError as e:
+        except (ValueError, SerializationError) as e:
             raise StructError('Invalid bytes to create transaction subclass.') from e
