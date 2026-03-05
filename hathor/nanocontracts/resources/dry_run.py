@@ -16,7 +16,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
+
+from twisted.internet.defer import Deferred
+from twisted.internet.threads import deferToThread
 
 from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
@@ -66,7 +69,7 @@ class NCDryRunResource(Resource):
         query_params_model=NCDryRunParams,
         response_model=DryRunResult,
     )
-    def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> bytes:
+    def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
         # Validate that exactly one of block_hash or tx_hash is provided
         if params.block_hash and params.tx_hash:
             request.setResponseCode(400)
@@ -145,17 +148,13 @@ class NCDryRunResource(Resource):
             error = ErrorResponse(success=False, error='Cannot dry-run genesis block')
             return error.json_dumpb()
 
-        # Execute dry run using shared executor
-        try:
+        # Execute dry run in a thread to avoid blocking the reactor
+        def _execute() -> DryRunResult:
             dry_run_executor = NCDryRunBlockExecutor(self.manager.consensus_algorithm._block_executor)
-            result = dry_run_executor.execute(
+            return dry_run_executor.execute(
                 block,
                 include_changes=params.include_changes,
                 target_tx_hash=target_tx_hash,
             )
-        except Exception as e:
-            request.setResponseCode(500)
-            error = ErrorResponse(success=False, error=f'Dry run failed: {str(e)}')
-            return error.json_dumpb()
 
-        return result
+        return deferToThread(_execute)
