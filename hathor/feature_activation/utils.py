@@ -22,9 +22,10 @@ from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.transaction.scripts.opcode import OpcodesVersion
 
 if TYPE_CHECKING:
-    from hathor.conf.settings import FeatureSetting, HathorSettings
+    from hathor.conf.settings import HathorSettings
     from hathor.feature_activation.feature_service import FeatureService
     from hathor.transaction import Vertex
+    from hathorlib.conf.settings import FeatureSetting
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -39,7 +40,7 @@ class Features:
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
         """Return whether the Nano Contracts feature is active according to the provided settings and vertex."""
-        from hathor.conf.settings import FeatureSetting
+        from hathorlib.conf.settings import FeatureSetting
         feature_states = feature_service.get_feature_states(vertex=vertex)
         feature_settings = {
             Feature.COUNT_CHECKDATASIG_OP: FeatureSetting.FEATURE_ACTIVATION,
@@ -65,7 +66,7 @@ class Features:
 
 def _is_feature_active(setting: FeatureSetting, state: FeatureState) -> bool:
     """Return whether a feature is active based on the setting and state."""
-    from hathor.conf.settings import FeatureSetting
+    from hathorlib.conf.settings import FeatureSetting
     match setting:
         case FeatureSetting.DISABLED:
             return False

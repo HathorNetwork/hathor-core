@@ -18,6 +18,18 @@ runs:
         python-version: ${{ inputs.python }}
         cache: 'poetry'
 
+    - name: Configure in-project virtualenv
+      shell: bash
+      run: poetry config virtualenvs.in-project true
+
+    - name: Cache virtualenv
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-py${{ inputs.python }}-
+
     - name: Install Ubuntu dependencies
       if: startsWith(inputs.os, 'ubuntu')
       run: |
@@ -35,5 +47,5 @@ runs:
       shell: bash
 
     - name: Install Poetry dependencies
-      run: poetry install -n --no-root
+      run: poetry sync -n --no-root
       shell: bash

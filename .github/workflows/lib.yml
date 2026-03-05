@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install Poetry
-        run: pip install 'poetry<2'
+        run: pip install 'poetry'
       - name: Install Poetry dependencies
         run: poetry install -n --no-root -E client
       - name: Run linters
