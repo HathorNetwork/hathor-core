@@ -77,8 +77,8 @@ class NCDryRunResource(Resource):
         description='Dry-run nano contract execution for a block without modifying state.',
         tags=['nano_contracts'],
         visibility='private',
-        rate_limit_global=[{'rate': '10r/s', 'burst': 10, 'delay': 5}],
-        rate_limit_per_ip=[{'rate': '2r/s', 'burst': 3, 'delay': 1}],
+        rate_limit_global=[{'rate': '2r/s', 'burst': 5, 'delay': 2}],
+        rate_limit_per_ip=[{'rate': '1r/s', 'burst': 2, 'delay': 1}],
         query_params_model=NCDryRunParams,
         response_model=Union[DryRunResult, ErrorResponse, NotFoundResponse, ConflictResponse],
     )
