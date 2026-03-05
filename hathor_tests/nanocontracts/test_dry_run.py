@@ -18,6 +18,8 @@ These tests validate the detailed execution results from the dry-run executor,
 including transaction status, call records, events, and state changes.
 """
 
+import unittest
+
 from hathor.nanocontracts.execution.dry_run_block_executor import (
     DryRunCallRecord,
     DryRunResult,
@@ -189,7 +191,7 @@ class NCDryRunExecutorTest(BlueprintTestCase):
             self.assertIsNotNone(tx.exception_message)
 
 
-class DryRunResultSerializationTest(BlueprintTestCase):
+class DryRunResultSerializationTest(unittest.TestCase):
     """Tests for DryRunResult serialization."""
 
     def test_result_dict_serialization(self) -> None:
@@ -270,7 +272,7 @@ class DryRunResultSerializationTest(BlueprintTestCase):
         self.assertIn('11' * 32, json_str)
 
 
-class FormatDryRunTextTest(BlueprintTestCase):
+class FormatDryRunTextTest(unittest.TestCase):
     """Tests for format_dry_run_text function."""
 
     def test_format_success(self) -> None:
