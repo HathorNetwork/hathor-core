@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union
 
+import structlog
 from pydantic import Field, model_validator
 from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
@@ -34,6 +35,8 @@ from hathor.nanocontracts.execution.dry_run_utils import (
     resolve_block_for_dry_run,
 )
 from hathor.utils.api import QueryParams
+
+logger = structlog.get_logger()
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -85,6 +88,8 @@ class NCDryRunResource(Resource):
     def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
         request.setHeader(b'cache-control', b'no-store')
 
+        logger.info('nc_dry_run.start', block_hash=params.block_hash, tx_hash=params.tx_hash)
+
         try:
             target = resolve_block_for_dry_run(
                 self.manager.tx_storage,
@@ -97,6 +102,8 @@ class NCDryRunResource(Resource):
             return ConflictResponse(error=str(e))
         except DryRunNotFoundError as e:
             return NotFoundResponse(error=str(e))
+
+        logger.info('nc_dry_run.resolved', block_hash=target.block.hash.hex())
 
         # Execute dry run in a thread to avoid blocking the reactor
         def _execute() -> DryRunResult:
