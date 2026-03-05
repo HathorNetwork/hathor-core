@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
 
@@ -43,9 +43,9 @@ if TYPE_CHECKING:
 
 class NCDryRunParams(QueryParams):
     """Query parameters for the dry-run endpoint."""
-    block_hash: Optional[str] = None
-    tx_hash: Optional[str] = None
-    include_changes: bool = False
+    block_hash: Optional[str] = Field(default=None, description="Hex-encoded block hash (64 chars)")
+    tx_hash: Optional[str] = Field(default=None, description="Hex-encoded NC transaction hash (64 chars)")
+    include_changes: bool = Field(default=False, description="Include storage state changes in call records")
 
     @model_validator(mode='after')
     def check_exactly_one_hash(self) -> 'NCDryRunParams':
