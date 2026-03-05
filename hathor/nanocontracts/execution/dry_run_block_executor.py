@@ -124,7 +124,8 @@ class NCDryRunBlockExecutor:
         from hathor.transaction import Transaction
 
         block_meta = block.get_metadata()
-        expected_root_id = block_meta.nc_block_root_id or b''
+        nc_block_root_id = block_meta.nc_block_root_id
+        expected_root_id = nc_block_root_id or b''
 
         # Build dependency graph for in-memory voided tracking
         tx_deps: dict[bytes, set[bytes]] = {}
@@ -197,13 +198,17 @@ class NCDryRunBlockExecutor:
                     final_block_root_id = root_id
 
         # Compare computed root with expected
-        root_id_matches = final_block_root_id == expected_root_id
         warning = None
-        if not root_id_matches:
-            warning = (
-                f'Non-deterministic execution detected: computed root {final_block_root_id.hex()} '
-                f'differs from expected root {expected_root_id.hex()}'
-            )
+        if nc_block_root_id is None:
+            root_id_matches = True
+            warning = 'Block has not been executed yet; cannot compare root IDs'
+        else:
+            root_id_matches = final_block_root_id == expected_root_id
+            if not root_id_matches:
+                warning = (
+                    f'Non-deterministic execution detected: computed root {final_block_root_id.hex()} '
+                    f'differs from expected root {expected_root_id.hex()}'
+                )
 
         return DryRunResult(
             success=True,
