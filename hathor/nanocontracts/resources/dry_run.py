@@ -70,6 +70,8 @@ class NCDryRunResource(Resource):
         response_model=DryRunResult,
     )
     def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
+        request.setHeader(b'cache-control', b'no-store')
+
         # Validate that exactly one of block_hash or tx_hash is provided
         if params.block_hash and params.tx_hash:
             request.setResponseCode(400)
