@@ -28,7 +28,11 @@ from hathor.nanocontracts.execution.dry_run_block_executor import (
 from hathor_cli.nc_dry_run import format_dry_run_text
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
-from hathor_tests.nanocontracts.fixtures.dry_run import DryRunTestBlueprint, build_dry_run_dag
+from hathor_tests.nanocontracts.fixtures.dry_run import (
+    DryRunTestBlueprint,
+    build_complex_dry_run_dag,
+    build_dry_run_dag,
+)
 
 
 class NCDryRunExecutorTest(BlueprintTestCase):
@@ -158,6 +162,31 @@ class NCDryRunExecutorTest(BlueprintTestCase):
         self.assertEqual(call_record.depth, 0)
         self.assertEqual(call_record.method_name, 'increment')
         self.assertIsInstance(call_record.index_updates, list)
+
+    def test_dry_run_failure_cascade(self) -> None:
+        """Test that a failed tx results in FAILURE and dependent txs are SKIPPED."""
+        fixture, expected = build_complex_dry_run_dag(self.dag_builder, self.blueprint_id)
+        fixture.artifacts.propagate_with(self.manager)
+
+        block_executor = self.manager.consensus_algorithm._block_executor
+        dry_run_executor = NCDryRunBlockExecutor(block_executor)
+        result = dry_run_executor.execute(fixture.block_with_nc)
+
+        self.assertTrue(result.success)
+
+        # Count statuses
+        statuses = [tx.execution_status for tx in result.transactions]
+        failure_count = statuses.count(ExecutionStatus.FAILURE)
+        skipped_count = statuses.count(ExecutionStatus.SKIPPED)
+
+        self.assertEqual(failure_count, expected.failure_tx_count)
+        self.assertEqual(skipped_count, expected.skipped_tx_count)
+
+        # Verify the failed tx has exception info
+        failed_txs = [tx for tx in result.transactions if tx.execution_status == ExecutionStatus.FAILURE]
+        for tx in failed_txs:
+            self.assertIsNotNone(tx.exception_type)
+            self.assertIsNotNone(tx.exception_message)
 
 
 class DryRunResultSerializationTest(BlueprintTestCase):
