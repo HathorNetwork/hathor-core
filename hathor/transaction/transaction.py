@@ -14,8 +14,6 @@
 
 from __future__ import annotations
 
-import hashlib
-from struct import pack
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar
 
 from typing_extensions import Self, override
@@ -23,14 +21,15 @@ from typing_extensions import Self, override
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.exception import InvalidNewTransaction
+from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import TX_HASH_SIZE, GenericVertex
+from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import NanoHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
-from hathor.transaction.util import VerboseCallback, unpack, unpack_len
+from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
 
 T = TypeVar('T', bound=VertexBaseHeader)
@@ -39,12 +38,6 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCBlockStorage
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
-
-# Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
-_FUNDS_FORMAT_STRING = '!BBBBB'
-
-# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
-_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
 
 
 class RewardLockedInfo(NamedTuple):
@@ -93,6 +86,42 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
 
+    @override
+    def get_funds_struct(self) -> bytes:
+        from hathor.transaction.vertex_parser._transaction import serialize_tx_funds
+        serializer = Serializer.build_bytes_serializer()
+        serialize_tx_funds(serializer, self)
+        return bytes(serializer.finalize())
+
+    @override
+    def get_graph_struct(self) -> bytes:
+        from hathor.transaction.vertex_parser._common import serialize_graph_fields
+        serializer = Serializer.build_bytes_serializer()
+        serialize_graph_fields(serializer, self)
+        return bytes(serializer.finalize())
+
+    @classmethod
+    @override
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> Self:
+        from hathor.conf.get_settings import get_global_settings
+        from hathor.serialization import Deserializer
+        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
+        from hathor.transaction.vertex_parser._headers import deserialize_headers
+        from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
+        settings = get_global_settings()
+        tx = cls(storage=storage)
+        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserialize_tx_funds(deserializer, tx, verbose=verbose)
+        deserialize_graph_fields(deserializer, tx, verbose=verbose)
+        (tx.nonce,) = deserializer.read_struct('!I')
+        if verbose:
+            verbose('nonce', tx.nonce)
+        deserialize_headers(deserializer, tx, settings)
+        deserializer.finalize()
+        tx.update_hash()
+        return tx
+
     def clear_sighash_cache(self) -> None:
         """Clear caches related to sighash calculation."""
         self._sighash_cache = None
@@ -140,139 +169,19 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 return header
         raise ValueError(f'{header_type.__name__.lower()} not found')
 
-    @classmethod
-    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
-                           *, verbose: VerboseCallback = None) -> Self:
-        tx = cls(storage=storage)
-        buf = tx.get_fields_from_struct(struct_bytes, verbose=verbose)
-
-        if len(buf) < cls.SERIALIZATION_NONCE_SIZE:
-            raise ValueError('Invalid sequence of bytes')
-
-        [tx.nonce, ], buf = unpack('!I', buf)
-        if verbose:
-            verbose('nonce', tx.nonce)
-
-        while buf:
-            buf = tx.get_header_from_bytes(buf, verbose=verbose)
-
-        tx.update_hash()
-
-        return tx
-
-    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all funds fields for a transaction from a buffer.
-
-        :param buf: Bytes of a serialized transaction
-        :type buf: bytes
-
-        :param verbose: Verbose callback
-        :type verbose: VerboseCallback
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        (self.signal_bits, self.version, tokens_len, inputs_len, outputs_len), buf = unpack(
-            _FUNDS_FORMAT_STRING,
-            buf
-        )
-
-        if verbose:
-            verbose('signal_bits', self.signal_bits)
-            verbose('version', self.version)
-            verbose('tokens_len', tokens_len)
-            verbose('inputs_len', inputs_len)
-            verbose('outputs_len', outputs_len)
-
-        for _ in range(tokens_len):
-            token_uid, buf = unpack_len(TX_HASH_SIZE, buf)
-            self.tokens.append(token_uid)
-            if verbose:
-                verbose('token_uid', token_uid.hex())
-
-        for _ in range(inputs_len):
-            txin, buf = TxInput.create_from_bytes(buf, verbose=verbose)
-            self.inputs.append(txin)
-
-        for _ in range(outputs_len):
-            txout, buf = TxOutput.create_from_bytes(buf, verbose=verbose)
-            self.outputs.append(txout)
-
-        return buf
-
-    def get_funds_struct(self) -> bytes:
-        """Return the funds data serialization of the transaction
-
-        :return: funds data serialization of the transaction
-        :rtype: bytes
-        """
-        struct_bytes = pack(
-            _FUNDS_FORMAT_STRING,
-            self.signal_bits,
-            self.version,
-            len(self.tokens),
-            len(self.inputs),
-            len(self.outputs)
-        )
-
-        for token_uid in self.tokens:
-            struct_bytes += token_uid
-
-        for tx_input in self.inputs:
-            struct_bytes += bytes(tx_input)
-
-        for tx_output in self.outputs:
-            struct_bytes += bytes(tx_output)
-
-        return struct_bytes
-
     def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
 
         :return: Serialization of the inputs, outputs and tokens
         :rtype: bytes
         """
-        # This method does not depend on the input itself, however we call it for each one to sign it.
-        # For transactions that have many inputs there is a significant decrease on the verify time
-        # when using this cache, so we call this method only once.
-        if not skip_cache and self._sighash_cache:
-            return self._sighash_cache
-
-        struct_bytes = bytearray(
-            pack(
-                _SIGHASH_ALL_FORMAT_STRING,
-                self.signal_bits,
-                self.version,
-                len(self.tokens),
-                len(self.inputs),
-                len(self.outputs)
-            )
-        )
-
-        for token_uid in self.tokens:
-            struct_bytes += token_uid
-
-        for tx_input in self.inputs:
-            struct_bytes += tx_input.get_sighash_bytes()
-
-        for tx_output in self.outputs:
-            struct_bytes += bytes(tx_output)
-
-        for header in self.headers:
-            struct_bytes += header.get_sighash_bytes()
-
-        ret = bytes(struct_bytes)
-        self._sighash_cache = ret
-        return ret
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize_sighash(self, skip_cache=skip_cache)
 
     def get_sighash_all_data(self) -> bytes:
         """Return the sha256 hash of sighash_all"""
-        if self._sighash_data_cache is None:
-            self._sighash_data_cache = hashlib.sha256(self.get_sighash_all()).digest()
-
-        return self._sighash_data_cache
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.get_sighash_data(self)
 
     def get_token_uid(self, index: int) -> TokenUid:
         """Returns the token uid with corresponding index from the tx token uid list.
