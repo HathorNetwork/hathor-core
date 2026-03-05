@@ -20,12 +20,6 @@ import sys
 from argparse import ArgumentParser
 from typing import TYPE_CHECKING, Optional
 
-from hathor.nanocontracts.execution.dry_run_utils import (
-    DryRunConflictError,
-    DryRunNotFoundError,
-    DryRunValidationError,
-    resolve_block_for_dry_run,
-)
 from hathor_cli.run_node import RunNode
 
 if TYPE_CHECKING:
@@ -86,6 +80,12 @@ class NcDryRun(RunNode):
 
     def run(self) -> None:
         from hathor.nanocontracts.execution.dry_run_block_executor import NCDryRunBlockExecutor
+        from hathor.nanocontracts.execution.dry_run_utils import (
+            DryRunConflictError,
+            DryRunNotFoundError,
+            DryRunValidationError,
+            resolve_block_for_dry_run,
+        )
 
         block_hash_arg: Optional[str] = self._args.block_hash
         tx_hash_arg: Optional[str] = self._args.tx_hash

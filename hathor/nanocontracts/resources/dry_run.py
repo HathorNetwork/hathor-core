@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 import structlog
 from pydantic import Field, model_validator
@@ -25,7 +25,7 @@ from twisted.internet.threads import deferToThread
 
 from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
-from hathor.api.schemas.base import ConflictResponse, ErrorResponse, NotFoundResponse
+from hathor.api.schemas.base import ConflictResponse, ErrorResponse, NotFoundResponse, ResponseModel
 from hathor.api_util import Resource
 from hathor.nanocontracts.execution.dry_run_block_executor import DryRunResult, NCDryRunBlockExecutor
 from hathor.nanocontracts.execution.dry_run_utils import (
@@ -85,7 +85,7 @@ class NCDryRunResource(Resource):
         query_params_model=NCDryRunParams,
         response_model=Union[DryRunResult, ErrorResponse, NotFoundResponse, ConflictResponse],
     )
-    def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
+    def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[ResponseModel, Deferred[Any]]:
         request.setHeader(b'cache-control', b'no-store')
 
         logger.info('nc_dry_run.start', block_hash=params.block_hash, tx_hash=params.tx_hash)

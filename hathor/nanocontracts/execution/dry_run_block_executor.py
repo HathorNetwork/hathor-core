@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import Field
 
+from hathor.api.schemas.base import ResponseModel
 from hathor.nanocontracts.execution.block_executor import (
     NCBeginBlock,
     NCBeginTransaction,
@@ -29,7 +30,6 @@ from hathor.nanocontracts.execution.block_executor import (
     NCTxExecutionSkipped,
     NCTxExecutionSuccess,
 )
-from hathor.api.schemas.base import ResponseModel
 from hathor.utils.pydantic import BaseModel, Hex
 
 
