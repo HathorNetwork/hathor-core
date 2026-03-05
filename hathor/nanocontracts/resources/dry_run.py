@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union
 
+from pydantic import model_validator
 from twisted.internet.defer import Deferred
 from twisted.internet.threads import deferToThread
 
@@ -41,6 +42,14 @@ class NCDryRunParams(QueryParams):
     block_hash: Optional[str] = None
     tx_hash: Optional[str] = None
     include_changes: bool = False
+
+    @model_validator(mode='after')
+    def check_exactly_one_hash(self) -> 'NCDryRunParams':
+        if self.block_hash and self.tx_hash:
+            raise ValueError('Cannot specify both block_hash and tx_hash')
+        if not self.block_hash and not self.tx_hash:
+            raise ValueError('Must specify either block_hash or tx_hash')
+        return self
 
 
 @register_resource
@@ -71,17 +80,6 @@ class NCDryRunResource(Resource):
     )
     def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
         request.setHeader(b'cache-control', b'no-store')
-
-        # Validate that exactly one of block_hash or tx_hash is provided
-        if params.block_hash and params.tx_hash:
-            request.setResponseCode(400)
-            error = ErrorResponse(success=False, error='Cannot specify both block_hash and tx_hash')
-            return error.json_dumpb()
-
-        if not params.block_hash and not params.tx_hash:
-            request.setResponseCode(400)
-            error = ErrorResponse(success=False, error='Must specify either block_hash or tx_hash')
-            return error.json_dumpb()
 
         block: Block
         target_tx_hash: Optional[bytes] = None
