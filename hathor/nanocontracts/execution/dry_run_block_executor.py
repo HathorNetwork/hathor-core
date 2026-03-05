@@ -127,17 +127,14 @@ class NCDryRunBlockExecutor:
         nc_block_root_id = block_meta.nc_block_root_id
         expected_root_id = nc_block_root_id or b''
 
-        # Build dependency graph for in-memory voided tracking
-        tx_deps: dict[bytes, set[bytes]] = {}
-        for tx in block.iter_transactions_in_this_block():
-            if tx.is_nano_contract():
-                tx_deps[tx.hash] = {txin.tx_id for txin in tx.inputs}
-
-        # Track voided txs in-memory during execution
+        # Track voided txs in-memory during execution; tx_deps is populated
+        # from the NCBeginBlock effect to avoid a separate BFS traversal.
         voided_in_block: set[bytes] = set()
+        tx_deps: dict[bytes, set[bytes]] = {}
+        nc_tx_set: set[bytes] = set()
 
         def should_skip(tx: Transaction) -> bool:
-            # Check if any dependency was voided during this execution
+            # Check if any dependency (within block's NC txs) was voided
             deps = tx_deps.get(tx.hash, set())
             if deps & voided_in_block:
                 return True
@@ -163,6 +160,10 @@ class NCDryRunBlockExecutor:
                 case NCBeginBlock(parent_root_id=parent_root_id, nc_sorted_calls=calls):
                     initial_block_root_id = parent_root_id
                     nc_sorted_calls = [tx.hash for tx in calls]
+                    # Build dependency graph from the already-collected NC txs
+                    nc_tx_set = set(nc_sorted_calls)
+                    for tx in calls:
+                        tx_deps[tx.hash] = {txin.tx_id for txin in tx.inputs} & nc_tx_set
 
                 case NCBeginTransaction(rng_seed=rng_seed):
                     current_rng_seed = rng_seed
