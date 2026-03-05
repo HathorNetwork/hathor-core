@@ -16,10 +16,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+
+_HEX_HASH_RE = re.compile(r'^[0-9a-fA-F]{64}$')
 
 if TYPE_CHECKING:
     from hathor.transaction import Block
@@ -78,10 +81,9 @@ def resolve_block_for_dry_run(
 
 def _resolve_via_tx(tx_storage: 'TransactionStorage', tx_hash_hex: str) -> DryRunTarget:
     """Resolve block via a transaction's first_block."""
-    try:
-        tx_hash_bytes = bytes.fromhex(tx_hash_hex)
-    except ValueError:
-        raise DryRunValidationError(f'Invalid tx_hash: {tx_hash_hex}')
+    if not _HEX_HASH_RE.match(tx_hash_hex):
+        raise DryRunValidationError('Invalid hash format')
+    tx_hash_bytes = bytes.fromhex(tx_hash_hex)
 
     try:
         tx = tx_storage.get_transaction(tx_hash_bytes)
@@ -106,10 +108,9 @@ def _resolve_via_tx(tx_storage: 'TransactionStorage', tx_hash_hex: str) -> DryRu
 
 def _resolve_via_block(tx_storage: 'TransactionStorage', block_hash_hex: str) -> DryRunTarget:
     """Resolve block directly by hash."""
-    try:
-        block_hash_bytes = bytes.fromhex(block_hash_hex)
-    except ValueError:
-        raise DryRunValidationError(f'Invalid block_hash: {block_hash_hex}')
+    if not _HEX_HASH_RE.match(block_hash_hex):
+        raise DryRunValidationError('Invalid hash format')
+    block_hash_bytes = bytes.fromhex(block_hash_hex)
 
     try:
         block = tx_storage.get_block(block_hash_bytes)

@@ -72,7 +72,7 @@ class NCDryRunResourceTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(400, response.responseCode)
         data = response.json_value()
         self.assertFalse(data['success'])
-        self.assertIn('Invalid block_hash', data['error'])
+        self.assertIn('Invalid hash format', data['error'])
 
     @inlineCallbacks
     def test_invalid_tx_hash(self):
@@ -83,7 +83,7 @@ class NCDryRunResourceTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(400, response.responseCode)
         data = response.json_value()
         self.assertFalse(data['success'])
-        self.assertIn('Invalid tx_hash', data['error'])
+        self.assertIn('Invalid hash format', data['error'])
 
     @inlineCallbacks
     def test_block_not_found(self):
