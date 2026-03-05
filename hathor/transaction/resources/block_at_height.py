@@ -59,15 +59,6 @@ class BlockAtHeightErrorResponse(ErrorResponseModel):
     message: str = Field(description="Error message")
 
 
-BlockAtHeightErrorResponse.openapi_examples = {
-    'error': OpenAPIExample(
-        summary='Block not found',
-        value=BlockAtHeightErrorResponse(
-            message='No block with height 100.',
-        ),
-    ),
-}
-
 BlockAtHeightSuccessResponse.openapi_examples = {
     'success': OpenAPIExample(
         summary='Success block height 1',

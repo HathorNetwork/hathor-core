@@ -24,7 +24,7 @@ class HealthcheckParams(QueryParams):
     """Query parameters for the /health endpoint."""
     strict_status_code: str | None = Field(
         default=None,
-        description="If set to '1', always return 200 status code even if unhealthy"
+        description="If set to '1', always return HTTP 200 even when unhealthy (body still shows fail status)"
     )
 
 
@@ -58,9 +58,14 @@ class HealthcheckFailResponse(ResponseModel):
     )
 
 
-class HealthcheckStrictFailResponse(HealthcheckFailResponse):
-    """Fail response returned with HTTP 200 when strict_status_code=1."""
+class HealthcheckStrictFailResponse(ResponseModel):
+    """Response model for failed healthcheck with strict_status_code=1 (returns 200)."""
     http_status_code: ClassVar[int] = 200
+    status: Literal['fail'] = Field(description="Overall health status")
+    description: str = Field(description="Service description including version")
+    checks: dict[str, list[HealthcheckComponentResponse]] = Field(
+        description="Map of component names to their check results"
+    )
 
 
 def _sync_component(status: str, output: str) -> HealthcheckComponentResponse:
@@ -119,6 +124,7 @@ async def sync_healthcheck(manager: HathorManager) -> HealthcheckCallbackRespons
 
 def _to_response_model(
     result: HealthcheckResponse,
+    request: Request,
     strict_status_code: bool,
 ) -> ResponseModel:
     """Convert a HealthcheckResponse to a Pydantic response model."""
@@ -207,9 +213,9 @@ We currently perform 2 checks in the sync mechanism for the healthcheck:
             status = asyncio.get_event_loop().run_until_complete(healthcheck.run())
             deferred = succeed(status)
 
-        # IMPORTANT: This callback must run BEFORE the decorator's _handle_deferred_result.
-        # Twisted chains callbacks in order: first _to_response_model converts the
-        # HealthcheckResponse into a ResponseModel, then _handle_deferred_result serializes it.
-        deferred.addCallback(_to_response_model, strict_status_code)
+        # IMPORTANT: _to_response_model must be added here BEFORE the decorator's
+        # _handle_deferred_result callback. The chain is:
+        #   HealthcheckResponse -> _to_response_model -> ResponseModel -> _handle_deferred_result -> bytes
+        deferred.addCallback(_to_response_model, request, strict_status_code)
 
         return deferred

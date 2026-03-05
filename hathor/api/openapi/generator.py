@@ -14,6 +14,7 @@
 
 """OpenAPI 3.1 specification generator from Pydantic models."""
 
+import copy
 import typing
 from collections import defaultdict
 from typing import Any
@@ -39,8 +40,6 @@ class OpenAPIGenerator:
         self.title = title
         self.version = version
         self.description = description
-        self._schemas: dict[str, Any] = {}
-        self._schema_models: dict[str, type[BaseModel]] = {}
 
     def _get_schema_ref(self, model: type[BaseModel]) -> dict[str, Any]:
         """Get a $ref to a schema, registering it if needed.
@@ -80,7 +79,9 @@ class OpenAPIGenerator:
 
         # Add query parameters from Pydantic model
         if metadata.query_params_model:
-            schema = metadata.query_params_model.model_json_schema()
+            schema = metadata.query_params_model.model_json_schema(
+                ref_template='#/components/schemas/{model}'
+            )
             properties = schema.get('properties', {})
             required_fields = set(schema.get('required', []))
 
@@ -214,13 +215,15 @@ class OpenAPIGenerator:
         return operation
 
     def _build_path_item(self, metadata: EndpointMetadata) -> dict[str, Any]:
-        """Build an OpenAPI path item with extensions."""
+        """Build an OpenAPI path item with operation-level extensions."""
         path_item: dict[str, Any] = {}
 
-        # Add visibility extension
-        path_item['x-visibility'] = metadata.visibility
+        operation = self._build_operation(metadata)
 
-        # Add rate limit extension
+        # Add extensions at operation level (not path level) to avoid
+        # overwrites when multiple methods share the same path.
+        operation['x-visibility'] = metadata.visibility
+
         if metadata.rate_limit_global or metadata.rate_limit_per_ip:
             rate_limit: dict[str, Any] = {}
             if metadata.rate_limit_global:
@@ -233,14 +236,12 @@ class OpenAPIGenerator:
                     {'rate': rl.rate, 'burst': rl.burst, 'delay': rl.delay}
                     for rl in metadata.rate_limit_per_ip
                 ]
-            path_item['x-rate-limit'] = rate_limit
+            operation['x-rate-limit'] = rate_limit
 
-        # Add path params regex extension
         if metadata.path_params_regex:
-            path_item['x-path-params-regex'] = metadata.path_params_regex
+            operation['x-path-params-regex'] = metadata.path_params_regex
 
-        # Add the operation
-        path_item[metadata.method.lower()] = self._build_operation(metadata)
+        path_item[metadata.method.lower()] = operation
 
         return path_item
 
@@ -258,8 +259,8 @@ class OpenAPIGenerator:
             ValueError: If duplicate method+path combinations are detected.
         """
         # Reset schemas for fresh generation
-        self._schemas = {}
-        self._schema_models = {}
+        self._schemas: dict[str, Any] = {}
+        self._schema_models: dict[str, type[BaseModel]] = {}
 
         # Build paths from registered endpoints
         paths: dict[str, Any] = {}
@@ -294,22 +295,20 @@ class OpenAPIGenerator:
 
         # Add components/schemas if any were registered
         if self._schemas:
-            # Process schemas to handle nested $defs
+            # Process schemas to handle nested $defs (recursively)
             components_schemas: dict[str, Any] = {}
             for name, schema in self._schemas.items():
-                # Copy before mutating to avoid modifying potentially cached dicts
-                schema = dict(schema)
-                # Extract $defs to top-level schemas
-                if '$defs' in schema:
-                    for def_name, def_schema in schema.pop('$defs').items():
-                        if def_name in components_schemas and components_schemas[def_name] != def_schema:
-                            raise ValueError(
-                                f"Schema $defs name collision for '{def_name}': "
-                                f"conflicting definitions from different models"
-                            )
-                        components_schemas[def_name] = def_schema
+                schema = copy.deepcopy(schema)
+                self._extract_defs(schema, components_schemas)
                 components_schemas[name] = schema
 
             spec['components'] = {'schemas': components_schemas}
 
         return spec
+
+    def _extract_defs(self, schema: dict[str, Any], target: dict[str, Any]) -> None:
+        """Recursively extract $defs from a schema into the target dict."""
+        if '$defs' in schema:
+            for def_name, def_schema in schema.pop('$defs').items():
+                self._extract_defs(def_schema, target)
+                target[def_name] = def_schema

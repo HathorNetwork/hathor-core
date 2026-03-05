@@ -133,7 +133,7 @@ class TestOpenAPIGenerator(unittest.TestCase):
         self.assertEqual(len(schema['oneOf']), 2)
 
     def test_duplicate_operation_detection(self) -> None:
-        """Duplicate method+path with different operation_ids should raise ValueError at registration."""
+        """Duplicate method+path should raise ValueError."""
         class MyResponse(ResponseModel):
             value: str
 
@@ -148,18 +148,21 @@ class TestOpenAPIGenerator(unittest.TestCase):
             def render_GET(self, request):
                 pass
 
+        class _Dummy2:
+            @api_endpoint(
+                path='/test',
+                method='GET',
+                operation_id='test_op_2',
+                summary='Test 2',
+                response_model=MyResponse,
+            )
+            def render_GET(self, request):
+                pass
+
+        gen = OpenAPIGenerator()
         with self.assertRaises(ValueError) as ctx:
-            class _Dummy2:
-                @api_endpoint(
-                    path='/test',
-                    method='GET',
-                    operation_id='test_op_2',
-                    summary='Test 2',
-                    response_model=MyResponse,
-                )
-                def render_GET(self, request):
-                    pass
-        self.assertIn('Duplicate endpoint', str(ctx.exception))
+            gen.generate()
+        self.assertIn('Duplicate operation', str(ctx.exception))
 
     def test_query_params(self) -> None:
         """query_params_model should produce correct parameters section."""
@@ -354,8 +357,12 @@ class TestOpenAPIGenerator(unittest.TestCase):
         # Both methods should be present
         self.assertIn('get', path_item)
         self.assertIn('post', path_item)
-        # Extensions from second method should be merged (last writer wins)
-        self.assertEqual(path_item['x-visibility'], 'private')
+        # Extensions should be at operation level, not path level
+        self.assertEqual(path_item['get']['x-visibility'], 'public')
+        self.assertEqual(path_item['post']['x-visibility'], 'private')
+        # Rate limit only on GET
+        self.assertIn('x-rate-limit', path_item['get'])
+        self.assertNotIn('x-rate-limit', path_item['post'])
 
     def test_no_response_model(self) -> None:
         """No response_model should produce a simple 200 entry."""
