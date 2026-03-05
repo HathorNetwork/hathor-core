@@ -79,7 +79,7 @@ class NCDryRunResource(Resource):
         summary='Dry-run NC block execution',
         description='Dry-run nano contract execution for a block without modifying state.',
         tags=['nano_contracts'],
-        visibility='private',
+        visibility='private',  # Rate limits still apply to private endpoints via nginx/proxy config
         rate_limit_global=[{'rate': '2r/s', 'burst': 5, 'delay': 2}],
         rate_limit_per_ip=[{'rate': '1r/s', 'burst': 2, 'delay': 1}],
         query_params_model=NCDryRunParams,
