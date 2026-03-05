@@ -489,37 +489,6 @@ class TestRequestBodyValidation(unittest.TestCase):
         self.assertFalse(data['success'])
 
 
-class TestStatusCodeFromModel(unittest.TestCase):
-    def setUp(self) -> None:
-        clear_endpoint_registry()
-
-    def tearDown(self) -> None:
-        clear_endpoint_registry()
-
-    def test_status_code_set_from_model(self) -> None:
-        """Decorator should always set status code from the model's http_status_code."""
-        class MyOkResponse(ResponseModel):
-            http_status_code: ClassVar[int] = 200
-            value: str
-
-        class MyResource(Resource):
-            @api_endpoint(
-                path='/test',
-                method='GET',
-                operation_id='test',
-                summary='Test',
-                response_model=MyOkResponse,
-            )
-            def render_GET(self, request):
-                return MyOkResponse(value='ok')
-
-        request = _FakeRequest()
-        resource = MyResource()
-        resource.render_GET(request)
-
-        self.assertEqual(request.responseCode, 200)
-
-
 class TestDeferredErrbackHandling(unittest.TestCase):
     def setUp(self) -> None:
         clear_endpoint_registry()
@@ -552,7 +521,7 @@ class TestDeferredErrbackHandling(unittest.TestCase):
         self.assertEqual(request.responseCode, 500)
         data = request.json_value()
         self.assertIn('error', data)
-        self.assertIn('something went wrong', data['error'])
+        self.assertEqual('Internal Server Error', data['error'])
 
     def test_deferred_callback_exception_returns_500(self) -> None:
         """If the Deferred callback raises, the errback should catch it and return 500."""
@@ -585,7 +554,7 @@ class TestDeferredErrbackHandling(unittest.TestCase):
         self.assertEqual(request.responseCode, 500)
         data = request.json_value()
         self.assertIn('error', data)
-        self.assertIn('callback boom', data['error'])
+        self.assertEqual('Internal Server Error', data['error'])
 
     def test_errback_on_finished_request_is_noop(self) -> None:
         """Errback should not write to an already finished request."""

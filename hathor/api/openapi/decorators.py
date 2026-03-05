@@ -32,7 +32,7 @@ F = TypeVar('F', bound=Callable[..., Any])
 HttpMethod = Literal['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 
 
-@dataclass
+@dataclass(frozen=True)
 class RateLimitConfig:
     """Rate limit configuration for an endpoint."""
     rate: str
@@ -40,7 +40,7 @@ class RateLimitConfig:
     delay: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class EndpointMetadata:
     """Metadata collected by @api_endpoint decorator."""
     path: str
@@ -62,7 +62,6 @@ class EndpointMetadata:
 
 # Global registry of endpoint metadata
 _endpoint_registry: list[EndpointMetadata] = []
-_registered_keys: dict[tuple[str, str], str] = {}  # (path, method) -> operation_id
 
 
 def get_endpoint_registry() -> list[EndpointMetadata]:
@@ -73,7 +72,6 @@ def get_endpoint_registry() -> list[EndpointMetadata]:
 def clear_endpoint_registry() -> None:
     """Clear the endpoint registry. Useful for testing."""
     _endpoint_registry.clear()
-    _registered_keys.clear()
 
 
 def _serialize_response(result: Any, request: Request) -> bytes:
@@ -81,12 +79,15 @@ def _serialize_response(result: Any, request: Request) -> bytes:
 
     If result is a ResponseModel, serialize it and set the HTTP status code.
     If result is bytes, pass through unchanged.
+    Raises TypeError for unexpected result types.
     """
     if isinstance(result, ResponseModel):
+        response_bytes = result.json_dumpb()
         request.setResponseCode(result.http_status_code)
-        return result.json_dumpb()
-    # Fallback: raw bytes pass through
-    return result
+        return response_bytes
+    if isinstance(result, bytes):
+        return result
+    raise TypeError(f'unexpected response type: {type(result).__name__}')
 
 
 class InternalErrorResponse(ResponseModel):
@@ -95,14 +96,18 @@ class InternalErrorResponse(ResponseModel):
     error: str
 
 
-def _handle_deferred_error(failure: Any, request: Request) -> None:
-    """Errback for Deferred results: log error, write 500 response, finish request."""
+def _handle_deferred_error(failure: Any, request: Request) -> Any:
+    """Errback for Deferred results: log error, write 500 response, finish request.
+
+    Returns the failure if the request is already finished so it is not
+    silently swallowed. No further callbacks should be added after this errback.
+    """
     if request.finished:
         logger.debug('errback on finished request', error=str(failure))
-        return
+        return failure
     logger.error('unhandled error in deferred endpoint', error=str(failure))
     request.setResponseCode(500)
-    response = InternalErrorResponse(error=f'Internal Server Error: {failure.getErrorMessage()}')
+    response = InternalErrorResponse(error='Internal Server Error')
     request.write(response.json_dumpb())
     request.finish()
 
@@ -121,17 +126,30 @@ def _handle_deferred_result(result: Any, request: Request) -> None:
         request.write(InternalErrorResponse(error='Internal Server Error').json_dumpb())
         request.finish()
         return
-    if isinstance(result, ResponseModel):
-        request.setResponseCode(result.http_status_code)
-        request.write(result.json_dumpb())
-    else:
-        if not isinstance(result, bytes):
-            logger.error('deferred resolved to unexpected type', type=type(result).__name__)
-            request.setResponseCode(500)
-            request.write(InternalErrorResponse(error='Internal Server Error').json_dumpb())
-        else:
-            request.write(result)
+
+    # Serialize before writing so serialization errors don't leave a partial response
+    try:
+        response_bytes = _serialize_response(result, request)
+    except Exception:
+        logger.error('failed to serialize deferred response', exc_info=True)
+        request.setResponseCode(500)
+        request.write(InternalErrorResponse(error='Internal Server Error').json_dumpb())
+        request.finish()
+        return
+
+    request.write(response_bytes)
     request.finish()
+
+
+_RATE_LIMIT_REQUIRED_KEYS = {'rate', 'burst', 'delay'}
+
+
+def _parse_rate_limit(rl: dict[str, Any]) -> RateLimitConfig:
+    """Parse a rate limit dict into RateLimitConfig with key validation."""
+    missing = _RATE_LIMIT_REQUIRED_KEYS - rl.keys()
+    if missing:
+        raise ValueError(f'Rate limit config missing required keys: {missing}')
+    return RateLimitConfig(rate=rl['rate'], burst=rl['burst'], delay=rl['delay'])
 
 
 def api_endpoint(
@@ -189,14 +207,8 @@ def api_endpoint(
     """
     def decorator(func: F) -> F:
         # Parse rate limit configs
-        global_limits = [
-            RateLimitConfig(rate=rl['rate'], burst=rl['burst'], delay=rl['delay'])
-            for rl in (rate_limit_global or [])
-        ]
-        per_ip_limits = [
-            RateLimitConfig(rate=rl['rate'], burst=rl['burst'], delay=rl['delay'])
-            for rl in (rate_limit_per_ip or [])
-        ]
+        global_limits = [_parse_rate_limit(rl) for rl in (rate_limit_global or [])]
+        per_ip_limits = [_parse_rate_limit(rl) for rl in (rate_limit_per_ip or [])]
 
         metadata = EndpointMetadata(
             path=path,
@@ -216,21 +228,24 @@ def api_endpoint(
             path_params_descriptions=path_params_descriptions or {},
         )
 
+        # Resolve imports once per decorated function, not per request
+        import json as _json
+
+        from pydantic import ValidationError
+        from twisted.internet.defer import Deferred
+        from twisted.web.server import NOT_DONE_YET as _NOT_DONE_YET
+
+        from hathor.api_util import set_cors
+        from hathor.utils.api import ErrorResponse as _LegacyErrorResponse
+
         @functools.wraps(func)
         def wrapper(self: Any, request: Request, *args: Any, **kwargs: Any) -> Any:
-            from twisted.internet.defer import Deferred
-            from twisted.web.server import NOT_DONE_YET as _NOT_DONE_YET
-
-            from hathor.api_util import set_cors
-
             # Set standard headers
             request.setHeader(b'content-type', b'application/json; charset=utf-8')
             set_cors(request, method)
 
             # Auto-validate query params
             if query_params_model is not None:
-                from hathor.utils.api import ErrorResponse as _LegacyErrorResponse
-
                 params = query_params_model.from_request(request)  # type: ignore[attr-defined]
                 if isinstance(params, _LegacyErrorResponse):
                     # Validation failed — return 400 error
@@ -241,10 +256,6 @@ def api_endpoint(
 
             # Auto-validate request body
             if request_model is not None:
-                import json as _json
-
-                from pydantic import ValidationError
-
                 try:
                     if request.content is None:
                         error = ErrorResponse(error='Request body is missing')
@@ -267,26 +278,17 @@ def api_endpoint(
                 result.addCallback(_handle_deferred_result, request)
                 result.addErrback(_handle_deferred_error, request)
                 return _NOT_DONE_YET
-            elif isinstance(result, ResponseModel):
+            elif isinstance(result, (ResponseModel, bytes)):
                 return _serialize_response(result, request)
             else:
-                # Fallback: raw bytes or NOT_DONE_YET pass through
+                # Fallback: NOT_DONE_YET passes through
                 return result
 
         # Store metadata on the wrapper for later retrieval
         wrapper._openapi_metadata = metadata  # type: ignore[attr-defined]
 
-        # Register in global registry (with duplicate guard)
-        key = (path, method)
-        if key in _registered_keys:
-            if _registered_keys[key] != operation_id:
-                raise ValueError(
-                    f"Duplicate endpoint: {method} {path} registered with different operation_ids: "
-                    f"'{_registered_keys[key]}' vs '{operation_id}'"
-                )
-        else:
-            _registered_keys[key] = operation_id
-            _endpoint_registry.append(metadata)
+        # Register in global registry
+        _endpoint_registry.append(metadata)
 
         return wrapper  # type: ignore[return-value]
 

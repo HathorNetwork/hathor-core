@@ -85,3 +85,18 @@ class ErrorResponse(ErrorResponseModel):
     """
     success: Literal[False] = False
     error: str
+
+
+class NotFoundResponse(ErrorResponse):
+    """404 Not Found error response."""
+    http_status_code: ClassVar[int] = 404
+
+
+class ConflictResponse(ErrorResponse):
+    """409 Conflict error response."""
+    http_status_code: ClassVar[int] = 409
+
+
+class InternalServerErrorResponse(ErrorResponse):
+    """500 Internal Server Error response."""
+    http_status_code: ClassVar[int] = 500
