@@ -22,8 +22,9 @@ from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
 from hathor.api_util import Resource
 from hathor.nanocontracts.execution.dry_run_block_executor import DryRunResult, NCDryRunBlockExecutor
+from hathor.api.schemas.base import ErrorResponse
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
-from hathor.utils.api import ErrorResponse, QueryParams
+from hathor.utils.api import QueryParams
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
