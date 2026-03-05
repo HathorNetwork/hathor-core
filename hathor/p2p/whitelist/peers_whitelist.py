@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, succeed
 from twisted.internet.task import LoopingCall
 
 from hathor.p2p.peer_id import PeerId
@@ -46,6 +46,7 @@ class PeersWhitelist(ABC):
         self._is_updating: bool = False
         self._consecutive_failures: int = 0
         self._has_successful_fetch: bool = False
+        self._failure_counted_this_cycle: bool = False
 
     def start(self, on_remove_callback: OnRemoveCallbackType) -> None:
         self._on_remove_callback = on_remove_callback
@@ -74,7 +75,14 @@ class PeersWhitelist(ABC):
         self._consecutive_failures = 0
 
     def _on_update_failure(self) -> None:
-        """Called when whitelist update fails. Increments backoff counter."""
+        """Called when whitelist update fails. Increments backoff counter.
+
+        Guarded to count at most once per update cycle, preventing double-counting
+        when an errback handler and _handle_refresh_err both fire for the same failure.
+        """
+        if self._failure_counted_this_cycle:
+            return
+        self._failure_counted_this_cycle = True
         self._consecutive_failures += 1
 
     def _handle_refresh_err(self, failure: Any) -> None:
@@ -82,8 +90,8 @@ class PeersWhitelist(ABC):
            and ends up stopping the looping call.
            We log the error and start the looping call again with exponential backoff.
         """
-        self._on_update_failure()
         retry_interval = self._get_retry_interval()
+        self._on_update_failure()
         self.log.warning(
             'whitelist refresh had an exception. Start looping call again.',
             error=failure.getErrorMessage(),
@@ -93,17 +101,20 @@ class PeersWhitelist(ABC):
         )
         self._reactor.callLater(retry_interval, self._start_lc)
 
+    def _clear_updating_flag(self, result: Any) -> None:
+        self._is_updating = False
+        return result
+
     def update(self) -> Deferred[None]:
         # Avoiding re-entrancy. If running, should not update once more.
         if self._is_updating:
             self.log.warning('whitelist update already running, skipping execution.')
-            d: Deferred[None] = Deferred()
-            d.callback(None)
-            return d
+            return succeed(None)
 
         self._is_updating = True
+        self._failure_counted_this_cycle = False
         d = self._unsafe_update()
-        d.addBoth(lambda _: setattr(self, '_is_updating', False))
+        d.addBoth(self._clear_updating_flag)
         return d
 
     def add_peer(self, peer_id: PeerId) -> None:
@@ -112,9 +123,9 @@ class PeersWhitelist(ABC):
             self._current.add(peer_id)
             self.log.info('Peer added to whitelist', peer_id=peer_id)
 
-    def current_whitelist(self) -> set[PeerId]:
-        """ Returns the current whitelist as a set of PeerId."""
-        return self._current
+    def current_whitelist(self) -> frozenset[PeerId]:
+        """ Returns the current whitelist as a frozenset of PeerId."""
+        return frozenset(self._current)
 
     def policy(self) -> WhitelistPolicy:
         """ Returns the current whitelist policy."""
@@ -151,9 +162,12 @@ class PeersWhitelist(ABC):
         self._log_diff(current_whitelist, new_whitelist)
 
         peers_to_remove = current_whitelist - new_whitelist
-        for peer_id in peers_to_remove:
-            if self._on_remove_callback:
-                self._on_remove_callback(peer_id)
+        if peers_to_remove:
+            if self._on_remove_callback is None:
+                raise RuntimeError('on_remove_callback is not set, was start() called?')
+            on_remove = self._on_remove_callback
+            for peer_id in peers_to_remove:
+                on_remove(peer_id)
 
         self._current = new_whitelist
         self._policy = new_policy

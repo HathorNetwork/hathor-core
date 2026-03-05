@@ -314,10 +314,12 @@ class ConnectionsManagerSysctl(Sysctl):
         return 'none'
 
     def set_whitelist(self, new_whitelist: str) -> None:
-        """Set the whitelist-only mode. If 'on' or 'off', simply changes the
-        following status of current whitelist. If an URL or Filepath, changes
-        the whitelist object, following it by default.
-        It does not support eliminating the whitelist (passing None)."""
+        """Toggle or swap the active whitelist at runtime.
+
+        If 'on', restores the previously suspended whitelist.
+        If 'off', suspends the current whitelist (stops enforcing it).
+        If a URL or file path, replaces the current whitelist with a new one.
+        Does not support eliminating the whitelist (passing None); use 'off' instead."""
 
         connections = self.connections
         option: str = new_whitelist.lower().strip()
@@ -339,6 +341,7 @@ class ConnectionsManagerSysctl(Sysctl):
             connections.reactor,
             new_whitelist,
             connections._settings,
+            allow_unsafe_http=connections._settings.P2P_WHITELIST_ALLOW_UNSAFE_HTTP,
         )
 
         if whitelist is None:

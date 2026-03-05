@@ -362,7 +362,9 @@ class Builder:
         if not url:
             raise ValueError('url is required for set_url_whitelist')
         from hathor.p2p.whitelist import URLPeersWhitelist
-        url_peers_whitelist = URLPeersWhitelist(reactor, url, False)
+        settings = self._get_or_create_settings()
+        allow_unsafe_http = settings.P2P_WHITELIST_ALLOW_UNSAFE_HTTP
+        url_peers_whitelist = URLPeersWhitelist(reactor, url, allow_unsafe_http=allow_unsafe_http)
         # We do not start the URLPeersWhitelist here, as it is started by the ConnectionsManager
         self._peers_whitelist = url_peers_whitelist
         return self

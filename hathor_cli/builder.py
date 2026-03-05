@@ -307,6 +307,7 @@ class CliBuilder:
             reactor=reactor,
             whitelist_spec=whitelist_spec,
             settings=settings,
+            allow_unsafe_http=settings.P2P_WHITELIST_ALLOW_UNSAFE_HTTP,
         )
 
         p2p_manager = ConnectionsManager(

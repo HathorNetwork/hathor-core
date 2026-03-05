@@ -15,11 +15,11 @@
 from typing import Any
 from urllib.parse import urlparse
 
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, succeed
 from twisted.web.client import Agent
 
 from hathor.p2p.whitelist.parsing import parse_whitelist_with_policy
-from hathor.p2p.whitelist.peers_whitelist import PeersWhitelist
+from hathor.p2p.whitelist.peers_whitelist import OnRemoveCallbackType, PeersWhitelist
 from hathor.reactor import ReactorProtocol as Reactor
 
 # The timeout in seconds for the whitelist GET request
@@ -27,10 +27,10 @@ WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class URLPeersWhitelist(PeersWhitelist):
-    def __init__(self, reactor: Reactor, url: str | None, mainnet: bool = False) -> None:
+    def __init__(self, reactor: Reactor, url: str | None, *, allow_unsafe_http: bool = False) -> None:
         super().__init__(reactor)
         self._url: str | None = url
-        self._http_agent = Agent(self._reactor)
+        self._http_agent: Agent | None = None
 
         if self._url is None:
             return
@@ -39,12 +39,19 @@ class URLPeersWhitelist(PeersWhitelist):
             return
 
         result = urlparse(self._url)
-        if mainnet:
-            if result.scheme != 'https':
-                raise ValueError(f'invalid scheme: {self._url}')
+        if not result.netloc:
+            raise ValueError(f'invalid url: {self._url}')
+        if not allow_unsafe_http and result.scheme != 'https':
+            raise ValueError(f'url must use https: {self._url}')
 
-            if not result.netloc:
-                raise ValueError(f'invalid url: {self._url}')
+        self._http_agent = Agent(self._reactor)
+
+    def start(self, on_remove_callback: 'OnRemoveCallbackType') -> None:
+        """Override start to skip the LoopingCall when URL is None."""
+        if self._url is None:
+            self.log.info('whitelist URL is None, skipping periodic refresh')
+            return
+        super().start(on_remove_callback)
 
     def url(self) -> str | None:
         return self._url
@@ -106,18 +113,17 @@ class URLPeersWhitelist(PeersWhitelist):
         # Guard against URL being None (e.g., when set to "none" string)
         if self._url is None:
             self.log.debug('skipping whitelist update, url is None')
-            d: Deferred[None] = Deferred()
-            d.callback(None)
-            return d
+            return succeed(None)
 
+        assert self._http_agent is not None
         self.log.info('update whitelist')
         d = self._http_agent.request(
             b'GET',
             self._url.encode(),
             Headers({'User-Agent': ['hathor-core']}),
             None)
-        d.addCallback(readBody)  # type: ignore[call-overload]
+        d.addCallback(readBody)
         d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self._reactor)
-        d.addCallback(self._update_whitelist_cb)  # type: ignore[call-overload]
+        d.addCallback(self._update_whitelist_cb)
         d.addErrback(self._update_whitelist_err)
         return d

@@ -34,9 +34,6 @@ class FilePeersWhitelist(PeersWhitelist):
         """Return the file path as the whitelist source."""
         return self._path
 
-    def refresh(self) -> Deferred[None]:
-        return self._unsafe_update()
-
     def _read_file(self) -> str:
         """Read the whitelist file. Runs in a thread to avoid blocking."""
         with open(self._path, 'r', encoding='utf-8') as fp:
