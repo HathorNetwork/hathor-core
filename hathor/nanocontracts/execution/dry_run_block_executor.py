@@ -189,7 +189,7 @@ class NCDryRunBlockExecutor:
                     voided_in_block.add(tx.hash)
                     tx_result = DryRunTxResult(
                         tx_hash=tx.hash,
-                        rng_seed=current_rng_seed or b'',
+                        rng_seed=current_rng_seed if current_rng_seed is not None else b'',
                         execution_status=ExecutionStatus.SKIPPED,
                     )
                     transactions.append(tx_result)
@@ -239,7 +239,7 @@ class NCDryRunBlockExecutor:
 
         return DryRunTxResult(
             tx_hash=tx.hash,
-            rng_seed=rng_seed or b'',
+            rng_seed=rng_seed if rng_seed is not None else b'',
             execution_status=ExecutionStatus.SUCCESS,
             call_records=call_records,
             events=events,
@@ -260,7 +260,7 @@ class NCDryRunBlockExecutor:
 
         return DryRunTxResult(
             tx_hash=tx.hash,
-            rng_seed=rng_seed or b'',
+            rng_seed=rng_seed if rng_seed is not None else b'',
             execution_status=ExecutionStatus.FAILURE,
             call_records=call_records,
             exception_type=type(exception).__name__,
