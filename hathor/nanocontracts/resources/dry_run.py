@@ -26,7 +26,7 @@ from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
 from hathor.api_util import Resource
 from hathor.nanocontracts.execution.dry_run_block_executor import DryRunResult, NCDryRunBlockExecutor
-from hathor.api.schemas.base import ErrorResponse
+from hathor.api.schemas.base import ErrorResponse, NotFoundResponse
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.utils.api import QueryParams
 
@@ -76,7 +76,7 @@ class NCDryRunResource(Resource):
         rate_limit_global=[{'rate': '10r/s', 'burst': 10, 'delay': 5}],
         rate_limit_per_ip=[{'rate': '2r/s', 'burst': 3, 'delay': 1}],
         query_params_model=NCDryRunParams,
-        response_model=DryRunResult,
+        response_model=Union[DryRunResult, ErrorResponse, NotFoundResponse],
     )
     def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
         request.setHeader(b'cache-control', b'no-store')
