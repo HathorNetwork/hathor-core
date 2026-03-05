@@ -24,17 +24,20 @@ from twisted.internet.threads import deferToThread
 
 from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
+from hathor.api.schemas.base import ErrorResponse, NotFoundResponse
 from hathor.api_util import Resource
 from hathor.nanocontracts.execution.dry_run_block_executor import DryRunResult, NCDryRunBlockExecutor
-from hathor.api.schemas.base import ErrorResponse, NotFoundResponse
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+from hathor.nanocontracts.execution.dry_run_utils import (
+    DryRunNotFoundError,
+    DryRunValidationError,
+    resolve_block_for_dry_run,
+)
 from hathor.utils.api import QueryParams
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
 
     from hathor.manager import HathorManager
-    from hathor.transaction import Block
 
 
 class NCDryRunParams(QueryParams):
@@ -81,80 +84,24 @@ class NCDryRunResource(Resource):
     def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
         request.setHeader(b'cache-control', b'no-store')
 
-        block: Block
-        target_tx_hash: Optional[bytes] = None
-
-        if params.tx_hash:
-            # Get transaction and find its first_block
-            try:
-                tx_hash_bytes = bytes.fromhex(params.tx_hash)
-            except ValueError:
-                request.setResponseCode(400)
-                error = ErrorResponse(success=False, error=f'Invalid tx_hash: {params.tx_hash}')
-                return error.json_dumpb()
-
-            try:
-                tx = self.manager.tx_storage.get_transaction(tx_hash_bytes)
-            except TransactionDoesNotExist:
-                request.setResponseCode(404)
-                error = ErrorResponse(success=False, error=f'Transaction not found: {params.tx_hash}')
-                return error.json_dumpb()
-
-            if not tx.is_nano_contract():
-                request.setResponseCode(400)
-                error = ErrorResponse(success=False, error='Transaction is not a nano contract')
-                return error.json_dumpb()
-
-            tx_meta = tx.get_metadata()
-            if tx_meta.first_block is None:
-                request.setResponseCode(400)
-                error = ErrorResponse(success=False, error='Transaction has no first_block')
-                return error.json_dumpb()
-
-            try:
-                block = self.manager.tx_storage.get_block(tx_meta.first_block)
-            except (TransactionDoesNotExist, TransactionIsNotABlock):
-                request.setResponseCode(404)
-                error = ErrorResponse(success=False, error=f'Block not found: {tx_meta.first_block.hex()}')
-                return error.json_dumpb()
-
-            target_tx_hash = tx_hash_bytes
-        else:
-            # Get block directly
-            assert params.block_hash is not None
-            try:
-                block_hash_bytes = bytes.fromhex(params.block_hash)
-            except ValueError:
-                request.setResponseCode(400)
-                error = ErrorResponse(success=False, error=f'Invalid block_hash: {params.block_hash}')
-                return error.json_dumpb()
-
-            try:
-                block = self.manager.tx_storage.get_block(block_hash_bytes)
-            except (TransactionDoesNotExist, TransactionIsNotABlock):
-                request.setResponseCode(404)
-                error = ErrorResponse(success=False, error=f'Block not found: {params.block_hash}')
-                return error.json_dumpb()
-
-        # Validate block state
-        block_meta = block.get_metadata()
-        if block_meta.voided_by:
-            request.setResponseCode(400)
-            error = ErrorResponse(success=False, error='Block is not on best chain (voided)')
-            return error.json_dumpb()
-
-        if block.is_genesis:
-            request.setResponseCode(400)
-            error = ErrorResponse(success=False, error='Cannot dry-run genesis block')
-            return error.json_dumpb()
+        try:
+            target = resolve_block_for_dry_run(
+                self.manager.tx_storage,
+                block_hash=params.block_hash,
+                tx_hash=params.tx_hash,
+            )
+        except DryRunValidationError as e:
+            return ErrorResponse(error=str(e))
+        except DryRunNotFoundError as e:
+            return NotFoundResponse(error=str(e))
 
         # Execute dry run in a thread to avoid blocking the reactor
         def _execute() -> DryRunResult:
             dry_run_executor = NCDryRunBlockExecutor(self.manager.consensus_algorithm._block_executor)
             return dry_run_executor.execute(
-                block,
+                target.block,
                 include_changes=params.include_changes,
-                target_tx_hash=target_tx_hash,
+                target_tx_hash=target.target_tx_hash,
             )
 
         return deferToThread(_execute)

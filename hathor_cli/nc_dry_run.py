@@ -20,7 +20,11 @@ import sys
 from argparse import ArgumentParser
 from typing import TYPE_CHECKING, Optional
 
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
+from hathor.nanocontracts.execution.dry_run_utils import (
+    DryRunNotFoundError,
+    DryRunValidationError,
+    resolve_block_for_dry_run,
+)
 from hathor_cli.run_node import RunNode
 
 if TYPE_CHECKING:
@@ -81,7 +85,6 @@ class NcDryRun(RunNode):
 
     def run(self) -> None:
         from hathor.nanocontracts.execution.dry_run_block_executor import NCDryRunBlockExecutor
-        from hathor.transaction import Block
 
         block_hash_arg: Optional[str] = self._args.block_hash
         tx_hash_arg: Optional[str] = self._args.tx_hash
@@ -90,73 +93,29 @@ class NcDryRun(RunNode):
         verbose: bool = self._args.verbose
         output_path: Optional[str] = self._args.output
 
-        block: Block
-        target_tx_hash: Optional[bytes] = None
-
-        if tx_hash_arg:
-            # Get transaction and find its first_block
-            try:
-                tx_hash_bytes = bytes.fromhex(tx_hash_arg)
-            except ValueError:
-                self.log.error(f'Invalid tx_hash: {tx_hash_arg}')
-                sys.exit(1)
-
-            try:
-                tx = self.tx_storage.get_transaction(tx_hash_bytes)
-            except TransactionDoesNotExist:
-                self.log.error(f'Transaction not found: {tx_hash_arg}')
-                sys.exit(1)
-
-            if not tx.is_nano_contract():
-                self.log.error('Transaction is not a nano contract')
-                sys.exit(1)
-
-            tx_meta = tx.get_metadata()
-            if tx_meta.first_block is None:
-                self.log.error('Transaction has no first_block')
-                sys.exit(1)
-
-            try:
-                block = self.tx_storage.get_block(tx_meta.first_block)
-            except (TransactionDoesNotExist, TransactionIsNotABlock):
-                self.log.error(f'Block not found: {tx_meta.first_block.hex()}')
-                sys.exit(1)
-
-            target_tx_hash = tx_hash_bytes
-        else:
-            # Get block directly
-            assert block_hash_arg is not None
-            try:
-                block_hash_bytes = bytes.fromhex(block_hash_arg)
-            except ValueError:
-                self.log.error(f'Invalid block_hash: {block_hash_arg}')
-                sys.exit(1)
-
-            try:
-                block = self.tx_storage.get_block(block_hash_bytes)
-            except (TransactionDoesNotExist, TransactionIsNotABlock):
-                self.log.error(f'Block not found: {block_hash_arg}')
-                sys.exit(1)
-
-        # Validate block state
-        block_meta = block.get_metadata()
-        if block_meta.voided_by:
-            self.log.error('Block is not on best chain (voided)')
-            sys.exit(1)
-
-        if block.is_genesis:
-            self.log.error('Cannot dry-run genesis block')
+        try:
+            target = resolve_block_for_dry_run(
+                self.tx_storage,
+                block_hash=block_hash_arg,
+                tx_hash=tx_hash_arg,
+            )
+        except (DryRunValidationError, DryRunNotFoundError) as e:
+            self.log.error(str(e))
             sys.exit(1)
 
         # Execute dry run using shared executor
-        dry_run_executor: NCDryRunBlockExecutor = NCDryRunBlockExecutor(
-            self.manager.consensus_algorithm._block_executor
-        )
-        result = dry_run_executor.execute(
-            block,
-            include_changes=include_changes,
-            target_tx_hash=target_tx_hash,
-        )
+        try:
+            dry_run_executor = NCDryRunBlockExecutor(
+                self.manager.consensus_algorithm._block_executor
+            )
+            result = dry_run_executor.execute(
+                target.block,
+                include_changes=include_changes,
+                target_tx_hash=target.target_tx_hash,
+            )
+        except Exception as e:
+            self.log.error('dry-run execution failed', error=str(e))
+            sys.exit(1)
 
         # Log warning if roots don't match
         if not result.root_id_matches:
