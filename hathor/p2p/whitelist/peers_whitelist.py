@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable
 
 from structlog import get_logger
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, succeed
 from twisted.internet.task import LoopingCall
 
 from hathor.p2p.peer_id import PeerId
@@ -93,17 +93,19 @@ class PeersWhitelist(ABC):
         )
         self._reactor.callLater(retry_interval, self._start_lc)
 
+    def _clear_updating_flag(self, result: Any) -> None:
+        self._is_updating = False
+        return result
+
     def update(self) -> Deferred[None]:
         # Avoiding re-entrancy. If running, should not update once more.
         if self._is_updating:
             self.log.warning('whitelist update already running, skipping execution.')
-            d: Deferred[None] = Deferred()
-            d.callback(None)
-            return d
+            return succeed(None)
 
         self._is_updating = True
         d = self._unsafe_update()
-        d.addBoth(lambda _: setattr(self, '_is_updating', False))
+        d.addBoth(self._clear_updating_flag)
         return d
 
     def add_peer(self, peer_id: PeerId) -> None:
@@ -112,9 +114,9 @@ class PeersWhitelist(ABC):
             self._current.add(peer_id)
             self.log.info('Peer added to whitelist', peer_id=peer_id)
 
-    def current_whitelist(self) -> set[PeerId]:
-        """ Returns the current whitelist as a set of PeerId."""
-        return self._current
+    def current_whitelist(self) -> frozenset[PeerId]:
+        """ Returns the current whitelist as a frozenset of PeerId."""
+        return frozenset(self._current)
 
     def policy(self) -> WhitelistPolicy:
         """ Returns the current whitelist policy."""
@@ -152,8 +154,9 @@ class PeersWhitelist(ABC):
 
         peers_to_remove = current_whitelist - new_whitelist
         for peer_id in peers_to_remove:
-            if self._on_remove_callback:
-                self._on_remove_callback(peer_id)
+            if self._on_remove_callback is None:
+                raise RuntimeError('on_remove_callback is not set, was start() called?')
+            self._on_remove_callback(peer_id)
 
         self._current = new_whitelist
         self._policy = new_policy

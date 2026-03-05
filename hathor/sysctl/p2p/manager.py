@@ -339,6 +339,7 @@ class ConnectionsManagerSysctl(Sysctl):
             connections.reactor,
             new_whitelist,
             connections._settings,
+            allow_unsafe_http=connections._settings.P2P_WHITELIST_ALLOW_UNSAFE_HTTP,
         )
 
         if whitelist is None:

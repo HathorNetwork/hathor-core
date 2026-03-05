@@ -18,7 +18,7 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.manager.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address1))
         url = "https://anything.com"
         reactor = self.manager.reactor
-        mock_peers_whitelist = URLPeersWhitelist(reactor, url, True)
+        mock_peers_whitelist = URLPeersWhitelist(reactor, url)
         mock_peers_whitelist.start(mock_peers_whitelist._on_remove_callback)
         self.manager.connections.peers_whitelist = mock_peers_whitelist
         self.manager.connections.peers_whitelist.add_peer(self.get_random_peer_from_pool().id)

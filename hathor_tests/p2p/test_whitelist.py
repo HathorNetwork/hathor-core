@@ -14,13 +14,10 @@ from hathor.p2p.whitelist import (
     WHITELIST_REQUEST_TIMEOUT,
     WHITELIST_RETRY_INTERVAL_MAX,
     WHITELIST_RETRY_INTERVAL_MIN,
-    WHITELIST_SPEC_DEFAULT,
-    WHITELIST_SPEC_DISABLED,
-    WHITELIST_SPEC_HATHORLABS,
-    WHITELIST_SPEC_NONE,
     FilePeersWhitelist,
     URLPeersWhitelist,
     WhitelistPolicy,
+    WhitelistSpec,
     parse_whitelist_with_policy,
 )
 from hathor.simulator import FakeConnection
@@ -288,14 +285,14 @@ class ParseWhitelistWithPolicyTestCase(unittest.TestCase):
             parse_whitelist_with_policy(content)
         self.assertIn('policy must be defined in the header', str(context.exception))
 
-    def test_parse_invalid_policy_uses_default(self) -> None:
-        """Test that invalid policy logs a warning and uses the default."""
+    def test_parse_invalid_policy_raises(self) -> None:
+        """Test that invalid policy raises ValueError."""
         content = """hathor-whitelist
 #policy: invalid-policy
 """
-        peers, policy = parse_whitelist_with_policy(content)
-        self.assertEqual(policy, WhitelistPolicy.ONLY_WHITELISTED_PEERS)
-        self.assertEqual(peers, set())
+        with self.assertRaises(ValueError) as context:
+            parse_whitelist_with_policy(content)
+        self.assertIn('invalid whitelist policy', str(context.exception))
 
     def test_parse_policy_with_space_after_hash(self) -> None:
         """Test parsing whitelist with '# policy:' (space after #)."""
@@ -465,8 +462,8 @@ class FilePeersWhitelistTestCase(unittest.TestCase):
         # Failure counter should be incremented
         self.assertEqual(whitelist._consecutive_failures, 1)
 
-    def test_file_whitelist_refresh_returns_deferred(self) -> None:
-        """Test that FilePeersWhitelist.refresh() returns a Deferred."""
+    def test_file_whitelist_unsafe_update_returns_deferred(self) -> None:
+        """Test that FilePeersWhitelist._unsafe_update() returns a Deferred."""
         content = """hathor-whitelist
 #policy: allow-all
 """
@@ -476,7 +473,7 @@ class FilePeersWhitelistTestCase(unittest.TestCase):
             path = f.name
 
         whitelist = FilePeersWhitelist(self.clock, path)
-        result = whitelist.refresh()
+        result = whitelist._unsafe_update()
 
         self.assertIsInstance(result, Deferred)
 
@@ -715,33 +712,33 @@ class URLValidationTestCase(unittest.TestCase):
 
     def test_url_whitelist_none_string(self) -> None:
         """Test that 'none' string URL is converted to None."""
-        whitelist = URLPeersWhitelist(self.clock, 'none', mainnet=False)
+        whitelist = URLPeersWhitelist(self.clock, 'none', allow_unsafe_http=True)
         self.assertIsNone(whitelist.url())
 
     def test_url_whitelist_none_string_case_insensitive(self) -> None:
         """Test that 'NONE' string URL is converted to None (case insensitive)."""
-        whitelist = URLPeersWhitelist(self.clock, 'NONE', mainnet=False)
+        whitelist = URLPeersWhitelist(self.clock, 'NONE', allow_unsafe_http=True)
         self.assertIsNone(whitelist.url())
 
     def test_url_whitelist_actual_none(self) -> None:
         """Test that actual None URL works."""
-        whitelist = URLPeersWhitelist(self.clock, None, mainnet=False)
+        whitelist = URLPeersWhitelist(self.clock, None, allow_unsafe_http=True)
         self.assertIsNone(whitelist.url())
 
-    def test_url_whitelist_mainnet_requires_https(self) -> None:
-        """Test that mainnet requires HTTPS URLs."""
+    def test_url_whitelist_requires_https_by_default(self) -> None:
+        """Test that HTTPS is required by default."""
         with self.assertRaises(ValueError) as context:
-            URLPeersWhitelist(self.clock, 'http://whitelist.com', mainnet=True)
-        self.assertIn('invalid scheme', str(context.exception))
+            URLPeersWhitelist(self.clock, 'http://whitelist.com')
+        self.assertIn('url must use https', str(context.exception))
 
-    def test_url_whitelist_mainnet_accepts_https(self) -> None:
-        """Test that mainnet accepts HTTPS URLs."""
-        whitelist = URLPeersWhitelist(self.clock, 'https://whitelist.com', mainnet=True)
+    def test_url_whitelist_accepts_https_by_default(self) -> None:
+        """Test that HTTPS URLs are accepted by default."""
+        whitelist = URLPeersWhitelist(self.clock, 'https://whitelist.com')
         self.assertEqual(whitelist.url(), 'https://whitelist.com')
 
     def test_url_whitelist_none_url_does_not_crash_on_update(self) -> None:
         """Test that URLPeersWhitelist with url=None does not crash on update."""
-        whitelist = URLPeersWhitelist(self.clock, 'none', mainnet=False)
+        whitelist = URLPeersWhitelist(self.clock, 'none', allow_unsafe_http=True)
         self.assertIsNone(whitelist.url())
 
         # This should not crash - it should return early
@@ -965,11 +962,11 @@ class WhitelistLifecycleTestCase(unittest.TestCase):
     def test_whitelist_source_method(self) -> None:
         """Test that source() method returns correct values for different whitelist types."""
         # Test URLPeersWhitelist
-        url_whitelist = URLPeersWhitelist(self.clock, 'https://example.com/whitelist', mainnet=False)
+        url_whitelist = URLPeersWhitelist(self.clock, 'https://example.com/whitelist', allow_unsafe_http=True)
         self.assertEqual(url_whitelist.source(), 'https://example.com/whitelist')
 
         # Test URLPeersWhitelist with None URL
-        none_whitelist = URLPeersWhitelist(self.clock, 'none', mainnet=False)
+        none_whitelist = URLPeersWhitelist(self.clock, 'none', allow_unsafe_http=True)
         self.assertIsNone(none_whitelist.source())
 
         # Test FilePeersWhitelist
@@ -1054,11 +1051,7 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertFalse(whitelist.is_peer_allowed(random_peer_id))
 
     def test_bootstrap_peer_always_allowed(self) -> None:
-        """Test that bootstrap peers are always allowed via manager's _bootstrap_peer_ids.
-
-        Bootstrap exemption is now handled by the manager, not the whitelist.
-        The whitelist's is_peer_allowed does NOT know about bootstrap peers.
-        """
+        """Test that bootstrap peers are always allowed, even after a successful whitelist fetch."""
         network = 'testnet'
         manager = self.create_peer(network, url_whitelist='https://whitelist.com')
         whitelist = manager.connections.peers_whitelist
@@ -1067,6 +1060,10 @@ class GracePeriodTestCase(unittest.TestCase):
         bootstrap_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
         manager.connections._bootstrap_peer_ids.add(bootstrap_peer_id)
 
+        # Before first fetch, bootstrap peer is allowed
+        self.assertFalse(whitelist._has_successful_fetch)
+        self.assertTrue(manager.connections.is_peer_allowed(bootstrap_peer_id))
+
         # Simulate a successful whitelist update that does NOT include the bootstrap peer
         other_peer_id = PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367')
         whitelist._apply_whitelist_update({other_peer_id}, WhitelistPolicy.ONLY_WHITELISTED_PEERS)
@@ -1074,14 +1071,11 @@ class GracePeriodTestCase(unittest.TestCase):
         # Verify grace period has ended
         self.assertTrue(whitelist._has_successful_fetch)
 
-        # Whitelist does NOT know about bootstrap peers — it rejects non-whitelisted peers
-        self.assertFalse(whitelist.is_peer_allowed(bootstrap_peer_id))
+        # Bootstrap peer is STILL allowed (unconditional)
+        self.assertTrue(manager.connections.is_peer_allowed(bootstrap_peer_id))
 
-        # But the manager would allow it via _bootstrap_peer_ids check
-        self.assertIn(bootstrap_peer_id, manager.connections._bootstrap_peer_ids)
-
-        # Peer in whitelist should be allowed
-        self.assertTrue(whitelist.is_peer_allowed(other_peer_id))
+        # Peer in whitelist should also be allowed
+        self.assertTrue(manager.connections.is_peer_allowed(other_peer_id))
 
     def test_grace_period_connections_rejected_without_bootstrap(self) -> None:
         """Test that connections are rejected during grace period without bootstrap registration."""
@@ -1134,7 +1128,7 @@ class GracePeriodTestCase(unittest.TestCase):
 
     def test_grace_period_flag_persists_through_failures(self) -> None:
         """Test that grace period flag is NOT set on update failures."""
-        whitelist = URLPeersWhitelist(self.clock, 'https://whitelist.com', mainnet=False)
+        whitelist = URLPeersWhitelist(self.clock, 'https://whitelist.com', allow_unsafe_http=True)
 
         # Initial state: no successful fetch
         self.assertFalse(whitelist._has_successful_fetch)
@@ -1223,9 +1217,10 @@ class GracePeriodTestCase(unittest.TestCase):
         self.assertFalse(new_whitelist.is_peer_allowed(random_peer_id))
 
     def test_drop_connection_by_peer_id_skips_bootstrap_peers(self) -> None:
-        """Test that drop_connection_by_peer_id does not disconnect bootstrap peers."""
+        """Test that drop_connection_by_peer_id always skips bootstrap peers."""
         network = 'testnet'
-        manager = self.create_peer(network, url_whitelist='')
+        manager = self.create_peer(network, url_whitelist='https://whitelist.com')
+        whitelist = manager.connections.peers_whitelist
 
         # Register a bootstrap peer
         bootstrap_peer_id = PeerId('1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef')
@@ -1237,22 +1232,19 @@ class GracePeriodTestCase(unittest.TestCase):
         mock_protocol.peer.id = bootstrap_peer_id
         manager.connections.connected_peers[bootstrap_peer_id] = mock_protocol
 
-        # Attempt to drop the bootstrap peer connection
+        # Before first fetch, bootstrap peer is skipped
+        self.assertFalse(whitelist._has_successful_fetch)
         manager.connections.drop_connection_by_peer_id(bootstrap_peer_id)
-
-        # The connection should NOT have been dropped
         mock_protocol.send_error_and_close_connection.assert_not_called()
-        self.assertIn(bootstrap_peer_id, manager.connections.connected_peers)
 
-        # But dropping a non-bootstrap peer should work
-        other_peer_id = PeerId('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
-        other_protocol = Mock()
-        other_protocol.peer = Mock()
-        other_protocol.peer.id = other_peer_id
-        manager.connections.connected_peers[other_peer_id] = other_protocol
+        # Simulate successful whitelist fetch (grace period ends)
+        other_peer_id = PeerId('2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367')
+        whitelist._apply_whitelist_update({other_peer_id}, WhitelistPolicy.ONLY_WHITELISTED_PEERS)
+        self.assertTrue(whitelist._has_successful_fetch)
 
-        manager.connections.drop_connection_by_peer_id(other_peer_id)
-        other_protocol.send_error_and_close_connection.assert_called_once()
+        # After grace period, bootstrap peer is STILL skipped (unconditional)
+        manager.connections.drop_connection_by_peer_id(bootstrap_peer_id)
+        mock_protocol.send_error_and_close_connection.assert_not_called()
 
     def test_whitelist_swap_preserves_bootstrap_peer_ids_on_manager(self) -> None:
         """Test that swapping whitelists preserves bootstrap peer IDs on the manager.
@@ -1288,8 +1280,8 @@ class WhitelistSpecConstantsTestCase(unittest.TestCase):
     """Tests for whitelist specification constants."""
 
     def test_whitelist_spec_constants_values(self) -> None:
-        """Test that whitelist spec constants have expected values."""
-        self.assertEqual(WHITELIST_SPEC_DEFAULT, 'default')
-        self.assertEqual(WHITELIST_SPEC_HATHORLABS, 'hathorlabs')
-        self.assertEqual(WHITELIST_SPEC_NONE, 'none')
-        self.assertEqual(WHITELIST_SPEC_DISABLED, 'disabled')
+        """Test that WhitelistSpec enum has expected values."""
+        self.assertEqual(WhitelistSpec.DEFAULT, 'default')
+        self.assertEqual(WhitelistSpec.HATHORLABS, 'hathorlabs')
+        self.assertEqual(WhitelistSpec.NONE, 'none')
+        self.assertEqual(WhitelistSpec.DISABLED, 'disabled')

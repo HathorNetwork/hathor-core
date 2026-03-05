@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+from enum import StrEnum, unique
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -24,11 +25,13 @@ from hathor.reactor import ReactorProtocol as Reactor
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
 
-# Whitelist specification constants
-WHITELIST_SPEC_DEFAULT = 'default'
-WHITELIST_SPEC_HATHORLABS = 'hathorlabs'
-WHITELIST_SPEC_NONE = 'none'
-WHITELIST_SPEC_DISABLED = 'disabled'
+
+@unique
+class WhitelistSpec(StrEnum):
+    DEFAULT = 'default'
+    HATHORLABS = 'hathorlabs'
+    NONE = 'none'
+    DISABLED = 'disabled'
 
 
 def _looks_like_url(spec: str) -> bool:
@@ -40,6 +43,8 @@ def create_peers_whitelist(
     reactor: Reactor,
     whitelist_spec: str,
     settings: 'HathorSettings',
+    *,
+    allow_unsafe_http: bool = False,
 ) -> 'PeersWhitelist | None':
     """Factory function to create PeersWhitelist from a specification string.
 
@@ -48,6 +53,7 @@ def create_peers_whitelist(
         whitelist_spec: Whitelist specification - can be 'default', 'hathorlabs', 'none', 'disabled',
                 a file path, or a URL
         settings: Hathor settings containing WHITELIST_URL
+        allow_unsafe_http: Whether to allow non-HTTPS URLs (default: False, secure by default)
 
     Returns:
         PeersWhitelist instance or None if disabled
@@ -55,12 +61,12 @@ def create_peers_whitelist(
     peers_whitelist: PeersWhitelist | None = None
     spec_lower = whitelist_spec.lower().strip()
 
-    if spec_lower in (WHITELIST_SPEC_DEFAULT, WHITELIST_SPEC_HATHORLABS):
-        peers_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
-    elif spec_lower in (WHITELIST_SPEC_NONE, WHITELIST_SPEC_DISABLED):
+    if spec_lower in (WhitelistSpec.DEFAULT, WhitelistSpec.HATHORLABS):
+        peers_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), allow_unsafe_http=allow_unsafe_http)
+    elif spec_lower in (WhitelistSpec.NONE, WhitelistSpec.DISABLED):
         peers_whitelist = None
     elif _looks_like_url(whitelist_spec):
-        peers_whitelist = URLPeersWhitelist(reactor, whitelist_spec, True)
+        peers_whitelist = URLPeersWhitelist(reactor, whitelist_spec, allow_unsafe_http=allow_unsafe_http)
     elif os.path.isfile(whitelist_spec):
         peers_whitelist = FilePeersWhitelist(reactor, whitelist_spec)
     else:

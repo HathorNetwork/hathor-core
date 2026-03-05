@@ -13,14 +13,14 @@
 # limitations under the License.
 
 from enum import Enum
-from typing import Optional
 
 from structlog import get_logger
 
 from hathor.p2p.peer_id import PeerId
-from hathor.p2p.utils import parse_file
 
 logger = get_logger()
+
+WHITELIST_HEADER = 'hathor-whitelist'
 
 
 class WhitelistPolicy(Enum):
@@ -29,33 +29,7 @@ class WhitelistPolicy(Enum):
     ONLY_WHITELISTED_PEERS = 'only-whitelisted-peers'
 
 
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[PeerId]:
-    """ Parses the list of whitelist peer ids
-
-    Example:
-
-    parse_whitelist('''hathor-whitelist
-# node1
- 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-
-# node3
-G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-''')
-    {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
-
-    """
-    lines = parse_file(text, header=header)
-    return {PeerId(line.split()[0]) for line in lines}
-
-
-def parse_whitelist_with_policy(
-    text: str,
-    *,
-    header: Optional[str] = None
-) -> tuple[set[PeerId], WhitelistPolicy]:
+def parse_whitelist_with_policy(text: str) -> tuple[set[PeerId], WhitelistPolicy]:
     """Parses the whitelist file and extracts both peer IDs and policy.
 
     The policy line (optional) must appear in the header, before any peer IDs.
@@ -69,30 +43,33 @@ def parse_whitelist_with_policy(
         - allow-all: Allow connections from any peer
         - only-whitelisted-peers: Only allow connections from listed peers (default)
 
-    Example:
+    Examples:
 
-    parse_whitelist_with_policy('''hathor-whitelist
-# policy: allow-all
-''')
-    (set(), WhitelistPolicy.ALLOW_ALL)
+    >>> parse_whitelist_with_policy('hathor-whitelist\\n# policy: allow-all\\n')
+    (set(), <WhitelistPolicy.ALLOW_ALL: 'allow-all'>)
 
-    parse_whitelist_with_policy('''hathor-whitelist
-# This whitelist only allows specific peers
-# policy: only-whitelisted-peers
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-''')
-    ({'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}, WhitelistPolicy.ONLY_WHITELISTED_PEERS)
+    >>> peers, policy = parse_whitelist_with_policy(
+    ...     'hathor-whitelist\\n'
+    ...     '# policy: only-whitelisted-peers\\n'
+    ...     '2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367\\n'
+    ... )
+    >>> policy
+    <WhitelistPolicy.ONLY_WHITELISTED_PEERS: 'only-whitelisted-peers'>
+    >>> len(peers)
+    1
 
-    parse_whitelist_with_policy('''hathor-whitelist
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-''')
-    ({'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}, WhitelistPolicy.ONLY_WHITELISTED_PEERS)
+    >>> peers, policy = parse_whitelist_with_policy(
+    ...     'hathor-whitelist\\n'
+    ...     '2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367\\n'
+    ... )
+    >>> policy
+    <WhitelistPolicy.ONLY_WHITELISTED_PEERS: 'only-whitelisted-peers'>
+    >>> len(peers)
+    1
     """
-    if header is None:
-        header = 'hathor-whitelist'
     lines = text.splitlines()
     _header = lines.pop(0)
-    if _header != header:
+    if _header != WHITELIST_HEADER:
         raise ValueError('invalid header')
 
     policy = WhitelistPolicy.ONLY_WHITELISTED_PEERS  # default
@@ -111,12 +88,16 @@ def parse_whitelist_with_policy(
                 try:
                     policy = WhitelistPolicy(policy_value)
                 except ValueError:
-                    logger.warning('invalid whitelist policy, using default', policy_value=policy_value)
+                    raise ValueError(f'invalid whitelist policy: {policy_value}')
             continue
         else:
             peer_lines.append(line)
 
     peers = {p for line in peer_lines if (p := _parse_peer_id_lossy(line)) is not None}
+
+    if policy == WhitelistPolicy.ALLOW_ALL and peers:
+        logger.warning('whitelist has allow-all policy but also lists peer IDs', num_peers=len(peers))
+
     return peers, policy
 
 
@@ -128,4 +109,5 @@ def _parse_peer_id_lossy(line: str) -> PeerId | None:
     try:
         return PeerId(line.split()[0])
     except (ValueError, IndexError):
+        logger.warning('failed to parse peer id from whitelist line', line=line)
         return None

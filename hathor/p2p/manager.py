@@ -267,13 +267,16 @@ class ConnectionsManager:
         """
         Do a discovery and connect on all discovery strategies.
         """
-        for peer_discovery in self.peer_discoveries:
-            # Wrap connect_to_endpoint to register bootstrap peer IDs
-            def connect_with_bootstrap_registration(entrypoint: PeerEndpoint) -> None:
-                if entrypoint.peer_id is not None:
-                    self._bootstrap_peer_ids.add(entrypoint.peer_id)
-                self.connect_to_endpoint(entrypoint)
+        # Clear bootstrap peer IDs on each discovery run to prevent unbounded growth
+        # when DNS returns different peers over time.
+        self._bootstrap_peer_ids.clear()
 
+        def connect_with_bootstrap_registration(entrypoint: PeerEndpoint) -> None:
+            if entrypoint.peer_id is not None:
+                self._bootstrap_peer_ids.add(entrypoint.peer_id)
+            self.connect_to_endpoint(entrypoint)
+
+        for peer_discovery in self.peer_discoveries:
             coro = peer_discovery.discover_and_connect(connect_with_bootstrap_registration)
             Deferred.fromCoroutine(coro)
 
