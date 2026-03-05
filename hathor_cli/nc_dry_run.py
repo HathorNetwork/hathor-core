@@ -133,9 +133,13 @@ class NcDryRun(RunNode):
             output_str = format_dry_run_text(result, verbose=verbose)
 
         if output_path:
-            with open(output_path, 'w') as f:
-                f.write(output_str)
-            self.log.info(f'Output written to {output_path}')
+            try:
+                with open(output_path, 'w') as f:
+                    f.write(output_str)
+            except OSError as e:
+                self.log.error('failed to write output file', path=output_path, error=str(e))
+                sys.exit(1)
+            self.log.info('output written', path=output_path)
         else:
             print(output_str)
 
