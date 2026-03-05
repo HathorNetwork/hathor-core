@@ -299,7 +299,7 @@ class NCDryRunBlockExecutor:
     def _extract_changes(self, changes_tracker: Any) -> list[dict[str, Any]]:
         """Extract storage changes from a changes tracker."""
         changes: list[dict[str, Any]] = []
-        for attr_key, (value, nc_type) in changes_tracker.data.items():
+        for attr_key, (value, _nc_type) in changes_tracker.data.items():
             change = {
                 'key': attr_key.key.hex(),
                 'value': repr(value),
