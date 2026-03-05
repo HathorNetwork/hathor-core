@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from pydantic import Field
 
@@ -71,7 +71,7 @@ class DryRunTxResult(BaseModel):
 
 class DryRunResult(ResponseModel):
     """Complete result from dry-running a block."""
-    success: bool = Field(description="Whether the dry-run completed successfully")
+    success: Literal[True] = Field(default=True, description="Whether the dry-run completed successfully")
     block_hash: Hex[bytes] = Field(description="Block hash")
     block_height: int = Field(description="Block height")
     initial_block_root_id: Hex[bytes] = Field(description="NC root ID before execution")
@@ -212,7 +212,6 @@ class NCDryRunBlockExecutor:
                 )
 
         return DryRunResult(
-            success=True,
             block_hash=block.hash,
             block_height=block.get_height(),
             initial_block_root_id=initial_block_root_id,
