@@ -225,6 +225,24 @@ class DryRunResultSerializationTest(BlueprintTestCase):
         self.assertIsInstance(json_bytes, bytes)
         self.assertIn(b'112233', json_bytes)
 
+    def test_result_model_dump_json(self) -> None:
+        """Test DryRunResult.model_dump_json() produces valid JSON string (used by CLI)."""
+        result = DryRunResult(
+            success=True,
+            block_hash=b'\x11\x22\x33',
+            block_height=100,
+            initial_block_root_id=b'\x44\x55',
+            final_block_root_id=b'\x66\x77',
+            expected_block_root_id=b'\x66\x77',
+            root_id_matches=True,
+            nc_sorted_calls=[],
+            transactions=[],
+        )
+
+        json_str = result.model_dump_json(indent=2)
+        self.assertIsInstance(json_str, str)
+        self.assertIn('112233', json_str)
+
 
 class FormatDryRunTextTest(BlueprintTestCase):
     """Tests for format_dry_run_text function."""

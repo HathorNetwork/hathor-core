@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from argparse import ArgumentParser
 from typing import TYPE_CHECKING, Optional
@@ -168,7 +167,7 @@ class NcDryRun(RunNode):
 
         # Output results
         if output_format == 'json':
-            output_str = json.dumps(result.dict(), indent=2)
+            output_str = result.model_dump_json(indent=2)
         else:
             output_str = format_dry_run_text(result, verbose=verbose)
 
