@@ -152,17 +152,6 @@ def _parse_rate_limit(rl: dict[str, Any]) -> RateLimitConfig:
     return RateLimitConfig(rate=rl['rate'], burst=rl['burst'], delay=rl['delay'])
 
 
-_RATE_LIMIT_REQUIRED_KEYS = {'rate', 'burst', 'delay'}
-
-
-def _parse_rate_limit(rl: dict[str, Any]) -> RateLimitConfig:
-    """Parse a rate limit dict into RateLimitConfig with key validation."""
-    missing = _RATE_LIMIT_REQUIRED_KEYS - rl.keys()
-    if missing:
-        raise ValueError(f'Rate limit config missing required keys: {missing}')
-    return RateLimitConfig(rate=rl['rate'], burst=rl['burst'], delay=rl['delay'])
-
-
 def api_endpoint(
     *,
     path: str,
