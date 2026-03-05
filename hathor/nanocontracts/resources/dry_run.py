@@ -156,6 +156,4 @@ class NCDryRunResource(Resource):
             error = ErrorResponse(success=False, error=f'Dry run failed: {str(e)}')
             return error.json_dumpb()
 
-        # Return result directly using pydantic's json_dumpb
-        request.setResponseCode(200)
-        return result.json_dumpb()
+        return result

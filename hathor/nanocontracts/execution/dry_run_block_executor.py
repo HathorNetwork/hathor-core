@@ -29,8 +29,8 @@ from hathor.nanocontracts.execution.block_executor import (
     NCTxExecutionSkipped,
     NCTxExecutionSuccess,
 )
-from hathor.utils.api import Response
-from hathor.utils.pydantic import Hex
+from hathor.api.schemas.base import ResponseModel
+from hathor.utils.pydantic import BaseModel, Hex
 
 
 class ExecutionStatus(StrEnum):
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Block
 
 
-class DryRunCallRecord(Response):
+class DryRunCallRecord(BaseModel):
     """A single call record from NC execution."""
     type: str = Field(description="Call type: 'public' or 'view'")
     depth: int = Field(description="Call depth in the execution stack")
@@ -57,7 +57,7 @@ class DryRunCallRecord(Response):
     )
 
 
-class DryRunTxResult(Response):
+class DryRunTxResult(BaseModel):
     """Result of dry-running a single transaction."""
     tx_hash: Hex[bytes] = Field(description="Transaction hash")
     rng_seed: Hex[bytes] = Field(description="RNG seed used for this transaction")
@@ -69,7 +69,7 @@ class DryRunTxResult(Response):
     traceback: Optional[str] = Field(default=None, description="Traceback string on failure")
 
 
-class DryRunResult(Response):
+class DryRunResult(ResponseModel):
     """Complete result from dry-running a block."""
     success: bool = Field(description="Whether the dry-run completed successfully")
     block_hash: Hex[bytes] = Field(description="Block hash")
