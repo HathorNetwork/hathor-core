@@ -20,6 +20,7 @@ import sys
 from argparse import ArgumentParser
 from typing import TYPE_CHECKING, Optional
 
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor_cli.run_node import RunNode
 
 if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class NcDryRun(RunNode):
 
             try:
                 tx = self.tx_storage.get_transaction(tx_hash_bytes)
-            except Exception:
+            except TransactionDoesNotExist:
                 self.log.error(f'Transaction not found: {tx_hash_arg}')
                 sys.exit(1)
 
@@ -117,7 +118,7 @@ class NcDryRun(RunNode):
 
             try:
                 block = self.tx_storage.get_block(tx_meta.first_block)
-            except Exception:
+            except (TransactionDoesNotExist, TransactionIsNotABlock):
                 self.log.error(f'Block not found: {tx_meta.first_block.hex()}')
                 sys.exit(1)
 
@@ -133,7 +134,7 @@ class NcDryRun(RunNode):
 
             try:
                 block = self.tx_storage.get_block(block_hash_bytes)
-            except Exception:
+            except (TransactionDoesNotExist, TransactionIsNotABlock):
                 self.log.error(f'Block not found: {block_hash_arg}')
                 sys.exit(1)
 

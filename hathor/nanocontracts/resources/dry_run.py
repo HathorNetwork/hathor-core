@@ -22,6 +22,7 @@ from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
 from hathor.api_util import Resource
 from hathor.nanocontracts.execution.dry_run_block_executor import DryRunResult, NCDryRunBlockExecutor
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionIsNotABlock
 from hathor.utils.api import ErrorResponse, QueryParams
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ class NCDryRunResource(Resource):
 
             try:
                 tx = self.manager.tx_storage.get_transaction(tx_hash_bytes)
-            except Exception:
+            except TransactionDoesNotExist:
                 request.setResponseCode(404)
                 error = ErrorResponse(success=False, error=f'Transaction not found: {params.tx_hash}')
                 return error.json_dumpb()
@@ -108,7 +109,7 @@ class NCDryRunResource(Resource):
 
             try:
                 block = self.manager.tx_storage.get_block(tx_meta.first_block)
-            except Exception:
+            except (TransactionDoesNotExist, TransactionIsNotABlock):
                 request.setResponseCode(404)
                 error = ErrorResponse(success=False, error=f'Block not found: {tx_meta.first_block.hex()}')
                 return error.json_dumpb()
@@ -126,7 +127,7 @@ class NCDryRunResource(Resource):
 
             try:
                 block = self.manager.tx_storage.get_block(block_hash_bytes)
-            except Exception:
+            except (TransactionDoesNotExist, TransactionIsNotABlock):
                 request.setResponseCode(404)
                 error = ErrorResponse(success=False, error=f'Block not found: {params.block_hash}')
                 return error.json_dumpb()
