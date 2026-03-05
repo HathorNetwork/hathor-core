@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar, cast
 
 from typing_extensions import override
 
@@ -176,7 +176,7 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
     def get_data_bytes(self) -> bytes:
         """Return the serialized data."""
-        return self.__nc_type.to_bytes(self.data)
+        return cast(bytes, self.__nc_type.to_bytes(self.data))
 
     def get_sighash_all_data(self) -> bytes:
         """Workaround to be able to pass `self` for ScriptExtras. See the method `checksig`."""
@@ -522,7 +522,7 @@ class NCRawArgs:
         from hathor.nanocontracts.method import ArgsOnly  # type: ignore[import-not-found]
         try:
             args_parser = ArgsOnly.from_arg_types(arg_types)
-            return args_parser.deserialize_args_bytes(self.args_bytes)
+            return cast(tuple[Any, ...], args_parser.deserialize_args_bytes(self.args_bytes))
         except (NCSerializationError, SerializationError, TypeError, ValueError):
             return None
 
