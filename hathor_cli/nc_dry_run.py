@@ -120,7 +120,7 @@ class NcDryRun(RunNode):
 
         # Log warning if roots don't match
         if not result.root_id_matches:
-            self.log.warn(
+            self.log.warning(
                 'Non-deterministic execution detected',
                 computed_root=result.final_block_root_id.hex(),
                 expected_root=result.expected_block_root_id.hex(),
