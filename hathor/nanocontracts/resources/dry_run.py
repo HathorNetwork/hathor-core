@@ -24,10 +24,11 @@ from twisted.internet.threads import deferToThread
 
 from hathor._openapi.register import register_resource
 from hathor.api.openapi import api_endpoint
-from hathor.api.schemas.base import ErrorResponse, NotFoundResponse
+from hathor.api.schemas.base import ConflictResponse, ErrorResponse, NotFoundResponse
 from hathor.api_util import Resource
 from hathor.nanocontracts.execution.dry_run_block_executor import DryRunResult, NCDryRunBlockExecutor
 from hathor.nanocontracts.execution.dry_run_utils import (
+    DryRunConflictError,
     DryRunNotFoundError,
     DryRunValidationError,
     resolve_block_for_dry_run,
@@ -79,7 +80,7 @@ class NCDryRunResource(Resource):
         rate_limit_global=[{'rate': '10r/s', 'burst': 10, 'delay': 5}],
         rate_limit_per_ip=[{'rate': '2r/s', 'burst': 3, 'delay': 1}],
         query_params_model=NCDryRunParams,
-        response_model=Union[DryRunResult, ErrorResponse, NotFoundResponse],
+        response_model=Union[DryRunResult, ErrorResponse, NotFoundResponse, ConflictResponse],
     )
     def render_GET(self, request: 'Request', *, params: NCDryRunParams) -> Union[bytes, Deferred]:
         request.setHeader(b'cache-control', b'no-store')
@@ -92,6 +93,8 @@ class NCDryRunResource(Resource):
             )
         except DryRunValidationError as e:
             return ErrorResponse(error=str(e))
+        except DryRunConflictError as e:
+            return ConflictResponse(error=str(e))
         except DryRunNotFoundError as e:
             return NotFoundResponse(error=str(e))
 

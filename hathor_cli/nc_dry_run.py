@@ -21,6 +21,7 @@ from argparse import ArgumentParser
 from typing import TYPE_CHECKING, Optional
 
 from hathor.nanocontracts.execution.dry_run_utils import (
+    DryRunConflictError,
     DryRunNotFoundError,
     DryRunValidationError,
     resolve_block_for_dry_run,
@@ -99,7 +100,7 @@ class NcDryRun(RunNode):
                 block_hash=block_hash_arg,
                 tx_hash=tx_hash_arg,
             )
-        except (DryRunValidationError, DryRunNotFoundError) as e:
+        except (DryRunValidationError, DryRunConflictError, DryRunNotFoundError) as e:
             self.log.error(str(e))
             sys.exit(1)
 

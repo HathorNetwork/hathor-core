@@ -27,7 +27,12 @@ if TYPE_CHECKING:
 
 
 class DryRunValidationError(Exception):
-    """Raised when dry-run input validation fails (e.g., invalid hash format, genesis block)."""
+    """Raised when dry-run input validation fails (e.g., invalid hash format)."""
+    pass
+
+
+class DryRunConflictError(Exception):
+    """Raised when the block is in a conflicting state (e.g., voided)."""
     pass
 
 
@@ -119,6 +124,6 @@ def _validate_block(block: 'Block') -> None:
     """Validate that a block is suitable for dry-run execution."""
     block_meta = block.get_metadata()
     if block_meta.voided_by:
-        raise DryRunValidationError('Block is not on best chain (voided)')
+        raise DryRunConflictError('Block is not on best chain (voided)')
     if block.is_genesis:
         raise DryRunValidationError('Cannot dry-run genesis block')
