@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from typing_extensions import Self, override
 
-HATHOR_TOKEN_UID = b'\x00'
-
 from hathorlib.nanocontracts.nc_types.fixed_size_bytes_nc_type import Bytes32NCType
 from hathorlib.nanocontracts.nc_types.nc_type import NCType
 from hathorlib.nanocontracts.types import TokenUid
@@ -25,6 +23,7 @@ from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.compound_encoding.optional import decode_optional, encode_optional
 from hathorlib.utils.typing import is_subclass
 
+HATHOR_TOKEN_UID = b'\x00'
 TOKEN_SIZE = 32
 HATHOR_TOKEN_HEX = HATHOR_TOKEN_UID.hex()
 

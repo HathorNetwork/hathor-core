@@ -16,11 +16,11 @@ from __future__ import annotations
 
 from typing_extensions import Self, override
 
-from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
+from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES
 from hathorlib.nanocontracts.nc_types.nc_type import NCType
 from hathorlib.nanocontracts.types import Address
 from hathorlib.serialization import Deserializer, Serializer
-from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES
+from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import is_subclass
 
 

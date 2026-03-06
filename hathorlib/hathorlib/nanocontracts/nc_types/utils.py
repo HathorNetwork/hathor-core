@@ -25,7 +25,8 @@ try:
     from structlog import get_logger
 except ImportError:
     import logging
-    def get_logger():
+
+    def get_logger():  # type: ignore[misc]
         return logging.getLogger(__name__)
 
 from hathorlib.utils.typing import get_args, get_origin, is_subclass

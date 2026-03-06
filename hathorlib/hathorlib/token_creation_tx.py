@@ -17,10 +17,10 @@ from struct import error as StructError, pack
 from typing import Tuple
 
 from hathorlib.base_transaction import TxInput, TxOutput
-from hathorlib.token_info import TokenVersion
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import TransactionDataError
 from hathorlib.scripts import DataScript
+from hathorlib.token_info import TokenVersion
 from hathorlib.transaction import Transaction
 from hathorlib.utils import clean_token_string, int_to_bytes, unpack, unpack_len
 

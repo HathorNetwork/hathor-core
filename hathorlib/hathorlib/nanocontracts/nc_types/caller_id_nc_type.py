@@ -19,13 +19,13 @@ from typing import _UnionGenericAlias as UnionGenericAlias, assert_never, get_ar
 
 from typing_extensions import Self, override
 
-from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
+from hathorlib.base_transaction import TX_HASH_SIZE
+from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES
 from hathorlib.nanocontracts.nc_types.nc_type import NCType
 from hathorlib.nanocontracts.types import Address, CallerId, ContractId
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.compound_encoding.caller_id import decode_caller_id, encode_caller_id
-from hathorlib.base_transaction import TX_HASH_SIZE
-from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES
+from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 
 
 class CallerIdNCType(NCType[CallerId]):

@@ -19,7 +19,12 @@ from typing import Generic, NamedTuple, TypeAlias, TypeVar, final
 
 from typing_extensions import Self
 
-from hathorlib.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap, get_aliased_type, get_usable_origin_type
+from hathorlib.nanocontracts.nc_types.utils import (
+    TypeAliasMap,
+    TypeToNCTypeMap,
+    get_aliased_type,
+    get_usable_origin_type,
+)
 from hathorlib.serialization import Deserializer, Serializer
 
 T = TypeVar('T')
