@@ -450,6 +450,9 @@ class ConsensusAlgorithm:
                 case Feature.FEE_TOKENS:
                     if not self._fee_tokens_activation_rule(tx, is_active):
                         return False
+                case Feature.TRANSFER_HEADER:
+                    if not self._transfer_headers_activation_rule(tx, is_active):
+                        return False
                 case Feature.COUNT_CHECKDATASIG_OP:
                     if not self._checkdatasig_count_rule(tx):
                         return False
@@ -520,6 +523,18 @@ class ConsensusAlgorithm:
             if not isinstance(e, TooManySigOps):
                 self.log.exception('unexpected exception in mempool-reverification')
             return False
+        return True
+
+    def _transfer_headers_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
+        """
+        Check whether a tx became invalid because the reorg changed the transfer-headers feature activation state.
+        """
+        if is_active:
+            return True
+
+        if tx.has_transfer_header():
+            return False
+
         return True
 
     def _opcodes_v2_activation_rule(self, tx: Transaction, new_best_block: Block) -> bool:

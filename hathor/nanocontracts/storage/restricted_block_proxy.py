@@ -18,11 +18,11 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.storage.block_storage import NCBlockStorage
-    from hathor.nanocontracts.types import TokenUid
+    from hathor.nanocontracts.types import Address, Amount, TokenUid
     from hathor.transaction.token_info import TokenDescription, TokenVersion
 
 
-class TokenProxy:
+class RestrictedBlockProxy:
     """A proxy used to limit access to only the tokens method of a block storage.
     """
     def __init__(self, block_storage: NCBlockStorage) -> None:
@@ -51,3 +51,7 @@ class TokenProxy:
             token_symbol=token_symbol,
             token_version=token_version
         )
+
+    def add_address_balance(self, address: Address, amount: Amount, token_id: TokenUid) -> None:
+        """Proxy to block_storage.add_address_balance()."""
+        self.__block_storage.add_address_balance(address, amount, token_id)

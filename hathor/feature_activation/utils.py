@@ -36,16 +36,18 @@ class Features:
     nanocontracts: bool
     fee_tokens: bool
     opcodes_version: OpcodesVersion
+    transfer_headers: bool = False
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
-        """Return whether the Nano Contracts feature is active according to the provided settings and vertex."""
+        """Return active/inactive state for every runtime feature according to the provided settings and vertex."""
         from hathorlib.conf.settings import FeatureSetting
         feature_states = feature_service.get_feature_states(vertex=vertex)
         feature_settings = {
             Feature.COUNT_CHECKDATASIG_OP: FeatureSetting.FEATURE_ACTIVATION,
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
+            Feature.TRANSFER_HEADER: settings.ENABLE_TRANSFER_HEADER,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
         }
 
@@ -61,6 +63,7 @@ class Features:
             nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
+            transfer_headers=feature_is_active[Feature.TRANSFER_HEADER],
         )
 
 
