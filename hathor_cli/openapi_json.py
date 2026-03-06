@@ -42,13 +42,47 @@ def get_components() -> dict[str, Any]:
 
 def get_openapi_dict() -> dict[str, Any]:
     """ Returns the generated OpenAPI dict
+
+    This function merges OpenAPI specs from two sources:
+    1. Legacy: Manual `resource.openapi` class attributes
+    2. Modern: `@api_endpoint` decorator with Pydantic models
+
+    The modern approach takes precedence for any overlapping paths.
     """
     from hathor._openapi.register import get_registered_resources
+    from hathor.api.openapi import OpenAPIGenerator
+
     openapi = get_base()
     components = get_components()
     openapi['components'] = components['components']
+
+    # 1. Add paths from legacy manual openapi attributes
     for resource in get_registered_resources():
-        openapi['paths'].update(resource.openapi)
+        if hasattr(resource, 'openapi'):
+            for path, path_item in resource.openapi.items():
+                if path in openapi['paths']:
+                    openapi['paths'][path].update(path_item)
+                else:
+                    openapi['paths'][path] = path_item
+
+    # 2. Add/override paths from modern @api_endpoint decorator
+    generator = OpenAPIGenerator()
+    modern_spec = generator.generate()
+
+    # Merge paths at method level (modern takes precedence for overlapping methods)
+    for path, path_item in modern_spec.get('paths', {}).items():
+        if path in openapi['paths']:
+            openapi['paths'][path].update(path_item)
+        else:
+            openapi['paths'][path] = path_item
+
+    # Merge schemas into components
+    modern_schemas = modern_spec.get('components', {}).get('schemas', {})
+    if modern_schemas:
+        if 'schemas' not in openapi['components']:
+            openapi['components']['schemas'] = {}
+        openapi['components']['schemas'].update(modern_schemas)
+
     return openapi
 
 
