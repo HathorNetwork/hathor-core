@@ -12,13 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .generic_adapter import GenericDeserializerAdapter, GenericSerializerAdapter
-from .max_bytes import MaxBytesDeserializer, MaxBytesExceededError, MaxBytesSerializer
-
-__all__ = [
-    'GenericDeserializerAdapter',
-    'GenericSerializerAdapter',
-    'MaxBytesDeserializer',
-    'MaxBytesExceededError',
-    'MaxBytesSerializer',
-]
+DEFAULT_LEB128_MAX_BYTES: int = 4
+DEFAULT_BYTES_MAX_LENGTH: int = 2**16  # 64KiB

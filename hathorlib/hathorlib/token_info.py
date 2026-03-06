@@ -1,4 +1,4 @@
-# Copyright 2025 Hathor Labs
+# Copyright 2021 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,13 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .generic_adapter import GenericDeserializerAdapter, GenericSerializerAdapter
-from .max_bytes import MaxBytesDeserializer, MaxBytesExceededError, MaxBytesSerializer
+from dataclasses import dataclass
+from enum import IntEnum
 
-__all__ = [
-    'GenericDeserializerAdapter',
-    'GenericSerializerAdapter',
-    'MaxBytesDeserializer',
-    'MaxBytesExceededError',
-    'MaxBytesSerializer',
-]
+
+class TokenVersion(IntEnum):
+    NATIVE = 0
+    DEPOSIT = 1
+    FEE = 2
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class TokenDescription:
+    token_id: bytes
+    token_name: str
+    token_symbol: str
+    token_version: TokenVersion
+
+    def __post_init__(self) -> None:
+        assert isinstance(self.token_version, TokenVersion)
