@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from types import TracebackType
-from typing import Generic, TypeVar, Union
+from typing import Generic, TypeVar
 
 from typing_extensions import Self, override
 
@@ -55,9 +55,9 @@ class GenericSerializerAdapter(Serializer, Generic[S]):
 
     def __exit__(
         self,
-        exc_type: Union[type[BaseException], None],
-        exc_value: Union[BaseException, None],
-        traceback: Union[TracebackType, None],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         pass
 
@@ -103,8 +103,8 @@ class GenericDeserializerAdapter(Deserializer, Generic[D]):
 
     def __exit__(
         self,
-        exc_type: Union[type[BaseException], None],
-        exc_value: Union[BaseException, None],
-        traceback: Union[TracebackType, None],
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         pass
