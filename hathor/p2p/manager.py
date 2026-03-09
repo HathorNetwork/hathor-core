@@ -27,7 +27,7 @@ from twisted.web.client import Agent
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import ConnectionChanged, ConnectionRejected, ConnectionResult, ConnectionSlots
+from hathor.p2p.connection_slot import ConnectionRejected, ConnectionResult, ConnectionSlots, SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -166,18 +166,16 @@ class ConnectionsManager:
         # List of peers connected and ready to communicate.
         self.connected_peers = {}
 
-        # List of connections by each slot
-
+        # Instances of Connection Slots
         max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
         max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
-        max_discovered: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
-        max_check_ep: int = settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_bootstrap: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
 
-        self.outgoing_slot = ConnectionSlots(HathorProtocol.ConnectionType.OUTGOING, settings, max_outgoing)
-        self.incoming_slot = ConnectionSlots(HathorProtocol.ConnectionType.INCOMING, settings, max_incoming)
-        self.bootstrap_slot = ConnectionSlots(HathorProtocol.ConnectionType.BOOTSTRAP, settings, max_discovered)
-        self.check_entrypoints_slot = ConnectionSlots(HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS, settings, max_check_ep)
+        slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap)
 
+        # Connection slots manager -> Kickstarts connection slots 
+        self.slots_manager = SlotsManager(slots_manager_settings)
+    
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
         self.new_connection_from_queue = deque()
@@ -440,32 +438,13 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
-        connection_allowed: ConnectionResult
-        # If protocol is added to slot, True. If to Queue or disconnected, False.
-        # Next block sends the connection to the appropriate slot.
-        conn_type = protocol.connection_type
+        connection_status: ConnectionResult
 
-        match conn_type:
-            case HathorProtocol.ConnectionType.OUTGOING:
-                # Here, it can happen that the protocol changes to Check Entrypoints.
-                connection_allowed = self.outgoing_slot.add_connection(protocol)
+        connection_status = self.slots_manager.add_to_slot(protocol)
 
-                # If connection changes from outgoing -> check_ep, we add it here.
-                if isinstance(connection_allowed, ConnectionChanged):
-                    connection_allowed = self.check_entrypoints_slot.add_connection(protocol)
-
-            case HathorProtocol.ConnectionType.INCOMING:
-                connection_allowed = self.incoming_slot.add_connection(protocol)
-
-            case HathorProtocol.ConnectionType.BOOTSTRAP:
-                connection_allowed = self.bootstrap_slot.add_connection(protocol)
-
-            case _:
-                assert_never(conn_type)
-
-        # Regardless of the slot sent, the total connections increases.
-        # A connection waiting in queue is not added (yet) to the whole pool, only if another disconnects.
-        if isinstance(connection_allowed, ConnectionRejected):
+        if isinstance(connection_status, ConnectionRejected):
+            self.log.warn('Connection Rejected')
+            protocol.disconnect(force=True)
             return
 
         self.connections.add(protocol)
@@ -527,10 +506,6 @@ class ConnectionsManager:
         # Notify other peers about this new peer connection.
         self.relay_peer_to_ready_connections(protocol.peer)
 
-        # If it is a connection for checking entrypoint only, we must disconnect now.
-        if protocol.connection_type == HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-            protocol.disconnect(reason="READY connection for check_entrypoint slot.")
-
     def relay_peer_to_ready_connections(self, peer: PublicPeer) -> None:
         """Relay peer to all ready connections."""
         for conn in self.iter_ready_connections():
@@ -545,32 +520,8 @@ class ConnectionsManager:
         # Discard handles case when not in connections.
         self.connections.discard(protocol)
 
-        # If the protocol discarded is from check_entrypoints slot.
-        dequeued_ep = None
-
         # Each conn is from a slot - discard from it as well.
-        match protocol.connection_type:
-            case HathorProtocol.ConnectionType.OUTGOING:
-                self.outgoing_slot.remove_connection(protocol)
-
-            case HathorProtocol.ConnectionType.INCOMING:
-                self.incoming_slot.remove_connection(protocol)
-
-            case HathorProtocol.ConnectionType.BOOTSTRAP:
-                self.bootstrap_slot.remove_connection(protocol)
-
-            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
-                dequeued_ep = self.check_entrypoints_slot.remove_connection(protocol)
-                # For a given ep, check if some verified peer has it. If so, pop it off and restart.
-                while dequeued_ep:
-                    for peer in self.verified_peer_storage.values():
-                        if dequeued_ep in peer.info.entrypoints:
-                            dequeued_ep = self.check_entrypoints_slot.remove_connection(protocol, True, dequeued_ep)
-                            break
-                    if dequeued_ep and dequeued_ep not in peer.info.entrypoints:
-                        self.connect_to_endpoint(entrypoint=dequeued_ep.with_id(None))
-            case _:
-                assert_never()
+        self.slots_manager.remove_from_slot(protocol)
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
