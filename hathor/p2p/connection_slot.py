@@ -38,8 +38,25 @@ class ConnectionRejected:
     reason: str
 
 
-ConnectionResult = ConnectionAllowed | ConnectionChanged | ConnectionRejected
+@dataclass
+class ConnectionRemoved:
+    reason: str
 
+
+@dataclass
+class EntrypointQueued:
+    stratum: str
+
+
+@dataclass
+class EntrypointDenied:
+    stratum: str
+
+
+ConnectionResult = ConnectionAllowed | ConnectionChanged | ConnectionRejected | ConnectionRemoved
+EntrypointResult = EntrypointQueued | EntrypointDenied
+
+SlotResult = ConnectionResult | EntrypointResult
 
 class ConnectionSlots:
     """ Class of a connection pool slot - outgoing, incoming, discovered or
@@ -176,6 +193,8 @@ class ConnectionSlots:
 
         return None
 
+    def is_full(self) -> bool:
+        return len(self.connection_slot) >= self.max_slot_connections
 
 class SlotsManager:
     """Manager of slot connections - selects the slot to which must we send the]
@@ -192,6 +211,7 @@ class SlotsManager:
     bootstrap_slot: ConnectionSlots
     check_ep_slot: ConnectionSlots
     queue_entrypoints: deque[PeerEndpoint | None]
+    verified_entrypoints: set[PeerEndpoint | None]
     types_allowed: dict[str ,HathorProtocol.ConnectionType] = {
         'outgoing': HathorProtocol.ConnectionType.OUTGOING,
         'incoming' : HathorProtocol.ConnectionType.INCOMING,
@@ -219,45 +239,115 @@ class SlotsManager:
         conn_type = protocol.connection_type
         assert conn_type in self.types_allowed
 
+        types = self.types_allowed
+        queue = self.queue_entrypoints
+
         slot: ConnectionSlots | None = None
         match conn_type:
+            case HathorProtocol.ConnectionType.OUTGOING:
+                slot = self.outgoing_slot
+                if slot.is_full():
+                    protocol.connection_type = types['check_ep']
+                    conn_type = protocol.connection_type
+                    slot = self.check_ep_slot
+                    # No connection changed?
+                    
             case HathorProtocol.ConnectionType.INCOMING:
                 slot = self.incoming_slot
             case HathorProtocol.ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
+            case _:
+                assert_never()
+
+        if protocol in slot.connection_slot:
+            return ConnectionRejected('Protocol already in the slot.')
+
+        if not slot.is_full():
+            slot.add_connection(protocol)
+            return ConnectionAllowed(f"Allowed: Connection {conn_type} added to slot")
+
+        # If slot is full, proceed to error handling.
+
+        if slot.type in [types['incoming'], types['bootstrap']]:
+            return ConnectionRejected(f'Slot {slot.type} is full.')
+    
+
+        if slot.type == types['check_ep']:
+            if len(queue) >= self.queue_max_size:
+                protocol.disconnect(force=True, reason="p2p_queue is full")
+                return ConnectionRejected('Queue is full')
+
+            entrypoint = protocol.entrypoint
+            queue.appendleft(entrypoint)
+            protocol.disconnect(force=True, reason="Slot full, entrypoint added to the p2p_queue.")
+            return ConnectionRejected("Slot full, entrypoint added to p2p_queue.")
+        
+        # We handled the case of slot full in match, we must assure type is not outgoing in the end.
+        assert slot.type != types['outgoing']
+
+    def remove_from_slot(self, protocol: HathorProtocol) -> None:
+        """ Removes protocol from slot of same type.
+            If OUTGOING, INCOMING or BOOTSTRAP, simply remove from slot and disconnect.
+            If CHECK_ENTRYPOINTS, entrypoint queue must also be managed."""
+
+        conn_type = protocol.connection_type
+        assert conn_type in self.types_allowed
+
+        slot: ConnectionSlots | None = None
+        match conn_type:
             case HathorProtocol.ConnectionType.OUTGOING:
                 slot = self.outgoing_slot
+            case HathorProtocol.ConnectionType.INCOMING:
+                slot = self.incoming_slot
+            case HathorProtocol.ConnectionType.BOOTSTRAP:
+                slot = self.bootstrap_slot
             case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
                 slot = self.check_ep_slot
             case _:
                 assert_never()
 
-        types = self.types_allowed
-        queue = self.queue_entrypoints
+        if protocol not in slot.connection_slot:
+            return ConnectionRejected("Protocol not in slot - can't be removed.")
 
-        if protocol in slot.connection_slot:
-            return ConnectionRejected('Protocol already in slot.')
-
-        if len(slot.connection_slot) >= slot.max_slot_connections:
-
-            if slot.type in [types['incoming'], types['bootstrap']]:
-                return ConnectionRejected(f'Slot {slot.type} is full.')
+        slot.remove_connection(protocol)
         
-            if slot.type == types['outgoing']:
-                protocol.connection_type = HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS
-                self.add_to_slot(protocol) # Call add_to_slot with new protocol type
-                # Recursion call will make the ConnectionChanged flag come in reverse.
-                return ConnectionChanged(f'Slot {slot.type} is full: Changing to Check_EP')
+        types = self.types_allowed
+        if slot.type == types['check_ep']:
+            # Remove connection from CHECK_EP
+            # If READY, we fetch the entrypoints and put them into the queue.
+            # Regardless, we'll need to 
+            if protocol.connection_state != HathorProtocol.ConnectionState.READY:
+                return ConnectionRemoved('Protocol state NOT READY.')
 
-            if slot.type == types['check_ep']:
-                if len(queue) >= self.queue_max_size:
-                    protocol.disconnect(force=True, reason="p2p_queue is full")
-                    return ConnectionRejected('Queue is full')
+            # If ready, protocol entrypoint mustn't be None
+            assert protocol.entrypoint != None, ConnectionRejected('Entrypoint should not be None')
 
-                entrypoint = protocol.entrypoint
+            verified_entrypoints = self.verified_entrypoints
+            verified_entrypoints.add(PeerEndpoint(protocol.entrypoint))
+
+            peer_entrypoints = protocol.peer.info.entrypoints
+            queue = self.queue_entrypoints
+
+            for entrypoint in peer_entrypoints:
+                entrypoint = PeerEndpoint(entrypoint, peer_id=None)
+                if entrypoint in verified_entrypoints:
+                    continue
+                # Change from previous implementation: ALWAYS put the endpoint on the queue.
+                # even if slot not full. 
+
+                if self.is_queue_full():
+                    return ConnectionRemoved('Entrypoint queue is full.')
+
                 queue.appendleft(entrypoint)
-                protocol.disconnect(force=True, reason="Slot full, entrypoint added to the p2p_queue.")
-                return ConnectionRejected("Slot full, entrypoint added to p2p_queue.")
 
-    def remove_connection(self, protocol: HathorProtocol) -> None:
-        pass
+
+            return ConnectionRemoved(f'Protocol {slot.type} removed from slot.')
+            # If not, we simply discard it. 
+
+    def is_queue_full(self) -> bool:
+        return len(self.queue_entrypoints) >= self.queue_max_size
+
+"Still needs:"
+"1. Connect to entrypoints in queue"
+"2. When connection arrives, it outgoing is not full, it will become an outgoing connection."
+"3. Check perfectly the dequeuing mechanism."
