@@ -24,10 +24,9 @@ from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
 from twisted.web.client import Agent
-from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import ConnectionRejected, ConnectionResult, ConnectionSlots, SlotsManager, SlotsManagerSettings
+from hathor.p2p.connection_slot import ConnectionRejected, ConnectionAllowed, ConnectionSlots, SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -173,9 +172,9 @@ class ConnectionsManager:
 
         slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap)
 
-        # Connection slots manager -> Kickstarts connection slots 
+        # Connection slots manager -> Kickstarts connection slots
         self.slots_manager = SlotsManager(slots_manager_settings)
-    
+
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
         self.new_connection_from_queue = deque()
@@ -438,7 +437,7 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
-        connection_status: ConnectionResult
+        connection_status: ConnectionAllowed | ConnectionRejected
 
         connection_status = self.slots_manager.add_to_slot(protocol)
 

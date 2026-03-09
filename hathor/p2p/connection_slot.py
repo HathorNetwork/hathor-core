@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import deque
 from dataclasses import dataclass
-from typing import Optional
 
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.protocol import HathorProtocol
 
 
@@ -40,6 +37,7 @@ class ConnectionRemoved:
 
 ConnectionResult = ConnectionAllowed | ConnectionRejected | ConnectionRemoved
 
+
 class ConnectionSlots:
     """ Class of a connection pool slot - outgoing, incoming, discovered connections. """
     connection_slot: set[HathorProtocol]
@@ -50,7 +48,7 @@ class ConnectionSlots:
 
         if max_connections <= 0:
             raise ValueError("Slot max number must allow at least one connection")
-        
+
         self.type = type
         self.connection_slot = set()
         self.max_slot_connections = max_connections
@@ -67,7 +65,7 @@ class ConnectionSlots:
 
         if protocol in self.connection_slot:
             return ConnectionRejected("Protocol already in Slot.")
-        
+
         if self.is_full():
             return ConnectionRejected(f"Slot {self.type} is full")
 
@@ -88,25 +86,25 @@ class ConnectionSlots:
     def is_in_slot(self, protocol: HathorSettings) -> bool:
         return protocol in self.connection_slot
 
+
 @dataclass
 class SlotsManagerSettings:
     max_outgoing: int
     max_incoming: int
     max_bootstrap: int
 
+
 class SlotsManager:
     """Manager of slot connections - selects the slot to which must we send the
-     arriving protocol.
-     
-    Three protocol slots: OUTGOING, INCOMING, DISCOVERED.
+     arriving protocol. Three protocol slots: OUTGOING, INCOMING, DISCOVERED.
     """
     outgoing_slot: ConnectionSlots
     incoming_slot: ConnectionSlots
     bootstrap_slot: ConnectionSlots
 
-    types_allowed: dict[str ,HathorProtocol.ConnectionType] = {
+    types_allowed: dict[str, HathorProtocol.ConnectionType] = {
         'outgoing': HathorProtocol.ConnectionType.OUTGOING,
-        'incoming' : HathorProtocol.ConnectionType.INCOMING,
+        'incoming': HathorProtocol.ConnectionType.INCOMING,
         'bootstrap': HathorProtocol.ConnectionType.BOOTSTRAP,
     }
 
@@ -116,8 +114,8 @@ class SlotsManager:
         self.incoming_slot = ConnectionSlots(types['incoming'], settings.max_incoming)
         self.bootstrap_slot = ConnectionSlots(types['bootstrap'], settings.max_bootstrap)
 
-    def add_to_slot(self, protocol: HathorProtocol) -> ConnectionResult:
-        """Add received protocol to one of the slots. 
+    def add_to_slot(self, protocol: HathorProtocol) -> ConnectionAllowed | ConnectionRejected:
+        """Add received protocol to one of the slots.
         If slot is full, protocol is disconnected. """
 
         conn_type = protocol.connection_type
@@ -135,7 +133,7 @@ class SlotsManager:
                 assert_never()
 
         return slot.add_connection(protocol)
-    
+
     def remove_from_slot(self, protocol: HathorProtocol) -> None:
         """ Removes protocol from slot of same type.
             If OUTGOING, INCOMING or BOOTSTRAP, simply remove from slot and disconnect."""
@@ -158,6 +156,7 @@ class SlotsManager:
             return ConnectionRejected("Protocol not in slot - can't be removed.")
 
         slot.remove_connection(protocol)
+
 
 "Still needs:"
 "1. Connect to entrypoints in queue"
