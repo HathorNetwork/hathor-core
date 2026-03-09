@@ -7,7 +7,7 @@ from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import Slot
+from hathor.p2p.connection_slot import ConnectionSlots
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorProtocol
@@ -729,5 +729,5 @@ class RandomSimulatorTestCase(SimulatorTestCase):
     def test_example_usage_of_Slot(self) -> None:
         _settings = HathorSettings(P2PKH_VERSION_BYTE=bytes(1), MULTISIG_VERSION_BYTE=bytes(1), NETWORK_NAME="testnet")
         max_connections = 15
-        slot = Slot(HathorProtocol.ConnectionType.OUTGOING, _settings, max_connections=max_connections)
+        slot = ConnectionSlots(HathorProtocol.ConnectionType.OUTGOING, _settings, max_connections=max_connections)
         assert slot.max_slot_connections == max_connections

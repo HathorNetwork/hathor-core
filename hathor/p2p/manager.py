@@ -27,7 +27,7 @@ from twisted.web.client import Agent
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import ConnectionChanged, ConnectionRejected, ConnectionResult, Slot
+from hathor.p2p.connection_slot import ConnectionChanged, ConnectionRejected, ConnectionResult, ConnectionSlots
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -94,10 +94,10 @@ class ConnectionsManager:
 
     rate_limiter: RateLimiter
 
-    outgoing_slot: Slot
-    incoming_slot: Slot
-    bootstrap_slot: Slot
-    check_entrypoints_slot: Slot
+    outgoing_slot: ConnectionSlots
+    incoming_slot: ConnectionSlots
+    bootstrap_slot: ConnectionSlots
+    check_entrypoints_slot: ConnectionSlots
 
     def __init__(
         self,
@@ -173,10 +173,10 @@ class ConnectionsManager:
         max_discovered: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
         max_check_ep: int = settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
 
-        self.outgoing_slot = Slot(HathorProtocol.ConnectionType.OUTGOING, settings, max_outgoing)
-        self.incoming_slot = Slot(HathorProtocol.ConnectionType.INCOMING, settings, max_incoming)
-        self.bootstrap_slot = Slot(HathorProtocol.ConnectionType.DISCOVERED, settings, max_discovered)
-        self.check_entrypoints_slot = Slot(HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS, settings, max_check_ep)
+        self.outgoing_slot = ConnectionSlots(HathorProtocol.ConnectionType.OUTGOING, settings, max_outgoing)
+        self.incoming_slot = ConnectionSlots(HathorProtocol.ConnectionType.INCOMING, settings, max_incoming)
+        self.bootstrap_slot = ConnectionSlots(HathorProtocol.ConnectionType.BOOTSTRAP, settings, max_discovered)
+        self.check_entrypoints_slot = ConnectionSlots(HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS, settings, max_check_ep)
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -457,7 +457,7 @@ class ConnectionsManager:
             case HathorProtocol.ConnectionType.INCOMING:
                 connection_allowed = self.incoming_slot.add_connection(protocol)
 
-            case HathorProtocol.ConnectionType.DISCOVERED:
+            case HathorProtocol.ConnectionType.BOOTSTRAP:
                 connection_allowed = self.bootstrap_slot.add_connection(protocol)
 
             case _:
@@ -556,7 +556,7 @@ class ConnectionsManager:
             case HathorProtocol.ConnectionType.INCOMING:
                 self.incoming_slot.remove_connection(protocol)
 
-            case HathorProtocol.ConnectionType.DISCOVERED:
+            case HathorProtocol.ConnectionType.BOOTSTRAP:
                 self.bootstrap_slot.remove_connection(protocol)
 
             case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
@@ -775,13 +775,13 @@ class ConnectionsManager:
         """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
             if discovery_call:
-                protocol.connection_type = HathorProtocol.ConnectionType.DISCOVERED
+                protocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
             protocol.on_outbound_connect(entrypoint, peer)
         else:
             assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
             if discovery_call:
-                protocol.wrappedProtocol.connection_type = HathorProtocol.ConnectionType.DISCOVERED
+                protocol.wrappedProtocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
             protocol.wrappedProtocol.on_outbound_connect(entrypoint, peer)
         self.connecting_peers.pop(endpoint)
 
@@ -929,7 +929,7 @@ class ConnectionsManager:
         other_connection = self.connected_peers[protocol.peer.id]
         _outbound_types = (
             HathorProtocol.ConnectionType.OUTGOING,
-            HathorProtocol.ConnectionType.DISCOVERED,
+            HathorProtocol.ConnectionType.BOOTSTRAP,
             HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS,
         )
         is_outbound = protocol.connection_type in _outbound_types

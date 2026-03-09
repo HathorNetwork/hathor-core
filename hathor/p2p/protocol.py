@@ -76,8 +76,12 @@ class HathorProtocol:
         """ Types of Connection as inputs for an instance of the Hathor Protocol. """
         OUTGOING = 0
         INCOMING = 1
-        DISCOVERED = 2
+        BOOTSTRAP = 2
         CHECK_ENTRYPOINTS = 3
+
+        def is_outbound(self) -> bool:
+            """ If value is 1, then the connection is inbound. If not, outbound."""
+            return self.value != self.INCOMING
 
     class ConnectionState(Enum):
         """ State of connection of two peers - either in a slot queue or active. """
