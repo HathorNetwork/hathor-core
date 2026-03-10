@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .generic_adapter import GenericDeserializerAdapter, GenericSerializerAdapter
-from .max_bytes import MaxBytesDeserializer, MaxBytesExceededError, MaxBytesSerializer
-
-__all__ = [
-    'GenericDeserializerAdapter',
-    'GenericSerializerAdapter',
-    'MaxBytesDeserializer',
-    'MaxBytesExceededError',
-    'MaxBytesSerializer',
-]
+# Re-export from hathorlib for backward compatibility
+from hathorlib.serialization.adapters import *  # noqa: F401,F403
+from hathorlib.serialization.adapters import (  # noqa: F401
+    GenericDeserializerAdapter,
+    GenericSerializerAdapter,
+    MaxBytesDeserializer,
+    MaxBytesExceededError,
+    MaxBytesSerializer,
+)
