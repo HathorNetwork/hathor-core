@@ -57,7 +57,7 @@ class BlueprintTestCase(unittest.TestCase):
         """ Implementation of `get_readonly_contract` and `get_readwrite_contract`, only difference is `locked`
         """
         from hathor.nanocontracts.nc_exec_logs import NCLogger
-        runner = self.runner
+        runner = self.runner._runner
         contract_storage = runner.get_storage(contract_id)
         if locked:
             contract_storage.lock()
@@ -122,7 +122,7 @@ class BlueprintTestCase(unittest.TestCase):
         return self._register_blueprint_class(blueprint_class, blueprint_id)
 
     def build_runner(self) -> TestRunner:
-        """Create a Runner instance."""
+        """Create a test runner."""
         return TestRunner(
             tx_storage=self.manager.tx_storage,
             settings=self._settings,
@@ -186,7 +186,7 @@ class BlueprintTestCase(unittest.TestCase):
         token_version: TokenVersion
     ) -> None:
         """Create a token in the runner block storage"""
-        self.runner.block_storage.create_token(
+        self.runner._runner.block_storage.create_token(
             token_id=token_uid,
             token_name=token_name,
             token_symbol=token_symbol,
