@@ -16,8 +16,8 @@
 from hathorlib.nanocontracts.storage.block_storage import *  # noqa: F401,F403
 from hathorlib.nanocontracts.storage.block_storage import (  # noqa: F401
     AddressKey,
+    BlockTrieTag,
     ContractKey,
     NCBlockStorage,
     TokenKey,
-    BlockTrieTag,
 )
