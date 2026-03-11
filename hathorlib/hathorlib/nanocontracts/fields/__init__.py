@@ -29,7 +29,6 @@ __all__ = [
     'DictContainer',
     'Field',
     'SetContainer',
-    'TypeToFieldMap',
     'make_field_for_type',
 ]
 
