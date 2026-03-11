@@ -29,7 +29,7 @@ from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import leb128
 
 
-class _Tag(Enum):
+class BlockTrieTag(Enum):
     CONTRACT = b'\0'
     TOKEN = b'\1'
     ADDRESS = b'\2'
@@ -39,21 +39,21 @@ class ContractKey(NamedTuple):
     nc_id: bytes
 
     def __bytes__(self):
-        return _Tag.CONTRACT.value + self.nc_id
+        return BlockTrieTag.CONTRACT.value + self.nc_id
 
 
 class TokenKey(NamedTuple):
     token_id: bytes
 
     def __bytes__(self):
-        return _Tag.TOKEN.value + self.token_id
+        return BlockTrieTag.TOKEN.value + self.token_id
 
 
 class AddressKey(NamedTuple):
     address: Address
 
     def __bytes__(self):
-        return _Tag.ADDRESS.value + self.address
+        return BlockTrieTag.ADDRESS.value + self.address
 
 
 class NCBlockStorage:
