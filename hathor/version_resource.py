@@ -80,7 +80,7 @@ VersionResponse.openapi_examples = {
 
 @register_resource
 class VersionResource(Resource):
-    """ Implements a web server API with POST to return the api version and some configuration
+    """ Implements a web server API with GET to return the api version and some configuration
 
     You must run with option `--status <PORT>`.
     """

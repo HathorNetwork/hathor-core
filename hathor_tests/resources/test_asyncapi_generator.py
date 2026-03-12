@@ -13,7 +13,7 @@ class TestSchemaRegistryMixin(unittest.TestCase):
 
     def setUp(self) -> None:
         class _Gen(SchemaRegistryMixin):
-            def __init__(self):
+            def __init__(self) -> None:
                 self._schemas: dict = {}
         self.gen = _Gen()
 

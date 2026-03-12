@@ -399,7 +399,7 @@ class TestRequestBodyValidation(unittest.TestCase):
 
     def test_valid_request_body(self) -> None:
         """Valid request body should be parsed and passed as body= kwarg."""
-        from hathor.api.schemas import RequestModel
+        from hathor.utils.pydantic import BaseModel as RequestModel
 
         class MyBody(RequestModel):
             name: str
@@ -428,7 +428,7 @@ class TestRequestBodyValidation(unittest.TestCase):
 
     def test_invalid_request_body_returns_400(self) -> None:
         """Invalid request body should return 400 error."""
-        from hathor.api.schemas import RequestModel
+        from hathor.utils.pydantic import BaseModel as RequestModel
 
         class MyBody(RequestModel):
             name: str
@@ -459,7 +459,7 @@ class TestRequestBodyValidation(unittest.TestCase):
 
     def test_malformed_json_returns_400(self) -> None:
         """Malformed JSON body should return 400 error."""
-        from hathor.api.schemas import RequestModel
+        from hathor.utils.pydantic import BaseModel as RequestModel
 
         class MyBody(RequestModel):
             name: str
@@ -618,3 +618,279 @@ class TestEndpointRegistryEncapsulation(unittest.TestCase):
         # Mutating the returned list should not affect the internal registry
         registry.clear()
         self.assertEqual(len(get_endpoint_registry()), original_len)
+
+
+class TestCatchHathorExceptions(unittest.TestCase):
+    """CQ-001: @api_endpoint should catch HathorError."""
+
+    def setUp(self) -> None:
+        clear_endpoint_registry()
+
+    def tearDown(self) -> None:
+        clear_endpoint_registry()
+
+    def test_hathor_error_returns_error_response(self) -> None:
+        """HathorError raised in handler should return ErrorResponse."""
+        from hathor.exception import HathorError
+
+        class MyResponse(ResponseModel):
+            value: str
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='GET',
+                operation_id='test_hathor_err',
+                summary='Test',
+                response_model=MyResponse,
+            )
+            def render_GET(self, request):
+                raise HathorError('something broke')
+
+        request = _FakeRequest()
+        resource = MyResource()
+        result = resource.render_GET(request)
+
+        self.assertEqual(request.responseCode, 400)
+        data = json.loads(result)
+        self.assertFalse(data['success'])
+        self.assertEqual(data['error'], 'something broke')
+
+    def test_hathor_error_with_status_code(self) -> None:
+        """HathorError with status_code attribute should use that status code."""
+        from hathor.exception import HathorError
+
+        class CustomError(HathorError):
+            status_code = 409
+
+        class MyResponse(ResponseModel):
+            value: str
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='GET',
+                operation_id='test_hathor_err_code',
+                summary='Test',
+                response_model=MyResponse,
+            )
+            def render_GET(self, request):
+                raise CustomError('conflict')
+
+        request = _FakeRequest()
+        resource = MyResource()
+        resource.render_GET(request)
+
+        self.assertEqual(request.responseCode, 409)
+
+    def test_catch_hathor_exceptions_disabled(self) -> None:
+        """With catch_hathor_exceptions=False, HathorError should propagate."""
+        from hathor.exception import HathorError
+
+        class MyResponse(ResponseModel):
+            value: str
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='GET',
+                operation_id='test_no_catch',
+                summary='Test',
+                response_model=MyResponse,
+                catch_hathor_exceptions=False,
+            )
+            def render_GET(self, request):
+                raise HathorError('should propagate')
+
+        request = _FakeRequest()
+        resource = MyResource()
+        with self.assertRaises(HathorError):
+            resource.render_GET(request)
+
+
+class TestSanitizeValidationErrors(unittest.TestCase):
+    """SC-002: Validation errors should be sanitized."""
+
+    def setUp(self) -> None:
+        clear_endpoint_registry()
+
+    def tearDown(self) -> None:
+        clear_endpoint_registry()
+
+    def test_malformed_json_returns_safe_message(self) -> None:
+        """Malformed JSON should return 'Request body is not valid JSON'."""
+        from hathor.utils.pydantic import BaseModel as RequestModel
+
+        class MyBody(RequestModel):
+            name: str
+
+        class MyResponse(ResponseModel):
+            greeting: str
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='POST',
+                operation_id='test_sanitize_json',
+                summary='Test',
+                request_model=MyBody,
+                response_model=MyResponse,
+            )
+            def render_POST(self, request, *, body):
+                return MyResponse(greeting=f'Hello {body.name}')
+
+        request = _FakeRequest()
+        request.content = BytesIO(b'not json')
+        resource = MyResource()
+        result = resource.render_POST(request)  # type: ignore[call-arg]
+
+        self.assertEqual(request.responseCode, 400)
+        data = json.loads(result)
+        self.assertEqual(data['error'], 'Request body is not valid JSON')
+
+    def test_validation_error_contains_field_path(self) -> None:
+        """Validation error should contain field path and message, not model internals."""
+        from hathor.utils.pydantic import BaseModel as RequestModel
+
+        class MyBody(RequestModel):
+            name: str
+            age: int
+
+        class MyResponse(ResponseModel):
+            greeting: str
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='POST',
+                operation_id='test_sanitize_validation',
+                summary='Test',
+                request_model=MyBody,
+                response_model=MyResponse,
+            )
+            def render_POST(self, request, *, body):
+                return MyResponse(greeting='hello')
+
+        request = _FakeRequest(body={'name': 'test', 'age': 'not_a_number'})
+        resource = MyResource()
+        result = resource.render_POST(request)  # type: ignore[call-arg]
+
+        self.assertEqual(request.responseCode, 400)
+        data = json.loads(result)
+        # Should contain field path
+        self.assertIn('age', data['error'])
+        # Should NOT contain model class name
+        self.assertNotIn('MyBody', data['error'])
+
+
+class TestMaxBodySize(unittest.TestCase):
+    """SC-003: @api_endpoint should enforce max_body_size."""
+
+    def setUp(self) -> None:
+        clear_endpoint_registry()
+
+    def tearDown(self) -> None:
+        clear_endpoint_registry()
+
+    def test_body_exceeding_limit_returns_413(self) -> None:
+        """Request body exceeding max_body_size should return 413."""
+        from hathor.utils.pydantic import BaseModel as RequestModel
+
+        class MyBody(RequestModel):
+            data: str
+
+        class MyResponse(ResponseModel):
+            ok: bool
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='POST',
+                operation_id='test_max_body',
+                summary='Test',
+                request_model=MyBody,
+                response_model=MyResponse,
+                max_body_size=10,
+            )
+            def render_POST(self, request, *, body):
+                return MyResponse(ok=True)
+
+        request = _FakeRequest()
+        request.content = BytesIO(b'x' * 100)
+        resource = MyResource()
+        result = resource.render_POST(request)  # type: ignore[call-arg]
+
+        self.assertEqual(request.responseCode, 413)
+        data = json.loads(result)
+        self.assertIn('too large', data['error'])
+
+    def test_body_within_limit_passes(self) -> None:
+        """Request body within max_body_size should pass through."""
+        from hathor.utils.pydantic import BaseModel as RequestModel
+
+        class MyBody(RequestModel):
+            name: str
+
+        class MyResponse(ResponseModel):
+            ok: bool
+
+        class MyResource(Resource):
+            @api_endpoint(
+                path='/test',
+                method='POST',
+                operation_id='test_max_body_ok',
+                summary='Test',
+                request_model=MyBody,
+                response_model=MyResponse,
+                max_body_size=1000,
+            )
+            def render_POST(self, request, *, body):
+                return MyResponse(ok=True)
+
+        request = _FakeRequest(body={'name': 'test'})
+        resource = MyResource()
+        result = resource.render_POST(request)  # type: ignore[call-arg]
+
+        self.assertEqual(request.responseCode, 200)
+        data = json.loads(result)
+        self.assertTrue(data['ok'])
+
+
+class TestDuplicateEndpointRegistration(unittest.TestCase):
+    """AR-001: Duplicate endpoint registration should raise ValueError."""
+
+    def setUp(self) -> None:
+        clear_endpoint_registry()
+
+    def tearDown(self) -> None:
+        clear_endpoint_registry()
+
+    def test_duplicate_path_method_raises(self) -> None:
+        """Registering two endpoints with the same path+method should raise ValueError."""
+        class MyResponse(ResponseModel):
+            value: str
+
+        class MyResource1(Resource):
+            @api_endpoint(
+                path='/dup_test',
+                method='GET',
+                operation_id='dup1',
+                summary='Test 1',
+                response_model=MyResponse,
+            )
+            def render_GET(self, request):
+                pass
+
+        with self.assertRaises(ValueError) as ctx:
+            class MyResource2(Resource):
+                @api_endpoint(
+                    path='/dup_test',
+                    method='GET',
+                    operation_id='dup2',
+                    summary='Test 2',
+                    response_model=MyResponse,
+                )
+                def render_GET(self, request):
+                    pass
+
+        self.assertIn('Duplicate endpoint registration', str(ctx.exception))

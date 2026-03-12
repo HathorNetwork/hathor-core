@@ -94,7 +94,7 @@ def main():
     parser = create_parser()
     parser.add_argument('--indent', type=int, default=None, help='Number of spaces to use for indentation')
     parser.add_argument('out', type=argparse.FileType('w', encoding='UTF-8'), default=get_default_output_path(),
-                        nargs='?', help='Output file where OpenSPI json will be written')
+                        nargs='?', help='Output file where OpenAPI json will be written')
     args = parser.parse_args()
 
     openapi = get_openapi_dict()

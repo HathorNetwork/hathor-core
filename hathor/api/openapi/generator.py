@@ -101,7 +101,14 @@ class OpenAPIGenerator(SchemaRegistryMixin):
         # Check if it's a Union type
         args = typing.get_args(metadata.response_model)
         if args:
-            return list(args)
+            models = []
+            for a in args:
+                if a is type(None):
+                    continue
+                if not (isinstance(a, type) and issubclass(a, BaseModel)):
+                    raise TypeError(f"response_model Union contains non-BaseModel type: {a}")
+                models.append(a)
+            return models
 
         # Single model
         return [metadata.response_model]

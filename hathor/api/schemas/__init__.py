@@ -14,20 +14,12 @@
 
 """Pydantic schemas for API request/response validation and OpenAPI generation."""
 
-from hathor.api.schemas.base import (
-    ErrorResponse,
-    ErrorResponseModel,
-    OpenAPIExample,
-    RequestModel,
-    ResponseModel,
-    SuccessResponse,
-)
+from hathor.api.schemas.base import ErrorResponse, ErrorResponseModel, OpenAPIExample, ResponseModel, SuccessResponse
 
 __all__ = [
     'ErrorResponse',
     'ErrorResponseModel',
     'OpenAPIExample',
-    'RequestModel',
     'ResponseModel',
     'SuccessResponse',
 ]

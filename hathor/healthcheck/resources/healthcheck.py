@@ -189,7 +189,7 @@ We currently perform 2 checks in the sync mechanism for the healthcheck:
         rate_limit_global=[{'rate': '10r/s', 'burst': 10, 'delay': 5}],
         rate_limit_per_ip=[{'rate': '1r/s', 'burst': 3, 'delay': 2}],
         query_params_model=HealthcheckParams,
-        response_model=Union[HealthcheckSuccessResponse, HealthcheckFailResponse],
+        response_model=Union[HealthcheckSuccessResponse, HealthcheckFailResponse, HealthcheckStrictFailResponse],
     )
     def render_GET(self, request: Request, *, params: HealthcheckParams) -> Deferred:
         """ GET request /health/
