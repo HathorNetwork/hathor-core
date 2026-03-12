@@ -33,14 +33,6 @@ class OpenAPIExample:
     value: BaseModel
 
 
-class RequestModel(BaseModel):
-    """Base class for POST/PUT request bodies.
-
-    Inherits from BaseModel with extra='forbid' and frozen=True.
-    """
-    pass
-
-
 class ResponseModel(BaseModel):
     """Base class for all API responses.
 

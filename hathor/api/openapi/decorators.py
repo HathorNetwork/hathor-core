@@ -58,6 +58,8 @@ class EndpointMetadata:
     deprecated: bool
     path_params_regex: dict[str, str]
     path_params_descriptions: dict[str, str]
+    catch_hathor_exceptions: bool
+    max_body_size: int
 
 
 # Global registry of endpoint metadata
@@ -152,6 +154,17 @@ def _parse_rate_limit(rl: dict[str, Any]) -> RateLimitConfig:
     return RateLimitConfig(rate=rl['rate'], burst=rl['burst'], delay=rl['delay'])
 
 
+def _sanitize_validation_error(e: Any) -> str:
+    """Format a Pydantic ValidationError into a safe, user-facing message.
+
+    Strips model internals and only includes field paths and messages.
+    """
+    return '; '.join(
+        f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}"
+        for err in e.errors()
+    )
+
+
 def api_endpoint(
     *,
     path: str,
@@ -169,6 +182,8 @@ def api_endpoint(
     deprecated: bool = False,
     path_params_regex: dict[str, str] | None = None,
     path_params_descriptions: dict[str, str] | None = None,
+    catch_hathor_exceptions: bool = True,
+    max_body_size: int = 1_000_000,
 ) -> Callable[[F], F]:
     """Decorator to register an endpoint with OpenAPI metadata and auto-validate/serialize.
 
@@ -204,6 +219,8 @@ def api_endpoint(
         deprecated: Whether this endpoint is deprecated
         path_params_regex: Regex patterns for path parameters
         path_params_descriptions: Descriptions for path parameters
+        catch_hathor_exceptions: Whether to catch HathorError and return ErrorResponse (default True)
+        max_body_size: Maximum request body size in bytes (default 1MB)
     """
     def decorator(func: F) -> F:
         # Parse rate limit configs
@@ -226,7 +243,20 @@ def api_endpoint(
             deprecated=deprecated,
             path_params_regex=path_params_regex or {},
             path_params_descriptions=path_params_descriptions or {},
+            catch_hathor_exceptions=catch_hathor_exceptions,
+            max_body_size=max_body_size,
         )
+
+        # Check for duplicate registrations
+        key = (metadata.path, metadata.method)
+        for existing in _endpoint_registry:
+            if (existing.path, existing.method) == key:
+                if existing.operation_id == metadata.operation_id:
+                    # Same endpoint decorated again (e.g. module re-executed by pytest --doctest-modules)
+                    return func
+                raise ValueError(
+                    f"Duplicate endpoint registration: {metadata.method} {metadata.path}"
+                )
 
         # Resolve imports once per decorated function, not per request
         import json as _json
@@ -236,6 +266,7 @@ def api_endpoint(
         from twisted.web.server import NOT_DONE_YET as _NOT_DONE_YET
 
         from hathor.api_util import set_cors
+        from hathor.exception import HathorError
         from hathor.utils.api import ErrorResponse as _LegacyErrorResponse
 
         @functools.wraps(func)
@@ -262,16 +293,31 @@ def api_endpoint(
                         request.setResponseCode(400)
                         return error.json_dumpb()
                     body_bytes = request.content.read()
+                    if len(body_bytes) > max_body_size:
+                        error = ErrorResponse(error=f'Request body too large (max {max_body_size} bytes)')
+                        request.setResponseCode(413)
+                        return error.json_dumpb()
                     body_data = _json.loads(body_bytes)
                     body = request_model.model_validate(body_data)
-                except (ValidationError, _json.JSONDecodeError, UnicodeDecodeError) as e:
-                    error = ErrorResponse(error=str(e))
+                except ValidationError as e:
+                    error = ErrorResponse(error=_sanitize_validation_error(e))
+                    request.setResponseCode(400)
+                    return error.json_dumpb()
+                except (_json.JSONDecodeError, UnicodeDecodeError):
+                    error = ErrorResponse(error='Request body is not valid JSON')
                     request.setResponseCode(400)
                     return error.json_dumpb()
                 kwargs['body'] = body
 
             # Call the actual handler
-            result = func(self, request, *args, **kwargs)
+            try:
+                result = func(self, request, *args, **kwargs)
+            except HathorError as e:
+                if not catch_hathor_exceptions:
+                    raise
+                error = ErrorResponse(error=str(e))
+                request.setResponseCode(getattr(e, 'status_code', 400))
+                return error.json_dumpb()
 
             # Auto-serialize response
             if isinstance(result, Deferred):

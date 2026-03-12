@@ -1,6 +1,6 @@
 """Tests for OpenAPI 3.1 specification generator."""
 import unittest
-from typing import ClassVar, Literal, Union
+from typing import ClassVar, Literal, Optional, Union
 
 from pydantic import Field
 
@@ -133,35 +133,23 @@ class TestOpenAPIGenerator(unittest.TestCase):
         self.assertEqual(len(schema['oneOf']), 2)
 
     def test_duplicate_operation_detection(self) -> None:
-        """Duplicate method+path should raise ValueError."""
-        class MyResponse(ResponseModel):
-            value: str
+        """Duplicate method+path in explicit registry should raise ValueError."""
+        from hathor.api.openapi.decorators import EndpointMetadata
 
-        class _Dummy1:
-            @api_endpoint(
-                path='/test',
-                method='GET',
-                operation_id='test_op_1',
-                summary='Test 1',
-                response_model=MyResponse,
-            )
-            def render_GET(self, request):
-                pass
-
-        class _Dummy2:
-            @api_endpoint(
-                path='/test',
-                method='GET',
-                operation_id='test_op_2',
-                summary='Test 2',
-                response_model=MyResponse,
-            )
-            def render_GET(self, request):
-                pass
+        metadata = EndpointMetadata(
+            path='/test', method='GET', operation_id='test_op_1',
+            summary='Test 1', description='', tags=[], visibility='public',
+            rate_limit_global=[], rate_limit_per_ip=[],
+            query_params_model=None, request_model=None,
+            response_model=ResponseModel, deprecated=False,
+            path_params_regex={}, path_params_descriptions={},
+            catch_hathor_exceptions=True, max_body_size=1_000_000,
+        )
+        duplicate_registry = [metadata, metadata]
 
         gen = OpenAPIGenerator()
         with self.assertRaises(ValueError) as ctx:
-            gen.generate()
+            gen.generate(registry=duplicate_registry)
         self.assertIn('Duplicate operation', str(ctx.exception))
 
     def test_query_params(self) -> None:
@@ -404,3 +392,116 @@ class TestOpenAPIGenerator(unittest.TestCase):
         responses = spec['paths']['/test']['get']['responses']
         self.assertIn('200', responses)
         self.assertIn('400', responses)
+
+    def test_optional_response_model_filters_nonetype(self) -> None:
+        """CQ-004: Optional[SomeResponse] should filter out NoneType and not crash."""
+        class SomeResponse(ResponseModel):
+            value: str
+
+        from hathor.api.openapi.decorators import EndpointMetadata
+
+        metadata = EndpointMetadata(
+            path='/test', method='GET', operation_id='test_optional',
+            summary='Test', description='', tags=[], visibility='public',
+            rate_limit_global=[], rate_limit_per_ip=[],
+            query_params_model=None, request_model=None,
+            response_model=Optional[SomeResponse], deprecated=False,
+            path_params_regex={}, path_params_descriptions={},
+            catch_hathor_exceptions=True, max_body_size=1_000_000,
+        )
+
+        gen = OpenAPIGenerator()
+        spec = gen.generate(registry=[metadata])
+
+        responses = spec['paths']['/test']['get']['responses']
+        self.assertIn('200', responses)
+        schema = responses['200']['content']['application/json']['schema']
+        self.assertEqual(schema, {'$ref': '#/components/schemas/SomeResponse'})
+
+    def test_non_basemodel_in_union_raises_typeerror(self) -> None:
+        """CQ-004: Non-BaseModel type in Union response_model should raise TypeError."""
+        from hathor.api.openapi.decorators import EndpointMetadata
+
+        metadata = EndpointMetadata(
+            path='/test', method='GET', operation_id='test_bad_union',
+            summary='Test', description='', tags=[], visibility='public',
+            rate_limit_global=[], rate_limit_per_ip=[],
+            query_params_model=None, request_model=None,
+            response_model=Union[ResponseModel, str], deprecated=False,
+            path_params_regex={}, path_params_descriptions={},
+            catch_hathor_exceptions=True, max_body_size=1_000_000,
+        )
+
+        gen = OpenAPIGenerator()
+        with self.assertRaises(TypeError) as ctx:
+            gen.generate(registry=[metadata])
+        self.assertIn('non-BaseModel type', str(ctx.exception))
+
+    def test_healthcheck_strict_fail_in_union(self) -> None:
+        """AR-007: HealthcheckStrictFailResponse should appear in healthcheck spec."""
+        class SuccessResp(ResponseModel):
+            status: Literal['pass']
+
+        class FailResp(ResponseModel):
+            http_status_code: ClassVar[int] = 503
+            status: Literal['fail']
+
+        class StrictFailResp(ResponseModel):
+            http_status_code: ClassVar[int] = 200
+            status: Literal['fail']
+
+        class _Dummy:
+            @api_endpoint(
+                path='/health',
+                method='GET',
+                operation_id='health_test',
+                summary='Health',
+                response_model=Union[SuccessResp, FailResp, StrictFailResp],
+            )
+            def render_GET(self, request):
+                pass
+
+        gen = OpenAPIGenerator()
+        spec = gen.generate()
+
+        responses = spec['paths']['/health']['get']['responses']
+        self.assertIn('200', responses)
+        self.assertIn('503', responses)
+        # 200 should have oneOf with both SuccessResp and StrictFailResp
+        schema_200 = responses['200']['content']['application/json']['schema']
+        self.assertIn('oneOf', schema_200)
+        self.assertEqual(len(schema_200['oneOf']), 2)
+
+    def test_defs_collision_raises_error(self) -> None:
+        """Conflicting $defs with same name should raise ValueError."""
+        gen = OpenAPIGenerator()
+        gen._schemas = {
+            'Schema1': {
+                '$defs': {
+                    'Inner': {'type': 'object', 'properties': {'name': {'type': 'string'}}},
+                },
+            },
+            'Schema2': {
+                '$defs': {
+                    'Inner': {'type': 'object', 'properties': {'value': {'type': 'integer'}}},
+                },
+            },
+        }
+        with self.assertRaises(ValueError) as ctx:
+            gen._flatten_schemas()
+        self.assertIn('Conflicting schema definitions', str(ctx.exception))
+
+    def test_defs_same_schema_no_collision(self) -> None:
+        """Identical $defs with same name should not raise."""
+        gen = OpenAPIGenerator()
+        inner_schema = {'type': 'object', 'properties': {'name': {'type': 'string'}}}
+        gen._schemas = {
+            'Schema1': {
+                '$defs': {'Inner': dict(inner_schema)},
+            },
+            'Schema2': {
+                '$defs': {'Inner': dict(inner_schema)},
+            },
+        }
+        # Should not raise since schemas are identical
+        gen._flatten_schemas()
