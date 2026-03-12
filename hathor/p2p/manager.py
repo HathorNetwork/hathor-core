@@ -520,7 +520,11 @@ class ConnectionsManager:
         self.connections.discard(protocol)
 
         # Each conn is from a slot - discard from it as well.
-        self.slots_manager.remove_from_slot(protocol)
+        status = self.slots_manager.remove_from_slot(protocol)
+
+        # If there is some entrypoint popped from queue, we attempt to connect.
+        if status.entrypoint:
+            self.connect_to_endpoint(status.entrypoint)
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
