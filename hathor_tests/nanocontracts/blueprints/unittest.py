@@ -9,6 +9,7 @@ from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
+from hathor.nanocontracts.tx_storage_proxy import TransactionStorageProxy
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
 from hathor.nanocontracts.vertex_data import BlockData, create_vertex_data_from_vertex
 from hathor.transaction import Transaction, Vertex
@@ -125,7 +126,7 @@ class BlueprintTestCase(unittest.TestCase):
     def build_runner(self, runtime_version: NanoRuntimeVersion = NanoRuntimeVersion.V2) -> TestRunner:
         """Create a test runner."""
         return TestRunner(
-            tx_storage=self.manager.tx_storage,
+            tx_storage_proxy=TransactionStorageProxy(self.manager.tx_storage),
             settings=self._settings,
             reactor=self.reactor,
             runtime_version=runtime_version,

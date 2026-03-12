@@ -93,10 +93,10 @@ from hathor.nanocontracts.utils import (
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import InvalidFeeAmount
-from hathor.transaction.storage import TransactionStorage
-from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathor.transaction.storage.exceptions import TransactionDoesNotExist, TransactionMetadataDoesNotExist
 from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor.transaction.util import clean_token_string, validate_fee_amount, validate_token_name_and_symbol
+from hathorlib.nanocontracts.tx_storage_proxy import NCTransactionStorageProxy
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -128,12 +128,12 @@ class Runner:
         reactor: ReactorProtocol,
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
-        tx_storage: TransactionStorage,
+        tx_storage_proxy: NCTransactionStorageProxy,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
     ) -> None:
-        self.tx_storage = tx_storage
+        self.tx_storage_proxy = tx_storage_proxy
         self.storage_factory = storage_factory
         self.block_storage = block_storage
         self._storages: dict[ContractId, NCContractStorage] = {}
@@ -1143,7 +1143,7 @@ class Runner:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.tx_storage_proxy.get_blueprint_class(blueprint_id)
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_deposit_token')
@@ -1270,7 +1270,7 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.tx_storage.get_blueprint_class(blueprint_id)
+        self.tx_storage_proxy.get_blueprint_class(blueprint_id)
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
@@ -1314,26 +1314,17 @@ class Runner:
                 token_id=HATHOR_TOKEN_UID  # HTR token ID is the same as its UID
             )
 
-        # Check the transaction storage for existing tokens
         try:
-            token_creation_tx = self.tx_storage.get_token_creation_transaction(token_uid)
+            return self.tx_storage_proxy.get_token_description(token_uid)
         except TransactionDoesNotExist:
             raise NCInvalidSyscall(
                 f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
             )
-
-        if token_creation_tx.get_metadata().first_block is None:
+        except TransactionMetadataDoesNotExist:
             raise NCInvalidSyscall(
                 f'The {token_uid.hex()} token is not confirmed by any block '
                 f'for contract {call_record.contract_id.hex()}'
             )
-
-        return TokenDescription(
-            token_version=token_creation_tx.token_version,
-            token_name=token_creation_tx.token_name,
-            token_symbol=token_creation_tx.token_symbol,
-            token_id=token_creation_tx.hash
-        )
 
     def _create_token(
         self,
@@ -1454,19 +1445,19 @@ class Runner:
 
 
 class RunnerFactory:
-    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory')
+    __slots__ = ('reactor', 'settings', 'tx_storage_proxy', 'nc_storage_factory')
 
     def __init__(
         self,
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
-        tx_storage: TransactionStorage,
+        tx_storage_proxy: NCTransactionStorageProxy,
         nc_storage_factory: NCStorageFactory,
     ) -> None:
         self.reactor = reactor
         self.settings = settings
-        self.tx_storage = tx_storage
+        self.tx_storage_proxy = tx_storage_proxy
         self.nc_storage_factory = nc_storage_factory
 
     def create(
@@ -1480,7 +1471,7 @@ class RunnerFactory:
             reactor=self.reactor,
             settings=self.settings,
             runtime_version=runtime_version,
-            tx_storage=self.tx_storage,
+            tx_storage_proxy=self.tx_storage_proxy,
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,
             seed=seed,
