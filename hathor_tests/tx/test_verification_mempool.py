@@ -10,6 +10,7 @@ from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
     NCFail,
     NCForbiddenAction,
+    NCInsufficientFunds,
     NCInvalidMethodCall,
     NCInvalidSeqnum,
     NCMethodNotFound,
@@ -36,6 +37,7 @@ from hathor.verification.transaction_verifier import MAX_BETWEEN_CONFLICTS, MAX_
 from hathor.verification.vertex_verifier import MAX_PAST_TIMESTAMP_ALLOWED
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.conf.settings import FeatureSetting
 
 
 class MyTestBlueprint(Blueprint):
@@ -64,6 +66,46 @@ class MyOtherTestBlueprint(Blueprint):
     @fallback(allow_withdrawal=True)
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> None:
         assert method_name == 'unknown'
+
+
+class TransferHeaderMempoolValidationTest(unittest.TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.blueprint_id = b'c' * 32
+        settings = self._settings.model_copy(update={'ENABLE_TRANSFER_HEADER': FeatureSetting.ENABLED})
+        self.manager = self.create_peer('unittests', settings=settings)
+        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyTestBlueprint
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+    def test_transfer_header_input_rejects_when_amount_exceeds_available_balance(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            b10 < dummy
+
+            tx_init.nc_id = "{self.blueprint_id.hex()}"
+            tx_init.nc_method = initialize()
+            tx_init.nc_address = wallet1
+            tx_init.nc_seqnum = 0
+
+            tx_transfer.nc_id = tx_init
+            tx_transfer.nc_method = nop()
+            tx_transfer.nc_address = wallet1
+            tx_transfer.nc_seqnum = 1
+            tx_transfer.nc_transfer_input = 1 HTR wallet1
+            tx_transfer.nc_transfer_output = 1 HTR wallet2
+
+            tx_init <-- b30
+            b30 < tx_transfer
+        ''')
+        artifacts.propagate_with(self.manager, up_to='b30')
+        tx_transfer = artifacts.get_typed_vertex('tx_transfer', Transaction)
+
+        tx_transfer.timestamp = int(self.manager.reactor.seconds())
+        self.dag_builder._exporter._vertex_resolver(tx_transfer)
+
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(tx_transfer)
+        assert isinstance(e.exception.__cause__, NCInsufficientFunds)
 
 
 class VertexHeadersTest(unittest.TestCase):

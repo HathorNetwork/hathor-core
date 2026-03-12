@@ -26,6 +26,7 @@ from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVeri
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.verification.transfer_header_verifier import TransferHeaderVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
 
 
@@ -38,6 +39,7 @@ class VertexVerifiers(NamedTuple):
     tx: TransactionVerifier
     token_creation_tx: TokenCreationTransactionVerifier
     nano_header: NanoHeaderVerifier
+    transfer_header: TransferHeaderVerifier
     on_chain_blueprint: OnChainBlueprintVerifier
 
     @classmethod
@@ -90,6 +92,7 @@ class VertexVerifiers(NamedTuple):
         tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
         nano_header_verifier = NanoHeaderVerifier(settings=settings, tx_storage=tx_storage)
+        transfer_header_verifier = TransferHeaderVerifier(settings=settings, tx_storage=tx_storage)
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)
 
         return VertexVerifiers(
@@ -100,5 +103,6 @@ class VertexVerifiers(NamedTuple):
             tx=tx_verifier,
             token_creation_tx=token_creation_tx_verifier,
             nano_header=nano_header_verifier,
+            transfer_header=transfer_header_verifier,
             on_chain_blueprint=on_chain_blueprint_verifier,
         )

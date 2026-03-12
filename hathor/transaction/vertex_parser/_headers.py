@@ -57,6 +57,13 @@ def deserialize_headers(
                 assert isinstance(vertex, Transaction)
                 fees = deserialize_fee_header(deserializer)
                 header = FeeHeader(settings=settings, tx=vertex, fees=fees)
+            case VertexHeaderId.TRANSFER_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import TransferHeader
+                from hathor.transaction.vertex_parser._transfer_header import deserialize_transfer_header
+                assert isinstance(vertex, Transaction)
+                inputs, outputs = deserialize_transfer_header(deserializer)
+                header = TransferHeader(tx=vertex, inputs=inputs, outputs=outputs)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
@@ -64,7 +71,7 @@ def deserialize_headers(
 
 def serialize_header(serializer: Serializer, header: VertexBaseHeader) -> None:
     """Serialize a single header into the serializer."""
-    from hathor.transaction.headers import FeeHeader, NanoHeader
+    from hathor.transaction.headers import FeeHeader, NanoHeader, TransferHeader
 
     match header:
         case NanoHeader():
@@ -73,13 +80,16 @@ def serialize_header(serializer: Serializer, header: VertexBaseHeader) -> None:
         case FeeHeader():
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
             serialize_fee_header(serializer, header)
+        case TransferHeader():
+            from hathor.transaction.vertex_parser._transfer_header import serialize_transfer_header
+            serialize_transfer_header(serializer, header)
         case _:
             serializer.write_bytes(header.serialize())
 
 
 def get_header_sighash_bytes(header: VertexBaseHeader) -> bytes:
     """Get sighash bytes for a header."""
-    from hathor.transaction.headers import FeeHeader, NanoHeader
+    from hathor.transaction.headers import FeeHeader, NanoHeader, TransferHeader
 
     match header:
         case NanoHeader():
@@ -91,6 +101,11 @@ def get_header_sighash_bytes(header: VertexBaseHeader) -> bytes:
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
             serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header)
+            return bytes(serializer.finalize())
+        case TransferHeader():
+            from hathor.transaction.vertex_parser._transfer_header import serialize_transfer_header
+            serializer = Serializer.build_bytes_serializer()
+            serialize_transfer_header(serializer, header, skip_signature=True)
             return bytes(serializer.finalize())
         case _:
             return header.get_sighash_bytes()
