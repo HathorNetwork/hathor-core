@@ -38,7 +38,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
            'valid': False,
-           'error': 'ScriptError',
+           'error': 'invalid_address',
            'msg': 'The address is not valid',
         })
 
@@ -49,7 +49,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
            'valid': False,
-           'error': 'InvalidAddress',
+           'error': 'invalid_address',
            'msg': 'Address size must have 25 bytes',
         })
 
@@ -60,6 +60,6 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         data_success = response_success.json_value()
         self.assertEqual(data_success, {
            'valid': False,
-           'error': 'InvalidAddress',
+           'error': 'invalid_address',
            'msg': 'Invalid base58 address',
         })
