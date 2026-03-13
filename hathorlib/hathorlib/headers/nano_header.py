@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING
 
 from hathorlib.headers.base import VertexBaseHeader
 from hathorlib.headers.types import VertexHeaderId
-from hathorlib.utils import decode_unsigned, encode_unsigned, int_to_bytes, unpack, unpack_len
+from hathorlib.utils import int_to_bytes, unpack, unpack_len
+from hathorlib.utils.leb128 import decode_unsigned, encode_unsigned
 
 if TYPE_CHECKING:
     from hathorlib.base_transaction import BaseTransaction

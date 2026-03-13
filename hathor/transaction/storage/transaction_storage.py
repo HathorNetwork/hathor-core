@@ -28,6 +28,7 @@ from twisted.internet.defer import Deferred
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
+from hathor.nanocontracts.storage import get_block_storage_from_block
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
@@ -1007,13 +1008,13 @@ class TransactionStorage(ABC):
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return a block storage for the given block."""
-        return self._nc_storage_factory.get_block_storage_from_block(block)
+        return get_block_storage_from_block(self._nc_storage_factory, block)
 
     def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
         from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
         if not block.is_genesis:
-            block_storage = self._nc_storage_factory.get_block_storage_from_block(block)
+            block_storage = get_block_storage_from_block(self._nc_storage_factory, block)
         else:
             block_storage = self._nc_storage_factory.get_empty_block_storage()
 

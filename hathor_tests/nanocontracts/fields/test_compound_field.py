@@ -1,11 +1,11 @@
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.fields.container import INIT_NC_TYPE
-from hathor.nanocontracts.fields.deque_container import _METADATA_NC_TYPE as METADATA_NC_TYPE
 from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.nanocontracts.fields.deque_container import _METADATA_NC_TYPE as METADATA_NC_TYPE
 
 INT_NC_TYPE = VarInt32NCType()
 
