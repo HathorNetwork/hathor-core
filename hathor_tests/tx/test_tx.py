@@ -10,6 +10,7 @@ from hathor.daa import TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput, Vertex
 from hathor.transaction.exceptions import (
@@ -68,7 +69,7 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-        self.verification_params = VerificationParams.default_for_mempool(best_block=Mock())
+        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
 
     def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]
