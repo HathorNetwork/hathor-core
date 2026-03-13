@@ -121,7 +121,14 @@ class OpenAPIGenerator:
         # Check if it's a Union type
         args = typing.get_args(metadata.response_model)
         if args:
-            return list(args)
+            models = []
+            for a in args:
+                if a is type(None):
+                    continue
+                if not (isinstance(a, type) and issubclass(a, BaseModel)):
+                    raise TypeError(f"response_model Union contains non-BaseModel type: {a}")
+                models.append(a)
+            return models
 
         # Single model
         return [metadata.response_model]
@@ -311,4 +318,8 @@ class OpenAPIGenerator:
         if '$defs' in schema:
             for def_name, def_schema in schema.pop('$defs').items():
                 self._extract_defs(def_schema, target)
+                if def_name in target and target[def_name] != def_schema:
+                    raise ValueError(
+                        f"$defs collision for '{def_name}': different schemas share the same name"
+                    )
                 target[def_name] = def_schema
