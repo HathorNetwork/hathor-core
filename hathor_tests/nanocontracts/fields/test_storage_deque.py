@@ -17,9 +17,9 @@ from collections import deque
 import pytest
 
 from hathor.nanocontracts.fields.container import ContainerLeaf
-from hathor.nanocontracts.fields.deque_container import DequeContainer, _DequeMetadata
 from hathor.nanocontracts.nc_types import Int32NCType, StrNCType
 from hathor_tests.nanocontracts.fields.utils import MockNCStorage
+from hathorlib.nanocontracts.fields.deque_container import DequeContainer, _DequeMetadata
 
 INT_NC_TYPE = Int32NCType()
 STR_NC_TYPE = StrNCType()

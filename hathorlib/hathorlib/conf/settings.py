@@ -15,6 +15,8 @@ from typing_extensions import Self
 
 from hathorlib.conf.utils import parse_hex_str
 
+HATHOR_TOKEN_UID: bytes = b'\x00'
+
 
 @unique
 class FeatureSetting(StrEnum):
@@ -54,7 +56,7 @@ class HathorSettings(BaseModel):
     MULTISIG_VERSION_BYTE: Annotated[bytes, BeforeValidator(parse_hex_str)]
 
     # HTR Token UID
-    HATHOR_TOKEN_UID: bytes = b'\x00'
+    HATHOR_TOKEN_UID: bytes = HATHOR_TOKEN_UID
 
     # Maximum number of characters in a token name
     MAX_LENGTH_TOKEN_NAME: int = 30

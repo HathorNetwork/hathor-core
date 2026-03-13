@@ -81,7 +81,7 @@ class NcDump(RunNode):
 
     def run(self) -> None:
         from hathor import __version__
-        from hathor.nanocontracts.storage.block_storage import _Tag as BlockTrieTag
+        from hathor.nanocontracts.storage.block_storage import BlockTrieTag
         from hathor.nanocontracts.storage.patricia_trie import NodeId
         from hathor.types import VertexId
         from hathor.util import not_none

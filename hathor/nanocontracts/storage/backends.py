@@ -14,35 +14,20 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from hathor.nanocontracts.storage.node_nc_type import NodeNCType
 from hathor.serialization import Deserializer, Serializer
 from hathor.storage.rocksdb_storage import RocksDBStorage
+# Re-export from hathorlib for backward compatibility
+from hathorlib.nanocontracts.storage.backends import *  # noqa: F401,F403
+from hathorlib.nanocontracts.storage.backends import NodeTrieStore  # noqa: F401
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.storage.patricia_trie import Node
 
 
-class NodeTrieStore(ABC):
-    @abstractmethod
-    def __getitem__(self, key: bytes) -> Node:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __setitem__(self, key: bytes, item: Node) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __len__(self) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __contains__(self, key: bytes) -> bool:
-        raise NotImplementedError
-
-
+# RocksDBNodeTrieStore stays in hathor (depends on rocksdb)
 class RocksDBNodeTrieStore(NodeTrieStore):
     _CF_NAME = b'nc-state'
     _KEY_LENGTH = b'length'
