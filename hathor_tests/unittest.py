@@ -210,7 +210,7 @@ class TestCase(unittest.TestCase):
         settings: HathorSettings | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
-        settings = (settings or self._settings)._replace(NETWORK_NAME=network)
+        settings = (settings or self._settings).model_copy(update={'NETWORK_NAME': network})
         builder = self.get_builder() \
             .set_settings(settings)
 

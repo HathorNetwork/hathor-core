@@ -273,9 +273,11 @@ class CliBuilder:
 
         test_mode = TestMode.DISABLED
         if self._args.test_mode_tx_weight:
-            test_mode = TestMode.TEST_TX_WEIGHT
+            test_mode |= TestMode.TEST_TX_WEIGHT
             if self.wallet:
                 self.wallet.test_mode = True
+        if self._args.test_mode_block_weight:
+            test_mode |= TestMode.TEST_BLOCK_WEIGHT
 
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 

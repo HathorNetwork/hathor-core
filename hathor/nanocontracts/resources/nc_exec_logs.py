@@ -12,9 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
@@ -23,7 +22,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts.nc_exec_logs import NCLogLevel
 from hathor.transaction import Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-from hathor.utils.api import ErrorResponse, QueryParams
+from hathor.utils.api import ErrorResponse, QueryParams, Response
 
 
 @register_resource
@@ -107,8 +106,8 @@ class NCExecLogsParams(QueryParams):
     all_execs: bool = False
 
 
-class NCExecLogsResponse(QueryParams):
-    success: bool = Field(const=True, default=True)
+class NCExecLogsResponse(Response):
+    success: Literal[True] = True
     nc_id: str
     nc_execution: str | None
     logs: dict[str, Any]
@@ -116,12 +115,7 @@ class NCExecLogsResponse(QueryParams):
 
 NCExecLogsResource.openapi = {
     '/nano_contract/logs': {
-        'x-visibility': 'private',
-        'x-visibility-override': {
-            'nano-testnet-bravo': 'public',
-            'hathor-testnet-india': 'public',
-            'hathor-testnet-playground': 'public',
-        },
+        'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
                 {

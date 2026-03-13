@@ -48,9 +48,9 @@ class FeatureActivationStorage:
             self._save_settings(new_settings)
             return
 
-        db_settings: FeatureActivationSettings = FeatureActivationSettings.parse_raw(db_settings_bytes)
-        db_basic_settings = db_settings.copy(deep=True, exclude={'features'})
-        new_basic_settings = new_settings.copy(deep=True, exclude={'features'})
+        db_settings: FeatureActivationSettings = FeatureActivationSettings.model_validate_json(db_settings_bytes)
+        db_basic_settings = db_settings.model_copy(deep=True, update={'features': {}})
+        new_basic_settings = new_settings.model_copy(deep=True, update={'features': {}})
 
         self._validate_basic_settings(db_basic_settings=db_basic_settings, new_basic_settings=new_basic_settings)
         self._validate_features(db_features=db_settings.features, new_features=new_settings.features)

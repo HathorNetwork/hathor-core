@@ -23,7 +23,6 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from itertools import chain
 from math import isfinite, log
-from struct import pack
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, Iterator, Optional, TypeAlias, TypeVar
 
 from structlog import get_logger
@@ -35,14 +34,7 @@ from hathor.transaction.exceptions import InvalidOutputValue, WeightError
 from hathor.transaction.headers import VertexBaseHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
-from hathor.transaction.util import (
-    VerboseCallback,
-    bytes_to_output_value,
-    int_to_bytes,
-    output_value_to_bytes,
-    unpack,
-    unpack_len,
-)
+from hathor.transaction.util import VerboseCallback
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
@@ -61,15 +53,6 @@ logger = get_logger()
 MAX_OUTPUT_VALUE = 2**63  # max value (inclusive) that is possible to encode: 9223372036854775808 ~= 9.22337e+18
 
 TX_HASH_SIZE = 32   # 256 bits, 32 bytes
-
-# H = unsigned short (2 bytes), d = double(8), f = float(4), I = unsigned int (4),
-# Q = unsigned long long int (64), B = unsigned char (1 byte)
-
-# Signal bits (B), version (B), inputs len (B), and outputs len (B), token uids len (B).
-_SIGHASH_ALL_FORMAT_STRING = '!BBBBB'
-
-# Weight (d), timestamp (I), and parents len (B)
-_GRAPH_FORMAT_STRING = '!dIB'
 
 # The int value of one byte
 _ONE_BYTE = 0xFF
@@ -269,33 +252,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return whether this transaction has a fee header."""
         return False
 
-    def get_fields_from_struct(self, struct_bytes: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all common fields for a Transaction and a Block from a buffer.
-
-        :param struct_bytes: Bytes of a serialized transaction
-        :type struct_bytes: bytes
-
-        :return: A buffer containing the remaining struct bytes
-        :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
-        """
-        buf = self.get_funds_fields_from_struct(struct_bytes, verbose=verbose)
-        buf = self.get_graph_fields_from_struct(buf, verbose=verbose)
-        return buf
-
-    def get_header_from_bytes(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """Parse bytes and return the next header in buffer."""
-        from hathor.transaction.vertex_parser import VertexParser
-
-        if len(self.headers) >= self.get_maximum_number_of_headers():
-            raise ValueError('too many headers')
-        header_type = buf[:1]
-        header_class = VertexParser.get_header_parser(header_type, self._settings)
-        header, buf = header_class.deserialize(self, buf)
-        self.headers.append(header)
-        return buf
-
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
         return 2
@@ -407,52 +363,30 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         return is_genesis(self.hash, settings=self._settings)
 
     @abstractmethod
-    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        raise NotImplementedError
+    def get_funds_struct(self) -> bytes:
+        """Return the funds data serialization of the vertex.
 
-    def get_graph_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        """ Gets all common graph fields for a Transaction and a Block from a buffer.
-
-        :param buf: Bytes of a serialized transaction
-        :type buf: bytes
-
-        :return: A buffer containing the remaining struct bytes
+        :return: funds data serialization of the vertex
         :rtype: bytes
-
-        :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.weight, self.timestamp, parents_len), buf = unpack(_GRAPH_FORMAT_STRING, buf)
-        if verbose:
-            verbose('weigth', self.weight)
-            verbose('timestamp', self.timestamp)
-            verbose('parents_len', parents_len)
-
-        for _ in range(parents_len):
-            parent, buf = unpack_len(TX_HASH_SIZE, buf)  # 256bits
-            self.parents.append(parent)
-            if verbose:
-                verbose('parent', parent.hex())
-
-        return buf
+        raise NotImplementedError
 
     @abstractmethod
-    def get_funds_struct(self) -> bytes:
-        raise NotImplementedError
-
     def get_graph_struct(self) -> bytes:
         """Return the graph data serialization of the transaction, without including the nonce field
 
         :return: graph data serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = pack(_GRAPH_FORMAT_STRING, self.weight, self.timestamp, len(self.parents))
-        for parent in self.parents:
-            struct_bytes += parent
-        return struct_bytes
+        raise NotImplementedError
 
     def get_headers_struct(self) -> bytes:
         """Return the serialization of the headers only."""
-        return b''.join(h.serialize() for h in self.headers)
+        from hathor.serialization import Serializer
+        from hathor.transaction.vertex_parser.vertex_serializer import serialize_headers
+        serializer = Serializer.build_bytes_serializer()
+        serialize_headers(serializer, self)
+        return bytes(serializer.finalize())
 
     def get_struct_without_nonce(self) -> bytes:
         """Return a partial serialization of the transaction, without including the nonce field
@@ -460,9 +394,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: Partial serialization of the transaction
         :rtype: bytes
         """
-        struct_bytes = self.get_funds_struct()
-        struct_bytes += self.get_graph_struct()
-        return struct_bytes
+        return self.get_funds_struct() + self.get_graph_struct()
 
     def get_struct_nonce(self) -> bytes:
         """Return a partial serialization of the transaction's proof-of-work, which is usually the nonce field
@@ -470,19 +402,17 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         :return: Partial serialization of the transaction's proof-of-work
         :rtype: bytes
         """
+        from hathor.transaction.util import int_to_bytes
         assert self.SERIALIZATION_NONCE_SIZE is not None
-        struct_bytes = int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
-        return struct_bytes
+        return int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
 
     def get_struct(self) -> bytes:
         """Return the complete serialization of the transaction
 
         :rtype: bytes
         """
-        struct_bytes = self.get_struct_without_nonce()
-        struct_bytes += self.get_struct_nonce()
-        struct_bytes += self.get_headers_struct()
-        return struct_bytes
+        from hathor.transaction.vertex_parser.vertex_serializer import serialize
+        return serialize(self)
 
     def get_all_dependencies(self) -> set[bytes]:
         """Set of all tx-hashes needed to fully validate this tx, including parent blocks/txs and inputs."""
@@ -961,12 +891,8 @@ class TxInput:
 
         :rtype: bytes
         """
-        ret = b''
-        ret += self.tx_id
-        ret += int_to_bytes(self.index, 1)
-        ret += int_to_bytes(len(self.data), 2)  # data length
-        ret += self.data
-        return ret
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize_tx_input_bytes(self)
 
     def get_sighash_bytes(self) -> bytes:
         """Return a serialization of the input for the sighash. It always clears the input data.
@@ -974,29 +900,16 @@ class TxInput:
         :return: Serialization of the input
         :rtype: bytes
         """
-        ret = bytearray()
-        ret += self.tx_id
-        ret += int_to_bytes(self.index, 1)
-        ret += int_to_bytes(0, 2)
-        return bytes(ret)
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize_tx_input_sighash(self)
 
     @classmethod
     def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
         """ Creates a TxInput from a serialized input. Returns the input
         and remaining bytes
         """
-        input_tx_id, buf = unpack_len(TX_HASH_SIZE, buf)
-        if verbose:
-            verbose('txin_tx_id', input_tx_id.hex())
-        (input_index, data_len), buf = unpack('!BH', buf)
-        if verbose:
-            verbose('txin_index', input_index)
-            verbose('txin_data_len', data_len)
-        input_data, buf = unpack_len(data_len, buf)
-        if verbose:
-            verbose('txin_data', input_data.hex())
-        txin = cls(input_tx_id, input_index, input_data)
-        return txin, buf
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.deserialize_tx_input(buf, verbose=verbose)
 
     @classmethod
     def create_from_dict(cls, data: dict) -> 'TxInput':
@@ -1071,30 +984,16 @@ class TxOutput:
 
         :rtype: bytes
         """
-        ret = b''
-        ret += output_value_to_bytes(self.value)
-        ret += int_to_bytes(self.token_data, 1)
-        ret += int_to_bytes(len(self.script), 2)    # script length
-        ret += self.script
-        return ret
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize_tx_output_bytes(self)
 
     @classmethod
     def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
         """ Creates a TxOutput from a serialized output. Returns the output
         and remaining bytes
         """
-        value, buf = bytes_to_output_value(buf)
-        if verbose:
-            verbose('txout_value', value)
-        (token_data, script_len), buf = unpack('!BH', buf)
-        if verbose:
-            verbose('txout_token_data', token_data)
-            verbose('txout_script_len', script_len)
-        script, buf = unpack_len(script_len, buf)
-        if verbose:
-            verbose('txout_script', script.hex())
-        txout = cls(value, script, token_data)
-        return txout, buf
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.deserialize_tx_output(buf, verbose=verbose)
 
     def get_token_index(self) -> int:
         """The token uid index in the list"""
