@@ -12,6 +12,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput, Vertex
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     ConflictingInputs,
@@ -924,9 +925,9 @@ class TransactionTest(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_cls_from_tx_version(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_cls_from_tx_version(version), Transaction)
 
         # test Block.__init__() fails
         with self.assertRaises(AssertionError) as cm:
