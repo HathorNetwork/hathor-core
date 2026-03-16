@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib import Transaction
+from hathorlib import Transaction, TxVersion
 
 
 class DeprecatedNanoContract(Transaction):
@@ -21,7 +21,7 @@ class DeprecatedNanoContract(Transaction):
     def __init__(self) -> None:
         super().__init__()
 
-        self.version = 4  # TxVersion.NANO_CONTRACT was removed
+        self.version = TxVersion.DEPRECATED_NANO_CONTRACT
 
         # nc_id equals to the blueprint_id when a Nano Contract is being created.
         # nc_id equals to the nanocontract_id when a method is being called.
