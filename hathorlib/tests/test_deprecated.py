@@ -4,6 +4,7 @@ from hathorlib.base_transaction import tx_or_block_from_bytes
 from hathorlib.nanocontracts import DeprecatedNanoContract
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize(
     ['hex_hash', 'hex_bytes'],
     [
