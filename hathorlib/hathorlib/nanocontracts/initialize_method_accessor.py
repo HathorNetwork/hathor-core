@@ -66,7 +66,7 @@ class InitializeMethodAccessor(FauxImmutable):
 
     def initialize(self, *args: Any, **kwargs: Any) -> tuple[ContractId, object]:
         """Initialize a new contract."""
-        from hathor.nanocontracts import NCFail
+        from hathorlib.nanocontracts.exception import NCFail
         if self.__is_dirty:
             raise NCFail(
                 'accessor for initialize method was already used, '

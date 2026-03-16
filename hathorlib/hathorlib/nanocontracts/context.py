@@ -19,12 +19,10 @@ from itertools import chain
 from types import MappingProxyType
 from typing import Any, Sequence, assert_never, final
 
-from hathorlib.nanocontracts.exception import NCFail, NCInvalidContext
+from hathorlib.nanocontracts.exception import NCFail
 from hathorlib.nanocontracts.types import Address, CallerId, ContractId, NCAction, TokenUid
 from hathorlib.nanocontracts.vertex_data import BlockData, VertexData
 from hathorlib.utils.address import get_address_b58_from_bytes
-
-_EMPTY_MAP: MappingProxyType[TokenUid, tuple[NCAction, ...]] = MappingProxyType({})
 
 
 @final

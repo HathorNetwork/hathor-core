@@ -212,7 +212,7 @@ class PreparedPublicCall(FauxImmutable):
         __set_faux_immutable__(self, '__is_dirty', False)
 
     def __getattr__(self, method_name: str) -> PublicMethodAccessor:
-        from hathor.nanocontracts import NCFail
+        from hathorlib.nanocontracts.exception import NCFail
         if self.__is_dirty:
             raise NCFail(
                 f'prepared public method for contract `{self.__contract_id.hex()}` was already used, '
@@ -332,7 +332,7 @@ class PublicMethodAccessor(FauxImmutable):
 
     def __call__(self, *args: Any, **kwargs: Any) -> object:
         """Call the method with the provided arguments."""
-        from hathor.nanocontracts import NCFail
+        from hathorlib.nanocontracts.exception import NCFail
         if self.__is_dirty:
             raise NCFail(
                 f'accessor for public method `{self.__method_name}` was already used, '
@@ -370,7 +370,7 @@ def validate_blueprint_id(
 
     blueprint_id = runner.get_blueprint_id(contract_id)
     if blueprint_id not in blueprint_ids:
-        from hathor.nanocontracts import NCFail
+        from hathorlib.nanocontracts.exception import NCFail
         expected = tuple(sorted(bp.hex() for bp in blueprint_ids))
         raise NCFail(
             f'expected blueprint to be one of `{expected}`, '

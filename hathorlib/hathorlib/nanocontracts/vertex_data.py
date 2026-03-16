@@ -17,12 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum, unique
 
+from hathorlib import TxVersion
 from hathorlib.nanocontracts.types import TokenUid, VertexId
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class VertexData:
-    version: int
+    version: TxVersion
     hash: bytes
     nonce: int
     signal_bits: int

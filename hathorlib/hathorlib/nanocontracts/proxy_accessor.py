@@ -147,7 +147,7 @@ class PreparedProxyPublicCall(FauxImmutable):
         __set_faux_immutable__(self, '__is_dirty', False)
 
     def __getattr__(self, method_name: str) -> ProxyPublicMethodAccessor:
-        from hathor.nanocontracts import NCFail
+        from hathorlib.nanocontracts.exception import NCFail
         if self.__is_dirty:
             raise NCFail(
                 f'prepared proxy public method for blueprint `{self.__blueprint_id.hex()}` was already used, '
@@ -253,7 +253,7 @@ class ProxyPublicMethodAccessor(FauxImmutable):
 
     def call_with_nc_args(self, nc_args: NCArgs) -> object:
         """Call the method with the provided NCArgs."""
-        from hathor.nanocontracts import NCFail
+        from hathorlib.nanocontracts.exception import NCFail
         if self.__is_dirty:
             raise NCFail(
                 f'accessor for proxy public method `{self.__method_name}` was already used, '
