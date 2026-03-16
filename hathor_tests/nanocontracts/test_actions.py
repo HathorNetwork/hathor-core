@@ -29,7 +29,6 @@ from hathor.nanocontracts.types import NCActionType, TokenUid
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers.nano_header import NanoHeaderAction
-from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
 from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
 from hathor.verification.verification_params import VerificationParams
@@ -119,14 +118,9 @@ class TestActions(unittest.TestCase):
             Transaction,
         )
         best_block = self.manager.tx_storage.get_best_block()
-        self.verification_params = VerificationParams.default_for_mempool(
+        self.verification_params = VerificationParams.for_mempool(
             best_block=best_block,
-            features=Features(
-                count_checkdatasig_op=False,
-                nanocontracts=True,
-                fee_tokens=False,
-                opcodes_version=OpcodesVersion.V1,
-            )
+            features=Features.all_enabled()
         )
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.
