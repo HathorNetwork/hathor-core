@@ -31,8 +31,8 @@ from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooManySigOps
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
-from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -454,7 +454,7 @@ class ConsensusAlgorithm:
                     if not self._checkdatasig_count_rule(tx):
                         return False
                 case Feature.OPCODES_V2:
-                    if not self._opcodes_v2_activation_rule(tx, new_best_block):
+                    if not self._opcodes_v2_activation_rule(tx):
                         return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
@@ -522,7 +522,7 @@ class ConsensusAlgorithm:
             return False
         return True
 
-    def _opcodes_v2_activation_rule(self, tx: Transaction, new_best_block: Block) -> bool:
+    def _opcodes_v2_activation_rule(self, tx: Transaction) -> bool:
         """Check whether a tx became invalid because of the opcodes V2 feature."""
         from hathor.verification.nano_header_verifier import NanoHeaderVerifier
         from hathor.verification.transaction_verifier import TransactionVerifier
@@ -530,12 +530,12 @@ class ConsensusAlgorithm:
         # We check all txs regardless of the feature state, because this rule
         # already prohibited mempool txs before the block feature activation.
 
-        params = VerificationParams.default_for_mempool(best_block=new_best_block)
+        opcodes_version = OpcodesVersion.V2
 
         # Any exception in the inputs verification will be considered
         # a fail and the tx will be removed from the mempool.
         try:
-            TransactionVerifier._verify_inputs(self._settings, tx, params, skip_script=False)
+            TransactionVerifier._verify_inputs(self._settings, tx, opcodes_version, skip_script=False)
         except Exception as e:
             if not isinstance(e, InvalidInputData):
                 self.log.exception('unexpected exception in mempool-reverification')
@@ -545,7 +545,7 @@ class ConsensusAlgorithm:
         # a fail and the tx will be removed from the mempool.
         if tx.is_nano_contract():
             try:
-                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, params)
+                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, opcodes_version)
             except Exception as e:
                 if not isinstance(e, NCInvalidSignature):
                     self.log.exception('unexpected exception in mempool-reverification')
