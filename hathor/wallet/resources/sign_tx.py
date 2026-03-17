@@ -59,7 +59,7 @@ class SignTxResource(Resource):
                 prepare_to_send = _prepare_to_send == 'true'
 
             try:
-                tx = vertex_deserializer.deserialize(tx_bytes)
+                tx = vertex_deserializer.deserialize_transaction(tx_bytes)
                 tx.storage = self.manager.tx_storage
                 self.manager.wallet.sign_transaction(tx, self.manager.tx_storage)
 

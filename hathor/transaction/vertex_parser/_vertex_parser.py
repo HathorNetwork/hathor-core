@@ -68,6 +68,11 @@ class VertexParser:
                 raise StructError(f"invalid vertex version: {tx_version}")
 
             from hathor.transaction.vertex_parser import vertex_deserializer
-            return vertex_deserializer.deserialize(data, storage=storage, settings=self._settings)
+            vertex = vertex_deserializer.deserialize(data, storage=storage, settings=self._settings)
+            expected_cls = tx_version.get_cls()
+            assert isinstance(vertex, expected_cls), (
+                f'Expected {expected_cls.__name__}, got {type(vertex).__name__}'
+            )
+            return vertex
         except ValueError as e:
             raise StructError('Invalid bytes to create transaction subclass.') from e

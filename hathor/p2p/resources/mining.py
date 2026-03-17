@@ -57,7 +57,8 @@ class MiningResource(Resource):
             post_data = json_loadb(raw_data)
             block_bytes_str = post_data['block_bytes']
             block_bytes = base64.b64decode(block_bytes_str)
-            block = vertex_deserializer.deserialize(block_bytes, storage=self.manager.tx_storage)
+            block = vertex_deserializer.deserialize_block(block_bytes)
+            block.storage = self.manager.tx_storage
         except (AttributeError, KeyError, ValueError, JSONDecodeError, binascii.Error, struct.error):
             # XXX ideally, we should catch each error separately and send an specific error
             # message, but we only return 0 or 1 on the API

@@ -84,12 +84,16 @@ def deserialize(
 
 
 def deserialize_transaction(
-    data: bytes, settings: HathorSettings, verbose: VerboseCallback = None,
+    data: bytes, settings: HathorSettings | None = None, verbose: VerboseCallback = None,
 ) -> Transaction:
+    from hathor.conf.get_settings import get_global_settings
     from hathor.transaction.transaction import Transaction
     from hathor.transaction.vertex_parser._common import deserialize_graph_fields
     from hathor.transaction.vertex_parser._headers import deserialize_headers
     from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
+
+    if settings is None:
+        settings = get_global_settings()
 
     tx = Transaction()
     deserializer = Deserializer.build_bytes_deserializer(data)
@@ -105,12 +109,16 @@ def deserialize_transaction(
 
 
 def deserialize_token_creation_transaction(
-    data: bytes, settings: HathorSettings, verbose: VerboseCallback = None,
+    data: bytes, settings: HathorSettings | None = None, verbose: VerboseCallback = None,
 ) -> TokenCreationTransaction:
+    from hathor.conf.get_settings import get_global_settings
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
     from hathor.transaction.vertex_parser._common import deserialize_graph_fields
     from hathor.transaction.vertex_parser._headers import deserialize_headers
     from hathor.transaction.vertex_parser._token_creation import deserialize_token_creation_funds
+
+    if settings is None:
+        settings = get_global_settings()
 
     tctx = TokenCreationTransaction()
     deserializer = Deserializer.build_bytes_deserializer(data)
@@ -126,13 +134,17 @@ def deserialize_token_creation_transaction(
 
 
 def deserialize_on_chain_blueprint(
-    data: bytes, settings: HathorSettings, verbose: VerboseCallback = None,
+    data: bytes, settings: HathorSettings | None = None, verbose: VerboseCallback = None,
 ) -> Transaction:
+    from hathor.conf.get_settings import get_global_settings
     from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
     from hathor.transaction.vertex_parser._common import deserialize_graph_fields
     from hathor.transaction.vertex_parser._headers import deserialize_headers
     from hathor.transaction.vertex_parser._on_chain_blueprint import deserialize_ocb_extra_fields
     from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
+
+    if settings is None:
+        settings = get_global_settings()
 
     ocb = OnChainBlueprint()
     deserializer = Deserializer.build_bytes_deserializer(data)
@@ -149,11 +161,15 @@ def deserialize_on_chain_blueprint(
 
 
 def deserialize_block(
-    data: bytes, settings: HathorSettings, verbose: VerboseCallback = None,
+    data: bytes, settings: HathorSettings | None = None, verbose: VerboseCallback = None,
 ) -> Block:
+    from hathor.conf.get_settings import get_global_settings
     from hathor.transaction.block import Block
     from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
     from hathor.transaction.vertex_parser._headers import deserialize_headers
+
+    if settings is None:
+        settings = get_global_settings()
 
     block = Block()
     deserializer = Deserializer.build_bytes_deserializer(data)
@@ -167,12 +183,16 @@ def deserialize_block(
 
 
 def deserialize_poa_block(
-    data: bytes, settings: HathorSettings, verbose: VerboseCallback = None,
+    data: bytes, settings: HathorSettings | None = None, verbose: VerboseCallback = None,
 ) -> Block:
+    from hathor.conf.get_settings import get_global_settings
     from hathor.consensus.poa.poa import SIGNER_ID_LEN
     from hathor.transaction.poa.poa_block import PoaBlock
     from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_poa_block_graph_fields
     from hathor.transaction.vertex_parser._headers import deserialize_headers
+
+    if settings is None:
+        settings = get_global_settings()
 
     poa_block = PoaBlock()
     deserializer = Deserializer.build_bytes_deserializer(data)

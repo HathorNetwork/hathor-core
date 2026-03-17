@@ -54,7 +54,7 @@ class NanoContractDecodeResource(Resource):
             tx_bytes = bytes.fromhex(requested_decode)
 
             try:
-                tx = vertex_deserializer.deserialize(tx_bytes)
+                tx = vertex_deserializer.deserialize_transaction(tx_bytes)
             except struct.error:
                 data = {'success': False, 'message': 'Invalid transaction'}
                 return json_dumpb(data)

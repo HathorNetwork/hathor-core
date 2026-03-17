@@ -31,7 +31,7 @@ def execute(args: Namespace) -> None:
     from hathor.transaction.scripts import MultiSig
     from hathor.transaction.vertex_parser import vertex_deserializer
 
-    tx = vertex_deserializer.deserialize(bytes.fromhex(args.partial_tx))
+    tx = vertex_deserializer.deserialize_transaction(bytes.fromhex(args.partial_tx))
 
     signatures = [bytes.fromhex(signature) for signature in args.signatures.split(',')]
     input_data = MultiSig.create_input_data(bytes.fromhex(args.redeem_script), signatures)

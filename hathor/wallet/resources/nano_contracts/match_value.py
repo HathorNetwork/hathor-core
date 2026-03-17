@@ -183,7 +183,7 @@ class NanoContractMatchValueResource(Resource):
             return json_dumpb({'success': False, 'message': e.message})
 
         try:
-            tx = vertex_deserializer.deserialize(decoded_params.tx_bytes)
+            tx = vertex_deserializer.deserialize_transaction(decoded_params.tx_bytes)
         except struct.error:
             return json_dumpb({'success': False, 'message': 'Could not decode hex transaction'})
 
