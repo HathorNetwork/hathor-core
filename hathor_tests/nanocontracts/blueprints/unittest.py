@@ -6,6 +6,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts import HATHOR_TOKEN_UID, Context
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
@@ -121,12 +122,13 @@ class BlueprintTestCase(unittest.TestCase):
 
         return self._register_blueprint_class(blueprint_class, blueprint_id)
 
-    def build_runner(self) -> TestRunner:
+    def build_runner(self, runtime_version: NanoRuntimeVersion = NanoRuntimeVersion.V2) -> TestRunner:
         """Create a test runner."""
         return TestRunner(
             tx_storage=self.manager.tx_storage,
             settings=self._settings,
             reactor=self.reactor,
+            runtime_version=runtime_version,
         )
 
     def gen_random_token_uid(self) -> TokenUid:

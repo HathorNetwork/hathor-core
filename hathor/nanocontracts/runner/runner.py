@@ -47,6 +47,8 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
+from hathor.nanocontracts.nano_settings import NanoSettings
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.runner.index_records import (
@@ -125,6 +127,7 @@ class Runner:
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
+        runtime_version: NanoRuntimeVersion,
         tx_storage: TransactionStorage,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
@@ -136,6 +139,7 @@ class Runner:
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
+        self._runtime_version = runtime_version
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -1271,6 +1275,18 @@ class Runner:
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
 
+    def syscall_get_nano_settings(self) -> NanoSettings:
+        """Get nano settings according to the current runtime."""
+        match self._runtime_version:
+            case NanoRuntimeVersion.V1:
+                raise NCFail('syscall `get_settings` is not yet supported')
+            case NanoRuntimeVersion.V2:
+                return NanoSettings(
+                    fee_per_output=self._settings.FEE_PER_OUTPUT,
+                )
+            case _:
+                assert_never(self._runtime_version)
+
     def _get_token(self, token_uid: TokenUid) -> TokenDescription:
         """
         Get a token from the current changes tracker or storage.
@@ -1456,12 +1472,14 @@ class RunnerFactory:
     def create(
         self,
         *,
+        runtime_version: NanoRuntimeVersion,
         block_storage: NCBlockStorage,
         seed: bytes | None = None,
     ) -> Runner:
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
+            runtime_version=runtime_version,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,
