@@ -24,10 +24,11 @@ from hathor.nanocontracts.types import (
 )
 from hathor.nanocontracts.utils import sign_openssl
 from hathor.simulator.utils import add_new_block
-from hathor.transaction import Transaction, TxInput
+from hathor.transaction import Block, Transaction, TxInput
 from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH
+from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, get_genesis_key
 
@@ -614,3 +615,42 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         assert response12.json_value()['calls']['get_return_tuple()'] == {
             'value': ['bar', '1' * 64]
         }
+
+    async def test_state_by_timestamp_with_voided_block(self) -> None:
+        """Test that querying nano contract state by timestamp correctly skips voided blocks."""
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        date_last_bet = 1699579721
+
+        artifacts = dag_builder.build_from_str(f"""
+            blockchain genesis b[1..11]
+            blockchain b10 a[11..12]
+            b10 < dummy
+            a12.weight = 3
+
+            nc1.nc_id = "{self.bet_id.hex()}"
+            nc1.nc_method = initialize("00", {date_last_bet})
+            nc1 <-- b11
+
+            b11 < a11
+        """)
+
+        artifacts.propagate_with(self.manager)
+
+        b11, a11 = artifacts.get_typed_vertices(('b11', 'a11'), Block)
+        nc1 = artifacts.get_typed_vertex('nc1', Transaction)
+
+        # After the reorg, b11 is voided and a11 is the best chain
+        assert b11.get_metadata().voided_by
+        assert not a11.get_metadata().voided_by
+        assert b11.timestamp < a11.timestamp
+
+        # Query state by b11's timestamp (voided block).
+        response = await self.web.get(
+            'state', [
+                (b'id', nc1.hash.hex().encode('ascii')),
+                (b'timestamp', str(b11.timestamp).encode('ascii')),
+            ]
+        )
+        # The NC was confirmed by b11 which is now voided, so the contract
+        # should not exist at this point (b10). The API must return 404, not crash.
+        assert response.responseCode == 404

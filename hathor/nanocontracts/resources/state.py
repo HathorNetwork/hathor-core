@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.storage import NCContractStorage
     from hathor.transaction import Block
 
+MAX_TIMESTAMP_BLOCKS: int = 100
+
 
 @register_resource
 class NanoContractStateResource(Resource):
@@ -72,10 +74,10 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         nc_storage: NCContractStorage
-        block: Block
-        block_hash: Optional[bytes]
+        block: Block | None = None
+        block_hashes: list[bytes] | bytes | None
         try:
-            block_hash = bytes.fromhex(params.block_hash) if params.block_hash else None
+            block_hashes = bytes.fromhex(params.block_hash) if params.block_hash else None
         except ValueError:
             # This error will be raised in case the block_hash parameter is an invalid hex
             request.setResponseCode(400)
@@ -84,8 +86,8 @@ class NanoContractStateResource(Resource):
 
         if params.block_height is not None:
             # Get hash of the block with the height
-            block_hash = self.manager.tx_storage.indexes.height.get(params.block_height)
-            if block_hash is None:
+            block_hashes = self.manager.tx_storage.indexes.height.get(params.block_height)
+            if block_hashes is None:
                 # No block hash was found with this height
                 request.setResponseCode(400)
                 error_response = ErrorResponse(
@@ -94,29 +96,41 @@ class NanoContractStateResource(Resource):
                                 )
                 return error_response.json_dumpb()
         elif params.timestamp is not None:
-            block_hashes, has_more = self.manager.tx_storage.indexes.sorted_blocks.get_older(
+            ts_hashes, has_more = self.manager.tx_storage.indexes.sorted_blocks.get_older(
                 timestamp=params.timestamp,
                 hash_bytes=None,
-                count=1,
+                count=MAX_TIMESTAMP_BLOCKS,
             )
-            if not block_hashes:
-                # No block hash was found before this timestamp
+            if not ts_hashes:
                 request.setResponseCode(400)
                 error_response = ErrorResponse(
                     success=False,
                     error=f'No block hash was found before timestamp {params.timestamp}.'
                 )
                 return error_response.json_dumpb()
-            assert len(block_hashes) == 1
-            block_hash = block_hashes[0]
+            assert len(ts_hashes) <= MAX_TIMESTAMP_BLOCKS
+            block_hashes = ts_hashes
 
-        if block_hash:
-            try:
-                block = self.manager.tx_storage.get_block(block_hash)
-            except AssertionError:
-                # This block hash is not from a block
-                request.setResponseCode(400)
-                error_response = ErrorResponse(success=False, error=f'Invalid block_hash {params.block_hash}.')
+        if block_hashes:
+            if isinstance(block_hashes, bytes):
+                block_hashes = [block_hashes]
+            assert isinstance(block_hashes, list)
+            for block_hash in block_hashes:
+                try:
+                    current_block = self.manager.tx_storage.get_block(block_hash)
+                except AssertionError:
+                    # This block hash is not from a block
+                    request.setResponseCode(400)
+                    error_response = ErrorResponse(success=False, error=f'Invalid block_hash {params.block_hash}.')
+                    return error_response.json_dumpb()
+                meta = current_block.get_metadata()
+                if not meta.voided_by:
+                    block = current_block
+                    assert meta.nc_block_root_id is not None, f'expected root id to be set on block {block.hash_hex}'
+                    break
+            if block is None:
+                request.setResponseCode(404)
+                error_response = ErrorResponse(success=False, error='Couldn\'t find non-voided block')
                 return error_response.json_dumpb()
         else:
             block = self.manager.tx_storage.get_best_block()
