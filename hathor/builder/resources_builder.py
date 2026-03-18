@@ -260,6 +260,7 @@ class ResourcesBuilder:
                 BlueprintSourceCodeResource,
                 NanoContractHistoryResource,
                 NanoContractStateResource,
+                NCDryRunResource,
             )
             nc_resource = Resource()
             root.putChild(b'nano_contract', nc_resource)
@@ -273,6 +274,7 @@ class ResourcesBuilder:
             nc_resource.putChild(b'state', NanoContractStateResource(self.manager))
             nc_resource.putChild(b'creation', NCCreationResource(self.manager))
             nc_resource.putChild(b'logs', NCExecLogsResource(self.manager))
+            nc_resource.putChild(b'dry_run', NCDryRunResource(self.manager))
 
         if self._args.enable_debug_api:
             debug_resource = Resource()
