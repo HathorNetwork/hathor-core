@@ -56,6 +56,7 @@ def execute(args: Namespace) -> None:
 
     from hathor.transaction import Block
     from hathor.transaction.exceptions import HathorError
+    from hathor.transaction.vertex_parser import vertex_deserializer
 
     print('Hathor CPU Miner v1.0.0')
     print('URL: {}'.format(args.url))
@@ -118,8 +119,7 @@ def execute(args: Namespace) -> None:
             continue
 
         block_bytes = base64.b64decode(data['block_bytes'])
-        block = Block.create_from_struct(block_bytes)
-        assert isinstance(block, Block)
+        block = vertex_deserializer.deserialize_block(block_bytes)
         print('Mining block with weight {}'.format(block.weight))
 
         p = Process(target=worker, args=(q_in, q_out))
@@ -137,11 +137,11 @@ def execute(args: Namespace) -> None:
 
             from hathor.conf.get_settings import get_global_settings
             from hathor.daa import DifficultyAdjustmentAlgorithm
+            from hathor.feature_activation.utils import Features
+            from hathor.transaction.scripts.opcode import OpcodesVersion
             from hathor.verification.verification_params import VerificationParams
             from hathor.verification.verification_service import VerificationService
             from hathor.verification.vertex_verifiers import VertexVerifiers
-            from hathor.feature_activation.utils import Features
-            from hathor.transaction.scripts.opcode import OpcodesVersion
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
             verification_params = VerificationParams(nc_block_root_id=None, features=Features(

@@ -35,7 +35,7 @@ def create_parser() -> ArgumentParser:
 
 def execute(args: Namespace) -> None:
     from hathor.mining.cpu_mining_service import CpuMiningService
-    from hathor.transaction import Transaction
+    from hathor.transaction.vertex_parser import vertex_deserializer
 
     # Get tx you want to create a twin
     if args.url and args.hash:
@@ -58,7 +58,7 @@ def execute(args: Namespace) -> None:
 
     try:
         # Create new tx from the twin
-        twin = Transaction.create_from_struct(tx_bytes)
+        twin = vertex_deserializer.deserialize_transaction(tx_bytes)
 
         assert len(twin.parents) == 2
 
