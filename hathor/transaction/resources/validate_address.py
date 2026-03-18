@@ -77,7 +77,7 @@ class _ValidateAddressResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: HathorManager, address: Union[str, bytes]):
+    def __init__(self, manager: HathorManager, address: Union[str, bytes]) -> None:
         super().__init__()
         # Important to have the manager so we can know the tx_storage
         self.manager = manager
@@ -108,7 +108,7 @@ class _ValidateAddressResource(Resource):
         except Exception as e:
             return ValidateAddressErrorResponse(
                 valid=False,
-                error=type(e).__name__,
+                error='invalid_address',
                 msg=str(e),
             )
 

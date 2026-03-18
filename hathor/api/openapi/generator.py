@@ -14,7 +14,6 @@
 
 """OpenAPI 3.1 specification generator from Pydantic models."""
 
-import copy
 import typing
 from collections import defaultdict
 from typing import Any
@@ -22,9 +21,10 @@ from typing import Any
 from pydantic import BaseModel
 
 from hathor.api.openapi.decorators import EndpointMetadata, get_endpoint_registry
+from hathor.api.schema_utils import SchemaRegistryMixin
 
 
-class OpenAPIGenerator:
+class OpenAPIGenerator(SchemaRegistryMixin):
     """Generates OpenAPI 3.1 specification from registered endpoints.
 
     This generator collects metadata from @api_endpoint decorated methods
@@ -40,26 +40,6 @@ class OpenAPIGenerator:
         self.title = title
         self.version = version
         self.description = description
-
-    def _get_schema_ref(self, model: type[BaseModel]) -> dict[str, Any]:
-        """Get a $ref to a schema, registering it if needed.
-
-        Raises:
-            ValueError: If a different model with the same class name is already registered.
-        """
-        schema_name = model.__name__
-        if schema_name not in self._schemas:
-            self._schemas[schema_name] = model.model_json_schema(
-                ref_template='#/components/schemas/{model}'
-            )
-            self._schema_models[schema_name] = model
-        elif self._schema_models[schema_name] is not model:
-            raise ValueError(
-                f"Schema name collision for '{schema_name}': "
-                f"{self._schema_models[schema_name].__module__}.{schema_name} vs "
-                f"{model.__module__}.{schema_name}"
-            )
-        return {'$ref': f'#/components/schemas/{schema_name}'}
 
     def _build_parameters(self, metadata: EndpointMetadata) -> list[dict[str, Any]]:
         """Build OpenAPI parameters from query params model and path params."""
@@ -121,7 +101,14 @@ class OpenAPIGenerator:
         # Check if it's a Union type
         args = typing.get_args(metadata.response_model)
         if args:
-            return list(args)
+            models = []
+            for a in args:
+                if a is type(None):
+                    continue
+                if not (isinstance(a, type) and issubclass(a, BaseModel)):
+                    raise TypeError(f"response_model Union contains non-BaseModel type: {a}")
+                models.append(a)
+            return models
 
         # Single model
         return [metadata.response_model]
@@ -146,7 +133,7 @@ class OpenAPIGenerator:
         responses: dict[str, Any] = {}
         for status_code, status_models in sorted(by_status.items()):
             if len(status_models) == 1:
-                schema = self._get_schema_ref(status_models[0])
+                schema: dict[str, Any] = self._get_schema_ref(status_models[0])
             else:
                 schema = {
                     'oneOf': [self._get_schema_ref(m) for m in status_models],
@@ -260,7 +247,6 @@ class OpenAPIGenerator:
         """
         # Reset schemas for fresh generation
         self._schemas: dict[str, Any] = {}
-        self._schema_models: dict[str, type[BaseModel]] = {}
 
         # Build paths from registered endpoints
         paths: dict[str, Any] = {}
@@ -295,20 +281,6 @@ class OpenAPIGenerator:
 
         # Add components/schemas if any were registered
         if self._schemas:
-            # Process schemas to handle nested $defs (recursively)
-            components_schemas: dict[str, Any] = {}
-            for name, schema in self._schemas.items():
-                schema = copy.deepcopy(schema)
-                self._extract_defs(schema, components_schemas)
-                components_schemas[name] = schema
-
-            spec['components'] = {'schemas': components_schemas}
+            spec['components'] = {'schemas': self._flatten_schemas()}
 
         return spec
-
-    def _extract_defs(self, schema: dict[str, Any], target: dict[str, Any]) -> None:
-        """Recursively extract $defs from a schema into the target dict."""
-        if '$defs' in schema:
-            for def_name, def_schema in schema.pop('$defs').items():
-                self._extract_defs(def_schema, target)
-                target[def_name] = def_schema
