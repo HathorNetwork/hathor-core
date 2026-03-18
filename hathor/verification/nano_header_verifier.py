@@ -18,6 +18,7 @@ from collections import defaultdict
 from typing import Sequence
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
     NCFail,
@@ -71,11 +72,18 @@ ALLOWED_ACTION_SETS: frozenset[frozenset[NCActionType]] = frozenset([
 
 
 class NanoHeaderVerifier:
-    __slots__ = ('_settings', '_tx_storage')
+    __slots__ = ('_settings', '_tx_storage', 'blueprint_service')
 
-    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        tx_storage: TransactionStorage,
+        blueprint_service: BlueprintService,
+    ) -> None:
         self._settings = settings
         self._tx_storage = tx_storage
+        self.blueprint_service = blueprint_service
 
     def verify_nc_signature(self, tx: BaseTransaction, params: VerificationParams) -> None:
         """Verify if the caller's signature is valid."""
@@ -174,7 +182,7 @@ class NanoHeaderVerifier:
             allow_fallback = True
 
         try:
-            blueprint_class = self._tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
         except NCFail as e:
             raise NCTxValidationError from e
 

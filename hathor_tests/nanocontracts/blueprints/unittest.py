@@ -27,7 +27,7 @@ class BlueprintTestCase(unittest.TestCase):
         self.rng = self.manager.rng
         self.wallet = self.manager.wallet
         self.reactor = self.manager.reactor
-        self.nc_catalog = self.manager.tx_storage.nc_catalog
+        self.blueprint_service = self.manager.blueprint_service
 
         self.htr_token_uid = HATHOR_TOKEN_UID
         self.runner = self.build_runner()
@@ -67,7 +67,7 @@ class BlueprintTestCase(unittest.TestCase):
         nc_logger = NCLogger(__reactor__=runner.reactor, __nc_id__=contract_id)
         env = BlueprintEnvironment(runner, nc_logger, contract_storage, disable_cache=True)
         blueprint_id = runner.get_blueprint_id(contract_id)
-        blueprint_class = runner.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = runner.blueprint_service.get_blueprint_class(blueprint_id)
         contract = blueprint_class(env)
         return contract
 
@@ -80,8 +80,7 @@ class BlueprintTestCase(unittest.TestCase):
         if blueprint_id is None:
             blueprint_id = self.gen_random_blueprint_id()
 
-        assert blueprint_id not in self.nc_catalog.blueprints
-        self.nc_catalog.blueprints[blueprint_id] = blueprint_class
+        self.blueprint_service.register_blueprint(blueprint_id, blueprint_class, strict=True)
         return blueprint_id
 
     def register_blueprint_file(self, path: str, blueprint_id: BlueprintId | None = None) -> BlueprintId:
@@ -126,6 +125,7 @@ class BlueprintTestCase(unittest.TestCase):
         """Create a test runner."""
         return TestRunner(
             tx_storage=self.manager.tx_storage,
+            blueprint_service=self.manager.blueprint_service,
             settings=self._settings,
             reactor=self.reactor,
             runtime_version=runtime_version,

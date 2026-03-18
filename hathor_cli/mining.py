@@ -158,6 +158,7 @@ def execute(args: Namespace) -> None:
                 daa=daa,
                 feature_service=Mock(),
                 tx_storage=Mock(),
+                blueprint_service=Mock(),
             )
             verification_service = VerificationService(settings=settings, verifiers=verifiers)
             verification_service.verify_without_storage(block, verification_params)
