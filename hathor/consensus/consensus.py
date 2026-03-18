@@ -106,6 +106,7 @@ class ConsensusAlgorithm:
             runner_factory=runner_factory,
             nc_storage_factory=nc_storage_factory,
             nc_calls_sorter=nc_calls_sorter,
+            feature_service=feature_service,
         )
 
         # Create NCConsensusBlockExecutor (with side effects) for consensus
@@ -456,6 +457,9 @@ class ConsensusAlgorithm:
                 case Feature.OPCODES_V2:
                     if not self._opcodes_v2_activation_rule(tx):
                         return False
+                case Feature.NANO_RUNTIME_V2:
+                    # This feature does not affect verification, only the Nano runtime.
+                    pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.NOP_FEATURE_1

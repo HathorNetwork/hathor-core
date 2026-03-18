@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection, Sequence, TypeAlias, final
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
+from hathor.nanocontracts.nano_settings import NanoSettings
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
 
 if TYPE_CHECKING:
@@ -266,3 +267,10 @@ class BlueprintEnvironment:
             actions=actions,
             fees=fees or (),
         )
+
+    def get_settings(self) -> NanoSettings:
+        """
+        Return the settings for the current Nano runtime.
+        Settings are not constant, they may be changed over time.
+        """
+        return self.__runner.syscall_get_nano_settings()

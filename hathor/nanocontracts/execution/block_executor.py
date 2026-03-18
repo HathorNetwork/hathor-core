@@ -21,13 +21,16 @@ import traceback
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterator
 
+from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
     from hathor.nanocontracts.sorter.types import NCSorterCallable
@@ -113,6 +116,7 @@ class NCBlockExecutor:
         runner_factory: 'RunnerFactory',
         nc_storage_factory: 'NCStorageFactory',
         nc_calls_sorter: 'NCSorterCallable',
+        feature_service: FeatureService,
     ) -> None:
         """
         Initialize the block executor.
@@ -127,11 +131,9 @@ class NCBlockExecutor:
         self._runner_factory = runner_factory
         self._nc_storage_factory = nc_storage_factory
         self._nc_calls_sorter = nc_calls_sorter
+        self._feature_service = feature_service
 
-    def execute_block(
-        self,
-        block: Block,
-    ) -> Iterator[NCBlockEffect]:
+    def execute_block(self, block: Block) -> Iterator[NCBlockEffect]:
         """Execute block as generator, yielding effects without applying them.
 
         This is the pure execution method that yields lifecycle events as it processes
@@ -169,6 +171,7 @@ class NCBlockExecutor:
 
         nc_sorted_calls = self._nc_calls_sorter(block, nc_calls) if nc_calls else []
         block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)
+        features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
 
         yield NCBeginBlock(
             block=block,
@@ -189,6 +192,7 @@ class NCBlockExecutor:
 
             # Execute transaction and yield the result directly
             result = self.execute_transaction(
+                runtime_version=features.nano_runtime_version,
                 tx=tx,
                 block_storage=block_storage,
                 rng_seed=rng_seed,
@@ -210,6 +214,7 @@ class NCBlockExecutor:
     def execute_transaction(
         self,
         *,
+        runtime_version: NanoRuntimeVersion,
         tx: Transaction,
         block_storage: 'NCBlockStorage',
         rng_seed: bytes,
@@ -234,6 +239,7 @@ class NCBlockExecutor:
             return NCTxExecutionSkipped(tx=tx)
 
         runner = self._runner_factory.create(
+            runtime_version=runtime_version,
             block_storage=block_storage,
             seed=rng_seed,
         )

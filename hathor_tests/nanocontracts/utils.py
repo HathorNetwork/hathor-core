@@ -4,6 +4,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, Context, NCRocksDBStorageFactory
 from hathor.nanocontracts.method import Method
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
 from hathor.nanocontracts.runner import CallInfo, Runner
 from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
@@ -31,6 +32,7 @@ class TestRunner:
     def __init__(
         self,
         *,
+        runtime_version: NanoRuntimeVersion,
         tx_storage: TransactionStorage,
         settings: HathorSettings,
         reactor: ReactorProtocol,
@@ -44,6 +46,7 @@ class TestRunner:
         block_trie = PatriciaTrie(store)
         block_storage = NCBlockStorage(block_trie)
         self._runner: Runner = Runner(
+            runtime_version=runtime_version,
             tx_storage=tx_storage,
             storage_factory=storage_factory,
             block_storage=block_storage,

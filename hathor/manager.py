@@ -43,6 +43,7 @@ from hathor.exception import (
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.runner import Runner
@@ -410,7 +411,9 @@ class HathorManager:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = get_block_storage_from_block(nc_storage_factory, block)
+        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=block)
         return self.runner_factory.create(
+            runtime_version=features.nano_runtime_version,
             block_storage=block_storage,
         )
 

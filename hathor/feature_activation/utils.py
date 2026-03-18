@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction.scripts.opcode import OpcodesVersion
 
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ class Features:
     nanocontracts: bool
     fee_tokens: bool
     opcodes_version: OpcodesVersion
+    nano_runtime_version: NanoRuntimeVersion
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
@@ -47,6 +49,7 @@ class Features:
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
+            Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
         }
 
         feature_is_active: dict[Feature, bool] = {
@@ -55,12 +58,16 @@ class Features:
         }
 
         opcodes_version = OpcodesVersion.V2 if feature_is_active[Feature.OPCODES_V2] else OpcodesVersion.V1
+        nano_runtime_version = (
+            NanoRuntimeVersion.V2 if feature_is_active[Feature.NANO_RUNTIME_V2] else NanoRuntimeVersion.V1
+        )
 
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
             nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
+            nano_runtime_version=nano_runtime_version,
         )
 
     @staticmethod
@@ -69,7 +76,8 @@ class Features:
         Used for mempool verification.
 
         Features can either be more restrictive (for example, `count_checkdatasig_op`) or more permissive
-        (for example, `nanocontracts`).
+        (for example, `nanocontracts`) in relation to vertex verification. When a feature doesn't affect
+        verification, such as changes to the Nano runtime only (`nano_runtime_version`), it is indifferent.
 
         Returns information about each feature where permissive features come from the state in the provided
         block, and restrictive features are always enabled. This means restrictive features are applied in
@@ -77,12 +85,14 @@ class Features:
         """
         features = Features.from_vertex(settings=settings, feature_service=feature_service, vertex=best_block)
         return Features(
-            # Permissive features (come from the block state):
-            nanocontracts=features.nanocontracts,
-            fee_tokens=features.fee_tokens,
             # Restrictive features (hardcoded as enabled):
             count_checkdatasig_op=True,
             opcodes_version=OpcodesVersion.V2,
+            # Permissive features (come from the block state):
+            nanocontracts=features.nanocontracts,
+            fee_tokens=features.fee_tokens,
+            # Indifferent features (come from the block state):
+            nano_runtime_version=features.nano_runtime_version,
         )
 
     @staticmethod
@@ -91,14 +101,19 @@ class Features:
         Used mostly for APIs and tests, it disregards the actual state of the blockchain
         and hardcodes all features as enabled.
 
-        For restrictive features, this means they're restricted on APIs just like in the mempool. For permissive
-        features, they're allowed on APIs, which is fine since they may be blocked during verification anyway.
+        - For restrictive features, this means they're restricted on APIs just like in the mempool.
+        - For permissive features, they're allowed on APIs, which is fine since they may be blocked
+          during verification anyway.
+        - For indifferent features, it doesn't matter.
+
+        Read the `Features.for_mempool` docstring for more details on these types of features.
         """
         return Features(
             count_checkdatasig_op=True,
             nanocontracts=True,
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
+            nano_runtime_version=NanoRuntimeVersion.V2,
         )
 
 
