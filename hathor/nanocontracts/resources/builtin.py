@@ -50,8 +50,7 @@ class BlueprintBuiltinResource(Resource):
               success=False, error='Parameters after and before can\'t be used together.')
             return error_response.json_dumpb()
 
-        assert self.manager.tx_storage.nc_catalog is not None
-        builtin_bps = list(self.manager.tx_storage.nc_catalog.blueprints.items())
+        builtin_bps = list(self.manager.blueprint_service.nc_catalog.get_all().items())
 
         filtered_bps = builtin_bps
         if params.search:

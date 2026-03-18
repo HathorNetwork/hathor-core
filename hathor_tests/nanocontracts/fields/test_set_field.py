@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
@@ -49,9 +48,7 @@ class TestDequeField(unittest.TestCase):
         super().setUp()
         self.manager = self.create_peer('unittests')
         self.bp_id = b'x' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            self.bp_id: MyBlueprint
-        })
+        self.manager.blueprint_service.register_blueprint(self.bp_id, MyBlueprint)
 
     def test_set_field(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)

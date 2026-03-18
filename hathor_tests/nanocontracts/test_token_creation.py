@@ -3,7 +3,6 @@ from unittest.mock import Mock
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
 from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
@@ -58,12 +57,9 @@ class NCNanoContractTestCase(unittest.TestCase):
         super().setUp()
 
         self.myblueprint_id = b'x' * 32
-        self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
-        })
 
         self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
-        self.manager.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(self.myblueprint_id, MyBlueprint)
 
     def test_token_creation_by_vertex(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)

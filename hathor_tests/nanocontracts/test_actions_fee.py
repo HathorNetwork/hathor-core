@@ -132,8 +132,10 @@ class NCActionsFeeTestCase(BlueprintTestCase):
 
         self.my_blueprint_id = self.gen_random_blueprint_id()
         self.my_other_blueprint_id = self.gen_random_blueprint_id()
-        self.nc_catalog.blueprints[self.my_blueprint_id] = MyBlueprint
-        self.nc_catalog.blueprints[self.my_other_blueprint_id] = MyOtherBlueprint
+        self.blueprint_service.register_blueprints({
+            self.my_blueprint_id: MyBlueprint,
+            self.my_other_blueprint_id: MyOtherBlueprint,
+        })
 
         self.nc1_id = self.gen_random_contract_id()
         self.nc2_id = self.gen_random_contract_id()

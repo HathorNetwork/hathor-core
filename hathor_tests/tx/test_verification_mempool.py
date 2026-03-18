@@ -72,8 +72,10 @@ class VertexHeadersTest(unittest.TestCase):
         self.blueprint_id = b'a' * 32
         self.other_blueprint_id = b'b' * 32
         self.manager = self.create_peer('unittests')
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyTestBlueprint
-        self.manager.tx_storage.nc_catalog.blueprints[self.other_blueprint_id] = MyOtherTestBlueprint
+        self.manager.blueprint_service.register_blueprints({
+            self.blueprint_id: MyTestBlueprint,
+            self.other_blueprint_id: MyOtherTestBlueprint,
+        })
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_vertex_too_old(self) -> None:

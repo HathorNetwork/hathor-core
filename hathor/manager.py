@@ -46,6 +46,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import Features
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, get_block_storage_from_block
@@ -117,6 +118,7 @@ class HathorManager:
         runner_factory: RunnerFactory,
         feature_service: FeatureService,
         vertex_json_serializer: VertexJsonSerializer,
+        blueprint_service: BlueprintService,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -207,6 +209,7 @@ class HathorManager:
         self.runner_factory = runner_factory
         self.feature_service = feature_service
         self.vertex_json_serializer = vertex_json_serializer
+        self.blueprint_service = blueprint_service
 
         self.websocket_factory = websocket_factory
 

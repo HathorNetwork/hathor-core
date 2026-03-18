@@ -2,7 +2,6 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.indexes import RocksDBIndexesManager
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.utils import sign_openssl
 from hathor.storage.rocksdb_storage import RocksDBStorage
 from hathor.transaction import Transaction
@@ -33,10 +32,7 @@ class NCHistoryIndexesTest(unittest.TestCase):
 
     def test_basic(self):
         blueprint_id = b'x' * 32
-        self.catalog = NCBlueprintCatalog({
-            blueprint_id: MyTestBlueprint
-        })
-        self.manager.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(blueprint_id, MyTestBlueprint)
 
         parents = self.manager.get_new_tx_parents()
         nc = Transaction(weight=1, inputs=[], outputs=[], parents=parents, storage=self.tx_storage)
@@ -81,12 +77,9 @@ class NCHistoryIndexesTest(unittest.TestCase):
 
     def test_latest_tx_timestamp(self) -> None:
         blueprint_id = b'x' * 32
-        catalog = NCBlueprintCatalog({
-            blueprint_id: MyTestBlueprint
-        })
         manager = self.create_peer('testnet', nc_indexes=True)
         nc_history_index = manager.tx_storage.indexes.nc_history
-        manager.tx_storage.nc_catalog = catalog
+        manager.blueprint_service.register_blueprint(blueprint_id, MyTestBlueprint)
         dag_builder = TestDAGBuilder.from_manager(manager)
         artifacts = dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]

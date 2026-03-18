@@ -91,8 +91,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
         self.blueprint_id = BlueprintId(self.rng.randbytes(32))
-        assert self.manager.tx_storage.nc_catalog is not None
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyBluprint
+        self.manager.blueprint_service.register_blueprint(self.blueprint_id, MyBluprint)
 
         empty_block_storage = self.manager.consensus_algorithm.nc_storage_factory.get_empty_block_storage()
         empty_block_storage.commit()
