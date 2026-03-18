@@ -271,7 +271,7 @@ class Runner:
         try:
             ret = self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
         return ret
 
     def _unsafe_call_public_method(
@@ -306,9 +306,6 @@ class Runner:
         self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
 
-        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
-        self._updated_tokens_totals = defaultdict(int)
-        self._paid_actions_fees = defaultdict(int)
         return ret
 
     def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
@@ -506,15 +503,20 @@ class Runner:
 
         return result
 
-    def _reset_all_change_trackers(self) -> None:
+    def _reset_all_changes(self) -> None:
         """Reset all changes and prepare for next call."""
         assert self._call_info is not None
         for change_trackers in self._call_info.change_trackers.values():
             for change_tracker in change_trackers:
                 if not change_tracker.has_been_commited:
                     change_tracker.block()
+
         self._last_call_info = self._call_info
         self._call_info = None
+
+        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
+        self._updated_tokens_totals = defaultdict(int)
+        self._paid_actions_fees = defaultdict(int)
 
     def _validate_balances(self, ctx: Context) -> None:
         """
@@ -729,7 +731,7 @@ class Runner:
                 kwargs=kwargs,
             )
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
 
     def _handle_index_update(self, action: NCAction) -> None:
         """For each action in a public method call, create the appropriate index update records."""
@@ -940,7 +942,7 @@ class Runner:
         try:
             ret = self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
         return ret
 
     @_forbid_syscall_from_view('create_contract')
