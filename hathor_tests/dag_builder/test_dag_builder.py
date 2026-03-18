@@ -13,6 +13,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
+from hathorlib.nanocontracts.versions import BlueprintVersion
 
 
 class MyBlueprint(Blueprint):
@@ -285,13 +286,13 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx2 = artifacts.by_name['tx2'].vertex
         tx3 = artifacts.by_name['tx3'].vertex
 
-        ctx2 = tx2.get_nano_header().get_context()
+        ctx2 = tx2.get_nano_header().get_context(blueprint_version=BlueprintVersion.V1)
         self.assertEqual(dict(ctx2.actions), {
             tka_id: (NCDepositAction(token_uid=tka_id, amount=5),),
             htr_id: (NCDepositAction(token_uid=htr_id, amount=10),),
         })
 
-        ctx3 = tx3.get_nano_header().get_context()
+        ctx3 = tx3.get_nano_header().get_context(blueprint_version=BlueprintVersion.V1)
         self.assertEqual(dict(ctx3.actions), {
             htr_id: (NCDepositAction(token_uid=htr_id, amount=3),),
             tka_id: (NCWithdrawalAction(token_uid=tka_id, amount=2),),

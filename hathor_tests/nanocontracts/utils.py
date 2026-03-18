@@ -5,7 +5,6 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, Context, NCRocksDBStorageFactory
 from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.method import Method
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
 from hathor.nanocontracts.runner import CallInfo, Runner
 from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
@@ -21,6 +20,7 @@ from hathor.transaction.storage import TransactionRocksDBStorage, TransactionSto
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
+from hathorlib.nanocontracts.versions import NanoRuntimeVersion
 
 
 class TestRunner:
