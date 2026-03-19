@@ -16,6 +16,7 @@ from hathorlib.headers.base import VertexBaseHeader
 from hathorlib.headers.deprecated_nano_header import DeprecatedNanoHeader
 from hathorlib.headers.fee_header import FeeEntry, FeeHeader, FeeHeaderEntry
 from hathorlib.headers.nano_header import NC_INITIALIZE_METHOD, NanoHeader
+from hathorlib.headers.shielded_outputs_header import ShieldedOutputsHeader
 from hathorlib.headers.types import VertexHeaderId
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     'FeeHeaderEntry',
     'FeeEntry',
     'NC_INITIALIZE_METHOD',
+    'ShieldedOutputsHeader',
 ]

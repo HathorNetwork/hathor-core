@@ -19,7 +19,7 @@ from hathorlib.headers import VertexBaseHeader
 from hathorlib.utils import unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathorlib.headers import FeeHeader, NanoHeader
+    from hathorlib.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
@@ -83,6 +83,20 @@ class Transaction(BaseTransaction):
         from hathorlib.headers import FeeHeader
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
+
+    def has_shielded_outputs(self) -> bool:
+        """Returns true if this transaction has a shielded outputs header."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        from hathorlib.headers import ShieldedOutputsHeader
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        return self._get_header(ShieldedOutputsHeader)
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
