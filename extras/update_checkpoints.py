@@ -22,9 +22,10 @@ New checkpoints to add for mainnet:
   cp(4_900_000, bytes.fromhex('0000000000000000079b1c1ebf48d351a7d31dcc55c5b4cf79ade79089a20f5a')),
   cp(5_000_000, bytes.fromhex('000000000000000006c9167db1cc7e93fcf1c3014da6c6221390d03d1640c9b3')),
 
-The output can then be copied and pasted into `hathor/conf/mainnet.yml` and `hathor/conf/mainnet.py`
+The output can then be copied and pasted into `hathorlib/conf/mainnet.yml` and `hathor/conf/mainnet.py`
 """
 
+import importlib.resources
 import requests
 import yaml
 import argparse
@@ -32,11 +33,11 @@ import argparse
 # Built-in network configurations
 NETWORKS: dict[str, dict[str, str]] = {
     'mainnet': {
-        'config_file': 'hathor/conf/mainnet.yml',
+        'config_file': 'mainnet.yml',
         'node_url': 'https://node1.mainnet.hathor.network/v1a',
     },
     'testnet': {
-        'config_file': 'hathor/conf/testnet.yml',
+        'config_file': 'testnet.yml',
         'node_url': 'https://node1.india.testnet.hathor.network/v1a',
     },
     # Add more networks as needed
@@ -59,10 +60,10 @@ def get_hash_for_height(node_url: str, height: int) -> str:
     return response.json()['block']['tx_id']
 
 
-def load_checkpoints(config_file: str) -> dict[str, int]:
-    """Load the checkpoints from the specified YAML config file."""
-    with open(config_file, 'r') as file:
-        data = yaml.safe_load(file)
+def load_checkpoints(config_file: str) -> dict[int, str]:
+    """Load the checkpoints from the specified YAML config file in hathorlib."""
+    config_path = importlib.resources.files('hathorlib.conf').joinpath(config_file)
+    data = yaml.safe_load(config_path.read_text())
     return data.get('CHECKPOINTS', {})
 
 
@@ -77,7 +78,7 @@ def print_new_checkpoints(network_name: str) -> None:
     config_file = network_config['config_file']
     node_url = network_config['node_url']
 
-    # Load existing checkpoints from the YAML file
+    # Load existing checkpoints from the hathorlib YAML config
     current_checkpoints = load_checkpoints(config_file)
 
     # Get the latest block height
