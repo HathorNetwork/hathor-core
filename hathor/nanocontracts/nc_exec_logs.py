@@ -24,6 +24,7 @@ from hathor.nanocontracts import NCFail
 from hathor.nanocontracts.runner import CallInfo
 from hathor.transaction import Transaction
 from hathor.types import VertexId
+
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.nc_exec_logs import (  # noqa: F401
     MAX_EVENT_SIZE,
