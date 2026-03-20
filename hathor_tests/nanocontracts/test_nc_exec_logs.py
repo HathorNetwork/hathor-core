@@ -61,6 +61,8 @@ class MyBlueprint1(Blueprint):
 
     @public(allow_deposit=True)
     def call_another_public(self, ctx: Context, contract_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.log.debug('call_another_public() called on MyBlueprint1', contract_id=contract_id)
         action = NCDepositAction(token_uid=TokenUid(b'\x00'), amount=5)
         result1 = self.syscall.get_contract(contract_id, blueprint_id=None).public(action).sum(1, 2)
@@ -75,6 +77,8 @@ class MyBlueprint2(Blueprint):
 
     @public(allow_deposit=True)
     def sum(self, ctx: Context, a: int, b: int) -> int:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.log.debug('sum() called on MyBlueprint2', a=a, b=b)
         return a + b
 

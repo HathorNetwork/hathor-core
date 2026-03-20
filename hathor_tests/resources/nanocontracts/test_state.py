@@ -78,6 +78,7 @@ class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         action = ctx.get_single_action(self.token_uid)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         self.total += action.amount
         partial = self.address_details.get(address, {})

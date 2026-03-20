@@ -23,7 +23,8 @@ from hathorlib.nanocontracts.types import ContractId, NCDepositAction
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def create_token(self, ctx: Context, fail: bool) -> None:

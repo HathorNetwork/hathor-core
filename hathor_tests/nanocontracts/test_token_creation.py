@@ -25,12 +25,15 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.a = ''
         self.b = 0
 
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_deposit=True)
     def create_deposit_token(
@@ -43,6 +46,8 @@ class MyBlueprint(Blueprint):
         mint_authority: bool,
         melt_authority: bool,
     ) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.create_deposit_token(
             token_name=token_name,
             token_symbol=token_symbol,
@@ -150,9 +155,9 @@ class NCNanoContractTestCase(unittest.TestCase):
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 
-        jkl_context = JKL.get_nano_header().get_context(BlueprintVersion.V1)
+        jkl_context = JKL.get_nano_header().get_context(BlueprintVersion.V2)
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
-        assert jkl_context.actions[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
+        assert jkl_context.actions_by_token[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
 
         assert not tx2.is_nano_contract()
         assert tx2.get_metadata().voided_by is None

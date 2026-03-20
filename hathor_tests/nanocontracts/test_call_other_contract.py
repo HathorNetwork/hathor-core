@@ -41,6 +41,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, initial: int) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter = initial
         self.contract = None
 
@@ -50,6 +52,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def split_balance(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         if self.contract is None:
             return
 
@@ -62,6 +66,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True)
     def get_tokens_from_another_contract(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         if self.contract is None:
             return
 

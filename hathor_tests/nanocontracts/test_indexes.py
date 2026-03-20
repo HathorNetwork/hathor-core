@@ -23,6 +23,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter = 0
 
     @public
