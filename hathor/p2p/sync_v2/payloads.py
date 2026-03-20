@@ -12,62 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pydantic import validator
-
 from hathor.types import VertexId
-from hathor.utils.pydantic import BaseModel
+from hathor.utils.pydantic import BaseModel, Hex
 
 
 class PayloadBaseModel(BaseModel):
-
-    @classmethod
-    def convert_hex_to_bytes(cls, value: str | VertexId) -> VertexId:
-        """Convert a string in hex format to bytes. If bytes are given, it does nothing."""
-        if isinstance(value, str):
-            return bytes.fromhex(value)
-        elif isinstance(value, VertexId):
-            return value
-        raise ValueError('invalid type')
-
-    class Config:
-        json_encoders = {
-            VertexId: lambda x: x.hex()
-        }
+    """Base model for P2P message payloads with automatic hex encoding for bytes fields."""
+    pass
 
 
 class GetNextBlocksPayload(PayloadBaseModel):
     """GET-NEXT-BLOCKS message is used to request a stream of blocks in the best blockchain."""
-
-    start_hash: VertexId
-    end_hash: VertexId
+    start_hash: Hex[VertexId]
+    end_hash: Hex[VertexId]
     quantity: int
-
-    @validator('start_hash', 'end_hash', pre=True)
-    def validate_bytes_fields(cls, value: str | bytes) -> VertexId:
-        return cls.convert_hex_to_bytes(value)
 
 
 class BestBlockPayload(PayloadBaseModel):
     """BEST-BLOCK message is used to send information about the current best block."""
-
-    block: VertexId
+    block: Hex[VertexId]
     height: int
-
-    @validator('block', pre=True)
-    def validate_bytes_fields(cls, value: str | VertexId) -> VertexId:
-        return cls.convert_hex_to_bytes(value)
 
 
 class GetTransactionsBFSPayload(PayloadBaseModel):
     """GET-TRANSACTIONS-BFS message is used to request a stream of transactions confirmed by blocks."""
-    start_from: list[VertexId]
-    first_block_hash: VertexId
-    last_block_hash: VertexId
-
-    @validator('first_block_hash', 'last_block_hash', pre=True)
-    def validate_bytes_fields(cls, value: str | VertexId) -> VertexId:
-        return cls.convert_hex_to_bytes(value)
-
-    @validator('start_from', pre=True, each_item=True)
-    def validate_start_from(cls, value: str | VertexId) -> VertexId:
-        return cls.convert_hex_to_bytes(value)
+    start_from: list[Hex[VertexId]]
+    first_block_hash: Hex[VertexId]
+    last_block_hash: Hex[VertexId]

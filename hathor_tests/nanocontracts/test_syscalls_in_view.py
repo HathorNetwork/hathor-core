@@ -110,6 +110,10 @@ class DirectSyscalls(Blueprint):
     def setup_new_contract(self) -> None:
         self.syscall.setup_new_contract(BlueprintId(VertexId(b'')), salt=b'')
 
+    @view
+    def get_settings(self) -> None:
+        self.syscall.get_settings()
+
 
 class IndirectSyscalls(Blueprint):
     other_blueprint_id: BlueprintId | None
@@ -183,6 +187,7 @@ class TestSyscallsInView(BlueprintTestCase):
             'get_contract',
             'get_proxy',
             'get_current_code_blueprint_id',
+            'get_settings',
         }
 
         tested_methods = set()

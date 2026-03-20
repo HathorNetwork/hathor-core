@@ -6,10 +6,11 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts import HATHOR_TOKEN_UID, Context
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
-from hathor.nanocontracts.vertex_data import BlockData, VertexData
+from hathor.nanocontracts.vertex_data import BlockData, create_vertex_data_from_vertex
 from hathor.transaction import Transaction, Vertex
 from hathor.transaction.token_info import TokenVersion
 from hathor.util import not_none
@@ -57,7 +58,7 @@ class BlueprintTestCase(unittest.TestCase):
         """ Implementation of `get_readonly_contract` and `get_readwrite_contract`, only difference is `locked`
         """
         from hathor.nanocontracts.nc_exec_logs import NCLogger
-        runner = self.runner
+        runner = self.runner._runner
         contract_storage = runner.get_storage(contract_id)
         if locked:
             contract_storage.lock()
@@ -121,12 +122,13 @@ class BlueprintTestCase(unittest.TestCase):
 
         return self._register_blueprint_class(blueprint_class, blueprint_id)
 
-    def build_runner(self) -> TestRunner:
-        """Create a Runner instance."""
+    def build_runner(self, runtime_version: NanoRuntimeVersion = NanoRuntimeVersion.V2) -> TestRunner:
+        """Create a test runner."""
         return TestRunner(
             tx_storage=self.manager.tx_storage,
             settings=self._settings,
             reactor=self.reactor,
+            runtime_version=runtime_version,
         )
 
     def gen_random_token_uid(self) -> TokenUid:
@@ -172,7 +174,7 @@ class BlueprintTestCase(unittest.TestCase):
         """Create a Context instance with optional values or defaults."""
         return Context(
             caller_id=caller_id or self.gen_random_address(),
-            vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
+            vertex_data=create_vertex_data_from_vertex(vertex or self.get_genesis_tx()),
             block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
             actions=Context.__group_actions__(actions or ()),
         )
@@ -186,7 +188,7 @@ class BlueprintTestCase(unittest.TestCase):
         token_version: TokenVersion
     ) -> None:
         """Create a token in the runner block storage"""
-        self.runner.block_storage.create_token(
+        self.runner._runner.block_storage.create_token(
             token_id=token_uid,
             token_name=token_name,
             token_symbol=token_symbol,

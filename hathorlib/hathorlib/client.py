@@ -172,7 +172,8 @@ class HathorClient:
 
         tx = tx_or_block_from_bytes(raw)
 
-        if tx.is_block:
+        is_block = tx.is_block
+        if is_block:
             data = {'hexdata': raw.hex()}
             resp = await self._session.post(self._get_url('submit_block'), json=data)
         else:
@@ -187,4 +188,13 @@ class HathorClient:
 
         json = await resp.json()
 
-        return cast(bool, json['result'])
+        if is_block:
+            return cast(bool, json['result'])
+
+        # /push_tx returns {'success': bool, 'message': str}
+        success = json.get('success', False)
+        if not success:
+            message = json.get('message', 'Unknown error')
+            self.log.error('Error pushing tx', message=message)
+            raise PushTxFailed(message)
+        return True

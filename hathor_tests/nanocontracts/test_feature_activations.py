@@ -14,7 +14,6 @@
 
 import pytest
 
-from hathor.conf.settings import FeatureSetting
 from hathor.crypto.util import decode_address, get_address_from_public_key_hash
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
@@ -29,6 +28,7 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.scripts import P2PKH, Opcode
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.conf.settings import FeatureSetting
 
 
 class MyBluprint(Blueprint):
@@ -75,12 +75,12 @@ class TestNanoFeatureActivation(unittest.TestCase):
             }
         )
 
-        settings = self._settings._replace(
-            ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
-            ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
-            ENABLE_OPCODES_V2=FeatureSetting.FEATURE_ACTIVATION,
-            FEATURE_ACTIVATION=feature_settings,
-        )
+        settings = self._settings.model_copy(update={
+            'ENABLE_NANO_CONTRACTS': FeatureSetting.FEATURE_ACTIVATION,
+            'ENABLE_FEE_BASED_TOKENS': FeatureSetting.FEATURE_ACTIVATION,
+            'ENABLE_OPCODES_V2': FeatureSetting.FEATURE_ACTIVATION,
+            'FEATURE_ACTIVATION': feature_settings,
+        })
         daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
 
