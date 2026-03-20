@@ -228,7 +228,7 @@ class NanoHeader(VertexBaseHeader):
         """Return a context to be used in a method call."""
         from hathor.nanocontracts.context import Context
         from hathor.nanocontracts.types import Address
-        return Context.create_from_vertex(
+        return Context.__create_from_vertex__(
             blueprint_version=blueprint_version,
             caller_id=Address(self.nc_address),
             vertex=self.tx,

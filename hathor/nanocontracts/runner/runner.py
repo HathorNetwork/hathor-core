@@ -677,12 +677,9 @@ class Runner:
             rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
-        # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
-        # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
-        # impact the original context. Since the runner relies on the context for other critical checks, any
-        # unauthorized modification would pose a serious security risk.
-        ctx = ctx.__prepare_for_new_runner_call__(blueprint_version)
+        ctx = Context.__prepare_for_new_runner_call__(ctx, blueprint_version)
         ret = self._metered_executor.call(method, args=(ctx, *args))
+        ctx.__validate_action_authorization__()
 
         # All calls must end with non-negative balances.
         call_record.changes_tracker.validate_balances_are_positive()
