@@ -10,7 +10,7 @@ from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
-from hathor.nanocontracts.vertex_data import BlockData, VertexData
+from hathor.nanocontracts.vertex_data import BlockData, create_vertex_data_from_vertex
 from hathor.transaction import Transaction, Vertex
 from hathor.transaction.token_info import TokenVersion
 from hathor.util import not_none
@@ -174,7 +174,7 @@ class BlueprintTestCase(unittest.TestCase):
         """Create a Context instance with optional values or defaults."""
         return Context(
             caller_id=caller_id or self.gen_random_address(),
-            vertex_data=VertexData.create_from_vertex(vertex or self.get_genesis_tx()),
+            vertex_data=create_vertex_data_from_vertex(vertex or self.get_genesis_tx()),
             block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
             actions=Context.__group_actions__(actions or ()),
         )

@@ -16,17 +16,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Container as ContainerAbc, Mapping
-from typing import Any, ClassVar, Generic, TypeAlias, TypeVar
+from typing import ClassVar, Generic, TypeAlias, TypeVar
 
 from typing_extensions import TYPE_CHECKING, Self, final, get_origin, override
 
+from hathorlib.nanocontracts.blueprint_env import NCAttrCache
 from hathorlib.nanocontracts.nc_types import BoolNCType, NCType
 from hathorlib.nanocontracts.storage.contract_storage import NCContractStorage
 
-NCAttrCache: TypeAlias = dict[bytes, Any] | None
-
 if TYPE_CHECKING:
-    from hathorlib.nanocontracts.blueprint import Blueprint  # type: ignore[import-not-found]
+    from hathorlib.nanocontracts.blueprint import Blueprint
     from hathorlib.nanocontracts.fields.field import Field
 
 T = TypeVar('T')

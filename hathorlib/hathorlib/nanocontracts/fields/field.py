@@ -23,7 +23,7 @@ from hathorlib.nanocontracts.nc_types import NCType
 from hathorlib.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
 
 if TYPE_CHECKING:
-    from hathorlib.nanocontracts.blueprint import Blueprint  # type: ignore[import-not-found]
+    from hathorlib.nanocontracts.blueprint import Blueprint
 
 T = TypeVar('T')
 

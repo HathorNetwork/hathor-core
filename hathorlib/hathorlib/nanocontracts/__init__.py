@@ -21,13 +21,11 @@ from hathorlib.nanocontracts.faux_immutable import (
     __set_faux_immutable__,
     create_with_shell,
 )
-from hathorlib.nanocontracts.nanocontract import DeprecatedNanoContract
 from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
 __all__ = [
     'ALLOW_DUNDER_ATTR',
     'ALLOW_INHERITANCE_ATTR',
-    'DeprecatedNanoContract',
     'FauxImmutable',
     'FauxImmutableMeta',
     'OnChainBlueprint',

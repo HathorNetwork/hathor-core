@@ -12,13 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from dataclasses import dataclass
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class NanoSettings:
-    """
-    This dataclass contains information about the settings used by the current Nano runtime.
-    It is returned by the `get_settings` syscall. Note that settings are not constant, they may change over time.
-    """
-    fee_per_output: int
+# Re-export from hathorlib for backward compatibility
+from hathorlib.nanocontracts.nano_settings import *  # noqa: F401,F403
+from hathorlib.nanocontracts.nano_settings import NanoSettings  # noqa: F401

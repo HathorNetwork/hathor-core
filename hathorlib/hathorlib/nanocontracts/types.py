@@ -518,11 +518,10 @@ class NCRawArgs:
         return f"NCRawArgs('{str(self)}')"
 
     def try_parse_as(self, arg_types: tuple[type, ...]) -> tuple[Any, ...] | None:
-        # mypy: disable-error-code="import-not-found"
-        from hathor.nanocontracts.method import ArgsOnly  # type: ignore[import-not-found]
+        from hathorlib.nanocontracts.method import ArgsOnly
         try:
             args_parser = ArgsOnly.from_arg_types(arg_types)
-            return cast(tuple[Any, ...], args_parser.deserialize_args_bytes(self.args_bytes))
+            return args_parser.deserialize_args_bytes(self.args_bytes)
         except (NCSerializationError, SerializationError, TypeError, ValueError):
             return None
 

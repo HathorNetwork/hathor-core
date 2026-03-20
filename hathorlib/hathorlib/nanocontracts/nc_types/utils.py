@@ -171,7 +171,7 @@ def _get_aliased_type(type_: type | UnionType, alias_map: TypeAliasMap) -> tuple
     aliased_origin: type
     replaced = False
 
-    if origin_type is Union:
+    if origin_type is Union:  # type: ignore[comparison-overlap,unused-ignore]
         aliased_origin = UnionType
     elif origin_type in alias_map:
         aliased_origin = alias_map[origin_type]

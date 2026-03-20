@@ -29,7 +29,6 @@ KNOWN_CASES = [
     'hathor.Context.block',
     'hathor.Context.caller_id',
     'hathor.Context.copy',
-    'hathor.Context.create_from_vertex',
     'hathor.Context.get_caller_address',
     'hathor.Context.get_caller_contract_id',
     'hathor.Context.get_single_action',
