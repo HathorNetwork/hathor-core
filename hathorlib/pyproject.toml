@@ -86,17 +86,6 @@ module = [
 check_untyped_defs = false
 disallow_untyped_defs = false
 
-[[tool.mypy.overrides]]
-module = [
-    "hathorlib.nanocontracts.nc_types.varint_nc_type",
-    "hathorlib.nanocontracts.nc_types.sized_int_nc_type",
-    "hathorlib.nanocontracts.nc_types.collection_nc_type",
-    "hathorlib.nanocontracts.nc_types.utils",
-]
-warn_return_any = false
-strict_equality = false
-
-
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]

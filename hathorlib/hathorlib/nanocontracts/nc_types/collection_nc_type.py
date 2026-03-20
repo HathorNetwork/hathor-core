@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Collection, Hashable, Iterable, Set
-from typing import TypeVar, get_args, get_origin
+from typing import TypeVar, cast, get_args, get_origin
 
 from typing_extensions import Self, override
 
@@ -62,7 +62,7 @@ class _CollectionNCType(NCType[Collection[T]], ABC):
         args = get_args(type_)
         if not args or len(args) != 1:
             raise TypeError(f'expected {type_.__name__}[<type>]')
-        return args[0]
+        return cast(type[T], args[0])
 
     def _check_item(self, item: T) -> None:
         self._item._check_value(item, deep=True)
@@ -136,7 +136,7 @@ class SetNCType(_CollectionNCType[H]):
         member_type, = args
         if not is_origin_hashable(args[0]):
             raise TypeError(f'{args[0]} is not hashable')
-        return member_type
+        return cast(type[T], member_type)
 
     @override
     def _check_item(self, item: H) -> None:
