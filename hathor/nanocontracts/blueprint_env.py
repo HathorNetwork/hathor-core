@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Collection, Sequence, TypeAlias, final
 
 from hathor.conf.settings import HATHOR_TOKEN_UID
-from hathor.nanocontracts.nano_settings import NanoSettings
 from hathor.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
+from hathorlib.nanocontracts.nano_settings import NanoSettings
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.contract_accessor import ContractAccessor

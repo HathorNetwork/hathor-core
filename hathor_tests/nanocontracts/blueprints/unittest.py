@@ -6,7 +6,6 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts import HATHOR_TOKEN_UID, Context
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.on_chain_blueprint import Code, OnChainBlueprint
 from hathor.nanocontracts.types import Address, BlueprintId, ContractId, NCAction, TokenUid, VertexId
@@ -18,6 +17,7 @@ from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVeri
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
 from hathor_tests.nanocontracts.utils import TestRunner
+from hathorlib.nanocontracts.versions import BlueprintVersion, NanoRuntimeVersion
 
 
 class BlueprintTestCase(unittest.TestCase):
@@ -75,12 +75,19 @@ class BlueprintTestCase(unittest.TestCase):
         self,
         blueprint_class: type[Blueprint],
         blueprint_id: BlueprintId | None = None,
+        *,
+        blueprint_version: BlueprintVersion = BlueprintVersion.V1,  # TODO: Change to V2 after all tests are updated
     ) -> BlueprintId:
         """Register a blueprint class with an optional id, allowing contracts to be created from it."""
         if blueprint_id is None:
             blueprint_id = self.gen_random_blueprint_id()
 
-        self.blueprint_service.register_blueprint(blueprint_id, blueprint_class, strict=True)
+        self.blueprint_service.register_blueprint(
+            blueprint_id,
+            blueprint_class,
+            strict=True,
+            blueprint_version=blueprint_version
+        )
         return blueprint_id
 
     def register_blueprint_file(self, path: str, blueprint_id: BlueprintId | None = None) -> BlueprintId:
