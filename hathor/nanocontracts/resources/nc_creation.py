@@ -40,6 +40,7 @@ class NCCreationResource(Resource):
         super().__init__()
         self.manager = manager
         self.tx_storage = self.manager.tx_storage
+        self.bp_service = self.manager.blueprint_service
         self.nc_creation_index = self.tx_storage.indexes.nc_creation
         self.nc_history_index = self.tx_storage.indexes.nc_history
         self.bp_history_index = self.tx_storage.indexes.blueprint_history
@@ -182,7 +183,7 @@ class NCCreationResource(Resource):
         if tx is not None:
             nano_header = tx.get_nano_header()
             blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-            blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.bp_service.get_blueprint_class(blueprint_id)
             created_at = tx.timestamp
 
         else:
@@ -192,7 +193,7 @@ class NCCreationResource(Resource):
                 return None
 
             blueprint_id = nc_storage.get_blueprint_id()
-            blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.bp_service.get_blueprint_class(blueprint_id)
             created_at = 0
 
         assert self.nc_history_index is not None

@@ -4,7 +4,6 @@ import pytest
 
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.rng import NanoRNG
@@ -49,13 +48,12 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.myblueprint_id = b'x' * 32
         self.attacker_blueprint_id = b'y' * 32
-        self.catalog = NCBlueprintCatalog({
+
+        self.manager = self.simulator.create_peer()
+        self.manager.blueprint_service.register_blueprints({
             self.myblueprint_id: MyBlueprint,
             self.attacker_blueprint_id: AttackerBlueprint,
         })
-
-        self.manager = self.simulator.create_peer()
-        self.manager.tx_storage.nc_catalog = self.catalog
 
         self.wallet = self.manager.wallet
 

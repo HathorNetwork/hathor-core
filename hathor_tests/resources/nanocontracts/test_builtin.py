@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.resources.builtin import BlueprintBuiltinResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 
@@ -40,7 +39,7 @@ class BlueprintBuiltinResourceTest(_BaseResourceTest._ResourceTest):
         )
         self.web = StubSite(BlueprintBuiltinResource(self.manager))
 
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
+        self.manager.blueprint_service.register_blueprints({
             (b'\x11' * 32): MyBlueprint1,
             (b'\x22' * 32): MyBlueprint2,
             (b'\x33' * 32): MyBlueprint2,

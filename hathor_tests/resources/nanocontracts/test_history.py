@@ -5,7 +5,6 @@ from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.resources import NanoContractHistoryResource
 from hathor.nanocontracts.utils import sign_openssl
@@ -55,10 +54,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(NanoContractHistoryResource(self.manager))
 
         self.blueprint_id = b'1' * 32
-        self.catalog = NCBlueprintCatalog({
-            self.blueprint_id: MyBlueprint
-        })
-        self.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(self.blueprint_id, MyBlueprint)
         self.nc_seqnum = 0
 
     @inlineCallbacks
