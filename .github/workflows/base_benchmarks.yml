@@ -31,7 +31,7 @@ jobs:
           wget $BENCH_DATA_URL
           tar -xzf $BENCH_DATA_FILE_NAME.tar.gz
           mkdir $SERVER_DATA_DIR
-          poetry run hathor-cli load-from-logs \
+          poetry run python -m hathor_cli load-from-logs \
             --testnet \
             --data $SERVER_DATA_DIR \
             --cache \
@@ -40,7 +40,7 @@ jobs:
             --log-dump $BENCH_DATA_FILE_NAME
       - name: Run server node
         run: |
-          poetry run hathor-cli run_node \
+          poetry run python -m hathor_cli run_node \
             --testnet \
             --data $SERVER_DATA_DIR \
             --cache \

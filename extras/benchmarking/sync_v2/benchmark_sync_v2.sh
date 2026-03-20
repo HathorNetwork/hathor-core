@@ -5,7 +5,7 @@ hyperfine \
   --command-name "sync-v2 (up to $N_BLOCKS blocks)" \
   --prepare "rm -rf $BENCH_DATA_DIR && mkdir $BENCH_DATA_DIR" \
   "
-    poetry run hathor-cli quick_test \
+    poetry run python -m hathor_cli quick_test \
       --testnet \
       --data $BENCH_DATA_DIR \
       --cache \
