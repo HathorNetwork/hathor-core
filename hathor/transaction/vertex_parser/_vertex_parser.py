@@ -18,6 +18,7 @@ from struct import error as StructError
 from typing import TYPE_CHECKING, Type
 
 from hathor.serialization.exceptions import SerializationError
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
 
 if TYPE_CHECKING:
@@ -67,7 +68,7 @@ class VertexParser:
             if not is_valid:
                 raise StructError(f"invalid vertex version: {tx_version}")
 
-            cls = tx_version.get_cls()
+            cls = get_cls_from_tx_version(tx_version)
             return cls.create_from_struct(data, storage=storage)
         except (ValueError, SerializationError) as e:
             raise StructError('Invalid bytes to create transaction subclass.') from e

@@ -12,19 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from enum import IntEnum
-
-
-class NanoRuntimeVersion(IntEnum):
-    """
-    The runtime version of Nano Contracts.
-    It must be updated via Feature Activation and can be used to add new syscalls, for example.
-
-    V1:
-      - Initial version
-
-    V2:
-      - Added `get_settings` syscall
-    """
-    V1 = 1
-    V2 = 2
+# Re-export from hathorlib for backward compatibility
+from hathorlib.nanocontracts.nano_runtime_version import *  # noqa: F401,F403
+from hathorlib.nanocontracts.nano_runtime_version import NanoRuntimeVersion  # noqa: F401

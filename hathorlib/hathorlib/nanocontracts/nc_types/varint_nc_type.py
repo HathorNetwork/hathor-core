@@ -36,16 +36,16 @@ class _VarIntNCType(NCType[int]):
         if self._max_byte_size is None:
             return None
         if self._signed:
-            return 2**(self._max_byte_size * 7 - 1) - 1
+            return int(2**(self._max_byte_size * 7 - 1) - 1)
         else:
-            return 2**(self._max_byte_size * 7) - 1
+            return int(2**(self._max_byte_size * 7) - 1)
 
     @classmethod
     def _lower_bound_value(self) -> int | None:
         if not self._signed:
             return 0
         if self._max_byte_size is not None:
-            return -(2**(self._max_byte_size * 7))
+            return int(-(2**(self._max_byte_size * 7)))
         else:
             return None
 

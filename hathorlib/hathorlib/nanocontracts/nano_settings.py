@@ -1,10 +1,10 @@
-#  Copyright 2025 Hathor Labs
+#  Copyright 2026 Hathor Labs
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
 #
-#  http://www.apache.org/licenses/LICENSE-2.0
+#    http://www.apache.org/licenses/LICENSE-2.0
 #
 #  Unless required by applicable law or agreed to in writing, software
 #  distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,6 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# Re-export from hathorlib for backward compatibility
-from hathorlib.nanocontracts.blueprint_env import *  # noqa: F401,F403
-from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment, NCAttrCache  # noqa: F401
+from dataclasses import dataclass
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class NanoSettings:
+    """
+    This dataclass contains information about the settings used by the current Nano runtime.
+    It is returned by the `get_settings` syscall. Note that settings are not constant, they may change over time.
+    """
+    fee_per_output: int

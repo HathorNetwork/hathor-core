@@ -225,9 +225,9 @@ class NanoHeader(VertexBaseHeader):
 
     def get_context(self) -> Context:
         """Return a context to be used in a method call."""
-        from hathor.nanocontracts.context import Context
+        from hathor.nanocontracts.context import create_context_from_vertex
         from hathor.nanocontracts.types import Address
-        return Context.create_from_vertex(
+        return create_context_from_vertex(
             caller_id=Address(self.nc_address),
             vertex=self.tx,
             actions=self.get_actions(),

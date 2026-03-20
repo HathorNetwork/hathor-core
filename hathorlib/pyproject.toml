@@ -86,7 +86,6 @@ module = [
 check_untyped_defs = false
 disallow_untyped_defs = false
 
-
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]

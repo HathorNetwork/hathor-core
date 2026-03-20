@@ -38,16 +38,16 @@ class _SizedIntNCType(NCType[int]):
         if self._byte_size is None:
             return None
         if self._signed:
-            return 2**(self._byte_size * 8 - 1) - 1
+            return int(2**(self._byte_size * 8 - 1) - 1)
         else:
-            return 2**(self._byte_size * 8) - 1
+            return int(2**(self._byte_size * 8) - 1)
 
     @classmethod
     def _lower_bound_value(self) -> int | None:
         if self._byte_size is None:
             return None
         if self._signed:
-            return -(2**(self._byte_size * 8 - 1))
+            return int(-(2**(self._byte_size * 8 - 1)))
         else:
             return 0
 
