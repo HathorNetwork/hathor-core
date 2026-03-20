@@ -512,3 +512,125 @@ class TestHeaderNumOutputsLimits:
 
         with pytest.raises(InvalidShieldedOutputError, match='too many shielded outputs'):
             ShieldedOutputsHeader.deserialize(tx, buf)
+
+
+class TestShieldedOutputStandardScript:
+    """Shielded output scripts must pass the same standard-script checks as transparent outputs."""
+
+    def _make_tx_with_shielded_scripts(self, scripts: list[bytes]) -> MagicMock:
+        """Create a mock transaction with shielded outputs carrying the given scripts."""
+        from hathorlib.headers.shielded_outputs_header import ShieldedOutputsHeader as LibHeader
+
+        shielded_outputs = [
+            AmountShieldedOutput(
+                commitment=b'\x02' + b'\x00' * 32,
+                range_proof=b'\x00' * 100,
+                script=script,
+                token_data=0,
+            )
+            for script in scripts
+        ]
+        header = MagicMock(spec=LibHeader)
+        header.shielded_outputs = shielded_outputs
+
+        tx = MagicMock()
+        tx.outputs = []
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.get_shielded_outputs_header = MagicMock(return_value=header)
+        tx.is_nft_creation_standard = MagicMock(return_value=False)
+        return tx
+
+    def test_p2pkh_script_passes(self) -> None:
+        """Shielded output with P2PKH script should be standard."""
+        p2pkh_script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'
+        tx = self._make_tx_with_shielded_scripts([p2pkh_script])
+        from hathorlib.base_transaction import BaseTransaction
+        result = BaseTransaction.is_standard(tx)
+        assert result is True
+
+    def test_non_standard_script_rejected(self) -> None:
+        """Shielded output with non-standard script should be rejected."""
+        non_standard_script = b'\xff' * 25  # garbage, not P2PKH/MultiSig/DataScript
+        tx = self._make_tx_with_shielded_scripts([non_standard_script])
+        from hathorlib.base_transaction import BaseTransaction
+        result = BaseTransaction.is_standard(tx)
+        assert result is False
+
+    def test_oversized_script_rejected(self) -> None:
+        """Shielded output with oversized script should be rejected."""
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        oversized = b'\x76\xa9\x14' + b'\x00' * (settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE + 1)
+        tx = self._make_tx_with_shielded_scripts([oversized])
+        from hathorlib.base_transaction import BaseTransaction
+        result = BaseTransaction.is_standard(tx)
+        assert result is False
+
+    def test_data_script_within_limit_passes(self) -> None:
+        """Shielded output with data script should pass (within limit)."""
+        from hathorlib.scripts import DataScript
+        data_script = DataScript.create_output_script('test data')
+        tx = self._make_tx_with_shielded_scripts([data_script])
+        from hathorlib.base_transaction import BaseTransaction
+        result = BaseTransaction.is_standard(tx)
+        assert result is True
+
+    def test_data_script_exceeds_limit_rejected(self) -> None:
+        """Too many data scripts across transparent + shielded should be rejected."""
+        from hathorlib.scripts import DataScript
+        data_script = DataScript.create_output_script('test data')
+        # Default max_number_of_data_script_outputs is typically small (e.g. 1)
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        max_data = settings.MAX_DATA_SCRIPT_OUTPUTS
+        scripts = [data_script] * (max_data + 1)
+        tx = self._make_tx_with_shielded_scripts(scripts)
+        from hathorlib.base_transaction import BaseTransaction
+        result = BaseTransaction.is_standard(tx)
+        assert result is False
+
+
+class TestVerifyOutputsShieldedScriptSize:
+    """verify_outputs() must reject shielded outputs with oversized scripts."""
+
+    def test_oversized_shielded_script_rejected(self) -> None:
+        """Shielded output with script exceeding MAX_OUTPUT_SCRIPT_SIZE should raise."""
+        from hathor.verification.vertex_verifier import VertexVerifier
+        settings = _make_settings()
+        settings.MAX_OUTPUT_SCRIPT_SIZE = 256
+        settings.MAX_NUM_OUTPUTS = 256
+        verifier = VertexVerifier(settings=settings, reactor=MagicMock(), feature_service=MagicMock())
+
+        oversized_script = b'\x00' * 257
+        shielded_output = AmountShieldedOutput(
+            commitment=b'\x02' + b'\x00' * 32,
+            range_proof=b'\x00' * 100,
+            script=oversized_script,
+            token_data=0,
+        )
+        tx = MagicMock()
+        tx.outputs = []
+        tx.shielded_outputs = [shielded_output]
+        from hathor.transaction.exceptions import InvalidOutputScriptSize
+        with pytest.raises(InvalidOutputScriptSize, match='shielded output script size'):
+            verifier.verify_outputs(tx)
+
+    def test_valid_shielded_script_accepted(self) -> None:
+        """Shielded output with script within limit should not raise."""
+        from hathor.verification.vertex_verifier import VertexVerifier
+        settings = _make_settings()
+        settings.MAX_OUTPUT_SCRIPT_SIZE = 256
+        settings.MAX_NUM_OUTPUTS = 256
+        verifier = VertexVerifier(settings=settings, reactor=MagicMock(), feature_service=MagicMock())
+
+        valid_script = b'\x76\xa9\x14' + os.urandom(20) + b'\x88\xac'
+        shielded_output = AmountShieldedOutput(
+            commitment=b'\x02' + b'\x00' * 32,
+            range_proof=b'\x00' * 100,
+            script=valid_script,
+            token_data=0,
+        )
+        tx = MagicMock()
+        tx.outputs = []
+        tx.shielded_outputs = [shielded_output]
+        verifier.verify_outputs(tx)

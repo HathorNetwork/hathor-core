@@ -174,6 +174,13 @@ class VertexVerifier:
                     len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
+        if hasattr(vertex, 'shielded_outputs'):
+            for shielded_output in vertex.shielded_outputs:
+                if len(shielded_output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
+                    raise InvalidOutputScriptSize('shielded output script size: {} and max-size: {}'.format(
+                        len(shielded_output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
+                    ))
+
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
         """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
