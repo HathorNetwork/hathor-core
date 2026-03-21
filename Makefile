@@ -76,13 +76,9 @@ mypy:
 dmypy:
 	dmypy run --timeout 86400 -- -p hathor -p hathor_tests -p extras.custom_tests
 
-.PHONY: flake8
-flake8:
-	flake8 $(py_sources)
-
-.PHONY: isort-check
-isort-check:
-	isort --ac --check-only $(py_sources)
+.PHONY: ruff
+ruff:
+	ruff check $(py_sources)
 
 .PHONY: yamllint
 yamllint:
@@ -92,20 +88,28 @@ yamllint:
 check-custom:
 	bash ./extras/custom_checks.sh
 
+.PHONY: check-version
+check-version:
+	bash ./extras/custom_checks.sh check_version_match
+
 .PHONY: check
-check: check-custom yamllint flake8 isort-check mypy
+check: check-custom yamllint ruff mypy
 
 .PHONY: dcheck
-dcheck: check-custom yamllint flake8 isort-check dmypy
+dcheck: check-custom yamllint ruff dmypy
 
 # formatting:
 
 .PHONY: fmt
 fmt: isort
 
+.PHONY: ruff-fmt
+ruff-fmt:
+	ruff format hathor/ hathor_tests/ extras/custom_tests/ hathor_cli/
+
 .PHONY: isort
 isort:
-	isort --ac $(py_sources)
+	ruff check $(py_sources) --select I --fix
 
 # generation:
 
