@@ -77,6 +77,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-py${{ matrix.python }}-mypy-refs/heads/dev-
             ${{ runner.os }}-py${{ matrix.python }}-mypy-
+      - name: Check for changelog fragment
+        env:
+          SKIP_CHANGELOG: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changelog') }}
+        run: |
+          # Skip if 'skip-changelog' label present
+          if [[ "$SKIP_CHANGELOG" == "true" ]]; then
+            echo "Skipping due to skip-changelog label"
+            exit 0
+          fi
+
+          PR=${{ github.event.pull_request.number }}
+          if ls changelogs/unreleased/${PR}.*.md 1> /dev/null 2>&1; then
+            echo "Found changelog fragment for PR #${PR}"
+          else
+            echo "::error::Missing changelog fragment: changelogs/unreleased/${PR}.<type>.md"
+            echo "Valid types: added, changed, removed, fixed, packaging"
+            echo "Or add 'skip-changelog' label to skip this check."
+            exit 1
+          fi
+      - name: Validate towncrier config
+        run: towncrier build --draft --version "test" > /dev/null
       - name: Run linters
         run: poetry run make check
   test-cli:
