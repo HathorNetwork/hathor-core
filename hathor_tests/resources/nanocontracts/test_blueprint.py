@@ -134,7 +134,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
                 'docstring': None,
             },
         }
-        self.assertEqual(data['private_methods'], expected_data)
+        self.assertEqual(data['view_methods'], expected_data)
 
 
 class BuiltinBlueprintInfoTest(BaseBlueprintInfoTest):
