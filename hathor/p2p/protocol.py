@@ -25,6 +25,7 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
+from hathor.p2p.connect_classes import ConnectionState, ConnectionType
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -35,7 +36,6 @@ from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import format_address
 from hathor.profiler import get_cpu_profiler
-from hathor.p2p.connection_classes import ConnectionState, ConnectionType
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -72,8 +72,6 @@ class HathorProtocol:
         HELLO = HelloState
         PEER_ID = PeerIdState
         READY = ReadyState
-
-    
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'

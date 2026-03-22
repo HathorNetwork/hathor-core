@@ -6,12 +6,8 @@ from unittest.mock import patch
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
-from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_classes import ConnectionState, ConnectionType
-from hathor.p2p.connection_slot import ConnectionSlots
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
-from hathor.p2p.protocol import HathorProtocol
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient
@@ -475,4 +471,3 @@ class RandomSimulatorTestCase(SimulatorTestCase):
 
         # force the processing of async code, nothing should break
         self.simulator.run(0)
-
