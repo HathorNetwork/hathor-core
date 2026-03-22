@@ -14,33 +14,13 @@
 
 from collections import deque
 from dataclasses import dataclass
-
+from enum import Enum
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.protocol import HathorProtocol, PeerEndpoint
-
-
-@dataclass
-class ConnectionAllowed:
-    confirmation: str
-
-
-@dataclass
-class ConnectionRejected:
-    reason: str
-
-
-@dataclass
-class ConnectionRemoved:
-    reason: str
-
-
-@dataclass
-class ConnectionNotRemoved:
-    reason: str
-
-
+from hathor.p2p.connection_classes import ConnectionAllowed, ConnectionRejected, ConnectionNotRemoved, ConnectionRemoved
+from hathor.p2p.protocol import HathorProtocol
+from connection_classes import ConnectionState, ConnectionType
 
 AddToSlotResult = ConnectionAllowed | ConnectionRejected
 RemoveFromSlotResult = ConnectionRemoved | ConnectionNotRemoved
@@ -49,10 +29,10 @@ RemoveFromSlotResult = ConnectionRemoved | ConnectionNotRemoved
 class ConnectionSlots:
     """ Class of a connection pool slot - outgoing, incoming, discovered connections. """
     connection_slot: set[HathorProtocol]
-    type: HathorProtocol.ConnectionType
+    type: ConnectionType
     max_slot_connections: int
 
-    def __init__(self, type: HathorProtocol.ConnectionType, max_connections: int):
+    def __init__(self, type: ConnectionType, max_connections: int):
 
         if max_connections <= 0:
             raise ValueError("Slot max number must allow at least one connection")
@@ -107,16 +87,16 @@ class SlotsManager:
     incoming_slot: ConnectionSlots
     bootstrap_slot: ConnectionSlots
 
-    types_allowed: dict[str, HathorProtocol.ConnectionType] = {
-        'outgoing': HathorProtocol.ConnectionType.OUTGOING,
-        'incoming': HathorProtocol.ConnectionType.INCOMING,
-        'bootstrap': HathorProtocol.ConnectionType.BOOTSTRAP,
+    types_allowed: dict[str, ConnectionType] = {
+        'outgoing': ConnectionType.OUTGOING,
+        'incoming': ConnectionType.INCOMING,
+        'bootstrap': ConnectionType.BOOTSTRAP,
     }
 
-    states_allowed: dict[str, HathorProtocol.ConnectionState] = {
-        'created': HathorProtocol.ConnectionState.CREATED,
-        'connecting': HathorProtocol.ConnectionState.CONNECTING,
-        'ready': HathorProtocol.ConnectionState.READY,
+    states_allowed: dict[str, ConnectionState] = {
+        'created': ConnectionState.CREATED,
+        'connecting': ConnectionState.CONNECTING,
+        'ready': ConnectionState.READY,
     }
 
     def __init__(self, settings: SlotsManagerSettings) -> None:
@@ -136,17 +116,14 @@ class SlotsManager:
 
         slot: ConnectionSlots | None = None
         match conn_type:
-            case HathorProtocol.ConnectionType.OUTGOING:
+            case ConnectionType.OUTGOING:
                 slot = self.outgoing_slot
-            case HathorProtocol.ConnectionType.INCOMING:
+            case ConnectionType.INCOMING:
                 slot = self.incoming_slot
-            case HathorProtocol.ConnectionType.BOOTSTRAP:
+            case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
             case _:
                 assert_never()
-
-        if self.should_queue_entrypoint(slot):
-            self.put_on_queue(protocol)
 
         status = slot.add_connection(protocol)
 
@@ -162,11 +139,11 @@ class SlotsManager:
 
         slot: ConnectionSlots | None = None
         match conn_type:
-            case HathorProtocol.ConnectionType.OUTGOING:
+            case ConnectionType.OUTGOING:
                 slot = self.outgoing_slot
-            case HathorProtocol.ConnectionType.INCOMING:
+            case ConnectionType.INCOMING:
                 slot = self.incoming_slot
-            case HathorProtocol.ConnectionType.BOOTSTRAP:
+            case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
             case _:
                 assert_never()
