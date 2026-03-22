@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_classes import ConnectionRejected, ConnectionAllowed, ConnectionState, ConnectionType
+from hathor.p2p.connect_classes import ConnectionAllowed, ConnectionRejected, ConnectionState, ConnectionType
 from hathor.p2p.connection_slot import ConnectionSlots, SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
@@ -800,11 +800,10 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-
     def connect_to_discovery_call(self,
-        entrypoint: PeerEndpoint,
-        peer: UnverifiedPeer | PublicPeer | None = None,
-        use_ssl: bool | None = None) -> None:
+                                  entrypoint: PeerEndpoint,
+                                  peer: UnverifiedPeer | PublicPeer | None = None,
+                                  use_ssl: bool | None = None) -> None:
         """Called when a discovery call is being done, and the discovery_factory should be instantiated,
         not the Client Factory. Use this instead of connect_to_endpoint in these cases."""
 
@@ -860,7 +859,6 @@ class ConnectionsManager:
             peer=peer,
             peers_count=self._get_peers_count()
         )
-
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         """ Start to listen for new connection according to the description.
