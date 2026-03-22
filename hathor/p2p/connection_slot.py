@@ -87,23 +87,16 @@ class SlotsManager:
     incoming_slot: ConnectionSlots
     bootstrap_slot: ConnectionSlots
 
-    types_allowed: dict[str, ConnectionType] = {
-        'outgoing': ConnectionType.OUTGOING,
-        'incoming': ConnectionType.INCOMING,
-        'bootstrap': ConnectionType.BOOTSTRAP,
-    }
-
-    states_allowed: dict[str, ConnectionState] = {
-        'created': ConnectionState.CREATED,
-        'connecting': ConnectionState.CONNECTING,
-        'ready': ConnectionState.READY,
-    }
+    types_allowed: list[ConnectionType] = [
+        ConnectionType.OUTGOING,
+        ConnectionType.INCOMING,
+        ConnectionType.BOOTSTRAP,
+    ]
 
     def __init__(self, settings: SlotsManagerSettings) -> None:
-        types = self.types_allowed
-        self.outgoing_slot = ConnectionSlots(types['outgoing'], settings.max_outgoing)
-        self.incoming_slot = ConnectionSlots(types['incoming'], settings.max_incoming)
-        self.bootstrap_slot = ConnectionSlots(types['bootstrap'], settings.max_bootstrap)
+        self.outgoing_slot = ConnectionSlots(ConnectionType.OUTGOING, settings.max_outgoing)
+        self.incoming_slot = ConnectionSlots(ConnectionType.INCOMING, settings.max_incoming)
+        self.bootstrap_slot = ConnectionSlots(ConnectionType.BOOTSTRAP, settings.max_bootstrap)
 
     def add_to_slot(self, protocol: HathorProtocol) -> AddToSlotResult:
         """Add received protocol to one of the slots.
@@ -148,8 +141,7 @@ class SlotsManager:
             case _:
                 assert_never()
 
-        if protocol not in slot.connection_slot:
-            return ConnectionNotRemoved(reason='Protocol not in slot.')
+        assert protocol in slot.connection_slot, 'Protocol not in slot.'
 
         slot.remove_connection(protocol)
         return ConnectionRemoved(reason=f'Connection on slot {slot.type} removed.', entrypoint=None)
