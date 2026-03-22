@@ -35,6 +35,7 @@ from hathor.p2p.states import BaseState, HelloState, PeerIdState, ReadyState
 from hathor.p2p.sync_version import SyncVersion
 from hathor.p2p.utils import format_address
 from hathor.profiler import get_cpu_profiler
+from hathor.p2p.connection_classes import ConnectionState, ConnectionType
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager  # noqa: F401
@@ -72,22 +73,7 @@ class HathorProtocol:
         PEER_ID = PeerIdState
         READY = ReadyState
 
-    class ConnectionType(Enum):
-        """ Types of Connection as inputs for an instance of the Hathor Protocol. """
-        OUTGOING = 0
-        INCOMING = 1
-        BOOTSTRAP = 2
-        CHECK_ENTRYPOINTS = 3
-
-        def is_outbound(self) -> bool:
-            """ If value is 1, then the connection is inbound. If not, outbound."""
-            return self.value != self.INCOMING
-
-    class ConnectionState(Enum):
-        """ State of connection of two peers - either in a slot queue or active. """
-        CREATED = 0
-        CONNECTING = 1
-        READY = 2
+    
 
     class RateLimitKeys(str, Enum):
         GLOBAL = 'global'
@@ -143,7 +129,7 @@ class HathorProtocol:
         self.connection_type = connection_type
 
         # Connection State
-        self.connection_state = HathorProtocol.ConnectionState.CREATED
+        self.connection_state = ConnectionState.CREATED
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT
