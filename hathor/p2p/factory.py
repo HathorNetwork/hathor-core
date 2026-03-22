@@ -18,13 +18,14 @@ from twisted.internet import protocol
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.settings import HathorSettings
+from hathor.p2p.connection_classes import ConnectionType
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorLineReceiver
 
 
 class _HathorLineReceiverFactory(ABC, protocol.Factory):
-    connection_type: HathorLineReceiver.ConnectionType
+    connection_type: ConnectionType
 
     def __init__(
         self,
@@ -55,13 +56,13 @@ class _HathorLineReceiverFactory(ABC, protocol.Factory):
 class HathorServerFactory(_HathorLineReceiverFactory, protocol.ServerFactory):
     """ HathorServerFactory is used to generate HathorProtocol objects when a new connection arrives.
     """
-    connection_type = HathorLineReceiver.ConnectionType.INCOMING
+    connection_type = ConnectionType.INCOMING
 
 
 class HathorClientFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
     """ HathorClientFactory is used to generate HathorProtocol objects when we connected to another peer.
     """
-    connection_type = HathorLineReceiver.ConnectionType.OUTGOING
+    connection_type = ConnectionType.OUTGOING
 
 
 class HathorDiscoveredFactory(_HathorLineReceiverFactory, protocol.ClientFactory):
@@ -69,4 +70,4 @@ class HathorDiscoveredFactory(_HathorLineReceiverFactory, protocol.ClientFactory
         HathorDiscoveredFactory is the same as a HathorClientFactory, but the type of connection is set to
         discovered, for connection pool slotting.
     """
-    connection_type = HathorLineReceiver.ConnectionType.BOOTSTRAP
+    connection_type = ConnectionType.BOOTSTRAP

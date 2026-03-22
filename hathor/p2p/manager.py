@@ -26,7 +26,8 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_slot import ConnectionRejected, ConnectionAllowed, ConnectionSlots, SlotsManager, SlotsManagerSettings
+from hathor.p2p.connection_classes import ConnectionRejected, ConnectionAllowed, ConnectionState, ConnectionType
+from hathor.p2p.connection_slot import ConnectionSlots, SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -450,7 +451,7 @@ class ConnectionsManager:
         self.handshaking_peers.add(protocol)
 
         # If not queued, connection state is "CONNECTING", as it is not ready yet, added to handshaking.
-        protocol.connection_state = HathorProtocol.ConnectionState.CONNECTING
+        protocol.connection_state = ConnectionState.CONNECTING
 
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_CONNECTED,
@@ -467,7 +468,7 @@ class ConnectionsManager:
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
         # In 1614 - should we disconnect to checkep-?
-        protocol.connection_state = HathorProtocol.ConnectionState.READY
+        protocol.connection_state = ConnectionState.READY
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emitted regardless
@@ -725,13 +726,13 @@ class ConnectionsManager:
         """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
             if discovery_call:
-                protocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
+                protocol.connection_type = ConnectionType.BOOTSTRAP
             protocol.on_outbound_connect(entrypoint, peer)
         else:
             assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
             if discovery_call:
-                protocol.wrappedProtocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
+                protocol.wrappedProtocol.connection_type = ConnectionType.BOOTSTRAP
             protocol.wrappedProtocol.on_outbound_connect(entrypoint, peer)
         self.connecting_peers.pop(endpoint)
 
@@ -878,9 +879,9 @@ class ConnectionsManager:
         assert protocol.my_peer.id is not None
         other_connection = self.connected_peers[protocol.peer.id]
         _outbound_types = (
-            HathorProtocol.ConnectionType.OUTGOING,
-            HathorProtocol.ConnectionType.BOOTSTRAP,
-            HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS,
+            ConnectionType.OUTGOING,
+            ConnectionType.BOOTSTRAP,
+            ConnectionType.CHECK_ENTRYPOINTS,
         )
         is_outbound = protocol.connection_type in _outbound_types
         if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):
