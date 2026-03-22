@@ -292,7 +292,7 @@ class ConnectionsManager:
         Do a discovery and connect on all discovery strategies.
         """
         for peer_discovery in self.peer_discoveries:
-            coro = peer_discovery.discover_and_connect(self.connect_to_endpoint)
+            coro = peer_discovery.discover_and_connect(self.connect_to_discovery_call)
             Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
@@ -725,14 +725,10 @@ class ConnectionsManager:
     ) -> None:
         """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
-            if discovery_call:
-                protocol.connection_type = ConnectionType.BOOTSTRAP
             protocol.on_outbound_connect(entrypoint, peer)
         else:
             assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
-            if discovery_call:
-                protocol.wrappedProtocol.connection_type = ConnectionType.BOOTSTRAP
             protocol.wrappedProtocol.on_outbound_connect(entrypoint, peer)
         self.connecting_peers.pop(endpoint)
 
@@ -740,8 +736,7 @@ class ConnectionsManager:
         self,
         entrypoint: PeerEndpoint,
         peer: UnverifiedPeer | PublicPeer | None = None,
-        use_ssl: bool | None = None,
-        discovery_call: bool = False
+        use_ssl: bool | None = None
     ) -> None:
         """ Attempt to connect directly to an endpoint, prefer calling `connect_to_peer` when possible.
 
@@ -783,16 +778,11 @@ class ConnectionsManager:
         endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
 
         factory: IProtocolFactory
-        if discovery_call:
-            if use_ssl:
-                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.discovered_factory)
-            else:
-                factory = self.discovered_factory
+
+        if use_ssl:
+            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
         else:
-            if use_ssl:
-                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
-            else:
-                factory = self.client_factory
+            factory = self.client_factory
 
         if peer is not None:
             now = int(self.reactor.seconds())
@@ -801,7 +791,7 @@ class ConnectionsManager:
         deferred = endpoint.connect(factory)
         self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
 
-        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint, discovery_call)
+        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('connecting to', entrypoint=str(entrypoint), peer=str(peer))
         self.pubsub.publish(
@@ -809,6 +799,68 @@ class ConnectionsManager:
             peer=peer,
             peers_count=self._get_peers_count()
         )
+
+
+    def connect_to_discovery_call(self,
+        entrypoint: PeerEndpoint,
+        peer: UnverifiedPeer | PublicPeer | None = None,
+        use_ssl: bool | None = None) -> None:
+        """Called when a discovery call is being done, and the discovery_factory should be instantiated,
+        not the Client Factory. Use this instead of connect_to_endpoint in these cases."""
+
+        if entrypoint.peer_id is not None and peer is not None and entrypoint.peer_id != peer.id:
+            self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
+                           entrypoint=str(entrypoint))
+            return
+
+        for connecting_peer in self.connecting_peers.values():
+            if connecting_peer.entrypoint.addr == entrypoint.addr:
+                self.log.debug(
+                    'skipping because we are already connecting to this endpoint',
+                    entrypoint=str(entrypoint),
+                )
+                return
+
+        if self.localhost_only and not entrypoint.addr.is_localhost():
+            self.log.debug('skip because of simple localhost check', entrypoint=str(entrypoint))
+            return
+
+        if not self.enable_ipv6 and entrypoint.addr.is_ipv6():
+            self.log.info('skip because IPv6 is disabled', entrypoint=entrypoint)
+            return
+
+        if self.disable_ipv4 and entrypoint.addr.is_ipv4():
+            self.log.info('skip because IPv4 is disabled', entrypoint=entrypoint)
+            return
+
+        if use_ssl is None:
+            use_ssl = self.use_ssl
+
+        endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
+
+        factory: IProtocolFactory
+
+        if use_ssl:
+            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.discovered_factory)
+        else:
+            factory = self.discovered_factory
+
+        if peer is not None:
+            now = int(self.reactor.seconds())
+            peer.info.increment_retry_attempt(now)
+
+        deferred = endpoint.connect(factory)
+        self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
+
+        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
+        deferred.addErrback(self.on_connection_failure, peer, endpoint)
+        self.log.info('connecting to', entrypoint=str(entrypoint), peer=str(peer))
+        self.pubsub.publish(
+            HathorEvents.NETWORK_PEER_CONNECTING,
+            peer=peer,
+            peers_count=self._get_peers_count()
+        )
+
 
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         """ Start to listen for new connection according to the description.
@@ -881,7 +933,6 @@ class ConnectionsManager:
         _outbound_types = (
             ConnectionType.OUTGOING,
             ConnectionType.BOOTSTRAP,
-            ConnectionType.CHECK_ENTRYPOINTS,
         )
         is_outbound = protocol.connection_type in _outbound_types
         if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):
