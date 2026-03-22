@@ -466,7 +466,7 @@ class ConnectionsManager:
 
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
-
+        # In 1614 - should we disconnect to checkep-?
         protocol.connection_state = HathorProtocol.ConnectionState.READY
 
         # we emit the event even if it's a duplicate peer as a matching
@@ -520,11 +520,7 @@ class ConnectionsManager:
         self.connections.discard(protocol)
 
         # Each conn is from a slot - discard from it as well.
-        status = self.slots_manager.remove_from_slot(protocol)
-
-        # If there is some entrypoint popped from queue, we attempt to connect.
-        if status.entrypoint:
-            self.connect_to_endpoint(status.entrypoint)
+        self.slots_manager.remove_from_slot(protocol)
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)

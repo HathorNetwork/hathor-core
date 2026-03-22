@@ -139,7 +139,7 @@ class HathorProtocol:
         self.reactor = self.connections.reactor
 
         # Type of Connection
-        # 0 == Outgoing, 1 == Incoming, 2 == Discovered, 3 == For Checking Entrypoints.
+        # 0 == Outgoing, 1 == Incoming, 2 == Discovered
         self.connection_type = connection_type
 
         # Connection State
