@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
-from hathor.p2p.connection_classes import ConnectionType
+from hathor.p2p.connect_classes import ConnectionType
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint

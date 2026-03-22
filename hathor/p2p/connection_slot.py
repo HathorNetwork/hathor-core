@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import deque
 from dataclasses import dataclass
-from enum import Enum
+
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_classes import ConnectionAllowed, ConnectionRejected, ConnectionNotRemoved, ConnectionRemoved
+from hathor.p2p.connect_classes import (
+    ConnectionAllowed,
+    ConnectionNotRemoved,
+    ConnectionRejected,
+    ConnectionRemoved,
+    ConnectionType,
+)
 from hathor.p2p.protocol import HathorProtocol
-from connection_classes import ConnectionState, ConnectionType
 
 AddToSlotResult = ConnectionAllowed | ConnectionRejected
 RemoveFromSlotResult = ConnectionRemoved | ConnectionNotRemoved
@@ -58,12 +62,13 @@ class ConnectionSlots:
 
         return ConnectionAllowed(f"Added to slot {self.type}.")
 
-    def remove_connection(self, protocol: HathorProtocol) -> RemoveFromSlotResult:
+    def remove_connection(self, protocol: HathorProtocol) -> ConnectionRemoved:
         """ Removes from given instance the protocol passed. Returns protocol from queue
             when disconnection leads to free space in slot."""
 
         # Discard does nothing if protocol not in connection_slot.
         self.connection_slot.discard(protocol)
+        return ConnectionRemoved('Connection successfully removed.')
 
     def is_full(self) -> bool:
         return len(self.connection_slot) >= self.max_slot_connections
@@ -116,7 +121,7 @@ class SlotsManager:
             case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
             case _:
-                assert_never()
+                assert_never(conn_type)
 
         status = slot.add_connection(protocol)
 
@@ -139,13 +144,12 @@ class SlotsManager:
             case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
             case _:
-                assert_never()
+                assert_never(conn_type)
 
         assert protocol in slot.connection_slot, 'Protocol not in slot.'
 
         slot.remove_connection(protocol)
-        return ConnectionRemoved(reason=f'Connection on slot {slot.type} removed.', entrypoint=None)
-
+        return ConnectionRemoved(reason=f'Connection on slot {slot.type} removed.')
 
     def slot_number(self, slot: ConnectionSlots) -> int:
         return len(slot.connection_slot)

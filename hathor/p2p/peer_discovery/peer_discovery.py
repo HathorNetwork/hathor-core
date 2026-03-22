@@ -17,6 +17,7 @@ from typing import Callable
 
 from hathor.p2p.peer_endpoint import PeerEndpoint
 
+
 class PeerDiscovery(ABC):
     """ Base class to implement peer discovery strategies.
     """

@@ -18,7 +18,7 @@ from twisted.internet import protocol
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connection_classes import ConnectionType
+from hathor.p2p.connect_classes import ConnectionType
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.protocol import HathorLineReceiver
