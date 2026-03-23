@@ -36,7 +36,6 @@ from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.tx_storage_proxy import TransactionStorageProxy
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -235,7 +234,7 @@ class CliBuilder:
         runner_factory = RunnerFactory(
             reactor=reactor,
             settings=settings,
-            tx_storage_proxy=TransactionStorageProxy(tx_storage),
+            tx_storage=tx_storage,
             nc_storage_factory=self.nc_storage_factory,
         )
 

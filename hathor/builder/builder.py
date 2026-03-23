@@ -39,7 +39,6 @@ from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
-from hathor.nanocontracts.tx_storage_proxy import TransactionStorageProxy
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
@@ -437,7 +436,7 @@ class Builder:
             self._runner_factory = RunnerFactory(
                 reactor=self._get_reactor(),
                 settings=self._get_or_create_settings(),
-                tx_storage_proxy=TransactionStorageProxy(self._get_or_create_tx_storage()),
+                tx_storage=self._get_or_create_tx_storage(),
                 nc_storage_factory=self._get_or_create_nc_storage_factory(),
             )
         return self._runner_factory

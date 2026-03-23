@@ -34,21 +34,21 @@ class TestRunner:
         self,
         *,
         runtime_version: NanoRuntimeVersion,
-        tx_storage_proxy: NCTransactionStorageProxy,
+        tx_storage: NCTransactionStorageProxy,
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
     ) -> None:
         if seed is None:
             seed = b'x' * 32
-        assert isinstance(tx_storage_proxy.storage, TransactionRocksDBStorage)
-        storage_factory = NCRocksDBStorageFactory(tx_storage_proxy.storage._rocksdb_storage)
-        store = RocksDBNodeTrieStore(tx_storage_proxy.storage._rocksdb_storage)
+        assert isinstance(tx_storage, TransactionRocksDBStorage)
+        storage_factory = NCRocksDBStorageFactory(tx_storage._rocksdb_storage)
+        store = RocksDBNodeTrieStore(tx_storage._rocksdb_storage)
         block_trie = PatriciaTrie(store)
         block_storage = NCBlockStorage(block_trie)
         self._runner: Runner = Runner(
             runtime_version=runtime_version,
-            tx_storage_proxy=tx_storage_proxy,
+            tx_storage=tx_storage,
             storage_factory=storage_factory,
             block_storage=block_storage,
             settings=settings,
