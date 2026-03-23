@@ -35,11 +35,6 @@ RemoveFromSlotResult = ConnectionRemoved | ConnectionNotRemoved
 
 
 @dataclass
-class ConnectionNotRemoved:
-    reason: str
-
-
-@dataclass
 class LockSlot:
     """Struct for reserving a spot in the check_ep slot for a specific entrypoint.
     This is done so to avoid that a connection made with an entrypoint popped from the queue
@@ -91,26 +86,19 @@ class ConnectionSlots:
 
         return ConnectionAllowed(f"Added to slot {self.type}.")
 
-    def remove_connection(self, protocol: HathorProtocol) -> RemoveFromSlotResult:
+    def remove_connection(self, protocol: HathorProtocol) -> ConnectionRemoved:
         """ Removes from given instance the protocol passed. Returns protocol from queue
             when disconnection leads to free space in slot."""
 
         # Discard does nothing if protocol not in connection_slot.
         self.connection_slot.discard(protocol)
-        return ConnectionRemoved('Connection successfully removed.')
+        return ConnectionRemoved('Connection successfully removed.', None)
 
     def is_full(self) -> bool:
         return len(self.connection_slot) >= self.max_slot_connections
 
     def is_in_slot(self, protocol: HathorSettings) -> bool:
         return protocol in self.connection_slot
-
-
-@dataclass
-class SlotsManagerSettings:
-    max_outgoing: int
-    max_incoming: int
-    max_bootstrap: int
 
 
 @dataclass
@@ -149,10 +137,10 @@ class SlotsManager:
 
     def __init__(self, settings: SlotsManagerSettings) -> None:
         types = self.types_allowed
-        self.outgoing_slot = ConnectionSlots(types['outgoing'], settings.max_outgoing)
-        self.incoming_slot = ConnectionSlots(types['incoming'], settings.max_incoming)
-        self.bootstrap_slot = ConnectionSlots(types['bootstrap'], settings.max_bootstrap)
-        self.check_ep_slot = ConnectionSlots(types['check_ep'], settings.max_check_ep)
+        self.outgoing_slot = ConnectionSlots(ConnectionType.OUTGOING, settings.max_outgoing)
+        self.incoming_slot = ConnectionSlots(ConnectionType.INCOMING, settings.max_incoming)
+        self.bootstrap_slot = ConnectionSlots(ConnectionType.BOOTSTRAP, settings.max_bootstrap)
+        self.check_ep_slot = ConnectionSlots(ConnectionType.CHECK_ENTRYPOINTS, settings.max_check_ep)
         self.entrypoints_queue = deque()
         self.seen_entrypoints = set()
         self.untrustworthy_entrypoints = set()
@@ -174,11 +162,11 @@ class SlotsManager:
                 if slot.is_full():
                     protocol.connection_type = types['check_ep']
                     return self.add_to_slot(protocol)
-            case HathorProtocol.ConnectionType.INCOMING:
+            case ConnectionType.INCOMING:
                 slot = self.incoming_slot
             case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
-            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+            case ConnectionType.CHECK_ENTRYPOINTS:
                 slot = self.check_ep_slot
                 locked = self.spot_locked.is_spot_reserved
                 if locked:
@@ -197,9 +185,10 @@ class SlotsManager:
 
         return status
 
-    def remove_from_slot(self, protocol: HathorProtocol) -> RemoveFromSlotResult:
+    def remove_from_slot(self, protocol: HathorProtocol) -> ConnectionRemoved | ConnectionNotRemoved:
         """ Removes protocol from slot of same type.
-            If OUTGOING, INCOMING or BOOTSTRAP, simply remove from slot and disconnect.
+            If OUTGOING, INCOMING, BOOTSTRAP or
+            CHECK ENTRYPOINTS, simply remove from slot and disconnect.
             Should be called by manager when disconnecting a protocol."""
 
         conn_type = protocol.connection_type
@@ -213,7 +202,7 @@ class SlotsManager:
                 slot = self.incoming_slot
             case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
-            case HathorProtocol.ConnectionType.CHECK_ENTRYPOINTS:
+            case ConnectionType.CHECK_ENTRYPOINTS:
                 slot = self.check_ep_slot
             case _:
                 assert_never(conn_type)
@@ -221,7 +210,10 @@ class SlotsManager:
         assert protocol in slot.connection_slot
 
         types = self.types_allowed
-        if slot.type != types['check_ep']:
+
+        assert slot.type in types
+
+        if slot.type != ConnectionType.CHECK_ENTRYPOINTS:
             slot.remove_connection(protocol)
             return ConnectionRemoved(reason=f'Connection on slot {slot.type} removed.', entrypoint=None)
 
@@ -231,30 +223,32 @@ class SlotsManager:
         connection_state = protocol.connection_state
         states = self.states_allowed
 
+        assert connection_state in states
         # If disconnected due to a time-out, we don't trust the entrypoint.
-        if connection_state != states['ready']:
+        if connection_state != ConnectionState.READY:
             self.untrustworthy_entrypoints.add(entrypoint)
 
         # Check if the protocol has its entrypoint being one we already saw before.
         # If so, grab the entrypoints and queue them.
 
-        if not self.has_been_seen(entrypoint) and connection_state == states['ready']:
+        ready = ConnectionState.READY
+        if not self.has_been_seen(entrypoint) and connection_state == ready:
             peer_entrypoints = protocol.peer.info.entrypoints
 
             for peer_entrypoint in peer_entrypoints:
                 if not self.has_been_seen(peer_entrypoint):
                     self.put_on_queue(protocol)
 
-        self.seen_entrypoints.add(entrypoint)
-        slot.remove_connection(protocol)
-        return ConnectionRemoved(reason=f'Connection on slot {slot.type} removed.')
-
         new_entrypoint = self.entrypoints_queue.pop()
 
         if self.should_lock_the_spot(slot, new_entrypoint):
             self.lock_the_spot(slot, new_entrypoint)
 
+        self.seen_entrypoints.add(entrypoint)
+        slot.remove_connection(protocol)
+
         return ConnectionRemoved(reason=f'Connection on slot {slot.type} removed', entrypoint=new_entrypoint)
+
 
     def should_queue_entrypoint(self, slot: ConnectionSlots) -> bool:
         """See if the protocol should have its entrypoint thrown into the queue."""

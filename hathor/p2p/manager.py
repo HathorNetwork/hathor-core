@@ -170,8 +170,9 @@ class ConnectionsManager:
         max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
         max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
         max_bootstrap: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
+        max_check_ep: int = settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
 
-        slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap)
+        slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap, max_check_ep)
 
         # Connection slots manager -> Kickstarts connection slots
         self.slots_manager = SlotsManager(slots_manager_settings)
@@ -467,10 +468,8 @@ class ConnectionsManager:
 
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
-        # In 1614 - should we disconnect to checkep-?
-        protocol.connection_state = ConnectionState.READY
 
-        protocol.connection_state = HathorProtocol.ConnectionState.READY
+        protocol.connection_state = ConnectionState.READY
 
         # we emit the event even if it's a duplicate peer as a matching
         # NETWORK_PEER_DISCONNECTED will be emitted regardless
@@ -479,6 +478,10 @@ class ConnectionsManager:
             protocol=protocol,
             peers_count=self._get_peers_count()
         )
+
+        # If check_ep, getting ready we may disconnect.
+        if protocol.connection_type == ConnectionType.CHECK_ENTRYPOINTS:
+            protocol.disconnect('Entrypoint checked - READY', force=True)
 
         peer_id = protocol.peer.id
         if peer_id in self.connected_peers:
@@ -727,18 +730,13 @@ class ConnectionsManager:
         peer: UnverifiedPeer | PublicPeer | None,
         endpoint: IStreamClientEndpoint,
         entrypoint: PeerEndpoint,
-        discovery_call: bool = False
     ) -> None:
         """Called when we successfully connect to a peer."""
         if isinstance(protocol, HathorProtocol):
-            if discovery_call:
-                protocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
             protocol.on_outbound_connect(entrypoint, peer)
         else:
             assert isinstance(protocol, TLSMemoryBIOProtocol)
             assert isinstance(protocol.wrappedProtocol, HathorProtocol)
-            if discovery_call:
-                protocol.wrappedProtocol.connection_type = HathorProtocol.ConnectionType.BOOTSTRAP
             protocol.wrappedProtocol.on_outbound_connect(entrypoint, peer)
         self.connecting_peers.pop(endpoint)
 
@@ -944,6 +942,7 @@ class ConnectionsManager:
         _outbound_types = (
             ConnectionType.OUTGOING,
             ConnectionType.BOOTSTRAP,
+            ConnectionType.CHECK_ENTRYPOINTS
         )
         is_outbound = protocol.connection_type in _outbound_types
         if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):

@@ -15,6 +15,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from hathor.p2p.protocol import PeerEndpoint
 
 
 class ConnectionType(Enum):
@@ -49,8 +50,10 @@ class ConnectionRejected:
 @dataclass
 class ConnectionRemoved:
     reason: str
+    entrypoint: PeerEndpoint | None
 
 
 @dataclass
 class ConnectionNotRemoved:
     reason: str
+    entrypoint: PeerEndpoint | None
