@@ -19,7 +19,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
-from hathorlib.conf.settings import HathorSettings as LibSettings
+from hathorlib.conf.settings import FeatureSetting, HathorSettings as LibSettings
 
 DECIMAL_PLACES = 2
 
@@ -75,4 +75,33 @@ class HathorSettings(LibSettings):
             self.INITIAL_TOKEN_UNITS_PER_BLOCK != 0 or
                 self.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
             raise ValueError('PoA networks do not support block rewards')
+        return self
+
+    @model_validator(mode='after')
+    def _validate_feature_activation(self) -> Self:
+        """Validate that configured Feature Activations are set to be used.
+
+        >>> from hathor.feature_activation.feature import Feature
+        >>> from hathor.feature_activation.model.criteria import Criteria
+        >>> from hathor.feature_activation.settings import Settings as FeatureSettings
+        >>> from hathorlib.conf.settings import FeatureSetting
+        >>> dummy = dict(NETWORK_NAME='unittests', P2PKH_VERSION_BYTE=b'\\x28', MULTISIG_VERSION_BYTE=b'\\x64')
+        >>> criteria = Criteria(bit=0, start_height=0, timeout_height=40320, version='0.0.0')
+        >>> fa = FeatureSettings(features={Feature.NANO_CONTRACTS: criteria})
+        >>> HathorSettings(  # doctest: +ELLIPSIS
+        ...     **dummy, ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION, FEATURE_ACTIVATION=fa)
+        HathorSettings(...)
+        >>> HathorSettings(  # doctest: +ELLIPSIS
+        ...     **dummy, ENABLE_NANO_CONTRACTS=FeatureSetting.DISABLED, FEATURE_ACTIVATION=fa)
+        Traceback (most recent call last):
+            ...
+        pydantic_core._pydantic_core.ValidationError: 1 validation error for HathorSettings
+          Value error, Feature Activation is configured for feature NANO_CONTRACTS but it's unused: disabled ...
+        """
+        from hathor.feature_activation.utils import Features
+        settings = Features.get_settings(self)
+        for feature in self.FEATURE_ACTIVATION.features:
+            setting = settings[feature]
+            if setting != FeatureSetting.FEATURE_ACTIVATION:
+                raise ValueError(f'Feature Activation is configured for feature {feature} but it\'s unused: {setting}')
         return self
