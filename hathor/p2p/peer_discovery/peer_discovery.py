@@ -23,7 +23,7 @@ class PeerDiscovery(ABC):
     """
 
     @abstractmethod
-    async def discover_and_connect(self, connect_to_discovery_call: Callable[[PeerEndpoint], None]) -> None:
+    async def discover_and_connect(self, connect_to_endpoint: Callable[[PeerEndpoint], None]) -> None:
         """ This method must discover the peers and call `connect_to_endpoint` for each of them.
 
         :param connect_to_endpoint: Function which will be called for each discovered peer.
