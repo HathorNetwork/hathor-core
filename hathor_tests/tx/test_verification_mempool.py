@@ -6,6 +6,7 @@ from typing import Generator
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.checkpoint import Checkpoint
+from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, fallback, public
 from hathor.nanocontracts.exception import (
@@ -20,7 +21,7 @@ from hathor.nanocontracts.exception import (
     OCBBlueprintNotConfirmed,
 )
 from hathor.nanocontracts.types import NCArgs
-from hathor.transaction import Block, Transaction
+from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     CheckpointError,
     ConflictWithConfirmedTxError,
@@ -39,6 +40,7 @@ from hathor.verification.transaction_verifier import MAX_BETWEEN_CONFLICTS, MAX_
 from hathor.verification.vertex_verifier import MAX_PAST_TIMESTAMP_ALLOWED
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.token_amount import UnsignedAmount
 
 
 class MyTestBlueprint(Blueprint):
@@ -168,6 +170,111 @@ class VertexHeadersTest(unittest.TestCase):
             self.manager.vertex_handler.on_new_mempool_transaction(tx3)
         assert isinstance(e.exception.__cause__, UnusedTokensError)
 
+    def _build_final_melt_setup(self) -> tuple[DAGArtifacts, Transaction]:
+        """Build a DAG holding 100 TKA and a consensus-valid final-melt tx that lists TKA.
+
+        The melt tx burns the full 100 TKA balance and the melt authority, withdrawing the 1 HTR deposit
+        (1% of 100). It references TKA only through its inputs, with no TKA output, so listing TKA in the
+        tokens list makes `verify_tokens` consider it unused. The DAG's `b31` is left unpropagated so
+        tests can deliver the melt tx through the block-sync path.
+        """
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..31]
+            b10 < dummy
+
+            tx1.out[0] = 100 TKA
+
+            tx1 <-- b31
+            tx1 < b31
+        ''')
+        artifacts.propagate_with(self.manager, up_to_before='b31')
+        melt_tx = self._build_final_melt_tx(artifacts, list_token=True)
+        return artifacts, melt_tx
+
+    def _build_final_melt_tx(self, artifacts: DAGArtifacts, *, list_token: bool) -> Transaction:
+        """Build the final-melt tx, listing the melted token in the tokens list or omitting it."""
+        tka = artifacts.get_typed_vertex('TKA', TokenCreationTransaction)
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        melt_authority_index = next(
+            index for index, output in enumerate(tka.outputs)
+            if output.is_token_authority() and output.can_melt_token()
+        )
+
+        melt_tx = Transaction(
+            inputs=[
+                TxInput(tx1.hash, 0, b''),
+                TxInput(tka.hash, melt_authority_index, b''),
+            ],
+            outputs=[TxOutput(UnsignedAmount.from_v1(1), tx1.outputs[0].script, 0)],
+            parents=self.manager.get_new_tx_parents(),
+            tokens=[tka.hash] if list_token else [],
+            storage=self.manager.tx_storage,
+            timestamp=int(self.manager.reactor.seconds()),
+        )
+        self.dag_builder._exporter.sign_all_inputs(melt_tx)
+        melt_tx.weight = self.manager.daa_factory.minimum_tx_weight(melt_tx)
+        self.dag_builder._exporter._vertex_resolver(melt_tx)
+        return melt_tx
+
+    def test_final_melt_rejected_at_mempool_entry(self) -> None:
+        """A tokens-list entry referenced only by inputs is rejected at every mempool entry.
+
+        A final melt references the melted token only through its inputs, so the tokens list decides
+        admission: listing the token trips the unused-tokens check, while the same melt with the token
+        omitted from the list is accepted.
+        """
+        artifacts, melt_tx = self._build_final_melt_setup()
+
+        with self.assertRaises(InvalidNewTransaction) as e:
+            self.manager.vertex_handler.on_new_mempool_transaction(melt_tx)
+        assert isinstance(e.exception.__cause__, UnusedTokensError)
+        assert str(e.exception.__cause__) == 'unused tokens are not allowed'
+        assert not self.manager.tx_storage.transaction_exists(melt_tx.hash)
+
+        clean_melt_tx = self._build_final_melt_tx(artifacts, list_token=False)
+        assert self.manager.vertex_handler.on_new_mempool_transaction(clean_melt_tx)
+        assert self.manager.tx_storage.transaction_exists(clean_melt_tx.hash)
+
+    @inlineCallbacks
+    def test_final_melt_accepted_inside_block(self) -> Generator:
+        """A tx listing a token referenced only by inputs is admitted when it arrives inside a block."""
+        artifacts, melt_tx = self._build_final_melt_setup()
+        b31 = artifacts.get_typed_vertex('b31', Block)
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+
+        # Align the melt tx with chain time: the block path has no freshness requirement, and b31 must
+        # stay close to b30 to satisfy the max distance between blocks. The timestamp must still exceed
+        # every parent's and every spent tx's.
+        b30 = artifacts.get_typed_vertex('b30', Block)
+        melt_tx_deps = list(melt_tx.parents) + [tx_input.tx_id for tx_input in melt_tx.inputs]
+        melt_tx.timestamp = 1 + max(
+            self.manager.tx_storage.get_transaction(vertex_id).timestamp for vertex_id in melt_tx_deps
+        )
+        self.dag_builder._exporter._vertex_resolver(melt_tx)
+
+        # Make b31 confirm the melt tx by replacing its auto-filled tx parent (index 0 is the block
+        # parent, and tx1 is kept as the other tx parent).
+        other_parent_index = next(
+            index for index, parent in enumerate(b31.parents)
+            if index > 0 and parent != tx1.hash
+        )
+        b31.parents[other_parent_index] = melt_tx.hash
+        b31.timestamp = max(b30.timestamp, melt_tx.timestamp) + 1
+        self.dag_builder._exporter._vertex_resolver(b31)
+
+        deferred = self.manager.vertex_handler.on_new_sync_block(b31, deps=[melt_tx])
+        # `on_new_sync_block` schedules a zero-delay `deferLater` after each dep, which only fires when
+        # the test clock ticks.
+        self.clock.advance(0)
+        success = yield deferred
+        assert success
+
+        stored_melt_tx = self.manager.tx_storage.get_transaction(melt_tx.hash)
+        melt_meta = stored_melt_tx.get_metadata()
+        assert melt_meta.validation.is_fully_connected()
+        assert melt_meta.voided_by is None
+        assert melt_meta.first_block == b31.hash
+
     def test_conflict_with_confirmed_tx(self) -> None:
         artifacts = self.dag_builder.build_from_str('''
             blockchain genesis b[1..30]
@@ -292,7 +399,7 @@ class VertexHeadersTest(unittest.TestCase):
         }
         assert tx_ok.hash in mempool_hashes
 
-        assert self.manager.vertex_handler.on_new_relayed_vertex(b32)
+        assert self.manager.vertex_handler.on_new_relayed_block(b32)
 
         tx_ok_confirmed = self.manager.tx_storage.get_transaction(tx_ok.hash)
         assert tx_ok_confirmed.get_metadata().first_block == b32.hash
@@ -301,7 +408,7 @@ class VertexHeadersTest(unittest.TestCase):
         }
         assert tx_ok.hash not in mempool_hashes
 
-        assert self.manager.vertex_handler.on_new_relayed_vertex(a32)
+        assert self.manager.vertex_handler.on_new_relayed_block(a32)
 
         tx_ok_reorged = self.manager.tx_storage.get_transaction(tx_ok.hash)
         assert tx_ok_reorged.get_metadata().first_block is None
@@ -377,7 +484,7 @@ class VertexHeadersTest(unittest.TestCase):
         c5.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(c5)
         with self.assertRaises(InvalidNewTransaction) as e:
-            yield manager2.vertex_handler.on_new_block(c5, deps=[])
+            yield manager2.vertex_handler.on_new_sync_block(c5, deps=[])
         assert isinstance(e.exception.__cause__, CheckpointError)
 
     def test_nano_header_seqnum(self) -> None:

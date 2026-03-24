@@ -361,7 +361,7 @@ class TransactionVerifier:
 
     def verify_tokens(self, tx: Transaction, params: VerificationParams) -> None:
         """Verify that all tokens are used and unique."""
-        if not params.harden_token_restrictions:
+        if not params.apply_mempool_restrictions:
             return
 
         if len(tx.tokens) > MAX_TOKENS_LENGTH:
@@ -392,7 +392,7 @@ class TransactionVerifier:
         """Verify that this transaction has no conflicts with confirmed transactions."""
         assert tx.storage is not None
 
-        if not params.reject_conflicts_with_confirmed_txs:
+        if not params.apply_mempool_restrictions:
             return
 
         between_counter = 0

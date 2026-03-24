@@ -98,8 +98,8 @@ def test_allowed_headers_excludes_shielded_when_disabled() -> None:
 
     features_on = Features.all_enabled()
     features_off = dataclasses.replace(features_on, shielded_transactions=False)
-    params_off = VerificationParams.for_mempool(best_block=Mock(), features=features_off)
-    params_on = VerificationParams.for_mempool(best_block=Mock(), features=features_on)
+    params_off = VerificationParams(nc_block_root_id=None, features=features_off)
+    params_on = VerificationParams(nc_block_root_id=None, features=features_on)
 
     allowed_off = verifier.get_allowed_headers(tx, params_off)
     assert ShieldedOutputsHeader not in allowed_off
