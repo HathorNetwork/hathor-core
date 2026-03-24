@@ -85,7 +85,7 @@ class DAGArtifacts:
 
             if found_begin:
                 try:
-                    assert manager.vertex_handler.on_new_relayed_vertex(vertex)
+                    assert manager.vertex_handler.on_new_vertex(vertex)
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
                 for step_fn in self._step_fns:
