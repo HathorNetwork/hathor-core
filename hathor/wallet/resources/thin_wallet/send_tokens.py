@@ -27,7 +27,6 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
-from hathor.feature_activation.utils import Features
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError

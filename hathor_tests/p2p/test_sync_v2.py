@@ -293,13 +293,13 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for node, vertex in artifacts.list:
             if node.name.startswith('lose') or node.name.startswith('b'):
                 cloned = vertex.clone(include_metadata=True, include_storage=False)
-                assert manager.vertex_handler.on_new_relayed_vertex(cloned)
+                assert manager.vertex_handler.on_new_vertex(cloned)
 
         # Simulate a previous partial sync by adding 10 winning blocks, but not the one that would reorg.
         for i in range(1, 11):
             win_blk = artifacts.get_typed_vertex(f'win{i}', Block)
             cloned = win_blk.clone(include_metadata=False, include_storage=False)
-            assert manager.vertex_handler.on_new_relayed_vertex(cloned)
+            assert manager.vertex_handler.on_new_vertex(cloned)
             assert cloned.get_metadata().voided_by == {cloned.hash}
 
         win11 = artifacts.get_typed_vertex('win11', Block)

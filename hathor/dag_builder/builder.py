@@ -38,6 +38,7 @@ from hathor.dag_builder.types import (
 from hathor.dag_builder.utils import is_literal, parse_amount_token
 from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.reactor import ReactorProtocol
 from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
 
@@ -52,6 +53,7 @@ FEE_KEY = 'fee'
 class DAGBuilder:
     def __init__(
         self,
+        reactor: ReactorProtocol,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
         genesis_wallet: BaseWallet,
@@ -70,6 +72,7 @@ class DAGBuilder:
         self._tokenize = tokenize
         self._filler = DefaultFiller(self, settings, daa)
         self._exporter = VertexExporter(
+            reactor=reactor,
             builder=self,
             settings=settings,
             daa=daa,
@@ -90,6 +93,7 @@ class DAGBuilder:
         """Create a DAGBuilder instance from a HathorManager instance."""
         assert manager.tx_storage.nc_catalog
         return DAGBuilder(
+            reactor=manager.reactor,
             settings=manager._settings,
             daa=manager.daa,
             genesis_wallet=initialize_hd_wallet(genesis_words),
