@@ -96,7 +96,7 @@ from hathor.transaction.exceptions import InvalidFeeAmount
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor.transaction.util import clean_token_string, validate_fee_amount, validate_token_name_and_symbol
-from hathorlib.nanocontracts.tx_storage_proxy import NCTransactionStorageProxy
+from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -130,7 +130,7 @@ class Runner:
         reactor: ReactorProtocol,
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
-        tx_storage: NCTransactionStorageProxy,
+        tx_storage: NCTransactionStorageProtocol,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
@@ -1455,7 +1455,7 @@ class RunnerFactory:
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
-        tx_storage: NCTransactionStorageProxy,
+        tx_storage: NCTransactionStorageProtocol,
         nc_storage_factory: NCStorageFactory,
     ) -> None:
         self.reactor = reactor

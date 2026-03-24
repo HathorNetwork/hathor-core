@@ -21,6 +21,6 @@ from hathorlib.nanocontracts.types import BlueprintId
 from hathorlib.token_info import TokenDescription
 
 
-class NCTransactionStorageProxy(Protocol):
+class NCTransactionStorageProtocol(Protocol):
     def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]: ...
     def get_token_description(self, token_uid: bytes) -> Optional[TokenDescription]: ...
