@@ -27,7 +27,7 @@ from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.connect_classes import ConnectionAllowed, ConnectionRejected, ConnectionState, ConnectionType
-from hathor.p2p.connection_slot import ConnectionSlots, SlotsManager, SlotsManagerSettings
+from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -93,11 +93,6 @@ class ConnectionsManager:
     _enabled_sync_versions: set[SyncVersion]
 
     rate_limiter: RateLimiter
-
-    outgoing_slot: ConnectionSlots
-    incoming_slot: ConnectionSlots
-    bootstrap_slot: ConnectionSlots
-    check_entrypoints_slot: ConnectionSlots
 
     def __init__(
         self,
@@ -291,8 +286,13 @@ class ConnectionsManager:
         """
         Do a discovery and connect on all discovery strategies.
         """
+        def connect_to_bootstrap(entrypoint: PeerEndpoint, peer: UnverifiedPeer | PublicPeer | None = None,
+                                 use_ssl: bool | None = None) -> None:
+
+            self.connect_to_endpoint(entrypoint, peer, use_ssl=use_ssl, discovery_call=True)
+
         for peer_discovery in self.peer_discoveries:
-            coro = peer_discovery.discover_and_connect(self.connect_to_discovery_call)
+            coro = peer_discovery.discover_and_connect(connect_to_bootstrap)
             Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
@@ -736,7 +736,8 @@ class ConnectionsManager:
         self,
         entrypoint: PeerEndpoint,
         peer: UnverifiedPeer | PublicPeer | None = None,
-        use_ssl: bool | None = None
+        use_ssl: bool | None = None,
+        discovery_call: bool = False
     ) -> None:
         """ Attempt to connect directly to an endpoint, prefer calling `connect_to_peer` when possible.
 
@@ -777,72 +778,10 @@ class ConnectionsManager:
 
         endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
 
-        factory: IProtocolFactory
+        factory: IProtocolFactory = self.discovered_factory if discovery_call else self.client_factory
 
         if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
-        else:
-            factory = self.client_factory
-
-        if peer is not None:
-            now = int(self.reactor.seconds())
-            peer.info.increment_retry_attempt(now)
-
-        deferred = endpoint.connect(factory)
-        self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
-
-        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
-        deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('connecting to', entrypoint=str(entrypoint), peer=str(peer))
-        self.pubsub.publish(
-            HathorEvents.NETWORK_PEER_CONNECTING,
-            peer=peer,
-            peers_count=self._get_peers_count()
-        )
-
-    def connect_to_discovery_call(self,
-                                  entrypoint: PeerEndpoint,
-                                  peer: UnverifiedPeer | PublicPeer | None = None,
-                                  use_ssl: bool | None = None) -> None:
-        """Called when a discovery call is being done, and the discovery_factory should be instantiated,
-        not the Client Factory. Use this instead of connect_to_endpoint in these cases."""
-
-        if entrypoint.peer_id is not None and peer is not None and entrypoint.peer_id != peer.id:
-            self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
-                           entrypoint=str(entrypoint))
-            return
-
-        for connecting_peer in self.connecting_peers.values():
-            if connecting_peer.entrypoint.addr == entrypoint.addr:
-                self.log.debug(
-                    'skipping because we are already connecting to this endpoint',
-                    entrypoint=str(entrypoint),
-                )
-                return
-
-        if self.localhost_only and not entrypoint.addr.is_localhost():
-            self.log.debug('skip because of simple localhost check', entrypoint=str(entrypoint))
-            return
-
-        if not self.enable_ipv6 and entrypoint.addr.is_ipv6():
-            self.log.info('skip because IPv6 is disabled', entrypoint=entrypoint)
-            return
-
-        if self.disable_ipv4 and entrypoint.addr.is_ipv4():
-            self.log.info('skip because IPv4 is disabled', entrypoint=entrypoint)
-            return
-
-        if use_ssl is None:
-            use_ssl = self.use_ssl
-
-        endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
-
-        factory: IProtocolFactory
-
-        if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.discovered_factory)
-        else:
-            factory = self.discovered_factory
+            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
 
         if peer is not None:
             now = int(self.reactor.seconds())
