@@ -20,8 +20,7 @@ fn parse_secret_key(bytes: &[u8]) -> PyResult<SecretKey> {
     if bytes.len() != 32 {
         return Err(pyo3::exceptions::PyValueError::new_err("must be 32 bytes"));
     }
-    SecretKey::from_slice(bytes)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    SecretKey::from_slice(bytes).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 fn parse_generator(bytes: &[u8]) -> PyResult<Generator> {
@@ -39,9 +38,9 @@ fn derive_asset_tag(py: Python<'_>, token_uid: &[u8]) -> PyResult<PyObject> {
             "token_uid must be 32 bytes",
         ));
     }
-    let uid: [u8; 32] = token_uid
-        .try_into()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err("token_uid must be exactly 32 bytes"))?;
+    let uid: [u8; 32] = token_uid.try_into().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("token_uid must be exactly 32 bytes")
+    })?;
     let tag = crate::generators::derive_asset_tag(&uid).map_err(to_py_err)?;
     Ok(PyBytes::new_bound(py, &tag.serialize()).into())
 }
@@ -61,9 +60,9 @@ fn derive_tag(py: Python<'_>, token_uid: &[u8]) -> PyResult<PyObject> {
             "token_uid must be 32 bytes",
         ));
     }
-    let uid: [u8; 32] = token_uid
-        .try_into()
-        .map_err(|_| pyo3::exceptions::PyValueError::new_err("token_uid must be exactly 32 bytes"))?;
+    let uid: [u8; 32] = token_uid.try_into().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("token_uid must be exactly 32 bytes")
+    })?;
     let tag = crate::generators::derive_tag(&uid).map_err(to_py_err)?;
     let tag_bytes: [u8; 32] = tag.into();
     Ok(PyBytes::new_bound(py, &tag_bytes).into())
@@ -77,10 +76,10 @@ fn create_asset_commitment(py: Python<'_>, tag_bytes: &[u8], r_asset: &[u8]) -> 
             "tag must be 32 bytes (raw Tag)",
         ));
     }
-    let tag = secp256k1_zkp::Tag::from(
-        <[u8; 32]>::try_from(tag_bytes)
-            .map_err(|_| pyo3::exceptions::PyValueError::new_err("tag must be exactly 32 bytes"))?,
-    );
+    let tag =
+        secp256k1_zkp::Tag::from(<[u8; 32]>::try_from(tag_bytes).map_err(|_| {
+            pyo3::exceptions::PyValueError::new_err("tag must be exactly 32 bytes")
+        })?);
     let tweak = parse_tweak(r_asset)?;
     let commitment = crate::generators::create_asset_commitment(&tag, &tweak).map_err(to_py_err)?;
     Ok(PyBytes::new_bound(py, &commitment.serialize()).into())
@@ -142,7 +141,12 @@ fn create_range_proof(
     let gen = parse_generator(generator)?;
     let nonce_key = nonce.map(|n| parse_secret_key(n)).transpose()?;
     let proof = crate::rangeproof::create_range_proof(
-        amount, &bf, &comm, &gen, message, nonce_key.as_ref(),
+        amount,
+        &bf,
+        &comm,
+        &gen,
+        message,
+        nonce_key.as_ref(),
     )
     .map_err(to_py_err)?;
     Ok(PyBytes::new_bound(py, &proof.serialize()).into())
@@ -236,10 +240,9 @@ fn create_surjection_proof(
             "codomain_tag must be 32 bytes",
         ));
     }
-    let ct = secp256k1_zkp::Tag::from(
-        <[u8; 32]>::try_from(codomain_tag)
-            .map_err(|_| pyo3::exceptions::PyValueError::new_err("codomain_tag must be exactly 32 bytes"))?,
-    );
+    let ct = secp256k1_zkp::Tag::from(<[u8; 32]>::try_from(codomain_tag).map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err("codomain_tag must be exactly 32 bytes")
+    })?);
     let cbf = parse_tweak(codomain_blinding_factor)?;
 
     let domain_vec: Vec<(Generator, secp256k1_zkp::Tag, Tweak)> = domain
@@ -251,10 +254,10 @@ fn create_surjection_proof(
                     "tag must be 32 bytes",
                 ));
             }
-            let tag = secp256k1_zkp::Tag::from(
-                <[u8; 32]>::try_from(tag_bytes.as_slice())
-                    .map_err(|_| pyo3::exceptions::PyValueError::new_err("tag must be exactly 32 bytes"))?,
-            );
+            let tag =
+                secp256k1_zkp::Tag::from(<[u8; 32]>::try_from(tag_bytes.as_slice()).map_err(
+                    |_| pyo3::exceptions::PyValueError::new_err("tag must be exactly 32 bytes"),
+                )?);
             let bf = parse_tweak(bf_bytes)?;
             Ok((gen, tag, bf))
         })

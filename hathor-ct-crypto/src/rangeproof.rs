@@ -61,7 +61,11 @@ pub fn rewind_range_proof(
         .rewind(SECP256K1, *commitment, *nonce, &[], *generator)
         .map_err(|e| HathorCtError::RangeProofError(format!("range proof rewind failed: {}", e)))?;
 
-    Ok((opening.value, opening.blinding_factor, opening.message.into_vec()))
+    Ok((
+        opening.value,
+        opening.blinding_factor,
+        opening.message.into_vec(),
+    ))
 }
 
 /// Verify a Bulletproof range proof.
@@ -152,7 +156,10 @@ mod tests {
 
         // Creating a range proof with amount=0 and min_value=1 should fail
         let result = create_range_proof(amount, &blinding, &commitment, &gen, None, None);
-        assert!(result.is_err(), "zero-amount range proof creation should fail with min_value=1");
+        assert!(
+            result.is_err(),
+            "zero-amount range proof creation should fail with min_value=1"
+        );
     }
 
     #[test]
@@ -191,7 +198,8 @@ mod tests {
         for amount in amounts {
             let blinding = Tweak::new(&mut rand::thread_rng());
             let commitment = create_commitment(amount, &blinding, &gen).unwrap();
-            let proof = create_range_proof(amount, &blinding, &commitment, &gen, None, None).unwrap();
+            let proof =
+                create_range_proof(amount, &blinding, &commitment, &gen, None, None).unwrap();
             proofs.push(proof);
             commitments.push(commitment);
         }
@@ -219,7 +227,8 @@ mod tests {
         let commitment = create_commitment(amount, &blinding, &gen).unwrap();
 
         let msg = b"test message";
-        let proof = create_range_proof(amount, &blinding, &commitment, &gen, Some(msg), None).unwrap();
+        let proof =
+            create_range_proof(amount, &blinding, &commitment, &gen, Some(msg), None).unwrap();
         assert!(verify_range_proof(&proof, &commitment, &gen).is_ok());
     }
 
@@ -243,7 +252,15 @@ mod tests {
 
         let nonce = SecretKey::new(&mut rand::thread_rng());
         let msg = b"hello world rewind";
-        let proof = create_range_proof(amount, &blinding, &commitment, &gen, Some(msg), Some(&nonce)).unwrap();
+        let proof = create_range_proof(
+            amount,
+            &blinding,
+            &commitment,
+            &gen,
+            Some(msg),
+            Some(&nonce),
+        )
+        .unwrap();
 
         // Verify the proof is valid
         assert!(verify_range_proof(&proof, &commitment, &gen).is_ok());
@@ -268,7 +285,8 @@ mod tests {
         let nonce = SecretKey::new(&mut rand::thread_rng());
         let wrong_nonce = SecretKey::new(&mut rand::thread_rng());
 
-        let proof = create_range_proof(amount, &blinding, &commitment, &gen, None, Some(&nonce)).unwrap();
+        let proof =
+            create_range_proof(amount, &blinding, &commitment, &gen, None, Some(&nonce)).unwrap();
 
         // Rewind with wrong nonce should fail
         let result = rewind_range_proof(&proof, &commitment, &wrong_nonce, &gen);

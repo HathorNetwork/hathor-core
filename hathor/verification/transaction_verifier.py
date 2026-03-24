@@ -386,52 +386,15 @@ class TransactionVerifier:
 
         :raises ForbiddenMint: if tokens were minted without authority
         :raises ForbiddenMelt: if tokens were melted without authority
-        :raises InputOutputMismatch: if HTR deposit or fee amounts are incorrect
+        :raises InputOutputMismatch: if fee amounts are incorrect
         """
-        deposit = 0
-        withdraw = 0
-
         for token_uid, token_info in token_dict.items():
             cls._check_token_permissions(token_uid, token_info)
-            match token_info.version:
-                case None:
-                    # Nonexistent tokens are not expected here (shielded txs are not nanos)
-                    pass
-
-                case TokenVersion.NATIVE:
-                    continue
-
-                case TokenVersion.DEPOSIT:
-                    if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
-                    if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
-
-                case TokenVersion.FEE:
-                    continue
-
-                case _:
-                    assert_never(token_info.version)
-
-        # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount > htr_expected_amount:
-            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
-                htr_info.amount,
-                htr_expected_amount,
-            ))
 
         expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
-
-        if htr_info.amount < htr_expected_amount:
-            raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
-                htr_info.amount,
-                htr_expected_amount,
-            ))
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:

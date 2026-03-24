@@ -18,14 +18,28 @@ version = "0.22"
 features = ["extension-module"]
 optional = true
 
+[dependencies.napi]
+version = "2"
+optional = true
+default-features = false
+features = ["napi8"]
+
+[dependencies.napi-derive]
+version = "2"
+optional = true
+
 [dev-dependencies]
 proptest = "1"
 criterion = "0.5"
+
+[build-dependencies]
+napi-build = { version = "2", optional = true }
 
 [features]
 default = ["std"]
 std = ["secp256k1-zkp/std"]
 python = ["pyo3"]
+napi = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
 
 [lib]
 name = "hathor_ct_crypto"

@@ -96,6 +96,31 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
     return a + log(1 + 2**(b - a) * multiplier, 2)
 
 
+def _shielded_output_to_json(output: 'ShieldedOutput', *, decode_script: bool = False) -> dict[str, Any]:
+    """Serialize a shielded output to a JSON-compatible dict."""
+    from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+    data: dict[str, Any] = {
+        'type': 'shielded',
+        'commitment': output.commitment.hex(),
+        'range_proof': base64.b64encode(output.range_proof).decode('utf-8'),
+        'script': base64.b64encode(output.script).decode('utf-8'),
+    }
+    if output.ephemeral_pubkey:
+        data['ephemeral_pubkey'] = output.ephemeral_pubkey.hex()
+    if isinstance(output, AmountShieldedOutput):
+        data['token_data'] = output.token_data
+    elif isinstance(output, FullShieldedOutput):
+        data['asset_commitment'] = output.asset_commitment.hex()
+        data['surjection_proof'] = base64.b64encode(output.surjection_proof).decode('utf-8')
+    if decode_script:
+        from hathor.transaction.scripts import parse_address_script
+        script_type = parse_address_script(output.script)
+        if script_type:
+            data['decoded'] = {'address': script_type.address}
+    return data
+
+
 # Versions are sequential for blocks and transactions
 class TxVersion(IntEnum):
     REGULAR_BLOCK = 0
@@ -551,6 +576,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         for txout in self.outputs:
             add_address_from_output(txout)
 
+        for shielded_out in self.shielded_outputs:
+            script_type_out = parse_address_script(shielded_out.script)
+            if script_type_out:
+                addresses.add(script_type_out.address)
+
         return addresses
 
     def set_validation(self, validation: ValidationState) -> None:
@@ -852,6 +882,13 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         for output in self.outputs:
             data['outputs'].append(output.to_json(decode_script=decode_script))
 
+        shielded = self.shielded_outputs
+        if shielded:
+            data['shielded_outputs'] = [
+                _shielded_output_to_json(s_out, decode_script=decode_script)
+                for s_out in shielded
+            ]
+
         if include_metadata:
             data['metadata'] = self.get_metadata().to_json()
 
@@ -916,6 +953,13 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             output = serialize_output(self, tx_out)
             output['spent_by'] = spent_by.hex() if spent_by else None
             ret['outputs'].append(output)
+
+        for s_index, shielded_out in enumerate(self.shielded_outputs):
+            output_index = len(self.outputs) + s_index
+            spent_by = meta.get_output_spent_by(output_index)
+            s_data = _shielded_output_to_json(shielded_out, decode_script=True)
+            s_data['spent_by'] = spent_by.hex() if spent_by else None
+            ret['outputs'].append(s_data)
 
         return ret
 

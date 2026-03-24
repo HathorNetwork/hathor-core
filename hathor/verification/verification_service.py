@@ -308,7 +308,7 @@ class VerificationService:
         if (
             not isinstance(tx, TokenCreationTransaction)
             and isinstance(tx, Transaction)
-            and tx.has_shielded_outputs()
+            and tx.is_shielded()
         ):
             block_storage = self._get_block_storage(params)
             _token_dict = token_dict or tx.get_complete_token_info(block_storage)

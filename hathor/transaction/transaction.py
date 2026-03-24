@@ -143,6 +143,19 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         else:
             return True
 
+    def has_shielded_inputs(self) -> bool:
+        """Return whether any input references a shielded output (needs storage)."""
+        assert self.storage is not None
+        for tx_input in self.inputs:
+            spent_tx = self.storage.get_transaction(tx_input.tx_id)
+            if tx_input.index >= len(spent_tx.outputs):
+                return True
+        return False
+
+    def is_shielded(self) -> bool:
+        """Return whether this tx involves any shielded components (inputs or outputs)."""
+        return self.has_shielded_outputs() or self.has_shielded_inputs()
+
     def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
         """Return the ShieldedOutputsHeader or raise ValueError."""
         return self._get_header(ShieldedOutputsHeader)

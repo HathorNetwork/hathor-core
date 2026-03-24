@@ -10,5 +10,8 @@ pub mod types;
 #[allow(clippy::useless_conversion)]
 pub mod ffi;
 
+#[cfg(feature = "napi")]
+pub mod napi_bindings;
+
 pub use error::{HathorCtError, Result};
 pub use types::*;
