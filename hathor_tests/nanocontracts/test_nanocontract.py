@@ -1,5 +1,4 @@
 from typing import Any
-from unittest.mock import Mock
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -11,7 +10,6 @@ from hathor.crypto.util import (
     get_address_from_public_key_bytes,
     get_public_key_bytes_compressed,
 )
-from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context

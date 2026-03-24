@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from math import isinf, isnan
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -10,7 +10,6 @@ from hathor.daa import TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
-from hathor.feature_activation.utils import Features
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput, Vertex
 from hathor.transaction.base_transaction import get_cls_from_tx_version
