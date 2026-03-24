@@ -16,7 +16,7 @@ If after consulting the documentation, you still need **help to operate and use 
 
 If you observe an incorrect behavior while using Hathor core, see [the "Issues" subsection in "Contributing"](#issues).
 
-## Contributing
+## Contributingt
 
 ### Issues
 
