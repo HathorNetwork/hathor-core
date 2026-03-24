@@ -157,7 +157,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         address = get_address_b58_from_public_key_bytes(blueprint.nc_pubkey)
         self.assertIn(address, related_addresses)
 
-        assert self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
+        assert self.manager.vertex_handler.on_new_mempool_transaction(blueprint)
         add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
         assert blueprint.get_metadata().first_block is not None
 
@@ -168,7 +168,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
 
         # initialize an on-chain Bet nanocontract
         nc_init_tx = self._gen_nc_initialize_tx(blueprint, [self.oracle_script, self.token_uid, self.date_last_bet])
-        assert self.manager.vertex_handler.on_new_relayed_vertex(nc_init_tx)
+        assert self.manager.vertex_handler.on_new_mempool_transaction(nc_init_tx)
         block, = add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the initialization nc transaction
         assert nc_init_tx.get_metadata().first_block is not None
 

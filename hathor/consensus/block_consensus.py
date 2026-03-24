@@ -91,7 +91,7 @@ class BlockConsensusAlgorithm:
         assert not block.is_genesis
 
         parent = block.get_block_parent()
-        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=parent)
+        features = Features.for_vertex(settings=self._settings, feature_service=self.feature_service, vertex=parent)
         return features.nanocontracts
 
     def mark_as_nc_fail_execution(self, tx: Transaction) -> None:

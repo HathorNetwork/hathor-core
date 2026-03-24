@@ -27,7 +27,6 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
-from hathor.feature_activation.utils import Features
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
@@ -215,8 +214,7 @@ class SendTokensResource(Resource):
     def _stratum_thread_verify(self, context: _Context) -> _Context:
         """ Method to verify the transaction that runs in a separated thread
         """
-        best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
+        params = VerificationParams.for_apis(self.manager.tx_storage)
         self.manager.verification_service.verify(context.tx, params)
         return context
 
@@ -274,8 +272,7 @@ class SendTokensResource(Resource):
             raise CancelledError()
         context.tx.update_hash()
         context.tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
+        params = VerificationParams.for_apis(self.manager.tx_storage)
         self.manager.verification_service.verify(context.tx, params)
         return context
 

@@ -171,7 +171,7 @@ class NCBlockExecutor:
 
         nc_sorted_calls = self._nc_calls_sorter(block, nc_calls) if nc_calls else []
         block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)
-        features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
+        features = Features.for_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
 
         yield NCBeginBlock(
             block=block,

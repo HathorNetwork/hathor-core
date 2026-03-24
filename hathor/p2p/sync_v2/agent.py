@@ -614,7 +614,7 @@ class NodeBlockSync(SyncAgent):
         """This method is called when a block and its transactions are downloaded."""
         # Note: Any vertex and block could have already been added by another concurrent syncing peer.
         try:
-            yield self.vertex_handler.on_new_block(blk, deps=vertex_list)
+            yield self.vertex_handler.on_new_sync_block(blk, deps=vertex_list)
         except InvalidNewTransaction:
             self.protocol.send_error_and_close_connection('invalid vertex received')
 
@@ -1173,7 +1173,8 @@ class NodeBlockSync(SyncAgent):
         # Finally, it is either an unsolicited new transaction or block.
         self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
         try:
-            success = self.vertex_handler.on_new_relayed_vertex(tx)
+            assert isinstance(tx, Block)
+            success = self.vertex_handler.on_new_relayed_block(tx)
             if success:
                 self.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:
