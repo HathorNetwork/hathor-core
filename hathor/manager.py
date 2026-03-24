@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Iterator, Optional, Union
 
-from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
@@ -44,15 +43,16 @@ from hathor.exception import (
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, get_block_storage_from_block
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
-from hathor.pubsub import HathorEvents, PubSubManager
+from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
 from hathor.stratum import StratumFactory
@@ -68,6 +68,7 @@ from hathor.utils.weight import calculate_min_significant_weight, weight_to_work
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
+from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory
@@ -222,6 +223,7 @@ class HathorManager:
         if self.wallet:
             self.wallet.pubsub = self.pubsub
             self.wallet.reactor = self.reactor
+            self._subscribe_wallet(self.wallet)
 
         # It will be inject later by the builder.
         # XXX Remove this attribute after all dependencies are cleared.
@@ -250,6 +252,14 @@ class HathorManager:
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
+
+    def _subscribe_wallet(self, wallet: BaseWallet) -> None:
+        """Register a wallet on pubsub."""
+        def handler(event: HathorEvents, args: EventArguments) -> None:
+            assert event == HathorEvents.NETWORK_NEW_TX_PROCESSING
+            wallet.on_new_tx(args.tx)
+
+        self.pubsub.subscribe(HathorEvents.NETWORK_NEW_TX_PROCESSING, handler)
 
     def get_default_capabilities(self) -> list[str]:
         """Return the default capabilities for this manager."""
@@ -400,8 +410,12 @@ class HathorManager:
     def get_nc_runner(self, block: Block) -> Runner:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
-        block_storage = nc_storage_factory.get_block_storage_from_block(block)
-        return self.runner_factory.create(block_storage=block_storage)
+        block_storage = get_block_storage_from_block(nc_storage_factory, block)
+        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=block)
+        return self.runner_factory.create(
+            runtime_version=features.nano_runtime_version,
+            block_storage=block_storage,
+        )
 
     def get_best_block_nc_runner(self) -> Runner:
         """Return a contract runner for the best block."""
@@ -410,7 +424,7 @@ class HathorManager:
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return the nano block storage for a given block."""
-        return self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+        return get_block_storage_from_block(self.consensus_algorithm.nc_storage_factory, block)
 
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
@@ -437,8 +451,6 @@ class HathorManager:
             self.wallet._manually_initialize()
 
         self.tx_storage.pre_init()
-        assert self.tx_storage.indexes is not None
-
         self._bit_signaling_service.start()
 
         started_at = int(time.time())
@@ -515,7 +527,6 @@ class HathorManager:
 
         This method needs the essential indexes to be already initialized.
         """
-        assert self.tx_storage.indexes is not None
         # based on the current best-height, filter-out checkpoints that aren't expected to exist in the database
         best_height = self.tx_storage.get_height_best_block()
         expected_checkpoints = [cp for cp in self.checkpoints if cp.height <= best_height]
@@ -550,58 +561,80 @@ class HathorManager:
                     f'hash {block_hash.hex()} was found'
                 )
 
+    def get_timestamp_for_new_vertex(self) -> int:
+        """Generate a timestamp appropriate for a new transaction."""
+        timestamp_now = int(self.reactor.seconds())
+        best_block = self.tx_storage.get_best_block()
+        return max(timestamp_now, best_block.timestamp)
+
     def get_new_tx_parents(self, timestamp: Optional[float] = None) -> list[VertexId]:
         """Select which transactions will be confirmed by a new transaction.
 
         :return: The hashes of the parents for a new transaction.
         """
-        timestamp = timestamp or self.reactor.seconds()
+        timestamp = timestamp or self.get_timestamp_for_new_vertex()
         parent_txs = self.generate_parent_txs(timestamp)
         return list(parent_txs.get_random_parents(self.rng))
 
     def generate_parent_txs(self, timestamp: Optional[float]) -> 'ParentTxs':
         """Select which transactions will be confirmed by a new block or transaction.
 
-        This method tries to return a stable result, such that for a given timestamp and storage state it will always
-        return the same.
+        The result of this method depends on the current state of the blockchain and is intended to generate tx-parents
+        for a new block in the current blockchain, as such if a timestamp is present it must be at least greater than
+        the current best block's.
         """
+
         if timestamp is None:
             timestamp = self.reactor.seconds()
 
-        can_include_intervals = sorted(self.tx_storage.get_tx_tips(timestamp - 1))
-        assert can_include_intervals, 'tips cannot be empty'
+        best_block = self.tx_storage.get_best_block()
+        assert timestamp >= best_block.timestamp
 
-        confirmed_tips: list[Transaction] = []
-        unconfirmed_tips: list[Transaction] = []
-        for interval in can_include_intervals:
-            tx = self.tx_storage.get_tx(interval.data)
-            tips = unconfirmed_tips if tx.get_metadata().first_block is None else confirmed_tips
-            tips.append(tx)
-
-        def get_tx_parents(tx: Transaction) -> list[Transaction]:
+        def get_tx_parents(tx: BaseTransaction, *, with_inputs: bool = False) -> list[Transaction]:
             if tx.is_genesis:
-                other_genesis = {self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH} - {tx.hash}
-                assert len(other_genesis) == 1
-                return [self.tx_storage.get_tx(vertex_id) for vertex_id in other_genesis]
+                genesis_txs = [self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH]
+                if tx.is_transaction:
+                    other_genesis_tx, = set(genesis_txs) - {tx.hash}
+                    return [self.tx_storage.get_tx(other_genesis_tx)]
+                else:
+                    return [self.tx_storage.get_tx(t) for t in genesis_txs]
 
             parents = tx.get_tx_parents()
             assert len(parents) == 2
-            return list(parents)
 
+            txs = list(parents)
+            if with_inputs:
+                input_tx_ids = set(i.tx_id for i in tx.inputs)
+                inputs = (self.tx_storage.get_transaction(tx_id) for tx_id in input_tx_ids)
+                input_txs = (tx for tx in inputs if isinstance(tx, Transaction))
+                txs.extend(input_txs)
+
+            return txs
+
+        unconfirmed_tips = [tx for tx in self.tx_storage.iter_mempool_tips() if tx.timestamp < timestamp]
         match unconfirmed_tips:
             case []:
-                if len(confirmed_tips) >= 2:
-                    return ParentTxs.from_txs(can_include=confirmed_tips, must_include=())
-                assert len(confirmed_tips) == 1
-                tx = confirmed_tips[0]
-                return ParentTxs.from_txs(can_include=get_tx_parents(tx), must_include=(tx,))
-
+                # mix the blocks tx-parents, with their own tx-parents to avoid carrying one of the genesis tx over
+                best_block_tx_parents = get_tx_parents(best_block)
+                tx1_tx_grandparents = get_tx_parents(best_block_tx_parents[0], with_inputs=True)
+                tx2_tx_grandparents = get_tx_parents(best_block_tx_parents[1], with_inputs=True)
+                confirmed_tips = sorted(
+                    set(best_block_tx_parents) | set(tx1_tx_grandparents) | set(tx2_tx_grandparents),
+                    key=lambda tx: tx.timestamp,
+                )
+                self.log.debug('generate_parent_txs: empty mempool, repeat parents')
+                return ParentTxs.from_txs(can_include=confirmed_tips[-2:], must_include=())
             case [tip_tx]:
-                if len(confirmed_tips) >= 1:
-                    return ParentTxs.from_txs(can_include=confirmed_tips, must_include=(tip_tx,))
-                return ParentTxs.from_txs(can_include=get_tx_parents(tip_tx), must_include=(tip_tx,))
-
+                best_block_tx_parents = get_tx_parents(best_block)
+                repeated_parents = get_tx_parents(tip_tx, with_inputs=True)
+                confirmed_tips = sorted(
+                    set(best_block_tx_parents) | set(repeated_parents),
+                    key=lambda tx: tx.timestamp,
+                )
+                self.log.debug('generate_parent_txs: one tx in mempool, fill with one repeated parent')
+                return ParentTxs.from_txs(can_include=confirmed_tips[-1:], must_include=(tip_tx,))
             case _:
+                self.log.debug('generate_parent_txs: multiple unconfirmed mempool tips')
                 return ParentTxs.from_txs(can_include=unconfirmed_tips, must_include=())
 
     def allow_mining_without_peers(self) -> None:
@@ -623,15 +656,6 @@ class HathorManager:
         if parent_block_hash is not None:
             return BlockTemplates([self.make_block_template(parent_block_hash, timestamp)], storage=self.tx_storage)
         return BlockTemplates(self.make_block_templates(timestamp), storage=self.tx_storage)
-        # FIXME: the following caching scheme breaks tests:
-        # cached_timestamp: Optional[int]
-        # cached_block_template: BlockTemplates
-        # cached_timestamp, cached_block_template = getattr(self, '_block_templates_cache', (None, None))
-        # if cached_timestamp == self.tx_storage.latest_timestamp:
-        #     return cached_block_template
-        # block_templates = BlockTemplates(self.make_block_templates(), storage=self.tx_storage)
-        # setattr(self, '_block_templates_cache', (self.tx_storage.latest_timestamp, block_templates))
-        # return block_templates
 
     def make_block_templates(self, timestamp: Optional[int] = None) -> Iterator[BlockTemplate]:
         """ Makes block templates for all possible best tips as of the latest timestamp.
@@ -639,8 +663,8 @@ class HathorManager:
         Each block template has all the necessary info to build a block to be mined without requiring further
         information from the blockchain state. Which is ideal for use by external mining servers.
         """
-        for parent_block_hash in self.tx_storage.get_best_block_tips():
-            yield self.make_block_template(parent_block_hash, timestamp)
+        parent_block_hash = self.tx_storage.get_best_block_hash()
+        yield self.make_block_template(parent_block_hash, timestamp)
 
     def make_block_template(self, parent_block_hash: VertexId, timestamp: Optional[int] = None) -> BlockTemplate:
         """ Makes a block template using the given parent block.
@@ -775,10 +799,15 @@ class HathorManager:
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
         """
-        tips = self.tx_storage.get_best_block_tips()
         parent_hash = blk.get_block_parent_hash()
-        if parent_hash not in tips:
-            self.log.warn('submit_block(): Ignoring block: parent not a tip', blk=blk.hash_hex)
+        best_block_hash = self.tx_storage.get_best_block_hash()
+        if parent_hash != best_block_hash:
+            self.log.warn(
+                'submit_block(): Ignoring block: parent not a tip',
+                submitted_block_hash=blk.hash_hex,
+                submitted_parent_hash=parent_hash.hex(),
+                tip_block_hash=best_block_hash.hex(),
+            )
             return False
         parent_block = self.tx_storage.get_transaction(parent_hash)
         parent_block_metadata = parent_block.get_metadata()

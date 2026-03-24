@@ -14,7 +14,6 @@
 
 """ Module that contains a Python API for interacting with a portion of the HTTP/WS APIs
 """
-
 import asyncio
 import random
 import string
@@ -32,6 +31,7 @@ from hathor.manager import HathorManager
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, Block, TransactionMetadata
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -390,7 +390,7 @@ def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
     if storage:
         data['storage'] = storage
 
-    cls = TxVersion(data['version']).get_cls()
+    cls = get_cls_from_tx_version(TxVersion(data['version']))
     metadata = data.pop('metadata', None)
     tx = cls(**data)
     if update_hash:

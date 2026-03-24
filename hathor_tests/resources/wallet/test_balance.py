@@ -30,6 +30,7 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
             cpu_mining_service=CpuMiningService()
         )
         yield self.web_mining.post("mining", {'block_bytes': base64.b64encode(block_bytes).decode('utf-8')})
+        self.clock.advance(1)
 
         # Get new balance after block
         response2 = yield self.web.get("wallet/balance")

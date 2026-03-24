@@ -113,6 +113,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         self._make_a_bet(100, '1x1')
         self._make_a_bet(200, '1x1')
         self._make_a_bet(300, '1x1')
+        self._make_a_bet(300, '2x2')
         bet1 = self._make_a_bet(500, '2x2')
 
         ###
@@ -123,12 +124,12 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         ###
         # Single winner withdraws all funds.
         ###
-        self.assertEqual(1100, runner.call_view_method(self.nc_id, 'get_max_withdrawal', bet1.address))
+        self.assertEqual(875, runner.call_view_method(self.nc_id, 'get_max_withdrawal', bet1.address))
 
         self._withdraw(bet1.address, 100)
-        self.assertEqual(1000, runner.call_view_method(self.nc_id, 'get_max_withdrawal', bet1.address))
+        self.assertEqual(775, runner.call_view_method(self.nc_id, 'get_max_withdrawal', bet1.address))
 
-        self._withdraw(bet1.address, 1000)
+        self._withdraw(bet1.address, 775)
         self.assertEqual(0, runner.call_view_method(self.nc_id, 'get_max_withdrawal', bet1.address))
 
         # Out of funds! Any withdrawal must fail from now on...

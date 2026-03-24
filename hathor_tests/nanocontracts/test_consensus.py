@@ -152,8 +152,8 @@ class NCConsensusTestCase(SimulatorTestCase):
 
     def _finish_preparing_tx(self, tx: Transaction, *, set_timestamp: bool = True) -> Transaction:
         if set_timestamp:
-            tx.timestamp = int(self.manager.reactor.seconds())
-        tx.parents = self.manager.get_new_tx_parents()
+            tx.timestamp = int(self.manager.get_timestamp_for_new_vertex())
+        tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
         tx.weight = self.manager.daa.minimum_tx_weight(tx)
         return tx
 
@@ -1476,3 +1476,53 @@ class NCConsensusTestCase(SimulatorTestCase):
         assert tx2.get_metadata().voided_by == {tx2.hash}
         assert tx2.get_metadata().conflict_with == [nc2.hash]
         assert tx2.get_metadata().first_block is None
+
+    def test_reorg_back_to_mempool(self) -> None:
+        dag_builder = TestDAGBuilder.from_manager(self.manager)
+        artifacts = dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            blockchain b31 a[32..35]
+            b30 < dummy
+
+            nc1.nc_id = "{self.myblueprint_id.hex()}"
+            nc1.nc_method = initialize("00")
+
+            # nc2 will fail because nc1.counter is 0
+            nc2.nc_id = nc1
+            nc2.nc_method = fail_on_zero()
+
+            nc1 <-- b31
+            nc2 <-- b32
+
+            b33 < a32
+
+            a34.weight = 40
+
+            # a34 will generate a reorg, moving nc2 back to the mempool
+            # then, nc2 will be re-executed by a35
+            nc2 <-- a35
+        ''')
+
+        b32, a34, a35 = artifacts.get_typed_vertices(['b32', 'a34', 'a35'], Block)
+        nc2 = artifacts.get_typed_vertex('nc2', Transaction)
+
+        artifacts.propagate_with(self.manager, up_to='b33')
+
+        assert nc2.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().first_block == b32.hash
+
+        artifacts.propagate_with(self.manager, up_to='a34')
+
+        assert not a34.get_metadata().voided_by
+        assert b32.get_metadata().voided_by
+
+        assert nc2.get_metadata().nc_execution == NCExecutionState.PENDING
+        assert nc2.get_metadata().voided_by is None
+        assert nc2.get_metadata().first_block is None
+
+        artifacts.propagate_with(self.manager, up_to='a35')
+
+        assert nc2.get_metadata().nc_execution == NCExecutionState.FAILURE
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().first_block == a35.hash

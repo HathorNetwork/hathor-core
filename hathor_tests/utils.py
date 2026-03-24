@@ -10,7 +10,6 @@ from typing import Any, Optional, cast
 import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
-from hathorlib.scripts import DataScript
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
@@ -29,6 +28,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
+from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
 
@@ -181,8 +181,9 @@ def add_new_tx(
     manager: HathorManager,
     address: str,
     value: int,
-    advance_clock: int | None = None,
-    propagate: bool = True
+    advance_clock: int = 1,
+    propagate: bool = True,
+    name: str | None = None,
 ) -> Transaction:
     """ Create, resolve and propagate a new tx
 
@@ -199,6 +200,7 @@ def add_new_tx(
         :rtype: :py:class:`hathor.transaction.transaction.Transaction`
     """
     tx = gen_new_tx(manager, address, value)
+    tx.name = name
     if propagate:
         manager.propagate_tx(tx)
     if advance_clock:
@@ -209,8 +211,9 @@ def add_new_tx(
 def add_new_transactions(
     manager: HathorManager,
     num_txs: int,
-    advance_clock: int | None = None,
-    propagate: bool = True
+    advance_clock: int = 1,
+    propagate: bool = True,
+    name: str | None = None,
 ) -> list[Transaction]:
     """ Create, resolve and propagate some transactions
 
@@ -224,10 +227,11 @@ def add_new_transactions(
         :rtype: list[Transaction]
     """
     txs = []
-    for _ in range(num_txs):
+    for i in range(num_txs):
         address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
         value = manager.rng.choice([5, 10, 15, 20])
-        tx = add_new_tx(manager, address, value, advance_clock, propagate)
+        tx_name = f'{name}-{i}' if num_txs > 1 else name
+        tx = add_new_tx(manager, address, value, advance_clock, propagate, name=tx_name)
         txs.append(tx)
     return txs
 
@@ -477,14 +481,14 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
             block = add_new_block(manager, advance_clock=1, address=address)
             deposit_input.append(TxInput(block.hash, 0, b''))
             total_reward += block.outputs[0].value
-            timestamp = block.timestamp + 1
 
         if total_reward > deposit_amount:
             change_output = TxOutput(total_reward - deposit_amount, script, 0)
         else:
             change_output = None
 
-        add_blocks_unlock_reward(manager)
+        unlock_blocks = add_blocks_unlock_reward(manager)
+        timestamp = unlock_blocks[-1].timestamp + 1
         assert timestamp is not None
         parents = manager.get_new_tx_parents(timestamp)
 
@@ -531,9 +535,15 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     return tx
 
 
-def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, mint_amount: int = 300,
-                      token_name: str = 'TestFeeCoin', token_symbol: str = 'TFC',
-                      genesis_output_amount: Optional[int] = None) -> TokenCreationTransaction:
+def create_fee_tokens(
+    manager: 'HathorManager',
+    address_b58: Optional[str] = None,
+    mint_amount: int = 300,
+    token_name: str = 'TestFeeCoin',
+    token_symbol: str = 'TFC',
+    genesis_output_amount: Optional[int] = None,
+    propagate: bool = True,
+) -> TokenCreationTransaction:
     """Creates a new token and propagates a tx with the following UTXOs:
     0. some tokens (already mint some tokens so they can be transferred);
     1. mint authority;
@@ -618,9 +628,11 @@ def create_fee_tokens(manager: 'HathorManager', address_b58: Optional[str] = Non
         input_.data = P2PKH.create_input_data(public_bytes, signature)
 
     manager.cpu_mining_service.resolve(tx)
-    manager.propagate_tx(tx)
-    assert isinstance(manager.reactor, Clock)
-    manager.reactor.advance(8)
+
+    if propagate:
+        manager.propagate_tx(tx)
+        assert isinstance(manager.reactor, Clock)
+        manager.reactor.advance(8)
 
     return tx
 
@@ -740,6 +752,7 @@ class EventMocker:
     next_id: int = 0
     tx_data = TxData(
         hash='abc',
+        name='tx name',
         nonce=123,
         timestamp=456,
         signal_bits=0,

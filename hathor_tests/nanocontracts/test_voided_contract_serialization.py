@@ -80,4 +80,4 @@ class VoidedContractSerializationTest(BlueprintTestCase):
         stored_call = self.manager.tx_storage.get_transaction(call_tx.hash)
         data = stored_call.to_json_extended()
         assert data['nc_id'] == nc_fail.hash_hex
-        assert data['nc_blueprint_id'] == self.fail_blueprint_id.hex()
+        assert data['nc_blueprint_id'] == ''

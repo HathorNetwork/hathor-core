@@ -32,6 +32,7 @@ class CliManager:
         self.longest_cmd: int = 0
 
         from . import (
+            asyncapi_json,
             check_blueprint,
             db_export,
             db_import,
@@ -78,7 +79,8 @@ class CliManager:
         self.add_cmd('side-dag', 'gen_poa_keys', generate_poa_keys, 'Generate a private/public key pair and its '
                                                                     'address to be used in Proof-of-Authority')
         self.add_cmd('side-dag', 'gen_genesis', generate_genesis, 'Generate a new genesis')
-        self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate OpenAPI json for API docs')
+        self.add_cmd('docs', 'generate_openapi_json', openapi_json, 'Generate OpenAPI json for REST API docs')
+        self.add_cmd('docs', 'generate_asyncapi_json', asyncapi_json, 'Generate AsyncAPI json for WebSocket API docs')
         self.add_cmd('multisig', 'gen_multisig_address', multisig_address, 'Generate a new multisig address')
         self.add_cmd('multisig', 'spend_multisig_output', multisig_spend, 'Generate tx that spends a multisig output')
         self.add_cmd('multisig', 'tx_signature', multisig_signature, 'Generate a signature of a multisig tx')

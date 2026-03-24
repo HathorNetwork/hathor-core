@@ -1,5 +1,6 @@
 import base64
 import re
+from typing import cast
 from unittest.mock import patch
 
 from twisted.internet.defer import Deferred, succeed
@@ -9,6 +10,8 @@ from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
+from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient
+from hathor.p2p.sync_v2.exception import StreamingError
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import (
     StopAfterNMinedBlocks,
@@ -17,9 +20,9 @@ from hathor.simulator.trigger import (
     StopWhenTrue,
     Trigger,
 )
+from hathor.transaction import Block
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
-from hathor.transaction.storage.traversal import DFSWalk
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor_tests.dag_builder.builder import TestDAGBuilder
@@ -176,13 +179,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         blk = manager1.tx_storage.get_best_block()
         tx_parents = [manager1.tx_storage.get_transaction(x) for x in blk.parents[1:]]
         self.assertEqual(len(tx_parents), 2)
-        dfs = DFSWalk(manager1.tx_storage, is_dag_verifications=True, is_left_to_right=False)
-        cnt = 0
-        for tx in dfs.run(tx_parents):
-            if tx.get_metadata().first_block == blk.hash:
-                cnt += 1
-            else:
-                dfs.skip_neighbors(tx)
+        cnt = len(list(blk.iter_transactions_in_this_block()))
         self.assertGreater(cnt, 400)
 
         # Generate 500 txs in mempool.
@@ -247,8 +244,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         ''')
         artifacts.propagate_with(manager1)
 
-        assert manager1.tx_storage.indexes is not None
-        assert manager1.tx_storage.indexes.mempool_tips is not None
         mempool_tips_count = len(manager1.tx_storage.indexes.mempool_tips.get())
         # we should expect at the very least 30 tips
         self.assertGreater(mempool_tips_count, 30)
@@ -283,6 +278,69 @@ class RandomSimulatorTestCase(SimulatorTestCase):
                          manager2.tx_storage.get_vertices_count() + mempool_tips_count + 1)
         # and also the second node should have aborted the connection
         self.assertTrue(conn12.proto2.aborting)
+
+    def test_sync_v2_reorg_stuck_on_repeated_blocks(self) -> None:
+        manager = self.create_peer()
+
+        dag_builder = TestDAGBuilder.from_manager(manager)
+        artifacts = dag_builder.build_from_str("""
+            blockchain genesis b[0..5]
+            blockchain b5 lose[1..11]
+            blockchain b5 win[1..12]
+        """)
+
+        # Load the losing chain.
+        for node, vertex in artifacts.list:
+            if node.name.startswith('lose') or node.name.startswith('b'):
+                cloned = vertex.clone(include_metadata=True, include_storage=False)
+                assert manager.vertex_handler.on_new_relayed_vertex(cloned)
+
+        # Simulate a previous partial sync by adding 10 winning blocks, but not the one that would reorg.
+        for i in range(1, 11):
+            win_blk = artifacts.get_typed_vertex(f'win{i}', Block)
+            cloned = win_blk.clone(include_metadata=False, include_storage=False)
+            assert manager.vertex_handler.on_new_relayed_vertex(cloned)
+            assert cloned.get_metadata().voided_by == {cloned.hash}
+
+        win11 = artifacts.get_typed_vertex('win11', Block)
+        win12 = artifacts.get_typed_vertex('win12', Block)
+        start_block = artifacts.get_typed_vertex('b5', Block)
+
+        self.assertFalse(manager.tx_storage.transaction_exists(win11.hash))
+        self.assertFalse(manager.tx_storage.transaction_exists(win12.hash))
+
+        start_info = _HeightInfo(height=start_block.get_height(), id=start_block.hash)
+        end_info = _HeightInfo(height=win12.get_height(), id=win12.hash)
+
+        class DummyProtocol:
+            def get_short_peer_id(self) -> str:
+                return 'dummy'
+
+        class DummySync:
+            def __init__(self) -> None:
+                self.protocol = DummyProtocol()
+                self.tx_storage = manager.tx_storage
+                self.vertex_handler = manager.vertex_handler
+
+        client = BlockchainStreamingClient(cast(NodeBlockSync, DummySync()), start_info, end_info)
+
+        errors: list[StreamingError] = []
+        client.wait().addErrback(lambda failure: errors.append(failure.value))
+
+        # Restarted stream re-sends the start block and the 10 already-downloaded winning blocks before the new ones.
+        stream: list[Block] = [start_block] + [
+            artifacts.get_typed_vertex(f'win{i}', Block) for i in range(1, 13)
+        ]
+        for blk in stream:
+            client.handle_blocks(blk)
+            if errors:
+                break
+
+        self.assertFalse(errors, 'should stream without hitting repeated-block guard')
+        self.assertTrue(manager.tx_storage.transaction_exists(win11.hash))
+        self.assertTrue(manager.tx_storage.transaction_exists(win12.hash))
+        best_block = manager.tx_storage.get_best_block()
+        self.assertEqual(best_block.hash, win12.hash)
 
     def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
         manager1 = self.create_peer()
@@ -321,7 +379,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    index_manager = conn12.manager2.tx_storage.indexes
                     vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)
@@ -356,7 +414,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             response = []
             for h in heights:
                 if h < reorg_height:
-                    index_manager = not_none(conn12.manager2.tx_storage.indexes)
+                    index_manager = conn12.manager2.tx_storage.indexes
                     vertex_id = not_none(index_manager.height.get(h))
                 else:
                     vertex_id = rng.randbytes(32)

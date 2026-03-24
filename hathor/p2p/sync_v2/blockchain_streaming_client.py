@@ -99,15 +99,17 @@ class BlockchainStreamingClient:
 
         # Check for repeated blocks.
         is_duplicated = False
-        if self.tx_storage.partial_vertex_exists(blk.hash):
-            # We reached a block we already have. Skip it.
-            self._blk_repeated += 1
-            is_duplicated = True
-            if self._blk_repeated > self.max_repeated_blocks:
-                self.log.info('too many repeated block received', total_repeated=self._blk_repeated)
-                self.fails(TooManyRepeatedVerticesError())
-            self._last_received_block = blk
-            return
+        if (blk_meta := self.tx_storage.get_metadata(blk.hash)) is not None:
+            # XXX: check whether the block is part of the best chain
+            if not blk_meta.voided_by:
+                # We reached a block we already have. Skip it.
+                self._blk_repeated += 1
+                if self._blk_repeated > self.max_repeated_blocks:
+                    self.log.info('too many repeated block received', total_repeated=self._blk_repeated)
+                    self.fails(TooManyRepeatedVerticesError())
+                is_duplicated = True
+                self._last_received_block = blk
+                return
 
         # basic linearity validation, crucial for correctly predicting the next block's height
         if self._reverse:

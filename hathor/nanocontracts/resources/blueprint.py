@@ -18,6 +18,7 @@ import types
 import typing
 from typing import TYPE_CHECKING, Any, Optional
 
+import hathor
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
 from hathor.nanocontracts import types as nc_types
@@ -66,6 +67,8 @@ class BlueprintInfoResource(Resource):
                 match args:
                     case (_subtype, types.NoneType) | (types.NoneType, _subtype):
                         return self._get_optional_type_name(_subtype)
+                    case (hathor.Address, hathor.ContractId) | (hathor.ContractId, hathor.Address):
+                        return 'CallerId'
                 return self._get_composed_type_name('union', args)
             case nc_types.SignedData:
                 return self._get_composed_type_name('SignedData', args)

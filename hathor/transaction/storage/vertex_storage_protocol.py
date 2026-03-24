@@ -43,6 +43,6 @@ class VertexStorageProtocol(Protocol):
         raise NotImplementedError
 
     @abstractmethod
-    def get_best_block_tips(self) -> list[VertexId]:
+    def get_best_block_hash(self) -> VertexId:
         """Return a list of blocks that are heads in a best chain."""
         raise NotImplementedError

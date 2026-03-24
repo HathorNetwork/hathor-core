@@ -358,30 +358,30 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().nc_execution == NCExecutionState.PENDING
-        assert nc1 in self.manager.tx_storage.iter_mempool_from_best_index()
+        assert nc1 in self.manager.tx_storage.iter_mempool()
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
 
         assert nc2.get_metadata().voided_by is None
         assert nc2.get_metadata().nc_execution == NCExecutionState.PENDING
-        assert nc2 in self.manager.tx_storage.iter_mempool_from_best_index()
+        assert nc2 in self.manager.tx_storage.iter_mempool()
         assert self.manager.tx_storage.transaction_exists(nc2.hash)
 
         assert nc3.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
         assert nc3.get_metadata().nc_execution == NCExecutionState.PENDING
-        assert nc3 not in self.manager.tx_storage.iter_mempool_from_best_index()
+        assert nc3 not in self.manager.tx_storage.iter_mempool()
         assert not self.manager.tx_storage.transaction_exists(nc3.hash)
 
         assert nc4.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
         assert nc4.get_metadata().nc_execution == NCExecutionState.PENDING
-        assert nc4 not in self.manager.tx_storage.iter_mempool_from_best_index()
+        assert nc4 not in self.manager.tx_storage.iter_mempool()
         assert not self.manager.tx_storage.transaction_exists(nc4.hash)
 
         assert nc5.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
         assert nc5.get_metadata().nc_execution == NCExecutionState.PENDING
-        assert nc5 not in self.manager.tx_storage.iter_mempool_from_best_index()
+        assert nc5 not in self.manager.tx_storage.iter_mempool()
         assert not self.manager.tx_storage.transaction_exists(nc5.hash)
 
         assert nc6.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
         assert nc6.get_metadata().nc_execution == NCExecutionState.PENDING
-        assert nc6 not in self.manager.tx_storage.iter_mempool_from_best_index()
+        assert nc6 not in self.manager.tx_storage.iter_mempool()
         assert not self.manager.tx_storage.transaction_exists(nc6.hash)

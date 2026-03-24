@@ -260,13 +260,14 @@ class VerificationService:
             # TODO do genesis validation
             return
         self.verify_without_storage(tx, params)
-        self.verifiers.tx.verify_sigops_input(tx, params.enable_checkdatasig_count)
-        self.verifiers.tx.verify_inputs(tx)  # need to run verify_inputs first to check if all inputs exist
+        self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
+        self.verifiers.tx.verify_inputs(tx, params)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
         block_storage = self._get_block_storage(params)
         self.verifiers.tx.verify_sum(
             self._settings,
+            tx,
             token_dict or tx.get_complete_token_info(block_storage),
             # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
             allow_nonexistent_tokens=tx.is_nano_contract()
@@ -319,14 +320,14 @@ class VerificationService:
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
-            self._verify_without_storage_nano_header(vertex)
+            self._verify_without_storage_nano_header(vertex, params)
 
     def _verify_without_storage_base_block(self, block: Block, params: VerificationParams) -> None:
         self.verifiers.block.verify_no_inputs(block)
         self.verifiers.vertex.verify_outputs(block)
         self.verifiers.block.verify_output_token_indexes(block)
         self.verifiers.block.verify_data(block)
-        self.verifiers.vertex.verify_sigops_output(block, params.enable_checkdatasig_count)
+        self.verifiers.vertex.verify_sigops_output(block, params.features.count_checkdatasig_op)
 
     def _verify_without_storage_block(self, block: Block, params: VerificationParams) -> None:
         """ Run all verifications that do not need a storage.
@@ -348,7 +349,7 @@ class VerificationService:
         self.verifiers.tx.verify_number_of_inputs(tx)
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)
-        self.verifiers.vertex.verify_sigops_output(tx, params.enable_checkdatasig_count)
+        self.verifiers.vertex.verify_sigops_output(tx, params.features.count_checkdatasig_op)
         self.verifiers.tx.verify_tokens(tx, params)
 
     def _verify_without_storage_token_creation_tx(
@@ -358,9 +359,9 @@ class VerificationService:
     ) -> None:
         self._verify_without_storage_tx(tx, params)
 
-    def _verify_without_storage_nano_header(self, tx: BaseTransaction) -> None:
+    def _verify_without_storage_nano_header(self, tx: BaseTransaction, params: VerificationParams) -> None:
         assert tx.is_nano_contract()
-        self.verifiers.nano_header.verify_nc_signature(tx)
+        self.verifiers.nano_header.verify_nc_signature(tx, params)
         self.verifiers.nano_header.verify_actions(tx)
 
     def _verify_without_storage_fee_header(self, tx: BaseTransaction) -> None:

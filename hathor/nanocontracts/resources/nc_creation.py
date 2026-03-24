@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 from twisted.web.http import Request
 
@@ -38,7 +40,6 @@ class NCCreationResource(Resource):
         super().__init__()
         self.manager = manager
         self.tx_storage = self.manager.tx_storage
-        assert self.tx_storage.indexes is not None
         self.nc_creation_index = self.tx_storage.indexes.nc_creation
         self.nc_history_index = self.tx_storage.indexes.nc_history
         self.bp_history_index = self.tx_storage.indexes.blueprint_history
@@ -206,10 +207,10 @@ class NCCreationResource(Resource):
 
 
 class NCCreationParams(QueryParams):
-    before: str | None
-    after: str | None
+    before: str | None = None
+    after: str | None = None
     count: int = Field(default=10, le=100)
-    search: str | None
+    search: str | None = None
     order: SortOrder = SortOrder.DESC
 
 
@@ -223,7 +224,7 @@ class NCCreationItem(Response):
 
 
 class NCCreationResponse(Response):
-    success: bool = Field(default=True, const=True)
+    success: Literal[True] = True
     nc_creation_txs: list[NCCreationItem]
     before: str | None
     after: str | None

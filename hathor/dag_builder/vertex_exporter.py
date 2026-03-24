@@ -283,12 +283,15 @@ class VertexExporter:
             blk.weight = float(node.attrs['weight'])
         else:
             blk.weight = self._daa.calculate_block_difficulty(blk, self.get_parent_block)
+        if 'signal_bits' in node.attrs:
+            blk.signal_bits = int(node.attrs['signal_bits'])
         self.update_vertex_hash(blk)
         self._block_height[blk.hash] = height
         return blk
 
     def _get_ast_value_bytes(self, ast_node: ast.AST) -> bytes:
         if isinstance(ast_node, ast.Constant):
+            assert isinstance(ast_node.value, str)
             return bytes.fromhex(ast_node.value)
         elif isinstance(ast_node, ast.Name):
             return self.get_vertex_id(ast_node.id)

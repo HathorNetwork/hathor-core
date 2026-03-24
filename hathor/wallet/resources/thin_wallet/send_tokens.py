@@ -27,6 +27,7 @@ from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, render_options, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.exception import InvalidNewTransaction
+from hathor.feature_activation.utils import Features
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
@@ -155,10 +156,9 @@ class SendTokensResource(Resource):
 
         # When using stratum to solve pow, we already set timestamp and parents
         stratum_deferred: Deferred[None] = Deferred()
-        # FIXME: Skipping mypy on the line below for now, as it looks like it's wrong but we don't have tests for it.
-        stratum_deferred.addCallback(self._stratum_deferred_resolve, request)  # type: ignore
-
-        fn_timeout = partial(self._stratum_timeout, request=request, tx=tx)
+        # FIXME: Skipping mypy on the lines below for now, as it looks like it's wrong but we don't have tests for it.
+        stratum_deferred.addCallback(self._stratum_deferred_resolve, request)  # type: ignore[call-overload]
+        fn_timeout = partial(self._stratum_timeout, request=request, tx=tx)  # type: ignore[call-arg]
         stratum_deferred.addTimeout(TIMEOUT_STRATUM_RESOLVE_POW, self.manager.reactor, onTimeoutCancel=fn_timeout)
 
         # this prepares transaction for mining
@@ -216,7 +216,7 @@ class SendTokensResource(Resource):
         """ Method to verify the transaction that runs in a separated thread
         """
         best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.default_for_mempool(best_block=best_block)
+        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
         self.manager.verification_service.verify(context.tx, params)
         return context
 
@@ -275,7 +275,7 @@ class SendTokensResource(Resource):
         context.tx.update_hash()
         context.tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
         best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.default_for_mempool(best_block=best_block)
+        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
         self.manager.verification_service.verify(context.tx, params)
         return context
 

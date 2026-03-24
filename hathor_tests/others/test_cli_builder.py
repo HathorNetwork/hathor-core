@@ -8,7 +8,7 @@ from hathor.exception import BuilderError
 from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.p2p.sync_version import SyncVersion
-from hathor.transaction.storage import TransactionCacheStorage, TransactionRocksDBStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.wallet import HDWallet, Wallet
 from hathor_cli.builder import CliBuilder
 from hathor_cli.run_node_args import RunNodeArgs
@@ -26,7 +26,7 @@ class BuilderTestCase(unittest.TestCase):
 
     def _build_with_error(self, cmd_args: list[str], err_msg: str) -> None:
         raw_args = self.parser.parse_args(cmd_args)
-        args = RunNodeArgs.parse_obj(vars(raw_args))
+        args = RunNodeArgs.model_validate(vars(raw_args))
         builder = CliBuilder(args)
         with self.assertRaises(BuilderError) as cm:
             manager = builder.create_manager(self.reactor)
@@ -36,7 +36,7 @@ class BuilderTestCase(unittest.TestCase):
 
     def _build(self, cmd_args: list[str]) -> HathorManager:
         raw_args = self.parser.parse_args(cmd_args)
-        args = RunNodeArgs.parse_obj(vars(raw_args))
+        args = RunNodeArgs.model_validate(vars(raw_args))
         builder = CliBuilder(args)
         manager = builder.create_manager(self.reactor)
         self.assertIsNotNone(manager)
@@ -50,8 +50,8 @@ class BuilderTestCase(unittest.TestCase):
     def test_all_default(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
-        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsNotNone(manager.tx_storage.cache_data)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
         self.assertIsNone(manager.wallet)
         self.assertEqual('unittests', manager.network)
@@ -70,8 +70,8 @@ class BuilderTestCase(unittest.TestCase):
     def test_rocksdb_storage(self):
         data_dir = self.mkdtemp()
         manager = self._build(['--data', data_dir])
-        self.assertIsInstance(manager.tx_storage, TransactionCacheStorage)
-        self.assertIsInstance(manager.tx_storage.store, TransactionRocksDBStorage)
+        self.assertIsInstance(manager.tx_storage, TransactionRocksDBStorage)
+        self.assertIsNotNone(manager.tx_storage.cache_data)
         self.assertIsInstance(manager.tx_storage.indexes, RocksDBIndexesManager)
 
     def test_sync_default(self):

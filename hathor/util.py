@@ -21,11 +21,12 @@ import math
 import sys
 import time
 from collections import OrderedDict
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass
 from functools import partial, wraps
 from random import Random as PyRandom
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, cast
 
 from structlog import get_logger
 
@@ -251,11 +252,8 @@ class LogDuration(float):
     __repr__ = __str__
 
 
-_T = TypeVar("_T")
-
-
 # borrowed from: https://github.com/facebook/pyre-check/blob/master/pyre_extensions/__init__.py
-def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
+def not_none(optional: Optional[T], message: str = 'Unexpected `None`') -> T:
     """Convert an optional to its value. Raises an `AssertionError` if the
     value is `None`"""
     if optional is None:
@@ -287,7 +285,7 @@ class Random(PyRandom):
             return self.getrandbits(n * 8).to_bytes(n, 'little')
 
 
-def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
+def collect_n(it: Iterator[T], n: int) -> tuple[list[T], bool]:
     """Collect up to n elements from an iterator into a list, returns the list and whether there were more elements.
 
     This method will consume up to n+1 elements from the iterator because it will try to get one more element after it
@@ -314,7 +312,7 @@ def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
     """
     if n < 0:
         raise ValueError(f'n must be non-negative, got {n}')
-    col: list[_T] = []
+    col: list[T] = []
     has_more = False
     while n > 0:
         try:
@@ -334,7 +332,7 @@ def collect_n(it: Iterator[_T], n: int) -> tuple[list[_T], bool]:
     return col, has_more
 
 
-def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
+def skip_n(it: Iterator[T], n: int) -> Iterator[T]:
     """ Skip at least n elements if possible.
 
     Example:
@@ -362,7 +360,7 @@ def skip_n(it: Iterator[_T], n: int) -> Iterator[_T]:
     return it
 
 
-def skip_until(it: Iterator[_T], condition: Callable[[_T], bool]) -> Iterator[_T]:
+def skip_until(it: Iterator[T], condition: Callable[[T], bool]) -> Iterator[T]:
     """ Skip all elements and stops after condition is True, it will also skip the element where condition is True.
 
     Example:
@@ -394,7 +392,7 @@ def skip_until(it: Iterator[_T], condition: Callable[[_T], bool]) -> Iterator[_T
 
 
 _DT_ITER_NEXT_WARN = 3  # time in seconds to warn when `next(iter_tx)` takes too long
-_DT_LOG_PROGRESS = 30  # time in seconds after which a progress will be logged (it can take longer, but not shorter)
+_DT_LOG_PROGRESS = 10  # time in seconds after which a progress will be logged (it can take longer, but not shorter)
 _DT_YIELD_WARN = 1  # time in seconds to warn when `yield tx` takes too long (which is when processing happens)
 
 
@@ -457,18 +455,28 @@ def progress(
         log.info('loaded', count=count, rate=rate, total_dt=dt_total)
 
 
-def tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: Optional['structlog.stdlib.BoundLogger'] = None,
-                total: Optional[int] = None) -> Iterator['BaseTransaction']:
+def tx_progress(
+    iter_tx: Iterator['BaseTransaction'],
+    *,
+    log: Optional['structlog.stdlib.BoundLogger'] = None,
+    total: Optional[int] = None,
+    show_height_and_ts: bool = False,
+) -> Iterator['BaseTransaction']:
     """ Log the progress of a transaction iterator while iterating.
     """
     if log is None:
         log = logger.new()
 
-    yield from _tx_progress(iter_tx, log=log, total=total)
+    yield from _tx_progress(iter_tx, log=log, total=total, show_height_and_ts=show_height_and_ts)
 
 
-def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib.BoundLogger', total: Optional[int]
-                 ) -> Iterator['BaseTransaction']:
+def _tx_progress(
+    iter_tx: Iterator['BaseTransaction'],
+    *,
+    log: 'structlog.stdlib.BoundLogger',
+    total: Optional[int],
+    show_height_and_ts: bool,
+) -> Iterator['BaseTransaction']:
     """ Inner implementation of progress helper.
     """
     t_start = time.time()
@@ -479,6 +487,7 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
     count_log_prev = 0
     block_count = 0
     tx_count = 0
+    first_log = True
 
     log.debug('load will start')
     t_log_prev = t_start
@@ -501,12 +510,15 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
 
         t_log = time.time()
         dt_log = LogDuration(t_log - t_log_prev)
-        if dt_log > _DT_LOG_PROGRESS:
+        if first_log or dt_log > _DT_LOG_PROGRESS:
+            first_log = False
             t_log_prev = t_log
             dcount = count - count_log_prev
             tx_rate = '?' if dt_log == 0 else dcount / dt_log
             ts = datetime.datetime.fromtimestamp(ts_tx)
-            kwargs = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count, latest_ts=ts, height=h)
+            kwargs: dict[str, Any] = dict(tx_rate=tx_rate, tx_new=dcount, dt=dt_log, total=count)
+            if show_height_and_ts:
+                kwargs.update(latest_ts=ts, height=h)
             if total:
                 progress_ = count / total
                 elapsed_time = t_log - t_start
@@ -517,7 +529,6 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
                     remaining_time = LogDuration(elapsed_time / progress_ - elapsed_time)
                 log.info(
                     f'loading... {math.floor(progress_ * 100):2.0f}%',
-                    progress=progress_,
                     remaining_time=remaining_time,
                     **kwargs
                 )
@@ -546,7 +557,10 @@ def _tx_progress(iter_tx: Iterator['BaseTransaction'], *, log: 'structlog.stdlib
     t_final = time.time()
     dt_total = LogDuration(t_final - t_start)
     tx_rate = '?' if dt_total == 0 else count / dt_total
-    log.info('loaded', tx_count=count, tx_rate=tx_rate, total_dt=dt_total, height=h, blocks=block_count, txs=tx_count)
+    kwargs = dict(tx_count=count, tx_rate=tx_rate, total_dt=dt_total, blocks=block_count, txs=tx_count)
+    if show_height_and_ts:
+        kwargs.update(height=h)
+    log.info('loaded', **kwargs)
 
 
 class peekable(Iterator[T]):

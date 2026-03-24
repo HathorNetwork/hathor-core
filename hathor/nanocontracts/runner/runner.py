@@ -47,6 +47,8 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
+from hathor.nanocontracts.nano_settings import NanoSettings
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.runner.index_records import (
@@ -125,6 +127,7 @@ class Runner:
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
+        runtime_version: NanoRuntimeVersion,
         tx_storage: TransactionStorage,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
@@ -136,6 +139,7 @@ class Runner:
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
+        self._runtime_version = runtime_version
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -271,7 +275,7 @@ class Runner:
         try:
             ret = self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
         return ret
 
     def _unsafe_call_public_method(
@@ -306,9 +310,6 @@ class Runner:
         self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
 
-        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
-        self._updated_tokens_totals = defaultdict(int)
-        self._paid_actions_fees = defaultdict(int)
         return ret
 
     def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
@@ -472,6 +473,9 @@ class Runner:
             rules = BalanceRules.get_rules(self._settings, action)
             rules.nc_caller_execution_rule(previous_changes_tracker)
 
+        # All calls must begin with non-negative balance.
+        previous_changes_tracker.validate_balances_are_positive()
+
         # Update the balances with the fee payment amount. Since some tokens could be created during contract
         # execution, the verification of the tokens and amounts will be done after it
         for fee in fees:
@@ -503,15 +507,20 @@ class Runner:
 
         return result
 
-    def _reset_all_change_trackers(self) -> None:
+    def _reset_all_changes(self) -> None:
         """Reset all changes and prepare for next call."""
         assert self._call_info is not None
         for change_trackers in self._call_info.change_trackers.values():
             for change_tracker in change_trackers:
                 if not change_tracker.has_been_commited:
                     change_tracker.block()
+
         self._last_call_info = self._call_info
         self._call_info = None
+
+        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
+        self._updated_tokens_totals = defaultdict(int)
+        self._paid_actions_fees = defaultdict(int)
 
     def _validate_balances(self, ctx: Context) -> None:
         """
@@ -671,6 +680,9 @@ class Runner:
         # unauthorized modification would pose a serious security risk.
         ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
 
+        # All calls must end with non-negative balances.
+        call_record.changes_tracker.validate_balances_are_positive()
+
         if method_name == NC_INITIALIZE_METHOD:
             self._check_all_field_initialized(blueprint)
 
@@ -723,7 +735,7 @@ class Runner:
                 kwargs=kwargs,
             )
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
 
     def _handle_index_update(self, action: NCAction) -> None:
         """For each action in a public method call, create the appropriate index update records."""
@@ -934,7 +946,7 @@ class Runner:
         try:
             ret = self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
         return ret
 
     @_forbid_syscall_from_view('create_contract')
@@ -1263,6 +1275,18 @@ class Runner:
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
 
+    def syscall_get_nano_settings(self) -> NanoSettings:
+        """Get nano settings according to the current runtime."""
+        match self._runtime_version:
+            case NanoRuntimeVersion.V1:
+                raise NCFail('syscall `get_settings` is not yet supported')
+            case NanoRuntimeVersion.V2:
+                return NanoSettings(
+                    fee_per_output=self._settings.FEE_PER_OUTPUT,
+                )
+            case _:
+                assert_never(self._runtime_version)
+
     def _get_token(self, token_uid: TokenUid) -> TokenDescription:
         """
         Get a token from the current changes tracker or storage.
@@ -1271,11 +1295,15 @@ class Runner:
             NCInvalidSyscall when the token isn't found.
         """
         call_record = self.get_current_call_record()
-        changes_tracker = self.get_current_changes_tracker()
-        assert call_record.contract_id == changes_tracker.nc_id
 
-        if changes_tracker.has_token(token_uid):
-            return changes_tracker.get_token(token_uid)
+        # We need to check in all contracts executed by this call because any of them could have created the token.
+        assert self._call_info is not None
+        for change_trackers_list in self._call_info.change_trackers.values():
+            if len(change_trackers_list) == 0:
+                continue
+            change_tracker = change_trackers_list[-1]
+            if change_tracker.has_token(token_uid):
+                return change_tracker.get_token(token_uid)
 
         # Special case for HTR token (native token with UID 00)
         if token_uid == HATHOR_TOKEN_UID:
@@ -1441,10 +1469,17 @@ class RunnerFactory:
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
 
-    def create(self, *, block_storage: NCBlockStorage, seed: bytes | None = None) -> Runner:
+    def create(
+        self,
+        *,
+        runtime_version: NanoRuntimeVersion,
+        block_storage: NCBlockStorage,
+        seed: bytes | None = None,
+    ) -> Runner:
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
+            runtime_version=runtime_version,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
             block_storage=block_storage,

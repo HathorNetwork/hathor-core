@@ -24,14 +24,13 @@ DEBUG: bool = False
 class TestMempoolTipsIndex(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)  # for simplicity
+        assert self._settings is not None
+        settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})  # for simplicity
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
 
         self.manager = self.create_peer_from_builder(builder)
         self.tx_storage = self.manager.tx_storage
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         self.mempool_tips = self.tx_storage.indexes.mempool_tips
 
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)

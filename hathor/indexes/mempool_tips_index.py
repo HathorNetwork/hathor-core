@@ -82,8 +82,6 @@ class MempoolTipsIndex(BaseIndex):
     def get(self) -> set[bytes]:
         """
         Get the set of mempool tips indexed.
-
-        What to do with `get_tx_tips()`? They kind of do the same thing and it might be really confusing in the future.
         """
         raise NotImplementedError
 
@@ -98,6 +96,9 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         assert tx.hash is not None
         assert tx.storage is not None
         tx_meta = tx.get_metadata()
+        # do not include voided transactions
+        if tx_meta.voided_by:
+            return
         # do not include transactions that have been confirmed
         if tx_meta.first_block:
             return
@@ -201,11 +202,13 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         bfs = BFSTimestampWalk(tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False)
         for tx in bfs.run(self.iter(tx_storage), skip_root=False):
             if not isinstance(tx, Transaction):
+                bfs.skip_neighbors()
                 continue
             if tx.get_metadata().first_block is not None:
-                bfs.skip_neighbors(tx)
+                bfs.skip_neighbors()
             else:
                 yield tx
+                bfs.add_neighbors()
 
     def get(self) -> set[bytes]:
         return set(iter(self._index))

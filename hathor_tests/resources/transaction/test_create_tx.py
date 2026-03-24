@@ -314,7 +314,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             ]
         })).json_value()
         self.assertEqual(resp, {
-            'error': 'HTR balance is different than expected. (amount=1, expected=0)'
+            'error': 'There\'s an invalid surplus of HTR. (amount=1, expected=0)'
         })
 
     @inlineCallbacks
@@ -334,7 +334,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             ]
         })).json_value()
         self.assertEqual(resp, {
-            'error': 'HTR balance is different than expected. (amount=-1, expected=0)'
+            'error': 'There\'s an invalid deficit of HTR. (amount=-1, expected=0)'
         })
 
     @inlineCallbacks

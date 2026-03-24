@@ -48,6 +48,7 @@ from hathor.transaction.exceptions import ScriptError, TooManySigOps
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts import SigopCounter, create_output_script
 from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
 
@@ -76,8 +77,12 @@ class NanoHeaderVerifier:
         self._settings = settings
         self._tx_storage = tx_storage
 
-    def verify_nc_signature(self, tx: BaseTransaction) -> None:
+    def verify_nc_signature(self, tx: BaseTransaction, params: VerificationParams) -> None:
         """Verify if the caller's signature is valid."""
+        self._verify_nc_signature(self._settings, tx, params.features.opcodes_version)
+
+    @staticmethod
+    def _verify_nc_signature(settings: HathorSettings, tx: BaseTransaction, opcodes_version: OpcodesVersion) -> None:
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
 
@@ -91,7 +96,7 @@ class NanoHeaderVerifier:
             )
 
         counter = SigopCounter(
-            max_multisig_pubkeys=self._settings.MAX_MULTISIG_PUBKEYS,
+            max_multisig_pubkeys=settings.MAX_MULTISIG_PUBKEYS,
             enable_checkdatasig_count=True,
         )
         output_script = create_output_script(nano_header.nc_address)
@@ -103,7 +108,7 @@ class NanoHeaderVerifier:
             raw_script_eval(
                 input_data=nano_header.nc_script,
                 output_script=output_script,
-                extras=ScriptExtras(tx=tx)
+                extras=ScriptExtras(tx=tx, version=opcodes_version)
             )
         except ScriptError as e:
             raise NCInvalidSignature from e

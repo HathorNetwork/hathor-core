@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from math import isinf, isnan
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -10,8 +10,10 @@ from hathor.daa import TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput, Vertex
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     ConflictingInputs,
@@ -36,6 +38,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.utils import (
@@ -67,6 +70,8 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
+        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
+
     def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]
 
@@ -86,7 +91,7 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -107,7 +112,7 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -147,7 +152,7 @@ class TransactionTest(unittest.TestCase):
         _input.data = data_wrong
 
         with self.assertRaises(InvalidInputData):
-            self._verifiers.tx.verify_inputs(tx)
+            self._verifiers.tx.verify_inputs(tx, params=self.verification_params)
 
     def test_too_many_inputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -776,10 +781,10 @@ class TransactionTest(unittest.TestCase):
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
-        self._verifiers.tx.verify_inputs(tx2)
+        self._verifiers.tx.verify_inputs(tx2, params=self.verification_params)
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.tx.verify_inputs(tx2)
+            self._verifiers.tx.verify_inputs(tx2, params=self.verification_params)
         tx2.timestamp = tx2_timestamp
 
         # Validate maximum distance between blocks
@@ -821,7 +826,8 @@ class TransactionTest(unittest.TestCase):
 
     def test_output_serialization(self):
         from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
-        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE, bytes_to_output_value, output_value_to_bytes
+        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE
+        from hathor.transaction.util import bytes_to_output_value, output_value_to_bytes
         max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
         self.assertEqual(len(max_32), 4)
         value, buf = bytes_to_output_value(max_32)
@@ -838,7 +844,7 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
-        from hathor.transaction.base_transaction import bytes_to_output_value
+        from hathor.transaction.util import bytes_to_output_value
 
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
@@ -920,9 +926,9 @@ class TransactionTest(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_cls_from_tx_version(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_cls_from_tx_version(version), Transaction)
 
         # test Block.__init__() fails
         with self.assertRaises(AssertionError) as cm:
@@ -939,7 +945,7 @@ class TransactionTest(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
         block = Block(
             signal_bits=0xF0,
-            version=0x0F,
+            version=TxVersion.REGULAR_BLOCK,
             nonce=100,
             weight=1,
             parents=[genesis_block.hash]
@@ -993,7 +999,7 @@ class TransactionTest(unittest.TestCase):
             outputs=[_output],
             storage=self.tx_storage
         )
-        self._verifiers.tx.verify_inputs(tx, skip_script=True)
+        self._verifiers.tx.verify_inputs(tx, skip_script=True, params=self.verification_params)
 
     def test_txin_data_limit_exceeded(self):
         with self.assertRaises(InvalidInputDataSize):
@@ -1086,12 +1092,15 @@ class TransactionTest(unittest.TestCase):
     def test_sighash_cache(self):
         from unittest import mock
 
+        from hathor.transaction.vertex_parser import _transaction
+
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(5, script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
-        with mock.patch('hathor.transaction.transaction.bytearray') as mocked:
+        original = _transaction.serialize_tx_sighash
+        with mock.patch.object(_transaction, 'serialize_tx_sighash', wraps=original) as mocked:
             for _ in range(10):
                 tx.get_sighash_all()
 
@@ -1105,7 +1114,8 @@ class TransactionTest(unittest.TestCase):
         output = TxOutput(5, script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
-        with mock.patch('hathor.transaction.transaction.hashlib') as mocked:
+        with mock.patch('hathor.transaction.vertex_parser.vertex_serializer.hashlib') as mocked:
+            mocked.sha256.return_value.digest.return_value = b'\x00' * 32
             for _ in range(10):
                 tx.get_sighash_all_data()
 

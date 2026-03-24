@@ -181,8 +181,6 @@ class NodeBlockSync(SyncAgent):
     def get_status(self) -> dict[str, Any]:
         """ Return the status of the sync.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         tips = self.tx_storage.indexes.mempool_tips.get()
         tips_limited, tips_has_more = collect_n(iter(tips), MAX_MEMPOOL_STATUS_TIPS)
         res = {
@@ -361,7 +359,6 @@ class NodeBlockSync(SyncAgent):
 
         Notice that we might already have all other peer's blocks while the other peer is still syncing.
         """
-        assert self.tx_storage.indexes is not None
         self.state = PeerState.SYNCING_BLOCKS
 
         # Get my best block.
@@ -462,8 +459,6 @@ class NodeBlockSync(SyncAgent):
     def handle_get_tips(self, _payload: str) -> None:
         """ Handle a GET-TIPS message.
         """
-        assert self.tx_storage.indexes is not None
-        assert self.tx_storage.indexes.mempool_tips is not None
         if self._is_streaming:
             self.log.warn('can\'t send while streaming')  # XXX: or can we?
             self.send_message(ProtocolMessages.MEMPOOL_END)
@@ -641,7 +636,6 @@ class NodeBlockSync(SyncAgent):
     def handle_get_peer_block_hashes(self, payload: str) -> None:
         """ Handle a GET-PEER-BLOCK-HASHES message.
         """
-        assert self.tx_storage.indexes is not None
         heights = json.loads(payload)
         if len(heights) > 20:
             self.log.info('too many heights', heights_qty=len(heights))
@@ -677,7 +671,7 @@ class NodeBlockSync(SyncAgent):
             end_hash=end_hash,
             quantity=quantity,
         )
-        self.send_message(ProtocolMessages.GET_NEXT_BLOCKS, payload.json())
+        self.send_message(ProtocolMessages.GET_NEXT_BLOCKS, payload.model_dump_json())
         self.receiving_stream = True
 
     def handle_get_next_blocks(self, payload: str) -> None:
@@ -687,7 +681,7 @@ class NodeBlockSync(SyncAgent):
         if self._is_streaming:
             self.protocol.send_error_and_close_connection('GET-NEXT-BLOCKS received before previous one finished')
             return
-        data = GetNextBlocksPayload.parse_raw(payload)
+        data = GetNextBlocksPayload.model_validate_json(payload)
         start_block = self._validate_block(data.start_hash)
         if start_block is None:
             return
@@ -848,12 +842,12 @@ class NodeBlockSync(SyncAgent):
             block=best_block.hash,
             height=best_block.static_metadata.height,
         )
-        self.send_message(ProtocolMessages.BEST_BLOCK, payload.json())
+        self.send_message(ProtocolMessages.BEST_BLOCK, payload.model_dump_json())
 
     def handle_best_block(self, payload: str) -> None:
         """ Handle a BEST-BLOCK message.
         """
-        data = BestBlockPayload.parse_raw(payload)
+        data = BestBlockPayload.model_validate_json(payload)
         best_block = _HeightInfo(height=data.height, id=data.block)
 
         deferred = self._deferred_best_block
@@ -927,7 +921,7 @@ class NodeBlockSync(SyncAgent):
             first_block_hash=first_block_hash,
             last_block_hash=last_block_hash,
         )
-        self.send_message(ProtocolMessages.GET_TRANSACTIONS_BFS, payload.json())
+        self.send_message(ProtocolMessages.GET_TRANSACTIONS_BFS, payload.model_dump_json())
         self.receiving_stream = True
 
     def handle_get_transactions_bfs(self, payload: str) -> None:
@@ -936,7 +930,7 @@ class NodeBlockSync(SyncAgent):
         if self._is_streaming:
             self.log.warn('ignore GET-TRANSACTIONS-BFS, already streaming')
             return
-        data = GetTransactionsBFSPayload.parse_raw(payload)
+        data = GetTransactionsBFSPayload.model_validate_json(payload)
 
         if len(data.start_from) > MAX_GET_TRANSACTIONS_BFS_LEN:
             self.log.error('too many transactions in GET-TRANSACTIONS-BFS', state=self.state)

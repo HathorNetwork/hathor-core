@@ -21,11 +21,20 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder
 class TestBfsRegression(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)  # for simplicity
+        settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})  # for simplicity
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
         builder = self.get_builder(settings).set_daa(daa)
         self.manager = self.create_peer_from_builder(builder)
         self.tx_storage = self.manager.tx_storage
+
+    def _assert_block_tie(self, x: Block, y: Block) -> None:
+        assert x.get_metadata().score == y.get_metadata().score
+        if x.hash < y.hash:
+            assert not x.get_metadata().voided_by
+            assert y.get_metadata().voided_by
+        else:
+            assert x.get_metadata().voided_by
+            assert not y.get_metadata().voided_by
 
     def test_bfs_regression(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
@@ -63,8 +72,7 @@ class TestBfsRegression(unittest.TestCase):
         # sanity check:
         assert not b3.get_metadata().validation.is_initial()
         assert not a3.get_metadata().validation.is_initial()
-        assert b3.get_metadata().voided_by
-        assert a3.get_metadata().voided_by
+        self._assert_block_tie(a3, b3)
         assert a4.get_metadata().validation.is_initial()
         assert tx1.get_metadata().validation.is_initial()
 
@@ -76,8 +84,7 @@ class TestBfsRegression(unittest.TestCase):
         assert not b3.get_metadata().validation.is_initial()
         assert not a3.get_metadata().validation.is_initial()
         assert not tx1.get_metadata().validation.is_initial()
-        assert b3.get_metadata().voided_by
-        assert a3.get_metadata().voided_by
+        self._assert_block_tie(a3, b3)
         assert not tx1.get_metadata().voided_by
         assert a4.get_metadata().validation.is_initial()
 

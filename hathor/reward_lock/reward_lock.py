@@ -58,17 +58,9 @@ def get_spent_reward_locked_info(
 
 def get_minimum_best_height(storage: VertexStorageProtocol) -> int:
     """Return the height of the current best block that shall be used for `min_height` verification."""
-    import math
-
-    # omitting timestamp to get the current best block, this will usually hit the cache instead of being slow
-    tips = storage.get_best_block_tips()
-    assert len(tips) > 0
-    best_height = math.inf
-    for tip in tips:
-        blk = storage.get_block(tip)
-        best_height = min(best_height, blk.get_height())
-    assert isinstance(best_height, int)
-    return best_height
+    # XXX: only use methods available in VertexStorageProtocol, otherwise TransactionStorage.get_height_best_block
+    # would give the same result but more efficiently by using a cache and an index
+    return storage.get_block(storage.get_best_block_hash()).get_height()
 
 
 def _spent_reward_needed_height(settings: HathorSettings, block: Block, best_height: int) -> int:

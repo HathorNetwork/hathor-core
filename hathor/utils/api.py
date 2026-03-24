@@ -12,10 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import cgi
-from typing import Type, TypeVar, Union
+from email.message import Message
+from typing import Literal, Type, TypeVar, Union
 
-from pydantic import Field, ValidationError
+from pydantic import ValidationError
 from twisted.web.http import Request
 
 from hathor.api_util import get_args
@@ -38,8 +38,11 @@ class QueryParams(BaseModel):
         encoding = 'utf8'
 
         if content_type_header := request.requestHeaders.getRawHeaders('content-type'):
-            _, options = cgi.parse_header(content_type_header[0])
-            encoding = options.get('charset', encoding)
+            m = Message()
+            m['content-type'] = content_type_header[0]
+            encoding_raw = m.get_param('charset', encoding)
+            assert isinstance(encoding_raw, str)
+            encoding = encoding_raw
 
         raw_args = get_args(request).items()
         args: dict[str, str | None | list[str]] = {}
@@ -55,7 +58,7 @@ class QueryParams(BaseModel):
                 args[decoded_key] = decoded_values
 
         try:
-            return cls.parse_obj(args)
+            return cls.model_validate(args)
         except ValidationError as error:
             return ErrorResponse(error=str(error))
 
@@ -65,5 +68,5 @@ class Response(BaseModel):
 
 
 class ErrorResponse(Response):
-    success: bool = Field(default=False, const=True)
+    success: Literal[False] = False
     error: str

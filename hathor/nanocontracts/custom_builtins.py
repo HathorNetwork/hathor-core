@@ -228,12 +228,13 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
         name: str,
         globals: Mapping[str, object] | None = None,
         locals: Mapping[str, object] | None = None,
-        fromlist: Sequence[str] = (),
+        fromlist: Sequence[str] | None = None,
         level: int = 0,
     ) -> types.ModuleType:
+        fromlist_: Sequence[str] = fromlist or ()
         if level != 0:
             raise ImportError('Relative imports are not allowed')
-        if not fromlist and name != 'typing':
+        if not fromlist_ and name != 'typing':
             # XXX: typing is allowed here because Foo[T] triggers a __import__('typing', fromlist=None) for some reason
             raise ImportError('Only `from ... import ...` imports are allowed')
         if name not in allowed_imports:
@@ -241,12 +242,12 @@ def _generate_restricted_import_function(allowed_imports: dict[str, dict[str, ob
 
         # Create a fake module class that will only be returned by this import call
         class FakeModule:
-            __slots__ = tuple(fromlist)
+            __slots__ = tuple(fromlist_)
 
         fake_module = FakeModule()
         allowed_fromlist = allowed_imports[name]
 
-        for import_what in fromlist:
+        for import_what in fromlist_:
             if import_what not in allowed_fromlist:
                 raise ImportError(f'Import from "{name}.{import_what}" is not allowed.')
 

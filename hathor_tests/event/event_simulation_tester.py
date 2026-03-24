@@ -34,10 +34,16 @@ class BaseEventSimulationTester(SimulatorTestCase):
 
     def _prepare(self, reward_spend_min_blocks: int) -> None:
         peer = PrivatePeer.auto_generated()
-        builder = self.simulator.get_default_builder() \
-            .set_peer(peer) \
-            .enable_event_queue() \
-            .set_settings(self._settings._replace(REWARD_SPEND_MIN_BLOCKS=reward_spend_min_blocks))
+        builder = (
+            self.simulator.get_default_builder()
+            .set_peer(peer)
+            .enable_event_queue()
+            .set_settings(
+                self._settings.model_copy(
+                    update={"REWARD_SPEND_MIN_BLOCKS": reward_spend_min_blocks}
+                )
+            )
+        )
         artifacts = self.simulator.create_artifacts(builder)
 
         self.peer_id: str = str(peer.id)
@@ -62,12 +68,12 @@ class BaseEventSimulationTester(SimulatorTestCase):
         )
 
     def _get_success_responses(self) -> list[EventResponse]:
-        return list(map(EventResponse.parse_obj, self._get_transport_messages()))
+        return list(map(EventResponse.model_validate, self._get_transport_messages()))
 
     def _get_error_response(self) -> InvalidRequestResponse:
         responses = self._get_transport_messages()
         assert len(responses) == 1
-        return InvalidRequestResponse.parse_obj(responses[0])
+        return InvalidRequestResponse.model_validate(responses[0])
 
     def _get_transport_messages(self) -> list[dict[str, Any]]:
         values = self.transport.value()

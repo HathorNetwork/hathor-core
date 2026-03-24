@@ -46,42 +46,6 @@ class SimulatorIndexesTestCase(SimulatorTestCase):
         self.manager = self._build_randomized_blockchain()
 
     @pytest.mark.flaky(max_runs=3, min_passes=1)
-    def test_tips_index_initialization(self):
-        # XXX: this test makes use of the internals of TipsIndex
-        tx_storage = self.manager.tx_storage
-        assert tx_storage.indexes is not None
-
-        # XXX: sanity check that we've at least produced something
-        self.assertGreater(tx_storage.get_vertices_count(), 3)
-
-        # base tips indexes
-        base_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        base_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        base_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
-
-        # reset the indexes, which will force a re-initialization of all indexes
-        tx_storage._manually_initialize()
-
-        reinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        reinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        reinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
-
-        self.assertEqual(reinit_all_tips_tree, base_all_tips_tree)
-        self.assertEqual(reinit_block_tips_tree, base_block_tips_tree)
-        self.assertEqual(reinit_tx_tips_tree, base_tx_tips_tree)
-
-        # reset again
-        tx_storage._manually_initialize()
-
-        newinit_all_tips_tree = tx_storage.indexes.all_tips.tree.copy()
-        newinit_block_tips_tree = tx_storage.indexes.block_tips.tree.copy()
-        newinit_tx_tips_tree = tx_storage.indexes.tx_tips.tree.copy()
-
-        self.assertEqual(newinit_all_tips_tree, base_all_tips_tree)
-        self.assertEqual(newinit_block_tips_tree, base_block_tips_tree)
-        self.assertEqual(newinit_tx_tips_tree, base_tx_tips_tree)
-
-    @pytest.mark.flaky(max_runs=3, min_passes=1)
     def test_topological_iterators(self):
         tx_storage = self.manager.tx_storage
 

@@ -1,4 +1,5 @@
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -10,6 +11,7 @@ from hathor.crypto.util import (
     get_address_from_public_key_bytes,
     get_public_key_bytes_compressed,
 )
+from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
@@ -39,6 +41,7 @@ from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT, MAX_NC_SCRIPT_SIZE
+from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
 
@@ -83,6 +86,8 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         self.genesis = self.peer.tx_storage.get_all_genesis()
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
+
+        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
 
     def _create_nc(
         self,
@@ -172,7 +177,7 @@ class NCNanoContractTestCase(unittest.TestCase):
     def test_verify_signature_success(self) -> None:
         nc = self._get_nc()
         nc.clear_sighash_cache()
-        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_nc_id(self) -> None:
         nc = self._get_nc()
@@ -180,7 +185,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_id = b'a' * 32
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_nc_method(self) -> None:
         nc = self._get_nc()
@@ -188,7 +193,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_method = 'other_nc_method'
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_nc_args_bytes(self) -> None:
         nc = self._get_nc()
@@ -196,7 +201,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_args_bytes = b'other_nc_args_bytes'
         nc.clear_sighash_cache()
         with self.assertRaises(NCInvalidSignature):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_invalid_nc_address(self) -> None:
         nc = self._get_nc()
@@ -204,7 +209,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_address = b'invalid-address'
         nc.clear_sighash_cache()
         with pytest.raises(NCInvalidSignature, match=f'invalid address: {nano_header.nc_address.hex()}'):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_invalid_nc_script(self) -> None:
         nc = self._get_nc()
@@ -212,7 +217,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = b'invalid-script'
         nc.clear_sighash_cache()
         with pytest.raises(InvalidScriptError, match='Invalid Opcode'):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_wrong_nc_address(self) -> None:
         key = KeyPair.create(b'xyz')
@@ -225,7 +230,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_address = get_address_from_public_key_bytes(pubkey_bytes)
         nc.clear_sighash_cache()
         with pytest.raises(NCInvalidSignature) as e:
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
         assert isinstance(e.value.__cause__, EqualVerifyFailed)
 
     def test_verify_signature_fails_wrong_pubkey(self) -> None:
@@ -244,7 +249,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = P2PKH.create_input_data(public_key_bytes=pubkey_bytes, signature=signature)
 
         # First, it's passing with the key from above
-        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
         # We change the script to use a new pubkey, but with the same signature
         key = KeyPair.create(b'wrong')
@@ -254,7 +259,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = P2PKH.create_input_data(public_key_bytes=pubkey_bytes, signature=signature)
 
         with pytest.raises(NCInvalidSignature) as e:
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
         assert isinstance(e.value.__cause__, EqualVerifyFailed)
 
     def test_verify_signature_fails_wrong_signature(self) -> None:
@@ -273,7 +278,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = P2PKH.create_input_data(public_key_bytes=pubkey_bytes, signature=signature)
 
         # First, it's passing with the key from above
-        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
         # We change the script to use a new signature, but with the same pubkey
         key = KeyPair.create(b'wrong')
@@ -282,7 +287,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = P2PKH.create_input_data(public_key_bytes=pubkey_bytes, signature=signature)
 
         with pytest.raises(NCInvalidSignature) as e:
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
         assert isinstance(e.value.__cause__, FinalStackInvalid)
         assert 'Stack left with False value' in e.value.__cause__.args[0]
 
@@ -292,7 +297,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = b'\x00' * (MAX_NC_SCRIPT_SIZE + 1)
 
         with pytest.raises(NCInvalidSignature, match='nc_script larger than max: 1025 > 1024'):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_fails_nc_script_too_many_sigops(self) -> None:
         nc = self._get_nc()
@@ -305,7 +310,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         nano_header.nc_script = script.data
 
         with pytest.raises(TooManySigOps, match='sigops count greater than max: 21 > 20'):
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
     def test_verify_signature_multisig(self) -> None:
         nc = self._get_nc()
@@ -332,7 +337,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             sign_privkeys=[keys[0][0]],
         )
         with pytest.raises(NCInvalidSignature) as e:
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
         assert isinstance(e.value.__cause__, MissingStackItems)
         assert e.value.__cause__.args[0] == 'OP_CHECKMULTISIG: not enough signatures on the stack'
 
@@ -345,7 +350,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             sign_privkeys=[KeyPair.create(b'invalid').get_private_key(b'invalid')],
         )
         with pytest.raises(NCInvalidSignature) as e:
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
         assert isinstance(e.value.__cause__, FinalStackInvalid)
         assert 'Stack left with False value' in e.value.__cause__.args[0]
 
@@ -357,13 +362,13 @@ class NCNanoContractTestCase(unittest.TestCase):
             redeem_pubkey_bytes=redeem_pubkey_bytes,
             sign_privkeys=[x[0] for x in keys[:2]],
         )
-        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+        self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
 
         # Test fails because the address was changed
         nc.clear_sighash_cache()
         nano_header.nc_address = decode_address(self.peer.wallet.get_unused_address())
         with pytest.raises(NCInvalidSignature) as e:
-            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc)
+            self.peer.verification_service.verifiers.nano_header.verify_nc_signature(nc, self.verification_params)
         assert isinstance(e.value.__cause__, EqualVerifyFailed)
 
     def test_get_related_addresses(self) -> None:

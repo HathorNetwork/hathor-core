@@ -13,21 +13,15 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from enum import IntEnum
 from typing import TYPE_CHECKING, Any
 
 from hathor.types import TokenUid
+from hathorlib.token_info import TokenDescription, TokenVersion  # noqa: F401
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCBlockStorage
     from hathor.transaction.storage import TransactionStorage
-
-
-class TokenVersion(IntEnum):
-    NATIVE = 0
-    DEPOSIT = 1
-    FEE = 2
 
 
 # used when (de)serializing token information
@@ -55,17 +49,6 @@ class TokenInfo:
         A token is considered minted if its amount is positive.
         """
         return self.amount > 0
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class TokenDescription:
-    token_id: bytes
-    token_name: str
-    token_symbol: str
-    token_version: TokenVersion
-
-    def __post_init__(self) -> None:
-        assert isinstance(self.token_version, TokenVersion)
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):

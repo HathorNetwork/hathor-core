@@ -28,7 +28,7 @@ class GenerateTxParentsTestCase(unittest.TestCase):
     def test_two_unconfirmed_genesis(self) -> None:
         parent_txs = self.manager.generate_parent_txs(timestamp=None)
         assert parent_txs.must_include == ()
-        assert parent_txs.can_include == [self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH]
+        assert set(parent_txs.can_include) == {self._settings.GENESIS_TX1_HASH, self._settings.GENESIS_TX2_HASH}
 
     def test_two_unconfirmed_txs(self) -> None:
         artifacts = self.dag_builder.build_from_str('''
@@ -43,8 +43,8 @@ class GenerateTxParentsTestCase(unittest.TestCase):
         assert tx1.get_metadata().first_block is None
 
         parent_txs = self.manager.generate_parent_txs(timestamp=None)
-        assert parent_txs.must_include == ()
-        assert parent_txs.can_include == [dummy.hash, tx1.hash]
+        assert parent_txs.must_include == (tx1.hash,)
+        assert parent_txs.can_include == [dummy.hash]
 
     def test_zero_unconfirmed_two_confirmed(self) -> None:
         artifacts = self.dag_builder.build_from_str('''
@@ -80,8 +80,8 @@ class GenerateTxParentsTestCase(unittest.TestCase):
         assert tx1.get_metadata().first_block == b11.hash
 
         parent_txs = self.manager.generate_parent_txs(timestamp=None)
-        assert parent_txs.must_include == (tx1.hash,)
-        assert set(parent_txs.can_include) == {dummy.hash, self._settings.GENESIS_TX1_HASH}
+        assert parent_txs.must_include == ()
+        assert parent_txs.can_include == [dummy.hash, tx1.hash]
 
     def test_one_unconfirmed_one_confirmed(self) -> None:
         artifacts = self.dag_builder.build_from_str('''
@@ -118,7 +118,7 @@ class GenerateTxParentsTestCase(unittest.TestCase):
 
         parent_txs = self.manager.generate_parent_txs(timestamp=None)
         assert parent_txs.must_include == (tx1.hash,)
-        assert set(parent_txs.can_include) == {dummy.hash, self._settings.GENESIS_TX1_HASH}
+        assert parent_txs.can_include == [dummy.hash]
 
     def test_some_confirmed_txs(self) -> None:
         artifacts = self.dag_builder.build_from_str('''
@@ -146,4 +146,4 @@ class GenerateTxParentsTestCase(unittest.TestCase):
 
         parent_txs = self.manager.generate_parent_txs(timestamp=None)
         assert parent_txs.must_include == (tx1.hash,)
-        assert parent_txs.can_include == [tx2.hash, tx5.hash]
+        assert parent_txs.can_include == [tx5.hash]

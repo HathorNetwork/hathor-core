@@ -19,12 +19,12 @@ from io import TextIOWrapper
 
 
 def main() -> None:
-    from hathor_cli.util import create_parser
-    from hathor.conf import NANO_TESTNET_SETTINGS_FILEPATH
     from hathor.conf.get_settings import get_global_settings
     from hathor.nanocontracts import OnChainBlueprint
     from hathor.nanocontracts.on_chain_blueprint import Code
     from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
+    from hathor_cli.util import create_parser
+    from hathorlib.conf import NANO_TESTNET_SETTINGS_FILEPATH
 
     os.environ['HATHOR_CONFIG_YAML'] = NANO_TESTNET_SETTINGS_FILEPATH
 

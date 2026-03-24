@@ -165,6 +165,7 @@ class TransactionTest(unittest.TestCase):
         assert tx_address not in balance_per_address
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
         self.assertTrue(self.manager.on_new_tx(tx))
+        self.clock.advance(1)
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
         assert balance_per_address[tx_address] == 6400
 
@@ -182,7 +183,7 @@ class TransactionTest(unittest.TestCase):
             self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
 
         # the transaction should have been removed from the mempool
-        self.assertNotIn(tx, self.manager.tx_storage.iter_mempool_from_best_index())
+        self.assertNotIn(tx, self.manager.tx_storage.iter_mempool())
 
         # additionally the transaction should have been marked as invalid and removed from the storage after the re-org
         self.assertTrue(tx.get_metadata().validation.is_invalid())
@@ -269,6 +270,6 @@ class TransactionTest(unittest.TestCase):
         assert tx1.get_metadata().validation.is_invalid()
         assert tx1.get_metadata().voided_by == {self._settings.PARTIALLY_VALIDATED_ID}
 
-        assert tx1 not in manager.tx_storage.iter_mempool_from_best_index()
+        assert tx1 not in manager.tx_storage.iter_mempool()
         assert not manager.tx_storage.transaction_exists(tx1.hash)
         assert not manager.tx_storage.transaction_exists(b12.hash)
