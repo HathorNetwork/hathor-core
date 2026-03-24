@@ -208,7 +208,7 @@ class NCBlockExecutor:
         nc_cyclic_txs = sorted_txs.cyclic if sorted_txs else tuple()
         block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)
         assert block_storage.get_root_id() == parent_root_id
-        features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
+        features = Features.for_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
 
         yield NCBeginBlock(
             block=block,

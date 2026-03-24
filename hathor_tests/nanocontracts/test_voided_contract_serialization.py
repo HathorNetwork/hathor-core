@@ -65,7 +65,7 @@ class VoidedContractSerializationTest(BlueprintTestCase):
         assert call_meta.voided_by is None
 
         # now manually add b12 as if it was received from the network
-        assert self.manager.vertex_handler.on_new_block(b12, deps=[])
+        assert self.manager.vertex_handler.on_new_sync_block(b12, deps=[])
 
         call_meta = call_tx.get_metadata()
         assert call_meta.first_block == b12.hash

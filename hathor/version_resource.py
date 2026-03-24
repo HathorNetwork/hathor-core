@@ -113,7 +113,7 @@ class VersionResource(Resource):
             :rtype: string (json)
         """
         best_block = self.manager.tx_storage.get_best_block()
-        features = Features.from_vertex(
+        features = Features.for_vertex(
             settings=self._settings, vertex=best_block, feature_service=self.feature_service
         )
         nano_contracts_enabled = features.nanocontracts

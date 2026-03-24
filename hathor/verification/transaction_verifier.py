@@ -363,11 +363,8 @@ class TransactionVerifier:
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
 
-    def verify_tokens(self, tx: Transaction, params: VerificationParams) -> None:
+    def verify_tokens(self, tx: Transaction) -> None:
         """Verify that all tokens are used and unique."""
-        if not params.harden_token_restrictions:
-            return
-
         if len(tx.tokens) > MAX_TOKENS_LENGTH:
             raise TooManyTokens('too many tokens')
 
@@ -387,12 +384,9 @@ class TransactionVerifier:
         if sorted(seen_token_indexes) != list(range(1, len(tx.tokens) + 1)):
             raise UnusedTokensError('unused tokens are not allowed')
 
-    def verify_conflict(self, tx: Transaction, params: VerificationParams) -> None:
+    def verify_conflict(self, tx: Transaction) -> None:
         """Verify that this transaction has no conflicts with confirmed transactions."""
         assert tx.storage is not None
-
-        if not params.reject_conflicts_with_confirmed_txs:
-            return
 
         between_counter = 0
         for txin in tx.inputs:
