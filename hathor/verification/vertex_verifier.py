@@ -252,11 +252,8 @@ class VertexVerifier:
                 )
             seen_header_types.add(type(header))
 
-    def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
+    def verify_old_timestamp(self, vertex: BaseTransaction) -> None:
         """Verify that the timestamp is not too old. Mempool only."""
-        if not params.reject_too_old_vertices:
-            return
-
         now = self._reactor.seconds()
         t_diff = now - vertex.timestamp
         if t_diff > MAX_PAST_TIMESTAMP_ALLOWED:

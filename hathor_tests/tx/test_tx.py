@@ -70,7 +70,7 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
+        self.verification_params = VerificationParams.for_apis(self.manager.tx_storage)
 
     def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]

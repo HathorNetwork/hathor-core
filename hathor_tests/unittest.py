@@ -531,5 +531,4 @@ class TestCase(unittest.TestCase):
 
     @staticmethod
     def get_verification_params(manager: HathorManager | None = None) -> VerificationParams:
-        best_block = manager.tx_storage.get_best_block() if manager else None
-        return VerificationParams.for_mempool(best_block=best_block or Mock(), features=Features.all_enabled())
+        return VerificationParams.for_apis(manager.tx_storage if manager else Mock())

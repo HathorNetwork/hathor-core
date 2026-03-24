@@ -87,7 +87,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.genesis = self.peer.tx_storage.get_all_genesis()
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
+        self.verification_params = VerificationParams.for_apis(self.peer.tx_storage)
 
     def _create_nc(
         self,

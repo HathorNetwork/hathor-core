@@ -215,8 +215,7 @@ class SendTokensResource(Resource):
     def _stratum_thread_verify(self, context: _Context) -> _Context:
         """ Method to verify the transaction that runs in a separated thread
         """
-        best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
+        params = VerificationParams.for_apis(self.manager.tx_storage)
         self.manager.verification_service.verify(context.tx, params)
         return context
 

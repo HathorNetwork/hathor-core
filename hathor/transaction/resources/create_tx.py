@@ -119,7 +119,7 @@ class CreateTxResource(Resource):
         verifiers.vertex.verify_sigops_output(tx, enable_checkdatasig_count=True)
         verifiers.tx.verify_sigops_input(tx, enable_checkdatasig_count=True)
         best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
+        params = VerificationParams.for_apis(self.manager.tx_storage)
         # need to run verify_inputs first to check if all inputs exist
         verifiers.tx.verify_inputs(tx, params, skip_script=True)
         verifiers.vertex.verify_parents(tx)

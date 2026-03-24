@@ -117,11 +117,7 @@ class TestActions(unittest.TestCase):
             ['tx0', 'tx1', 'tx2', 'TKA'],
             Transaction,
         )
-        best_block = self.manager.tx_storage.get_best_block()
-        self.verification_params = VerificationParams.for_mempool(
-            best_block=best_block,
-            features=Features.all_enabled()
-        )
+        self.verification_params = VerificationParams.for_apis(self.manager.tx_storage)
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.
         self.tx1.storage = self.manager.tx_storage
@@ -840,9 +836,8 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=2, amount=1),
         ])
 
-        params = dataclasses.replace(self.verification_params, harden_token_restrictions=False)
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verify(self.tx1, params)
+            self.manager.verification_service.verify(self.tx1, self.verification_params)
         assert str(e.value) == 'DEPOSIT token index 2 not found'
 
     def test_token_uid_not_in_list(self) -> None:
