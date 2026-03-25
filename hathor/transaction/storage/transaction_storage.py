@@ -53,6 +53,7 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.vertex_children import VertexChildrenService
 from hathor.types import VertexId
+from hathorlib.token_info import TokenDescription
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -574,6 +575,27 @@ class TransactionStorage(ABC):
         if not isinstance(tx, TokenCreationTransaction):
             raise TokenCreationTransactionDoesNotExist(hash_bytes)
         return tx
+
+    def get_token_description(self, token_uid: bytes) -> Optional[TokenDescription]:
+        """Get the confirmed token description for `token_uid`.
+
+        :param token_uid: Unique token id to fetch.
+        :raises TransactionDoesNotExist: If the transaction with the given hash does not exist.
+        :raises TokenCreationTransactionDoesNotExist: If the transaction exists but is not a TokenCreationTransaction.
+        :return: The TokenCreationTransaction instance.
+        """
+        # Check the transaction storage for existing tokens
+        token_creation_tx = self.get_token_creation_transaction(token_uid)
+
+        if token_creation_tx.get_metadata().first_block is None:
+            return None
+
+        return TokenDescription(
+            token_version=token_creation_tx.token_version,
+            token_name=token_creation_tx.token_name,
+            token_symbol=token_creation_tx.token_symbol,
+            token_id=token_creation_tx.hash
+        )
 
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""

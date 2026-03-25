@@ -16,10 +16,11 @@ from hathor.nanocontracts.utils import sign_pycoin
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.headers.nano_header import NanoHeader, NanoHeaderAction
-from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
+from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
 
 
 class TestRunner:
@@ -33,7 +34,7 @@ class TestRunner:
         self,
         *,
         runtime_version: NanoRuntimeVersion,
-        tx_storage: TransactionStorage,
+        tx_storage: NCTransactionStorageProtocol,
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
