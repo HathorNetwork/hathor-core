@@ -17,7 +17,7 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import NCViewMethodError
-from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathor.nanocontracts.types import Address, Amount, BlueprintId, ContractId, TokenUid, VertexId
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -113,6 +113,10 @@ class DirectSyscalls(Blueprint):
     @view
     def get_settings(self) -> None:
         self.syscall.get_settings()
+
+    @view
+    def transfer_to_address(self) -> None:
+        self.syscall.transfer_to_address(Address(b''), amount=Amount(0), token=TokenUid(b''))
 
 
 class IndirectSyscalls(Blueprint):

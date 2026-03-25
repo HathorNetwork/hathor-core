@@ -52,3 +52,8 @@ class VerificationParams:
             harden_nano_restrictions=True,
             reject_conflicts_with_confirmed_txs=True,
         )
+
+    @classmethod
+    def default_for_mempool(cls, *, best_block: Block) -> VerificationParams:
+        """Build mempool verification params with every feature enabled."""
+        return cls.for_mempool(best_block=best_block, features=Features.all_enabled())

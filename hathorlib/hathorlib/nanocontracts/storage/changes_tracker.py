@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import itertools
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
@@ -31,7 +32,7 @@ from hathorlib.nanocontracts.storage.contract_storage import (
     NCContractStorage,
 )
 from hathorlib.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathorlib.nanocontracts.types import BlueprintId, ContractId, TokenUid
+from hathorlib.nanocontracts.types import Address, Amount, BlueprintId, ContractId, TokenUid
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 T = TypeVar('T')
@@ -81,6 +82,7 @@ class NCChangesTracker(NCContractStorage):
         self._balance_diff: dict[BalanceKey, int] = {}
         self._authorities_diff: dict[BalanceKey, _NCAuthorityDiff] = {}
         self._created_tokens: dict[TokenUid, TokenDescription] = {}
+        self._transfers: defaultdict[tuple[Address, TokenUid], int] = defaultdict(int)
         self._blueprint_id: BlueprintId | None = None
 
         self.has_been_commited = False
@@ -116,6 +118,16 @@ class NCChangesTracker(NCContractStorage):
         if token_description is not None:
             return token_description
         return self.storage.get_token(token_id)
+
+    def add_address_balance(
+        self,
+        address: Address,
+        amount: Amount,
+        token_id: TokenUid,
+    ) -> None:
+        self.check_if_locked()
+        assert amount >= 0
+        self._transfers[(address, token_id)] += amount
 
     def get_balance_diff(self) -> MappingProxyType[BalanceKey, int]:
         """Return the balance diff of this change tracker."""
@@ -208,6 +220,9 @@ class NCChangesTracker(NCContractStorage):
                 token_version=TokenVersion(td.token_version)
             )
 
+        for (address, token_id), amount in self._transfers.items():
+            self.storage.add_address_balance(address, Amount(amount), token_id)
+
         if self._blueprint_id is not None:
             self.storage.set_blueprint_id(self._blueprint_id)
 
@@ -287,6 +302,7 @@ class NCChangesTracker(NCContractStorage):
         assert not bool(self._balance_diff)
         assert not bool(self._authorities_diff)
         assert not bool(self._created_tokens)
+        assert not bool(self._transfers)
         assert not bool(self._blueprint_id)
         return not bool(self.data)
 
