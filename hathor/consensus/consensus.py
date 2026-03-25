@@ -457,8 +457,8 @@ class ConsensusAlgorithm:
                 case Feature.OPCODES_V2:
                     if not self._opcodes_v2_activation_rule(tx):
                         return False
-                case Feature.NANO_RUNTIME_V2:
-                    # This feature does not affect verification, only the Nano runtime.
+                case Feature.NANO_RUNTIME_V2 | Feature.BLUEPRINT_V2:
+                    # These features do not affect verification, only the Nano execution runtime.
                     pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH

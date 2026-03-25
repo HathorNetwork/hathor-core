@@ -39,3 +39,4 @@ class Feature(StrEnum):
     OPCODES_V2 = 'OPCODES_V2'
 
     NANO_RUNTIME_V2 = 'NANO_RUNTIME_V2'
+    BLUEPRINT_V2 = 'BLUEPRINT_V2'
