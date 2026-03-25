@@ -34,10 +34,13 @@ from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @fallback(allow_deposit=True)
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         assert method_name == 'unknown'
         match nc_args:
             case NCRawArgs():
@@ -63,6 +66,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def call_another_fallback(self, ctx: Context, contract_id: ContractId) -> str:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         return self.syscall.get_contract(contract_id, blueprint_id=None).public().fallback()
 
     @public

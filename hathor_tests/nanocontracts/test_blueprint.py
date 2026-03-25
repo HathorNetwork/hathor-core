@@ -65,7 +65,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def fail(self, ctx: Context) -> None:
