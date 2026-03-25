@@ -93,10 +93,10 @@ from hathor.nanocontracts.utils import (
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import InvalidFeeAmount
-from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor.transaction.util import clean_token_string, validate_fee_amount, validate_token_name_and_symbol
+from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -122,13 +122,15 @@ class Runner:
     MAX_RECURSION_DEPTH: int = 100
     MAX_CALL_COUNTER: int = 250
 
+    _runtime_version: NanoRuntimeVersion
+
     def __init__(
         self,
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
-        tx_storage: TransactionStorage,
+        tx_storage: NCTransactionStorageProtocol,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
@@ -1314,26 +1316,18 @@ class Runner:
                 token_id=HATHOR_TOKEN_UID  # HTR token ID is the same as its UID
             )
 
-        # Check the transaction storage for existing tokens
         try:
-            token_creation_tx = self.tx_storage.get_token_creation_transaction(token_uid)
+            token_description = self.tx_storage.get_token_description(token_uid)
+            if token_description is None:
+                raise NCInvalidSyscall(
+                    f'The {token_uid.hex()} token is not confirmed by any block '
+                    f'for contract {call_record.contract_id.hex()}'
+                )
+            return token_description
         except TransactionDoesNotExist:
             raise NCInvalidSyscall(
                 f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
             )
-
-        if token_creation_tx.get_metadata().first_block is None:
-            raise NCInvalidSyscall(
-                f'The {token_uid.hex()} token is not confirmed by any block '
-                f'for contract {call_record.contract_id.hex()}'
-            )
-
-        return TokenDescription(
-            token_version=token_creation_tx.token_version,
-            token_name=token_creation_tx.token_name,
-            token_symbol=token_creation_tx.token_symbol,
-            token_id=token_creation_tx.hash
-        )
 
     def _create_token(
         self,
@@ -1461,7 +1455,7 @@ class RunnerFactory:
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
-        tx_storage: TransactionStorage,
+        tx_storage: NCTransactionStorageProtocol,
         nc_storage_factory: NCStorageFactory,
     ) -> None:
         self.reactor = reactor
