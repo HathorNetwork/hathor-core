@@ -30,6 +30,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, token_uid: TokenUid) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.token_uid = token_uid
 
     def assert_balance(self, token_uid: TokenUid, *, before: int, current: int) -> None:
@@ -44,16 +46,22 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def deposit(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_htr_balance(before=10, current=10)
         self.assert_token_balance(before=0, current=10)
 
     @public(allow_withdrawal=True)
     def withdrawal(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_htr_balance(before=10, current=10)
         self.assert_token_balance(before=10, current=7)
 
     @public(allow_grant_authority=True)
     def mint(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_htr_balance(before=10, current=10)
         self.assert_token_balance(before=0, current=0)
         self.syscall.mint_tokens(self.token_uid, amount=300)
@@ -68,6 +76,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_grant_authority=True)
     def melt(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_htr_balance(before=7, current=7)
         self.assert_token_balance(before=300, current=300)
         self.syscall.melt_tokens(self.token_uid, amount=200)
@@ -82,6 +92,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def deposit_into_another(self, ctx: Context, contract_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_token_balance(before=0, current=10)
         action = NCDepositAction(token_uid=self.token_uid, amount=7)
         self.syscall \
@@ -92,6 +104,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def accept_deposit_from_another(self, ctx: Context, contract_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_token_balance(before=0, current=7)
         action = NCDepositAction(token_uid=self.token_uid, amount=3)
         self.syscall.get_contract(contract_id, blueprint_id=None).public(action).accept_deposit_from_another_callback()
@@ -99,10 +113,14 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_reentrancy=True)
     def accept_deposit_from_another_callback(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_token_balance(before=3, current=6)
 
     @public(allow_withdrawal=True)
     def withdraw_from_another(self, ctx: Context, contract_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_token_balance(before=6, current=5)
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=2)
         self.syscall.get_contract(contract_id, blueprint_id=None).public(action).accept_withdrawal_from_another(
@@ -112,6 +130,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True)
     def accept_withdrawal_from_another(self, ctx: Context, contract_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_token_balance(before=4, current=2)
         action = NCWithdrawalAction(token_uid=self.token_uid, amount=1)
         self.syscall.get_contract(contract_id, blueprint_id=None) \
@@ -121,6 +141,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True, allow_reentrancy=True)
     def accept_withdrawal_from_another_callback(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.assert_token_balance(before=7, current=6)
 
 

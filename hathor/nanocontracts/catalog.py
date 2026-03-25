@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.blueprint import Blueprint
 
 
+_DEFAULT_BLUEPRINT_VERSION: BlueprintVersion = BlueprintVersion.V2
 _BLUEPRINTS_MAPPER: dict[str, type[Blueprint]] = {}
 
 
@@ -46,13 +47,13 @@ class NCBlueprintCatalog:
         blueprints: dict[bytes, type[Blueprint]],
         *,
         strict: bool = False,
-        blueprint_version: BlueprintVersion = BlueprintVersion.V2,
+        blueprint_version: BlueprintVersion | None = None,
     ) -> None:
         """Register blueprints in the catalog."""
         for blueprint_id, blueprint in blueprints.items():
             if strict and (existing := self._blueprints.get(blueprint_id)):
                 raise ValueError(f'Blueprint {blueprint_id.hex()} is already registered: {existing[0].__name__}')
-            self._blueprints[blueprint_id] = blueprint, blueprint_version
+            self._blueprints[blueprint_id] = blueprint, blueprint_version or _DEFAULT_BLUEPRINT_VERSION
 
     def get_all(self) -> dict[bytes, type[Blueprint]]:
         """Return a copy of all registered blueprints."""

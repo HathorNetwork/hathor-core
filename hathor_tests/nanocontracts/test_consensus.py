@@ -8,7 +8,7 @@ from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.types import NCAction, NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
+from hathor.nanocontracts.types import NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import sign_pycoin
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.simulator.utils import add_new_blocks
@@ -39,16 +39,6 @@ class MyBlueprint(Blueprint):
         self.counter = 0
         self.token_uid = token_uid
 
-    def _get_action(self, ctx: Context) -> NCAction:
-        if len(ctx.actions) != 1:
-            raise NCFail('only one token allowed')
-        if self.token_uid not in ctx.actions:
-            raise NCFail('invalid token')
-        action = ctx.get_single_action(self.token_uid)
-        if action.token_uid != self.token_uid:
-            raise NCFail('invalid token')
-        return action
-
     @public
     def nop(self, ctx: Context, a: int) -> None:
         self.counter += 1
@@ -56,14 +46,16 @@ class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def deposit(self, ctx: Context) -> None:
         self.counter += 1
-        action = self._get_action(ctx)
+        action = ctx.get_single_action(self.token_uid)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         self.total += action.amount
 
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
         self.counter += 1
-        action = self._get_action(ctx)
+        action = ctx.get_single_action(self.token_uid)
+        ctx.authorize(action)
         assert isinstance(action, NCWithdrawalAction)
         self.total -= action.amount
 

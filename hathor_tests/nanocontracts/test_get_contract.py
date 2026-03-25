@@ -34,6 +34,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True)
     def address_subtract(self, ctx: Context, address: Address, amount: Amount) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter += 1
         if self.totals[address] < amount:
             raise NCFail('cannot subtract')
