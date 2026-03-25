@@ -25,6 +25,7 @@ from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.balance_rules import BalanceRules
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
@@ -131,11 +132,13 @@ class Runner:
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
         tx_storage: NCTransactionStorageProtocol,
+        blueprint_service: BlueprintService,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
     ) -> None:
         self.tx_storage = tx_storage
+        self.blueprint_service = blueprint_service
         self.storage_factory = storage_factory
         self.block_storage = block_storage
         self._storages: dict[ContractId, NCContractStorage] = {}
@@ -1145,7 +1148,7 @@ class Runner:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_deposit_token')
@@ -1272,7 +1275,7 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.tx_storage.get_blueprint_class(blueprint_id)
+        self.blueprint_service.get_blueprint_class(blueprint_id)
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
@@ -1448,7 +1451,7 @@ class Runner:
 
 
 class RunnerFactory:
-    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory')
+    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory', 'blueprint_service')
 
     def __init__(
         self,
@@ -1457,11 +1460,13 @@ class RunnerFactory:
         settings: HathorSettings,
         tx_storage: NCTransactionStorageProtocol,
         nc_storage_factory: NCStorageFactory,
+        blueprint_service: BlueprintService,
     ) -> None:
         self.reactor = reactor
         self.settings = settings
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
+        self.blueprint_service = blueprint_service
 
     def create(
         self,
@@ -1476,6 +1481,7 @@ class RunnerFactory:
             runtime_version=runtime_version,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
+            blueprint_service=self.blueprint_service,
             block_storage=block_storage,
             seed=seed,
         )

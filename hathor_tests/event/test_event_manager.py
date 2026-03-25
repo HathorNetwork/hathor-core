@@ -2,7 +2,6 @@ from hathor.event.model.event_data import TokenCreatedData
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventRocksDBStorage
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.types import ContractId
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.pubsub import HathorEvents
@@ -112,9 +111,7 @@ class EventManagerTest(unittest.TestCase):
 
     def test_nc_token_creation_event(self) -> None:
         blueprint_id = b'\x01' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            blueprint_id: _TokenFactoryBlueprint,
-        })
+        self.manager.blueprint_service.register_blueprint(blueprint_id, _TokenFactoryBlueprint)
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
@@ -195,9 +192,7 @@ class EventManagerTest(unittest.TestCase):
 
     def test_nc_token_creation_event_not_emitted_twice(self) -> None:
         blueprint_id = b'\x01' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            blueprint_id: _TokenFactoryBlueprint,
-        })
+        self.manager.blueprint_service.register_blueprint(blueprint_id, _TokenFactoryBlueprint)
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''

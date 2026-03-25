@@ -35,7 +35,7 @@ from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
@@ -110,7 +110,7 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [Reactor, HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService, TransactionStorage],
+    [Reactor, HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService, TransactionStorage, BlueprintService],
     VertexVerifiers
 ]
 
@@ -199,6 +199,7 @@ class Builder:
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
         self._vertex_json_serializer: VertexJsonSerializer | None = None
+        self._blueprint_service: BlueprintService | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -233,9 +234,7 @@ class Builder:
         poa_block_producer = self._get_or_create_poa_block_producer()
         runner_factory = self._get_or_create_runner_factory()
         vertex_json_serializer = self._get_or_create_vertex_json_serializer()
-
-        if settings.ENABLE_NANO_CONTRACTS:
-            tx_storage.nc_catalog = self._get_nc_catalog()
+        blueprint_service = self._get_or_create_blueprint_service()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -279,6 +278,7 @@ class Builder:
             runner_factory=runner_factory,
             feature_service=feature_service,
             vertex_json_serializer=vertex_json_serializer,
+            blueprint_service=blueprint_service,
             **kwargs
         )
 
@@ -426,11 +426,6 @@ class Builder:
 
         return self._consensus
 
-    def _get_nc_catalog(self) -> NCBlueprintCatalog:
-        from hathor.nanocontracts.catalog import generate_catalog_from_settings
-        settings = self._get_or_create_settings()
-        return generate_catalog_from_settings(settings)
-
     def _get_or_create_runner_factory(self) -> RunnerFactory:
         if self._runner_factory is None:
             self._runner_factory = RunnerFactory(
@@ -438,6 +433,7 @@ class Builder:
                 settings=self._get_or_create_settings(),
                 tx_storage=self._get_or_create_tx_storage(),
                 nc_storage_factory=self._get_or_create_nc_storage_factory(),
+                blueprint_service=self._get_or_create_blueprint_service(),
             )
         return self._runner_factory
 
@@ -611,6 +607,7 @@ class Builder:
             feature_service = self._get_or_create_feature_service()
             daa = self._get_or_create_daa()
             tx_storage = self._get_or_create_tx_storage()
+            blueprint_service = self._get_or_create_blueprint_service()
 
             if self._vertex_verifiers_builder:
                 self._vertex_verifiers = self._vertex_verifiers_builder(
@@ -618,7 +615,8 @@ class Builder:
                     settings,
                     daa,
                     feature_service,
-                    tx_storage
+                    tx_storage,
+                    blueprint_service,
                 )
             else:
                 self._vertex_verifiers = VertexVerifiers.create_defaults(
@@ -627,6 +625,7 @@ class Builder:
                     daa=daa,
                     feature_service=feature_service,
                     tx_storage=tx_storage,
+                    blueprint_service=blueprint_service,
                 )
 
         return self._vertex_verifiers
@@ -684,12 +683,24 @@ class Builder:
         if self._vertex_json_serializer is None:
             tx_storage = self._get_or_create_tx_storage()
             nc_log_storage = self._get_or_create_nc_log_storage()
+            blueprint_service = self._get_or_create_blueprint_service()
             self._vertex_json_serializer = VertexJsonSerializer(
                 storage=tx_storage,
                 nc_log_storage=nc_log_storage,
+                blueprint_service=blueprint_service,
             )
 
         return self._vertex_json_serializer
+
+    def _get_or_create_blueprint_service(self) -> BlueprintService:
+        if self._blueprint_service is None:
+            self._blueprint_service = BlueprintService(
+                settings=self._get_or_create_settings(),
+                tx_storage=self._get_or_create_tx_storage(),
+                feature_service=self._get_or_create_feature_service(),
+            )
+
+        return self._blueprint_service
 
     def set_rocksdb_path(self, path: str | tempfile.TemporaryDirectory) -> 'Builder':
         if self._tx_storage:
