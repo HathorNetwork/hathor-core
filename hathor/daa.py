@@ -33,6 +33,7 @@ from hathor.util import iwindows
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.feature_activation.feature_service import FeatureService
     from hathor.transaction import Block, Transaction
 
 logger = get_logger()
@@ -52,12 +53,40 @@ class DifficultyAdjustmentAlgorithm:
     # TODO: This singleton is temporary, and only used in Peer. It should be removed from there, and then from here.
     singleton: ClassVar[Optional['DifficultyAdjustmentAlgorithm']] = None
 
-    def __init__(self, *, settings: HathorSettings, test_mode: TestMode = TestMode.DISABLED) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        feature_service: 'FeatureService | None' = None,
+        test_mode: TestMode = TestMode.DISABLED,
+    ) -> None:
         self._settings = settings
+        self._feature_service = feature_service
         self.AVG_TIME_BETWEEN_BLOCKS = self._settings.AVG_TIME_BETWEEN_BLOCKS
         self.MIN_BLOCK_WEIGHT = self._settings.MIN_BLOCK_WEIGHT
         self.TEST_MODE = test_mode
         DifficultyAdjustmentAlgorithm.singleton = self
+
+    def _is_reduce_daa_active(self, block: 'Block') -> bool:
+        """For verification: check if feature is active for a given block."""
+        if self._feature_service is None:
+            return False
+        from hathor.feature_activation.feature import Feature
+        return self._feature_service.is_feature_active(vertex=block, feature=Feature.REDUCE_DAA_TARGET)
+
+    def _is_reduce_daa_active_for_next(self, parent_block: 'Block') -> bool:
+        """For template creation: predict if feature will be active for next block."""
+        if self._feature_service is None:
+            return False
+        from hathor.feature_activation.feature import Feature
+        return self._feature_service.is_feature_active_for_next_block(
+            parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
+        )
+
+    def _get_effective_avg_time(self, reduce_active: bool) -> float:
+        if reduce_active:
+            return self._settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X / 10
+        return self._settings.AVG_TIME_BETWEEN_BLOCKS
 
     @cpu.profiler(key=lambda _, block: 'calculate_block_difficulty!{}'.format(block.hash.hex()))
     def calculate_block_difficulty(self, block: 'Block', parent_block_getter: Callable[['Block'], 'Block']) -> float:
@@ -68,8 +97,10 @@ class DifficultyAdjustmentAlgorithm:
         if block.is_genesis:
             return self.MIN_BLOCK_WEIGHT
 
+        reduce_active = self._is_reduce_daa_active(block)
+        avg_time = self._get_effective_avg_time(reduce_active)
         parent_block = parent_block_getter(block)
-        return self.calculate_next_weight(parent_block, block.timestamp, parent_block_getter)
+        return self._calculate_next_weight(parent_block, block.timestamp, parent_block_getter, avg_time=avg_time)
 
     def _calculate_N(self, parent_block: 'Block') -> int:
         """Calculate the N value for the `calculate_next_weight` algorithm."""
@@ -97,6 +128,22 @@ class DifficultyAdjustmentAlgorithm:
         timestamp: int,
         parent_block_getter: Callable[['Block'], 'Block'],
     ) -> float:
+        """Public method for template creation. Determines T from feature state."""
+        if self.TEST_MODE & TestMode.TEST_BLOCK_WEIGHT:
+            return 1.0
+
+        reduce_active = self._is_reduce_daa_active_for_next(parent_block)
+        avg_time = self._get_effective_avg_time(reduce_active)
+        return self._calculate_next_weight(parent_block, timestamp, parent_block_getter, avg_time=avg_time)
+
+    def _calculate_next_weight(
+        self,
+        parent_block: 'Block',
+        timestamp: int,
+        parent_block_getter: Callable[['Block'], 'Block'],
+        *,
+        avg_time: float,
+    ) -> float:
         """ Calculate the next block weight, aka DAA/difficulty adjustment algorithm.
 
         The algorithm used is described in [RFC 22](https://gitlab.com/HathorNetwork/rfcs/merge_requests/22).
@@ -111,7 +158,7 @@ class DifficultyAdjustmentAlgorithm:
         root = parent_block
         N = self._calculate_N(parent_block)
         K = N // 2
-        T = self.AVG_TIME_BETWEEN_BLOCKS
+        T = avg_time
         S = 5
         if N < 10:
             return self.MIN_BLOCK_WEIGHT
@@ -211,20 +258,45 @@ class DifficultyAdjustmentAlgorithm:
 
         return weight
 
-    def get_tokens_issued_per_block(self, height: int) -> int:
-        """Return the number of tokens issued (aka reward) per block of a given height."""
+    def _get_reward_reduction_factor(self) -> int:
+        """Return the factor by which to divide the reward when REDUCE_DAA_TARGET is active."""
+        return (self._settings.AVG_TIME_BETWEEN_BLOCKS * 10) // self._settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X
+
+    def get_tokens_issued_per_block(self, height: int, *, block: 'Block | None' = None) -> int:
+        """Return the number of tokens issued (aka reward) per block of a given height.
+
+        When a block is provided, checks feature state and reduces the reward proportionally
+        if REDUCE_DAA_TARGET is active.
+        """
         if self._settings.BLOCKS_PER_HALVING is None:
             assert self._settings.MINIMUM_TOKENS_PER_BLOCK == self._settings.INITIAL_TOKENS_PER_BLOCK
-            return self._settings.MINIMUM_TOKENS_PER_BLOCK
+            amount = self._settings.MINIMUM_TOKENS_PER_BLOCK
+        else:
+            number_of_halvings = (height - 1) // self._settings.BLOCKS_PER_HALVING
+            number_of_halvings = max(0, number_of_halvings)
 
-        number_of_halvings = (height - 1) // self._settings.BLOCKS_PER_HALVING
-        number_of_halvings = max(0, number_of_halvings)
+            if number_of_halvings > self._settings.MAXIMUM_NUMBER_OF_HALVINGS:
+                amount = self._settings.MINIMUM_TOKENS_PER_BLOCK
+            else:
+                amount = self._settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
+                amount = max(amount, self._settings.MINIMUM_TOKENS_PER_BLOCK)
 
-        if number_of_halvings > self._settings.MAXIMUM_NUMBER_OF_HALVINGS:
-            return self._settings.MINIMUM_TOKENS_PER_BLOCK
+        if block is not None and self._is_reduce_daa_active(block):
+            amount //= self._get_reward_reduction_factor()
 
-        amount = self._settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
-        amount = max(amount, self._settings.MINIMUM_TOKENS_PER_BLOCK)
+        return amount
+
+    def get_reward_for_next_block(self, parent_block: 'Block') -> int:
+        """Return the reward for the next block after parent_block.
+
+        For template creation. Uses feature state prediction for the next block.
+        """
+        height = parent_block.get_height() + 1
+        amount = self.get_tokens_issued_per_block(height)
+
+        if self._is_reduce_daa_active_for_next(parent_block):
+            amount //= self._get_reward_reduction_factor()
+
         return amount
 
     def get_mined_tokens(self, height: int) -> int:

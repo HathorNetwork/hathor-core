@@ -460,6 +460,9 @@ class ConsensusAlgorithm:
                 case Feature.NANO_RUNTIME_V2:
                     # This feature does not affect verification, only the Nano runtime.
                     pass
+                case Feature.REDUCE_DAA_TARGET:
+                    # This feature does not affect transaction verification, only DAA parameters.
+                    pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.NOP_FEATURE_1
