@@ -3,6 +3,7 @@ from typing import Any
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, Context, NCRocksDBStorageFactory
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
@@ -35,6 +36,7 @@ class TestRunner:
         *,
         runtime_version: NanoRuntimeVersion,
         tx_storage: NCTransactionStorageProtocol,
+        blueprint_service: BlueprintService,
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
@@ -49,6 +51,7 @@ class TestRunner:
         self._runner: Runner = Runner(
             runtime_version=runtime_version,
             tx_storage=tx_storage,
+            blueprint_service=blueprint_service,
             storage_factory=storage_factory,
             block_storage=block_storage,
             settings=settings,

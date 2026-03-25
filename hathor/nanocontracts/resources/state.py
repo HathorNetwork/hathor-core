@@ -134,7 +134,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
 
         value: Any
         # Get balances.

@@ -20,6 +20,7 @@ class _BaseTest:
                 daa=daa,
                 feature_service=Mock(),
                 tx_storage=Mock(),
+                blueprint_service=Mock(),
             )
             self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 

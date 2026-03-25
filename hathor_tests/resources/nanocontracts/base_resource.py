@@ -1,6 +1,5 @@
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.types import BlueprintId
 from hathor_tests.resources.base_resource import _BaseResourceTest
 
@@ -14,9 +13,7 @@ class GenericNanoResourceTest(_BaseResourceTest._ResourceTest):
         blueprint_id: BlueprintId,
         blueprint_class: type[Blueprint],
     ) -> None:
-        manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            blueprint_id: blueprint_class,
-        })
+        manager.blueprint_service.register_blueprint(blueprint_id, blueprint_class)
 
     def create_on_chain_blueprint(self, manager: HathorManager, nc_code: str) -> OnChainBlueprint:
         from hathor.nanocontracts.on_chain_blueprint import Code

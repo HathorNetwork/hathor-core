@@ -1,5 +1,4 @@
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.fields.container import INIT_NC_TYPE, KEY_SEPARATOR
 from hathor.nanocontracts.nc_types import StrNCType, VarInt32NCType
 from hathor.transaction import Block, Transaction
@@ -68,7 +67,7 @@ class TestNestedContainers(unittest.TestCase):
         self.bp2 = b'2' * 32
         self.bp3 = b'3' * 32
         self.bp4 = b'4' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
+        self.manager.blueprint_service.register_blueprints({
             self.bp1: DictOfDictBlueprint,
             self.bp2: ListOfDictBlueprint,
             self.bp3: DictListDictBlueprint,

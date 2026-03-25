@@ -4,7 +4,6 @@ from hathor.conf import HathorSettings
 from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.manager import HathorManager
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.types import NCActionType
 from hathor.nanocontracts.utils import sign_pycoin
@@ -42,13 +41,10 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         super().setUp()
 
         self.myblueprint_id = b'x' * 32
-        self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
-        })
         self.nc_seqnum = 0
 
         self.manager.allow_mining_without_peers()
-        self.manager.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(self.myblueprint_id, MyBlueprint)
 
         self.wallet = self.manager.wallet
 

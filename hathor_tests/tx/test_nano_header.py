@@ -52,7 +52,7 @@ class VertexHeadersTest(unittest.TestCase):
         super().setUp()
         self.blueprint_id = b'x' * 32
         self.manager = self.create_peer('unittests')
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyTestBlueprint
+        self.manager.blueprint_service.register_blueprint(self.blueprint_id, MyTestBlueprint)
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
         private_key = unittest.OCB_TEST_PRIVKEY.hex()

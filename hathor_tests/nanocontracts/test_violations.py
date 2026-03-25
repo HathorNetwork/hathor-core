@@ -35,7 +35,7 @@ class ViolationsTestCase(BlueprintTestCase):
 
         self.blueprint_id = self.gen_random_blueprint_id()
         self.contract_id = self.gen_random_contract_id()
-        self.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+        self.blueprint_service.register_blueprint(self.blueprint_id, MyBlueprint)
         self.tx = self.get_genesis_tx()
         self.address = self.gen_random_address()
 

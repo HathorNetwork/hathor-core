@@ -148,11 +148,13 @@ class NCNanoContractTestCase(BlueprintTestCase):
         self.proxy_caller_blueprint_id = self.gen_random_blueprint_id()
         self.target_blueprint_id = self.gen_random_blueprint_id()
 
-        self.nc_catalog.blueprints[self.my_blueprint_id] = MyBlueprint
-        self.nc_catalog.blueprints[self.other_blueprint_id] = OtherBlueprint
-        self.nc_catalog.blueprints[self.fee_blueprint_id] = FeeTokenBlueprint
-        self.nc_catalog.blueprints[self.proxy_caller_blueprint_id] = ProxyCallerBlueprint
-        self.nc_catalog.blueprints[self.target_blueprint_id] = TargetBlueprint
+        self.blueprint_service.register_blueprints({
+            self.my_blueprint_id: MyBlueprint,
+            self.other_blueprint_id: OtherBlueprint,
+            self.fee_blueprint_id: FeeTokenBlueprint,
+            self.proxy_caller_blueprint_id: ProxyCallerBlueprint,
+            self.target_blueprint_id: TargetBlueprint,
+        })
 
     def test_basics(self) -> None:
         nc1_id = self.gen_random_contract_id()

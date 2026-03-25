@@ -75,7 +75,7 @@ class TestRuntimeV2(BlueprintTestCase):
         feature_service = self.manager.feature_service
         feature_service._feature_settings = feature_settings
         self.manager.consensus_algorithm._block_executor._settings = settings
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+        self.manager.blueprint_service.register_blueprint(self.blueprint_id, MyBlueprint)
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''

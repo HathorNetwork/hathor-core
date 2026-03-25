@@ -14,6 +14,7 @@
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.transaction import BaseTransaction, Transaction
 
 if TYPE_CHECKING:
@@ -27,9 +28,11 @@ class VertexJsonSerializer:
     def __init__(
         self,
         storage: 'TransactionStorage',
+        blueprint_service: BlueprintService,
         nc_log_storage: Optional['NCLogStorage'] = None,
     ) -> None:
         self.tx_storage = storage
+        self.blueprint_service = blueprint_service
         self.nc_log_storage = nc_log_storage
 
     def to_json(
@@ -134,7 +137,7 @@ class VertexJsonSerializer:
             blueprint_id = nano_header.get_blueprint_id_for_json()
 
         try:
-            blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
         except NCFail:
             return None
 

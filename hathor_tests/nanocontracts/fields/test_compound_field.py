@@ -1,5 +1,4 @@
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.fields.container import INIT_NC_TYPE
 from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
@@ -56,9 +55,7 @@ class TestDictField(unittest.TestCase):
         super().setUp()
         self.manager = self.create_peer('unittests')
         self.bp_dict = b'1' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            self.bp_dict: BlueprintWithCompoundField,
-        })
+        self.manager.blueprint_service.register_blueprint(self.bp_dict, BlueprintWithCompoundField)
 
     def test_dict_field(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)

@@ -30,6 +30,7 @@ from hathor.transaction import Block, Transaction
 from hathor.util import not_none
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.nanocontracts.types import BlueprintId
 
 MY_BLUEPRINT1_ID: bytes = b'\x11' * 32
 MY_BLUEPRINT2_ID: bytes = b'\x22' * 32
@@ -89,8 +90,8 @@ class BaseNCExecLogs(unittest.TestCase):
     def _get_initialize_entries(self, tx: Transaction) -> list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry]:
         assert tx.is_nano_contract()
         nano_header = tx.get_nano_header()
-        assert self.manager.tx_storage.nc_catalog is not None
-        blueprint_class = self.manager.tx_storage.nc_catalog.blueprints[nano_header.nc_id]
+        blueprint_class = self.manager.blueprint_service.nc_catalog.get_blueprint_class(BlueprintId(nano_header.nc_id))
+        assert blueprint_class is not None
         return [
             NCCallBeginEntry.model_construct(
                 nc_id=ContractId(tx.hash),
@@ -118,11 +119,10 @@ class BaseNCExecLogs(unittest.TestCase):
 
         self.nc_log_storage = not_none(artifacts.consensus.block_algorithm_factory.nc_log_storage)
         self.manager = artifacts.manager
-        assert self.manager.tx_storage.nc_catalog is not None
-        self.manager.tx_storage.nc_catalog.blueprints = {
+        self.manager.blueprint_service.register_blueprints({
             MY_BLUEPRINT1_ID: MyBlueprint1,
             MY_BLUEPRINT2_ID: MyBlueprint2,
-        }
+        })
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
 

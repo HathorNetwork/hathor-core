@@ -21,7 +21,6 @@ import pytest
 from hathor.feature_activation.utils import Features
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
@@ -81,9 +80,7 @@ class TestActions(unittest.TestCase):
         self.bp_id = b'1' * 32
         self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
 
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            self.bp_id: MyBlueprint
-        })
+        self.manager.blueprint_service.register_blueprint(self.bp_id, MyBlueprint)
         self.tokens_index: TokensIndex = not_none(self.manager.tx_storage.indexes.tokens)
         self.nc_seqnum = 0
 

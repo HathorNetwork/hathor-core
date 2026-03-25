@@ -17,6 +17,7 @@ from typing import NamedTuple
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.block_verifier import BlockVerifier
@@ -49,6 +50,7 @@ class VertexVerifiers(NamedTuple):
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
+        blueprint_service: BlueprintService,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
@@ -63,6 +65,7 @@ class VertexVerifiers(NamedTuple):
             daa=daa,
             feature_service=feature_service,
             tx_storage=tx_storage,
+            blueprint_service=blueprint_service,
         )
 
     @classmethod
@@ -75,6 +78,7 @@ class VertexVerifiers(NamedTuple):
         daa: DifficultyAdjustmentAlgorithm,
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
+        blueprint_service: BlueprintService,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using a custom vertex_verifier.
@@ -89,7 +93,11 @@ class VertexVerifiers(NamedTuple):
         poa_block_verifier = PoaBlockVerifier(settings=settings)
         tx_verifier = TransactionVerifier(settings=settings, daa=daa, feature_service=feature_service)
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
-        nano_header_verifier = NanoHeaderVerifier(settings=settings, tx_storage=tx_storage)
+        nano_header_verifier = NanoHeaderVerifier(
+            settings=settings,
+            tx_storage=tx_storage,
+            blueprint_service=blueprint_service,
+        )
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)
 
         return VertexVerifiers(

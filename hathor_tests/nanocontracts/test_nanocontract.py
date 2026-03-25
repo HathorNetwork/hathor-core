@@ -13,7 +13,6 @@ from hathor.crypto.util import (
 )
 from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidSignature
 from hathor.nanocontracts.method import Method
@@ -76,13 +75,10 @@ class NCNanoContractTestCase(unittest.TestCase):
         super().setUp()
 
         self.myblueprint_id = VertexId(b'x' * 32)
-        self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
-        })
         self.nc_seqnum = 0
 
         self.peer = self.create_peer('unittests')
-        self.peer.tx_storage.nc_catalog = self.catalog
+        self.peer.blueprint_service.register_blueprint(self.myblueprint_id, MyBlueprint)
 
         self.genesis = self.peer.tx_storage.get_all_genesis()
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]

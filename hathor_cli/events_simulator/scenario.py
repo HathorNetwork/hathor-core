@@ -316,7 +316,7 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
 
     blueprint1_id = b'\x11' * 32
     blueprint2_id = b'\x22' * 32
-    manager.tx_storage.nc_catalog = NCBlueprintCatalog({
+    manager.blueprint_service.register_blueprints({
         blueprint1_id: TestEventsBlueprint1,
         blueprint2_id: TestEventsBlueprint2,
     })
@@ -364,7 +364,7 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
             self.syscall.emit_event(b'test event on initialize 1')
 
     blueprint1_id = b'\x11' * 32
-    manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint1_id: TestEventsBlueprint1})
+    manager.blueprint_service.register_blueprint(blueprint1_id, TestEventsBlueprint1)
     dag_builder = _create_dag_builder(manager)
 
     # 2 reorgs happen, so nc1.initialize() gets executed 3 times, once in block a2 and twice in block b2
