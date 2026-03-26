@@ -11,10 +11,9 @@ When the user asks about mining, stratum, or block templates, follow these steps
 - Understand block template generation
 - Check for CPU mining implementation (if any)
 
-## Step 2: Read the stratum protocol
-- `hathor/stratum/` — stratum protocol implementation for external miners
-- Understand the stratum message flow (subscribe, authorize, notify, submit)
-- Check job creation and solution validation
+## Step 2: Read the stratum protocol (deprecated)
+- `hathor/stratum/` — stratum protocol implementation (deprecated/unused)
+- Focus on `hathor/mining/` and merge mining instead
 
 ## Step 3: Read merge mining
 - `hathor/merged_mining/` — merge mining (AuxPow) support

@@ -30,8 +30,8 @@ class VertexVerifiers(NamedTuple):
 - Use `__slots__` on verifier classes for performance
 - `ValidationState`: INITIAL(0) → BASIC(1) → FULL(3), or INVALID(-1). Also CHECKPOINT(2) and CHECKPOINT_FULL(4).
 
-## Adding a New Verifier
-1. Create verifier class in `hathor/verification/` with `__slots__`
-2. Add field to `VertexVerifiers` NamedTuple
-3. Add `match/case` branch in `VerificationService.verify_basic()` and `verify()`
-4. Wire up in `VertexVerifiers.create_defaults()`
+## Adding New Verification Logic
+1. Add a new method to the appropriate verifier class in `hathor/verification/`
+2. Call it from `verify_basic()` or `verify()` in the verifier as appropriate
+3. Raise an exception on failure — never return bool
+4. Add tests covering both valid and invalid cases

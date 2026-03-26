@@ -19,6 +19,6 @@ Steps:
    - Test class with `setUp` using `self.get_builder()` + `self.create_peer_from_builder()` if needed
    - Stub test methods for each public method/class in the source
    - Use `self.rng` for randomness, `self.clock` for time
-   - `@inlineCallbacks` + `yield` for async operations
-5. **Creating vertices (blocks and transactions)**: Prefer `DAGBuilder` over manual vertex construction. DAGBuilder provides a declarative, deterministic way to build DAG structures. Search for existing DAGBuilder usage in `hathor_tests/` for examples.
+   - `async def` + `await` for async operations
+5. **Creating vertices (blocks and transactions)**: Prefer `DAGBuilder` over manual vertex construction. DAGBuilder provides a declarative, deterministic way to build DAG structures. Search for existing DAGBuilder usage in `hathor_tests/dag_builder/test_dag_builder.py` for examples.
 6. **Determinism is critical**: All test behavior must be fully reproducible. Never use non-deterministic patterns (random without seed, real clocks, system state). Use `self.rng` and `self.clock`. Flaky tests break CI and erode trust — when in doubt, choose the more deterministic approach.

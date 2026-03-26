@@ -13,7 +13,7 @@ When the user asks about P2P networking, peer connections, sync, or message prop
 
 ## Step 2: Understand the sync protocol
 - `hathor/p2p/sync_v2/` — sync v2 implementation (current sync protocol)
-- Look for `SyncV2Protocol` or similar classes
+- Look for `NodeBlockSync` (sync agent) and `SyncV2Factory` in `hathor/p2p/sync_v2/`
 - Understand how nodes exchange block and transaction data
 - Check `hathor/p2p/sync_v2/mempool.py` for mempool synchronization
 

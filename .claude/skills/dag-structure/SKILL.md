@@ -8,7 +8,7 @@ When the user asks about the DAG structure, weight, difficulty, or parent select
 
 ## Step 1: Understand the DAG model
 - Hathor uses a DAG (Directed Acyclic Graph) where both blocks and transactions are vertices
-- Each vertex references parent vertices (blocks reference block parents, transactions reference tx parents)
+- Each vertex references parent vertices (blocks reference both block parents and transaction parents, transactions reference tx parents)
 - Read `hathor/transaction/base_transaction.py` for the parent fields
 
 ## Step 2: Read the DAA (Difficulty Adjustment Algorithm)

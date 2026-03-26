@@ -6,7 +6,6 @@ globs: ["hathor/**/*.py", "hathor_cli/**/*.py", "hathor_tests/**/*.py"]
 
 ## Formatting
 - Line length: 119 characters
-- isort config: `combine_as_imports=true`, `trailing_comma=true`, `multi_line_output=3`
 - No trailing whitespace, single newline at EOF
 
 ## Imports
@@ -24,8 +23,8 @@ globs: ["hathor/**/*.py", "hathor_cli/**/*.py", "hathor_tests/**/*.py"]
 - Group: stdlib → third-party → first-party (`hathor`, `hathor_tests`)
 
 ## Type Annotations
-- Strict mypy enforced for: `hathor.consensus`, `hathor.verification`, `hathor.event`, `hathor.feature_activation` and their test counterparts
-- In strict modules: no `Any` without justification, `disallow_untyped_defs`, `disallow_any_generics`
+- Strict mypy is enforced across the codebase
+- No `Any` without justification, `disallow_untyped_defs`, `disallow_any_generics`
 - Use `X | None` instead of `Optional[X]`
 
 ## Naming

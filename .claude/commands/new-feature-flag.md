@@ -22,13 +22,18 @@ Steps:
    )
    ```
 
-3. Guard the new behavior in code using:
+3. Show how to guard the new behavior in code. Preferred pattern:
    ```python
-   if feature_service.is_feature_active(Feature.MY_FEATURE, block=block):
+   features = Features.from_vertex(settings=settings, feature_service=feature_service, vertex=block)
+   if features.my_feature.is_active():
+       # new behavior
+   ```
+   Alternative single-feature check:
+   ```python
+   if feature_service.is_feature_active(vertex=block, feature=Feature.MY_FEATURE):
        # new behavior
    ```
 
 4. Add tests in `hathor_tests/feature_activation/` verifying:
-   - Feature activates correctly after signaling threshold
    - Code behaves correctly both with feature active and inactive
-   - Transition between states works properly
+   - If the feature has specific consensus or mempool-cleanup behavior, test those transitions

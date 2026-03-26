@@ -27,7 +27,8 @@ DEFINED → STARTED → MUST_SIGNAL → LOCKED_IN → ACTIVE
 
 ## Step 4: Check feature-gated behavior
 Search the codebase for uses of the feature activation system:
-- Look for `is_feature_active()` or similar checks
+- Preferred: `Features.from_vertex(settings=..., feature_service=..., vertex=block)` returns a `Features` dataclass with all feature states
+- Alternative: `feature_service.is_feature_active(vertex=vertex, feature=Feature.X)` for single checks
 - Features gate new behavior that should only activate after network consensus
 
 ## Step 5: Check feature configuration

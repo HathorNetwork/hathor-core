@@ -37,8 +37,8 @@ def test_something(self):
 - `self.create_peer_from_builder(builder)` calls `builder.build()` and returns the `HathorManager`
 
 ## Async Tests
-- Use `@inlineCallbacks` decorator with `yield` (Twisted-style), not `async/await`
-- For HTTP: use `StubSite` to wrap a resource, then `yield web.get(...)` or `yield web.post(...)`
+- Use `async def` with `await` for async test methods
+- For HTTP: use `StubSite` to wrap a resource, then `await web.get(...)` or `await web.post(...)`
 
 ## Determinism
 - Use `self.rng` (seeded Random instance) for all randomness — never `random.random()`

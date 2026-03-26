@@ -11,7 +11,7 @@ Blueprints inherit from `Blueprint` and use decorators to define methods:
 ```python
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.types import public, view
+from hathorlib.nanocontracts.types import public, view
 
 class MyBlueprint(Blueprint):
     balance: int  # State attributes declared as class annotations
@@ -32,7 +32,8 @@ class MyBlueprint(Blueprint):
 ## Method Decorators
 - `@public` — modifies state, receives `ctx: Context`. Optional params: `allow_deposit`, `allow_withdrawal`, `allow_grant_authority`, `allow_acquire_authority`, `allow_actions`, `allow_reentrancy`
 - `@view` — read-only, does NOT receive `ctx: Context`, cannot modify state
-- `@private` — internal helper, not callable externally
+- `@fallback` — handles calls to undefined methods; same params as `@public`
+- `@export` — class decorator to export a blueprint
 
 ## Action Directions
 - **DEPOSIT** = tokens flow TO the contract (appears on the **output** side)
@@ -43,5 +44,5 @@ This is critical for balance calculations and fee handling.
 ## Key Components
 - `Runner` — executes blueprint methods with proper context
 - `BlockExecutor` — processes all nano actions in a block
-- Types from `hathor.nanocontracts.types`
+- Types from `hathorlib.nanocontracts.types`
 - Context from `hathor.nanocontracts.context`

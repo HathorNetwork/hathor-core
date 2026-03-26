@@ -25,13 +25,16 @@ pytest hathor_tests/path/to/test_file.py::TestClass -n0  # single class
 pytest hathor_tests/path/to/test_file.py::TestClass::test_method -n0  # single test
 ```
 
-## Rust Crypto Library (hathor-ct-crypto/)
+## Hathorlib Commands
+
+Hathorlib is a separate sub-project in `hathorlib/` with its own dependencies and checks.
 
 ```bash
-cd hathor-ct-crypto
-cargo test                        # run Rust tests
-cargo fmt && cargo clippy         # format + lint
-maturin develop --features python # build Python bindings (needs active venv)
+cd hathorlib
+poetry install -n --no-root -E client  # install deps (if not already)
+poetry run make check                   # runs: flake8, isort-check, mypy
+poetry run make tests                   # test suite with coverage (>60% threshold)
+poetry run make fmt                     # auto-format with isort
 ```
 
 ## Architecture Overview
@@ -40,7 +43,7 @@ maturin develop --features python # build Python bindings (needs active venv)
 The ledger is a DAG where vertices are either **blocks** (consensus/weight) or **transactions** (value transfer). Each vertex references 2+ parent vertices. Blocks form a blockchain backbone; transactions hang between blocks.
 
 ### TxVersion Dispatch
-Every vertex has a `TxVersion` (IntEnum): REGULAR_BLOCK(0), REGULAR_TRANSACTION(1), TOKEN_CREATION_TRANSACTION(2), MERGE_MINED_BLOCK(3), POA_BLOCK(5), ON_CHAIN_BLUEPRINT(6). The version drives `match/case` dispatch throughout verification, serialization, and consensus.
+Every vertex has a `TxVersion` (IntEnum): REGULAR_BLOCK(0), REGULAR_TRANSACTION(1), TOKEN_CREATION_TRANSACTION(2), MERGE_MINED_BLOCK(3), POA_BLOCK(5), ON_CHAIN_BLUEPRINT(6). The version is primarily used for deserialization; runtime dispatch typically uses `isinstance` checks.
 
 ### Verification Pipeline
 `VerificationService` dispatches to `VertexVerifiers` (NamedTuple of per-type verifiers):
@@ -50,10 +53,10 @@ Every vertex has a `TxVersion` (IntEnum): REGULAR_BLOCK(0), REGULAR_TRANSACTION(
 - `ValidationState`: INITIAL(0) → BASIC(1) → FULL(3), or INVALID(-1)
 
 ### Nano Contracts
-Blueprints define on-chain logic with `@public`, `@view` decorators. The `Runner` executes methods; `BlockExecutor` processes all nano actions in a block. Actions: DEPOSIT (tokens → contract, output side), WITHDRAWAL (tokens ← contract, input side).
+Nano contracts are Hathor's smart contracts. Blueprints define on-chain logic with `@public`, `@view` decorators. The `Runner` executes methods; `BlockExecutor` processes all nano actions in a block. Actions: DEPOSIT (tokens → contract, output side), WITHDRAWAL (tokens ← contract, input side).
 
 ### Feature Activation
-State machine for network upgrades: DEFINED → STARTED → MUST_SIGNAL → LOCKED_IN → ACTIVE. Controlled by `Feature` enum + per-network criteria. Guard code with `feature_service.is_feature_active(Feature.X, block)`.
+State machine for network upgrades: DEFINED → STARTED → MUST_SIGNAL → LOCKED_IN → ACTIVE. Controlled by `Feature` enum + per-network criteria. Use `Features.from_vertex(settings=..., feature_service=..., vertex=block)` to get all feature states, or `feature_service.is_feature_active(vertex=vertex, feature=Feature.X)` for a single check.
 
 ## Project Layout
 
@@ -71,7 +74,6 @@ hathor/                  # Main package
 hathor_cli/              # CLI entry points
 hathor_tests/            # Tests (mirrors hathor/ structure)
 hathorlib/               # Lightweight shared library
-hathor-ct-crypto/        # Rust confidential transaction crypto (PyO3)
 ```
 
 ## Key Conventions

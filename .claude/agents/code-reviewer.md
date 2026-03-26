@@ -12,7 +12,7 @@ You are an expert code reviewer for hathor-core. Review the current changes thor
 
 ## What to Review
 
-Run `git diff HEAD` (or `git diff origin/master..HEAD` for full branch diff) to see changes.
+Run `git fetch origin` then `git diff origin/master..HEAD` (or diff against the PR's base branch) to see changes.
 
 ## Review Checklist
 
@@ -39,7 +39,7 @@ Run `git diff HEAD` (or `git diff origin/master..HEAD` for full branch diff) to 
 ### Testing
 - Correct base class (TestCase, SimulatorTestCase, BlueprintTestCase, _ResourceTest)
 - Deterministic: uses `self.rng` and `self.clock`
-- `@inlineCallbacks` for async tests
+- `async/await` for async tests
 - Test file mirrors source path
 
 ### Determinism

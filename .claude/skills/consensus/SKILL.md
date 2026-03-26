@@ -17,6 +17,7 @@ A vertex becomes "voided" when:
 - It is in a side chain (not on the best block chain)
 - Its parents/inputs are voided (voidance propagates)
 Check `transaction_metadata.py` for the `voided_by` field and how it's updated.
+- Nano contract execution failure: `voided_by` contains `NC_EXECUTION_FAIL_ID` (from `hathor.nanocontracts`)
 
 ## Step 3: Understand best chain selection
 The best chain is determined by accumulated weight:
