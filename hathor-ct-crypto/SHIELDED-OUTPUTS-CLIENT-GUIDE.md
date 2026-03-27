@@ -1,24 +1,71 @@
 # Shielded Outputs: Client Integration Guide
 
-This guide explains how wallets and explorers interact with Hathor's shielded outputs using the `hathor-ct-crypto` library. The same Rust core powers all three bindings: Rust (direct), Python (PyO3), and Node.js/TypeScript (NAPI).
+This guide explains how wallets and explorers interact with Hathor's shielded outputs using the `hathor-ct-crypto` library. All three bindings -- Rust (direct), Python (PyO3), and Node.js/TypeScript (NAPI) -- wrap the same Rust implementation.
+
+> **Scope:** This guide covers creating, verifying, and recovering shielded outputs. Transaction assembly (attaching outputs to a `ShieldedOutputsHeader`) and spending shielded outputs are covered in the transaction format specification.
+
+---
+
+## Workflow Overview
+
+Shielded outputs attach to regular v1/v2 transactions via a `ShieldedOutputsHeader` -- no new transaction version is needed. A transaction can mix transparent and shielded outputs freely.
+
+**Sender workflow:**
+
+1. Generate blinding factors (Section 2.0)
+2. Create shielded outputs (Section 2.1 / 2.2)
+3. Compute the balancing blinding factor for the last output (Section 2.3)
+4. Attach outputs to the transaction's `ShieldedOutputsHeader`
+
+**Verifier workflow (full nodes, explorers):**
+
+1. Validate curve points (Section 3.1)
+2. Verify range proofs (Section 3.2)
+3. Verify surjection proofs for FullShielded outputs (Section 3.3)
+4. Verify commitment balance (Section 3.4)
+
+**Recipient workflow:**
+
+1. Rewind the output using your private key (Section 4.1 / 4.2)
+2. Cross-check recovered token UID for FullShielded outputs (Section 4.3)
+3. Store the recovered blinding factor(s) -- needed to spend the output later
+
+### Cross-Language API Names
+
+The Python/TypeScript bindings use snake_case / camelCase names. Most functions have identical names across bindings, with one exception:
+
+| Operation | Rust (internal) | Python | TypeScript |
+|-----------|----------------|--------|------------|
+| Create AmountShielded | `create_amount_shielded_output` | `create_amount_shielded_output` | `createAmountShieldedOutput` |
+| Create FullShielded | `create_full_shielded_output` | `create_shielded_output_with_both_blindings` | `createShieldedOutputWithBothBlindings` |
+| Rewind AmountShielded | `rewind_amount_shielded_output` | `rewind_amount_shielded_output` | `rewindAmountShieldedOutput` |
+| Rewind FullShielded | `rewind_full_shielded_output` | `rewind_full_shielded_output` | `rewindFullShieldedOutput` |
+
+**Return field names** also differ slightly:
+
+| Rust field | Python field | TypeScript field |
+|------------|-------------|-----------------|
+| `value_blinding_factor` | `blinding_factor` | `blindingFactor` |
+| `asset_commitment` | `asset_commitment` | `assetCommitment` |
+| `asset_blinding_factor` | `asset_blinding_factor` | `assetBlindingFactor` |
 
 ---
 
 ## 1. Output Types
 
-Hathor offers two privacy tiers for shielded outputs. Both attach to regular transactions via a `ShieldedOutputsHeader` -- no new transaction version is needed.
+Hathor offers two privacy tiers for shielded outputs.
 
 ### AmountShieldedOutput
 
 Hides the **amount**. The token type remains visible.
 
-| Field | Size | Description |
-|-------|------|-------------|
-| `commitment` | 33 B | Pedersen commitment `C = value * H_token + r * G` |
-| `range_proof` | ~675 B | Bulletproof proving value is in [1, 2^64) |
-| `script` | variable | Locking script (P2PKH, etc.) |
-| `token_data` | 1 B | Token index (same as `TxOutput.token_data`) |
-| `ephemeral_pubkey` | 33 B | Sender's ephemeral public key for ECDH recovery |
+| Field | Size | Source | Description |
+|-------|------|--------|-------------|
+| `commitment` | 33 B | library | Pedersen commitment `C = value * H_token + r * G` |
+| `range_proof` | ~675 B | library | Bulletproof proving value is in [1, 2^64) |
+| `script` | variable | caller | Locking script (P2PKH, etc.) -- set at the transaction layer |
+| `token_data` | 1 B | caller | Token index (same as `TxOutput.token_data`) |
+| `ephemeral_pubkey` | 33 B | library | Sender's ephemeral public key for ECDH recovery |
 
 **Use when:** the token type is not sensitive (e.g., HTR transfers).
 
@@ -26,14 +73,14 @@ Hides the **amount**. The token type remains visible.
 
 Hides **both** the amount and the token type.
 
-| Field | Size | Description |
-|-------|------|-------------|
-| `commitment` | 33 B | Pedersen commitment using blinded generator |
-| `range_proof` | ~675 B | Bulletproof (embeds encrypted token UID + asset blinding in message) |
-| `script` | variable | Locking script |
-| `asset_commitment` | 33 B | Blinded asset tag `A = H_token + r_asset * G` |
-| `surjection_proof` | ~130 B | Proves the hidden token is one of the input tokens |
-| `ephemeral_pubkey` | 33 B | Sender's ephemeral public key for ECDH recovery |
+| Field | Size | Source | Description |
+|-------|------|--------|-------------|
+| `commitment` | 33 B | library | Pedersen commitment `C = value * A + r * G` where `A` is the blinded generator |
+| `range_proof` | ~675 B | library | Bulletproof (embeds encrypted token UID + asset blinding in message) |
+| `script` | variable | caller | Locking script |
+| `asset_commitment` | 33 B | library | Blinded asset tag `A = H_token + r_asset * G` |
+| `surjection_proof` | ~130 B | library | Proves the hidden token is one of the input tokens |
+| `ephemeral_pubkey` | 33 B | library | Sender's ephemeral public key for ECDH recovery |
 
 **Use when:** the token type is sensitive (e.g., custom tokens, stablecoins).
 
@@ -45,7 +92,7 @@ The high-level `create_*` functions handle the full pipeline: ephemeral keypair 
 
 ### 2.0 Generating Blinding Factors
 
-Blinding factors must be valid secp256k1 scalars (non-zero, less than the curve order). Use the library's generator instead of raw `os.urandom()` to guarantee validity.
+Blinding factors must be valid secp256k1 scalars (non-zero, less than the curve order). Always use the library's generator -- raw `os.urandom()` or `rand::random()` may produce invalid scalars.
 
 #### Rust
 
@@ -146,16 +193,18 @@ output.blindingFactor;   // Buffer, 32 B
 
 ### 2.2 FullShieldedOutput
 
+> **Note:** The Python/TypeScript bindings expose this as `create_shielded_output_with_both_blindings`. The underlying Rust function is `create_full_shielded_output`. See the cross-language table in the Workflow Overview.
+
 #### Rust
 
 ```rust
-use hathor_ct_crypto::ecdh::create_full_shielded_output;
+use hathor_ct_crypto::ecdh::{create_full_shielded_output, generate_random_blinding_factor};
 
 let value: u64 = 7777;
 let recipient_pubkey: &[u8; 33] = /* ... */;
 let token_uid: [u8; 32] = /* actual token UID, 32 bytes */;
-let vbf: [u8; 32] = rand::random();  // value blinding factor
-let abf: [u8; 32] = rand::random();  // asset blinding factor
+let vbf: [u8; 32] = generate_random_blinding_factor();
+let abf: [u8; 32] = generate_random_blinding_factor();
 
 let output = create_full_shielded_output(
     value,
@@ -204,25 +253,65 @@ output.assetBlindingFactor;    // Buffer | null, 32 B
 
 ### 2.3 Blinding Factor Management
 
-For a transaction to be valid, blinding factors must **balance**: the sum of input blindings must equal the sum of output blindings (per token). Assign random blinding factors to all outputs except the last, then compute the balancing factor:
+Pedersen commitments are homomorphic: `Commit(a, r1) + Commit(b, r2) = Commit(a+b, r1+r2)`. The network verifies transaction balance by checking that commitment sums match (see Section 3.4). For this to work, the blinding factors must be coordinated: **the sum of input blinding factors must equal the sum of output blinding factors** (per token type).
+
+In practice, assign random blinding factors to all outputs except the last, then compute the last output's blinding factor so the sum balances.
+
+Each entry in the `inputs` and `other_outputs` lists is a triple of `(value, value_blinding_factor, generator_blinding_factor)`:
+- **value_blinding_factor** (vbf): the `r` in the Pedersen commitment
+- **generator_blinding_factor** (gbf): the asset blinding factor. Use `b'\x00' * 32` (all zeros) for AmountShielded outputs and transparent inputs/outputs; use the actual `abf` for FullShielded outputs.
+
+#### Worked Example
+
+A transaction with 1 transparent input (100 HTR) and 2 AmountShielded outputs (60 + 40 HTR):
 
 ```python
-# Python example
+import hathor_ct_crypto as ct
+
+# Input: transparent 100 HTR -- vbf and gbf are both zero
+input_vbf = b'\x00' * 32
+input_gbf = b'\x00' * 32
+
+# Output 1: 60 HTR shielded -- random vbf, gbf is zero (AmountShielded)
+out1_vbf = ct.generate_random_blinding_factor()
+out1_gbf = b'\x00' * 32
+
+# Output 2: 40 HTR shielded -- compute balancing vbf
 last_vbf = ct.compute_balancing_blinding_factor(
-    value=last_output_value,
-    generator_blinding_factor=last_abf,  # b'\x00'*32 for AmountShielded
-    inputs=[(val, vbf, gbf) for each input],
-    other_outputs=[(val, vbf, gbf) for each other output],
+    value=40,
+    generator_blinding_factor=b'\x00' * 32,  # last output's gbf (zero for AmountShielded)
+    inputs=[(100, input_vbf, input_gbf)],
+    other_outputs=[(60, out1_vbf, out1_gbf)],
 )
+
+# Now create the outputs using these blinding factors
+out1 = ct.create_amount_shielded_output(60, recipient_pubkey, token_uid, out1_vbf)
+out2 = ct.create_amount_shielded_output(40, recipient_pubkey, token_uid, last_vbf)
 ```
 
+#### Rust
+
+```rust
+use hathor_ct_crypto::balance::compute_balancing_blinding_factor;
+
+let last_vbf = compute_balancing_blinding_factor(
+    40,                          // last output value
+    &[0u8; 32],                  // last output's gbf (zero for AmountShielded)
+    &[(100, input_vbf, [0u8; 32])],   // inputs: (value, vbf, gbf)
+    &[(60, out1_vbf, [0u8; 32])],     // other outputs: (value, vbf, gbf)
+)?;
+```
+
+#### TypeScript
+
 ```typescript
-// TypeScript example
+import { computeBalancingBlindingFactor } from 'hathor-ct-crypto';
+
 const lastVbf = computeBalancingBlindingFactor(
-  lastOutputValue,
-  lastAbf,  // Buffer.alloc(32) for AmountShielded
-  inputs.map(i => ({ value: i.value, valueBlindingFactor: i.vbf, generatorBlindingFactor: i.gbf })),
-  otherOutputs.map(o => ({ value: o.value, valueBlindingFactor: o.vbf, generatorBlindingFactor: o.gbf })),
+  40,                                // last output value
+  Buffer.alloc(32),                  // last output's gbf (zero for AmountShielded)
+  [{ value: 100, valueBlindingFactor: inputVbf, generatorBlindingFactor: Buffer.alloc(32) }],
+  [{ value: 60, valueBlindingFactor: out1Vbf, generatorBlindingFactor: Buffer.alloc(32) }],
 );
 ```
 
@@ -230,42 +319,66 @@ const lastVbf = computeBalancingBlindingFactor(
 
 ## 3. Verifying Shielded Outputs
 
-Full nodes and explorers verify shielded outputs without knowing the hidden values.
+Full nodes and explorers verify shielded outputs without knowing the hidden values. Perform these checks in order.
 
-### 3.1 Range Proof Verification
+### 3.1 Point Validation
 
-Proves the committed value is in [1, 2^64) -- i.e., no negative or zero amounts.
-
-```rust
-// Rust
-use hathor_ct_crypto::rangeproof::verify_range_proof;
-
-let valid = verify_range_proof(&proof, &commitment, &generator)?;
-// valid: Range<u64> on success, Err on failure
-```
+Before any other verification, validate that commitments and generators are valid secp256k1 curve points:
 
 ```python
 # Python
-valid: bool = ct.verify_range_proof(proof, commitment, generator)
+assert ct.validate_commitment(output.commitment)        # 33 B
+assert ct.validate_generator(output.asset_commitment)    # 33 B (FullShielded only)
 ```
 
 ```typescript
 // TypeScript
+validateCommitment(output.commitment);       // throws on invalid
+validateGenerator(output.assetCommitment);   // throws on invalid (FullShielded only)
+```
+
+### 3.2 Range Proof Verification
+
+Proves the committed value is in [1, 2^64) -- i.e., no negative or zero amounts.
+
+```rust
+// Rust -- returns Range<u64> on success (always 0..2^64 for Hathor), Err on failure
+use hathor_ct_crypto::rangeproof::verify_range_proof;
+
+let range = verify_range_proof(&proof, &commitment, &generator)?;
+```
+
+```python
+# Python -- returns bool
+valid: bool = ct.verify_range_proof(proof, commitment, generator)
+```
+
+```typescript
+// TypeScript -- returns boolean
 const valid: boolean = verifyRangeProof(proof, commitment, generator);
 ```
 
-The **generator** depends on the output type:
-- **AmountShielded**: `generator = derive_asset_tag(token_uid)`
-- **FullShielded**: `generator = output.asset_commitment`
+> The Rust binding returns the proven value range on success (always `0..2^64` for Hathor's configuration); the Python and TypeScript bindings simplify this to a boolean.
 
-### 3.2 Surjection Proof Verification (FullShieldedOutput only)
+The **generator** depends on the output type:
+- **AmountShielded**: `generator = derive_asset_tag(token_uid)` -- the unblinded 33-byte generator
+- **FullShielded**: `generator = output.asset_commitment` -- the blinded 33-byte generator
+
+### 3.3 Surjection Proof Verification (FullShieldedOutput only)
 
 Proves the hidden token type is one of the input token types -- without revealing which one.
 
+The **domain** is the list of generators from all transaction inputs: use `derive_asset_tag(token_uid)` for transparent inputs, or the input's `asset_commitment` for shielded inputs. The **codomain** is the output's `asset_commitment`.
+
+```rust
+// Rust
+use hathor_ct_crypto::surjection::verify_surjection_proof;
+
+verify_surjection_proof(&proof, &codomain, &domain)?;
+```
+
 ```python
 # Python
-# codomain: the output's blinded asset commitment (33 B)
-# domain: list of blinded generators from the inputs (33 B each)
 valid: bool = ct.verify_surjection_proof(proof, codomain, domain)
 ```
 
@@ -274,22 +387,22 @@ valid: bool = ct.verify_surjection_proof(proof, codomain, domain)
 const valid: boolean = verifySurjectionProof(proof, codomain, domain);
 ```
 
-### 3.3 Balance Verification
+### 3.4 Balance Verification
 
 Verifies the homomorphic balance equation: sum of input commitments equals sum of output commitments (per token). Supports mixed transactions with both transparent and shielded inputs/outputs.
 
 ```python
-# Python
+# Python -- uses positional args with tuples: (amount, token_uid_32B)
 valid: bool = ct.verify_balance(
-    transparent_inputs=[(amount, token_uid_32B), ...],
-    shielded_inputs=[commitment_33B, ...],
-    transparent_outputs=[(amount, token_uid_32B), ...],
-    shielded_outputs=[commitment_33B, ...],
+    [(100, token_uid)],         # transparent inputs
+    [shielded_commitment],      # shielded input commitments (33 B each)
+    [(50, token_uid)],          # transparent outputs
+    [shielded_commitment_out],  # shielded output commitments (33 B each)
 )
 ```
 
 ```typescript
-// TypeScript
+// TypeScript -- uses objects: { amount, tokenUid }
 const valid: boolean = verifyBalance(
   [{ amount: 100, tokenUid: htrUid }],   // transparent inputs
   [shieldedInputCommitment],               // shielded inputs
@@ -298,14 +411,7 @@ const valid: boolean = verifyBalance(
 );
 ```
 
-### 3.4 Point Validation
-
-Before processing, validate that commitments and generators are valid secp256k1 curve points:
-
-```python
-assert ct.validate_commitment(output.commitment)   # 33 B
-assert ct.validate_generator(output.asset_commitment)  # 33 B (FullShielded)
-```
+> Python uses tuples `(amount, token_uid)` for transparent entries; TypeScript uses objects `{ amount, tokenUid }`.
 
 ---
 
@@ -427,24 +533,67 @@ result.assetBlindingFactor;   // Buffer, 32 B
 
 ### 4.3 Cross-checking FullShielded Token UID
 
-After rewinding a `FullShieldedOutput`, the wallet **must** verify the recovered `token_uid` matches the on-chain `asset_commitment`. A malicious sender could embed a fraudulent token UID in the message.
+After rewinding a `FullShieldedOutput`, the wallet **must** verify that the recovered `token_uid` is consistent with the on-chain `asset_commitment`. An attacker could embed an incorrect token UID in the range proof message.
+
+The verification reconstructs the expected asset commitment from the recovered values using two helper functions:
+- `derive_tag(token_uid)` -- produces a 32-byte raw tag from the token UID
+- `create_asset_commitment(tag, abf)` -- produces the 33-byte blinded generator from a raw tag and asset blinding factor
+
+(These differ from `derive_asset_tag(token_uid)`, which produces a 33-byte **unblinded** generator used in range proof verification.)
+
+#### Python
 
 ```python
-# Reconstruct expected asset commitment from recovered values
 expected_tag = ct.derive_tag(result.token_uid)
 expected_ac = ct.create_asset_commitment(expected_tag, result.asset_blinding_factor)
-assert expected_ac == output.asset_commitment, "token UID mismatch -- possible fraud"
+assert expected_ac == output.asset_commitment, "token UID mismatch -- asset commitment verification failed"
 ```
 
-### 4.4 Wrong Key Behavior
+#### Rust
 
-If the rewind nonce doesn't match (wrong recipient), the rewind call raises an error (Python: `ValueError`, Rust: `Err(HathorCtError)`, TypeScript: thrown `Error`). This is by design -- there are no false positives.
+```rust
+use hathor_ct_crypto::generators::{derive_tag, create_asset_commitment};
+
+let expected_tag = derive_tag(&result.token_uid)?;
+let expected_ac = create_asset_commitment(&expected_tag, &result.asset_blinding_factor)?;
+assert_eq!(expected_ac, output.asset_commitment, "token UID mismatch");
+```
+
+#### TypeScript
+
+```typescript
+import { deriveTag, createAssetCommitment } from 'hathor-ct-crypto';
+
+const expectedTag = deriveTag(result.tokenUid);
+const expectedAc = createAssetCommitment(expectedTag, result.assetBlindingFactor);
+assert(expectedAc.equals(output.assetCommitment), 'token UID mismatch');
+```
+
+### 4.4 Behavior on Recipient Mismatch
+
+If the rewind nonce doesn't match (wrong recipient), the rewind call raises an error (Python: `ValueError`, Rust: `Err(HathorCtError)`, TypeScript: thrown `Error`). The rewind nonce is derived from the ECDH shared secret, which is unique per sender-recipient-ephemeral triple, so a mismatched key always produces an invalid nonce -- there are no false positives.
 
 ---
 
-## 5. ECDH Internals (Low-Level)
+## 5. Error Handling
 
-The high-level functions above handle ECDH internally. These low-level primitives are exposed for advanced use cases (e.g., custom recovery flows, delegated scanning).
+| Error category | Recoverable? | Cause |
+|---------------|-------------|-------|
+| Invalid public key | No | Malformed 33-byte key input (not a valid curve point) |
+| Invalid blinding factor | No | Scalar is zero or >= curve order -- use `generate_random_blinding_factor()` |
+| Range proof creation failure | No | Internal error (should not happen with valid inputs) |
+| Range proof verification failure | N/A | Returns `false` (Python/TS) or `Err` (Rust) -- the proof is invalid |
+| Surjection proof verification failure | N/A | Returns `false` / `Err` -- the proof is invalid |
+| Rewind failure (wrong key) | Expected | Not your output -- this is the normal "not for me" signal |
+| Rewind failure (corrupted data) | No | On-chain data is malformed |
+
+"No" means a programming error -- fix the input, don't retry. "Expected" means this is normal operation (scanning outputs you don't own).
+
+---
+
+## 6. ECDH Internals
+
+The high-level functions above handle ECDH internally. These low-level primitives are exposed for specific use cases such as custom recovery flows or delegated scanning.
 
 | Function | Description |
 |----------|-------------|
@@ -452,6 +601,10 @@ The high-level functions above handle ECDH internally. These low-level primitive
 | `generate_ephemeral_keypair()` | Fresh secp256k1 keypair: `(privkey_32B, pubkey_33B)` |
 | `derive_ecdh_shared_secret(privkey, peer_pubkey)` | `SHA256(version_byte \|\| x)` of shared EC point (32 B) |
 | `derive_rewind_nonce(shared_secret)` | `SHA256("Hathor_CT_nonce_v1" \|\| shared_secret)` (32 B) |
+| `rewind_range_proof(proof, commitment, nonce, generator)` | Returns `(value, blinding_factor, message)` -- the low-level rewind used internally |
+| `derive_tag(token_uid)` | Raw 32-byte tag from token UID (for surjection proofs and `create_asset_commitment`) |
+| `derive_asset_tag(token_uid)` | Unblinded 33-byte generator from token UID (for range proof verification) |
+| `create_asset_commitment(tag, r_asset)` | Blinded 33-byte generator from raw tag + asset blinding factor |
 
 **Recovery flow (manual):**
 
@@ -466,19 +619,19 @@ nonce = derive_rewind_nonce(s)
 
 ---
 
-## 6. Key Sizes Reference
+## 7. Key Sizes Reference
 
 | Value | Size | Notes |
 |-------|------|-------|
 | Private key | 32 B | secp256k1 scalar |
 | Public key (compressed) | 33 B | `02`/`03` prefix + x-coordinate |
 | Pedersen commitment | 33 B | Compressed curve point |
-| Generator / asset tag | 33 B | Compressed curve point |
-| Raw tag (surjection) | 32 B | Used for surjection proof domain |
+| Generator / asset tag | 33 B | Compressed curve point (from `derive_asset_tag`) |
+| Raw tag | 32 B | From `derive_tag` (used for surjection proofs and `create_asset_commitment`) |
 | Blinding factor (value) | 32 B | secp256k1 scalar |
 | Blinding factor (asset) | 32 B | secp256k1 scalar |
 | Shared secret | 32 B | SHA256 output |
 | Rewind nonce | 32 B | SHA256 output |
 | Token UID | 32 B | HTR = `0x00 * 32` |
-| Range proof | ~675 B | Bulletproof (max 1024 B) |
-| Surjection proof | ~130 B | Depends on domain size (max 4096 B) |
+| Range proof | ~675 B | Bulletproof; hard upper bound 1024 B (safe for buffer allocation) |
+| Surjection proof | ~130 B | Depends on domain size; hard upper bound 4096 B |
