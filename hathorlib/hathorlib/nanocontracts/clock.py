@@ -1,4 +1,4 @@
-# Copyright 2024 Hathor Labs
+# Copyright 2026 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Re-export from hathorlib for backward compatibility
-from hathorlib.nanocontracts.metered_exec import (  # noqa: F401
-    FUEL_COST_MAP,
-    MeteredExecutor,
-    OutOfFuelError,
-    OutOfMemoryError,
-)
+from typing import Protocol
+
+
+class ClockProtocol(Protocol):
+    """A minimal protocol for getting the current time. Used by NCLogger."""
+    def seconds(self) -> float: ...

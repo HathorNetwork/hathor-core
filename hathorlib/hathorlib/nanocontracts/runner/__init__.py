@@ -12,5 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# Re-export from hathorlib for backward compatibility
-from hathorlib.nanocontracts.allowed_imports import ALLOWED_IMPORTS  # noqa: F401
+from hathorlib.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
+from hathorlib.nanocontracts.runner.runner import Runner
+
+__all__ = [
+    'CallType',
+    'CallRecord',
+    'CallInfo',
+    'Runner',
+]

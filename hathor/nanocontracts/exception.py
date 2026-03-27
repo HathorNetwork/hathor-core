@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.transaction.exceptions import TxValidationError
 # Re-export all exceptions from hathorlib for backward compatibility
+from hathorlib.exceptions import TxValidationError  # noqa: F401
 from hathorlib.nanocontracts.exception import (  # noqa: F401
     BlueprintDoesNotExist,
     BlueprintSyntaxError,
@@ -34,14 +34,20 @@ from hathorlib.nanocontracts.exception import (  # noqa: F401
     NCInvalidFee,
     NCInvalidFeePaymentToken,
     NCInvalidInitializeMethodCall,
+    NCInvalidMethodCall,
+    NCInvalidPubKey,
     NCInvalidPublicMethodCallFromView,
+    NCInvalidSeqnum,
+    NCInvalidSignature,
     NCInvalidSyscall,
+    NCMethodNotFound,
     NCNumberOfCallsExceeded,
     NCRecursionError,
     NCSerializationArgTooLong,
     NCSerializationError,
     NCSerializationTypeError,
     NCTokenAlreadyExists,
+    NCTxValidationError,
     NCTypeError,
     NCUninitializedContractError,
     NCViewMethodError,
@@ -53,30 +59,3 @@ from hathorlib.nanocontracts.exception import (  # noqa: F401
     OCBPubKeyNotAllowed,
     UnknownFieldType,
 )
-
-# hathor-specific exceptions that depend on TxValidationError
-
-
-class NCTxValidationError(TxValidationError, NCFail):
-    pass
-
-
-class NCInvalidSignature(NCTxValidationError, NCFail):
-    pass
-
-
-class NCInvalidPubKey(NCTxValidationError, NCFail):
-    pass
-
-
-class NCInvalidSeqnum(NCTxValidationError, NCFail):
-    pass
-
-
-class NCMethodNotFound(NCTxValidationError):
-    """Raised when a method is not found in a nano contract."""
-    pass
-
-
-class NCInvalidMethodCall(NCTxValidationError):
-    """Raised when a contract calls another contract's invalid method."""

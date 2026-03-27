@@ -697,7 +697,6 @@ class Builder:
             self._blueprint_service = BlueprintService(
                 settings=self._get_or_create_settings(),
                 tx_storage=self._get_or_create_tx_storage(),
-                feature_service=self._get_or_create_feature_service(),
             )
 
         return self._blueprint_service

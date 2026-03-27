@@ -24,6 +24,9 @@ settings = HathorSettings()
 # used to allow new versions of the serialization format in the future
 ON_CHAIN_BLUEPRINT_VERSION: int = 1
 
+# The Python version used for compiling OCB code
+PYTHON_CODE_COMPAT_VERSION: tuple[int, int] = (3, 11)
+
 
 @unique
 class CodeKind(IntEnum):

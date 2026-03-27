@@ -231,7 +231,6 @@ class CliBuilder:
         blueprint_service = BlueprintService(
             settings=settings,
             tx_storage=tx_storage,
-            feature_service=self.feature_service,
         )
 
         assert self.nc_storage_factory is not None

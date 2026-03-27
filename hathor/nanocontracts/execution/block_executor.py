@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Iterator
 from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
+from hathor.nanocontracts.runner.runner import execute_from_tx
 from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
@@ -245,7 +246,7 @@ class NCBlockExecutor:
         )
 
         try:
-            runner.execute_from_tx(tx)
+            execute_from_tx(runner, tx)
 
             # after the execution we have the latest state in the storage
             # and at this point no tokens pending creation
