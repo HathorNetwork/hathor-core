@@ -380,6 +380,11 @@ class HathorSettings(BaseModel):
     # Number max of connections in the p2p network
     PEER_MAX_CONNECTIONS: int = 125
 
+    # Max Number of each connection slot (int):
+    P2P_PEER_MAX_INCOMING_CONNECTIONS: int = 50
+    P2P_PEER_MAX_OUTGOING_CONNECTIONS: int = 60
+    P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS: int = 15
+
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 
@@ -567,5 +572,22 @@ class HathorSettings(BaseModel):
             raise ValueError(
                 f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
                 f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
+            )
+        return self
+
+    @model_validator(mode='after')
+    def _validate_peer_connection_slots(self) -> Self:
+        slot_total = (
+            self.P2P_PEER_MAX_INCOMING_CONNECTIONS
+            + self.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+            + self.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS
+        )
+        if self.PEER_MAX_CONNECTIONS != slot_total:
+            raise ValueError(
+                f'PEER_MAX_CONNECTIONS ({self.PEER_MAX_CONNECTIONS}) must equal '
+                f'P2P_PEER_MAX_INCOMING_CONNECTIONS ({self.P2P_PEER_MAX_INCOMING_CONNECTIONS}) + '
+                f'P2P_PEER_MAX_OUTGOING_CONNECTIONS ({self.P2P_PEER_MAX_OUTGOING_CONNECTIONS}) + '
+                f'P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS '
+                f'({self.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS}) = {slot_total}'
             )
         return self
