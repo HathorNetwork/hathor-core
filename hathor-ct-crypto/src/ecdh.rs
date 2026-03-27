@@ -7,6 +7,16 @@ use crate::types::TokenUid;
 
 const NONCE_DOMAIN_SEPARATOR: &[u8] = b"Hathor_CT_nonce_v1";
 
+/// Generate a random 32-byte blinding factor suitable for Pedersen commitments.
+///
+/// Uses a cryptographically secure RNG. The result is a valid secp256k1 scalar (non-zero).
+pub fn generate_random_blinding_factor() -> [u8; 32] {
+    let tweak = Tweak::new(&mut rand::thread_rng());
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(tweak.as_ref());
+    bytes
+}
+
 /// Generate a fresh ephemeral secp256k1 key pair.
 ///
 /// Returns (private_key_bytes_32B, compressed_pubkey_bytes_33B).
