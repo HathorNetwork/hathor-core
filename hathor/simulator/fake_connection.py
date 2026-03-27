@@ -273,7 +273,12 @@ class FakeConnection:
         self._buf2.clear()
 
         self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
-        self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+
+        # If in bootstrap mode, now we instantiate the Discovery Factory.
+        if self._fake_bootstrap_id is False:
+            self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+        elif self._fake_bootstrap_id or self._fake_bootstrap_id is None:
+            self._proto2 = self.manager2.connections.discovered_factory.buildProtocol(self.addr1)
 
         # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls
         # connect_to_endpoint()
