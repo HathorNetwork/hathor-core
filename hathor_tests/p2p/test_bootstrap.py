@@ -58,7 +58,8 @@ class BootstrapTestCase(unittest.TestCase):
             True,
             self.rng,
             enable_ipv6=False,
-            disable_ipv4=False
+            disable_ipv4=False,
+            slots_manager=None  # type: ignore
         )
 
         host_ports1 = [
@@ -92,7 +93,8 @@ class BootstrapTestCase(unittest.TestCase):
             True,
             self.rng,
             enable_ipv6=False,
-            disable_ipv4=False
+            disable_ipv4=False,
+            slots_manager=None  # type: ignore
         )
 
         bootstrap_a = [

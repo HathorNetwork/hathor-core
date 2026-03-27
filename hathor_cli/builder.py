@@ -35,6 +35,7 @@ from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.execution import NCBlockExecutor
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
+from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -314,6 +315,20 @@ class CliBuilder:
 
         cpu_mining_service = CpuMiningService()
 
+        # Instances of Connection Slots
+        max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
+        max_bootstrap: int = settings.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS
+
+        slots_manager_settings = SlotsManagerSettings(
+            max_outgoing=max_outgoing,
+            max_incoming=max_incoming,
+            max_bootstrap=max_bootstrap,
+        )
+
+        # Connection slots manager -> Kickstarts connection slots
+        slots_manager = SlotsManager(slots_manager_settings)
+
         p2p_manager = ConnectionsManager(
             settings=settings,
             reactor=reactor,
@@ -323,6 +338,7 @@ class CliBuilder:
             rng=Random(),
             enable_ipv6=self._args.x_enable_ipv6,
             disable_ipv4=self._args.x_disable_ipv4,
+            slots_manager= slots_manager
         )
 
         vertex_handler = VertexHandler(
