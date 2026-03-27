@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connect_classes import ConnectionRejected, ConnectionState
+from hathor.p2p.connect_classes import ConnectionRejected, ConnectionRemoved, ConnectionState
 from hathor.p2p.connection_slot import SlotsManager
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
@@ -283,6 +283,9 @@ class ConnectionsManager:
         """
         Do a discovery and connect on all discovery strategies.
         """
+        def connect_to_bootstrap(entrypoint: PeerEndpoint) -> None:
+            self.connect_to_endpoint(entrypoint, discovery_call=True)
+
         for peer_discovery in self.peer_discoveries:
             coro = peer_discovery.discover_and_connect(self.connect_to_bootstrap)
             Deferred.fromCoroutine(coro)
@@ -430,8 +433,20 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
+        # Checks if entrypoint has been blacklisted. If so, then if it can be delisted.
+        if protocol.entrypoint is not None and self.slots_manager.is_blacklisted(protocol.entrypoint):
+
+            # Check if can be delisted:
+            if not self.slots_manager.may_unblacklist(protocol):
+                self.log.warn('entrypoint blacklisted, disconnecting...')
+                protocol.disconnect(force=True)
+                return
+
+            self.slots_manager.remove_from_blacklist(protocol)
+
         connection_status = self.slots_manager.add_to_slot(protocol)
 
+        # Adding rejected, disconnect protocol.
         if isinstance(connection_status, ConnectionRejected):
             self.log.warn('Connection Rejected')
             protocol.disconnect(force=True)
@@ -467,6 +482,10 @@ class ConnectionsManager:
             protocol=protocol,
             peers_count=self._get_peers_count()
         )
+
+        # If in check_ep, getting ready we may disconnect.
+        if protocol in self.slots_manager.check_ep_slot:
+            protocol.disconnect('Entrypoint checked - READY', force=True)
 
         peer_id = protocol.peer.id
         if peer_id in self.connected_peers:
@@ -511,7 +530,11 @@ class ConnectionsManager:
         self.connections.discard(protocol)
 
         # Each conn is from a slot - discard from it as well.
-        self.slots_manager.remove_from_slot(protocol)
+        status = self.slots_manager.remove_from_slot(protocol)
+
+        # If there is some entrypoint popped from queue, we attempt to connect.
+        if isinstance(status, ConnectionRemoved) and status.entrypoint:
+            self.connect_to_endpoint(status.entrypoint)
 
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)

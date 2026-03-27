@@ -315,8 +315,10 @@ class CliBuilder:
         max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
         max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
         max_bootstrap: int = settings.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS
+        max_check_ep: int = settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_ep_queue: int = settings.P2P_QUEUE_SIZE
 
-        slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap)
+        slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap, max_check_ep, max_ep_queue)
 
         # Connection slots manager -> Kickstarts connection slots
         slots_manager = SlotsManager(slots_manager_settings)

@@ -16,16 +16,23 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from hathor.p2p.peer_endpoint import PeerEndpoint
+
 
 class ConnectionType(Enum):
     """ Types of Connection as inputs for an instance of the Hathor Protocol. """
     OUTGOING = 0
     INCOMING = 1
     BOOTSTRAP = 2
+    CHECK_ENTRYPOINTS = 3
+
+    # If a connection comes from an entrypoint queue, if its assigned the
+    # 'REBOUNDED' state. It is not a slot.
+    REBOUNDED = 4
 
     def is_outbound(self) -> bool:
-        """ If value is 1, then the connection is inbound. If not, outbound."""
-        return self in (ConnectionType.OUTGOING, ConnectionType.BOOTSTRAP)
+        return self in (ConnectionType.OUTGOING, ConnectionType.BOOTSTRAP,
+                        ConnectionType.CHECK_ENTRYPOINTS, ConnectionType.CHECK_ENTRYPOINTS)
 
 
 class ConnectionState(Enum):
@@ -48,6 +55,7 @@ class ConnectionRejected:
 @dataclass(slots=True, frozen=True)
 class ConnectionRemoved:
     reason: str
+    entrypoint: PeerEndpoint | None
 
 
 @dataclass(slots=True, frozen=True)
