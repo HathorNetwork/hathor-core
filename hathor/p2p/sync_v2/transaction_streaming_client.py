@@ -55,6 +55,9 @@ class TransactionStreamingClient:
         #      it will be correctly enabled when doing a full validation anyway.
         #      We can also set the `nc_block_root_id` to `None` because we only call `verify_basic`,
         #      which doesn't need it.
+        # XXX: Default to shielded_transactions=False since shielded txs cannot exist
+        # before the feature is activated. The correct value will be computed when doing
+        # a full validation anyway.
         self.verification_params = VerificationParams(
             nc_block_root_id=None,
             features=Features(
@@ -63,6 +66,7 @@ class TransactionStreamingClient:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
                 nano_runtime_version=NanoRuntimeVersion.V1,
+                shielded_transactions=False,
             )
         )
 

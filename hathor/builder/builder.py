@@ -236,6 +236,9 @@ class Builder:
         vertex_json_serializer = self._get_or_create_vertex_json_serializer()
         blueprint_service = self._get_or_create_blueprint_service()
 
+        from hathor.crypto.shielded import validate_shielded_crypto_available
+        validate_shielded_crypto_available(settings.ENABLE_SHIELDED_TRANSACTIONS)
+
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
 

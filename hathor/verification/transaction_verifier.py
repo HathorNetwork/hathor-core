@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
+from structlog import get_logger
+
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
@@ -34,10 +36,16 @@ from hathor.transaction.exceptions import (
     InputVoidedAndConfirmed,
     InvalidInputData,
     InvalidInputDataSize,
+    InvalidRangeProofError,
+    InvalidShieldedOutputError,
+    InvalidSurjectionProofError,
     InvalidToken,
     InvalidVersionError,
     RewardLocked,
     ScriptError,
+    ShieldedAuthorityError,
+    ShieldedBalanceMismatchError,
+    ShieldedMintMeltForbiddenError,
     TimestampError,
     TokenNotFound,
     TooFewInputs,
@@ -46,6 +54,7 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     TooManyTokens,
     TooManyWithinConflicts,
+    TrivialCommitmentError,
     UnusedTokensError,
     WeightError,
 )
@@ -60,13 +69,15 @@ if TYPE_CHECKING:
 
 cpu = get_cpu_profiler()
 
+logger = get_logger()
+
 MAX_TOKENS_LENGTH: int = 16
 MAX_WITHIN_CONFLICTS: int = 8
 MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa', '_feature_service', 'log')
 
     def __init__(
         self,
@@ -78,6 +89,7 @@ class TransactionVerifier:
         self._settings = settings
         self._daa = daa
         self._feature_service = feature_service
+        self.log = logger.new()
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -120,10 +132,20 @@ class TransactionVerifier:
                 spent_tx = tx.get_spent_tx(tx_input)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            if tx_input.index >= len(spent_tx.outputs):
+            # Handle shielded output references
+            if tx_input.index < len(spent_tx.outputs):
+                script = spent_tx.outputs[tx_input.index].script
+            elif spent_tx.shielded_outputs:
+                shielded_idx = tx_input.index - len(spent_tx.outputs)
+                if shielded_idx < len(spent_tx.shielded_outputs):
+                    script = spent_tx.shielded_outputs[shielded_idx].script
+                else:
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        tx_input.tx_id.hex(), tx_input.index))
+            else:
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+            n_txops += counter.get_sigops_count(tx_input.data, script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
@@ -150,7 +172,19 @@ class TransactionVerifier:
                 ))
 
             spent_tx = tx.get_spent_tx(input_tx)
-            assert input_tx.index < len(spent_tx.outputs)
+
+            # Handle shielded output references instead of asserting
+            if input_tx.index < len(spent_tx.outputs):
+                # Standard transparent output
+                pass
+            elif spent_tx.shielded_outputs:
+                shielded_idx = input_tx.index - len(spent_tx.outputs)
+                if shielded_idx >= len(spent_tx.shielded_outputs):
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        input_tx.tx_id.hex(), input_tx.index))
+            else:
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    input_tx.tx_id.hex(), input_tx.index))
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
@@ -256,25 +290,19 @@ class TransactionVerifier:
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     @classmethod
-    def verify_sum(
+    def _check_token_permissions_and_deposits(
         cls,
         settings: HathorSettings,
-        tx: Transaction,
         token_dict: TokenInfoDict,
+        *,
         allow_nonexistent_tokens: bool = False,
-    ) -> None:
-        """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
-        and outputs is not 0, make sure inputs have mint/melt authority.
+    ) -> tuple[int, bool]:
+        """Check token permissions and compute deposit/withdraw balance.
 
-        When `allow_nonexistent_tokens` flag is set to `True` and a nonexistent token is provided,
-        this method will skip the fee and HTR balance checks.
+        Shared logic between verify_sum and verify_token_rules.
 
-        token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
-        amount = outputs - inputs, thus:
-        - amount < 0 when melting
-        - amount > 0 when minting
-
-        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
+        Returns:
+            (htr_expected_amount, has_nonexistent_tokens)
         """
         deposit = 0
         withdraw = 0
@@ -284,8 +312,6 @@ class TransactionVerifier:
             cls._check_token_permissions(token_uid, token_info)
             match token_info.version:
                 case None:
-                    # When a token is not found, we can't assert the HTR value since we don't know the token version.
-                    # This is only possible for nanos, because they may create the missing token in execution-time.
                     if not allow_nonexistent_tokens:
                         raise TokenNotFound(f'token uid {token_uid.hex()} not found.')
                     has_nonexistent_tokens = True
@@ -305,7 +331,6 @@ class TransactionVerifier:
                 case _:
                     assert_never(token_info.version)
 
-        # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
         htr_info = token_dict[settings.HATHOR_TOKEN_UID]
         if htr_info.amount > htr_expected_amount:
@@ -313,6 +338,35 @@ class TransactionVerifier:
                 htr_info.amount,
                 htr_expected_amount,
             ))
+
+        return htr_expected_amount, has_nonexistent_tokens
+
+    @classmethod
+    def verify_sum(
+        cls,
+        settings: HathorSettings,
+        tx: Transaction,
+        token_dict: TokenInfoDict,
+        allow_nonexistent_tokens: bool = False,
+        *,
+        shielded_fee: int = 0,
+    ) -> None:
+        """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
+        and outputs is not 0, make sure inputs have mint/melt authority.
+
+        When `allow_nonexistent_tokens` flag is set to `True` and a nonexistent token is provided,
+        this method will skip the fee and HTR balance checks.
+
+        token_dict sums up all tokens present in the tx and their properties (amount, can_mint, can_melt)
+        amount = outputs - inputs, thus:
+        - amount < 0 when melting
+        - amount > 0 when minting
+
+        :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
+        """
+        htr_expected_amount, has_nonexistent_tokens = cls._check_token_permissions_and_deposits(
+            settings, token_dict, allow_nonexistent_tokens=allow_nonexistent_tokens,
+        )
 
         if has_nonexistent_tokens:
             # In a partial verification, it's not possible to check fees and
@@ -322,11 +376,12 @@ class TransactionVerifier:
             assert tx.is_nano_contract()
             return
 
-        expected_fee = token_dict.calculate_fee(settings)
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
         if htr_info.amount < htr_expected_amount:
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
@@ -334,6 +389,38 @@ class TransactionVerifier:
             ))
 
         assert htr_info.amount == htr_expected_amount
+
+    @classmethod
+    def verify_token_rules(
+        cls,
+        settings: HathorSettings,
+        token_dict: TokenInfoDict,
+        *,
+        shielded_fee: int = 0,
+    ) -> None:
+        """Verify token authority permissions, deposit requirements, and fee correctness.
+
+        Uses _check_token_permissions_and_deposits for shared permission/deposit logic,
+        then checks fee amounts. Used for shielded transactions where verify_sum's balance
+        equation is replaced by verify_shielded_balance.
+
+        :raises ForbiddenMint: if tokens were minted without authority
+        :raises ForbiddenMelt: if tokens were melted without authority
+        :raises InputOutputMismatch: if fee amounts are incorrect
+        """
+        htr_expected_amount, _ = cls._check_token_permissions_and_deposits(settings, token_dict)
+
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
+        if expected_fee != token_dict.fees_from_fee_header:
+            raise InputOutputMismatch(f"Fee amount is different than expected. "
+                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
+
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
+        if htr_info.amount < htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
@@ -377,6 +464,12 @@ class TransactionVerifier:
         seen_token_indexes = set()
         for txout in tx.outputs:
             seen_token_indexes.add(txout.get_token_index())
+
+        # Consider shielded output token indexes
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput
+        for shielded_out in tx.shielded_outputs:
+            if isinstance(shielded_out, AmountShieldedOutput):
+                seen_token_indexes.add(shielded_out.token_data & 0x7F)
 
         if tx.is_nano_contract():
             nano_header = tx.get_nano_header()
@@ -425,3 +518,324 @@ class TransactionVerifier:
 
         if between_counter > MAX_BETWEEN_CONFLICTS:
             raise TooManyBetweenConflicts
+
+    # --- Shielded transaction verification methods ---
+
+    @staticmethod
+    def _normalize_token_uid(token_uid: bytes) -> bytes:
+        """Normalize a token UID to 32 bytes for the crypto library."""
+        from hathor.crypto.shielded.asset_tag import normalize_token_uid
+        try:
+            return normalize_token_uid(token_uid)
+        except ValueError as e:
+            raise InvalidShieldedOutputError(str(e)) from e
+
+    @staticmethod
+    def calculate_shielded_fee(settings: HathorSettings, tx: Transaction) -> int:
+        """Calculate the total fee required for shielded outputs."""
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+        fee = 0
+        for output in tx.shielded_outputs:
+            if isinstance(output, AmountShieldedOutput):
+                fee += settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT
+            elif isinstance(output, FullShieldedOutput):
+                fee += settings.FEE_PER_FULL_SHIELDED_OUTPUT
+        return fee
+
+    def verify_shielded_fee(self, tx: Transaction) -> None:
+        """Verify the transaction declares sufficient fees for its shielded outputs."""
+        if not tx.has_fees():
+            raise InvalidShieldedOutputError('shielded transactions require a fee header')
+        fee_header = tx.get_fee_header()
+        expected_shielded_fee = self.calculate_shielded_fee(self._settings, tx)
+        total_declared_fee = fee_header.total_fee_amount()
+        if total_declared_fee < expected_shielded_fee:
+            raise InvalidShieldedOutputError(
+                f'insufficient fee for shielded outputs: declared {total_declared_fee}, '
+                f'minimum shielded fee is {expected_shielded_fee}'
+            )
+
+    def verify_no_mint_melt(self, token_dict: TokenInfoDict) -> None:
+        """Reject mint/melt operations in transactions with shielded outputs."""
+        for token_uid, token_info in token_dict.items():
+            if token_info.version == TokenVersion.NATIVE:
+                continue
+            if token_info.can_mint and token_info.has_been_minted():
+                raise ShieldedMintMeltForbiddenError(
+                    f'token {token_uid.hex()}: minting is not allowed in transactions '
+                    f'with shielded outputs (transparent surplus: {token_info.amount})'
+                )
+            if token_info.can_melt and token_info.has_been_melted():
+                raise ShieldedMintMeltForbiddenError(
+                    f'token {token_uid.hex()}: melting is not allowed in transactions '
+                    f'with shielded outputs (transparent deficit: {token_info.amount})'
+                )
+
+    def verify_shielded_outputs(self, tx: Transaction) -> None:
+        """Top-level: calls all basic shielded checks."""
+        self.verify_commitments_valid(tx)
+        self.verify_authority_restriction(tx)
+        self.verify_range_proofs(tx)
+        self.verify_trivial_commitment_protection(tx)
+        self.verify_shielded_fee(tx)
+
+    def verify_shielded_outputs_with_storage(self, tx: Transaction) -> None:
+        """Shielded verifications that need storage (balance, surjection).
+
+        Builds shared caches for spent transactions and asset tags to avoid
+        redundant storage lookups and crypto operations across sub-methods.
+        """
+        assert tx.storage is not None
+
+        # Build spent_txs cache once — shared by surjection, balance, and trivial commitment
+        spent_txs: dict[bytes, BaseTransaction] = {}
+        for tx_input in tx.inputs:
+            if tx_input.tx_id not in spent_txs:
+                spent_txs[tx_input.tx_id] = tx.storage.get_transaction(tx_input.tx_id)
+
+        # Build asset_tag cache once — shared by surjection and balance
+        asset_tag_cache: dict[bytes, bytes] = {}
+
+        self.verify_surjection_proofs(tx, spent_txs=spent_txs, asset_tag_cache=asset_tag_cache)
+        self.verify_shielded_balance(tx, spent_txs=spent_txs, asset_tag_cache=asset_tag_cache)
+
+    def verify_commitments_valid(self, tx: Transaction) -> None:
+        """Validate all commitments are exactly 33 bytes, valid curve points, and count is within limits."""
+        from hathor.crypto.shielded import validate_commitment, validate_generator
+        from hathor.crypto.util import get_public_key_from_bytes_compressed
+        from hathor.transaction.shielded_tx_output import (
+            ASSET_COMMITMENT_SIZE,
+            COMMITMENT_SIZE,
+            EPHEMERAL_PUBKEY_SIZE,
+            MAX_SHIELDED_OUTPUTS,
+            FullShieldedOutput,
+        )
+
+        if len(tx.shielded_outputs) > MAX_SHIELDED_OUTPUTS:
+            raise InvalidShieldedOutputError(
+                f'too many shielded outputs: {len(tx.shielded_outputs)} exceeds maximum {MAX_SHIELDED_OUTPUTS}'
+            )
+        for i, output in enumerate(tx.shielded_outputs):
+            if len(output.commitment) != COMMITMENT_SIZE:
+                raise InvalidShieldedOutputError(
+                    f'shielded output {i}: commitment must be {COMMITMENT_SIZE} bytes, '
+                    f'got {len(output.commitment)}'
+                )
+            if not validate_commitment(output.commitment):
+                raise InvalidShieldedOutputError(
+                    f'shielded output {i}: invalid commitment (not a valid curve point)'
+                )
+            if isinstance(output, FullShieldedOutput):
+                if len(output.asset_commitment) != ASSET_COMMITMENT_SIZE:
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: asset_commitment must be {ASSET_COMMITMENT_SIZE} bytes, '
+                        f'got {len(output.asset_commitment)}'
+                    )
+                if not validate_generator(output.asset_commitment):
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: invalid asset_commitment (not a valid curve point)'
+                    )
+
+            if output.ephemeral_pubkey:
+                if len(output.ephemeral_pubkey) != EPHEMERAL_PUBKEY_SIZE:
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: ephemeral_pubkey must be {EPHEMERAL_PUBKEY_SIZE} bytes, '
+                        f'got {len(output.ephemeral_pubkey)}'
+                    )
+                try:
+                    get_public_key_from_bytes_compressed(output.ephemeral_pubkey)
+                except (ValueError, TypeError):
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: invalid ephemeral_pubkey (not a valid secp256k1 point)'
+                    )
+
+    def verify_range_proofs(self, tx: Transaction) -> None:
+        """Every shielded output must have valid Bulletproof range proof."""
+        from hathor.crypto.shielded import verify_range_proof
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+        asset_tag_cache: dict[bytes, bytes] = {}
+        for i, output in enumerate(tx.shielded_outputs):
+            if isinstance(output, AmountShieldedOutput):
+                token_index = output.token_data & 0x7F
+                if token_index > len(tx.tokens):
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: token_data index {token_index} '
+                        f'exceeds token list length {len(tx.tokens)}'
+                    )
+                token_uid = tx.get_token_uid(token_index)
+                generator = self._get_or_derive_asset_tag(token_uid, asset_tag_cache)
+            elif isinstance(output, FullShieldedOutput):
+                generator = output.asset_commitment
+            else:
+                raise InvalidShieldedOutputError(f'shielded output {i}: unknown type')
+
+            try:
+                if not verify_range_proof(output.range_proof, output.commitment, generator):
+                    raise InvalidRangeProofError(
+                        f'shielded output {i}: range proof verification failed'
+                    )
+            except ValueError as e:
+                raise InvalidRangeProofError(f'shielded output {i}: {e}') from e
+
+    def _get_or_derive_asset_tag(
+        self,
+        token_uid: bytes,
+        asset_tag_cache: dict[bytes, bytes] | None,
+    ) -> bytes:
+        """Derive an asset tag, using the cache if available."""
+        from hathor.crypto.shielded import derive_asset_tag
+        normalized = self._normalize_token_uid(token_uid)
+        if asset_tag_cache is not None:
+            if normalized not in asset_tag_cache:
+                asset_tag_cache[normalized] = derive_asset_tag(normalized)
+            return asset_tag_cache[normalized]
+        return derive_asset_tag(normalized)
+
+    def verify_surjection_proofs(
+        self,
+        tx: Transaction,
+        *,
+        spent_txs: dict[bytes, BaseTransaction] | None = None,
+        asset_tag_cache: dict[bytes, bytes] | None = None,
+    ) -> None:
+        """Only FullShieldedOutput instances require surjection proofs."""
+        from hathor.crypto.shielded import verify_surjection_proof
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+        assert tx.storage is not None
+        domain_generators: list[bytes] = []
+        for tx_input in tx.inputs:
+            spent_tx = spent_txs[tx_input.tx_id] if spent_txs else tx.storage.get_transaction(tx_input.tx_id)
+            spent_index = tx_input.index
+            if spent_index < len(spent_tx.outputs):
+                spent_output = spent_tx.outputs[spent_index]
+                if spent_output.is_token_authority():
+                    continue
+                token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+                domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
+            else:
+                shielded_index = spent_index - len(spent_tx.outputs)
+                if shielded_index >= len(spent_tx.shielded_outputs):
+                    raise InvalidShieldedOutputError(
+                        f'input references non-existent shielded output index {spent_index}'
+                    )
+                shielded_out = spent_tx.shielded_outputs[shielded_index]
+                if isinstance(shielded_out, FullShieldedOutput):
+                    domain_generators.append(shielded_out.asset_commitment)
+                elif isinstance(shielded_out, AmountShieldedOutput):
+                    token_index = shielded_out.token_data & 0x7F
+                    try:
+                        token_uid = spent_tx.get_token_uid(token_index)
+                    except (IndexError, NotImplementedError) as e:
+                        raise InvalidShieldedOutputError(
+                            f'spent shielded output token_data index {token_index} '
+                            f'is invalid for the spent transaction'
+                        ) from e
+                    domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
+
+        has_full_shielded = any(isinstance(o, FullShieldedOutput) for o in tx.shielded_outputs)
+        if has_full_shielded and not domain_generators:
+            raise InvalidSurjectionProofError(
+                'FullShieldedOutput requires at least one input to form a surjection proof domain'
+            )
+
+        for i, output in enumerate(tx.shielded_outputs):
+            if isinstance(output, FullShieldedOutput):
+                if not output.surjection_proof:
+                    raise InvalidSurjectionProofError(
+                        f'shielded output {i}: FullShieldedOutput requires surjection proof'
+                    )
+                try:
+                    if not verify_surjection_proof(
+                        output.surjection_proof,
+                        output.asset_commitment,
+                        domain_generators,
+                    ):
+                        raise InvalidSurjectionProofError(
+                            f'shielded output {i}: surjection proof verification failed'
+                        )
+                except ValueError as e:
+                    raise InvalidSurjectionProofError(f'shielded output {i}: {e}') from e
+
+    def verify_shielded_balance(
+        self,
+        tx: Transaction,
+        *,
+        spent_txs: dict[bytes, BaseTransaction] | None = None,
+        asset_tag_cache: dict[bytes, bytes] | None = None,
+    ) -> None:
+        """Homomorphic balance verification: sum(C_in) == sum(C_out) + fee*H_HTR."""
+        from hathor.crypto.shielded import verify_balance
+
+        assert tx.storage is not None
+        transparent_inputs: list[tuple[int, bytes]] = []
+        shielded_inputs: list[bytes] = []
+
+        for tx_input in tx.inputs:
+            spent_tx = spent_txs[tx_input.tx_id] if spent_txs else tx.storage.get_transaction(tx_input.tx_id)
+            spent_index = tx_input.index
+            if spent_index < len(spent_tx.outputs):
+                spent_output = spent_tx.outputs[spent_index]
+                if not spent_output.is_token_authority():
+                    token_uid = self._normalize_token_uid(spent_tx.get_token_uid(spent_output.get_token_index()))
+                    transparent_inputs.append((spent_output.value, token_uid))
+            else:
+                shielded_index = spent_index - len(spent_tx.outputs)
+                if shielded_index >= len(spent_tx.shielded_outputs):
+                    raise InvalidShieldedOutputError(
+                        f'input references non-existent shielded output index {spent_index}'
+                    )
+                shielded_out = spent_tx.shielded_outputs[shielded_index]
+                shielded_inputs.append(shielded_out.commitment)
+
+        transparent_outputs: list[tuple[int, bytes]] = []
+        shielded_outputs: list[bytes] = []
+
+        for output in tx.outputs:
+            if output.is_token_authority():
+                continue
+            token_uid = self._normalize_token_uid(tx.get_token_uid(output.get_token_index()))
+            transparent_outputs.append((output.value, token_uid))
+
+        for shielded_output in tx.shielded_outputs:
+            shielded_outputs.append(shielded_output.commitment)
+
+        if tx.has_fees():
+            for fee_entry in tx.get_fee_header().get_fees():
+                token_uid = self._normalize_token_uid(fee_entry.token_uid)
+                transparent_outputs.append((fee_entry.amount, token_uid))
+
+        try:
+            if not verify_balance(
+                transparent_inputs,
+                shielded_inputs,
+                transparent_outputs,
+                shielded_outputs,
+            ):
+                raise ShieldedBalanceMismatchError(
+                    'shielded balance equation does not hold'
+                )
+        except ValueError as e:
+            raise ShieldedBalanceMismatchError(f'balance verification error: {e}') from e
+
+    def verify_authority_restriction(self, tx: Transaction) -> None:
+        """Shielded outputs cannot be authority (mint/melt) outputs."""
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput
+        for i, output in enumerate(tx.shielded_outputs):
+            if isinstance(output, AmountShieldedOutput):
+                from hathor.transaction import TxOutput
+                if output.token_data & TxOutput.TOKEN_AUTHORITY_MASK:
+                    raise ShieldedAuthorityError(
+                        f'shielded output {i}: authority outputs cannot be shielded'
+                    )
+
+    def verify_trivial_commitment_protection(self, tx: Transaction) -> None:
+        """Without storage, conservatively require >= 2 shielded outputs always."""
+        if not tx.shielded_outputs:
+            return
+        if len(tx.shielded_outputs) < 2:
+            raise TrivialCommitmentError(
+                'at least 2 shielded outputs are required '
+                f'to prevent trivial commitment matching (got {len(tx.shielded_outputs)})'
+            )
