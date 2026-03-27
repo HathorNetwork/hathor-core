@@ -383,6 +383,12 @@ pub struct BlindingEntry {
     pub generator_blinding_factor: Buffer,
 }
 
+/// Generate a random 32-byte blinding factor (valid secp256k1 scalar).
+#[napi]
+pub fn generate_random_blinding_factor() -> Buffer {
+    Buffer::from(crate::ecdh::generate_random_blinding_factor().to_vec())
+}
+
 /// Generate a fresh ephemeral secp256k1 key pair.
 ///
 /// Returns (private_key_bytes: 32B, compressed_pubkey_bytes: 33B).

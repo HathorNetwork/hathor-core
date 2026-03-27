@@ -368,6 +368,13 @@ fn compute_balancing_blinding_factor(
     Ok(PyBytes::new_bound(py, result.as_ref()).into())
 }
 
+/// Generate a random 32-byte blinding factor (valid secp256k1 scalar).
+#[pyfunction]
+fn generate_random_blinding_factor(py: Python<'_>) -> PyObject {
+    let bf = crate::ecdh::generate_random_blinding_factor();
+    PyBytes::new_bound(py, &bf).into()
+}
+
 /// Generate a fresh ephemeral secp256k1 key pair.
 ///
 /// Returns (private_key_bytes: 32B, compressed_pubkey_bytes: 33B).
@@ -586,6 +593,7 @@ fn hathor_ct_crypto(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_surjection_proof, m)?)?;
     m.add_function(wrap_pyfunction!(verify_balance, m)?)?;
     m.add_function(wrap_pyfunction!(compute_balancing_blinding_factor, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_random_blinding_factor, m)?)?;
     m.add_function(wrap_pyfunction!(generate_ephemeral_keypair, m)?)?;
     m.add_function(wrap_pyfunction!(derive_ecdh_shared_secret, m)?)?;
     m.add_function(wrap_pyfunction!(derive_rewind_nonce, m)?)?;
