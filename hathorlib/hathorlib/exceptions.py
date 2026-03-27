@@ -16,7 +16,8 @@ limitations under the License.
 
 
 class HathorError(Exception):
-    """General error class"""
+    """Base class for exceptions in Hathor."""
+    pass
 
 
 class InvalidAddress(HathorError):

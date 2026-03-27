@@ -64,13 +64,13 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 
 
 class TxVersion(IntEnum):
-    """Versions are sequential for blocks and transactions"""
-
+    """ Indicate transaction type when serialized. """
     REGULAR_BLOCK = 0
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
-    NANO_CONTRACT = 4
+    # DEPRECATED_NANO_CONTRACT = 4
+    POA_BLOCK = 5
     ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
@@ -80,25 +80,24 @@ class TxVersion(IntEnum):
 
         raise ValueError(f'Invalid version: {value}')
 
-    def get_cls(self) -> Type['BaseTransaction']:
-        from hathorlib import Block, TokenCreationTransaction, Transaction
-        from hathorlib.nanocontracts.nanocontract import DeprecatedNanoContract
-        from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
-        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
-            TxVersion.REGULAR_BLOCK: Block,
-            TxVersion.REGULAR_TRANSACTION: Transaction,
-            TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
-            TxVersion.NANO_CONTRACT: DeprecatedNanoContract,
-            TxVersion.ON_CHAIN_BLUEPRINT: OnChainBlueprint,
-        }
+def get_cls_from_tx_version(tx_version: TxVersion) -> Type['BaseTransaction']:
+    from hathorlib import Block, TokenCreationTransaction, Transaction
+    from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
-        cls = cls_map.get(self)
+    cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
+        TxVersion.REGULAR_BLOCK: Block,
+        TxVersion.REGULAR_TRANSACTION: Transaction,
+        TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
+        TxVersion.ON_CHAIN_BLUEPRINT: OnChainBlueprint,
+    }
 
-        if cls is None:
-            raise ValueError('Invalid version.')
-        else:
-            return cls
+    cls = cls_map.get(tx_version)
+
+    if cls is None:
+        raise ValueError('Invalid version.')
+    else:
+        return cls
 
 
 class BaseTransaction(ABC):
@@ -724,7 +723,7 @@ def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     version = data[1]
     try:
         tx_version = TxVersion(version)
-        cls = tx_version.get_cls()
+        cls = get_cls_from_tx_version(tx_version)
         return cls.create_from_struct(data)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')

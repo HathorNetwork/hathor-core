@@ -152,6 +152,8 @@ _openapi_connecting_peer = {
 StatusResource.openapi = {
     '/status': {
         'x-visibility': 'public',
+        # The /status endpoint has a large reponse, so we need to increase the buffer size of the proxy
+        'x-proxy-buffers': '16 16k',
         'x-rate-limit': {
             'global': [
                 {

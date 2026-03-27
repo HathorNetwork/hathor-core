@@ -8,7 +8,7 @@ LICENSE file in the root directory of this source tree.
 import unittest
 
 from hathorlib import Block, TokenCreationTransaction, Transaction
-from hathorlib.base_transaction import tx_or_block_from_bytes
+from hathorlib.base_transaction import get_cls_from_tx_version, tx_or_block_from_bytes
 from hathorlib.conf import HathorSettings
 from hathorlib.scripts import create_output_script
 from hathorlib.utils import decode_address
@@ -257,9 +257,9 @@ class HathorCommonsTestCase(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_cls_from_tx_version(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_cls_from_tx_version(version), Transaction)
 
         # test serialization doesn't mess up with signal_bits and version
         data = bytes.fromhex('f00001ffffffe8b789180000001976a9147fd4ae0e4fb2d2854e76d359029d8078bb9'

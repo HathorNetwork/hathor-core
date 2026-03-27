@@ -56,9 +56,9 @@ class EventSimulationScenariosTest(BaseEventSimulationTester):
 
         for a, b in zip(responses, expected):
             self.assertEqual(type(a), type(b))
-            self.assertEqual(a.__fields__, b.__fields__)
-            self.assertEqual(a.event.__fields__, b.event.__fields__)
-            self.assertEqual(a.event.data.__fields__, b.event.data.__fields__)
+            self.assertEqual(type(a).model_fields, type(b).model_fields)
+            self.assertEqual(type(a.event).model_fields, type(b.event).model_fields)
+            self.assertEqual(type(a.event.data).model_fields, type(b.event.data).model_fields)
 
             for field in ['type', 'peer_id', 'network', 'latest_event_id', 'stream_id']:
                 self.assertEqual(getattr(a, field), getattr(b, field))

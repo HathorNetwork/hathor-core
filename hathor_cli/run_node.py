@@ -49,6 +49,7 @@ def temp_fifo(filename: str, tempdir: str | None) -> Iterator[None]:
 class RunNode:
     UNSAFE_ARGUMENTS: list[tuple[str, Callable[['RunNodeArgs'], bool]]] = [
         ('--test-mode-tx-weight', lambda args: bool(args.test_mode_tx_weight)),
+        ('--test-mode-block-weight', lambda args: bool(args.test_mode_block_weight)),
         ('--enable-crash-api', lambda args: bool(args.enable_crash_api)),
         ('--sync-bridge', lambda args: bool(args.sync_bridge)),
         ('--sync-v1-only', lambda args: bool(args.sync_v1_only)),
@@ -87,6 +88,8 @@ class RunNode:
 
         parser.add_argument('--test-mode-tx-weight', action='store_true',
                             help='Reduces tx weight to 1 for testing purposes')
+        parser.add_argument('--test-mode-block-weight', action='store_true',
+                            help='Reduces block weight to 1 for testing purposes')
         parser.add_argument('--dns', action='append', help='Seed DNS')
         parser.add_argument('--peer', help='json file with peer info')
         parser.add_argument('--sysctl',
@@ -499,7 +502,7 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
-        from hathor.conf import (
+        from hathorlib.conf import (
             LOCALNET_SETTINGS_FILEPATH,
             NANO_TESTNET_SETTINGS_FILEPATH,
             TESTNET_INDIA_SETTINGS_FILEPATH,
@@ -586,7 +589,7 @@ class RunNode:
 
     def _parse_args_obj(self, args: dict[str, Any]) -> 'RunNodeArgs':
         from hathor_cli.run_node_args import RunNodeArgs
-        return RunNodeArgs.parse_obj(args)
+        return RunNodeArgs.model_validate(args)
 
     def run(self) -> None:
         self.reactor.run()

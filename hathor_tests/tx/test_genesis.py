@@ -41,6 +41,7 @@ class GenesisTest(unittest.TestCase):
             daa=self._daa,
             feature_service=Mock(),
             tx_storage=self.storage,
+            blueprint_service=Mock(),
         )
         self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 

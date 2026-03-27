@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TypeAlias
+from typing import NewType, TypeAlias
 
 # XXX: All of these types already have an equivalent NewType available on `hathor.nanoconracts.types`, the next step is
 #      to refactor the places which use `hathor.types`, which is still a lot. Some of these would also benefit from
@@ -24,6 +24,8 @@ Amount: TypeAlias = int            # NewType('Amount', int)
 Timestamp: TypeAlias = int         # NewType('Timestamp', int)
 TxOutputScript: TypeAlias = bytes  # NewType('TxOutputScript', bytes)
 VertexId: TypeAlias = bytes        # NewType('VertexId', bytes)
+BlockId = NewType('BlockId', VertexId)
+TransactionId = NewType('TransactionId', VertexId)
 TokenUid: TypeAlias = VertexId     # NewType('TokenUid', VertexId)
 
 

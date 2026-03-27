@@ -283,6 +283,8 @@ class VertexExporter:
             blk.weight = float(node.attrs['weight'])
         else:
             blk.weight = self._daa.calculate_block_difficulty(blk, self.get_parent_block)
+        if 'signal_bits' in node.attrs:
+            blk.signal_bits = int(node.attrs['signal_bits'])
         self.update_vertex_hash(blk)
         self._block_height[blk.hash] = height
         return blk

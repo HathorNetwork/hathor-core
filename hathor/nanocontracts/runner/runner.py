@@ -25,6 +25,7 @@ from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.nanocontracts.balance_rules import BalanceRules
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import (
     NCAlreadyInitializedContractError,
@@ -47,6 +48,8 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.faux_immutable import create_with_shell
 from hathor.nanocontracts.metered_exec import MeteredExecutor
 from hathor.nanocontracts.method import Method, ReturnOnly
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
+from hathor.nanocontracts.nano_settings import NanoSettings
 from hathor.nanocontracts.rng import NanoRNG
 from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
 from hathor.nanocontracts.runner.index_records import (
@@ -91,10 +94,10 @@ from hathor.nanocontracts.utils import (
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import InvalidFeeAmount
-from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor.transaction.util import clean_token_string, validate_fee_amount, validate_token_name_and_symbol
+from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -120,22 +123,28 @@ class Runner:
     MAX_RECURSION_DEPTH: int = 100
     MAX_CALL_COUNTER: int = 250
 
+    _runtime_version: NanoRuntimeVersion
+
     def __init__(
         self,
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
-        tx_storage: TransactionStorage,
+        runtime_version: NanoRuntimeVersion,
+        tx_storage: NCTransactionStorageProtocol,
+        blueprint_service: BlueprintService,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
     ) -> None:
         self.tx_storage = tx_storage
+        self.blueprint_service = blueprint_service
         self.storage_factory = storage_factory
         self.block_storage = block_storage
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
+        self._runtime_version = runtime_version
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -271,7 +280,7 @@ class Runner:
         try:
             ret = self._unsafe_call_public_method(contract_id, method_name, ctx, nc_args)
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
         return ret
 
     def _unsafe_call_public_method(
@@ -306,9 +315,6 @@ class Runner:
         self._validate_balances(ctx)
         self._commit_all_changes_to_storage()
 
-        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
-        self._updated_tokens_totals = defaultdict(int)
-        self._paid_actions_fees = defaultdict(int)
         return ret
 
     def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
@@ -506,15 +512,20 @@ class Runner:
 
         return result
 
-    def _reset_all_change_trackers(self) -> None:
+    def _reset_all_changes(self) -> None:
         """Reset all changes and prepare for next call."""
         assert self._call_info is not None
         for change_trackers in self._call_info.change_trackers.values():
             for change_tracker in change_trackers:
                 if not change_tracker.has_been_commited:
                     change_tracker.block()
+
         self._last_call_info = self._call_info
         self._call_info = None
+
+        # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
+        self._updated_tokens_totals = defaultdict(int)
+        self._paid_actions_fees = defaultdict(int)
 
     def _validate_balances(self, ctx: Context) -> None:
         """
@@ -729,7 +740,7 @@ class Runner:
                 kwargs=kwargs,
             )
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
 
     def _handle_index_update(self, action: NCAction) -> None:
         """For each action in a public method call, create the appropriate index update records."""
@@ -940,7 +951,7 @@ class Runner:
         try:
             ret = self._unsafe_call_public_method(contract_id, NC_INITIALIZE_METHOD, ctx, nc_args)
         finally:
-            self._reset_all_change_trackers()
+            self._reset_all_changes()
         return ret
 
     @_forbid_syscall_from_view('create_contract')
@@ -1137,7 +1148,7 @@ class Runner:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_deposit_token')
@@ -1264,10 +1275,22 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.tx_storage.get_blueprint_class(blueprint_id)
+        self.blueprint_service.get_blueprint_class(blueprint_id)
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
+
+    def syscall_get_nano_settings(self) -> NanoSettings:
+        """Get nano settings according to the current runtime."""
+        match self._runtime_version:
+            case NanoRuntimeVersion.V1:
+                raise NCFail('syscall `get_settings` is not yet supported')
+            case NanoRuntimeVersion.V2:
+                return NanoSettings(
+                    fee_per_output=self._settings.FEE_PER_OUTPUT,
+                )
+            case _:
+                assert_never(self._runtime_version)
 
     def _get_token(self, token_uid: TokenUid) -> TokenDescription:
         """
@@ -1296,26 +1319,18 @@ class Runner:
                 token_id=HATHOR_TOKEN_UID  # HTR token ID is the same as its UID
             )
 
-        # Check the transaction storage for existing tokens
         try:
-            token_creation_tx = self.tx_storage.get_token_creation_transaction(token_uid)
+            token_description = self.tx_storage.get_token_description(token_uid)
+            if token_description is None:
+                raise NCInvalidSyscall(
+                    f'The {token_uid.hex()} token is not confirmed by any block '
+                    f'for contract {call_record.contract_id.hex()}'
+                )
+            return token_description
         except TransactionDoesNotExist:
             raise NCInvalidSyscall(
                 f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
             )
-
-        if token_creation_tx.get_metadata().first_block is None:
-            raise NCInvalidSyscall(
-                f'The {token_uid.hex()} token is not confirmed by any block '
-                f'for contract {call_record.contract_id.hex()}'
-            )
-
-        return TokenDescription(
-            token_version=token_creation_tx.token_version,
-            token_name=token_creation_tx.token_name,
-            token_symbol=token_creation_tx.token_symbol,
-            token_id=token_creation_tx.hash
-        )
 
     def _create_token(
         self,
@@ -1436,32 +1451,37 @@ class Runner:
 
 
 class RunnerFactory:
-    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory')
+    __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory', 'blueprint_service')
 
     def __init__(
         self,
         *,
         reactor: ReactorProtocol,
         settings: HathorSettings,
-        tx_storage: TransactionStorage,
+        tx_storage: NCTransactionStorageProtocol,
         nc_storage_factory: NCStorageFactory,
+        blueprint_service: BlueprintService,
     ) -> None:
         self.reactor = reactor
         self.settings = settings
         self.tx_storage = tx_storage
         self.nc_storage_factory = nc_storage_factory
+        self.blueprint_service = blueprint_service
 
     def create(
         self,
         *,
+        runtime_version: NanoRuntimeVersion,
         block_storage: NCBlockStorage,
         seed: bytes | None = None,
     ) -> Runner:
         return Runner(
             reactor=self.reactor,
             settings=self.settings,
+            runtime_version=runtime_version,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
+            blueprint_service=self.blueprint_service,
             block_storage=block_storage,
             seed=seed,
         )

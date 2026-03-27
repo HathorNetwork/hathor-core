@@ -86,4 +86,4 @@ class EventReorgTest(unittest.TestCase):
             self.assertEqual(EventType(actual_event.type), expected_event_type)
 
             for expected_data_key, expected_data_value in expected_partial_data.items():
-                self.assertEqual(actual_event.data.dict()[expected_data_key], expected_data_value)
+                self.assertEqual(actual_event.data.model_dump()[expected_data_key], expected_data_value)

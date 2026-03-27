@@ -49,6 +49,7 @@ from hathor.transaction.exceptions import (
     UnusedTokensError,
     WeightError,
 )
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -130,14 +131,14 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, params: VerificationParams, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        self._verify_inputs(self._settings, tx, params, skip_script=skip_script)
+        self._verify_inputs(self._settings, tx, params.features.opcodes_version, skip_script=skip_script)
 
     @classmethod
     def _verify_inputs(
         cls,
         settings: HathorSettings,
         tx: Transaction,
-        params: VerificationParams,
+        opcodes_version: OpcodesVersion,
         *,
         skip_script: bool,
     ) -> None:
@@ -160,7 +161,7 @@ class TransactionVerifier:
                 ))
 
             if not skip_script:
-                cls.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx, params=params)
+                cls.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx, opcodes_version=opcodes_version)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
@@ -175,7 +176,7 @@ class TransactionVerifier:
         tx: Transaction,
         input_tx: TxInput,
         spent_tx: BaseTransaction,
-        params: VerificationParams,
+        opcodes_version: OpcodesVersion,
     ) -> None:
         """
         :type tx: Transaction
@@ -184,7 +185,7 @@ class TransactionVerifier:
         """
         from hathor.transaction.scripts import script_eval
         try:
-            script_eval(tx, input_tx, spent_tx, params.features.opcodes_version)
+            script_eval(tx, input_tx, spent_tx, opcodes_version)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 

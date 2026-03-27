@@ -52,7 +52,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
             def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> int:
                 return 123
 
-        self.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+        self.blueprint_service.register_blueprint(self.blueprint_id, MyBlueprint)
         self.runner.create_contract(self.contract_id, self.blueprint_id, self.ctx, 123)
 
     def test_forbidden_field_name(self) -> None:
@@ -218,7 +218,7 @@ class TestBlueprintSyntax(BlueprintTestCase):
             def initialize(self, context: Context) -> None:
                 pass
 
-        self.nc_catalog.blueprints[self.blueprint_id] = MyBlueprint
+        self.blueprint_service.register_blueprint(self.blueprint_id, MyBlueprint)
         self.runner.create_contract(self.contract_id, self.blueprint_id, self.ctx)
 
     def test_public_context_untyped(self) -> None:

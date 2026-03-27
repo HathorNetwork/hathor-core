@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor_cli.run_node_args import RunNodeArgs
 from hathor_cli.side_dag import SideDagArgs
@@ -173,10 +174,6 @@ class CliBuilder:
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
 
-        if settings.ENABLE_NANO_CONTRACTS:
-            from hathor.nanocontracts.catalog import generate_catalog_from_settings
-            self.tx_storage.nc_catalog = generate_catalog_from_settings(settings)
-
         self.wallet = None
         if self._args.wallet:
             self.wallet = self.create_wallet()
@@ -230,12 +227,20 @@ class CliBuilder:
         from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
         nc_calls_sorter = random_nc_calls_sorter
 
+        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
+        blueprint_service = BlueprintService(
+            settings=settings,
+            tx_storage=tx_storage,
+            feature_service=self.feature_service,
+        )
+
         assert self.nc_storage_factory is not None
         runner_factory = RunnerFactory(
             reactor=reactor,
             settings=settings,
             tx_storage=tx_storage,
             nc_storage_factory=self.nc_storage_factory,
+            blueprint_service=blueprint_service,
         )
 
         nc_log_storage = NCLogStorage(
@@ -243,7 +248,6 @@ class CliBuilder:
             path=self.rocksdb_storage.path,
             config=self._args.nc_exec_logs,
         )
-        self.feature_service = FeatureService(settings=settings, tx_storage=tx_storage)
 
         soft_voided_tx_ids = set(settings.SOFT_VOIDED_TX_IDS)
         consensus_algorithm = ConsensusAlgorithm(
@@ -273,9 +277,11 @@ class CliBuilder:
 
         test_mode = TestMode.DISABLED
         if self._args.test_mode_tx_weight:
-            test_mode = TestMode.TEST_TX_WEIGHT
+            test_mode |= TestMode.TEST_TX_WEIGHT
             if self.wallet:
                 self.wallet.test_mode = True
+        if self._args.test_mode_block_weight:
+            test_mode |= TestMode.TEST_BLOCK_WEIGHT
 
         daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
 
@@ -285,6 +291,7 @@ class CliBuilder:
             daa=daa,
             feature_service=self.feature_service,
             tx_storage=tx_storage,
+            blueprint_service=blueprint_service,
         )
         verification_service = VerificationService(
             settings=settings,
@@ -321,7 +328,11 @@ class CliBuilder:
 
         SyncSupportLevel.add_factories(settings, p2p_manager, SyncSupportLevel.ENABLED, vertex_parser, vertex_handler)
 
-        vertex_json_serializer = VertexJsonSerializer(storage=tx_storage, nc_log_storage=nc_log_storage)
+        vertex_json_serializer = VertexJsonSerializer(
+            storage=tx_storage,
+            nc_log_storage=nc_log_storage,
+            blueprint_service=blueprint_service,
+        )
 
         from hathor.consensus.poa import PoaBlockProducer, PoaSignerFile
         poa_block_producer: PoaBlockProducer | None = None
@@ -360,6 +371,7 @@ class CliBuilder:
             runner_factory=runner_factory,
             feature_service=self.feature_service,
             vertex_json_serializer=vertex_json_serializer,
+            blueprint_service=blueprint_service,
         )
 
         if self._args.x_ipython_kernel:

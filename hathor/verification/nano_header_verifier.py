@@ -18,6 +18,7 @@ from collections import defaultdict
 from typing import Sequence
 
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
     NCFail,
@@ -48,6 +49,7 @@ from hathor.transaction.exceptions import ScriptError, TooManySigOps
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts import SigopCounter, create_output_script
 from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
 
@@ -70,18 +72,25 @@ ALLOWED_ACTION_SETS: frozenset[frozenset[NCActionType]] = frozenset([
 
 
 class NanoHeaderVerifier:
-    __slots__ = ('_settings', '_tx_storage')
+    __slots__ = ('_settings', '_tx_storage', 'blueprint_service')
 
-    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        tx_storage: TransactionStorage,
+        blueprint_service: BlueprintService,
+    ) -> None:
         self._settings = settings
         self._tx_storage = tx_storage
+        self.blueprint_service = blueprint_service
 
     def verify_nc_signature(self, tx: BaseTransaction, params: VerificationParams) -> None:
         """Verify if the caller's signature is valid."""
-        self._verify_nc_signature(self._settings, tx, params)
+        self._verify_nc_signature(self._settings, tx, params.features.opcodes_version)
 
     @staticmethod
-    def _verify_nc_signature(settings: HathorSettings, tx: BaseTransaction, params: VerificationParams) -> None:
+    def _verify_nc_signature(settings: HathorSettings, tx: BaseTransaction, opcodes_version: OpcodesVersion) -> None:
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
 
@@ -107,7 +116,7 @@ class NanoHeaderVerifier:
             raw_script_eval(
                 input_data=nano_header.nc_script,
                 output_script=output_script,
-                extras=ScriptExtras(tx=tx, version=params.features.opcodes_version)
+                extras=ScriptExtras(tx=tx, version=opcodes_version)
             )
         except ScriptError as e:
             raise NCInvalidSignature from e
@@ -173,7 +182,7 @@ class NanoHeaderVerifier:
             allow_fallback = True
 
         try:
-            blueprint_class = self._tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
         except NCFail as e:
             raise NCTxValidationError from e
 

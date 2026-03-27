@@ -43,11 +43,13 @@ from hathor.exception import (
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, get_block_storage_from_block
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_id import PeerId
@@ -116,6 +118,7 @@ class HathorManager:
         runner_factory: RunnerFactory,
         feature_service: FeatureService,
         vertex_json_serializer: VertexJsonSerializer,
+        blueprint_service: BlueprintService,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -206,6 +209,7 @@ class HathorManager:
         self.runner_factory = runner_factory
         self.feature_service = feature_service
         self.vertex_json_serializer = vertex_json_serializer
+        self.blueprint_service = blueprint_service
 
         self.websocket_factory = websocket_factory
 
@@ -409,8 +413,10 @@ class HathorManager:
     def get_nc_runner(self, block: Block) -> Runner:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
-        block_storage = nc_storage_factory.get_block_storage_from_block(block)
+        block_storage = get_block_storage_from_block(nc_storage_factory, block)
+        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=block)
         return self.runner_factory.create(
+            runtime_version=features.nano_runtime_version,
             block_storage=block_storage,
         )
 
@@ -421,7 +427,7 @@ class HathorManager:
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return the nano block storage for a given block."""
-        return self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+        return get_block_storage_from_block(self.consensus_algorithm.nc_storage_factory, block)
 
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
