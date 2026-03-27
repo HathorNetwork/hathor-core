@@ -152,7 +152,7 @@ def execute(args: Namespace) -> None:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V2,
                 nano_runtime_version=NanoRuntimeVersion.V2,
-                block_time_version=DAAVersion.V1,
+                daa_version=DAAVersion.V1,
             ))
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),

@@ -210,7 +210,7 @@ class DefaultFiller:
                     assert set(balance.keys()).issubset({'HTR'})
                     diff = balance.get('HTR', 0)
 
-                    target = self._daa.get_tokens_issued_per_block(1)  # TODO Use the actual height.
+                    target = self._daa._v1.get_tokens_issued_per_block(1)  # TODO Use the actual height.
                     assert diff >= 0
                     assert diff <= target
 

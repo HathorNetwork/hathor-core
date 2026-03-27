@@ -20,12 +20,8 @@ from unittest.mock import Mock
 from pytest import approx
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.daa import (
-    DifficultyAdjustmentAlgorithm,
-    DifficultyAdjustmentAlgorithmV1,
-    DifficultyAdjustmentAlgorithmV2,
-)
-from hathor.daa.common import _calculate_next_weight, TestMode
+from hathor.daa import DifficultyAdjustmentAlgorithm, DifficultyAdjustmentAlgorithmV1, DifficultyAdjustmentAlgorithmV2
+from hathor.daa.common import TestMode, _calculate_next_weight
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
@@ -94,12 +90,6 @@ class TestDAAV2:
 class TestFacadeGetTokensIssuedPerBlock:
     """Tests for the facade's get_tokens_issued_per_block with feature-based selection."""
 
-    def test_without_block_returns_normal_reward(self) -> None:
-        settings = _get_settings()
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        reward = daa.get_tokens_issued_per_block(1)
-        assert reward == settings.INITIAL_TOKENS_PER_BLOCK
-
     def test_with_block_feature_inactive(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
@@ -122,7 +112,7 @@ class TestFacadeGetTokensIssuedPerBlock:
         expected = settings.INITIAL_TOKENS_PER_BLOCK // 4
         assert reward == expected
 
-    def test_no_feature_service_returns_normal_reward(self) -> None:
+    def test_no_feature_service_returns_v1_reward(self) -> None:
         settings = _get_settings()
         daa = DifficultyAdjustmentAlgorithm(settings=settings)
         block = Mock()
@@ -174,7 +164,7 @@ class TestFacadeSelect:
         settings = _get_settings()
         daa = DifficultyAdjustmentAlgorithm(settings=settings)
         block = Mock()
-        assert daa._select(block) is daa._v1
+        assert daa._select(block) == daa._v1
 
     def test_select_v1_when_feature_inactive(self) -> None:
         settings = _get_settings()
@@ -182,7 +172,7 @@ class TestFacadeSelect:
         feature_service.is_feature_active.return_value = False
         daa = DifficultyAdjustmentAlgorithm(settings=settings, feature_service=feature_service)
         block = Mock()
-        assert daa._select(block) is daa._v1
+        assert daa._select(block) == daa._v1
 
     def test_select_v2_when_feature_active(self) -> None:
         settings = _get_settings()
@@ -190,7 +180,7 @@ class TestFacadeSelect:
         feature_service.is_feature_active.return_value = True
         daa = DifficultyAdjustmentAlgorithm(settings=settings, feature_service=feature_service)
         block = Mock()
-        assert daa._select(block) is daa._v2
+        assert daa._select(block) == daa._v2
 
 
 class TestConsensusFeatureActivationRules:

@@ -77,31 +77,44 @@ class DifficultyAdjustmentAlgorithm:
         """Public method for template creation. Selects version based on parent block's feature state."""
         return self._select(parent_block).calculate_next_weight(parent_block, timestamp, parent_block_getter)
 
-    def get_tokens_issued_per_block(self, height: int, *, block: Block | None = None) -> int:
+    def get_tokens_issued_per_block(self, height: int, *, block: Block) -> int:
         """Return the number of tokens issued per block of a given height.
 
-        When a block is provided, checks feature state and reduces the reward proportionally
+        Checks feature state on the given block and reduces the reward proportionally
         if REDUCE_DAA_TARGET is active.
         """
-        if block is not None:
-            return self._select(block).get_tokens_issued_per_block(height)
-        return self._v1.get_tokens_issued_per_block(height)
+        return self._select(block).get_tokens_issued_per_block(height)
 
     def get_reward_for_next_block(self, parent_block: Block) -> int:
         """Return the reward for the next block after parent_block."""
         height = parent_block.get_height() + 1
         return self._select(parent_block).get_tokens_issued_per_block(height)
 
-    def minimum_tx_weight(self, tx: Transaction) -> float:
-        """Returns the minimum weight for the param tx. Version-independent."""
+    def minimum_tx_weight(self, tx: Transaction, *, block: Block | None = None) -> float:
+        """Returns the minimum weight for the param tx.
+
+        Currently version-independent (V1 and V2 are identical).
+        """
+        if block is not None:
+            return self._select(block).minimum_tx_weight(tx)
         return self._v1.minimum_tx_weight(tx)
 
-    def get_mined_tokens(self, height: int) -> int:
-        """Return the number of tokens mined in total at height. Version-independent."""
+    def get_mined_tokens(self, height: int, *, block: Block | None = None) -> int:
+        """Return the number of tokens mined in total at height.
+
+        Currently version-independent (V1 and V2 are identical).
+        """
+        if block is not None:
+            return self._select(block).get_mined_tokens(height)
         return self._v1.get_mined_tokens(height)
 
-    def get_weight_decay_amount(self, distance: int) -> float:
-        """Return the amount to be reduced in the weight of the block. Version-independent."""
+    def get_weight_decay_amount(self, distance: int, *, block: Block | None = None) -> float:
+        """Return the amount to be reduced in the weight of the block.
+
+        Currently version-independent (V1 and V2 are identical).
+        """
+        if block is not None:
+            return self._select(block).get_weight_decay_amount(distance)
         return self._v1.get_weight_decay_amount(distance)
 
     def get_block_dependencies(

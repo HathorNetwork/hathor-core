@@ -64,7 +64,7 @@ class TransactionStreamingClient:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
                 nano_runtime_version=NanoRuntimeVersion.V1,
-                block_time_version=DAAVersion.V1,
+                daa_version=DAAVersion.V1,
             )
         )
 

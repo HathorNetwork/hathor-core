@@ -39,7 +39,7 @@ class Features:
     fee_tokens: bool
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
-    block_time_version: DAAVersion
+    daa_version: DAAVersion
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
@@ -64,7 +64,7 @@ class Features:
         nano_runtime_version = (
             NanoRuntimeVersion.V2 if feature_is_active[Feature.NANO_RUNTIME_V2] else NanoRuntimeVersion.V1
         )
-        block_time_version = (
+        daa_version = (
             DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
         )
 
@@ -74,7 +74,7 @@ class Features:
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
-            block_time_version=block_time_version,
+            daa_version=daa_version,
         )
 
     @staticmethod
@@ -100,7 +100,7 @@ class Features:
             fee_tokens=features.fee_tokens,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
-            block_time_version=features.block_time_version,
+            daa_version=features.daa_version,
         )
 
     @staticmethod
@@ -122,7 +122,7 @@ class Features:
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
-            block_time_version=DAAVersion.V2,
+            daa_version=DAAVersion.V2,
         )
 
 

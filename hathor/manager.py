@@ -796,8 +796,11 @@ class HathorManager:
         return block
 
     def get_tokens_issued_per_block(self, height: int) -> int:
-        """Return the number of tokens issued (aka reward) per block of a given height."""
-        return self.daa.get_tokens_issued_per_block(height)
+        """Return the number of tokens issued (aka reward) per block of a given height.
+
+        This is an info-only method (used by APIs) with no block context, so it always uses V1.
+        """
+        return self.daa._v1.get_tokens_issued_per_block(height)
 
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
