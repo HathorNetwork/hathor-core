@@ -43,17 +43,48 @@ Hides **both** the amount and the token type.
 
 The high-level `create_*` functions handle the full pipeline: ephemeral keypair generation, ECDH shared secret, nonce derivation, Pedersen commitment, and Bulletproof range proof -- in a single call.
 
+### 2.0 Generating Blinding Factors
+
+Blinding factors must be valid secp256k1 scalars (non-zero, less than the curve order). Use the library's generator instead of raw `os.urandom()` to guarantee validity.
+
+#### Rust
+
+```rust
+use hathor_ct_crypto::ecdh::generate_random_blinding_factor;
+
+let vbf: [u8; 32] = generate_random_blinding_factor(); // value blinding factor
+let abf: [u8; 32] = generate_random_blinding_factor(); // asset blinding factor (FullShielded)
+```
+
+#### Python
+
+```python
+import hathor_ct_crypto as ct
+
+vbf = ct.generate_random_blinding_factor()  # bytes, 32 B
+abf = ct.generate_random_blinding_factor()  # bytes, 32 B
+```
+
+#### TypeScript
+
+```typescript
+import { generateRandomBlindingFactor } from 'hathor-ct-crypto';
+
+const vbf = generateRandomBlindingFactor(); // Buffer, 32 B
+const abf = generateRandomBlindingFactor(); // Buffer, 32 B
+```
+
 ### 2.1 AmountShieldedOutput
 
 #### Rust
 
 ```rust
-use hathor_ct_crypto::ecdh::create_amount_shielded_output;
+use hathor_ct_crypto::ecdh::{create_amount_shielded_output, generate_random_blinding_factor};
 
 let value: u64 = 5000;
 let recipient_pubkey: &[u8; 33] = /* recipient's compressed secp256k1 pubkey */;
 let token_uid: [u8; 32] = [0u8; 32]; // HTR = all zeros
-let vbf: [u8; 32] = rand::random();  // random value blinding factor
+let vbf: [u8; 32] = generate_random_blinding_factor();
 
 let output = create_amount_shielded_output(
     value,
@@ -71,13 +102,12 @@ let output = create_amount_shielded_output(
 #### Python
 
 ```python
-import os
 import hathor_ct_crypto as ct
 
 value = 5000
 recipient_pubkey = b'\x02...'  # 33-byte compressed pubkey
 token_uid = b'\x00' * 32       # HTR
-vbf = os.urandom(32)           # random value blinding factor
+vbf = ct.generate_random_blinding_factor()
 
 output = ct.create_amount_shielded_output(value, recipient_pubkey, token_uid, vbf)
 
@@ -92,14 +122,14 @@ output.blinding_factor    # bytes, 32 B
 ```typescript
 import {
   createAmountShieldedOutput,
+  generateRandomBlindingFactor,
   type CreatedAmountShieldedOutput,
 } from 'hathor-ct-crypto';
-import { randomBytes } from 'crypto';
 
 const value = 5000;
 const recipientPubkey: Buffer = /* 33-byte compressed pubkey */;
 const tokenUid = Buffer.alloc(32); // HTR
-const vbf = randomBytes(32);
+const vbf = generateRandomBlindingFactor();
 
 const output: CreatedAmountShieldedOutput = createAmountShieldedOutput(
   value,
@@ -418,6 +448,7 @@ The high-level functions above handle ECDH internally. These low-level primitive
 
 | Function | Description |
 |----------|-------------|
+| `generate_random_blinding_factor()` | Random valid secp256k1 scalar (32 B) |
 | `generate_ephemeral_keypair()` | Fresh secp256k1 keypair: `(privkey_32B, pubkey_33B)` |
 | `derive_ecdh_shared_secret(privkey, peer_pubkey)` | `SHA256(version_byte \|\| x)` of shared EC point (32 B) |
 | `derive_rewind_nonce(shared_secret)` | `SHA256("Hathor_CT_nonce_v1" \|\| shared_secret)` (32 B) |
