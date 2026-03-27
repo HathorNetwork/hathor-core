@@ -21,6 +21,18 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
         self.web = StubSite(BlueprintInfoResource(self.manager))
 
     @inlineCallbacks
+    def test_fail_not_a_blueprint(self) -> Generator[Deferred[Any], Any, None]:
+        # Use the genesis block hash, which is a valid vertex but not a blueprint.
+        genesis_block = next(tx for tx in self.manager.tx_storage.get_all_genesis() if tx.is_block)
+        response = yield self.web.get(
+            'blueprint',
+            {
+                b'blueprint_id': bytes(genesis_block.hash_hex, 'utf-8'),
+            }
+        )
+        self.assertEqual(400, response.responseCode)
+
+    @inlineCallbacks
     def test_fail_missing_id(self) -> Generator[Deferred[Any], Any, None]:
         response1 = yield self.web.get('blueprint')
         self.assertEqual(400, response1.responseCode)
