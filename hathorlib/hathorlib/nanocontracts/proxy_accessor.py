@@ -21,7 +21,7 @@ from hathorlib.nanocontracts.types import BlueprintId, NCAction, NCArgs, NCFee, 
 
 if TYPE_CHECKING:
     # XXX: Temporary lazy import from hathor
-    from hathor.nanocontracts.runner import Runner  # type: ignore[import-not-found]
+    from hathor.nanocontracts.runner import Runner
 
 
 @final

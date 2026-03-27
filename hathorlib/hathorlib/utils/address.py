@@ -170,7 +170,7 @@ try:
 except Exception:
     # XXX: the source says "Test-only pure Python RIPEMD160 implementation", however for our case this is acceptable
     #      for more details see: https://github.com/bitcoin/bitcoin/pull/23716/files which has a copy of the same code
-    import pycoin.contrib.ripemd160  # type: ignore[import-untyped]
+    import pycoin.contrib.ripemd160  # noqa: F401
 
     def get_hash160(public_key_bytes: bytes) -> bytes:
         """The input is hashed twice: first with SHA-256 and then with RIPEMD-160"""
