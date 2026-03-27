@@ -36,7 +36,7 @@ exclude = ["tests", "tests.*"]
 [tool.poetry.dependencies]
 python = ">=3.9,<4"
 base58 = "~2.1.1"
-structlog = {version = "~22.3.0", optional = true}
+structlog = {version = "~22.3.0"}
 aiohttp = {version = "~3.9.3", optional = true}
 cryptography = "~42.0.5"
 pycoin = "~0.92"
@@ -52,7 +52,7 @@ flake8 = "~7.0.0"
 types-pyyaml = "=6.0.12.9"
 
 [tool.poetry.extras]
-client = ["aiohttp", "structlog"]
+client = ["aiohttp"]
 
 [tool.isort]
 combine_as_imports = true
