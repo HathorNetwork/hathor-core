@@ -157,6 +157,9 @@ class HathorSettings(BaseModel):
     # Average time between blocks.
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
 
+    # Average time between blocks after REDUCE_DAA_TARGET feature activation (in tenths of a second).
+    REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X: int = 75  # 7.5 seconds
+
     # Genesis pre-mined outputs
     # P2PKH HMcJymyctyhnWsWTXqhP9txDwgNZaMWf42
     #

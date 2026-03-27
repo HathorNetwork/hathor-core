@@ -633,7 +633,11 @@ class Builder:
     def _get_or_create_daa(self) -> DifficultyAdjustmentAlgorithm:
         if self._daa is None:
             settings = self._get_or_create_settings()
-            self._daa = DifficultyAdjustmentAlgorithm(settings=settings)
+            feature_service = self._get_or_create_feature_service()
+            self._daa = DifficultyAdjustmentAlgorithm(
+                settings=settings,
+                feature_service=feature_service,
+            )
 
         return self._daa
 
