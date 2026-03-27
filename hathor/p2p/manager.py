@@ -812,66 +812,6 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-    def connect_to_discovery_call(self,
-                                  entrypoint: PeerEndpoint,
-                                  peer: UnverifiedPeer | PublicPeer | None = None,
-                                  use_ssl: bool | None = None) -> None:
-        """Called when a discovery call is being done, and the discovery_factory should be instantiated,
-        not the Client Factory. Use this instead of connect_to_endpoint in these cases."""
-
-        if entrypoint.peer_id is not None and peer is not None and entrypoint.peer_id != peer.id:
-            self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
-                           entrypoint=str(entrypoint))
-            return
-
-        for connecting_peer in self.connecting_peers.values():
-            if connecting_peer.entrypoint.addr == entrypoint.addr:
-                self.log.debug(
-                    'skipping because we are already connecting to this endpoint',
-                    entrypoint=str(entrypoint),
-                )
-                return
-
-        if self.localhost_only and not entrypoint.addr.is_localhost():
-            self.log.debug('skip because of simple localhost check', entrypoint=str(entrypoint))
-            return
-
-        if not self.enable_ipv6 and entrypoint.addr.is_ipv6():
-            self.log.info('skip because IPv6 is disabled', entrypoint=entrypoint)
-            return
-
-        if self.disable_ipv4 and entrypoint.addr.is_ipv4():
-            self.log.info('skip because IPv4 is disabled', entrypoint=entrypoint)
-            return
-
-        if use_ssl is None:
-            use_ssl = self.use_ssl
-
-        endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
-
-        factory: IProtocolFactory
-
-        if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.discovered_factory)
-        else:
-            factory = self.discovered_factory
-
-        if peer is not None:
-            now = int(self.reactor.seconds())
-            peer.info.increment_retry_attempt(now)
-
-        deferred = endpoint.connect(factory)
-        self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
-
-        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
-        deferred.addErrback(self.on_connection_failure, peer, endpoint)
-        self.log.info('connecting to', entrypoint=str(entrypoint), peer=str(peer))
-        self.pubsub.publish(
-            HathorEvents.NETWORK_PEER_CONNECTING,
-            peer=peer,
-            peers_count=self._get_peers_count()
-        )
-
     def listen(self, description: str, use_ssl: Optional[bool] = None) -> None:
         """ Start to listen for new connection according to the description.
 
