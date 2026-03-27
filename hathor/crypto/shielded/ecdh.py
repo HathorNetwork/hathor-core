@@ -14,15 +14,10 @@
 
 """ECDH key exchange and nonce derivation for shielded output recovery.
 
-Uses secp256k1 via the `cryptography` library (already a project dependency).
+Uses the native hathor-ct-crypto Rust library (libsecp256k1 ECDH).
 """
 
-import hashlib
-
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-
-_NONCE_DOMAIN_SEPARATOR = b'Hathor_CT_nonce_v1'
+from hathor.crypto.shielded._bindings import _lib
 
 
 def generate_ephemeral_keypair() -> tuple[bytes, bytes]:
@@ -31,17 +26,15 @@ def generate_ephemeral_keypair() -> tuple[bytes, bytes]:
     Returns:
         (private_key_bytes: 32B, compressed_pubkey_bytes: 33B)
     """
-    private_key = ec.generate_private_key(ec.SECP256K1())
-    privkey_bytes = private_key.private_numbers().private_value.to_bytes(32, 'big')  # type: ignore[attr-defined]
-    pubkey_bytes = private_key.public_key().public_bytes(
-        encoding=Encoding.X962,
-        format=PublicFormat.CompressedPoint,
-    )
-    return privkey_bytes, pubkey_bytes
+    if _lib is None:
+        raise RuntimeError('hathor_ct_crypto native library is not available')
+    return _lib.generate_ephemeral_keypair()
 
 
 def derive_ecdh_shared_secret(private_key_bytes: bytes, peer_pubkey_bytes: bytes) -> bytes:
-    """Compute ECDH shared secret: SHA256(private_key * peer_pubkey).
+    """Compute ECDH shared secret using libsecp256k1's standard derivation.
+
+    The result is SHA256(version_byte || x_coordinate) of the shared EC point.
 
     Args:
         private_key_bytes: 32-byte private scalar
@@ -50,18 +43,9 @@ def derive_ecdh_shared_secret(private_key_bytes: bytes, peer_pubkey_bytes: bytes
     Returns:
         32-byte shared secret
     """
-    # Load private key
-    private_value = int.from_bytes(private_key_bytes, 'big')
-    private_key = ec.derive_private_key(private_value, ec.SECP256K1())
-
-    # Load peer public key
-    peer_pubkey = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), peer_pubkey_bytes)
-
-    # ECDH: compute raw shared point
-    shared_key = private_key.exchange(ec.ECDH(), peer_pubkey)
-
-    # Hash the raw shared secret for uniformity
-    return hashlib.sha256(shared_key).digest()
+    if _lib is None:
+        raise RuntimeError('hathor_ct_crypto native library is not available')
+    return _lib.derive_ecdh_shared_secret(private_key_bytes, peer_pubkey_bytes)
 
 
 def derive_rewind_nonce(shared_secret: bytes) -> bytes:
@@ -75,7 +59,9 @@ def derive_rewind_nonce(shared_secret: bytes) -> bytes:
     Returns:
         32-byte nonce suitable for use as a range proof nonce key
     """
-    return hashlib.sha256(_NONCE_DOMAIN_SEPARATOR + shared_secret).digest()
+    if _lib is None:
+        raise RuntimeError('hathor_ct_crypto native library is not available')
+    return _lib.derive_rewind_nonce(shared_secret)
 
 
 def extract_key_bytes(key: object) -> tuple[bytes, bytes]:
@@ -89,6 +75,9 @@ def extract_key_bytes(key: object) -> tuple[bytes, bytes]:
     Returns:
         (private_key_bytes: 32B, compressed_pubkey_bytes: 33B)
     """
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
     if isinstance(key, ec.EllipticCurvePrivateKey):
         privkey_bytes = key.private_numbers().private_value.to_bytes(32, 'big')  # type: ignore[attr-defined]
         pubkey_bytes = key.public_key().public_bytes(

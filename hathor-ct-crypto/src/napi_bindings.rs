@@ -383,6 +383,217 @@ pub struct BlindingEntry {
     pub generator_blinding_factor: Buffer,
 }
 
+/// Generate a fresh ephemeral secp256k1 key pair.
+///
+/// Returns (private_key_bytes: 32B, compressed_pubkey_bytes: 33B).
+#[napi(object)]
+pub struct EphemeralKeypair {
+    pub private_key: Buffer,
+    pub public_key: Buffer,
+}
+
+#[napi]
+pub fn generate_ephemeral_keypair() -> EphemeralKeypair {
+    let (sk_bytes, pk_bytes) = crate::ecdh::generate_ephemeral_keypair();
+    EphemeralKeypair {
+        private_key: Buffer::from(sk_bytes.to_vec()),
+        public_key: Buffer::from(pk_bytes.to_vec()),
+    }
+}
+
+/// Compute ECDH shared secret: SHA256(version_byte || x_coordinate).
+///
+/// Uses libsecp256k1's standard ECDH derivation.
+/// Returns 32-byte shared secret.
+#[napi]
+pub fn derive_ecdh_shared_secret(private_key: Buffer, peer_pubkey: Buffer) -> napi::Result<Buffer> {
+    let sk = crate::ecdh::parse_secret_key(private_key.as_ref()).map_err(to_napi_err)?;
+    let pk = crate::ecdh::parse_public_key(peer_pubkey.as_ref()).map_err(to_napi_err)?;
+    let secret = crate::ecdh::derive_ecdh_shared_secret(&sk, &pk);
+    Ok(Buffer::from(secret.to_vec()))
+}
+
+/// Derive a deterministic nonce from a shared secret.
+///
+/// nonce = SHA256("Hathor_CT_nonce_v1" || shared_secret)
+/// Returns 32-byte nonce suitable for use as a range proof nonce key.
+#[napi]
+pub fn derive_rewind_nonce(shared_secret: Buffer) -> napi::Result<Buffer> {
+    if shared_secret.len() != 32 {
+        return Err(napi::Error::from_reason("shared_secret must be 32 bytes"));
+    }
+    let secret: [u8; 32] = shared_secret.as_ref().try_into().unwrap();
+    let nonce = crate::ecdh::derive_rewind_nonce(&secret);
+    Ok(Buffer::from(nonce.to_vec()))
+}
+
+#[napi(object)]
+pub struct CreatedShieldedOutput {
+    pub ephemeral_pubkey: Buffer,
+    pub commitment: Buffer,
+    pub range_proof: Buffer,
+    pub blinding_factor: Buffer,
+    pub asset_commitment: Option<Buffer>,
+    pub asset_blinding_factor: Option<Buffer>,
+}
+
+/// Create a FullShielded output with both value blinding factor and asset blinding factor
+/// provided externally. This is needed for the last output in a FullShielded transaction
+/// where the balance equation requires pre-computing the vbf using a known abf.
+#[napi]
+pub fn create_shielded_output_with_both_blindings(
+    value: i64,
+    recipient_pubkey: Buffer,
+    token_uid: Buffer,
+    value_blinding_factor: Buffer,
+    asset_blinding_factor: Buffer,
+) -> napi::Result<CreatedShieldedOutput> {
+    if value < 0 {
+        return Err(napi::Error::from_reason("value must be non-negative"));
+    }
+    let tuid: [u8; 32] = token_uid
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("token_uid must be 32 bytes"))?;
+    let vbf: [u8; 32] = value_blinding_factor
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("value_blinding_factor must be 32 bytes"))?;
+    let abf: [u8; 32] = asset_blinding_factor
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("asset_blinding_factor must be 32 bytes"))?;
+
+    let result = crate::ecdh::create_full_shielded_output(
+        value as u64, recipient_pubkey.as_ref(), &tuid, &vbf, &abf,
+    )
+    .map_err(to_napi_err)?;
+
+    Ok(CreatedShieldedOutput {
+        ephemeral_pubkey: Buffer::from(result.ephemeral_pubkey.to_vec()),
+        commitment: Buffer::from(result.commitment),
+        range_proof: Buffer::from(result.range_proof),
+        blinding_factor: Buffer::from(result.value_blinding_factor.to_vec()),
+        asset_commitment: Some(Buffer::from(result.asset_commitment)),
+        asset_blinding_factor: Some(Buffer::from(result.asset_blinding_factor.to_vec())),
+    })
+}
+
+/// Result of creating an AmountShielded output (amount hidden, token visible).
+#[napi(object)]
+pub struct CreatedAmountShieldedOutput {
+    pub ephemeral_pubkey: Buffer,
+    pub commitment: Buffer,
+    pub range_proof: Buffer,
+    pub blinding_factor: Buffer,
+}
+
+/// Create an AmountShielded output (amount hidden, token visible).
+///
+/// Uses `derive_asset_tag(token_uid)` as the unblinded generator.
+#[napi]
+pub fn create_amount_shielded_output(
+    value: i64,
+    recipient_pubkey: Buffer,
+    token_uid: Buffer,
+    value_blinding_factor: Buffer,
+) -> napi::Result<CreatedAmountShieldedOutput> {
+    if value < 0 {
+        return Err(napi::Error::from_reason("value must be non-negative"));
+    }
+    let tuid: [u8; 32] = token_uid
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("token_uid must be 32 bytes"))?;
+    let vbf: [u8; 32] = value_blinding_factor
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("value_blinding_factor must be 32 bytes"))?;
+
+    let result = crate::ecdh::create_amount_shielded_output(
+        value as u64, recipient_pubkey.as_ref(), &tuid, &vbf,
+    )
+    .map_err(to_napi_err)?;
+
+    Ok(CreatedAmountShieldedOutput {
+        ephemeral_pubkey: Buffer::from(result.ephemeral_pubkey.to_vec()),
+        commitment: Buffer::from(result.commitment),
+        range_proof: Buffer::from(result.range_proof),
+        blinding_factor: Buffer::from(result.value_blinding_factor.to_vec()),
+    })
+}
+
+/// Result of rewinding an AmountShielded output.
+#[napi(object)]
+pub struct RewoundAmountShieldedOutput {
+    pub value: i64,
+    pub blinding_factor: Buffer,
+}
+
+/// Rewind an AmountShielded output to recover value and blinding factor.
+#[napi]
+pub fn rewind_amount_shielded_output(
+    private_key: Buffer,
+    ephemeral_pubkey: Buffer,
+    commitment: Buffer,
+    range_proof: Buffer,
+    token_uid: Buffer,
+) -> napi::Result<RewoundAmountShieldedOutput> {
+    let tuid: [u8; 32] = token_uid
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("token_uid must be 32 bytes"))?;
+
+    let result = crate::ecdh::rewind_amount_shielded_output(
+        private_key.as_ref(),
+        ephemeral_pubkey.as_ref(),
+        commitment.as_ref(),
+        range_proof.as_ref(),
+        &tuid,
+    )
+    .map_err(to_napi_err)?;
+
+    Ok(RewoundAmountShieldedOutput {
+        value: result.value as i64,
+        blinding_factor: Buffer::from(result.blinding_factor),
+    })
+}
+
+/// Result of rewinding a FullShielded output.
+#[napi(object)]
+pub struct RewoundFullShieldedOutput {
+    pub value: i64,
+    pub blinding_factor: Buffer,
+    pub token_uid: Buffer,
+    pub asset_blinding_factor: Buffer,
+}
+
+/// Rewind a FullShielded output to recover value, blinding factor, token UID and asset blinding.
+#[napi]
+pub fn rewind_full_shielded_output(
+    private_key: Buffer,
+    ephemeral_pubkey: Buffer,
+    commitment: Buffer,
+    range_proof: Buffer,
+    asset_commitment: Buffer,
+) -> napi::Result<RewoundFullShieldedOutput> {
+    let result = crate::ecdh::rewind_full_shielded_output(
+        private_key.as_ref(),
+        ephemeral_pubkey.as_ref(),
+        commitment.as_ref(),
+        range_proof.as_ref(),
+        asset_commitment.as_ref(),
+    )
+    .map_err(to_napi_err)?;
+
+    Ok(RewoundFullShieldedOutput {
+        value: result.value as i64,
+        blinding_factor: Buffer::from(result.blinding_factor),
+        token_uid: Buffer::from(result.token_uid.to_vec()),
+        asset_blinding_factor: Buffer::from(result.asset_blinding_factor.to_vec()),
+    })
+}
+
 /// Size of a serialized Pedersen commitment.
 #[napi]
 pub fn get_commitment_size() -> u32 {
