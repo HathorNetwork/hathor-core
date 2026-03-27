@@ -214,7 +214,13 @@ def tokenize(content: str) -> Iterator[Token]:
                 index = int(key[4:-1])
                 amount = int(parts[2])
                 token = parts[3]
-                attrs = parts[4:]
+                raw_attrs = parts[4:]
+                attrs: dict[str, str | int] = {}
+                for a in raw_attrs:
+                    if a.startswith('[') and a.endswith(']'):
+                        attrs[a[1:-1]] = 1
+                    else:
+                        attrs[a] = 1
                 yield (TokenType.OUTPUT, (name, index, amount, token, attrs))
             else:
                 value = ' '.join(parts[2:])

@@ -25,8 +25,9 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, ShieldedOutputsHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
+from hathor.transaction.shielded_tx_output import ShieldedOutput
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
@@ -161,6 +162,39 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def get_fee_header(self) -> FeeHeader:
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
+
+    def has_shielded_outputs(self) -> bool:
+        """Returns true if this transaction has a shielded outputs header."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def has_shielded_inputs(self) -> bool:
+        """Return whether any input references a shielded output (needs storage)."""
+        assert self.storage is not None
+        for tx_input in self.inputs:
+            spent_tx = self.storage.get_transaction(tx_input.tx_id)
+            if tx_input.index >= len(spent_tx.outputs):
+                return True
+        return False
+
+    def is_shielded(self) -> bool:
+        """Return whether this tx involves any shielded components (inputs or outputs)."""
+        return self.has_shielded_outputs() or self.has_shielded_inputs()
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        return self._get_header(ShieldedOutputsHeader)
+
+    @property
+    def shielded_outputs(self) -> list[ShieldedOutput]:
+        """Return the list of shielded outputs, or empty list if no header."""
+        if self.has_shielded_outputs():
+            return self.get_shielded_outputs_header().shielded_outputs
+        return []
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
@@ -319,8 +353,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
 
+            # Use resolve_spent_output for shielded-aware lookup.
+            # Shielded inputs are skipped for token accounting — their amounts
+            # are verified by the homomorphic balance equation instead.
+            try:
+                resolved = spent_tx.resolve_spent_output(tx_input.index)
+            except IndexError:
+                # Out of bounds — will be caught by _verify_inputs
+                continue
+
+            from hathor.transaction.shielded_tx_output import OutputMode
+            if resolved.mode() != OutputMode.TRANSPARENT:
+                # Shielded input: skip for token info (amount is hidden)
+                continue
+
+            assert isinstance(resolved, TxOutput)
+            spent_output = resolved
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)
 

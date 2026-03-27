@@ -38,6 +38,9 @@ class VerificationParams:
     def for_mempool(cls, *, best_block: Block, features: Features) -> VerificationParams:
         """This is the appropriate parameters for verifying mempool transactions, realtime blocks and API pushes.
 
+        Callers MUST compute features via Features.from_vertex() to ensure
+        feature activation state (including shielded_transactions) is correct.
+
         Other cases should instantiate `VerificationParams` manually with the appropriate parameter values.
         """
         best_block_meta = best_block.get_metadata()

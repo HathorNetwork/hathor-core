@@ -21,9 +21,9 @@ from hathorlib.nanocontracts.nano_settings import NanoSettings
 from hathorlib.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
 
 if TYPE_CHECKING:
-    from hathor.nanocontracts.nc_exec_logs import NCLogger  # type: ignore[import-not-found]
+    from hathor.nanocontracts.nc_exec_logs import NCLogger
     # Temporary lazy imports from hathor
-    from hathor.nanocontracts.runner import Runner  # type: ignore[import-not-found]
+    from hathor.nanocontracts.runner import Runner
 
     from hathorlib.nanocontracts.contract_accessor import ContractAccessor
     from hathorlib.nanocontracts.initialize_method_accessor import InitializeMethodAccessor
