@@ -1,0 +1,55 @@
+[package]
+name = "hathor-ct-crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+secp256k1-zkp = { version = "0.11", features = ["global-context", "rand-std", "std"] }
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "1"
+
+[dependencies.pyo3]
+version = "0.22"
+features = ["extension-module"]
+optional = true
+
+[dependencies.napi]
+version = "2"
+optional = true
+default-features = false
+features = ["napi8"]
+
+[dependencies.napi-derive]
+version = "2"
+optional = true
+
+[dev-dependencies]
+proptest = "1"
+criterion = "0.5"
+
+[build-dependencies]
+napi-build = { version = "2", optional = true }
+
+[features]
+default = ["std"]
+std = ["secp256k1-zkp/std"]
+python = ["pyo3"]
+napi = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
+
+[lib]
+name = "hathor_ct_crypto"
+crate-type = ["lib", "cdylib"]
+
+[[bench]]
+name = "bench_pedersen"
+harness = false
+
+[[bench]]
+name = "bench_rangeproof"
+harness = false
+
+[[bench]]
+name = "bench_surjection"
+harness = false
