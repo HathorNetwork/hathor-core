@@ -400,3 +400,88 @@ pub fn get_generator_size() -> u32 {
 pub fn get_zero_tweak() -> Buffer {
     Buffer::from(ZERO_TWEAK.as_ref().to_vec())
 }
+
+#[napi(object)]
+pub struct CreatedShieldedOutput {
+    pub ephemeral_pubkey: Buffer,
+    pub commitment: Buffer,
+    pub range_proof: Buffer,
+    pub blinding_factor: Buffer,
+    pub asset_commitment: Option<Buffer>,
+    pub asset_blinding_factor: Option<Buffer>,
+}
+
+/// Create a FullShielded output with both value blinding factor and asset blinding factor
+/// provided externally. This is needed for the last output in a FullShielded transaction
+/// where the balance equation requires pre-computing the vbf using a known abf.
+#[napi]
+pub fn create_shielded_output_with_both_blindings(
+    value: i64,
+    recipient_pubkey: Buffer,
+    token_uid: Buffer,
+    value_blinding_factor: Buffer,
+    asset_blinding_factor: Buffer,
+) -> napi::Result<CreatedShieldedOutput> {
+    use secp256k1_zkp::SECP256K1 as SECP;
+
+    if value < 0 {
+        return Err(napi::Error::from_reason("value must be non-negative"));
+    }
+
+    let pubkey: [u8; 33] = recipient_pubkey
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("recipient_pubkey must be 33 bytes"))?;
+    let tuid: [u8; 32] = token_uid
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("token_uid must be 32 bytes"))?;
+    let vbf: [u8; 32] = value_blinding_factor
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("value_blinding_factor must be 32 bytes"))?;
+    let abf: [u8; 32] = asset_blinding_factor
+        .as_ref()
+        .try_into()
+        .map_err(|_| napi::Error::from_reason("asset_blinding_factor must be 32 bytes"))?;
+
+    // 1. Generate ephemeral keypair
+    let (eph_sk, eph_pk) = SECP.generate_keypair(&mut rand::thread_rng());
+
+    // 2. ECDH shared secret
+    let shared_secret = crate::ecdh::derive_ecdh_shared_secret(
+        &eph_sk.secret_bytes(),
+        &pubkey,
+    )
+    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+
+    // 3. Derive rewind nonce
+    let nonce = crate::ecdh::derive_rewind_nonce(&shared_secret);
+
+    // 4. Create blinded asset commitment using provided abf
+    let tag = crate::generators::derive_tag(&tuid).map_err(to_napi_err)?;
+    let abf_tweak = parse_tweak(&abf)?;
+    let asset_comm = crate::generators::create_asset_commitment(&tag, &abf_tweak)
+        .map_err(to_napi_err)?;
+    let ac_bytes = asset_comm.serialize();
+
+    // 5. Create commitment and range proof with provided vbf
+    let nonce_sk = secp256k1_zkp::SecretKey::from_slice(&nonce)
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let bf_tweak = parse_tweak(&vbf)?;
+    let comm = crate::pedersen::create_commitment(value as u64, &bf_tweak, &asset_comm)
+        .map_err(to_napi_err)?;
+    let proof = crate::rangeproof::create_range_proof(
+        value as u64, &bf_tweak, &comm, &asset_comm, None, Some(&nonce_sk),
+    )
+    .map_err(to_napi_err)?;
+
+    Ok(CreatedShieldedOutput {
+        ephemeral_pubkey: Buffer::from(eph_pk.serialize().to_vec()),
+        commitment: Buffer::from(comm.serialize().to_vec()),
+        range_proof: Buffer::from(proof.serialize()),
+        blinding_factor: Buffer::from(vbf.to_vec()),
+        asset_commitment: Some(Buffer::from(ac_bytes.to_vec())),
+        asset_blinding_factor: Some(Buffer::from(abf.to_vec())),
+    })
+}

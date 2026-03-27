@@ -1,4 +1,5 @@
 pub mod balance;
+pub mod ecdh;
 pub mod error;
 pub mod generators;
 pub mod pedersen;
