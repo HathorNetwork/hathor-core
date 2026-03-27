@@ -368,6 +368,205 @@ fn compute_balancing_blinding_factor(
     Ok(PyBytes::new_bound(py, result.as_ref()).into())
 }
 
+/// Generate a fresh ephemeral secp256k1 key pair.
+///
+/// Returns (private_key_bytes: 32B, compressed_pubkey_bytes: 33B).
+#[pyfunction]
+fn generate_ephemeral_keypair(py: Python<'_>) -> PyObject {
+    let (sk_bytes, pk_bytes) = crate::ecdh::generate_ephemeral_keypair();
+    (
+        PyBytes::new_bound(py, &sk_bytes),
+        PyBytes::new_bound(py, &pk_bytes),
+    )
+        .into_py(py)
+}
+
+/// Compute ECDH shared secret: SHA256(version_byte || x_coordinate).
+///
+/// Uses libsecp256k1's standard ECDH derivation.
+/// Returns 32-byte shared secret.
+#[pyfunction]
+fn derive_ecdh_shared_secret(py: Python<'_>, private_key: &[u8], peer_pubkey: &[u8]) -> PyResult<PyObject> {
+    let sk = crate::ecdh::parse_secret_key(private_key).map_err(to_py_err)?;
+    let pk = crate::ecdh::parse_public_key(peer_pubkey).map_err(to_py_err)?;
+    let secret = crate::ecdh::derive_ecdh_shared_secret(&sk, &pk);
+    Ok(PyBytes::new_bound(py, &secret).into())
+}
+
+/// Derive a deterministic nonce from a shared secret.
+///
+/// nonce = SHA256("Hathor_CT_nonce_v1" || shared_secret)
+/// Returns 32-byte nonce suitable for use as a range proof nonce key.
+#[pyfunction]
+fn derive_rewind_nonce(py: Python<'_>, shared_secret: &[u8]) -> PyResult<PyObject> {
+    if shared_secret.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("shared_secret must be 32 bytes"));
+    }
+    let secret: [u8; 32] = shared_secret.try_into().unwrap();
+    let nonce = crate::ecdh::derive_rewind_nonce(&secret);
+    Ok(PyBytes::new_bound(py, &nonce).into())
+}
+
+/// Result of creating a shielded output with pre-computed blinding factors.
+#[pyclass(frozen, get_all)]
+struct CreatedShieldedOutput {
+    ephemeral_pubkey: Py<PyBytes>,
+    commitment: Py<PyBytes>,
+    range_proof: Py<PyBytes>,
+    blinding_factor: Py<PyBytes>,
+    asset_commitment: Py<PyBytes>,
+    asset_blinding_factor: Py<PyBytes>,
+}
+
+/// Create a FullShielded output with both value blinding factor and asset blinding factor
+/// provided externally. This is needed for the last output in a FullShielded transaction
+/// where the balance equation requires pre-computing the vbf using a known abf.
+#[pyfunction]
+fn create_shielded_output_with_both_blindings(
+    py: Python<'_>,
+    value: u64,
+    recipient_pubkey: &[u8],
+    token_uid: &[u8],
+    value_blinding_factor: &[u8],
+    asset_blinding_factor: &[u8],
+) -> PyResult<CreatedShieldedOutput> {
+    if token_uid.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("token_uid must be 32 bytes"));
+    }
+    if value_blinding_factor.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("value_blinding_factor must be 32 bytes"));
+    }
+    if asset_blinding_factor.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("asset_blinding_factor must be 32 bytes"));
+    }
+
+    let tuid: [u8; 32] = token_uid.try_into().unwrap();
+    let vbf: [u8; 32] = value_blinding_factor.try_into().unwrap();
+    let abf: [u8; 32] = asset_blinding_factor.try_into().unwrap();
+
+    let result = crate::ecdh::create_full_shielded_output(
+        value, recipient_pubkey, &tuid, &vbf, &abf,
+    )
+    .map_err(to_py_err)?;
+
+    Ok(CreatedShieldedOutput {
+        ephemeral_pubkey: PyBytes::new_bound(py, &result.ephemeral_pubkey).unbind(),
+        commitment: PyBytes::new_bound(py, &result.commitment).unbind(),
+        range_proof: PyBytes::new_bound(py, &result.range_proof).unbind(),
+        blinding_factor: PyBytes::new_bound(py, &result.value_blinding_factor).unbind(),
+        asset_commitment: PyBytes::new_bound(py, &result.asset_commitment).unbind(),
+        asset_blinding_factor: PyBytes::new_bound(py, &result.asset_blinding_factor).unbind(),
+    })
+}
+
+/// Result of creating an AmountShielded output (amount hidden, token visible).
+#[pyclass(frozen, get_all)]
+struct CreatedAmountShieldedOutput {
+    ephemeral_pubkey: Py<PyBytes>,
+    commitment: Py<PyBytes>,
+    range_proof: Py<PyBytes>,
+    blinding_factor: Py<PyBytes>,
+}
+
+/// Create an AmountShielded output (amount hidden, token visible).
+///
+/// Uses `derive_asset_tag(token_uid)` as the unblinded generator.
+#[pyfunction]
+fn create_amount_shielded_output(
+    py: Python<'_>,
+    value: u64,
+    recipient_pubkey: &[u8],
+    token_uid: &[u8],
+    value_blinding_factor: &[u8],
+) -> PyResult<CreatedAmountShieldedOutput> {
+    if token_uid.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("token_uid must be 32 bytes"));
+    }
+    if value_blinding_factor.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("value_blinding_factor must be 32 bytes"));
+    }
+
+    let tuid: [u8; 32] = token_uid.try_into().unwrap();
+    let vbf: [u8; 32] = value_blinding_factor.try_into().unwrap();
+
+    let result = crate::ecdh::create_amount_shielded_output(
+        value, recipient_pubkey, &tuid, &vbf,
+    )
+    .map_err(to_py_err)?;
+
+    Ok(CreatedAmountShieldedOutput {
+        ephemeral_pubkey: PyBytes::new_bound(py, &result.ephemeral_pubkey).unbind(),
+        commitment: PyBytes::new_bound(py, &result.commitment).unbind(),
+        range_proof: PyBytes::new_bound(py, &result.range_proof).unbind(),
+        blinding_factor: PyBytes::new_bound(py, &result.value_blinding_factor).unbind(),
+    })
+}
+
+/// Result of rewinding an AmountShielded output.
+#[pyclass(frozen, get_all)]
+struct RewoundAmountShieldedOutput {
+    value: u64,
+    blinding_factor: Py<PyBytes>,
+}
+
+/// Rewind an AmountShielded output to recover value and blinding factor.
+#[pyfunction]
+fn rewind_amount_shielded_output(
+    py: Python<'_>,
+    private_key: &[u8],
+    ephemeral_pubkey: &[u8],
+    commitment: &[u8],
+    range_proof: &[u8],
+    token_uid: &[u8],
+) -> PyResult<RewoundAmountShieldedOutput> {
+    if token_uid.len() != 32 {
+        return Err(pyo3::exceptions::PyValueError::new_err("token_uid must be 32 bytes"));
+    }
+    let tuid: [u8; 32] = token_uid.try_into().unwrap();
+
+    let result = crate::ecdh::rewind_amount_shielded_output(
+        private_key, ephemeral_pubkey, commitment, range_proof, &tuid,
+    )
+    .map_err(to_py_err)?;
+
+    Ok(RewoundAmountShieldedOutput {
+        value: result.value,
+        blinding_factor: PyBytes::new_bound(py, &result.blinding_factor).unbind(),
+    })
+}
+
+/// Result of rewinding a FullShielded output.
+#[pyclass(frozen, get_all)]
+struct RewoundFullShieldedOutput {
+    value: u64,
+    blinding_factor: Py<PyBytes>,
+    token_uid: Py<PyBytes>,
+    asset_blinding_factor: Py<PyBytes>,
+}
+
+/// Rewind a FullShielded output to recover value, blinding factor, token UID and asset blinding.
+#[pyfunction]
+fn rewind_full_shielded_output(
+    py: Python<'_>,
+    private_key: &[u8],
+    ephemeral_pubkey: &[u8],
+    commitment: &[u8],
+    range_proof: &[u8],
+    asset_commitment: &[u8],
+) -> PyResult<RewoundFullShieldedOutput> {
+    let result = crate::ecdh::rewind_full_shielded_output(
+        private_key, ephemeral_pubkey, commitment, range_proof, asset_commitment,
+    )
+    .map_err(to_py_err)?;
+
+    Ok(RewoundFullShieldedOutput {
+        value: result.value,
+        blinding_factor: PyBytes::new_bound(py, &result.blinding_factor).unbind(),
+        token_uid: PyBytes::new_bound(py, &result.token_uid).unbind(),
+        asset_blinding_factor: PyBytes::new_bound(py, &result.asset_blinding_factor).unbind(),
+    })
+}
+
 /// The Python module definition.
 #[pymodule]
 fn hathor_ct_crypto(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -387,6 +586,17 @@ fn hathor_ct_crypto(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_surjection_proof, m)?)?;
     m.add_function(wrap_pyfunction!(verify_balance, m)?)?;
     m.add_function(wrap_pyfunction!(compute_balancing_blinding_factor, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_ephemeral_keypair, m)?)?;
+    m.add_function(wrap_pyfunction!(derive_ecdh_shared_secret, m)?)?;
+    m.add_function(wrap_pyfunction!(derive_rewind_nonce, m)?)?;
+    m.add_function(wrap_pyfunction!(create_shielded_output_with_both_blindings, m)?)?;
+    m.add_function(wrap_pyfunction!(create_amount_shielded_output, m)?)?;
+    m.add_function(wrap_pyfunction!(rewind_amount_shielded_output, m)?)?;
+    m.add_function(wrap_pyfunction!(rewind_full_shielded_output, m)?)?;
+    m.add_class::<CreatedShieldedOutput>()?;
+    m.add_class::<CreatedAmountShieldedOutput>()?;
+    m.add_class::<RewoundAmountShieldedOutput>()?;
+    m.add_class::<RewoundFullShieldedOutput>()?;
 
     m.add("COMMITMENT_SIZE", COMMITMENT_SIZE)?;
     m.add("GENERATOR_SIZE", crate::types::GENERATOR_SIZE)?;
