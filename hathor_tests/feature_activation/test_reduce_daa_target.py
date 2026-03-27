@@ -14,19 +14,24 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from unittest.mock import Mock, patch
+from typing import TYPE_CHECKING, Any, Callable
+from unittest.mock import Mock
+
+from pytest import approx
 
 from hathor.conf.get_settings import get_global_settings
+from hathor.daa import (
+    DifficultyAdjustmentAlgorithm,
+    DifficultyAdjustmentAlgorithmV1,
+    DifficultyAdjustmentAlgorithmV2,
+)
+from hathor.daa.common import _calculate_next_weight, TestMode
+from hathor.feature_activation.feature import Feature
+from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.model.feature_state import FeatureState
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
-from hathor.feature_activation.feature import Feature
-from hathor.feature_activation.feature_service import FeatureService
-from hathor.feature_activation.model.criteria import Criteria
-from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.feature_activation.settings import Settings as FeatureSettings
 
 
 def _get_settings(*, reduced_avg_time_10x: int = 75) -> HathorSettings:
@@ -36,8 +41,58 @@ def _get_settings(*, reduced_avg_time_10x: int = 75) -> HathorSettings:
     })
 
 
-class TestGetTokensIssuedPerBlock:
-    """Tests for get_tokens_issued_per_block with REDUCE_DAA_TARGET feature."""
+class TestDAAV1:
+    """Tests for DifficultyAdjustmentAlgorithmV1."""
+
+    def test_avg_time_between_blocks(self) -> None:
+        settings = _get_settings()
+        v1 = DifficultyAdjustmentAlgorithmV1(settings=settings)
+        assert v1.avg_time_between_blocks == settings.AVG_TIME_BETWEEN_BLOCKS
+
+    def test_get_tokens_issued_per_block_normal_reward(self) -> None:
+        settings = _get_settings()
+        v1 = DifficultyAdjustmentAlgorithmV1(settings=settings)
+        assert v1.get_tokens_issued_per_block(1) == settings.INITIAL_TOKENS_PER_BLOCK
+
+
+class TestDAAV2:
+    """Tests for DifficultyAdjustmentAlgorithmV2."""
+
+    def test_avg_time_between_blocks(self) -> None:
+        settings = _get_settings()
+        v2 = DifficultyAdjustmentAlgorithmV2(settings=settings)
+        assert v2.avg_time_between_blocks == 7.5
+
+    def test_get_tokens_issued_per_block_reduced_reward(self) -> None:
+        settings = _get_settings()
+        v2 = DifficultyAdjustmentAlgorithmV2(settings=settings)
+        # AVG_TIME=30, REDUCED_10X=75 (7.5s), factor=300//75=4
+        expected = settings.INITIAL_TOKENS_PER_BLOCK // 4
+        assert v2.get_tokens_issued_per_block(1) == expected
+
+    def test_reward_reduction_factor_30_to_7_5(self) -> None:
+        settings = _get_settings(reduced_avg_time_10x=75)
+        v2 = DifficultyAdjustmentAlgorithmV2(settings=settings)
+        assert v2._get_reward_reduction_factor() == 4
+
+    def test_reward_reduction_factor_30_to_10(self) -> None:
+        settings = _get_settings(reduced_avg_time_10x=100)
+        v2 = DifficultyAdjustmentAlgorithmV2(settings=settings)
+        assert v2._get_reward_reduction_factor() == 3
+
+    def test_reward_reduction_factor_30_to_15(self) -> None:
+        settings = _get_settings(reduced_avg_time_10x=150)
+        v2 = DifficultyAdjustmentAlgorithmV2(settings=settings)
+        assert v2._get_reward_reduction_factor() == 2
+
+    def test_reward_reduction_factor_same_returns_1(self) -> None:
+        settings = _get_settings(reduced_avg_time_10x=300)
+        v2 = DifficultyAdjustmentAlgorithmV2(settings=settings)
+        assert v2._get_reward_reduction_factor() == 1
+
+
+class TestFacadeGetTokensIssuedPerBlock:
+    """Tests for the facade's get_tokens_issued_per_block with feature-based selection."""
 
     def test_without_block_returns_normal_reward(self) -> None:
         settings = _get_settings()
@@ -76,13 +131,13 @@ class TestGetTokensIssuedPerBlock:
         assert reward == settings.INITIAL_TOKENS_PER_BLOCK
 
 
-class TestGetRewardForNextBlock:
-    """Tests for get_reward_for_next_block."""
+class TestFacadeGetRewardForNextBlock:
+    """Tests for the facade's get_reward_for_next_block."""
 
     def test_feature_inactive(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active_for_next_block.return_value = False
+        feature_service.is_feature_active.return_value = False
         daa = DifficultyAdjustmentAlgorithm(settings=settings, feature_service=feature_service)
         parent_block = Mock()
         parent_block.get_height.return_value = 10
@@ -93,7 +148,7 @@ class TestGetRewardForNextBlock:
     def test_feature_active_reduces_reward(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active_for_next_block.return_value = True
+        feature_service.is_feature_active.return_value = True
         daa = DifficultyAdjustmentAlgorithm(settings=settings, feature_service=feature_service)
         parent_block = Mock()
         parent_block.get_height.return_value = 10
@@ -112,163 +167,30 @@ class TestGetRewardForNextBlock:
         assert reward == settings.INITIAL_TOKENS_PER_BLOCK
 
 
-class TestRewardReductionFactor:
-    """Tests for _get_reward_reduction_factor."""
+class TestFacadeSelect:
+    """Tests for the facade's _select method."""
 
-    def test_factor_30_to_7_5(self) -> None:
-        settings = _get_settings(reduced_avg_time_10x=75)
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        assert daa._get_reward_reduction_factor() == 4
-
-    def test_factor_30_to_10(self) -> None:
-        settings = _get_settings(reduced_avg_time_10x=100)
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        assert daa._get_reward_reduction_factor() == 3
-
-    def test_factor_30_to_15(self) -> None:
-        settings = _get_settings(reduced_avg_time_10x=150)
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        assert daa._get_reward_reduction_factor() == 2
-
-    def test_factor_same_returns_1(self) -> None:
-        settings = _get_settings(reduced_avg_time_10x=300)
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        assert daa._get_reward_reduction_factor() == 1
-
-
-class TestIsFeatureActiveForNextBlock:
-    """Tests for FeatureService.is_feature_active_for_next_block."""
-
-    def _make_service(
-        self,
-        *,
-        evaluation_interval: int = 4,
-        features: dict[Feature, Criteria] | None = None,
-    ) -> FeatureService:
-        if features is None:
-            features = {}
-        feature_settings = FeatureSettings.model_construct(
-            evaluation_interval=evaluation_interval,
-            default_threshold=3,
-            features=features,
-        )
-        settings = get_global_settings().model_copy(update={'FEATURE_ACTIVATION': feature_settings})
-        tx_storage = Mock()
-        return FeatureService(settings=settings, tx_storage=tx_storage)
-
-    def test_already_active(self) -> None:
-        service = self._make_service()
-        parent_block = Mock()
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.ACTIVE):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is True
-
-    def test_defined_returns_false(self) -> None:
-        service = self._make_service()
-        parent_block = Mock()
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.DEFINED):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is False
-
-    def test_started_returns_false(self) -> None:
-        service = self._make_service()
-        parent_block = Mock()
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.STARTED):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is False
-
-    def test_locked_in_not_at_boundary(self) -> None:
-        """LOCKED_IN but next block is NOT at an evaluation boundary -> False."""
-        features = {
-            Feature.REDUCE_DAA_TARGET: Criteria.model_construct(
-                bit=0, start_height=0, timeout_height=400,
-                minimum_activation_height=0, version=Mock()
-            )
-        }
-        service = self._make_service(evaluation_interval=4, features=features)
-        parent_block = Mock()
-        parent_block.static_metadata = Mock()
-        parent_block.static_metadata.height = 6  # next=7, 7 % 4 != 0
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.LOCKED_IN):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is False
-
-    def test_locked_in_at_boundary_min_activation_met(self) -> None:
-        """LOCKED_IN and next block IS at boundary and minimum_activation_height met -> True."""
-        features = {
-            Feature.REDUCE_DAA_TARGET: Criteria.model_construct(
-                bit=0, start_height=0, timeout_height=400,
-                minimum_activation_height=8, version=Mock()
-            )
-        }
-        service = self._make_service(evaluation_interval=4, features=features)
-        parent_block = Mock()
-        parent_block.static_metadata = Mock()
-        parent_block.static_metadata.height = 7  # next=8, 8 % 4 == 0 and 8 >= 8
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.LOCKED_IN):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is True
-
-    def test_locked_in_at_boundary_min_activation_not_met(self) -> None:
-        """LOCKED_IN and next block IS at boundary but minimum_activation_height NOT met -> False."""
-        features = {
-            Feature.REDUCE_DAA_TARGET: Criteria.model_construct(
-                bit=0, start_height=0, timeout_height=400,
-                minimum_activation_height=12, version=Mock()
-            )
-        }
-        service = self._make_service(evaluation_interval=4, features=features)
-        parent_block = Mock()
-        parent_block.static_metadata = Mock()
-        parent_block.static_metadata.height = 7  # next=8, 8 % 4 == 0 but 8 < 12
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.LOCKED_IN):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is False
-
-    def test_locked_in_no_criteria(self) -> None:
-        """LOCKED_IN at boundary but feature has no criteria -> False."""
-        service = self._make_service(evaluation_interval=4, features={})
-        parent_block = Mock()
-        parent_block.static_metadata = Mock()
-        parent_block.static_metadata.height = 7  # next=8, 8 % 4 == 0
-
-        with patch.object(FeatureService, 'get_state', return_value=FeatureState.LOCKED_IN):
-            result = service.is_feature_active_for_next_block(
-                parent_block=parent_block, feature=Feature.REDUCE_DAA_TARGET
-            )
-        assert result is False
-
-
-class TestEffectiveAvgTime:
-    """Tests for _get_effective_avg_time."""
-
-    def test_normal_avg_time(self) -> None:
+    def test_select_v1_without_feature_service(self) -> None:
         settings = _get_settings()
         daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        assert daa._get_effective_avg_time(reduce_active=False) == 30
+        block = Mock()
+        assert daa._select(block) is daa._v1
 
-    def test_reduced_avg_time(self) -> None:
+    def test_select_v1_when_feature_inactive(self) -> None:
         settings = _get_settings()
-        daa = DifficultyAdjustmentAlgorithm(settings=settings)
-        assert daa._get_effective_avg_time(reduce_active=True) == 7.5
+        feature_service = Mock(spec=FeatureService)
+        feature_service.is_feature_active.return_value = False
+        daa = DifficultyAdjustmentAlgorithm(settings=settings, feature_service=feature_service)
+        block = Mock()
+        assert daa._select(block) is daa._v1
+
+    def test_select_v2_when_feature_active(self) -> None:
+        settings = _get_settings()
+        feature_service = Mock(spec=FeatureService)
+        feature_service.is_feature_active.return_value = True
+        daa = DifficultyAdjustmentAlgorithm(settings=settings, feature_service=feature_service)
+        block = Mock()
+        assert daa._select(block) is daa._v2
 
 
 class TestConsensusFeatureActivationRules:
@@ -291,3 +213,113 @@ class TestConsensusFeatureActivationRules:
 
         result = consensus._feature_activation_rules(tx, new_best_block)
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Helpers for DAA regression tests
+# ---------------------------------------------------------------------------
+
+class _MockBlock:
+    """Lightweight mock block for DAA regression tests."""
+
+    __slots__ = ('_height', 'timestamp', 'weight', 'hash')
+
+    def __init__(self, height: int, timestamp: int, weight: float, hash_val: bytes = b'\x00' * 32) -> None:
+        self._height = height
+        self.timestamp = timestamp
+        self.weight = weight
+        self.hash = hash_val
+
+    def get_height(self) -> int:
+        return self._height
+
+
+def _build_chain(
+    n_blocks: int,
+    interval: int,
+    base_weight: float,
+    base_timestamp: int = 1_000_000,
+) -> tuple[list[_MockBlock], Callable[[_MockBlock], _MockBlock]]:
+    """Build a linear chain of mock blocks and return (blocks, parent_getter)."""
+    blocks: list[_MockBlock] = []
+    for i in range(n_blocks + 1):
+        blocks.append(_MockBlock(
+            height=i,
+            timestamp=base_timestamp + i * interval,
+            weight=base_weight,
+            hash_val=i.to_bytes(32, 'big'),
+        ))
+    parent_map: dict[int, _MockBlock] = {}
+    for i in range(1, len(blocks)):
+        parent_map[id(blocks[i])] = blocks[i - 1]
+
+    def getter(b: _MockBlock) -> _MockBlock:
+        return parent_map[id(b)]
+
+    return blocks, getter
+
+
+# ---------------------------------------------------------------------------
+# Hardcoded regression tests for _calculate_next_weight
+# ---------------------------------------------------------------------------
+
+class TestDAAV1Regression:
+    """Regression tests ensuring V1 (avg_time=30s) produces identical results to master."""
+
+    def _run(self, blocks: list[_MockBlock], getter: Callable[..., Any], interval: int) -> float:
+        settings = _get_settings()
+        parent = blocks[-1]
+        ts = parent.timestamp + interval
+        return _calculate_next_weight(
+            settings, parent, ts, getter,  # type: ignore[arg-type]
+            avg_time=30.0, min_block_weight=21, test_mode=TestMode.DISABLED,
+        )
+
+    def test_steady_state_30s(self) -> None:
+        """300 blocks at exactly 30s intervals, weight=25.0 -> weight stays ~25.0."""
+        blocks, getter = _build_chain(300, 30, 25.0)
+        w = self._run(blocks, getter, 30)
+        assert w == approx(25.0, abs=1e-10)
+
+    def test_fast_blocks_15s(self) -> None:
+        """300 blocks at 15s intervals, weight=25.0 -> V1 increases weight to ~26.0."""
+        blocks, getter = _build_chain(300, 15, 25.0)
+        w = self._run(blocks, getter, 15)
+        assert w == approx(26.0, abs=1e-10)
+
+    def test_slow_blocks_60s(self) -> None:
+        """300 blocks at 60s intervals, weight=25.0 -> V1 decreases weight to ~24.0."""
+        blocks, getter = _build_chain(300, 60, 25.0)
+        w = self._run(blocks, getter, 60)
+        assert w == approx(24.0, abs=1e-10)
+
+
+class TestDAAV2Regression:
+    """Regression tests ensuring V2 (avg_time=7.5s) produces correct results."""
+
+    def _run(self, blocks: list[_MockBlock], getter: Callable[..., Any], interval: int) -> float:
+        settings = _get_settings()
+        parent = blocks[-1]
+        ts = parent.timestamp + interval
+        return _calculate_next_weight(
+            settings, parent, ts, getter,  # type: ignore[arg-type]
+            avg_time=7.5, min_block_weight=21, test_mode=TestMode.DISABLED,
+        )
+
+    def test_steady_state_30s(self) -> None:
+        """Blocks at 30s but V2 targets 7.5s -> weight drops to ~23.0 (blocks are slow for V2)."""
+        blocks, getter = _build_chain(300, 30, 25.0)
+        w = self._run(blocks, getter, 30)
+        assert w == approx(23.0, abs=1e-10)
+
+    def test_fast_blocks_15s(self) -> None:
+        """Blocks at 15s, V2 targets 7.5s -> weight is ~24.0."""
+        blocks, getter = _build_chain(300, 15, 25.0)
+        w = self._run(blocks, getter, 15)
+        assert w == approx(24.0, abs=1e-10)
+
+    def test_slow_blocks_60s(self) -> None:
+        """Blocks at 60s, V2 targets 7.5s -> weight drops to ~22.0."""
+        blocks, getter = _build_chain(300, 60, 25.0)
+        w = self._run(blocks, getter, 60)
+        assert w == approx(22.0, abs=1e-10)

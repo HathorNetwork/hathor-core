@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Generator, Optional
 from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
+from hathor.daa import DAAVersion
 from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.p2p.sync_v2.exception import (
@@ -63,6 +64,7 @@ class TransactionStreamingClient:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
                 nano_runtime_version=NanoRuntimeVersion.V1,
+                block_time_version=DAAVersion.V1,
             )
         )
 

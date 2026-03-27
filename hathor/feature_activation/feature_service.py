@@ -57,33 +57,6 @@ class FeatureService:
         state = self.get_state(block=block, feature=feature)
         return state.is_active()
 
-    def is_feature_active_for_next_block(self, *, parent_block: 'Block', feature: Feature) -> bool:
-        """Return whether a Feature will be active for the next block after parent_block.
-
-        This handles the edge case at evaluation boundaries where LOCKED_IN transitions to ACTIVE.
-        Used for template creation when the block doesn't exist yet.
-        """
-        state = self.get_state(block=parent_block, feature=feature)
-
-        if state.is_active():
-            return True
-
-        if state != FeatureState.LOCKED_IN:
-            return False
-
-        # The feature is LOCKED_IN. Check if the next block is at an evaluation boundary
-        # where the transition to ACTIVE would occur.
-        next_height = parent_block.static_metadata.height + 1
-        if next_height % self._feature_settings.evaluation_interval != 0:
-            return False
-
-        # At a boundary, LOCKED_IN transitions to ACTIVE if height >= minimum_activation_height.
-        criteria = self._feature_settings.features.get(feature)
-        if criteria is None:
-            return False
-
-        return next_height >= criteria.minimum_activation_height
-
     def _get_feature_activation_block(self, vertex: Vertex) -> Block:
         """Return the block used for feature activation depending on the vertex type."""
         from hathor.transaction import Block, Transaction

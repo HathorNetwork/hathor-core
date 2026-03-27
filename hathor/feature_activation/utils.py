@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
+from hathor.daa import DAAVersion
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
@@ -38,6 +39,7 @@ class Features:
     fee_tokens: bool
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
+    block_time_version: DAAVersion
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
@@ -50,6 +52,7 @@ class Features:
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
+            Feature.REDUCE_DAA_TARGET: FeatureSetting.FEATURE_ACTIVATION,
         }
 
         feature_is_active: dict[Feature, bool] = {
@@ -61,6 +64,9 @@ class Features:
         nano_runtime_version = (
             NanoRuntimeVersion.V2 if feature_is_active[Feature.NANO_RUNTIME_V2] else NanoRuntimeVersion.V1
         )
+        block_time_version = (
+            DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
+        )
 
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
@@ -68,6 +74,7 @@ class Features:
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
+            block_time_version=block_time_version,
         )
 
     @staticmethod
@@ -93,6 +100,7 @@ class Features:
             fee_tokens=features.fee_tokens,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
+            block_time_version=features.block_time_version,
         )
 
     @staticmethod
@@ -114,6 +122,7 @@ class Features:
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
+            block_time_version=DAAVersion.V2,
         )
 
 
