@@ -28,22 +28,33 @@ features = ["napi8"]
 version = "2"
 optional = true
 
+[dependencies.uniffi]
+version = "0.28"
+optional = true
+
 [dev-dependencies]
 proptest = "1"
 criterion = "0.5"
 
 [build-dependencies]
 napi-build = { version = "2", optional = true }
+uniffi = { version = "0.28", features = ["build"], optional = true }
 
 [features]
 default = ["std"]
 std = ["secp256k1-zkp/std"]
 python = ["pyo3"]
 napi = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
+uniffi = ["dep:uniffi"]
+uniffi-cli = ["uniffi/cli"]
 
 [lib]
 name = "hathor_ct_crypto"
-crate-type = ["lib", "cdylib"]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+required-features = ["uniffi"]
 
 [[bench]]
 name = "bench_pedersen"

@@ -14,5 +14,11 @@ pub mod ffi;
 #[cfg(feature = "napi")]
 pub mod napi_bindings;
 
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
+
+#[cfg(feature = "uniffi")]
+pub mod uniffi_bindings;
+
 pub use error::{HathorCtError, Result};
 pub use types::*;
