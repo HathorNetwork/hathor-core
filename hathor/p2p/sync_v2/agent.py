@@ -1173,7 +1173,7 @@ class NodeBlockSync(SyncAgent):
         # Finally, it is either an unsolicited new transaction or block.
         self.log.debug('tx received in real time from peer', tx=tx.hash_hex, peer=self.protocol.get_peer_id())
         try:
-            success = self.vertex_handler.on_new_relayed_vertex(tx)
+            success = self.vertex_handler.on_new_vertex(tx)
             if success:
                 self.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:

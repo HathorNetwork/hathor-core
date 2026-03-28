@@ -26,7 +26,6 @@ from hathor.consensus.consensus import ConsensusEvent
 from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.feature_activation.feature_service import FeatureService
-from hathor.feature_activation.utils import Features
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -90,80 +89,39 @@ class VertexHandler:
             # This case only happens for the genesis and during sync of a voided chain.
             assert parent_block.is_genesis or parent_meta.voided_by
 
-        params = VerificationParams(
-            nc_block_root_id=parent_meta.nc_block_root_id,
-            features=Features.from_vertex(
-                settings=self._settings,
-                feature_service=self._feature_service,
-                vertex=parent_block,
-            ),
+        params = VerificationParams.for_block(
+            settings=self._settings,
+            feature_service=self._feature_service,
+            block=parent_block,
         )
 
         for tx in deps:
             if not self._tx_storage.transaction_exists(tx.hash):
-                if not self._old_on_new_vertex(tx, params):
+                if not self._internal_on_new_vertex(tx, params):
                     return False
                 yield deferLater(self._reactor, 0, lambda: None)
 
         if not self._tx_storage.transaction_exists(block.hash):
-            if not self._old_on_new_vertex(block, params):
+            if not self._internal_on_new_vertex(block, params):
                 return False
 
         return True
 
-    @cpu.profiler('on_new_mempool_transaction')
-    def on_new_mempool_transaction(self, tx: Transaction) -> bool:
-        """Called by mempool sync."""
-        best_block = self._tx_storage.get_best_block()
-        features = Features.for_mempool(
-            settings=self._settings,
-            feature_service=self._feature_service,
-            best_block=best_block,
-        )
+    @cpu.profiler('on_new_vertex')
+    def on_new_vertex(self, vertex: BaseTransaction) -> bool:
+        """Called by mempool sync, APIs, and unsolicited vertices in real time relay."""
         params = VerificationParams.for_mempool(
-            best_block=best_block,
-            features=features,
-        )
-        return self._old_on_new_vertex(tx, params)
-
-    @cpu.profiler('on_new_relayed_vertex')
-    def on_new_relayed_vertex(
-        self,
-        vertex: BaseTransaction,
-        *,
-        quiet: bool = False,
-        reject_locked_reward: bool = True,
-    ) -> bool:
-        """Called for unsolicited vertex received, usually due to real time relay."""
-        best_block = self._tx_storage.get_best_block()
-        best_block_meta = best_block.get_metadata()
-        if best_block_meta.nc_block_root_id is None:
-            assert best_block.is_genesis
-
-        features = Features.for_mempool(
             settings=self._settings,
             feature_service=self._feature_service,
-            best_block=best_block,
+            tx_storage=self._tx_storage,
         )
-        params = VerificationParams(
-            reject_locked_reward=reject_locked_reward,
-            nc_block_root_id=best_block_meta.nc_block_root_id,
-            features=features,
-        )
-        return self._old_on_new_vertex(vertex, params, quiet=quiet)
+        return self._internal_on_new_vertex(vertex, params)
 
-    @cpu.profiler('_old_on_new_vertex')
-    def _old_on_new_vertex(
-        self,
-        vertex: BaseTransaction,
-        params: VerificationParams,
-        *,
-        quiet: bool = False,
-    ) -> bool:
+    @cpu.profiler('_internal_on_new_vertex')
+    def _internal_on_new_vertex(self, vertex: BaseTransaction, params: VerificationParams) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param vertex: transaction to be added
-        :param quiet: if True will not log when a new tx is accepted
         """
         is_valid = self._validate_vertex(vertex, params)
 
@@ -172,7 +130,7 @@ class VertexHandler:
 
         try:
             consensus_events = self._unsafe_save_and_run_consensus(vertex)
-            self._post_consensus(vertex, params, consensus_events, quiet=quiet)
+            self._post_consensus(vertex, params, consensus_events)
         except BaseException:
             self._log.error('unexpected exception in on_new_vertex()', vertex=vertex)
             meta = vertex.get_metadata()
@@ -234,8 +192,6 @@ class VertexHandler:
         vertex: BaseTransaction,
         params: VerificationParams,
         consensus_events: list[ConsensusEvent],
-        *,
-        quiet: bool,
     ) -> None:
         """ Handle operations that need to happen once the tx becomes fully validated.
 
@@ -259,9 +215,9 @@ class VertexHandler:
                 self._pubsub.publish(event.event, **event.kwargs)
             self._pubsub.publish(HathorEvents.NETWORK_NEW_TX_ACCEPTED, tx=vertex)
 
-            self._log_new_object(vertex, 'new {}', quiet=quiet)
+            self._log_new_object(vertex, 'new {}')
 
-    def _log_new_object(self, tx: BaseTransaction, message_fmt: str, *, quiet: bool) -> None:
+    def _log_new_object(self, tx: BaseTransaction, message_fmt: str) -> None:
         """ A shortcut for logging additional information for block/txs.
         """
         metadata = tx.get_metadata()
@@ -291,11 +247,7 @@ class VertexHandler:
                 message = message_fmt.format('tx')
             else:
                 message = message_fmt.format('voided tx')
-        if not quiet:
-            log_func = self._log.info
-        else:
-            log_func = self._log.debug
 
         if tx.name:
             kwargs['__name'] = tx.name
-        log_func(message, **kwargs)
+        self._log.info(message, **kwargs)

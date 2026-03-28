@@ -38,6 +38,7 @@ from hathor.nanocontracts.types import (
     blueprint_id_from_bytes,
 )
 from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb, sign_pycoin
+from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
@@ -55,6 +56,7 @@ class VertexExporter:
     def __init__(
         self,
         *,
+        reactor: ReactorProtocol,
         builder: DAGBuilder,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
@@ -64,6 +66,7 @@ class VertexExporter:
         nc_catalog: NCBlueprintCatalog,
         blueprints_module: ModuleType | None,
     ) -> None:
+        self.reactor = reactor
         self._builder = builder
         self._vertices: dict[str, BaseTransaction] = {}
         self._wallets: dict[str, BaseWallet] = {}
@@ -192,7 +195,7 @@ class VertexExporter:
         deps = list(node.get_all_dependencies())
         assert deps
         timestamp = 1 + max(self._vertices[name].timestamp for name in deps if name in self._vertices)
-        return timestamp
+        return max(timestamp, int(self.reactor.seconds()))
 
     def update_vertex_hash(self, vertex: BaseTransaction, *, fix_conflict: bool = True) -> None:
         """Resolve vertex and update its hash."""

@@ -1,5 +1,4 @@
 from typing import Any
-from unittest.mock import Mock
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -11,7 +10,6 @@ from hathor.crypto.util import (
     get_address_from_public_key_bytes,
     get_public_key_bytes_compressed,
 )
-from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidSignature
@@ -83,7 +81,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.genesis = self.peer.tx_storage.get_all_genesis()
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
+        self.verification_params = VerificationParams.for_apis(self.peer.tx_storage)
 
     def _create_nc(
         self,

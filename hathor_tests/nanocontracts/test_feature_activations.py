@@ -194,7 +194,7 @@ class TestNanoFeatureActivation(unittest.TestCase):
         # but deprecated opcodes are already rejected on the mempool
         msg = 'full validation failed: unknown opcode: 208'
         with pytest.raises(InvalidNewTransaction, match=msg):
-            self.vertex_handler.on_new_relayed_vertex(op_v2_b)
+            self.vertex_handler.on_new_vertex(op_v2_b)
         assert op_v2_b.get_metadata().validation.is_initial()
         assert op_v2_b.get_metadata().voided_by is None
 
@@ -214,21 +214,21 @@ class TestNanoFeatureActivation(unittest.TestCase):
         # At this point the nano feature is not active, so nano header is rejected on the mempool
         msg = 'full validation failed: Header `NanoHeader` not supported by `Transaction`'
         with pytest.raises(InvalidNewTransaction, match=msg):
-            self.vertex_handler.on_new_relayed_vertex(nc1)
+            self.vertex_handler.on_new_vertex(nc1)
         assert nc1.get_metadata().validation.is_initial()
         assert nc1.get_metadata().voided_by is None
 
         # At this point the nano feature is not active, so OCB is rejected on the mempool
         msg = 'full validation failed: invalid vertex version: 6'
         with pytest.raises(InvalidNewTransaction, match=msg):
-            self.vertex_handler.on_new_relayed_vertex(ocb1)
+            self.vertex_handler.on_new_vertex(ocb1)
         assert ocb1.get_metadata().validation.is_initial()
         assert ocb1.get_metadata().voided_by is None
 
         # At this point the fee feature is not active, so fee header is rejected on the mempool
         msg = 'full validation failed: Header `FeeHeader` not supported by `TokenCreationTransaction`'
         with pytest.raises(InvalidNewTransaction, match=msg):
-            self.vertex_handler.on_new_relayed_vertex(fbt)
+            self.vertex_handler.on_new_vertex(fbt)
         assert fbt.get_metadata().validation.is_initial()
         assert fbt.get_metadata().voided_by is None
 
@@ -311,28 +311,28 @@ class TestNanoFeatureActivation(unittest.TestCase):
 
         # The nc and fee txs are re-accepted on the mempool.
         self._reset_vertex(nc1)
-        self.vertex_handler.on_new_relayed_vertex(nc1)
+        self.vertex_handler.on_new_vertex(nc1)
         assert nc1.get_metadata().validation.is_valid()
         assert nc1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(nc1.hash)
         assert nc1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         self._reset_vertex(ocb1)
-        self.vertex_handler.on_new_relayed_vertex(ocb1)
+        self.vertex_handler.on_new_vertex(ocb1)
         assert ocb1.get_metadata().validation.is_valid()
         assert ocb1.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(ocb1.hash)
         assert ocb1 in list(self.manager.tx_storage.iter_mempool_tips())
 
         self._reset_vertex(fbt)
-        self.vertex_handler.on_new_relayed_vertex(fbt)
+        self.vertex_handler.on_new_vertex(fbt)
         assert fbt.get_metadata().validation.is_valid()
         assert fbt.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(fbt.hash)
         assert fbt in list(self.manager.tx_storage.iter_mempool_tips())
 
         self._reset_vertex(fee_tx)
-        self.vertex_handler.on_new_relayed_vertex(fee_tx)
+        self.vertex_handler.on_new_vertex(fee_tx)
         assert fee_tx.get_metadata().validation.is_valid()
         assert fee_tx.get_metadata().voided_by is None
         assert self.manager.tx_storage.transaction_exists(fee_tx.hash)

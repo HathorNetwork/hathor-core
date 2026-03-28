@@ -414,7 +414,7 @@ class HathorManager:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = get_block_storage_from_block(nc_storage_factory, block)
-        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=block)
+        features = Features.for_vertex(settings=self._settings, feature_service=self.feature_service, vertex=block)
         return self.runner_factory.create(
             runtime_version=features.nano_runtime_version,
             block_storage=block_storage,
@@ -867,23 +867,13 @@ class HathorManager:
 
         return self.on_new_tx(tx, propagate_to_peers=True)
 
-    def on_new_tx(
-        self,
-        vertex: BaseTransaction,
-        *,
-        quiet: bool = False,
-        propagate_to_peers: bool = True,
-        reject_locked_reward: bool = True,
-    ) -> bool:
+    def on_new_tx(self, vertex: BaseTransaction, *, propagate_to_peers: bool = True) -> bool:
         """ New method for adding transactions or blocks that steps the validation state machine.
 
         :param vertex: transaction to be added
-        :param quiet: if True will not log when a new tx is accepted
         :param propagate_to_peers: if True will relay the tx to other peers if it is accepted
         """
-        success = self.vertex_handler.on_new_relayed_vertex(
-            vertex, quiet=quiet, reject_locked_reward=reject_locked_reward
-        )
+        success = self.vertex_handler.on_new_vertex(vertex)
 
         if propagate_to_peers and success:
             self.connections.send_tx_to_peers(vertex)

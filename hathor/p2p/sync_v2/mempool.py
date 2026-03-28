@@ -140,7 +140,7 @@ class SyncMempoolManager:
         if self.tx_storage.transaction_exists(tx.hash):
             return
         try:
-            success = self.vertex_handler.on_new_mempool_transaction(tx)
+            success = self.vertex_handler.on_new_vertex(tx)
             if success:
                 self.sync_agent.protocol.connections.send_tx_to_peers(tx)
         except InvalidNewTransaction:
