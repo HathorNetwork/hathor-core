@@ -1,0 +1,15 @@
+{
+  "name": "@hathor/ct-crypto-node",
+  "version": "0.1.0",
+  "description": "Hathor Confidential Transaction crypto primitives - Node.js native addon",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.0.0"
+  }
+}

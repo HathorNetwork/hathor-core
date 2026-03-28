@@ -1,0 +1,4 @@
+module hathor_ct_cryptoFFI {
+    header "hathor_ct_cryptoFFI.h"
+    export *
+}

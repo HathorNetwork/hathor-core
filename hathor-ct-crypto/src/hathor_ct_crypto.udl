@@ -1,0 +1,145 @@
+namespace hathor_ct_crypto {
+    // Generator / tag derivation
+    [Throws=CryptoError]
+    sequence<u8> derive_asset_tag([ByRef] sequence<u8> token_uid);
+
+    [Throws=CryptoError]
+    sequence<u8> derive_tag([ByRef] sequence<u8> token_uid);
+
+    sequence<u8> htr_asset_tag();
+
+    [Throws=CryptoError]
+    sequence<u8> create_asset_commitment([ByRef] sequence<u8> tag, [ByRef] sequence<u8> blinding_factor);
+
+    // Pedersen commitments
+    [Throws=CryptoError]
+    sequence<u8> create_commitment(u64 amount, [ByRef] sequence<u8> blinding, [ByRef] sequence<u8> generator);
+
+    // Range proofs
+    [Throws=CryptoError]
+    sequence<u8> create_range_proof(
+        u64 amount,
+        [ByRef] sequence<u8> blinding,
+        [ByRef] sequence<u8> commitment,
+        [ByRef] sequence<u8> generator,
+        sequence<u8>? message,
+        sequence<u8>? nonce
+    );
+
+    [Throws=CryptoError]
+    boolean verify_range_proof(
+        [ByRef] sequence<u8> proof,
+        [ByRef] sequence<u8> commitment,
+        [ByRef] sequence<u8> generator
+    );
+
+    [Throws=CryptoError]
+    RewindResult rewind_range_proof(
+        [ByRef] sequence<u8> proof,
+        [ByRef] sequence<u8> commitment,
+        [ByRef] sequence<u8> nonce,
+        [ByRef] sequence<u8> generator
+    );
+
+    // Surjection proofs
+    [Throws=CryptoError]
+    sequence<u8> create_surjection_proof(
+        [ByRef] sequence<u8> codomain_tag,
+        [ByRef] sequence<u8> codomain_blinding_factor,
+        sequence<SurjectionDomainEntry> domain
+    );
+
+    [Throws=CryptoError]
+    boolean verify_surjection_proof(
+        [ByRef] sequence<u8> proof,
+        [ByRef] sequence<u8> codomain,
+        sequence<sequence<u8>> domain
+    );
+
+    // ECDH
+    [Throws=CryptoError]
+    sequence<u8> derive_ecdh_shared_secret([ByRef] sequence<u8> privkey, [ByRef] sequence<u8> pubkey);
+
+    sequence<u8> derive_rewind_nonce([ByRef] sequence<u8> shared_secret);
+
+    // High-level shielded output creation
+    [Throws=CryptoError]
+    CreatedShieldedOutput create_shielded_output(
+        u64 value,
+        [ByRef] sequence<u8> recipient_pubkey,
+        [ByRef] sequence<u8> token_uid,
+        boolean fully_shielded
+    );
+
+    [Throws=CryptoError]
+    CreatedShieldedOutput create_shielded_output_with_blinding(
+        u64 value,
+        [ByRef] sequence<u8> recipient_pubkey,
+        [ByRef] sequence<u8> token_uid,
+        boolean fully_shielded,
+        [ByRef] sequence<u8> blinding_factor
+    );
+
+    [Throws=CryptoError]
+    CreatedShieldedOutput create_shielded_output_with_both_blindings(
+        u64 value,
+        [ByRef] sequence<u8> recipient_pubkey,
+        [ByRef] sequence<u8> token_uid,
+        [ByRef] sequence<u8> value_blinding_factor,
+        [ByRef] sequence<u8> asset_blinding_factor
+    );
+
+    // High-level decrypt
+    [Throws=CryptoError]
+    DecryptedShieldedOutput decrypt_shielded_output(
+        [ByRef] sequence<u8> recipient_privkey,
+        [ByRef] sequence<u8> ephemeral_pubkey,
+        [ByRef] sequence<u8> commitment,
+        [ByRef] sequence<u8> range_proof,
+        [ByRef] sequence<u8> token_uid,
+        sequence<u8>? asset_commitment
+    );
+
+    // Balance
+    [Throws=CryptoError]
+    sequence<u8> compute_balancing_blinding_factor(
+        sequence<sequence<u8>> other_blinding_factors
+    );
+
+    sequence<u8> get_zero_tweak();
+};
+
+[Error]
+enum CryptoError {
+    "InvalidInput",
+    "CryptoFailed",
+};
+
+dictionary RewindResult {
+    u64 value;
+    sequence<u8> blinding_factor;
+    sequence<u8> message;
+};
+
+dictionary SurjectionDomainEntry {
+    sequence<u8> generator;
+    sequence<u8> tag;
+    sequence<u8> blinding_factor;
+};
+
+dictionary CreatedShieldedOutput {
+    sequence<u8> ephemeral_pubkey;
+    sequence<u8> commitment;
+    sequence<u8> range_proof;
+    sequence<u8> blinding_factor;
+    sequence<u8>? asset_commitment;
+    sequence<u8>? asset_blinding_factor;
+};
+
+dictionary DecryptedShieldedOutput {
+    u64 value;
+    sequence<u8> blinding_factor;
+    sequence<u8> token_uid;
+    sequence<u8>? asset_blinding_factor;
+    string output_type;
+};
