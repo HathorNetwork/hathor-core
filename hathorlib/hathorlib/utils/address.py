@@ -164,6 +164,7 @@ def get_public_key_bytes_compressed(public_key: ec.EllipticCurvePublicKey) -> by
     """Return the bytes of a pubkey in the compressed format."""
     return public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
 
+
 def is_pubkey_compressed(pubkey: bytes) -> bool:
     """ Receives a public key bytes and return True if in CompressedPoint format
         This function will not test if this is a valid public key.
