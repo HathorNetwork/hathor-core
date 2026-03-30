@@ -15,7 +15,7 @@
 import unittest
 
 from hathorlib.exceptions import InvalidAddress
-from hathorlib.nanocontracts.types import Address, NCFee, TokenUid, HATHOR_TOKEN_UID
+from hathorlib.nanocontracts.types import HATHOR_TOKEN_UID, Address, NCFee, TokenUid
 from hathorlib.utils.address import get_address_b58_from_public_key, get_public_key_from_bytes_compressed
 
 

@@ -14,12 +14,7 @@
 
 import unittest
 
-from hathorlib.utils.leb128 import (
-    decode_signed,
-    decode_unsigned,
-    encode_signed,
-    encode_unsigned,
-)
+from hathorlib.utils.leb128 import decode_signed, decode_unsigned, encode_signed, encode_unsigned
 
 
 class TestEncodeUnsigned(unittest.TestCase):

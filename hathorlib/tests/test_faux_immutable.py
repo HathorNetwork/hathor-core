@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# mypy: disable-error-code="attr-defined"
+
 import unittest
 
-from hathorlib.nanocontracts.faux_immutable import (
-    FauxImmutable,
-    __set_faux_immutable__,
-    create_with_shell,
-)
+from hathorlib.nanocontracts.faux_immutable import FauxImmutable, __set_faux_immutable__, create_with_shell
 
 
 class TestFauxImmutable(unittest.TestCase):
@@ -48,7 +46,7 @@ class TestFauxImmutable(unittest.TestCase):
             __slots__ = ()
 
         with self.assertRaises(AttributeError):
-            MyClass.foo = 'bar'  # type: ignore
+            MyClass.foo = 'bar'
 
     def test_missing_slots_raises(self) -> None:
         with self.assertRaises(TypeError):
@@ -96,7 +94,7 @@ class TestFauxImmutable(unittest.TestCase):
                 __slots__ = ()
                 __allow_faux_inheritance__ = True
 
-            class BadClass(Base1, Base2):  # type: ignore
+            class BadClass(Base1, Base2):
                 __slots__ = ()
 
     def test_indirect_inheritance_raises(self) -> None:

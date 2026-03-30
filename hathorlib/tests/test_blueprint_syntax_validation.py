@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# mypy: disable-error-code="no-untyped-def"
+
+
 import unittest
 
 from hathorlib.nanocontracts.blueprint_syntax_validation import (
@@ -44,7 +47,7 @@ class TestValidateHasSelfArg(unittest.TestCase):
             validate_has_self_arg(my_method, 'public')
 
     def test_self_typed(self) -> None:
-        def my_method(self: int) -> None:  # type: ignore
+        def my_method(self: int) -> None:
             pass
         with self.assertRaises(BlueprintSyntaxError):
             validate_has_self_arg(my_method, 'public')

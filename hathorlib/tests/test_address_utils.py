@@ -51,8 +51,15 @@ class TestChecksum(unittest.TestCase):
 class TestDecodeAddress(unittest.TestCase):
     def test_valid_address_roundtrip(self) -> None:
         # Build a valid address from a known pubkey
-        # private_bytes = '308184020100301006072a8648ce3d020106052b8104000a046d306b0201010420e0a16e87ebe898762971ce1a9e340378604e6ecd5c1bc64d0ed0deb950488923a144034200047fe80ee4f43df6a778b383fbc9ba9a09b8b64c9dc42ad01cfa4b40073bcd4f29a404f08992f9d909364fc42d019e65c0036f6ddfb81986fca70ada8e37096203'
-        pubkey_bytes = bytes.fromhex('037fe80ee4f43df6a778b383fbc9ba9a09b8b64c9dc42ad01cfa4b40073bcd4f29')
+        # private_bytes = (
+        #     "308184020100301006072a8648ce3d020106052b8104000a046d306b0201010420e0a16e87ebe89"
+        #     "8762971ce1a9e340378604e6ecd5c1bc64d0ed0deb950488923a144034200047fe80ee4f43df6a7"
+        #     "78b383fbc9ba9a09b8b64c9dc42ad01cfa4b40073bcd4f29a404f08992f9d909364fc42d019e65c"
+        #     "0036f6ddfb81986fca70ada8e37096203"
+        # )
+        pubkey_bytes = bytes.fromhex(
+            "037fe80ee4f43df6a778b383fbc9ba9a09b8b64c9dc42ad01cfa4b40073bcd4f29"
+        )
         expected_address_b58 = 'HSzGCLFukjR7AigSgfhTbvB8ABcPPfeHZC'
         pubkey = get_public_key_from_bytes_compressed(pubkey_bytes)
         address_b58 = get_address_b58_from_public_key(pubkey)
@@ -73,6 +80,7 @@ class TestDecodeAddress(unittest.TestCase):
 
     def test_wrong_size(self) -> None:
         import base58
+
         # Encode too-short data
         short_b58 = base58.b58encode(b'\x00' * 10).decode('utf-8')
         with self.assertRaises(InvalidAddress):
@@ -80,6 +88,7 @@ class TestDecodeAddress(unittest.TestCase):
 
     def test_bad_checksum(self) -> None:
         import base58
+
         # Build valid address then corrupt checksum
         data = b'\x00' + b'\x01' * 20
         checksum = get_checksum(data)

@@ -91,4 +91,4 @@ class TestNanoRNG(unittest.TestCase):
     def test_immutability(self) -> None:
         rng = NanoRNG(self._get_seed())
         with self.assertRaises(AttributeError):
-            rng.foo = 'bar'  # type: ignore
+            rng.foo = 'bar'

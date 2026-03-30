@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# mypy: disable-error-code="no-untyped-def"
+
 import unittest
 
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCInvalidAction
 from hathorlib.nanocontracts.types import (
     HATHOR_TOKEN_UID,
-    Address,
     Amount,
     BlueprintId,
     ContractId,
@@ -25,6 +26,7 @@ from hathorlib.nanocontracts.types import (
     NCActionType,
     NCDepositAction,
     NCGrantAuthorityAction,
+    NCMethodType,
     NCRawArgs,
     NCWithdrawalAction,
     Timestamp,
@@ -32,10 +34,8 @@ from hathorlib.nanocontracts.types import (
     TxOutputScript,
     VertexId,
     _set_method_type,
-    NCMethodType,
     blueprint_id_from_bytes,
     set_checksig_backend,
-    RawSignedData,
 )
 
 
@@ -185,7 +185,7 @@ class TestChecksigBackend(unittest.TestCase):
 
 class TestViewDecorator(unittest.TestCase):
     def test_view_decorator(self) -> None:
-        from hathorlib.nanocontracts.types import view, NCMethodType, NC_METHOD_TYPE_ATTR
+        from hathorlib.nanocontracts.types import NC_METHOD_TYPE_ATTR, NCMethodType, view
 
         def my_method(self, x: int) -> int:
             return x

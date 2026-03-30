@@ -13,14 +13,14 @@
 # limitations under the License.
 
 from __future__ import annotations
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.exceptions import InvalidSignature
-from hathorlib.utils.address import is_pubkey_compressed, get_public_key_from_bytes_compressed
 
 import hashlib
 from collections.abc import Callable
 from typing import Any
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathorlib.nanocontracts.types import (
     NC_METHOD_TYPE_ATTR,
@@ -30,6 +30,7 @@ from hathorlib.nanocontracts.types import (
     TokenUid,
     VertexId,
 )
+from hathorlib.utils.address import get_public_key_from_bytes_compressed, is_pubkey_compressed
 
 CHILD_CONTRACT_ID_PREFIX: bytes = b'child-contract'
 CHILD_TOKEN_ID_PREFIX: bytes = b'child-token'

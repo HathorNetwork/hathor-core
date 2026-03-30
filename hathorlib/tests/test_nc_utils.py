@@ -16,12 +16,12 @@ import hashlib
 import unittest
 
 from hathorlib.nanocontracts.types import (
-    NCMethodType,
+    NC_METHOD_TYPE_ATTR,
     BlueprintId,
     ContractId,
+    NCMethodType,
     TokenUid,
     VertexId,
-    NC_METHOD_TYPE_ATTR,
 )
 from hathorlib.nanocontracts.utils import (
     CHILD_CONTRACT_ID_PREFIX,
