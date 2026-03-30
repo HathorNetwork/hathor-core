@@ -17,7 +17,6 @@ from __future__ import annotations
 import hashlib
 from types import ModuleType
 
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
@@ -26,8 +25,6 @@ from hathor.crypto.util import (
     decode_address,
     get_address_from_public_key_bytes,
     get_public_key_bytes_compressed,
-    get_public_key_from_bytes_compressed,
-    is_pubkey_compressed,
 )
 from hathor.transaction.headers import NanoHeader
 from hathor.util import not_none
@@ -40,31 +37,9 @@ from hathorlib.nanocontracts.utils import (  # noqa: F401
     is_nc_public_method,
     is_nc_view_method,
     json_dumps,
-    set_verify_ecdsa_backend,
     sha3,
     verify_ecdsa,
 )
-
-
-def _real_verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
-    """Verify a cryptographic signature using a compressed public key for a SECP256K1 curve."""
-    from hathor.nanocontracts import NCFail
-    if not is_pubkey_compressed(public_key):
-        raise NCFail('public_key is not compressed')
-
-    try:
-        pubkey = get_public_key_from_bytes_compressed(public_key)
-    except ValueError as e:
-        raise NCFail('public_key is invalid') from e
-
-    try:
-        pubkey.verify(signature, data, ec.ECDSA(hashes.SHA256()))
-        return True
-    except InvalidSignature:
-        return False
-
-
-set_verify_ecdsa_backend(_real_verify_ecdsa)
 
 
 def load_builtin_blueprint_for_ocb(filename: str, blueprint_name: str, module: ModuleType | None = None) -> str:

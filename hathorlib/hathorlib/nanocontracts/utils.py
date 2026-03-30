@@ -13,6 +13,10 @@
 # limitations under the License.
 
 from __future__ import annotations
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.exceptions import InvalidSignature
+from hathorlib.utils.address import is_pubkey_compressed, get_public_key_from_bytes_compressed
 
 import hashlib
 from collections.abc import Callable
@@ -71,20 +75,22 @@ def sha3(data: bytes) -> bytes:
     return hashlib.sha3_256(data).digest()
 
 
-_verify_ecdsa_impl: Callable[[bytes, bytes, bytes], bool] | None = None
-
-
-def set_verify_ecdsa_backend(impl: Callable[[bytes, bytes, bytes], bool]) -> None:
-    """Set the backend implementation for verify_ecdsa."""
-    global _verify_ecdsa_impl
-    _verify_ecdsa_impl = impl
-
-
 def verify_ecdsa(public_key: bytes, data: bytes, signature: bytes) -> bool:
     """Verify a cryptographic signature using a compressed public key for a SECP256K1 curve."""
-    if _verify_ecdsa_impl is None:
-        raise NotImplementedError('verify_ecdsa backend not set')
-    return _verify_ecdsa_impl(public_key, data, signature)
+    from hathorlib.nanocontracts.exception import NCFail
+    if not is_pubkey_compressed(public_key):
+        raise NCFail('public_key is not compressed')
+
+    try:
+        pubkey = get_public_key_from_bytes_compressed(public_key)
+    except ValueError as e:
+        raise NCFail('public_key is invalid') from e
+
+    try:
+        pubkey.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+        return True
+    except InvalidSignature:
+        return False
 
 
 def json_dumps(
