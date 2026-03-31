@@ -16,12 +16,8 @@ from __future__ import annotations
 
 from typing import Optional, Protocol
 
-from hathorlib.nanocontracts.blueprint import Blueprint
-from hathorlib.nanocontracts.types import BlueprintId
 from hathorlib.token_info import TokenDescription
 
 
 class NCTransactionStorageProtocol(Protocol):
     def get_token_description(self, token_uid: bytes) -> Optional[TokenDescription]: ...
-    def get_blueprint_source(self, blueprint_id: BlueprintId) -> str: ...
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]: ...

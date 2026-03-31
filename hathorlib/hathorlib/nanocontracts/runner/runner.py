@@ -26,7 +26,7 @@ from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError
 from hathorlib.nanocontracts.balance_rules import BalanceRules
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment
-from hathorlib.nanocontracts.blueprint_service import BlueprintService
+from hathorlib.nanocontracts.blueprint_service import BlueprintServiceProtocol
 from hathorlib.nanocontracts.clock import ClockProtocol
 from hathorlib.nanocontracts.context import Context
 from hathorlib.nanocontracts.exception import (
@@ -127,7 +127,7 @@ class Runner:
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
         tx_storage: NCTransactionStorageProtocol,
-        blueprint_service: BlueprintService,
+        blueprint_service: BlueprintServiceProtocol,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
@@ -1422,7 +1422,7 @@ class RunnerFactory:
         settings: HathorSettings,
         tx_storage: NCTransactionStorageProtocol,
         nc_storage_factory: NCStorageFactory,
-        blueprint_service: BlueprintService,
+        blueprint_service: BlueprintServiceProtocol,
     ) -> None:
         self.reactor = reactor
         self.settings = settings

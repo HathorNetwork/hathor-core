@@ -28,7 +28,6 @@ from twisted.internet.defer import Deferred
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
-from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.storage import get_block_storage_from_block
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
@@ -54,13 +53,6 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.vertex_children import VertexChildrenService
 from hathor.types import VertexId
-from hathorlib.nanocontracts.blueprint import Blueprint
-from hathorlib.nanocontracts.exception import (
-    BlueprintDoesNotExist,
-    OCBBlueprintNotConfirmed,
-    OCBInvalidBlueprintVertexType,
-)
-from hathorlib.nanocontracts.types import BlueprintId
 from hathorlib.token_info import TokenDescription
 
 if TYPE_CHECKING:
@@ -600,30 +592,6 @@ class TransactionStorage(ABC):
             token_symbol=token_creation_tx.token_symbol,
             token_id=token_creation_tx.hash
         )
-
-    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
-        """Return an on-chain blueprint transaction."""
-        try:
-            blueprint_tx = self.get_transaction(blueprint_id)
-        except TransactionDoesNotExist:
-            self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
-            raise BlueprintDoesNotExist(blueprint_id.hex())
-        if not isinstance(blueprint_tx, OnChainBlueprint):
-            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
-        tx_meta = blueprint_tx.get_metadata()
-        if tx_meta.voided_by or not tx_meta.first_block:
-            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
-        # XXX: maybe use N blocks confirmation, like reward-locks
-        return blueprint_tx
-
-    def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
-        """Returns the source code associated with the given blueprint_id."""
-        return self.get_on_chain_blueprint(blueprint_id).code.text
-
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
-        """Returns the blueprint class associated with the given blueprint_id."""
-        ocb = self.get_on_chain_blueprint(blueprint_id)
-        return ocb.get_blueprint_class()
 
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""
