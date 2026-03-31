@@ -25,9 +25,12 @@ class ConnectionType(Enum):
     BOOTSTRAP = 2
     CHECK_ENTRYPOINTS = 3
 
+    # If a connection comes from an entrypoint queue, if its assigned the 
+    # 'REBOUNDED' state. It is not a slot.
+    REBOUNDED = 4
+
     def is_outbound(self) -> bool:
-        """ If value is 1, then the connection is inbound. If not, outbound."""
-        return self.value != self.INCOMING
+        return self.value not in [self.INCOMING]
 
 
 class ConnectionState(Enum):
@@ -50,10 +53,10 @@ class ConnectionRejected:
 @dataclass
 class ConnectionRemoved:
     reason: str
-    entrypoint: PeerEndpoint | None
+    entrypoint: PeerEndpoint
 
 
 @dataclass
 class ConnectionNotRemoved:
     reason: str
-    entrypoint: PeerEndpoint | None
+

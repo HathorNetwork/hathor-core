@@ -194,3 +194,20 @@ class ConnectionSlotsTestCase(SimulatorTestCase):
         bootstrap_slot = full_node.connections.slots_manager.bootstrap_slot.connection_slot
         sum_of_slots = len(bootstrap_slot) + len(incoming_slot) + len(outgoing_slot)
         self.assertTrue(len(connections) == sum_of_slots)
+
+    def test_remove_connection(self) -> None:
+        pass
+
+
+class CheckEntrypointsTestCase(SimulatorTestCase):
+    def test_add_connection(self) -> None:
+        pass
+
+    def test_remove_connection(self) -> None:
+        pass
+
+    def test_add_one_when_full(self) -> None:
+        pass
+
+    def test_remove_when_queue_full(self) -> None:
+        pass

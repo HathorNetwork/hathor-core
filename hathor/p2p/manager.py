@@ -166,11 +166,12 @@ class ConnectionsManager:
         max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
         max_bootstrap: int = settings.P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS
         max_check_ep: int = settings.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+        max_ep_queue: int = settings.P2P_QUEUE_SIZE
 
-        slots_manager_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap, max_check_ep)
+        slots_setup = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap, max_check_ep, max_ep_queue)
 
         # Connection slots manager -> Kickstarts connection slots
-        self.slots_manager = SlotsManager(slots_manager_settings)
+        self.slots_manager = SlotsManager(slots_setup)
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -439,10 +440,9 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
-        connection_status: ConnectionAllowed | ConnectionRejected
-
         connection_status = self.slots_manager.add_to_slot(protocol)
 
+        # Adding rejected, disconnect protocol.
         if isinstance(connection_status, ConnectionRejected):
             self.log.warn('Connection Rejected')
             protocol.disconnect(force=True)
@@ -479,8 +479,8 @@ class ConnectionsManager:
             peers_count=self._get_peers_count()
         )
 
-        # If check_ep, getting ready we may disconnect.
-        if protocol.connection_type == ConnectionType.CHECK_ENTRYPOINTS:
+        # If in check_ep, getting ready we may disconnect.
+        if protocol in self.slots_manager.check_ep_slot:
             protocol.disconnect('Entrypoint checked - READY', force=True)
 
         peer_id = protocol.peer.id
