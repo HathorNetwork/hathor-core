@@ -18,10 +18,9 @@ from typing import TYPE_CHECKING, Protocol
 
 from structlog import get_logger
 
-
 if TYPE_CHECKING:
-    from hathorlib.nanocontracts.types import BlueprintId
     from hathorlib.nanocontracts.blueprint import Blueprint
+    from hathorlib.nanocontracts.types import BlueprintId
 
 logger = get_logger()
 
