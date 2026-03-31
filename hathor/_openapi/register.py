@@ -34,17 +34,17 @@ def register_resource(resource_class: ResourceClass) -> ResourceClass:
 def get_registered_resources() -> list[type[Resource]]:
     """ Returns a list with all the resources registered for the docs
     """
-    import hathor.event.resources.event  # noqa: 401
-    import hathor.feature_activation.resources.feature  # noqa: 401
-    import hathor.healthcheck.resources.healthcheck  # noqa: 401
-    import hathor.nanocontracts.resources  # noqa: 401
-    import hathor.p2p.resources  # noqa: 401
-    import hathor.profiler.resources  # noqa: 401
-    import hathor.stratum.resources  # noqa: 401
-    import hathor.transaction.resources  # noqa: 401
-    import hathor.version_resource  # noqa: 401
-    import hathor.wallet.resources.nano_contracts  # noqa: 401
-    import hathor.wallet.resources.thin_wallet  # noqa: 401
-    import hathor.websocket  # noqa: 401
+    import hathor.event.resources.event  # noqa: F401
+    import hathor.feature_activation.resources.feature  # noqa: F401
+    import hathor.healthcheck.resources.healthcheck  # noqa: F401
+    import hathor.nanocontracts.resources  # noqa: F401
+    import hathor.p2p.resources  # noqa: F401
+    import hathor.profiler.resources  # noqa: F401
+    import hathor.stratum.resources  # noqa: F401
+    import hathor.transaction.resources  # noqa: F401
+    import hathor.version_resource  # noqa: F401
+    import hathor.wallet.resources.nano_contracts  # noqa: F401
+    import hathor.wallet.resources.thin_wallet  # noqa: F401
+    import hathor.websocket  # noqa: F401
     global _registered_resources
     return _registered_resources
