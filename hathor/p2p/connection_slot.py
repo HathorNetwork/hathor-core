@@ -30,6 +30,59 @@ from hathor.p2p.protocol import HathorProtocol, PeerEndpoint
 
 AddToSlotResult = ConnectionAllowed | ConnectionRejected
 
+TIME_PENALTY = 10*60  # 10 minutes penalty for blacklisted entrypoints.
+
+
+class BlacklistedSet:
+    """ Set of blacklisted entrypoints, with the timestamp of blacklisting.
+        If a connection is opened with an entrypoint in blacklist, it is terminated.
+
+        After TIME_INTERVAL seconds have passed since the blacklisting timestamp, a
+        new connection can be opened with this entrypoint.
+
+        entrypoint_set: set of peer entrypoints.
+        time_map: Dictionary which maps the entrypoint to its blacklisting timestamp. """
+
+    entrypoint_set: set[PeerEndpoint]
+    time_map: dict[PeerEndpoint, int]
+
+    def __init__(self) -> None:
+        self.entrypoint_set = set()
+        self.time_map = dict()
+
+    def __contains__(self, entrypoint: PeerEndpoint) -> bool:
+        return entrypoint in self.entrypoint_set
+
+    def add_to_blacklist(self, protocol: HathorProtocol) -> None:
+        entrypoint = protocol.entrypoint
+        timestamp = protocol.reactor.seconds()
+
+        assert timestamp > 0, ValueError
+        assert entrypoint is not None, AssertionError
+
+        # Add to sets
+        self.entrypoint_set.add(entrypoint)
+        self.time_map[entrypoint] = timestamp
+
+    def remove_from_blacklist(self, entrypoint: PeerEndpoint) -> None:
+        self.entrypoint_set.discard(entrypoint)
+        self.time_map.pop(entrypoint, None)
+
+    def may_unblacklist(self, protocol: HathorProtocol) -> bool:
+
+        entrypoint = protocol.entrypoint
+        timestamp = self.time_map.get(entrypoint)
+        if not timestamp:
+            return False
+
+        current_time = protocol.reactor.seconds()
+        dt = current_time - timestamp
+
+        if dt > TIME_PENALTY:
+            return True
+        return False
+
+
 class ConnectionSlots:
     """ Class of a connection pool slot - outgoing, incoming, discovered connections. """
     connection_slot: set[HathorProtocol]
@@ -86,42 +139,42 @@ class ConnectionSlots:
 class CheckEntrypoints(ConnectionSlots):
     """ Checks the entrypoints of protocols and the ones provided by the peer.
 
-    
+
      Outflown connections from the outgoing slot arrive to the CheckEntrypoints class.
      They are added to the connection_slot set.
 
-     If the slot is full, the entrypoint is appended to the queue. If the queue is full, 
+     If the slot is full, the entrypoint is appended to the queue. If the queue is full,
      the entrypoint is discarded.
 
      Whenever a connection is removed, we pop an entrypoint from the queue and connect
      to it, in the rebound_slot.
 
-     If they do, then the entrypoints provided by the peer are appended to the 
+     If they do, then the entrypoints provided by the peer are appended to the
      entrypoint queue, for later connection attempt.
-    
-     CONNECTION_SLOT: When a protocol comes to an OUTGOING slot, and it is full, we 
+
+     CONNECTION_SLOT: When a protocol comes to an OUTGOING slot, and it is full, we
             redirect it to the CONNECTION_SLOT of CheckEntrypoints class, adding it here.
             This is done for analysis, since the OUTGOING slot being full is anomalous.
             We use the slot to check the entrypoint of the protocol. If it passes the check
             (should NOT be blacklisted), we grab the other entrypoints provided by the peer,
-            queue them, and we'll check them later one by one. 
-    
+            queue them, and we'll check them later one by one.
+
      UNTRUSTWORTHY_PEERS: If the connection is called to be removed, and it is NOT ready by a TIMEOUT,
             we consider it not to be trustworthy. If so, we add it to this set.
-    
+
      DEQUEUED_ENTRYPOINTS: The set of entrypoints which have been taken out of the entrypoint queue.
             When a protocol is to be added to the slot, if its core entrypoint is in this set, thence
             it has been dequeued, hence needs to be analyzed in the rebound_slot.
-    
+
      SEEN_ENTRYPOINTS: All protocols which have been removed (ready or not) are added to this set. If
             a protocol arrives to the add_slot method and its entrypoint has not been seen yet, when
             at removal (and if ready) we queue all the entrypoints provided by this protocol, as we
             are unaware of the other entrypoints of such peer.
 
-     REBOUND_SLOT: The rebound_slot is a separate space, of size 1, meant to only analyze protocols 
+     REBOUND_SLOT: The rebound_slot is a separate space, of size 1, meant to only analyze protocols
             instantiated from a previosly dequeued entrypoint. When the analysis is done (and we must remove it),
-            we pull another entrypoint from the queue, wrap it into a protocol via connect_to_endpoint 
-            (in the p2p_manager) and later it will be added to the slot via SlotsManager. 
+            we pull another entrypoint from the queue, wrap it into a protocol via connect_to_endpoint
+            (in the p2p_manager) and later it will be added to the slot via SlotsManager.
             When it's over, we remove it, pull another entrypoint, and keep the chain flowing.
 
             At kickstart, when there is no protocol in rebound_slot to begin, we use the removal of a
@@ -135,14 +188,14 @@ class CheckEntrypoints(ConnectionSlots):
 
             The rebound slot also analyzes entrypoints of connections which have tried to be checked earlier,
             yet the slot was full so the entrypoint has been queued, for a later attempt. In this case, regardless
-            of having been seen or not, we do not fetch the other provided entrypoints by the peer into the queue. 
+            of having been seen or not, we do not fetch the other provided entrypoints by the peer into the queue.
 
      """
 
     entrypoint_queue: deque[PeerEndpoint]
     dequeued_entrypoints: set[PeerEndpoint]
     rebound_slot: HathorProtocol
-
+    blacklisted_entrypoints: BlacklistedSet
 
     def __init__(self, slot_type: ConnectionType, max_connections: int, max_queue_size: int) -> None:
 
@@ -157,17 +210,17 @@ class CheckEntrypoints(ConnectionSlots):
         self.entrypoint_queue = deque()
         self.dequeued_entrypoints = set()
         self.seen_entrypoints = set()
-        self.untrustworthy_entrypoints = set()
+        self.blacklisted_entrypoints = BlacklistedSet()
 
         # Slots parameters
         self.max_queue_size = max_queue_size
-        self.rebound_slot =  None
+        self.rebound_slot = None
 
     def __contains__(self, protocol: HathorProtocol) -> bool:
         return protocol in self.connection_slot or protocol == self.rebound_slot
-    
+
     def add_connection(self, protocol: HathorProtocol) -> AddToSlotResult:
-    
+
         assert protocol.connection_type in [ConnectionType.CHECK_ENTRYPOINTS, ConnectionType.REBOUNDED]
 
         if protocol.connection_type == ConnectionType.REBOUNDED:
@@ -176,12 +229,12 @@ class CheckEntrypoints(ConnectionSlots):
             if not self.rebound_slot:
                 self.rebound_slot = protocol
                 return ConnectionAllowed('Connection added to rebound slot.')
-            
+
             # If rebound_slot occupied, queue the entrypoint back and try later.
             self.put_on_queue(protocol.entrypoint)
-            # PROB: CONNECTION IS STILL OPEN
+
             return ConnectionRejected('Rebound slot occupied. Trying later... ')
-    
+
         # Now, connection is only check_entrypoints type, so can be added to connection_slot.
         connection_status = super().add_connection(protocol)
 
@@ -194,24 +247,21 @@ class CheckEntrypoints(ConnectionSlots):
             # PROB: CONN STILL OPEN
         return connection_status
 
-
     def remove_connection(self, protocol: HathorProtocol) -> ConnectionRemoved | ConnectionNotRemoved:
         """ Removes protocol from the class.
 
-            The protocol can be either in the connection_slot or in the rebound_slot.
+         The protocol can be either in the connection_slot or in the rebound_slot.
 
+         If in rebound, pull entrypoint from the queue.
 
-            It will be stored into the rebound_slot for analysis. When
+         If in slot, and there is no protocol in rebound, pull entrypoint from queue.
+         If the connection removed in slot is ready and the entrypoint has not been seen,
+         queue all provided entrypoints by the peer for later analysis. If it is not ready
+         due to a timeout, we blacklist the entrypoint."""
 
-            If the protocol is in the rebound_slot when being removed, we pop an entrypoint
-            from the queue 
-            If protocol not in the connection slot set or in the rebound slot, it reverts.
-            
-            if """
         if not self.is_in_slot(protocol):
             return ConnectionNotRemoved('Connection not in slot for removal.')
 
-        # Eventually block  connection request.
         # Check if needs to blacklist protocol.
         self.should_blacklist(protocol)
 
@@ -225,7 +275,7 @@ class CheckEntrypoints(ConnectionSlots):
             for peer_entrypoint in peer_entrypoints:
                 if not self.has_been_seen(peer_entrypoint):
                     self.put_on_queue(peer_entrypoint)
-    
+
         if protocol in self.connection_slot:
             self.connection_slot.discard(protocol)
         elif protocol == self.rebound_slot:
@@ -280,28 +330,31 @@ class CheckEntrypoints(ConnectionSlots):
 
     def should_blacklist(self, protocol: HathorProtocol) -> None:
         """ Decides if peer is not trustworthy.
-        
+
             Criteria: If time taken is timeout time and it is not ready.
-        
+
             If blacklisted, we reject connection attempts"""
 
         if protocol.connection_state == ConnectionState.READY:
-            return 
+            return
 
         # Check if exceeded time matches time-out limit.
         dt = protocol.diff_timestamp
         dt_max = protocol.idle_timeout
         if dt < dt_max:
-            # Does not exceed timeout, it was only disconnected, so valid protocol. 
-            return 
+            # Does not exceed timeout, it was only disconnected, so valid protocol.
+            return
 
         # If not ready and exceeded time-out, we consider it not trustworthy - blacklist.
-        self.untrustworthy_entrypoints.add(protocol.entrypoint)
+        self.blacklist_entrypoint(protocol)
+
+    def blacklist_entrypoint(self, protocol: HathorProtocol) -> None:
+        self.blacklisted_entrypoints.add_to_blacklist(protocol)
 
     def should_dequeue_entrypoint(self, protocol: HathorProtocol) -> bool:
         """There are two scenarios where should dequeue:
-        1. We are disconnecting a protocol in the rebound slot, and it will pull an entrypoint 
-        from the queue by doing so (usual situation: one removal pulls one entrypoint). 
+        1. We are disconnecting a protocol in the rebound slot, and it will pull an entrypoint
+        from the queue by doing so (usual situation: one removal pulls one entrypoint).
 
         This first scenario we call 'usual_flow'.
 
@@ -310,13 +363,14 @@ class CheckEntrypoints(ConnectionSlots):
 
         This second scenario is called 'kickstart', as it is meant to kickstart the usual_flow, as there is no
         protocol in the rebound slot still.
-        
+
         This method should only be called when a protocol is disconnected.
         """
         kickstart = protocol in self.connection_slot and not self.rebound_slot
         usual_flow = protocol == self.rebound_slot
 
         return kickstart or usual_flow
+
 
 # To-Do: kw_only and update all dataclasses.
 @dataclass(slots=True, frozen=True)
@@ -337,8 +391,7 @@ class SlotsManager:
     bootstrap_slot: ConnectionSlots
     check_ep_slot: CheckEntrypoints
     seen_entrypoints: set[PeerEndpoint]
-    untrustworthy_entrypoints: set[PeerEndpoint]
-    spot_locked: LockSlot
+    blacklisted_entrypoints: BlacklistedSet
 
     types_allowed: list[ConnectionType] = {
         ConnectionType.OUTGOING,
@@ -370,15 +423,14 @@ class SlotsManager:
         self.entrypoints_queue = self.check_ep_slot.entrypoint_queue
         self.dequeued_entrypoints = self.check_ep_slot.dequeued_entrypoints
         self.seen_entrypoints = self.check_ep_slot.seen_entrypoints
-        self.untrustworthy_entrypoints = self.check_ep_slot.untrustworthy_entrypoints
-    
+        self.blacklisted_entrypoints = self.check_ep_slot.blacklisted_entrypoints
 
     def add_to_slot(self, protocol: HathorProtocol) -> AddToSlotResult:
         """Add received protocol to one of the slots.
-        
+
          If protocol is INCOMING or BOOTSTRAP, if slot full protocol is voided.
          If OUTGOING and slot full, type shifts to CHECK ENTRYPOINTS.
-         If the entrypoint of the protocol is in 'dequeued_entrypoints' set, 
+         If the entrypoint of the protocol is in 'dequeued_entrypoints' set,
          the protocol was constructed in a remove_connection execution. This
          protocol must go to the REBOUND slot, so the type shifts to REBOUNDED.
          It will go to the rebound slot, within the CHECK ENTRYPOINTS class.
@@ -404,11 +456,11 @@ class SlotsManager:
 
             case ConnectionType.OUTGOING:
                 slot = self.outgoing_slot
-    
+
                 if slot.is_slot_full():
                     protocol.connection_type = ConnectionType.CHECK_ENTRYPOINTS
                     slot = self.check_ep_slot
-                    
+
             case ConnectionType.INCOMING:
                 slot = self.incoming_slot
 
@@ -429,8 +481,8 @@ class SlotsManager:
             If OUTGOING, INCOMING, BOOTSTRAP, its remove_connection method will simply discard
             the protocol from the set.
 
-            If CHECK ENTRYPOINTS or REBOUNDED, it will call its remove_connection method, but it 
-            will also manage the flow of entrypoints - queueing, dequeueing, blacklisting - 
+            If CHECK ENTRYPOINTS or REBOUNDED, it will call its remove_connection method, but it
+            will also manage the flow of entrypoints - queueing, dequeueing, blacklisting -
             depending on the conditions of the received protocol.
             Both refer to the same slot object - check_ep_slot.
 
@@ -439,7 +491,7 @@ class SlotsManager:
         conn_type = protocol.connection_type
         assert conn_type in self.types_allowed
 
-        slot: ConnectionSlots | CheckEntrypoints | None  = None
+        slot: ConnectionSlots | CheckEntrypoints | None = None
         match conn_type:
             case ConnectionType.OUTGOING:
                 slot = self.outgoing_slot
@@ -447,14 +499,13 @@ class SlotsManager:
                 slot = self.incoming_slot
             case ConnectionType.BOOTSTRAP:
                 slot = self.bootstrap_slot
-            case ConnectionType.CHECK_ENTRYPOINTS: 
+            case ConnectionType.CHECK_ENTRYPOINTS:
                 slot = self.check_ep_slot
             case ConnectionType.REBOUNDED:
                 slot = self.check_ep_slot
             case _:
                 assert_never(conn_type)
 
-        assert protocol in slot
         assert slot.type in self.types_allowed
         assert protocol.connection_state in self.states_allowed
 
@@ -465,4 +516,10 @@ class SlotsManager:
         return self.check_ep_slot.has_been_seen(entrypoint)
 
     def is_blacklisted(self, entrypoint: PeerEndpoint) -> bool:
-        return entrypoint in self.untrustworthy_entrypoints
+        return entrypoint in self.blacklisted_entrypoints
+
+    def may_unblacklist(self, protocol: HathorProtocol) -> bool:
+        return self.blacklisted_entrypoints.may_unblacklist(protocol)
+
+    def remove_from_blacklist(self, protocol: HathorProtocol) -> bool:
+        return self.blacklisted_entrypoints.remove_from_blacklist(protocol.entrypoint)

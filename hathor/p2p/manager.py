@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connect_classes import ConnectionAllowed, ConnectionRejected, ConnectionState, ConnectionType
+from hathor.p2p.connect_classes import ConnectionRejected, ConnectionState, ConnectionType
 from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
@@ -440,6 +440,17 @@ class ConnectionsManager:
             protocol.disconnect(force=True)
             return
 
+        # Checks if entrypoint has been blacklisted. If so, then if it can be delisted.
+        if self.slots_manager.is_blacklisted(protocol):
+
+            # Check if can be delisted:
+            if not self.slots_manager.may_unblacklist(protocol):
+                self.log.warn('entrypoint blacklisted, disconnecting...')
+                protocol.disconnect(force=True)
+                return
+
+            self.slots_manager.remove_from_blacklist(protocol)
+
         connection_status = self.slots_manager.add_to_slot(protocol)
 
         # Adding rejected, disconnect protocol.
@@ -557,10 +568,6 @@ class ConnectionsManager:
             protocol=protocol,
             peers_count=self._get_peers_count()
         )
-
-        # SUGGESTION: To make a NETWORK_PEER_DEQUEUED. It would be clearer, since in the case of a dequeue,
-        # the order of events would be "NETWORK_PEER_READY" and then "NETWORK_PEER_CONNECTED", which is
-        # the opposite.
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""

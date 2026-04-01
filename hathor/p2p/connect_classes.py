@@ -15,6 +15,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+
 from hathor.p2p.protocol import PeerEndpoint
 
 
@@ -25,7 +26,7 @@ class ConnectionType(Enum):
     BOOTSTRAP = 2
     CHECK_ENTRYPOINTS = 3
 
-    # If a connection comes from an entrypoint queue, if its assigned the 
+    # If a connection comes from an entrypoint queue, if its assigned the
     # 'REBOUNDED' state. It is not a slot.
     REBOUNDED = 4
 
@@ -59,4 +60,3 @@ class ConnectionRemoved:
 @dataclass
 class ConnectionNotRemoved:
     reason: str
-
