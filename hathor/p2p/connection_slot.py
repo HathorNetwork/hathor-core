@@ -26,7 +26,8 @@ from hathor.p2p.connect_classes import (
     ConnectionState,
     ConnectionType,
 )
-from hathor.p2p.protocol import HathorProtocol, PeerEndpoint
+from hathor.p2p.protocol import HathorProtocol
+from hathor.p2p.peer_endpoint import PeerEndpoint
 
 AddToSlotResult = ConnectionAllowed | ConnectionRejected
 
@@ -100,6 +101,9 @@ class ConnectionSlots:
 
     def __contains__(self, connection: HathorProtocol) -> None:
         return connection in self.connection_slot
+
+    def __len__(self) -> int:
+        return len(self.connection_slot)
 
     def add_connection(self, protocol: HathorProtocol) -> AddToSlotResult:
         """ Adds connection protocol to the slot. Checks whether the slot is full or not. If full,

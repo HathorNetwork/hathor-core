@@ -2,6 +2,8 @@ from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.simulator import FakeConnection
 from hathor_tests.simulation.base import SimulatorTestCase
 
+from twisted.python.failure import Failure
+
 
 class ConnectionSlotsTestCase(SimulatorTestCase):
     def test_slot_limit(self) -> None:
@@ -200,11 +202,76 @@ class ConnectionSlotsTestCase(SimulatorTestCase):
 
 
 class CheckEntrypointsTestCase(SimulatorTestCase):
+
+
     def test_add_connection(self) -> None:
+
+        max_outgoing = 1
+        max_incoming = 1
+        max_bootstrap = 1
+        max_check_ep = 5
+        max_queue_ep = 100
+
+        full_node = self.create_peer()
+
+        sm_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap, max_check_ep, max_queue_ep)
+        full_node.connections.slots_manager = SlotsManager(sm_settings)
+
+        # We'll add two connections to outgoing slot.
+
+        out_peer_1 = self.create_peer()
+        out_peer_2 = self.create_peer()
+    
+        out_conn_1 = FakeConnection(out_peer_1, full_node)
+        out_conn_2 = FakeConnection(out_peer_2, full_node)
+        self.simulator.add_connection(out_conn_1)
+        self.simulator.add_connection(out_conn_2)
+        self.simulator.run(1)
+
+        # Make sure the outgoing slot is still at ONE connection
+        outgoing_slot = full_node.connections.slots_manager.outgoing_slot
+        assert(len(outgoing_slot) == max_outgoing)
+
+        # Make sure there is still ONE connection in the check ep Slot
+        check_ep_slot = full_node.connections.slots_manager.check_ep_slot
+        assert(len(check_ep_slot) == 1) 
+
+    def test_cap_check_entrypoints(self) -> None:
         pass
 
-    def test_remove_connection(self) -> None:
-        pass
+    def test_remove_connection_checkEp_slot(self) -> None:
+
+        max_outgoing = 1
+        max_incoming = 1
+        max_bootstrap = 1
+        max_check_ep = 5
+        max_queue_ep = 100
+
+        full_node = self.create_peer()
+
+        sm_settings = SlotsManagerSettings(max_outgoing, max_incoming, max_bootstrap, max_check_ep, max_queue_ep)
+        full_node.connections.slots_manager = SlotsManager(sm_settings)
+
+        # Add two connections to outgoing, one will be at check_entrypoints.
+        out_peer_1 = self.create_peer()
+        out_peer_2 = self.create_peer()
+    
+        out_conn_1 = FakeConnection(out_peer_1, full_node)
+        out_conn_2 = FakeConnection(out_peer_2, full_node)
+        self.simulator.add_connection(out_conn_1)
+        self.simulator.add_connection(out_conn_2)
+        self.simulator.run(1)
+
+        # Make sure there is still ONE connection in the check ep Slot
+        check_ep_slot = full_node.connections.slots_manager.check_ep_slot
+
+        # out_conn_2 should be the connection in check_ep_slot.
+        out_conn_2.disconnect(Failure(Exception('forced reconnection')))
+        self.simulator.remove_connection(out_conn_2)
+        self.simulator.run(1)
+
+        assert len(check_ep_slot) == 0
+
 
     def test_add_one_when_full(self) -> None:
         pass

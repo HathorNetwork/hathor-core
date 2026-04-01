@@ -15,7 +15,7 @@
 from abc import ABC, abstractmethod
 from typing import Callable
 
-from hathor.p2p.protocol import PeerEndpoint
+from hathor.p2p.peer_endpoint import PeerEndpoint
 
 
 class PeerDiscovery(ABC):

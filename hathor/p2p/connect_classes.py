@@ -16,8 +16,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from hathor.p2p.protocol import PeerEndpoint
-
+from hathor.p2p.peer_endpoint import PeerEndpoint
 
 class ConnectionType(Enum):
     """ Types of Connection as inputs for an instance of the Hathor Protocol. """
