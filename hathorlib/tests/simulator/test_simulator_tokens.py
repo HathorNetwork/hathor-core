@@ -18,8 +18,9 @@ import pytest
 
 from hathorlib.nanocontracts.exception import NCFail
 from hathorlib.simulator import Simulator, SimulatorBuilder
+from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID
 
-from .blueprints import HATHOR_TOKEN_UID, Vault
+from .blueprints import Vault
 
 
 class TestSimulatorTokens:
@@ -31,7 +32,7 @@ class TestSimulatorTokens:
         result = sim.create_contract(
             bid,
             caller=alice,
-            actions=[Simulator.deposit(HATHOR_TOKEN_UID, 1000)],
+            actions=[Simulator.deposit(NC_HTR_TOKEN_UID, 1000)],
         )
         assert sim.call_view(result.contract_id, 'get_total') == 1000
 
@@ -43,7 +44,7 @@ class TestSimulatorTokens:
         result = sim.create_contract(
             bid,
             caller=alice,
-            actions=[Simulator.deposit(HATHOR_TOKEN_UID, 1000)],
+            actions=[Simulator.deposit(NC_HTR_TOKEN_UID, 1000)],
         )
         cid = result.contract_id
 
@@ -51,7 +52,7 @@ class TestSimulatorTokens:
             cid, 'withdraw',
             caller=alice,
             args=(300,),
-            actions=[Simulator.withdrawal(HATHOR_TOKEN_UID, 300)],
+            actions=[Simulator.withdrawal(NC_HTR_TOKEN_UID, 300)],
         )
         assert sim.call_view(cid, 'get_total') == 700
 
@@ -63,14 +64,14 @@ class TestSimulatorTokens:
         result = sim.create_contract(
             bid,
             caller=alice,
-            actions=[Simulator.deposit(HATHOR_TOKEN_UID, 500)],
+            actions=[Simulator.deposit(NC_HTR_TOKEN_UID, 500)],
         )
         cid = result.contract_id
 
         sim.call_public(
             cid, 'deposit_more',
             caller=alice,
-            actions=[Simulator.deposit(HATHOR_TOKEN_UID, 300)],
+            actions=[Simulator.deposit(NC_HTR_TOKEN_UID, 300)],
         )
         assert sim.call_view(cid, 'get_total') == 800
 
@@ -82,7 +83,7 @@ class TestSimulatorTokens:
         result = sim.create_contract(
             bid,
             caller=alice,
-            actions=[Simulator.deposit(HATHOR_TOKEN_UID, 100)],
+            actions=[Simulator.deposit(NC_HTR_TOKEN_UID, 100)],
         )
 
         with pytest.raises(NCFail, match='Insufficient funds'):
@@ -90,7 +91,7 @@ class TestSimulatorTokens:
                 result.contract_id, 'withdraw',
                 caller=alice,
                 args=(200,),
-                actions=[Simulator.withdrawal(HATHOR_TOKEN_UID, 200)],
+                actions=[Simulator.withdrawal(NC_HTR_TOKEN_UID, 200)],
             )
 
         # Balance unchanged

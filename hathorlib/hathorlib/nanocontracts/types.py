@@ -34,9 +34,7 @@ from hathorlib.serialization import SerializationError
 from hathorlib.utils import get_deposit_token_withdraw_amount
 from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import InnerTypeMixin
-
-# Well-known constant: HTR token UID is always 0x00
-HATHOR_TOKEN_UID: bytes = b'\x00'
+from hathorlib.conf.settings import HATHOR_TOKEN_UID
 
 # XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
 #
@@ -108,6 +106,8 @@ CallerId: TypeAlias = Address | ContractId
 
 T = TypeVar('T')
 B = TypeVar('B', bound=type)
+
+NC_HTR_TOKEN_UID: TokenUid = TokenUid(HATHOR_TOKEN_UID)
 
 NC_INITIALIZE_METHOD: str = 'initialize'
 NC_FALLBACK_METHOD: str = 'fallback'

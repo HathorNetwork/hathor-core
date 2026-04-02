@@ -103,7 +103,7 @@ class TestSimulatorErrors:
         # This should fail and NOT commit
         from hathorlib.nanocontracts.exception import NCFail
         with pytest.raises(NCFail, match='intentional failure'):
-            sim.call_public(cid, 'fail_method', caller=alice)
+            sim.call_public(cid, 'fail_method', caller=alice, args=(0,))
 
         # Value should still be 100
         assert sim.call_view(cid, 'get_value') == 100
@@ -117,7 +117,7 @@ class TestSimulatorErrors:
 
         from hathorlib.nanocontracts.exception import NCFail
         with pytest.raises(NCFail):
-            sim.call_public(result.contract_id, 'fail_method', caller=alice)
+            sim.call_public(result.contract_id, 'fail_method', caller=alice, args=(0,))
 
         # Logs should be captured even for failed calls
         all_logs = sim.get_logs()

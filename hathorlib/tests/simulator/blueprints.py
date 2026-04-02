@@ -17,9 +17,7 @@
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.context import Context
 from hathorlib.nanocontracts.exception import NCFail
-from hathorlib.nanocontracts.types import NCActionType, TokenUid, public, view
-
-HATHOR_TOKEN_UID = TokenUid(b'\x00')
+from hathorlib.nanocontracts.types import NCActionType, NC_HTR_TOKEN_UID, public, view
 
 
 class Counter(Blueprint):
@@ -48,12 +46,12 @@ class Vault(Blueprint):
 
     @public(allow_actions=[NCActionType.DEPOSIT])
     def initialize(self, ctx: Context) -> None:
-        deposit = ctx.get_single_action(HATHOR_TOKEN_UID)
+        deposit = ctx.get_single_action(NC_HTR_TOKEN_UID)
         self.total = deposit.amount  # type: ignore
 
     @public(allow_actions=[NCActionType.DEPOSIT])
     def deposit_more(self, ctx: Context) -> None:
-        deposit = ctx.get_single_action(HATHOR_TOKEN_UID)
+        deposit = ctx.get_single_action(NC_HTR_TOKEN_UID)
         self.total += deposit.amount  # type: ignore
 
     @public(allow_actions=[NCActionType.WITHDRAWAL])
@@ -92,7 +90,8 @@ class FailingBlueprint(Blueprint):
         self.value = 42
 
     @public
-    def fail_method(self, ctx: Context) -> None:
+    def fail_method(self, ctx: Context, v: int) -> None:
+        self.value = v
         raise NCFail('intentional failure')
 
     @public

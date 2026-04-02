@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hathorlib.nanocontracts import Blueprint, Context, NanoRuntimeVersion, NCFail, Runner, RunnerFactory
-from hathorlib.nanocontracts.nc_exec_logs import NCExecEntry
+from hathorlib.nanocontracts.nc_exec_logs import NCExecEntry, NCEvent
 from hathorlib.nanocontracts.storage import NCBlockStorage
 from hathorlib.nanocontracts.storage.contract_storage import Balance
 from hathorlib.nanocontracts.types import (
@@ -34,6 +34,8 @@ from hathorlib.nanocontracts.types import (
     NCAction,
     NCDepositAction,
     NCWithdrawalAction,
+    NCAcquireAuthorityAction,
+    NCGrantAuthorityAction,
     TokenUid,
     VertexId,
 )
@@ -420,7 +422,7 @@ class Simulator:
         *,
         tx_hash: VertexId | None = None,
         block_hash: VertexId | None = None,
-    ) -> list:
+    ) -> list[NCEvent]:
         """Get events, optionally filtered by tx_hash or block_hash."""
         return self._event_store.get_events(tx_hash=tx_hash, block_hash=block_hash)
 
@@ -429,7 +431,7 @@ class Simulator:
         *,
         tx_hash: VertexId | None = None,
         block_hash: VertexId | None = None,
-    ) -> list:
+    ) -> list[NCExecEntry]:
         """Get execution logs, optionally filtered by tx_hash or block_hash."""
         return self._event_store.get_logs(tx_hash=tx_hash, block_hash=block_hash)
 
@@ -444,6 +446,18 @@ class Simulator:
     def withdrawal(token_uid: TokenUid, amount: int) -> NCWithdrawalAction:
         """Create a withdrawal action for use in method calls."""
         return NCWithdrawalAction(token_uid=token_uid, amount=amount)
+
+    @staticmethod
+    def grant_authority(token_uid: TokenUid, *, mint: bool = False, melt: bool = False) -> NCGrantAuthorityAction:
+        if not (mint or melt):
+            raise ValueError("We cannot have an authority that is neither mint nor melt")
+        return NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
+
+    @staticmethod
+    def acquire_authority(token_uid: TokenUid, *, mint: bool = False, melt: bool = False) -> NCAcquireAuthorityAction:
+        if not (mint or melt):
+            raise ValueError("We cannot have an authority that is neither mint nor melt")
+        return NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
 
     # Time Control
 
