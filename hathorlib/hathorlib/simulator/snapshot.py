@@ -33,6 +33,27 @@ class SimulatorSnapshot:
     """Frozen simulation state that can be restored later.
 
     Captured via deep copy of all mutable in-memory state.
+
+    Included in the snapshot:
+        - Contract storage (trie): all contract state, balances, and blueprint associations.
+        - Trie root pointer: used to rebuild NCBlockStorage on restore.
+        - Token registry: HTR and any custom tokens created via create_token().
+        - Clock time: the current simulated timestamp.
+        - Block height: the current block height counter.
+        - ID counter: ensures deterministic ID generation continues correctly.
+        - Events and logs: all recorded events and execution logs, indexed by tx/block hash.
+        - Current block hash: the hash of the in-progress block.
+
+    NOT included (and why):
+        - Blueprint registry: blueprint classes are code references, not mutable state.
+          They persist across restore since blueprints are never unregistered.
+        - Settings, RunnerFactory, runtime version: immutable configuration set at build time.
+        - auto_new_block flag: configuration preference, not simulation state.
+        - RNG seed hasher: not reset on restore, so the randomness sequence after restore
+          will differ from the original path. Fine for testing but not bit-identical replay.
+        - Pending block results: cleared on restore; any uncommitted tx results in the
+          current block are lost.
+        - Block data cache: not restored; lazily recreated on the next call.
     """
     trie_store_data: dict[bytes, Any]
     block_storage_root_id: bytes
