@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 from hathorlib.conf.settings import FeatureSetting, HathorSettings
 from hathorlib.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathorlib.nanocontracts.runner.runner import RunnerFactory
+from hathorlib.nanocontracts.types import ChecksigBackend
+from hathorlib.simulator.checksig import simulated_checksig_backend
 from hathorlib.simulator.context_factory import ContextFactory
 from hathorlib.simulator.id_generator import IdGenerator
 from hathorlib.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
@@ -59,6 +61,7 @@ class SimulatorBuilder:
         self._settings: HathorSettings | None = None
         self._auto_new_block: bool = True
         self._unlimited_fuel: bool = False
+        self._checksig_backend: ChecksigBackend | None = simulated_checksig_backend
 
     def with_seed(self, seed: bytes) -> SimulatorBuilder:
         """Set the RNG seed for deterministic execution."""
@@ -88,6 +91,16 @@ class SimulatorBuilder:
     def with_unlimited_fuel(self) -> SimulatorBuilder:
         """Disable fuel metering for rapid prototyping."""
         self._unlimited_fuel = True
+        return self
+
+    def with_checksig(self, backend: ChecksigBackend | None) -> SimulatorBuilder:
+        """Set the checksig backend used during simulated execution.
+
+        By default, the simulator uses a simulated backend that recognizes CHECKSIG_VALID
+        and CHECKSIG_INVALID sentinel values. Pass a custom callable to use your own
+        verification logic, or None to disable (checksig will raise NotImplementedError).
+        """
+        self._checksig_backend = backend
         return self
 
     def build(self) -> Simulator:
@@ -127,4 +140,5 @@ class SimulatorBuilder:
             id_generator=id_generator,
             context_factory=context_factory,
             auto_new_block=self._auto_new_block,
+            checksig_backend=self._checksig_backend,
         )

@@ -17,7 +17,7 @@
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.context import Context
 from hathorlib.nanocontracts.exception import NCFail
-from hathorlib.nanocontracts.types import NCActionType, NC_HTR_TOKEN_UID, public, view
+from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, NCActionType, SignedData, TxOutputScript, public, view
 
 
 class Counter(Blueprint):
@@ -124,3 +124,47 @@ class EventEmitter(Blueprint):
     @view
     def get_event_count(self) -> int:
         return self.event_count
+
+
+class CollectionArgs(Blueprint):
+    total: int
+
+    @public
+    def initialize(self, ctx: Context) -> None:
+        self.total = 0
+
+    @public
+    def sum_list(self, ctx: Context, values: list[int]) -> None:
+        self.total = sum(values)
+
+    @public
+    def sum_dict_values(self, ctx: Context, mapping: dict[str, int]) -> None:
+        self.total = sum(mapping.values())
+
+    @public
+    def count_unique(self, ctx: Context, items: set[int]) -> None:
+        self.total = len(items)
+
+    @view
+    def get_total(self) -> int:
+        return self.total
+
+
+class SignedMessage(Blueprint):
+    message: str
+    oracle_script: TxOutputScript
+
+    @public
+    def initialize(self, ctx: Context, oracle_script: TxOutputScript) -> None:
+        self.message = ''
+        self.oracle_script = oracle_script
+
+    @public
+    def set_message(self, ctx: Context, signed: SignedData[str]) -> None:
+        if not signed.checksig(self.syscall.get_contract_id(), self.oracle_script):
+            raise NCFail('invalid signature')
+        self.message = signed.data
+
+    @view
+    def get_message(self) -> str:
+        return self.message

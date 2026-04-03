@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import traceback
@@ -23,29 +24,31 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hathorlib.nanocontracts import Blueprint, Context, NanoRuntimeVersion, NCFail, Runner, RunnerFactory
-from hathorlib.nanocontracts.nc_exec_logs import NCExecEntry, NCEvent
+from hathorlib.nanocontracts.nc_exec_logs import NCEvent, NCExecEntry
 from hathorlib.nanocontracts.storage import NCBlockStorage
 from hathorlib.nanocontracts.storage.contract_storage import Balance
 from hathorlib.nanocontracts.types import (
     BLUEPRINT_EXPORT_NAME,
     Address,
     BlueprintId,
+    ChecksigBackend,
     ContractId,
+    NCAcquireAuthorityAction,
     NCAction,
     NCDepositAction,
-    NCWithdrawalAction,
-    NCAcquireAuthorityAction,
     NCGrantAuthorityAction,
+    NCWithdrawalAction,
     TokenUid,
     VertexId,
+    checksig_backend as _checksig_backend_ctx,
 )
 from hathorlib.nanocontracts.vertex_data import BlockData
 from hathorlib.simulator.context_factory import ContextFactory
-from hathorlib.simulator.proxy import ContractProxy
 from hathorlib.simulator.event_store import EventStore
 from hathorlib.simulator.id_generator import IdGenerator
 from hathorlib.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
 from hathorlib.simulator.in_memory_storage import InMemoryNCStorageFactory
+from hathorlib.simulator.proxy import ContractProxy
 from hathorlib.simulator.result import BlockResult, TxResult
 from hathorlib.simulator.snapshot import SimulatorSnapshot
 from hathorlib.token_info import TokenDescription, TokenVersion
@@ -88,6 +91,7 @@ class Simulator:
         id_generator: IdGenerator,
         context_factory: ContextFactory,
         auto_new_block: bool = True,
+        checksig_backend: ChecksigBackend | None = None,
     ) -> None:
         self._runner_factory = runner_factory
         self._runtime_version = runtime_version
@@ -99,6 +103,7 @@ class Simulator:
         self._ctx_factory = context_factory
         self._auto_new_block = auto_new_block
         self._event_store = EventStore()
+        self._checksig_backend = checksig_backend
 
         # Registered blueprint classes: class -> BlueprintId
         self._blueprint_ids: dict[type[Blueprint], BlueprintId] = {}
@@ -330,9 +335,16 @@ class Simulator:
         assert self._current_block_storage is not None
         self._ensure_block_data()
         runner = self._create_runner()
-        return runner.call_view_method(contract_id, method_name, *args, **kwargs)
+        with self._checksig_context():
+            return runner.call_view_method(contract_id, method_name, *args, **kwargs)
 
     # Core Execution
+
+    def _checksig_context(self) -> contextlib.AbstractContextManager[None]:
+        """Return a context manager that activates the checksig backend during execution."""
+        if self._checksig_backend is not None:
+            return _checksig_backend_ctx(self._checksig_backend)
+        return contextlib.nullcontext()
 
     def _create_runner(self) -> Runner:
         """Create a Runner for the current block, mirroring block_executor.execute_transaction."""
@@ -378,7 +390,8 @@ class Simulator:
         tx_hash = VertexId(ctx.vertex.hash)
 
         try:
-            fn(runner, ctx)
+            with self._checksig_context():
+                fn(runner, ctx)
         except NCFail:
             # On failure: don't commit, capture logs for debugging, re-raise
             call_info = runner.get_last_call_info()

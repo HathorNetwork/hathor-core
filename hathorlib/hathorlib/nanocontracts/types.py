@@ -15,13 +15,15 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum, unique
 from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
-from hathorlib.conf.settings import HathorSettings
+from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
     validate_has_not_ctx_arg,
@@ -34,7 +36,6 @@ from hathorlib.serialization import SerializationError
 from hathorlib.utils import get_deposit_token_withdraw_amount
 from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import InnerTypeMixin
-from hathorlib.conf.settings import HATHOR_TOKEN_UID
 
 # XXX: mypy gives the following errors on all subclasses of `bytes` that use FauxImmutableMeta:
 #
@@ -147,6 +148,26 @@ def set_checksig_backend(fn: ChecksigBackend) -> None:
     """
     global _checksig_backend
     _checksig_backend = fn
+
+
+@contextmanager
+def checksig_backend(fn: ChecksigBackend) -> Iterator[None]:
+    """Temporarily replace the global checksig backend, restoring the previous one on exit.
+
+    Example::
+
+        with checksig_backend(my_custom_backend):
+            # checksig() calls will use my_custom_backend
+            ...
+        # previous backend is restored
+    """
+    global _checksig_backend
+    previous = _checksig_backend
+    _checksig_backend = fn
+    try:
+        yield
+    finally:
+        _checksig_backend = previous
 
 
 class RawSignedData(InnerTypeMixin[T], Generic[T]):

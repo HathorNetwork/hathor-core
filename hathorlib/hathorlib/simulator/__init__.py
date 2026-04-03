@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from hathorlib.simulator.builder import SimulatorBuilder
+from hathorlib.simulator.checksig import CHECKSIG_INVALID, CHECKSIG_VALID
 from hathorlib.simulator.proxy import ContractProxy
 from hathorlib.simulator.result import BlockResult, TxResult
 from hathorlib.simulator.simulator import Simulator
@@ -20,6 +21,8 @@ from hathorlib.simulator.snapshot import SimulatorSnapshot
 
 __all__ = [
     'BlockResult',
+    'CHECKSIG_INVALID',
+    'CHECKSIG_VALID',
     'ContractProxy',
     'Simulator',
     'SimulatorBuilder',
