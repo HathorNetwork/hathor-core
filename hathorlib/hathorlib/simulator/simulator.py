@@ -41,6 +41,7 @@ from hathorlib.nanocontracts.types import (
 )
 from hathorlib.nanocontracts.vertex_data import BlockData
 from hathorlib.simulator.context_factory import ContextFactory
+from hathorlib.simulator.proxy import ContractProxy
 from hathorlib.simulator.event_store import EventStore
 from hathorlib.simulator.id_generator import IdGenerator
 from hathorlib.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
@@ -260,6 +261,34 @@ class Simulator:
             actions=actions,
             fn=_do_create,
         )
+
+    def create_instance(
+        self,
+        blueprint_id: BlueprintId,
+        *,
+        caller: Address,
+        args: tuple = (),
+        kwargs: dict[str, Any] | None = None,
+        actions: list[NCAction] | None = None,
+    ) -> ContractProxy:
+        """Create a new contract and return a ContractProxy wrapping it.
+
+        This is a convenience that calls create_contract() internally, then wraps the result.
+        """
+        tx_result = self.create_contract(blueprint_id, caller=caller, args=args, kwargs=kwargs, actions=actions)
+        blueprint_class = self._blueprint_service.get_blueprint_class(blueprint_id)
+        return ContractProxy(self, tx_result.contract_id, blueprint_class, tx_result=tx_result)
+
+    def wrap(self, contract_id: ContractId) -> ContractProxy:
+        """Wrap an existing contract in a ContractProxy.
+
+        The blueprint is resolved from the contract's stored metadata.
+        """
+        assert self._current_block_storage is not None
+        nc_storage = self._current_block_storage.get_contract_storage(contract_id)
+        blueprint_id = nc_storage.get_blueprint_id()
+        blueprint_class = self._blueprint_service.get_blueprint_class(blueprint_id)
+        return ContractProxy(self, contract_id, blueprint_class)
 
     # Method Calls
 
