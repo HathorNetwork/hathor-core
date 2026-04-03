@@ -23,6 +23,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import Features
 from hathor.manager import HathorManager
+from hathor.transaction.token_info import TokenVersion
 from hathor.types import BlockId, TransactionId
 from hathor.utils.pydantic import BaseModel, Hex
 
@@ -31,6 +32,7 @@ class NativeTokenInfo(BaseModel):
     """Information about the native token."""
     name: str = Field(description="Native token name")
     symbol: str = Field(description="Native token symbol")
+    version: int = Field(description="Native token version")
 
 
 class VersionResponse(ResponseModel):
@@ -72,7 +74,7 @@ VersionResponse.openapi_examples = {
             genesis_block_hash=BlockId(b'\x00' * 32),
             genesis_tx1_hash=TransactionId(b'\x00' * 31 + b'\x01'),
             genesis_tx2_hash=TransactionId(b'\x00' * 31 + b'\x02'),
-            native_token=NativeTokenInfo(name='Hathor', symbol='HTR'),
+            native_token=NativeTokenInfo(name='Hathor', symbol='HTR', version=TokenVersion.NATIVE),
         ),
     ),
 }
@@ -135,5 +137,6 @@ class VersionResource(Resource):
             native_token=NativeTokenInfo(
                 name=self._settings.NATIVE_TOKEN_NAME,
                 symbol=self._settings.NATIVE_TOKEN_SYMBOL,
+                version=TokenVersion.NATIVE,
             ),
         )
