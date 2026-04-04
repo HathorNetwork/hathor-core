@@ -19,7 +19,9 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import importlib.util
+import sys
 import traceback
+from types import ModuleType
 from pathlib import Path
 from typing import Any, Callable
 
@@ -39,10 +41,12 @@ from hathorlib.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCWithdrawalAction,
     TokenUid,
+    TxOutputScript,
     VertexId,
     checksig_backend as _checksig_backend_ctx,
 )
 from hathorlib.nanocontracts.vertex_data import BlockData
+from hathorlib.scripts import P2PKH
 from hathorlib.simulator.context_factory import ContextFactory
 from hathorlib.simulator.event_store import EventStore
 from hathorlib.simulator.id_generator import IdGenerator
@@ -207,7 +211,21 @@ class Simulator:
             raise ValueError(f'Cannot load module from: {path}')
 
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+
+        # Blueprints use `from hathor import ...` which requires a `hathor` module.
+        # In the hathorlib-only simulator environment, we inject a shim module that
+        # re-exports everything blueprints are allowed to import.
+        hathor_shim = self._ensure_hathor_shim()
+        had_hathor = 'hathor' in sys.modules
+        previous_hathor = sys.modules.get('hathor')
+        sys.modules['hathor'] = hathor_shim
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            if had_hathor:
+                sys.modules['hathor'] = previous_hathor  # type: ignore[assignment]
+            else:
+                sys.modules.pop('hathor', None)
 
         blueprint_class = getattr(module, BLUEPRINT_EXPORT_NAME, None)
         if blueprint_class is None:
@@ -217,11 +235,24 @@ class Simulator:
 
         return self.register_blueprint(blueprint_class)
 
+    @staticmethod
+    def _ensure_hathor_shim() -> ModuleType:
+        """Create a shim 'hathor' module that re-exports what blueprints are allowed to import."""
+        from hathorlib.nanocontracts.allowed_imports import ALLOWED_IMPORTS
+
+        shim = ModuleType('hathor')
+        for name, obj in ALLOWED_IMPORTS['hathor'].items():
+            setattr(shim, name, obj)
+        return shim
+
     # Address and Token management
 
     def create_address(self, name: str) -> Address:
         """Create a deterministic test address from a human-readable name."""
         return self._id_gen.create_address(name)
+
+    def get_output_script(self, address: Address) -> TxOutputScript:
+        return TxOutputScript(P2PKH.create_output_script(bytes(address)))
 
     def create_token(self, name: str, symbol: str, version: TokenVersion = TokenVersion.DEPOSIT) -> TokenUid:
         """Create and register a custom token for testing."""
@@ -506,10 +537,16 @@ class Simulator:
     def advance_time(self, seconds: float) -> None:
         """Advance the simulated clock by the given number of seconds."""
         self._clock.advance(seconds)
+        self._current_block_data_cache = None
 
     def set_time(self, timestamp: float) -> None:
-        """Set the simulated clock to a specific timestamp."""
+        """Set the simulated clock to a specific timestamp.
+
+        WARNING: Will not validate that timestamp is moving forward
+        so it can cause issues if used incorrectly.
+        """
         self._clock.set_time(timestamp)
+        self._current_block_data_cache = None
 
     # Snapshot/Restore
 
