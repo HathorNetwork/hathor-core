@@ -293,6 +293,103 @@ class TestVerifySumBypass:
             # Should not raise — authority pass-through is allowed
             service._verify_tx(tx, params)
 
+    def test_valid_shielded_tx_with_htr_deficit_in_transparent_accounting(self) -> None:
+        """A valid shielded tx where HTR moves into shielded outputs must not be rejected.
+
+        When HTR goes from transparent inputs to shielded outputs, token_dict only
+        sees the transparent side, so htr_info.amount is negative. The HTR deficit
+        check in verify_token_rules must not reject this, because balance integrity
+        is guaranteed by verify_shielded_balance (cryptographic proof).
+        """
+        from hathor.transaction import Transaction
+
+        service, settings, verifiers, params = _make_service_and_mocks()
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        # Token dict: HTR has a transparent deficit because value went to shielded outputs
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(
+            version=TokenVersion.NATIVE,
+            amount=-1000,  # transparent deficit — HTR went into shielded outputs
+        )
+        token_dict.fees_from_fee_header = 0
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            # Should not raise — balance is verified cryptographically
+            service._verify_tx(tx, params)
+
+    def test_valid_shielded_tx_with_htr_deficit_and_fee(self) -> None:
+        """Shielded tx with both HTR deficit and fee must pass.
+
+        Same as above but with a fee component to ensure both coexist correctly.
+        """
+        from hathor.transaction import Transaction
+
+        service, settings, verifiers, params = _make_service_and_mocks()
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        # Token dict: HTR deficit with fee
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(
+            version=TokenVersion.NATIVE,
+            amount=-1000,  # transparent deficit
+            chargeable_outputs=2,
+            chargeable_inputs=1,
+        )
+        # Fee = chargeable_outputs * FEE_PER_OUTPUT + shielded_fee
+        # With settings.FEE_PER_OUTPUT=100 and 2 chargeable outputs: 200
+        # shielded_fee is calculated from tx.shielded_outputs, which is a MagicMock
+        # so calculate_shielded_fee returns 0. Total expected fee = 200.
+        token_dict.fees_from_fee_header = 200
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            service._verify_tx(tx, params)
+
+    def test_valid_shielded_tx_with_partial_htr_deficit(self) -> None:
+        """Shielded tx where only part of HTR goes to shielded outputs.
+
+        htr_info.amount is slightly negative but not zero — some HTR stays
+        transparent, some goes shielded.
+        """
+        from hathor.transaction import Transaction
+
+        service, settings, verifiers, params = _make_service_and_mocks()
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(
+            version=TokenVersion.NATIVE,
+            amount=-500,  # partial transfer to shielded
+        )
+        token_dict.fees_from_fee_header = 0
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            service._verify_tx(tx, params)
+
 
 # ============================================================================
 # Explicit prohibition of mint/melt in shielded transactions
