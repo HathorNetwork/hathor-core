@@ -36,14 +36,32 @@ pub fn derive_ecdh_shared_secret(
     SharedSecret::new(peer_pubkey, private_key).secret_bytes()
 }
 
-/// Derive a deterministic nonce from a shared secret.
+/// Derive a deterministic nonce from a shared secret, guaranteed to be a valid SecretKey.
 ///
 /// nonce = SHA256("Hathor_CT_nonce_v1" || shared_secret)
+///
+/// If the hash output is not a valid secp256k1 scalar (probability ~2^-128),
+/// we rehash iteratively until we get a valid one.
 pub fn derive_rewind_nonce(shared_secret: &[u8; 32]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(NONCE_DOMAIN_SEPARATOR);
     hasher.update(shared_secret);
-    hasher.finalize().into()
+    let mut result: [u8; 32] = hasher.finalize().into();
+
+    // Ensure the result is a valid secp256k1 scalar (non-zero and < curve order).
+    // The probability of needing a retry is negligible (~2^-128), but this guarantees
+    // SecretKey::from_slice will never fail downstream.
+    let mut counter: u8 = 0;
+    while SecretKey::from_slice(&result).is_err() {
+        let mut retry_hasher = Sha256::new();
+        retry_hasher.update(NONCE_DOMAIN_SEPARATOR);
+        retry_hasher.update(&result);
+        retry_hasher.update([counter]);
+        result = retry_hasher.finalize().into();
+        counter = counter.wrapping_add(1);
+    }
+
+    result
 }
 
 /// Parse a 32-byte slice into a SecretKey.
@@ -237,6 +255,20 @@ pub fn rewind_full_shielded_output(
     let mut asset_blinding_factor = [0u8; 32];
     token_uid.copy_from_slice(&message[..32]);
     asset_blinding_factor.copy_from_slice(&message[32..64]);
+
+    // 5. Verify that token_uid + asset_blinding_factor reproduce the asset_commitment.
+    //    This prevents a malicious sender from embedding a wrong token_uid.
+    let tag = crate::generators::derive_tag(&token_uid)?;
+    let abf_tweak = Tweak::from_slice(&asset_blinding_factor)
+        .map_err(|e| HathorCtError::Secp256k1Error(e.to_string()))?;
+    let recomputed = crate::generators::create_asset_commitment(&tag, &abf_tweak)?;
+    if recomputed.serialize() != generator.serialize() {
+        return Err(HathorCtError::RangeProofError(
+            "asset commitment verification failed: extracted token_uid and asset_blinding_factor \
+             do not reproduce the asset_commitment from the output"
+                .into(),
+        ));
+    }
 
     Ok(RewindFullShieldedResult {
         value,

@@ -57,6 +57,17 @@ def deserialize_headers(
                 assert isinstance(vertex, Transaction)
                 fees = deserialize_fee_header(deserializer)
                 header = FeeHeader(settings=settings, tx=vertex, fees=fees)
+            case VertexHeaderId.SHIELDED_OUTPUTS_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import ShieldedOutputsHeader
+                assert isinstance(vertex, Transaction)
+                # Read all remaining bytes (includes peeked header_id) and delegate
+                # to ShieldedOutputsHeader.deserialize which uses raw bytes.
+                remaining_bytes = bytes(deserializer.read_all())
+                shielded_header, leftover = ShieldedOutputsHeader.deserialize(vertex, remaining_bytes)
+                header = shielded_header
+                # Push unconsumed bytes back into the deserializer
+                deserializer.replace_remaining(leftover)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)

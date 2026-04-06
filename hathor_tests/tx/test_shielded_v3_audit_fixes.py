@@ -34,21 +34,23 @@ def _method_source_contains(method: Callable[..., Any], text: str) -> bool:
 
 
 class TestStreamingClientFeatureGate:
-    """Streaming client defaults to shielded_transactions=False.
+    """Streaming client derives shielded_transactions from the block's feature activation state.
 
     During sync, the node processes blocks at different heights — some before feature
-    activation and some after.  Defaulting to False is safe because shielded txs cannot
-    exist before the feature is activated.  Full validation will compute the correct
-    value anyway.
+    activation and some after.  The streaming client now derives the feature state from
+    each partial block via Features.from_vertex, so permissive features like
+    shielded_transactions are correctly gated.
     """
 
-    def test_streaming_client_defaults_shielded_false(self) -> None:
-        """The streaming client VerificationParams should default shielded_transactions=False."""
+    def test_streaming_client_derives_features_from_block(self) -> None:
+        """The streaming client should derive features from the block, not hardcode them."""
         from hathor.p2p.sync_v2.transaction_streaming_client import TransactionStreamingClient
 
-        source = textwrap.dedent(inspect.getsource(TransactionStreamingClient.__init__))
-        assert 'shielded_transactions=False' in source, \
-            'Streaming client should default shielded_transactions=False'
+        source = textwrap.dedent(inspect.getsource(TransactionStreamingClient._make_verification_params))
+        assert 'Features.from_vertex' in source, \
+            'Streaming client should derive features from the block via Features.from_vertex'
+        assert 'shielded_transactions=features.shielded_transactions' in source, \
+            'Streaming client should pass shielded_transactions from the derived features'
 
 
 class TestMempoolCallerFeatures:

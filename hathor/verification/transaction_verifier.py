@@ -821,7 +821,7 @@ class TransactionVerifier:
 
     def verify_authority_restriction(self, tx: Transaction) -> None:
         """Shielded outputs cannot be authority (mint/melt) outputs."""
-        from hathor.transaction.shielded_tx_output import AmountShieldedOutput
+        from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
         for i, output in enumerate(tx.shielded_outputs):
             if isinstance(output, AmountShieldedOutput):
                 from hathor.transaction import TxOutput
@@ -829,6 +829,10 @@ class TransactionVerifier:
                     raise ShieldedAuthorityError(
                         f'shielded output {i}: authority outputs cannot be shielded'
                     )
+            elif isinstance(output, FullShieldedOutput):
+                pass  # FullShieldedOutput has no token_data field, so no authority risk
+            else:
+                raise InvalidShieldedOutputError(f'shielded output {i}: unknown output type')
 
     def verify_trivial_commitment_protection(self, tx: Transaction) -> None:
         """Without storage, conservatively require >= 2 shielded outputs always."""
