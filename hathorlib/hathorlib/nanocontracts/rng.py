@@ -88,8 +88,3 @@ class NanoRNG(FauxImmutable):
     def choice(self, seq: Sequence[T]) -> T:
         """Choose a random element from a non-empty sequence."""
         return seq[self.randbelow(len(seq))]
-
-    def random(self) -> float:
-        """Return a random float in the range [0, 1)."""
-        # 2**53 is the maximum integer float can represent without loss of precision.
-        return self.randbits(53) / 2**53

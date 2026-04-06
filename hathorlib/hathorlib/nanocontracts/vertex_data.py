@@ -27,7 +27,7 @@ class VertexData:
     hash: bytes
     nonce: int
     signal_bits: int
-    weight: float
+    work: int
     inputs: tuple[TxInputData, ...]
     outputs: tuple[TxOutputData, ...]
     tokens: tuple[TokenUid, ...]
