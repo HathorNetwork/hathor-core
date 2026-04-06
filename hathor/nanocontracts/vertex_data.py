@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathor.transaction.scripts import P2PKH, MultiSig, parse_address_script
+from hathor.utils.weight import weight_to_work
 from hathorlib.nanocontracts.types import VertexId
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.vertex_data import *  # noqa: F401,F403
@@ -136,7 +137,7 @@ def create_vertex_data_from_vertex(vertex: BaseTransaction) -> VertexData:
         hash=vertex.hash,
         nonce=vertex.nonce,
         signal_bits=vertex.signal_bits,
-        weight=vertex.weight,
+        work=weight_to_work(vertex.weight),
         inputs=inputs,
         outputs=outputs,
         tokens=tokens,

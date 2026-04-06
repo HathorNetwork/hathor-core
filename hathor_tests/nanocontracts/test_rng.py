@@ -1,4 +1,4 @@
-from math import floor, sqrt
+from math import sqrt
 
 import pytest
 
@@ -22,8 +22,8 @@ class MyBlueprint(Blueprint):
 
     @public
     def nop(self, ctx: Context) -> None:
-        x = self.syscall.rng.random()
-        if x < 0.5:
+        x = self.syscall.rng.randbits(53)
+        if x < 2**52:
             raise NCFail('bad luck')
 
 
@@ -36,7 +36,7 @@ class AttackerBlueprint(Blueprint):
 
     @public
     def attack(self, ctx: Context) -> None:
-        self.syscall.rng.random = lambda: 0.75  # type: ignore[method-assign]
+        self.syscall.rng.randbits = lambda bits: 2**52 + 1  # type: ignore[method-assign]
         self.syscall.get_contract(self.target, blueprint_id=None).public().nop()
 
 
@@ -109,53 +109,53 @@ class NCConsensusTestCase(SimulatorTestCase):
         #
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable object'):
-            rng.random = lambda self: 2  # type: ignore[method-assign, misc, assignment]
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable object'):
+            rng.randbits = lambda bits: 2  # type: ignore[method-assign]
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable object'):
-            setattr(rng, 'random', lambda self: 2)
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable object'):
+            setattr(rng, 'randbits', lambda bits: 2)
 
         # protected by overridden NanoRNG.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable object'):
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable object'):
             from types import MethodType
-            rng.random = MethodType(lambda self: 2, rng)  # type: ignore[method-assign]
+            rng.randbits = MethodType(lambda bits: 2, rng)  # type: ignore[method-assign]
 
         # protected by __slots__
-        with pytest.raises(AttributeError, match='\'NanoRNG\' object attribute \'random\' is read-only'):
-            object.__setattr__(rng, 'random', lambda self: 2)
+        with pytest.raises(AttributeError, match='\'NanoRNG\' object attribute \'randbits\' is read-only'):
+            object.__setattr__(rng, 'randbits', lambda bits: 2)
 
         #
         # Existing method on class
         #
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
-            NanoRNG.random = lambda self: 2  # type: ignore[method-assign]
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable class'):
+            NanoRNG.randbits = lambda self, bits: 2  # type: ignore[method-assign]
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
-            setattr(NanoRNG, 'random', lambda self: 2)
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable class'):
+            setattr(NanoRNG, 'randbits', lambda bits: 2)
 
         # protected by Python itself
         with pytest.raises(TypeError, match='can\'t apply this __setattr__ to FauxImmutableMeta object'):
-            object.__setattr__(NanoRNG, 'random', lambda self: 2)
+            object.__setattr__(NanoRNG, 'randbits', lambda bits: 2)
 
         #
         # Existing method on __class__
         #
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
-            rng.__class__.random = lambda self: 2  # type: ignore[method-assign]
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable class'):
+            rng.__class__.randbits = lambda self, bits: 2  # type: ignore[method-assign]
 
         # protected by overridden NoMethodOverrideMeta.__setattr__
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
-            setattr(rng.__class__, 'random', lambda self: 2)
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable class'):
+            setattr(rng.__class__, 'randbits', lambda bits: 2)
 
         # protected by Python itself
         with pytest.raises(TypeError, match='can\'t apply this __setattr__ to FauxImmutableMeta object'):
-            object.__setattr__(rng.__class__, 'random', lambda self: 2)
+            object.__setattr__(rng.__class__, 'randbits', lambda bits: 2)
 
         #
         # New attribute on class
@@ -173,7 +173,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         with pytest.raises(TypeError, match='can\'t apply this __setattr__ to FauxImmutableMeta object'):
             object.__setattr__(NanoRNG, 'new_attr', 123)
 
-        assert rng.random() < 1
+        assert rng.randbits(1) <= 1
 
     def test_rng_shell_class(self) -> None:
         seed = b'0' * 32
@@ -182,14 +182,14 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         assert rng1.__class__ != rng2.__class__
 
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
-            rng1.__class__.random = lambda self: 2  # type: ignore[method-assign]
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable class'):
+            rng1.__class__.randbits = lambda self, bits: 2  # type: ignore[method-assign]
 
-        with pytest.raises(AttributeError, match='cannot set attribute `random` on faux-immutable class'):
-            setattr(rng1.__class__, 'random', lambda self: 2)
+        with pytest.raises(AttributeError, match='cannot set attribute `randbits` on faux-immutable class'):
+            setattr(rng1.__class__, 'randbits', lambda bits: 2)
 
         with pytest.raises(TypeError, match='can\'t apply this __setattr__ to FauxImmutableMeta object'):
-            object.__setattr__(rng1.__class__, 'random', lambda self: 2)
+            object.__setattr__(rng1.__class__, 'randbits', lambda bits: 2)
 
     def assertGoodnessOfFitTest(self, observed: list[int], expected: list[int]) -> None:
         """Pearson chi-square goodness-of-fit test for uniform [0, 1)"""
@@ -320,21 +320,6 @@ class NCConsensusTestCase(SimulatorTestCase):
             x = rng.randrange(start, stop, step)
             assert (x - start) % step == 0
             idx = (x - start) // step
-            frequencies[idx] += 1
-
-        self.assertGoodnessOfFitTest(frequencies, [expected] * size)
-
-    def test_rng_random(self) -> None:
-        seed = self.rng.randbytes(32)
-        rng = NanoRNG(seed=seed)
-
-        size = 200
-        expected = 1000
-        frequencies = [0] * size
-        for _ in range(expected * size):
-            x = rng.random()
-            assert 0 <= x < 1
-            idx = floor(size * x)
             frequencies[idx] += 1
 
         self.assertGoodnessOfFitTest(frequencies, [expected] * size)
