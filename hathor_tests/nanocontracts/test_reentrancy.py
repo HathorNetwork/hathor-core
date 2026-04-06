@@ -22,6 +22,7 @@ class MyBlueprint(Blueprint):
     def deposit(self, ctx: Context) -> None:
         address = ctx.caller_id
         action = ctx.get_single_action(HTR_TOKEN_UID)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         amount = action.amount
 
@@ -84,6 +85,7 @@ class AttackerBlueprint(Blueprint):
         self.counter = 0
 
         action = ctx.get_single_action(HTR_TOKEN_UID)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         self.amount = Amount(action.amount)
 
@@ -92,18 +94,25 @@ class AttackerBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_deposit=True, allow_reentrancy=True)
     def attack(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self._run_attack('transfer_to', 'attack')
 
     @public(allow_deposit=True, allow_reentrancy=True)
     def attack_fixed(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self._run_attack('fixed_transfer_to', 'attack_fixed')
 
     @public(allow_deposit=True, allow_reentrancy=True)
     def attack_protected(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self._run_attack('protected_transfer_to', 'attack_protected')
 
     def _run_attack(self, method: str, callback: str) -> None:

@@ -2,7 +2,6 @@ import os
 import re
 from typing import Any, NamedTuple, Optional
 
-from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key_bytes
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
@@ -25,13 +24,12 @@ from hathor.transaction import Transaction
 from hathor.transaction.scripts import P2PKH
 from hathor.util import initialize_hd_wallet, not_none
 from hathor.wallet import KeyPair
+from hathorlib.conf.settings import FeatureSetting
 
 from ...utils import DEFAULT_WORDS
 from .. import test_blueprints
 from ..blueprints.unittest import BlueprintTestCase
 from .utils import get_ocb_private_key
-
-settings = HathorSettings()
 
 ON_CHAIN_BET_NC_CODE: str = load_builtin_blueprint_for_ocb('bet.py', 'Bet', test_blueprints)
 TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type(TxOutputScript)
@@ -50,7 +48,8 @@ class BetInfo(NamedTuple):
 class OnChainBetBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.manager = self.create_peer('unittests')
+        settings = self._settings.copy(update=dict(ENABLE_BLUEPRINT_V2=FeatureSetting.ENABLED))
+        self.manager = self.create_peer('unittests', settings=settings)
         self.wallet = initialize_hd_wallet(DEFAULT_WORDS)
         self.token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         self.initialize_contract()  # will set self.nc_id, self.runner, self.nc_storage
@@ -267,7 +266,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         action = NCDepositAction(token_uid=token_uid, amount=1)
         context = self.create_context(caller_id=address_bytes, actions=[action])
         score = '1x1'
-        with self.assertNCFail('InvalidToken', 'token different from 00'):
+        with self.assertNCFail('NCFail', 'expected exactly 1 action for token 00'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_withdraw_wrong_token(self) -> None:
@@ -277,5 +276,5 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         self.assertNotEqual(token_uid, self.token_uid)
         action = NCWithdrawalAction(token_uid=token_uid, amount=1)
         context = self.create_context(caller_id=bet1.address, actions=[action])
-        with self.assertNCFail('InvalidToken', 'token different from 00'):
+        with self.assertNCFail('NCFail', 'expected exactly 1 action for token 00'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)
