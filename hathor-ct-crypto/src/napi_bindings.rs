@@ -85,6 +85,9 @@ pub fn create_asset_commitment(tag_bytes: Buffer, r_asset: Buffer) -> napi::Resu
 /// Create a Pedersen commitment.
 #[napi]
 pub fn create_commitment(amount: i64, blinding: Buffer, generator: Buffer) -> napi::Result<Buffer> {
+    if amount < 0 {
+        return Err(napi::Error::from_reason("amount must be non-negative"));
+    }
     let bf = parse_tweak(blinding.as_ref())?;
     let gen = parse_generator(generator.as_ref())?;
     let c = crate::pedersen::create_commitment(amount as u64, &bf, &gen).map_err(to_napi_err)?;
@@ -94,6 +97,9 @@ pub fn create_commitment(amount: i64, blinding: Buffer, generator: Buffer) -> na
 /// Create a trivial (zero-blinding) Pedersen commitment.
 #[napi]
 pub fn create_trivial_commitment(amount: i64, generator: Buffer) -> napi::Result<Buffer> {
+    if amount < 0 {
+        return Err(napi::Error::from_reason("amount must be non-negative"));
+    }
     let gen = parse_generator(generator.as_ref())?;
     let c = crate::pedersen::create_trivial_commitment(amount as u64, &gen).map_err(to_napi_err)?;
     Ok(Buffer::from(c.serialize().to_vec()))
@@ -123,6 +129,9 @@ pub fn create_range_proof(
     message: Option<Buffer>,
     nonce: Option<Buffer>,
 ) -> napi::Result<Buffer> {
+    if amount < 0 {
+        return Err(napi::Error::from_reason("amount must be non-negative"));
+    }
     let bf = parse_tweak(blinding.as_ref())?;
     let comm = crate::pedersen::deserialize_commitment(commitment.as_ref()).map_err(to_napi_err)?;
     let gen = parse_generator(generator.as_ref())?;

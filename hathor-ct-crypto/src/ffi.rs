@@ -409,7 +409,8 @@ fn derive_rewind_nonce(py: Python<'_>, shared_secret: &[u8]) -> PyResult<PyObjec
     if shared_secret.len() != 32 {
         return Err(pyo3::exceptions::PyValueError::new_err("shared_secret must be 32 bytes"));
     }
-    let secret: [u8; 32] = shared_secret.try_into().unwrap();
+    let secret: [u8; 32] = shared_secret.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("shared_secret conversion failed"))?;
     let nonce = crate::ecdh::derive_rewind_nonce(&secret);
     Ok(PyBytes::new_bound(py, &nonce).into())
 }
@@ -447,9 +448,12 @@ fn create_shielded_output_with_both_blindings(
         return Err(pyo3::exceptions::PyValueError::new_err("asset_blinding_factor must be 32 bytes"));
     }
 
-    let tuid: [u8; 32] = token_uid.try_into().unwrap();
-    let vbf: [u8; 32] = value_blinding_factor.try_into().unwrap();
-    let abf: [u8; 32] = asset_blinding_factor.try_into().unwrap();
+    let tuid: [u8; 32] = token_uid.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("token_uid conversion failed"))?;
+    let vbf: [u8; 32] = value_blinding_factor.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("value_blinding_factor conversion failed"))?;
+    let abf: [u8; 32] = asset_blinding_factor.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("asset_blinding_factor conversion failed"))?;
 
     let result = crate::ecdh::create_full_shielded_output(
         value, recipient_pubkey, &tuid, &vbf, &abf,
@@ -493,8 +497,10 @@ fn create_amount_shielded_output(
         return Err(pyo3::exceptions::PyValueError::new_err("value_blinding_factor must be 32 bytes"));
     }
 
-    let tuid: [u8; 32] = token_uid.try_into().unwrap();
-    let vbf: [u8; 32] = value_blinding_factor.try_into().unwrap();
+    let tuid: [u8; 32] = token_uid.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("token_uid conversion failed"))?;
+    let vbf: [u8; 32] = value_blinding_factor.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("value_blinding_factor conversion failed"))?;
 
     let result = crate::ecdh::create_amount_shielded_output(
         value, recipient_pubkey, &tuid, &vbf,
@@ -529,7 +535,8 @@ fn rewind_amount_shielded_output(
     if token_uid.len() != 32 {
         return Err(pyo3::exceptions::PyValueError::new_err("token_uid must be 32 bytes"));
     }
-    let tuid: [u8; 32] = token_uid.try_into().unwrap();
+    let tuid: [u8; 32] = token_uid.try_into()
+        .map_err(|_| pyo3::exceptions::PyValueError::new_err("token_uid conversion failed"))?;
 
     let result = crate::ecdh::rewind_amount_shielded_output(
         private_key, ephemeral_pubkey, commitment, range_proof, &tuid,

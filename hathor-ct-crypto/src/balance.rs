@@ -61,6 +61,19 @@ pub fn verify_balance(inputs: &[BalanceEntry], outputs: &[BalanceEntry]) -> Resu
         }
     }
 
+    // If both sides are empty (all entries were zero-valued and skipped), the balance
+    // is trivially satisfied: 0 == 0. This happens for transactions with no shielded data
+    // and only zero-value transparent entries (e.g. authority-only).
+    // However, reject asymmetric cases where only one side has commitments.
+    if positive_commitments.is_empty() != negative_commitments.is_empty() {
+        return Err(HathorCtError::BalanceError(
+            "commitment balance verification failed: one side has commitments but the other is empty".into(),
+        ));
+    }
+    if positive_commitments.is_empty() && negative_commitments.is_empty() {
+        return Ok(());
+    }
+
     // Verify: sum(positive) == sum(negative)
     if !verify_commitments_sum_to_equal(SECP256K1, &positive_commitments, &negative_commitments) {
         return Err(HathorCtError::BalanceError(

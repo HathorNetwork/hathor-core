@@ -112,6 +112,12 @@ class VerificationService:
         self.verifiers.vertex.verify_version_basic(vertex)
         self.verifiers.vertex.verify_old_timestamp(vertex, params)
 
+        # Feature gate: reject shielded outputs early, before any verification touches shielded data.
+        if vertex.has_shielded_outputs():
+            if not params.features.shielded_transactions:
+                from hathor.transaction.exceptions import InvalidShieldedOutputError
+                raise InvalidShieldedOutputError('shielded transactions are not enabled')
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
@@ -141,10 +147,7 @@ class VerificationService:
             # nothing to do
 
         if vertex.has_shielded_outputs():
-            # Use feature activation state, not just settings
-            if not params.features.shielded_transactions:
-                from hathor.transaction.exceptions import InvalidShieldedOutputError
-                raise InvalidShieldedOutputError('shielded transactions are not enabled')
+            # Feature gate already checked above (before match-case dispatch).
             assert isinstance(vertex, Transaction)
             self._verify_basic_shielded_header(vertex)
 
