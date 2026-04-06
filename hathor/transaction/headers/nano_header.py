@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import assert_never
 
 from hathor.transaction.headers.base import VertexBaseHeader
+from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback
 from hathor.types import VertexId
 
@@ -90,6 +91,10 @@ class NanoHeaderAction:
 
 @dataclass(slots=True, kw_only=True)
 class NanoHeader(VertexBaseHeader):
+    @classmethod
+    def get_header_id(cls) -> bytes:
+        return VertexHeaderId.NANO_HEADER.value
+
     tx: Transaction
 
     # Sequence number for the caller.

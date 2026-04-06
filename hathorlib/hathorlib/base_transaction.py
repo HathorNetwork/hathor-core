@@ -213,7 +213,7 @@ class BaseTransaction(ABC):
 
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
-        return 2
+        return 3
 
     @classmethod
     @abstractmethod
@@ -479,6 +479,29 @@ class BaseTransaction(ABC):
                         continue
 
                 return False
+
+        # Check shielded output scripts (same rules as transparent)
+        if hasattr(self, 'has_shielded_outputs') and self.has_shielded_outputs():
+            for shielded_output in self.get_shielded_outputs_header().shielded_outputs:  # type: ignore[attr-defined]
+                script = shielded_output.script
+                # Same logic as TxOutput.is_standard_script
+                is_std = True
+                if len(script) > std_max_output_script_size:
+                    is_std = False
+                elif only_standard_script_type:
+                    parsed = parse_address_script(script)
+                    if parsed is None or not isinstance(parsed, TxOutput.STANDARD_SCRIPT_TYPES):
+                        is_std = False
+
+                if not is_std:
+                    # Check if data script (same as transparent)
+                    if len(script) <= std_max_output_script_size and DataScript.parse_script(script) is not None:
+                        if number_of_data_script_outputs == max_number_of_data_script_outputs:
+                            return False
+                        else:
+                            number_of_data_script_outputs += 1
+                            continue
+                    return False
 
         return True
 

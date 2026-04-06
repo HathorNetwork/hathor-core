@@ -22,7 +22,7 @@ from hathorlib.nanocontracts.nc_types.utils import pretty_type
 from hathorlib.nanocontracts.types import NC_FALLBACK_METHOD, NC_INITIALIZE_METHOD, NC_METHOD_TYPE_ATTR, NCMethodType
 
 if TYPE_CHECKING:
-    from hathor.nanocontracts.nc_exec_logs import NCLogger  # type: ignore[import-not-found]
+    from hathor.nanocontracts.nc_exec_logs import NCLogger
 
 FORBIDDEN_NAMES = {
     'syscall',

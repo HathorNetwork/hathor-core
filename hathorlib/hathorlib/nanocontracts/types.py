@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar, cast
+from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
@@ -156,10 +156,7 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
     """
 
     def __init__(self, data: T, script_input: bytes) -> None:
-        # mypy: disable-error-code="import-not-found"
-        from hathor.nanocontracts.nc_types import (  # type: ignore[import-not-found]
-            make_nc_type_for_return_type as make_nc_type,
-        )
+        from hathor.nanocontracts.nc_types import make_nc_type_for_return_type as make_nc_type
 
         self.data = data
         self.script_input = script_input
@@ -176,7 +173,7 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
     def get_data_bytes(self) -> bytes:
         """Return the serialized data."""
-        return cast(bytes, self.__nc_type.to_bytes(self.data))
+        return self.__nc_type.to_bytes(self.data)
 
     def get_sighash_all_data(self) -> bytes:
         """Workaround to be able to pass `self` for ScriptExtras. See the method `checksig`."""
