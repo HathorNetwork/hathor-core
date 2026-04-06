@@ -408,19 +408,12 @@ class TransactionVerifier:
         :raises ForbiddenMelt: if tokens were melted without authority
         :raises InputOutputMismatch: if fee amounts are incorrect
         """
-        htr_expected_amount, _ = cls._check_token_permissions_and_deposits(settings, token_dict)
+        cls._check_token_permissions_and_deposits(settings, token_dict)
 
         expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
-
-        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount < htr_expected_amount:
-            raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
-                htr_info.amount,
-                htr_expected_amount,
-            ))
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
