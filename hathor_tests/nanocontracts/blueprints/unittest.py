@@ -172,11 +172,14 @@ class BlueprintTestCase(unittest.TestCase):
         timestamp: int | None = None,
     ) -> Context:
         """Create a Context instance with optional values or defaults."""
+        from hathorlib.nanocontracts.verification import verify_action_list
+        actions = actions or ()
+        verify_action_list(actions, restrict_dup_actions=True)
         return Context(
             caller_id=caller_id or self.gen_random_address(),
             vertex_data=create_vertex_data_from_vertex(vertex or self.get_genesis_tx()),
             block_data=BlockData(hash=VertexId(b''), timestamp=timestamp or 0, height=0),
-            actions=Context.__group_actions__(actions or ()),
+            actions=Context.__group_actions__(actions),
         )
 
     def create_token(
