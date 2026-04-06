@@ -19,7 +19,6 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.feature_activation.utils import Features
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.p2p.sync_v2.exception import (
     InvalidVertexError,
     StreamingError,
@@ -55,20 +54,9 @@ class TransactionStreamingClient:
         #      it will be correctly enabled when doing a full validation anyway.
         #      We can also set the `nc_block_root_id` to `None` because we only call `verify_basic`,
         #      which doesn't need it.
-        # XXX: Default to shielded_transactions=False since shielded txs cannot exist
-        # before the feature is activated. The correct value will be computed when doing
-        # a full validation anyway.
-        self.verification_params = VerificationParams(
-            nc_block_root_id=None,
-            features=Features(
-                count_checkdatasig_op=False,
-                nanocontracts=False,
-                fee_tokens=False,
-                opcodes_version=OpcodesVersion.V1,
-                nano_runtime_version=NanoRuntimeVersion.V1,
-                shielded_transactions=False,
-            )
-        )
+        # Derive feature state from the first partial block so permissive features
+        # (e.g. shielded_transactions) are correctly gated during verify_basic.
+        self.verification_params = self._make_verification_params(partial_blocks[0])
 
         self.reactor = sync_agent.reactor
         self.log = logger.new(peer=self.protocol.get_short_peer_id())
@@ -264,10 +252,41 @@ class TransactionStreamingClient:
         self._prepare_block(self.partial_blocks[self._idx])
         return True
 
+    def _make_verification_params(self, blk: 'Block') -> VerificationParams:
+        """Build verification params for the given block.
+
+        Permissive features (nanocontracts, fee_tokens, shielded_transactions) are
+        derived from the block's feature activation state so that verify_basic
+        does not incorrectly reject transactions that use activated features.
+        """
+        manager = self.protocol.node
+        features = Features.from_vertex(
+            settings=manager._settings,
+            feature_service=manager.feature_service,
+            vertex=blk,
+        )
+        return VerificationParams(
+            nc_block_root_id=None,
+            features=Features(
+                # Keep restrictive features disabled for basic validation during sync —
+                # they will be correctly enabled during full validation.
+                count_checkdatasig_op=False,
+                opcodes_version=OpcodesVersion.V1,
+                # Permissive features: derive from the block's feature activation state.
+                nanocontracts=features.nanocontracts,
+                fee_tokens=features.fee_tokens,
+                shielded_transactions=features.shielded_transactions,
+                nano_runtime_version=features.nano_runtime_version,
+            )
+        )
+
     def _prepare_block(self, blk: 'Block') -> None:
         """Reset everything for the next block. It also adds blocks that have no dependencies."""
         self._waiting_for.clear()
         self._db.clear()
         self._existing_deps.clear()
+
+        # Update verification params for the new block's feature activation state.
+        self.verification_params = self._make_verification_params(blk)
 
         self._update_dependencies(blk)

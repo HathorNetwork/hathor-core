@@ -82,6 +82,13 @@ pub fn verify_range_proof(
         .map_err(|e| {
             HathorCtError::RangeProofError(format!("range proof verification failed: {}", e))
         })?;
+    // Enforce min_value >= 1 to reject zero-amount commitments.
+    // This check is also in the FFI wrappers, but we enforce it here as defense-in-depth.
+    if range.start < 1 {
+        return Err(HathorCtError::RangeProofError(
+            "range proof min_value must be >= 1 (zero-amount commitments are not allowed)".into(),
+        ));
+    }
     Ok(range)
 }
 
