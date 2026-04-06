@@ -38,6 +38,8 @@ class MyBlueprint1(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, blueprint_id: BlueprintId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.other_blueprint_id = blueprint_id
 
     @public
@@ -140,7 +142,8 @@ class MyBlueprint1(Blueprint):
 
     @public(allow_deposit=True)
     def nop_public(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def call_itself_through_double_proxy_other(self, ctx: Context) -> None:
@@ -218,6 +221,8 @@ class MyBlueprint2(Blueprint):
 
     @public(allow_deposit=True)
     def hello(self, ctx: Context, name: str) -> str:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         return f'hello {name}'
 
     @fallback
@@ -234,7 +239,8 @@ class MyBlueprint2(Blueprint):
 
     @public(allow_deposit=True)
     def nop_public(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @view
     def nop_view(self) -> None:

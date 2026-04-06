@@ -1,3 +1,4 @@
+from hathor import HATHOR_TOKEN_UID
 from hathor.event.model.event_data import TokenCreatedData
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventRocksDBStorage
@@ -16,10 +17,13 @@ from hathor_tests.utils import create_tokens
 class _TokenFactoryBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        action = ctx.get_single_action(HATHOR_TOKEN_UID)
+        ctx.authorize(action)
 
     @public(allow_deposit=True)
     def create_token(self, ctx: Context) -> None:
+        action = ctx.get_single_action(HATHOR_TOKEN_UID)
+        ctx.authorize(action)
         self.syscall.create_deposit_token(
             token_name='Deposit Token',
             token_symbol='DBT',

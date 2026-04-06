@@ -456,14 +456,14 @@ class NCNanoContractTestCase(unittest.TestCase):
         ))
         nc2.update_hash()
         nc2_nano_header = nc2.get_nano_header()
-        context = nc2_nano_header.get_context(BlueprintVersion.V1)
-        self.assertEqual(2, len(context.actions))
+        context = nc2_nano_header.get_context(BlueprintVersion.V2)
+        self.assertEqual(2, len(context.actions_by_token))
 
-        action1 = context.get_single_action(TokenUid(b'token-a'))
+        action1 = context.get_token_single_action(TokenUid(b'token-a'))
         assert isinstance(action1, NCWithdrawalAction)
         self.assertEqual(action1.amount, 50)
 
-        action2 = context.get_single_action(TokenUid(b'\0'))
+        action2 = context.get_token_single_action(TokenUid(b'\0'))
         assert isinstance(action2, NCDepositAction)
         self.assertEqual(action2.amount, 90)
 

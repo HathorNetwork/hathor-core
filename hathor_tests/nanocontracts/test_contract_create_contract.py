@@ -32,10 +32,12 @@ class MyBlueprint1(Blueprint):
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context, blueprint_id: BlueprintId, initial: int, token_uid: Optional[TokenUid]) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.token_uid = token_uid
         if initial > 0:
             token_uid = TokenUid(HATHOR_TOKEN_UID)
-            action = ctx.get_single_action(token_uid)
+            action = ctx.get_token_single_action(token_uid)
             salt = b'x'
             assert isinstance(action, NCDepositAction)
             new_action = NCDepositAction(token_uid=token_uid, amount=action.amount - initial)
@@ -66,12 +68,15 @@ class MyBlueprint1(Blueprint):
 
     @public(allow_deposit=True)
     def mint(self, ctx: Context, amount: int) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         assert self.token_uid is not None
         self.syscall.mint_tokens(self.token_uid, amount)
 
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
 
 class MyBlueprint2(Blueprint):
@@ -80,6 +85,8 @@ class MyBlueprint2(Blueprint):
 
     @public(allow_grant_authority=True)
     def initialize(self, ctx: Context, blueprint_id: BlueprintId, initial: int, token_uid: Optional[TokenUid]) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter = initial
         self.token_uid = token_uid
 
