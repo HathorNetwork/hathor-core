@@ -258,7 +258,7 @@ SETTINGS = HathorSettings(
                 version='0.67.0',
                 signal_support_by_default=True,
             ),
-            Feature.FEE_TOKENS: Criteria(
+            Feature.FAILED_FEE_TOKENS: Criteria(
                 # XXX: parity with hathor/conf/mainnet.yml
                 bit=2,
                 start_height=6_249_600,
@@ -268,7 +268,7 @@ SETTINGS = HathorSettings(
                 version='0.69.0',
                 signal_support_by_default=True,
             ),
-            Feature.OPCODES_V2: Criteria(
+            Feature.FAILED_OPCODES_V2: Criteria(
                 # XXX: parity with hathor/conf/mainnet.yml
                 bit=3,
                 start_height=6_249_600,

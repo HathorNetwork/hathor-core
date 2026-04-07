@@ -52,7 +52,7 @@ FEATURE_ACTIVATION:
       signal_support_by_default: true
 
     # current height: 335_348 at 2026-02-03 17:12:47 GMT
-    OPCODES_V2:
+    FAILED_OPCODES_V2:
       bit: 0
       start_height: 335_520  # expected around 2026-02-03 18:38:47 GMT
       timeout_height: 347_040  # 48 evaluation periods (96 hours)

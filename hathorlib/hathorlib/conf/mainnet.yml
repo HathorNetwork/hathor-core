@@ -230,7 +230,7 @@ FEATURE_ACTIVATION:
       version: 0.67.0
       signal_support_by_default: true
 
-    FEE_TOKENS:
+    FAILED_FEE_TOKENS:
       bit: 2
       # Right now the best block is 6_248_703 at Tuesday, 2026-01-27 22:45:36 GMT
       start_height: 6_249_600  # expected around 2026-02-04 06:14:06 GMT
@@ -240,7 +240,7 @@ FEATURE_ACTIVATION:
       version: 0.69.0
       signal_support_by_default: true
 
-    OPCODES_V2:
+    FAILED_OPCODES_V2:
       bit: 3
       # Right now the best block is 6_248_703 at Tuesday, 2026-01-27 21:45:36 GMT
       start_height: 6_249_600  # expected around 2026-02-04 06:14:06 GMT
