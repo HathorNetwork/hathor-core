@@ -26,7 +26,7 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
-from hathor.p2p.connect_classes import ConnectionRejected, ConnectionState, ConnectionType
+from hathor.p2p.connect_classes import ConnectionRejected, ConnectionRemoved, ConnectionState, ConnectionType
 from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
@@ -441,7 +441,7 @@ class ConnectionsManager:
             return
 
         # Checks if entrypoint has been blacklisted. If so, then if it can be delisted.
-        if self.slots_manager.is_blacklisted(protocol):
+        if protocol.entrypoint is not None and self.slots_manager.is_blacklisted(protocol.entrypoint):
 
             # Check if can be delisted:
             if not self.slots_manager.may_unblacklist(protocol):
@@ -540,7 +540,7 @@ class ConnectionsManager:
         status = self.slots_manager.remove_from_slot(protocol)
 
         # If there is some entrypoint popped from queue, we attempt to connect.
-        if status.entrypoint:
+        if isinstance(status, ConnectionRemoved) and status.entrypoint:
             self.connect_to_endpoint(status.entrypoint)
 
         if protocol in self.handshaking_peers:
@@ -796,12 +796,7 @@ class ConnectionsManager:
         factory: IProtocolFactory = self.discovered_factory if discovery_call else self.client_factory
 
         if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
-        else:
-            if use_ssl:
-                factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
-            else:
-                factory = self.client_factory
+            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
 
         if peer is not None:
             now = int(self.reactor.seconds())
@@ -810,7 +805,7 @@ class ConnectionsManager:
         deferred = endpoint.connect(factory)
         self.connecting_peers[endpoint] = _ConnectingPeer(entrypoint, deferred)
 
-        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint, discovery_call)
+        deferred.addCallback(self._connect_to_callback, peer, endpoint, entrypoint)
         deferred.addErrback(self.on_connection_failure, peer, endpoint)
         self.log.info('connecting to', entrypoint=str(entrypoint), peer=str(peer))
         self.pubsub.publish(

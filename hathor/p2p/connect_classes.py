@@ -18,6 +18,7 @@ from enum import Enum
 
 from hathor.p2p.peer_endpoint import PeerEndpoint
 
+
 class ConnectionType(Enum):
     """ Types of Connection as inputs for an instance of the Hathor Protocol. """
     OUTGOING = 0
@@ -53,7 +54,7 @@ class ConnectionRejected:
 @dataclass
 class ConnectionRemoved:
     reason: str
-    entrypoint: PeerEndpoint
+    entrypoint: PeerEndpoint | None
 
 
 @dataclass
