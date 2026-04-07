@@ -101,7 +101,7 @@ class HathorSettings(LibSettings):
         from hathor.feature_activation.utils import Features
         settings = Features.get_settings(self)
         for feature in self.FEATURE_ACTIVATION.features:
-            setting = settings[feature]
+            setting = settings.get(feature)
             if setting != FeatureSetting.FEATURE_ACTIVATION:
                 raise ValueError(f'Feature Activation is configured for feature {feature} but it\'s unused: {setting}')
         return self

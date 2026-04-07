@@ -47,7 +47,9 @@ class Features:
             Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: FeatureSetting.FEATURE_ACTIVATION,
             Feature.COUNT_CHECKDATASIG_OP: FeatureSetting.FEATURE_ACTIVATION,
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
+            Feature.FAILED_FEE_TOKENS: FeatureSetting.FEATURE_ACTIVATION,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
+            Feature.FAILED_OPCODES_V2: FeatureSetting.FEATURE_ACTIVATION,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
         }
