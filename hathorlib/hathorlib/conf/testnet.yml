@@ -61,8 +61,38 @@ FEATURE_ACTIVATION:
       version: 0.69.0
       signal_support_by_default: true
 
+    OPCODES_V2:
+      bit: 1
+      start_height: 0
+      timeout_height: 40320
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.70.0
+      signal_support_by_default: true
+
+    NANO_RUNTIME_V2:
+      bit: 2
+      start_height: 0
+      timeout_height: 40320
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.70.0
+      signal_support_by_default: true
+
+    BLUEPRINT_V2:
+      bit: 3
+      start_height: 0
+      timeout_height: 40320
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.70.0
+      signal_support_by_default: true
+
 ENABLE_NANO_CONTRACTS: feature_activation
 ENABLE_FEE_BASED_TOKENS: feature_activation
+ENABLE_OPCODES_V2: feature_activation
+ENABLE_NANO_RUNTIME_V2: feature_activation
+ENABLE_BLUEPRINT_V2: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
   - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY
