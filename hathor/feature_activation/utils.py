@@ -40,17 +40,25 @@ class Features:
     nano_runtime_version: NanoRuntimeVersion
 
     @staticmethod
-    def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
-        """Return information about each feature according to the state in the provided vertex."""
+    def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
+        """Return the FeatureSetting for each Feature."""
         from hathorlib.conf.settings import FeatureSetting
-        feature_states = feature_service.get_feature_states(vertex=vertex)
-        feature_settings = {
+        return {
+            Feature.INCREASE_MAX_MERKLE_PATH_LENGTH: FeatureSetting.FEATURE_ACTIVATION,
             Feature.COUNT_CHECKDATASIG_OP: FeatureSetting.FEATURE_ACTIVATION,
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
+            Feature.FAILED_FEE_TOKENS: FeatureSetting.FEATURE_ACTIVATION,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
+            Feature.FAILED_OPCODES_V2: FeatureSetting.FEATURE_ACTIVATION,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
         }
+
+    @staticmethod
+    def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
+        """Return information about each feature according to the state in the provided vertex."""
+        feature_states = feature_service.get_feature_states(vertex=vertex)
+        feature_settings = Features.get_settings(settings)
 
         feature_is_active: dict[Feature, bool] = {
             feature: _is_feature_active(setting, feature_states.get(feature, FeatureState.DEFINED))
