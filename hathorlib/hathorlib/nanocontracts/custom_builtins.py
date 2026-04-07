@@ -461,6 +461,12 @@ DISABLED_BUILTINS: frozenset[str] = frozenset({
     # This is useless for Blueprints.
     'complex',
 
+    # non-Exception subclasses are not caught by the Nano runtime and bubble up, crashing the full node.
+    'BaseException',
+    'GeneratorExit',
+    'KeyboardInterrupt',
+    'SystemExit',
+
     # =====================================
     # These are not included in the list because they're not callables, so we should generate
     # disabled functions for them. Also, some of them shouldn't be blocked in the AST.
@@ -489,345 +495,357 @@ AST_NAME_BLACKLIST: frozenset[str] = frozenset({
 })
 
 
-# list of allowed builtins during execution of an on-chain blueprint code
-EXEC_BUILTINS: dict[str, Any] = {
-    # XXX: check https://github.com/python/mypy/blob/master/mypy/typeshed/stdlib/builtins.pyi for the full typing
-    # XXX: check https://github.com/python/cpython/blob/main/Python/bltinmodule.c for the implementation
+_EXEC_BUILTINS: dict[str, Any] | None = None
 
-    # XXX: required to declare classes
-    # O(1)
-    # (func: Callable[[], CellType | Any], name: str, /, *bases: Any, metaclass: Any = ..., **kwds: Any) -> Any
-    '__build_class__': builtins.__build_class__,
 
-    # XXX: required to do imports
-    # XXX: will trigger the execution of the imported module
-    # (name: str, globals: Mapping[str, object] | None = None, locals: Mapping[str, object] | None = None,
-    #  fromlist: Sequence[str] = (), level: int = 0) -> types.ModuleType
-    '__import__': _generate_restricted_import_function(ALLOWED_IMPORTS),
+def get_exec_builtins() -> dict[str, Any]:
+    global _EXEC_BUILTINS
+    if _EXEC_BUILTINS is not None:
+        return _EXEC_BUILTINS
 
-    # XXX: also required to declare classes
-    # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name otherwise,
-    # since the blueprint code is adhoc, we could as well expose something else, like '__blueprint__' constant
-    '__name__': BLUEPRINT_EXPORT_NAME,
+    # list of allowed builtins during execution of an on-chain blueprint code
+    _EXEC_BUILTINS = {
+        # XXX: check https://github.com/python/mypy/blob/master/mypy/typeshed/stdlib/builtins.pyi for the full typing
+        # XXX: check https://github.com/python/cpython/blob/main/Python/bltinmodule.c for the implementation
 
-    # make it always True, which is how we'll normally run anyway
-    '__debug__': True,
+        # XXX: required to declare classes
+        # O(1)
+        # (func: Callable[[], CellType | Any], name: str, /, *bases: Any, metaclass: Any = ..., **kwds: Any) -> Any
+        '__build_class__': builtins.__build_class__,
 
-    # O(1)
-    # (x: SupportsAbs[T], /) -> T
-    'abs': builtins.abs,
+        # XXX: required to do imports
+        # XXX: will trigger the execution of the imported module
+        # (name: str, globals: Mapping[str, object] | None = None, locals: Mapping[str, object] | None = None,
+        #  fromlist: Sequence[str] = (), level: int = 0) -> types.ModuleType
+        '__import__': _generate_restricted_import_function(ALLOWED_IMPORTS),
 
-    # XXX: consumes an iterable when calling
-    # O(N) for N=len(iterable)
-    # (iterable: Iterable[object], /) -> bool
-    'all': custom_all,
+        # XXX: also required to declare classes
+        # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name
+        # otherwise, since the blueprint code is adhoc, we could as well expose something else, like '__blueprint__'
+        # constant
+        '__name__': BLUEPRINT_EXPORT_NAME,
 
-    # XXX: consumes an iterable when calling
-    # O(N) for N=len(iterable)
-    # (iterable: Iterable[object], /) -> bool
-    'any': custom_any,
+        # make it always True, which is how we'll normally run anyway
+        '__debug__': True,
 
-    # O(1)
-    # (number: int | SupportsIndex, /) -> str
-    'bin': builtins.bin,
+        # O(1)
+        # (x: SupportsAbs[T], /) -> T
+        'abs': builtins.abs,
 
-    # O(1)
-    # type bool(int)
-    'bool': builtins.bool,
+        # XXX: consumes an iterable when calling
+        # O(N) for N=len(iterable)
+        # (iterable: Iterable[object], /) -> bool
+        'all': custom_all,
 
-    # XXX: consumes an iterable when calling
-    # O(N) for N=len(iterable)
-    # type bytearray(MutableSequence[int])
-    'bytearray': builtins.bytearray,
+        # XXX: consumes an iterable when calling
+        # O(N) for N=len(iterable)
+        # (iterable: Iterable[object], /) -> bool
+        'any': custom_any,
 
-    # XXX: consumes an iterable when calling
-    # O(N) for N=len(iterable)
-    # type bytes(Sequence[int])
-    'bytes': builtins.bytes,
+        # O(1)
+        # (number: int | SupportsIndex, /) -> str
+        'bin': builtins.bin,
 
-    # O(1)
-    # (obj: object, /) -> bool
-    'callable': builtins.callable,
+        # O(1)
+        # type bool(int)
+        'bool': builtins.bool,
 
-    # O(1)
-    # (i: int, /) -> str
-    'chr': builtins.chr,
+        # XXX: consumes an iterable when calling
+        # O(N) for N=len(iterable)
+        # type bytearray(MutableSequence[int])
+        'bytearray': builtins.bytearray,
 
-    # O(1)
-    # decorator
-    'classmethod': builtins.classmethod,
+        # XXX: consumes an iterable when calling
+        # O(N) for N=len(iterable)
+        # type bytes(Sequence[int])
+        'bytes': builtins.bytes,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterable)
-    # type dict(MutableMapping[K, V])
-    # () -> dict
-    # (**kwargs: V) -> dict[str, V]
-    # (map: SupportsKeysAndGetItem[K, V], /) -> dict[K, V]
-    # (map: SupportsKeysAndGetItem[str, V], /, **kwargs: V) -> dict[K, V]
-    # (iterable: Iterable[tuple[K, V]], /) -> dict[K, V]
-    # (iterable: Iterable[tuple[str, V]], /, **kwargs: V) -> dict[str, V]
-    # (iterable: Iterable[list[str]], /) -> dict[str, str]
-    # (iterable: Iterable[list[bytes]], /) -> dict[bytes, bytes]
-    'dict': builtins.dict,
+        # O(1)
+        # (obj: object, /) -> bool
+        'callable': builtins.callable,
 
-    # O(1)
-    # (x: SupportsDivMod[T, R], y: T, /) -> R
-    # (x: T, y: SupportsRDivMod[T, R], /) -> R
-    'divmod': builtins.divmod,
+        # O(1)
+        # (i: int, /) -> str
+        'chr': builtins.chr,
 
-    # O(1)
-    # (iterable: Iterable[T], start: int = 0) -> enumerate(Iterator[T])
-    'enumerate': enumerate,
+        # O(1)
+        # decorator
+        'classmethod': builtins.classmethod,
 
-    # O(1)
-    # (function: None, iterable: Iterable[T | None], /) -> filter(Iterator[T])
-    # (function: Callable[[S], TypeGuard[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
-    # (function: Callable[[S], TypeIs[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
-    # (function: Callable[[T], Any], iterable: Iterable[T], /) -> filter(Iterator[T])
-    'filter': builtins.filter,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterable)
+        # type dict(MutableMapping[K, V])
+        # () -> dict
+        # (**kwargs: V) -> dict[str, V]
+        # (map: SupportsKeysAndGetItem[K, V], /) -> dict[K, V]
+        # (map: SupportsKeysAndGetItem[str, V], /, **kwargs: V) -> dict[K, V]
+        # (iterable: Iterable[tuple[K, V]], /) -> dict[K, V]
+        # (iterable: Iterable[tuple[str, V]], /, **kwargs: V) -> dict[str, V]
+        # (iterable: Iterable[list[str]], /) -> dict[str, str]
+        # (iterable: Iterable[list[bytes]], /) -> dict[bytes, bytes]
+        'dict': builtins.dict,
 
-    # O(N) for N=len(value)
-    # (value: object, format_spec: str = "", /) -> str
-    'format': builtins.format,
+        # O(1)
+        # (x: SupportsDivMod[T, R], y: T, /) -> R
+        # (x: T, y: SupportsRDivMod[T, R], /) -> R
+        'divmod': builtins.divmod,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterable)
-    # type frozenset(AbstractSet[T])
-    # () -> frozenset
-    # (iterable: Iterable[T], /) -> frozenset[T]
-    'frozenset': builtins.frozenset,
+        # O(1)
+        # (iterable: Iterable[T], start: int = 0) -> enumerate(Iterator[T])
+        'enumerate': enumerate,
 
-    # O(1)
-    # __hash__ shortcut
-    # (obj: object, /) -> int
-    'hash': builtins.hash,
+        # O(1)
+        # (function: None, iterable: Iterable[T | None], /) -> filter(Iterator[T])
+        # (function: Callable[[S], TypeGuard[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
+        # (function: Callable[[S], TypeIs[T]], iterable: Iterable[S], /) -> filter(Iterator[T])
+        # (function: Callable[[T], Any], iterable: Iterable[T], /) -> filter(Iterator[T])
+        'filter': builtins.filter,
 
-    # O(1)
-    # (number: int | SupportsIndex, /) -> str
-    'hex': builtins.hex,
+        # O(N) for N=len(value)
+        # (value: object, format_spec: str = "", /) -> str
+        'format': builtins.format,
 
-    # We allow `isinstance()` checks
-    'isinstance': builtins.isinstance,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterable)
+        # type frozenset(AbstractSet[T])
+        # () -> frozenset
+        # (iterable: Iterable[T], /) -> frozenset[T]
+        'frozenset': builtins.frozenset,
 
-    # O(1) various -> int
-    # (x: ConvertibleToInt = ..., /) -> int
-    # (x: str | bytes | bytearray, /, base: SupportsIndex) -> int
-    'int': builtins.int,
+        # O(1)
+        # __hash__ shortcut
+        # (obj: object, /) -> int
+        'hash': builtins.hash,
 
-    # O(1)
-    # __iter__ shortcut
-    # (object: SupportsIter[I], /) -> I
-    # (object: GetItemIterable[T], /) -> Iterator[T]
-    # (object: Callable[[], T | None], sentinel: None, /) -> Iterator[T]
-    # (object: Callable[[], T], sentinel: object, /) -> Iterator[T]
-    'iter': builtins.iter,
+        # O(1)
+        # (number: int | SupportsIndex, /) -> str
+        'hex': builtins.hex,
 
-    # O(1)
-    # (obj: Sized, /) -> int
-    'len': builtins.len,
+        # We allow `isinstance()` checks
+        'isinstance': builtins.isinstance,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterable)
-    # () -> list
-    # (iterable: Iterable[T], /) -> list[T]
-    'list': builtins.list,
+        # O(1) various -> int
+        # (x: ConvertibleToInt = ..., /) -> int
+        # (x: str | bytes | bytearray, /, base: SupportsIndex) -> int
+        'int': builtins.int,
 
-    # O(1)
-    # type map
-    # (func: Callable[[T], S], iter: Iterable[T], /) -> map[S]
-    # (func: Callable[[T1, T2], S], iter1: Iterable[T1], iter2: Iterable[T2], /) -> map[S]
-    # ...
-    # (func: Callable[[T1, ..., TN], S], iter1: Iterable[T1], ..., iterN: Iterable[TN],/) -> map[S]
-    'map': builtins.map,
+        # O(1)
+        # __iter__ shortcut
+        # (object: SupportsIter[I], /) -> I
+        # (object: GetItemIterable[T], /) -> Iterator[T]
+        # (object: Callable[[], T | None], sentinel: None, /) -> Iterator[T]
+        # (object: Callable[[], T], sentinel: object, /) -> Iterator[T]
+        'iter': builtins.iter,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterables)
-    # (arg1: T, arg2: T, /, *_args: T, key: None = None) -> T
-    # (arg1: T, arg2: T, /, *_args: T, key: Callable[[T], T]) -> T
-    # (iterable: Iterable[T], /, *, key: None = None) -> T
-    # (iterable: Iterable[T], /, *, key: Callable[[T], T]) -> T
-    # (iterable: Iterable[T], /, *, key: None = None, default: T) -> T
-    # (iterable: Iterable[T], /, *, key: Callable[[T], T], default: T) -> T
-    'max': builtins.max,
+        # O(1)
+        # (obj: Sized, /) -> int
+        'len': builtins.len,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterables)
-    # (arg1: T, arg2: T, /, *_args: T, key: None = None) -> T
-    # (arg1: T, arg2: T, /, *_args: T, key: Callable[[T], T]) -> T
-    # (iterable: Iterable[T], /, *, key: None = None) -> T
-    # (iterable: Iterable[T], /, *, key: Callable[[T], T]) -> T
-    # (iterable: Iterable[T], /, *, key: None = None, default: T) -> T
-    # (iterable: Iterable[T], /, *, key: Callable[[T], T], default: T) -> T
-    'min': builtins.min,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterable)
+        # () -> list
+        # (iterable: Iterable[T], /) -> list[T]
+        'list': builtins.list,
 
-    # O(1)
-    # __next__ shortcut
-    # (i: SupportsNext[T], /) -> T
-    # (i: SupportsNext[T], default: V, /) -> T | V
-    'next': builtins.next,
+        # O(1)
+        # type map
+        # (func: Callable[[T], S], iter: Iterable[T], /) -> map[S]
+        # (func: Callable[[T1, T2], S], iter1: Iterable[T1], iter2: Iterable[T2], /) -> map[S]
+        # ...
+        # (func: Callable[[T1, ..., TN], S], iter1: Iterable[T1], ..., iterN: Iterable[TN],/) -> map[S]
+        'map': builtins.map,
 
-    # O(1)
-    # (number: int | SupportsIndex, /) -> str
-    'oct': builtins.oct,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterables)
+        # (arg1: T, arg2: T, /, *_args: T, key: None = None) -> T
+        # (arg1: T, arg2: T, /, *_args: T, key: Callable[[T], T]) -> T
+        # (iterable: Iterable[T], /, *, key: None = None) -> T
+        # (iterable: Iterable[T], /, *, key: Callable[[T], T]) -> T
+        # (iterable: Iterable[T], /, *, key: None = None, default: T) -> T
+        # (iterable: Iterable[T], /, *, key: Callable[[T], T], default: T) -> T
+        'max': builtins.max,
 
-    # O(1)
-    # (c: str | bytes | bytearray, /) -> int
-    'ord': builtins.ord,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterables)
+        # (arg1: T, arg2: T, /, *_args: T, key: None = None) -> T
+        # (arg1: T, arg2: T, /, *_args: T, key: Callable[[T], T]) -> T
+        # (iterable: Iterable[T], /, *, key: None = None) -> T
+        # (iterable: Iterable[T], /, *, key: Callable[[T], T]) -> T
+        # (iterable: Iterable[T], /, *, key: None = None, default: T) -> T
+        # (iterable: Iterable[T], /, *, key: Callable[[T], T], default: T) -> T
+        'min': builtins.min,
 
-    # XXX: can be used to easily make large numbers
-    # O(1)
-    # (base: int, exp: int, mod: int) -> int
-    'pow': builtins.pow,
+        # O(1)
+        # __next__ shortcut
+        # (i: SupportsNext[T], /) -> T
+        # (i: SupportsNext[T], default: V, /) -> T | V
+        'next': builtins.next,
 
-    # XXX: generator that escapes the VM
-    # O(1)
-    # type range(Sequence[int])
-    # (stop: SupportsIndex, /) -> range
-    # (start: SupportsIndex, stop: SupportsIndex, step: SupportsIndex = ..., /) -> range
-    'range': custom_range,
+        # O(1)
+        # (number: int | SupportsIndex, /) -> str
+        'oct': builtins.oct,
 
-    # XXX: can consume an iterator when calling
-    # O(N) for N=len(sequence)
-    # type reversed(Iterator[T])
-    # (sequence: Reversible[T], /) -> reversed[T]
-    # (sequence: SupportsLenAndGetItem[T], /) -> reversed[T]
-    'reversed': builtins.reversed,
+        # O(1)
+        # (c: str | bytes | bytearray, /) -> int
+        'ord': builtins.ord,
 
-    # O(1)
-    # (number: SupportsRound1[T], ndigits: None = None) -> T
-    # (number: SupportsRound2[T], ndigits: SupportsIndex) -> T
-    'round': builtins.round,
+        # XXX: can be used to easily make large numbers
+        # O(1)
+        # (base: int, exp: int, mod: int) -> int
+        'pow': builtins.pow,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterable)
-    # type set(MutableSet[T])
-    # () -> set
-    # (iterable: Iterable[T], /) -> set[T]
-    'set': builtins.set,
+        # XXX: generator that escapes the VM
+        # O(1)
+        # type range(Sequence[int])
+        # (stop: SupportsIndex, /) -> range
+        # (start: SupportsIndex, stop: SupportsIndex, step: SupportsIndex = ..., /) -> range
+        'range': custom_range,
 
-    # O(1)
-    # type slice(Generic[A, B, C])
-    # (stop: int | None, /) -> slice[int | MaybeNone, int | MaybeNone, int | MaybeNone]
-    'slice': builtins.slice,
+        # XXX: can consume an iterator when calling
+        # O(N) for N=len(sequence)
+        # type reversed(Iterator[T])
+        # (sequence: Reversible[T], /) -> reversed[T]
+        # (sequence: SupportsLenAndGetItem[T], /) -> reversed[T]
+        'reversed': builtins.reversed,
 
-    # XXX: consumes an iterator when calling
-    # O(N*log(N)) for N=len(iterable)
-    # (iterable: Iterable[T], /, *, key: None = None, reverse: bool = False) -> list[T]
-    # (iterable: Iterable[T], /, *, key: Callable[[T], T], reverse: bool = False) -> list[T]
-    'sorted': builtins.sorted,
+        # O(1)
+        # (number: SupportsRound1[T], ndigits: None = None) -> T
+        # (number: SupportsRound2[T], ndigits: SupportsIndex) -> T
+        'round': builtins.round,
 
-    # O(1)
-    # type staticmethod(Generic[P, R])
-    # (f: Callable[P, R], /) -> staticmethod[P, R]
-    'staticmethod': builtins.staticmethod,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterable)
+        # type set(MutableSet[T])
+        # () -> set
+        # (iterable: Iterable[T], /) -> set[T]
+        'set': builtins.set,
 
-    # O(1)
-    # __str__ shortcut
-    # (object: object = ...) -> str
-    # (object: ReadableBuffer, encoding: str = ..., errors: str = ...) -> str
-    'str': builtins.str,
+        # O(1)
+        # type slice(Generic[A, B, C])
+        # (stop: int | None, /) -> slice[int | MaybeNone, int | MaybeNone, int | MaybeNone]
+        'slice': builtins.slice,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterable)
-    # (iterable: Iterable[bool], /, start: int = 0) -> int
-    # (iterable: Iterable[T], /) -> T
-    # (iterable: Iterable[T], /, start: T) -> T
-    'sum': builtins.sum,
+        # XXX: consumes an iterator when calling
+        # O(N*log(N)) for N=len(iterable)
+        # (iterable: Iterable[T], /, *, key: None = None, reverse: bool = False) -> list[T]
+        # (iterable: Iterable[T], /, *, key: Callable[[T], T], reverse: bool = False) -> list[T]
+        'sorted': builtins.sorted,
 
-    # XXX: consumes an iterator when calling
-    # O(N) for N=len(iterable)
-    # type tuple(Sequence[T])
-    # (iterable: Iterable[T] = ..., /) -> tuple[T]
-    'tuple': builtins.tuple,
+        # O(1)
+        # type staticmethod(Generic[P, R])
+        # (f: Callable[P, R], /) -> staticmethod[P, R]
+        'staticmethod': builtins.staticmethod,
 
-    # O(1)
-    # type zip(Iterator[T])
-    # (iter: Iterable[T], /, *, strict: bool = ...) -> zip[tuple[T]]
-    # (iter1: Iterable[T1], iter2: Iterable[T2], /, *, strict: bool = ...) -> zip[tuple[T1, T2]]
-    # ...
-    # (iter1: Iterable[T1], ..., iterN: Iterable[TN], /, *, strict: bool = ...) -> zip[tuple[T1, ..., TN]]
-    'zip': builtins.zip,
+        # O(1)
+        # __str__ shortcut
+        # (object: object = ...) -> str
+        # (object: ReadableBuffer, encoding: str = ..., errors: str = ...) -> str
+        'str': builtins.str,
 
-    # these exceptions aren't available in Python 3.10, so don't expose them
-    # 'BaseExceptionGroup': builtins.BaseExceptionGroup,
-    # 'ExceptionGroup': builtins.ExceptionGroup,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterable)
+        # (iterable: Iterable[bool], /, start: int = 0) -> int
+        # (iterable: Iterable[T], /) -> T
+        # (iterable: Iterable[T], /, start: T) -> T
+        'sum': builtins.sum,
 
-    # expose all other exception types:
-    'ArithmeticError': builtins.ArithmeticError,
-    'AssertionError': builtins.AssertionError,
-    'AttributeError': builtins.AttributeError,
-    'BaseException': builtins.BaseException,
-    'BlockingIOError': builtins.BlockingIOError,
-    'BrokenPipeError': builtins.BrokenPipeError,
-    'BufferError': builtins.BufferError,
-    'ChildProcessError': builtins.ChildProcessError,
-    'ConnectionAbortedError': builtins.ConnectionAbortedError,
-    'ConnectionError': builtins.ConnectionError,
-    'ConnectionRefusedError': builtins.ConnectionRefusedError,
-    'ConnectionResetError': builtins.ConnectionResetError,
-    'EOFError': builtins.EOFError,
-    'EnvironmentError': builtins.EnvironmentError,
-    'Exception': builtins.Exception,
-    'FileExistsError': builtins.FileExistsError,
-    'FileNotFoundError': builtins.FileNotFoundError,
-    'FloatingPointError': builtins.FloatingPointError,
-    'GeneratorExit': builtins.GeneratorExit,
-    'IOError': builtins.IOError,
-    'ImportError': builtins.ImportError,
-    'IndentationError': builtins.IndentationError,
-    'IndexError': builtins.IndexError,
-    'InterruptedError': builtins.InterruptedError,
-    'IsADirectoryError': builtins.IsADirectoryError,
-    'KeyError': builtins.KeyError,
-    'KeyboardInterrupt': builtins.KeyboardInterrupt,
-    'LookupError': builtins.LookupError,
-    'MemoryError': builtins.MemoryError,
-    'ModuleNotFoundError': builtins.ModuleNotFoundError,
-    'NameError': builtins.NameError,
-    'NotADirectoryError': builtins.NotADirectoryError,
-    'NotImplementedError': builtins.NotImplementedError,
-    'OSError': builtins.OSError,
-    'OverflowError': builtins.OverflowError,
-    'PermissionError': builtins.PermissionError,
-    'ProcessLookupError': builtins.ProcessLookupError,
-    'RecursionError': builtins.RecursionError,
-    'ReferenceError': builtins.ReferenceError,
-    'RuntimeError': builtins.RuntimeError,
-    'StopAsyncIteration': builtins.StopAsyncIteration,
-    'StopIteration': builtins.StopIteration,
-    'SyntaxError': builtins.SyntaxError,
-    'SystemError': builtins.SystemError,
-    'SystemExit': builtins.SystemExit,
-    'TabError': builtins.TabError,
-    'TimeoutError': builtins.TimeoutError,
-    'TypeError': builtins.TypeError,
-    'UnboundLocalError': builtins.UnboundLocalError,
-    'UnicodeDecodeError': builtins.UnicodeDecodeError,
-    'UnicodeEncodeError': builtins.UnicodeEncodeError,
-    'UnicodeError': builtins.UnicodeError,
-    'UnicodeTranslateError': builtins.UnicodeTranslateError,
-    'ValueError': builtins.ValueError,
-    'ZeroDivisionError': builtins.ZeroDivisionError,
+        # XXX: consumes an iterator when calling
+        # O(N) for N=len(iterable)
+        # type tuple(Sequence[T])
+        # (iterable: Iterable[T] = ..., /) -> tuple[T]
+        'tuple': builtins.tuple,
 
-    # expose all warning types:
-    'BytesWarning': builtins.BytesWarning,
-    'DeprecationWarning': builtins.DeprecationWarning,
-    'EncodingWarning': builtins.EncodingWarning,
-    'FutureWarning': builtins.FutureWarning,
-    'ImportWarning': builtins.ImportWarning,
-    'PendingDeprecationWarning': builtins.PendingDeprecationWarning,
-    'ResourceWarning': builtins.ResourceWarning,
-    'RuntimeWarning': builtins.RuntimeWarning,
-    'SyntaxWarning': builtins.SyntaxWarning,
-    'UnicodeWarning': builtins.UnicodeWarning,
-    'UserWarning': builtins.UserWarning,
-    'Warning': builtins.Warning,
+        # O(1)
+        # type zip(Iterator[T])
+        # (iter: Iterable[T], /, *, strict: bool = ...) -> zip[tuple[T]]
+        # (iter1: Iterable[T1], iter2: Iterable[T2], /, *, strict: bool = ...) -> zip[tuple[T1, T2]]
+        # ...
+        # (iter1: Iterable[T1], ..., iterN: Iterable[TN], /, *, strict: bool = ...) -> zip[tuple[T1, ..., TN]]
+        'zip': builtins.zip,
 
-    # All other builtins are NOT exposed:
-    # =====================================
+        # these exceptions aren't available in Python 3.10, so don't expose them
+        # 'BaseExceptionGroup': builtins.BaseExceptionGroup,
+        # 'ExceptionGroup': builtins.ExceptionGroup,
 
-    **{
-        name: _generate_disabled_builtin_func(name)
-        for name in DISABLED_BUILTINS
-    },
-}
+        # expose all other exception types:
+        'ArithmeticError': builtins.ArithmeticError,
+        'AssertionError': builtins.AssertionError,
+        'AttributeError': builtins.AttributeError,
+        'BlockingIOError': builtins.BlockingIOError,
+        'BrokenPipeError': builtins.BrokenPipeError,
+        'BufferError': builtins.BufferError,
+        'ChildProcessError': builtins.ChildProcessError,
+        'ConnectionAbortedError': builtins.ConnectionAbortedError,
+        'ConnectionError': builtins.ConnectionError,
+        'ConnectionRefusedError': builtins.ConnectionRefusedError,
+        'ConnectionResetError': builtins.ConnectionResetError,
+        'EOFError': builtins.EOFError,
+        'EnvironmentError': builtins.EnvironmentError,
+        'Exception': builtins.Exception,
+        'FileExistsError': builtins.FileExistsError,
+        'FileNotFoundError': builtins.FileNotFoundError,
+        'FloatingPointError': builtins.FloatingPointError,
+        'IOError': builtins.IOError,
+        'ImportError': builtins.ImportError,
+        'IndentationError': builtins.IndentationError,
+        'IndexError': builtins.IndexError,
+        'InterruptedError': builtins.InterruptedError,
+        'IsADirectoryError': builtins.IsADirectoryError,
+        'KeyError': builtins.KeyError,
+        'LookupError': builtins.LookupError,
+        'MemoryError': builtins.MemoryError,
+        'ModuleNotFoundError': builtins.ModuleNotFoundError,
+        'NameError': builtins.NameError,
+        'NotADirectoryError': builtins.NotADirectoryError,
+        'NotImplementedError': builtins.NotImplementedError,
+        'OSError': builtins.OSError,
+        'OverflowError': builtins.OverflowError,
+        'PermissionError': builtins.PermissionError,
+        'ProcessLookupError': builtins.ProcessLookupError,
+        'RecursionError': builtins.RecursionError,
+        'ReferenceError': builtins.ReferenceError,
+        'RuntimeError': builtins.RuntimeError,
+        'StopAsyncIteration': builtins.StopAsyncIteration,
+        'StopIteration': builtins.StopIteration,
+        'SyntaxError': builtins.SyntaxError,
+        'SystemError': builtins.SystemError,
+        'TabError': builtins.TabError,
+        'TimeoutError': builtins.TimeoutError,
+        'TypeError': builtins.TypeError,
+        'UnboundLocalError': builtins.UnboundLocalError,
+        'UnicodeDecodeError': builtins.UnicodeDecodeError,
+        'UnicodeEncodeError': builtins.UnicodeEncodeError,
+        'UnicodeError': builtins.UnicodeError,
+        'UnicodeTranslateError': builtins.UnicodeTranslateError,
+        'ValueError': builtins.ValueError,
+        'ZeroDivisionError': builtins.ZeroDivisionError,
+
+        # expose all warning types:
+        'BytesWarning': builtins.BytesWarning,
+        'DeprecationWarning': builtins.DeprecationWarning,
+        'EncodingWarning': builtins.EncodingWarning,
+        'FutureWarning': builtins.FutureWarning,
+        'ImportWarning': builtins.ImportWarning,
+        'PendingDeprecationWarning': builtins.PendingDeprecationWarning,
+        'ResourceWarning': builtins.ResourceWarning,
+        'RuntimeWarning': builtins.RuntimeWarning,
+        'SyntaxWarning': builtins.SyntaxWarning,
+        'UnicodeWarning': builtins.UnicodeWarning,
+        'UserWarning': builtins.UserWarning,
+        'Warning': builtins.Warning,
+
+        # All other builtins are NOT exposed:
+        # =====================================
+
+        **{
+            name: _generate_disabled_builtin_func(name)
+            for name in DISABLED_BUILTINS
+        },
+    }
+
+    for name, builtin in _EXEC_BUILTINS.items():
+        import inspect
+        if inspect.isclass(builtin) and issubclass(builtin, BaseException):
+            assert issubclass(builtin, Exception), f'cannot allow non-Exception subclasses: {name}'
+
+    return _EXEC_BUILTINS

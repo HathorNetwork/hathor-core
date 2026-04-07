@@ -58,9 +58,9 @@ class MeteredExecutor:
     def exec(self, source: str, /) -> dict[str, Any]:
         """ This is equivalent to `exec(source)` but with execution metering and memory limiting.
         """
-        from hathorlib.nanocontracts.custom_builtins import EXEC_BUILTINS
+        from hathorlib.nanocontracts.custom_builtins import get_exec_builtins
         env: dict[str, object] = {
-            '__builtins__': EXEC_BUILTINS,
+            '__builtins__': get_exec_builtins(),
         }
         # XXX: calling compile now makes the exec step consume less fuel
         code = compile(
@@ -80,11 +80,11 @@ class MeteredExecutor:
     def call(self, func: Callable[[Unpack[_Ts]], _T], /, *, args: tuple[Unpack[_Ts]]) -> _T:
         """ This is equivalent to `func(*args, **kwargs)` but with execution metering and memory limiting.
         """
-        from hathorlib.nanocontracts.custom_builtins import EXEC_BUILTINS
+        from hathorlib.nanocontracts.custom_builtins import get_exec_builtins
         from hathorlib.nanocontracts.exception import NCFail
 
         env: dict[str, object] = {
-            '__builtins__': EXEC_BUILTINS,
+            '__builtins__': get_exec_builtins(),
             '__func__': func,
             '__args__': args,
             '__result__': None,
@@ -104,7 +104,7 @@ class MeteredExecutor:
             exec(code, env)
         except NCFail:
             raise
-        except Exception as e:
+        except BaseException as e:
             # Convert any other exception to NCFail.
             raise NCFail from e
 

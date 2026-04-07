@@ -17,7 +17,7 @@ from io import StringIO
 from textwrap import dedent
 from unittest.mock import ANY, Mock, call, patch
 
-from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
+from hathor.nanocontracts.custom_builtins import get_exec_builtins
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -38,8 +38,9 @@ class TestCustomImport(BlueprintTestCase):
         '''
 
         # Wrap our custom builtin so we can spy its calls
-        wrapped_import_function = Mock(wraps=EXEC_BUILTINS['__import__'])
-        EXEC_BUILTINS['__import__'] = wrapped_import_function
+        exec_builtins = get_exec_builtins()
+        wrapped_import_function = Mock(wraps=exec_builtins['__import__'])
+        exec_builtins['__import__'] = wrapped_import_function
 
         # Before being used, the function is uncalled
         wrapped_import_function.assert_not_called()

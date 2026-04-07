@@ -14,13 +14,14 @@
 
 import pytest
 
+from hathor.exception import InvalidNewTransaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
 class TestBaseExceptionEscape(BlueprintTestCase):
-    def _test_exception_escape(self, method: str) -> None:
+    def _test_exception_escape(self, exc_name: str) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
@@ -36,7 +37,7 @@ class TestBaseExceptionEscape(BlueprintTestCase):
             nc_init.nc_method = initialize()
 
             nc_call.nc_id = nc_init
-            nc_call.nc_method = {method}()
+            nc_call.nc_method = raise_exc()
 
             ocb <-- b11
             b11 < nc_init
@@ -52,41 +53,41 @@ class TestBlueprint(Blueprint):
         pass
 
     @public
-    def raise_system_exit(self, ctx: Context) -> None:
-        raise SystemExit
-
-    @public
-    def raise_keyboard_interrupt(self, ctx: Context) -> None:
-        raise KeyboardInterrupt
-
-    @public
-    def raise_base_exception(self, ctx: Context) -> None:
-        raise BaseException
-
-    @public
-    def raise_generator_exit(self, ctx: Context) -> None:
-        raise GeneratorExit
+    def raise_exc(self, ctx: Context) -> None:
+        raise {exc_name}
             ```
         """)
 
         artifacts.propagate_with(self.manager)
 
     def test_system_exit(self) -> None:
-        # FIXME: Shouldn't crash!
-        with pytest.raises(SystemExit, match='-1'):
-            self._test_exception_escape('raise_system_exit')
+        with pytest.raises(Exception) as e:
+            self._test_exception_escape('SystemExit')
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == (
+            'full validation failed: forbidden syntax: Usage or reference to SystemExit is not allowed.'
+        )
 
     def test_keyboard_interrupt(self) -> None:
-        # FIXME: Shouldn't crash!
-        with pytest.raises(SystemExit, match='-1'):
-            self._test_exception_escape('raise_keyboard_interrupt')
+        with pytest.raises(Exception) as e:
+            self._test_exception_escape('KeyboardInterrupt')
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == (
+            'full validation failed: forbidden syntax: Usage or reference to KeyboardInterrupt is not allowed.'
+        )
 
     def test_base_exception(self) -> None:
-        # FIXME: Shouldn't crash!
-        with pytest.raises(SystemExit, match='-1'):
-            self._test_exception_escape('raise_base_exception')
+        with pytest.raises(Exception) as e:
+            self._test_exception_escape('BaseException')
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == (
+            'full validation failed: forbidden syntax: Usage or reference to BaseException is not allowed.'
+        )
 
     def test_generator_exit(self) -> None:
-        # FIXME: Shouldn't crash!
-        with pytest.raises(SystemExit, match='-1'):
-            self._test_exception_escape('raise_generator_exit')
+        with pytest.raises(Exception) as e:
+            self._test_exception_escape('GeneratorExit')
+        assert isinstance(e.value.__cause__, InvalidNewTransaction)
+        assert e.value.__cause__.args[0] == (
+            'full validation failed: forbidden syntax: Usage or reference to GeneratorExit is not allowed.'
+        )
