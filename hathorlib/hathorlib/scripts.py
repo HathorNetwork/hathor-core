@@ -26,8 +26,6 @@ from hathorlib.utils import (
     get_address_b58_from_redeem_script_hash,
 )
 
-settings = HathorSettings()
-
 
 def re_compile(pattern: str) -> Pattern[bytes]:
     """ Transform a given script pattern into a regular expression.
@@ -482,6 +480,7 @@ def create_output_script(address: bytes, timelock: Optional[Any] = None) -> byte
 
         :rtype: bytes
     """
+    settings = HathorSettings()
     if address[0] == binary_to_int(settings.P2PKH_VERSION_BYTE):
         return P2PKH.create_output_script(address, timelock)
     elif address[0] == binary_to_int(settings.MULTISIG_VERSION_BYTE):

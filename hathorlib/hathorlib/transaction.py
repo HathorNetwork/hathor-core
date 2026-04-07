@@ -30,8 +30,6 @@ if TYPE_CHECKING:
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
-settings = HathorSettings()
-
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
 _FUNDS_FORMAT_STRING = '!BBBBB'
 
@@ -221,6 +219,7 @@ class Transaction(BaseTransaction):
         :return: the token uid
         :rtype: bytes
         """
+        settings = HathorSettings()
         if index == 0:
             return settings.HATHOR_TOKEN_UID
         return self.tokens[index - 1]

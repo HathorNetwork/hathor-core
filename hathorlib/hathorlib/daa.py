@@ -20,8 +20,6 @@ from hathorlib.conf import HathorSettings
 if TYPE_CHECKING:
     from hathorlib import Transaction
 
-settings = HathorSettings()
-
 
 def minimum_tx_weight(tx: 'Transaction', *, fix_parents: bool = True) -> float:
     """Return the minimum weight for the tx.
@@ -32,6 +30,7 @@ def minimum_tx_weight(tx: 'Transaction', *, fix_parents: bool = True) -> float:
                                   ----------------
                                    1 + k / amount
     """
+    settings = HathorSettings()
     tx_size = len(tx.get_struct())
 
     # When a transaction is still being create, it might not have its parents yet.
