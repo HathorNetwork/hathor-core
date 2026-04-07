@@ -215,7 +215,10 @@ SETTINGS = HathorSettings(
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
     ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
-    ENABLE_FEE_BASED_TOKENS=FeatureSetting.DISABLED,
+    ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_OPCODES_V2=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_NANO_RUNTIME_V2=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_BLUEPRINT_V2=FeatureSetting.FEATURE_ACTIVATION,
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9',
         'HUbxYhtqW8pdRCC2WngPxN7MB4SUMDPrrh',
@@ -276,6 +279,46 @@ SETTINGS = HathorSettings(
                 minimum_activation_height=6_350_400,
                 lock_in_on_timeout=False,
                 version='0.69.0',
+                signal_support_by_default=True,
+            ),
+            Feature.FEE_TOKENS: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=0,
+                start_height=0,
+                timeout_height=40320,
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.OPCODES_V2: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=1,
+                start_height=0,
+                timeout_height=40320,
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.NANO_RUNTIME_V2: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=2,
+                start_height=0,
+                timeout_height=40320,
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.BLUEPRINT_V2: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=3,
+                start_height=0,
+                timeout_height=40320,
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
                 signal_support_by_default=True,
             ),
         }

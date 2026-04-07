@@ -24,6 +24,7 @@ from hathor.transaction.exceptions import TxValidationError
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.context import *  # noqa: F401,F403
 from hathorlib.nanocontracts.context import Context  # noqa: F401
+from hathorlib.nanocontracts.versions import BlueprintVersion
 from hathorlib.nanocontracts.vertex_data import BlockData
 
 if TYPE_CHECKING:
@@ -34,6 +35,7 @@ _EMPTY_MAP: MappingProxyType[TokenUid, tuple[NCAction, ...]] = MappingProxyType(
 
 def create_context_from_vertex(
     *,
+    blueprint_version: BlueprintVersion | None,
     caller_id: CallerId,
     vertex: Vertex,
     actions: Sequence[NCAction],
@@ -65,4 +67,5 @@ def create_context_from_vertex(
         vertex_data=vertex_data,
         block_data=block_data,
         actions=actions_map,
+        blueprint_version=blueprint_version,
     )
