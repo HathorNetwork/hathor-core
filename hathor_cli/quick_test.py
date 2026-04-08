@@ -37,20 +37,14 @@ class VertexHandlerWrapper:
         self._n_blocks = n_blocks or 0
 
     @inlineCallbacks
-    def on_new_block(self, block: Block, *args: Any, **kwargs: Any) -> Generator[Any, Any, bool]:
-        res = yield self._vertex_handler.on_new_block(block, *args, **kwargs)
+    def on_new_sync_block(self, block: Block, *args: Any, **kwargs: Any) -> Generator[Any, Any, bool]:
+        res = yield self._vertex_handler.on_new_sync_block(block, *args, **kwargs)
         if block.get_height() >= self._n_blocks:
             self.log.info(f'successfully reached height {block.get_height()}, exit now')
             self._manager.connections.disconnect_all_peers(force=True)
             self._manager.reactor.fireSystemEvent('shutdown')
             os._exit(0)
         return res
-
-    def on_new_mempool_transaction(self, tx: Transaction) -> bool:
-        return self._vertex_handler.on_new_mempool_transaction(tx)
-
-    def on_new_relayed_vertex(self, vertex: BaseTransaction, *args: Any, **kwargs: Any) -> bool:
-        return self._vertex_handler.on_new_mempool_transaction(vertex, *args, **kwargs)
 
 
 class QuickTest(RunNode):
@@ -69,7 +63,7 @@ class QuickTest(RunNode):
         super().prepare(register_resources=False)
         self._no_wait = self._args.no_wait
 
-        self.log.info('patching vertex_handler.on_new_vertex to quit on success')
+        self.log.info('patching vertex_handler to quit on success')
         p2p_factory = self.manager.connections.get_sync_factory(SyncVersion.V2)
         assert isinstance(p2p_factory, SyncV2Factory)
         p2p_factory.vertex_handler = VertexHandlerWrapper(

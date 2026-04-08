@@ -18,8 +18,7 @@ from hathor.dag_builder.builder import DAGBuilder
 def main(filename: str, genesis_seed: str) -> None:
     from hathor.reactor import initialize_global_reactor
 
-    # reactor
-    _ = initialize_global_reactor(use_asyncio_reactor=False)
+    reactor = initialize_global_reactor(use_asyncio_reactor=False)
 
     from hathor.conf.get_settings import get_global_settings
     from hathor.daa import DifficultyAdjustmentAlgorithm
@@ -42,6 +41,7 @@ def main(filename: str, genesis_seed: str) -> None:
     nc_catalog.register_blueprints(blueprints)
 
     builder = DAGBuilder(
+        reactor=reactor,
         settings=settings,
         daa=daa,
         genesis_wallet=genesis_wallet,

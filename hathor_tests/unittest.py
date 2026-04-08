@@ -20,7 +20,6 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
-from hathor.feature_activation.utils import Features
 from hathor.manager import HathorManager
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.p2p.peer import PrivatePeer
@@ -531,5 +530,4 @@ class TestCase(unittest.TestCase):
 
     @staticmethod
     def get_verification_params(manager: HathorManager | None = None) -> VerificationParams:
-        best_block = manager.tx_storage.get_best_block() if manager else None
-        return VerificationParams.for_mempool(best_block=best_block or Mock(), features=Features.all_enabled())
+        return VerificationParams.for_apis(manager.tx_storage if manager else Mock())

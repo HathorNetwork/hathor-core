@@ -289,7 +289,7 @@ class VertexHeadersTest(unittest.TestCase):
         }
         assert tx_ok.hash in mempool_hashes
 
-        assert self.manager.vertex_handler.on_new_relayed_vertex(b32)
+        assert self.manager.vertex_handler.on_new_relayed_block(b32)
 
         tx_ok_confirmed = self.manager.tx_storage.get_transaction(tx_ok.hash)
         assert tx_ok_confirmed.get_metadata().first_block == b32.hash
@@ -298,7 +298,7 @@ class VertexHeadersTest(unittest.TestCase):
         }
         assert tx_ok.hash not in mempool_hashes
 
-        assert self.manager.vertex_handler.on_new_relayed_vertex(a32)
+        assert self.manager.vertex_handler.on_new_relayed_block(a32)
 
         tx_ok_reorged = self.manager.tx_storage.get_transaction(tx_ok.hash)
         assert tx_ok_reorged.get_metadata().first_block is None
@@ -374,7 +374,7 @@ class VertexHeadersTest(unittest.TestCase):
         c5.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(c5)
         with self.assertRaises(InvalidNewTransaction) as e:
-            yield manager2.vertex_handler.on_new_block(c5, deps=[])
+            yield manager2.vertex_handler.on_new_sync_block(c5, deps=[])
         assert isinstance(e.exception.__cause__, CheckpointError)
 
     def test_nano_header_seqnum(self) -> None:

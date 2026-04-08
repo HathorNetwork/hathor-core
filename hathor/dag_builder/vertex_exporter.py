@@ -38,6 +38,7 @@ from hathor.nanocontracts.types import (
     blueprint_id_from_bytes,
 )
 from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb, sign_pycoin
+from hathor.reactor import ReactorProtocol
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
@@ -55,6 +56,7 @@ class VertexExporter:
     def __init__(
         self,
         *,
+        reactor: ReactorProtocol,
         builder: DAGBuilder,
         settings: HathorSettings,
         daa: DifficultyAdjustmentAlgorithm,
@@ -64,6 +66,7 @@ class VertexExporter:
         nc_catalog: NCBlueprintCatalog,
         blueprints_module: ModuleType | None,
     ) -> None:
+        self.reactor = reactor
         self._builder = builder
         self._vertices: dict[str, BaseTransaction] = {}
         self._wallets: dict[str, BaseWallet] = {}
@@ -186,13 +189,12 @@ class VertexExporter:
         address_b58 = self._wallets['main'].get_unused_address()
         return P2PKH.create_output_script(decode_address(address_b58))
 
-    def get_min_timestamp(self, node: DAGNode) -> int:
-        """Return the minimum timestamp where a node is valid."""
-        # update timestamp
-        deps = list(node.get_all_dependencies())
-        assert deps
-        timestamp = 1 + max(self._vertices[name].timestamp for name in deps if name in self._vertices)
-        return timestamp
+    def get_timestamp(self) -> int:
+        """Return the timestamp for a new vertex."""
+        ts = int(self.reactor.seconds())
+        assert hasattr(self.reactor, 'advance')
+        self.reactor.advance(1)
+        return ts
 
     def update_vertex_hash(self, vertex: BaseTransaction, *, fix_conflict: bool = True) -> None:
         """Resolve vertex and update its hash."""
@@ -250,7 +252,7 @@ class VertexExporter:
         vertex.token_name = node.name
         vertex.token_symbol = node.name
         vertex.token_version = node.get_attr_token_version()
-        vertex.timestamp = self.get_min_timestamp(node)
+        vertex.timestamp = self.get_timestamp()
         self.add_headers_if_needed(node, vertex)
         self.sign_all_inputs(vertex, node=node)
         if 'weight' in node.attrs:
@@ -276,7 +278,7 @@ class VertexExporter:
 
         blk = Block(parents=parents, outputs=outputs)
         self.add_headers_if_needed(node, blk)
-        blk.timestamp = self.get_min_timestamp(node) + self._settings.AVG_TIME_BETWEEN_BLOCKS
+        blk.timestamp = self.get_timestamp() + self._settings.AVG_TIME_BETWEEN_BLOCKS
         blk.get_height = lambda: height  # type: ignore[method-assign]
         blk.update_hash()  # the next call fails if blk.hash is None
         if 'weight' in node.attrs:
@@ -486,7 +488,7 @@ class VertexExporter:
             code_str = load_builtin_blueprint_for_ocb(filename, class_name, self._blueprints_module)
 
         ocb.code = Code.from_python_code(code_str, self._settings)
-        ocb.timestamp = self.get_min_timestamp(node)
+        ocb.timestamp = self.get_timestamp()
         self.sign_all_inputs(ocb, node=node)
 
         private_key_literal = node.get_required_literal('ocb_private_key')
@@ -513,7 +515,7 @@ class VertexExporter:
 
         assert len(block_parents) == 0
         tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
-        tx.timestamp = self.get_min_timestamp(node)
+        tx.timestamp = self.get_timestamp()
         self.add_headers_if_needed(node, tx)
         self.sign_all_inputs(tx, node=node)
         if 'weight' in node.attrs:

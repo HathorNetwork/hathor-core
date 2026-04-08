@@ -400,13 +400,13 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert isinstance(e.value.__cause__, InvalidNewTransaction)
         assert e.value.__cause__.args[0] == f'full validation failed: token uid {fbt_id.hex()} not found.'
 
-        assert self.manager.vertex_handler.on_new_relayed_vertex(b12)
+        assert self.manager.vertex_handler.on_new_relayed_block(b12)
         assert tx2.get_metadata().first_block == b12.hash
         assert tx2.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx2.get_metadata().voided_by is None
 
         # Now, it's valid and accepted.
-        assert self.manager.vertex_handler.on_new_relayed_vertex(tx3)
+        assert self.manager.vertex_handler.on_new_mempool_transaction(tx3)
         assert tx3.get_metadata().validation.is_valid()
         assert tx3.get_metadata().voided_by is None
 
@@ -457,7 +457,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tx1.get_metadata().voided_by is None
 
-        deferred = self.manager.vertex_handler.on_new_block(block=b12, deps=[tx2, tx3])
+        deferred = self.manager.vertex_handler.on_new_sync_block(block=b12, deps=[tx2, tx3])
         self.reactor.advance(1)
 
         msg = f'full validation failed: token uid {fbt_id.hex()} not found.'
