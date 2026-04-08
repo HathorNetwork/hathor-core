@@ -1,11 +1,18 @@
-"""
-Copyright (c) Hathor Labs and its affiliates.
-
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
-"""
+# Copyright 2026 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import hashlib
-from typing import cast
+from typing import Optional, cast
 
 import base58
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -13,8 +20,6 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidAddress
-
-settings = HathorSettings()
 
 
 def get_checksum(address_bytes: bytes) -> bytes:
@@ -83,7 +88,7 @@ def get_address_b58_from_public_key_hash(public_key_hash: bytes) -> str:
 
 
 def get_address_from_public_key_hash(
-    public_key_hash: bytes, version_byte: bytes = settings.P2PKH_VERSION_BYTE
+    public_key_hash: bytes, version_byte: Optional[bytes] = None
 ) -> bytes:
     """Gets the address in bytes from the public key hash
 
@@ -96,6 +101,12 @@ def get_address_from_public_key_hash(
         :return: address in bytes
         :rtype: bytes
     """
+    settings = HathorSettings()
+    version_byte = (
+        settings.P2PKH_VERSION_BYTE
+        if version_byte is None
+        else version_byte
+    )
     address = b''
     # Version byte
     address += version_byte
@@ -107,7 +118,7 @@ def get_address_from_public_key_hash(
 
 
 def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
-                                            version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> str:
+                                            version_byte: Optional[bytes] = None) -> str:
     """Gets the b58 address from the hash of the redeem script in multisig.
 
         :param redeem_script_hash: hash of the redeem script (sha256 and ripemd160)
@@ -116,12 +127,18 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in base 58
         :rtype: string
     """
+    settings = HathorSettings()
+    version_byte = (
+        settings.MULTISIG_VERSION_BYTE
+        if version_byte is None
+        else version_byte
+    )
     address = get_address_from_redeem_script_hash(redeem_script_hash, version_byte)
     return base58.b58encode(address).decode('utf-8')
 
 
 def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
-                                        version_byte: bytes = settings.MULTISIG_VERSION_BYTE) -> bytes:
+                                        version_byte: Optional[bytes] = None) -> bytes:
     """Gets the address in bytes from the redeem script hash
 
         :param redeem_script_hash: hash of redeem script (sha256 and ripemd160)
@@ -133,6 +150,12 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    settings = HathorSettings()
+    version_byte = (
+        settings.MULTISIG_VERSION_BYTE
+        if version_byte is None
+        else version_byte
+    )
     address = b''
     # Version byte
     address += version_byte

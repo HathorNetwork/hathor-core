@@ -24,8 +24,6 @@ from hathorlib.token_info import TokenVersion
 from hathorlib.transaction import Transaction
 from hathorlib.utils import clean_token_string, int_to_bytes, unpack, unpack_len
 
-settings = HathorSettings()
-
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
 
@@ -190,6 +188,7 @@ class TokenCreationTransaction(Transaction):
     def verify_token_info(self) -> None:
         """ Validates token info
         """
+        settings = HathorSettings()
         name_len = len(self.token_name)
         symbol_len = len(self.token_symbol)
         if name_len == 0 or name_len > settings.MAX_LENGTH_TOKEN_NAME:
