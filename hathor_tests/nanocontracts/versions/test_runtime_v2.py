@@ -20,7 +20,7 @@ from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.feature_activation.settings import Settings as FeatureSettings
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests.dag_builder.builder import TestDAGBuilder
@@ -28,6 +28,7 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
 from hathorlib.conf.settings import FeatureSetting
 from hathorlib.nanocontracts.exception import NCFail
+from hathorlib.nanocontracts.versions import NanoRuntimeVersion
 
 
 class MyBlueprint(Blueprint):
@@ -72,14 +73,13 @@ class TestRuntimeV2(BlueprintTestCase):
             FEATURE_ACTIVATION=feature_settings,
         ))
 
-        feature_service = self.manager.feature_service
-        feature_service._feature_settings = feature_settings
-        self.manager.consensus_algorithm._block_executor._settings = settings
+        self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, settings=settings)
         self.manager.blueprint_service.register_blueprint(self.blueprint_id, MyBlueprint)
+        feature_service = self.manager.feature_service
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
-            blockchain genesis b[1..12]
+            blockchain genesis b[1..13]
             b10 < dummy
 
             b5.signal_bits = 1
@@ -92,24 +92,28 @@ class TestRuntimeV2(BlueprintTestCase):
             nc2.nc_id = "{self.blueprint_id.hex()}"
             nc2.nc_method = initialize()
 
-            nc1 <-- b11
-            nc2 <-- b12
+            nc1 <-- b12
+            nc2 <-- b13
         ''')
         artifacts.propagate_with(self.manager)
 
-        b5, b6, b7, b11, b12 = artifacts.get_typed_vertices(('b5', 'b6', 'b7', 'b11', 'b12'), Block)
+        b5, b6, b7, b11, b12, b13 = artifacts.get_typed_vertices(('b5', 'b6', 'b7', 'b11', 'b12', 'b13'), Block)
         nc1, nc2 = artifacts.get_typed_vertices(('nc1', 'nc2'), Transaction)
 
         assert feature_service.get_state(block=b7, feature=Feature.NANO_RUNTIME_V2) == FeatureState.STARTED
         assert feature_service.get_state(block=b11, feature=Feature.NANO_RUNTIME_V2) == FeatureState.LOCKED_IN
         assert feature_service.get_state(block=b12, feature=Feature.NANO_RUNTIME_V2) == FeatureState.ACTIVE
 
+        # Nano Runtime V2 activation uses the first_block's parent state
+        assert nc1.get_metadata().first_block == b12.hash
+        assert nc2.get_metadata().first_block == b13.hash
+
         assert nc1.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, nc1.hash}
         assert nc1.get_metadata().nc_execution == NCExecutionState.FAILURE
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=nc1.hash,
-            block_id=b11.hash,
+            block_id=b12.hash,
             reason='syscall `get_settings` is not yet supported',
         )
 
