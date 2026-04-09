@@ -15,6 +15,7 @@
 from hathor.exception import HathorError
 from hathorlib.exceptions import TransactionDoesNotExist
 
+
 class TokenCreationTransactionDoesNotExist(TransactionDoesNotExist):
     """You are trying to get a token creation transaction that does not exist"""
 
