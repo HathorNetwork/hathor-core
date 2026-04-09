@@ -20,6 +20,10 @@ class HathorError(Exception):
     pass
 
 
+class TransactionDoesNotExist(HathorError):
+    """You are trying to get a transaction that does not exist"""
+
+
 class InvalidAddress(HathorError):
     """Address is invalid"""
 

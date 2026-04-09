@@ -22,7 +22,7 @@ from typing import Any, Callable, Concatenate, ParamSpec, Sequence, TypeVar
 from typing_extensions import assert_never
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
-from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError
+from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError, TransactionDoesNotExist
 from hathorlib.nanocontracts.balance_rules import BalanceRules
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment
@@ -1286,13 +1286,16 @@ class Runner:
 
         try:
             token_description = self.tx_storage.get_token_description(token_uid)
-        except Exception:
-            token_description = None
-        if token_description is None:
+            if token_description is None:
+                raise NCInvalidSyscall(
+                    f'The {token_uid.hex()} token is not confirmed by any block '
+                    f'for contract {call_record.contract_id.hex()}'
+                )
+            return token_description
+        except TransactionDoesNotExist:
             raise NCInvalidSyscall(
                 f'contract {call_record.contract_id.hex()} could not find {token_uid.hex()} token'
             )
-        return token_description
 
     def _create_token(
         self,
