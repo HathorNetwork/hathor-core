@@ -1,0 +1,191 @@
+# Copyright 2021 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[tool.poetry]
+name = "hathor"
+version = "0.70.0"
+description = "Hathor Network full-node"
+authors = ["Hathor Team <contact@hathor.network>"]
+license = "Apache-2.0"
+readme = "README.md"
+homepage = "https://hathor.network/"
+repository = "https://github.com/HathorNetwork/hathor-core/"
+# https://pypi.org/classifiers/
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Private :: Do Not Upload",
+]
+exclude = ["hathor_tests", "hathor_tests.*"]
+packages = [
+    { include = "hathor" },
+    { include = "hathor_cli" },
+]
+
+[tool.poetry.scripts]
+hathor-cli = 'hathor_cli.main:main'
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "~7.1.1"
+isort = {version = "~5.13.2", extras = ["colors"]}
+mypy = {version = "^1.19.1", markers = "implementation_name == 'cpython'"}
+mypy-zope = {version = "^1.0.14", markers = "implementation_name == 'cpython'"}
+pytest = "~8.3.2"
+pytest-cov = "~5.0.0"
+flaky = "~3.8.1"
+pytest-xdist = "~3.6.1"
+yamllint = "~1.35.1"
+# stubs:
+types-requests = "=2.28.11.4"
+types-pyopenssl = "=22.1.0.2"
+types-pyyaml = "=6.0.12.9"
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4"
+twisted = "~24.7.0"
+autobahn = "~24.4.2"
+base58 = "~2.1.1"
+colorama = "~0.4.6"
+configargparse = "~1.7.1"
+cryptography = "~42.0.5"
+graphviz = "~0.20.1"
+ipython = {version = "~8.7.0", extras = ["kernel"]}
+mnemonic = "~0.20"
+prometheus_client = "~0.15.0"
+pyopenssl = "=24.2.1"
+pycoin = "~0.92.20230326"
+requests = "=2.32.3"
+service_identity = "~21.1.0"
+pexpect = "~4.8.0"
+sortedcontainers = "~2.4.0"
+structlog = "~22.3.0"
+rocksdb = {git = "https://github.com/hathornetwork/python-rocksdb.git"}
+aiohttp = "~3.10.3"
+idna = "~3.4"
+setproctitle = "^1.3.3"
+sentry-sdk = {version = "^1.5.11", optional = true}
+structlog-sentry = {version = "^1.4.0", optional = true}
+pydantic = "^2.0"
+pyyaml = "^6.0.1"
+typing-extensions = "~4.12.2"
+python-healthchecklib = "^0.1.0"
+multidict = "=6.7.0"
+hathorlib = {path = "hathorlib", develop = true}
+cffi = "=1.17.1"
+zope-interface = "=8.2"
+packaging = "=26.0"
+
+[tool.poetry.extras]
+sentry = ["sentry-sdk", "structlog-sentry"]
+
+[tool.isort]
+combine_as_imports = true
+default_section = "THIRDPARTY"
+include_trailing_comma = true
+known_first_party = "hathor,hathor_tests"
+line_length = 119
+multi_line_output = 3
+
+[tool.mypy]
+pretty = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+extra_checks = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+namespace_packages = true
+show_error_codes = true
+show_error_context = true
+plugins = [
+    "pydantic.mypy",
+    "mypy_zope:plugin"
+]
+
+# these are modules which we don't have type stubs for
+[[tool.mypy.overrides]]
+module = [
+    'IPython',
+    '_hashlib',
+    'autobahn.*',
+    'colorama',
+    'configargparse',
+    'graphviz',
+    'prometheus_client',
+    'pudb.*',
+    'pycoin.*',
+    'pympler',
+    'rocksdb',
+    'sentry_sdk',
+    'setproctitle',
+    'sortedcontainers',
+    'structlog_sentry',
+    'structlog_sentry',
+    'psutil',
+]
+ignore_missing_imports = true
+
+# This override enables stricter rules for some specific modules.
+# Currently, we have only two options from strict-mode that are disabled, but we have to opt-in instead of opt-out
+# because setting strict=true doesn't work for module-level settings.
+# Reference: https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
+[[tool.mypy.overrides]]
+module = [
+    "hathor.consensus.*",
+    "hathor.feature_activation.*",
+    "hathor.event.*",
+    "hathor.verification.*",
+    "hathor_tests.consensus.*",
+    "hathor_tests.crypto.*",
+    "hathor_tests.event.*",
+    "hathor_tests.execution_manager.*",
+    "hathor_tests.feature_activation.*",
+    "hathor_tests.p2p.*",
+    "hathor_tests.pubsub.*",
+    "hathor_tests.simulation.*",
+    "hathor_tests.unittest",
+    "hathor_tests.utils",
+]
+strict_equality = true
+strict_concatenate = true
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+no_implicit_reexport = true
+warn_return_any = true
+# disallow_subclassing_any = true
+# disallow_untyped_calls = true
+
+# Pydantic v2 mypy plugin configuration
+# See: https://docs.pydantic.dev/latest/integrations/mypy/
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["hathor_tests"]
+addopts = "-n auto"
+markers = [
+    "slow",
+]
+norecursedirs = ["hathor_tests/nanocontracts/test_blueprints"]
+
+[build-system]
+requires = ["poetry-core >= 1.3.2", "cython < 0.30"]
+build-backend = "poetry.core.masonry.api"

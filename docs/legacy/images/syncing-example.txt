@@ -1,0 +1,36 @@
+title Syncing Algorithm
+
+note over A,B:
+    Suppose A and B are synced up to
+    timestamp 500, i.e., they are synced
+    at 500, but not synced at 501.
+    
+    Latest timestamp of A is 1006.
+    Latest timestamp of B is 1000.
+end note
+
+A->+B: GET-TIPS
+B-->-A: TIPS(1000)
+loop exponential search starting at 1000
+    A->+B: GET-TIPS(1000-2**i)
+    B-->-A: TIPS(timestamp=2**i)
+end
+note over A,B:
+    We're synced at 489 
+    and not synced at 745
+end note
+loop binary search between 489 and 745
+    A->+B: GET-TIPS(mid)
+    B-->-A: TIPS(mid)
+end
+note over A,B:
+    We're synced at 500
+    and not synced at 501
+end note
+loop download data
+A->+B: GET-NEXT(timestamp, offset)
+B-->-A: NEXT(hashes, next_timestamp, next_offset)
+A->B: GET-DATA(hash)
+A->B: GET-DATA(hash)
+B-->A: DATA(hash, bytes)
+B-->A: DATA(hash, bytes)

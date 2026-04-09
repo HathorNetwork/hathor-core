@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export WEBADMIN_PATH=~/Hathor/admin-frontend/
+export NODE_PATH=~/Hathor/hathor-python/

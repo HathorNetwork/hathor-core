@@ -1,0 +1,13 @@
+#!/bin/bash
+
+BASENAME=`basename $0`
+
+if [ $# -ne 1 ]; then
+	echo "usage: ${BASENAME} <prof_file>"
+	exit 1
+fi
+
+PROF=$1
+
+gprof2dot -f pstats $PROF -o $PROF.dot
+dot -O -Tpdf $PROF.dot

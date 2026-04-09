@@ -1,0 +1,51 @@
+name: setup-hathor-env
+description: Setup Hathor node environment
+inputs:
+  python:
+    description: The python version
+  os:
+    description: The OS name
+runs:
+  using: composite
+  steps:
+    - name: Install Poetry
+      shell: bash
+      run: pipx install poetry
+
+    - name: Set up Python ${{ inputs.python }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python }}
+        cache: 'poetry'
+
+    - name: Configure in-project virtualenv
+      shell: bash
+      run: poetry config virtualenvs.in-project true
+
+    - name: Cache virtualenv
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-py${{ inputs.python }}-
+
+    - name: Install Ubuntu dependencies
+      if: startsWith(inputs.os, 'ubuntu')
+      run: |
+        sudo apt-get -qy update
+        sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+      shell: bash
+
+    - name: Install macOS dependencies
+      if: startsWith(inputs.os, 'macos')
+      run: |
+        brew cleanup -q
+        # brew update -q
+        brew install -q graphviz rocksdb pkg-config openssl
+        echo "PYCOIN_LIBCRYPTO_PATH=$(brew --prefix openssl)/lib/libcrypto.dylib" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Install Poetry dependencies
+      run: poetry sync -n --no-root
+      shell: bash

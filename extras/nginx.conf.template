@@ -1,0 +1,73 @@
+server {
+	listen 80;
+	listen [::]:80;
+
+	server_name ${NODE_HOST};
+	return 301 https://${NODE_HOST}$request_uri;
+}
+
+server {
+	listen 443 ssl;
+	listen [::]:443 ssl;
+
+	ssl_certificate /etc/letsencrypt/live/${NODE_HOST}/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/${NODE_HOST}/privkey.pem;
+	ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+	ssl_ciphers HIGH:!aNULL:!MD5;
+
+	server_name ${NODE_HOST};
+
+	root ${INSTALL_DIR}/admin-frontend/build/;
+	index index.html;
+
+	location / {
+		auth_basic "Auth Required";
+		auth_basic_user_file ${INSTALL_DIR}/htpasswd;
+		try_files $${EMPTY}uri /index.html =404;
+	}
+
+	location /supervisor/ {
+		auth_basic "Auth Required";
+		auth_basic_user_file ${INSTALL_DIR}/htpasswd;
+
+		proxy_pass http://localhost:9001/;
+		proxy_http_version 1.1;
+		proxy_buffering off;
+		proxy_max_temp_file_size 0;
+		proxy_redirect default;
+		proxy_set_header Host $${EMPTY}host;
+		proxy_set_header X-Real-IP $${EMPTY}remote_addr;
+		proxy_set_header X-Forwarded-For $${EMPTY}proxy_add_x_forwarded_for;
+		proxy_set_header Connection "";
+	}
+
+	location /api/ {
+		auth_basic "Auth Required";
+		auth_basic_user_file ${INSTALL_DIR}/htpasswd;
+
+		proxy_pass http://localhost:8001/;
+		proxy_set_header X-Real-IP $${EMPTY}remote_addr;
+		proxy_set_header X-Forwarded-For $${EMPTY}proxy_add_x_forwarded_for;
+	}
+
+	location /api/ws/ {
+		auth_basic "Auth Required";
+		auth_basic_user_file ${INSTALL_DIR}/htpasswd;
+
+		proxy_pass http://localhost:8001/ws/;
+		proxy_set_header X-Real-IP $${EMPTY}remote_addr;
+		proxy_set_header X-Forwarded-For $${EMPTY}proxy_add_x_forwarded_for;
+
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $${EMPTY}http_upgrade;
+		proxy_set_header Connection $${EMPTY}connection_upgrade;
+
+		proxy_buffering off;
+	}
+
+}
+
+map $${EMPTY}http_upgrade $${EMPTY}connection_upgrade {
+	default upgrade;
+	'' close;
+}

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+BASENAME=`basename $0`
+
+if [ $# -ne 1 ]; then
+	echo "usage: ${BASENAME} <prof_file>"
+	exit 1
+fi
+
+FILE=$1
+
+exec python -m pstats $FILE

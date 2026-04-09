@@ -1,0 +1,4 @@
+#!/bin/bash
+
+cd ../
+exec ./hathor-cli gen_rand_tx http://localhost:8080 $@

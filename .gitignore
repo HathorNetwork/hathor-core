@@ -1,0 +1,32 @@
+.DS_Store
+
+__pycache__/
+*.py[cod]
+
+*.swp
+
+docs/_build/
+
+.coverage*
+cover/
+/coverage*
+
+.mypy_cache
+.dmypy.json
+.pytest_cache
+
+extras/docker/_build/
+extras/docker/envvars
+
+/build/
+/dist/
+/requirements.txt
+*.egg-info
+
+# Nix
+.direnv/
+
+keys.json
+
+# Pycharm
+.idea

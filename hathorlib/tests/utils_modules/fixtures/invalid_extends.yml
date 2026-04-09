@@ -1,0 +1,6 @@
+extends: ./unknown_file.yml
+
+a: aa
+b:
+  d: dd
+  e: ee
