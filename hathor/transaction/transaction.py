@@ -219,6 +219,16 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             json['nc_address'] = get_address_b58_from_bytes(nano_header.nc_address)
             json['nc_context'] = nano_header.get_context().to_json()
 
+        if self.has_fees():
+            fee_header = self.get_fee_header()
+            json['fees'] = [
+                {
+                    'token_uid': fee.token_uid.hex(),
+                    'amount': fee.amount,
+                }
+                for fee in fee_header.get_fees()
+            ]
+
         return json
 
     def to_json_extended(self) -> dict[str, Any]:
