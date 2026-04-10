@@ -18,7 +18,7 @@ import unittest
 
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCInvalidAction
 from hathorlib.nanocontracts.types import (
-    HATHOR_TOKEN_UID,
+    NC_HTR_TOKEN_UID,
     Amount,
     BlueprintId,
     ContractId,
@@ -102,10 +102,10 @@ class TestNCActions(unittest.TestCase):
 
     def test_authority_action_htr_token_forbidden(self) -> None:
         with self.assertRaises(NCInvalidAction):
-            NCGrantAuthorityAction(token_uid=TokenUid(HATHOR_TOKEN_UID), mint=True, melt=False)
+            NCGrantAuthorityAction(token_uid=NC_HTR_TOKEN_UID, mint=True, melt=False)
 
         with self.assertRaises(NCInvalidAction):
-            NCAcquireAuthorityAction(token_uid=TokenUid(HATHOR_TOKEN_UID), mint=True, melt=False)
+            NCAcquireAuthorityAction(token_uid=NC_HTR_TOKEN_UID, mint=True, melt=False)
 
 
 class TestCustomTypes(unittest.TestCase):
