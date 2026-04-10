@@ -38,14 +38,13 @@ packages = [
 hathor-cli = 'hathor_cli.main:main'
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "~7.1.1"
-isort = {version = "~5.13.2", extras = ["colors"]}
 mypy = {version = "^1.19.1", markers = "implementation_name == 'cpython'"}
 mypy-zope = {version = "^1.0.14", markers = "implementation_name == 'cpython'"}
 pytest = "~8.3.2"
 pytest-cov = "~5.0.0"
 flaky = "~3.8.1"
 pytest-xdist = "~3.6.1"
+ruff = "~0.15.5"
 yamllint = "~1.35.1"
 # stubs:
 types-requests = "=2.28.11.4"
@@ -90,13 +89,26 @@ packaging = "=26.0"
 [tool.poetry.extras]
 sentry = ["sentry-sdk", "structlog-sentry"]
 
-[tool.isort]
-combine_as_imports = true
-default_section = "THIRDPARTY"
-include_trailing_comma = true
-known_first_party = "hathor,hathor_tests"
-line_length = 119
-multi_line_output = 3
+[tool.ruff]
+line-length = 119
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E731"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["hathor", "hathor_tests", "hathorlib"]
+
+[tool.ruff.lint.per-file-ignores]
+"hathor/__init__.py" = ["F401"]
+"hathor/_openapi/register.py" = ["F401"]
+"hathor/event/websocket/protocol.py" = ["E701"]
+"hathor/nanocontracts/exception.py" = ["I001"]
+"hathor/nanocontracts/storage/__init__.py" = ["I001"]
+"hathor/nanocontracts/storage/backends.py" = ["I001"]
+"hathor/nanocontracts/storage/factory.py" = ["I001"]
 
 [tool.mypy]
 pretty = true
