@@ -178,6 +178,10 @@ class RunNode:
         parser.add_argument('--nc-exec-logs', default=NCLogConfig.NONE, choices=possible_nc_exec_logs,
                             help=f'Enable saving Nano Contracts execution logs. One of {possible_nc_exec_logs}')
         parser.add_argument('--nc-exec-fail-trace', action='store_true', help=SUPPRESS)
+        parser.add_argument('--x-nc-sync-check', type=int, nargs='?', const=0, default=None,
+                            help='Enable NC state comparison check during block sync.'
+                            ' Optionally specify a starting block height (default: 0, checks all blocks). '
+                            'Useful to combine with `--nc-exec-fail-trace`.')
         return parser
 
     def prepare(self, *, register_resources: bool = True) -> None:
