@@ -377,6 +377,21 @@ class HathorSettings(BaseModel):
     # Number max of connections in the p2p network
     PEER_MAX_CONNECTIONS: int = 125
 
+    # Max Number of each connection slot (int):
+    # Note that the sum is 124 < 125.
+    # Reason: We must leave always ONE protocol space for 
+    # the rebound slot. Otherwise, if the whole net is flooded
+    # (Incoming, Outgoing, Discovered, Check), we'll not be 
+    # able to analyze queued entrypoints.
+
+    P2P_PEER_MAX_INCOMING_CONNECTIONS: int = 50
+    P2P_PEER_MAX_OUTGOING_CONNECTIONS: int = 59
+    P2P_PEER_MAX_DISCOVERED_PEERS_CONNECTIONS: int = 10
+    P2P_PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
+
+    # Maximum number of entrypoints in check_entrypoints queue.
+    P2P_QUEUE_SIZE: int = 100
+
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 

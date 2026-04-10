@@ -61,11 +61,13 @@ class FakeConnection:
         addr1: IPv4Address | IPv6Address | None = None,
         addr2: IPv4Address | IPv6Address | None = None,
         fake_bootstrap_id: PeerId | None | Literal[False] = False,
+        fresh_entrypoints: bool = False
     ):
         """
         :param: latency: Latency between nodes in seconds
         :fake_bootstrap_id: when False, bootstrap mode is disabled. When a PeerId or None are passed, bootstrap mode is
             enabled and the value is used as the connection's entrypoint.peer_id
+        :fresh_entrypoints: When True, force protocols to have entrypoint from the get-go.
         """
         self.log = logger.new()
         self._fake_bootstrap_id = fake_bootstrap_id
@@ -85,6 +87,8 @@ class FakeConnection:
         self.addr1 = addr1 or IPv4Address('TCP', '127.0.0.1', self._get_port(manager1))
         # manager2's address, the client, where manager2 will connect from
         self.addr2 = addr2 or IPv4Address('TCP', '127.0.0.1', self._get_port(manager2))
+
+        self.fresh_entrypoints = fresh_entrypoints
 
         self.reconnect()
 
@@ -273,7 +277,17 @@ class FakeConnection:
         self._buf2.clear()
 
         self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
-        self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+        if self.fresh_entrypoints:
+            self._proto1.entrypoint = PeerAddress.from_address(self.addr2).with_id(self.manager1.my_peer.id)
+
+        # If in bootstrap mode, now we instantiate the Discovery Factory.
+        if self._fake_bootstrap_id is False:
+            self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+        elif self._fake_bootstrap_id or self._fake_bootstrap_id is None:
+            self._proto2 = self.manager2.connections.discovered_factory.buildProtocol(self.addr1)
+
+        if self.fresh_entrypoints:
+            self._proto2.entrypoint = self.entrypoint
 
         # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls
         # connect_to_endpoint()
