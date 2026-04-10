@@ -46,8 +46,6 @@ if TYPE_CHECKING:
 logger = get_logger()
 cpu = get_cpu_profiler()
 
-_base_transaction_log = logger.new()
-
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class ConsensusEvent:

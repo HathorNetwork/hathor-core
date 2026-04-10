@@ -174,10 +174,7 @@ class Runner:
         # Check seqnum.
         nano_header = tx.get_nano_header()
 
-        if nano_header.is_creating_a_new_contract():
-            contract_id = ContractId(VertexId(tx.hash))
-        else:
-            contract_id = ContractId(VertexId(nano_header.nc_id))
+        contract_id = nano_header.get_contract_id()
 
         assert nano_header.nc_seqnum >= 0
         current_seqnum = self.block_storage.get_address_seqnum(Address(nano_header.nc_address))
