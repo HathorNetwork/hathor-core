@@ -21,8 +21,8 @@ import hashlib
 import importlib.util
 import sys
 import traceback
-from types import ModuleType
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Callable
 
 from hathorlib.nanocontracts import Blueprint, Context, NanoRuntimeVersion, NCFail, Runner, RunnerFactory
