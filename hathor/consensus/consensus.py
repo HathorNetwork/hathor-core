@@ -462,6 +462,8 @@ class ConsensusAlgorithm:
                     pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
+                    | Feature.FAILED_FEE_TOKENS
+                    | Feature.FAILED_OPCODES_V2
                     | Feature.NOP_FEATURE_1
                     | Feature.NOP_FEATURE_2
                     | Feature.NOP_FEATURE_3
