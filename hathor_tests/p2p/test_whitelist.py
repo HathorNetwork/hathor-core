@@ -5,7 +5,6 @@ from twisted.python.failure import Failure
 from twisted.web.client import Agent
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
 from hathor.p2p.manager import WHITELIST_REQUEST_TIMEOUT
 from hathor.p2p.sync_version import SyncVersion
@@ -16,7 +15,7 @@ from hathor_tests import unittest
 class WhitelistTestCase(unittest.TestCase):
     def test_whitelist_no_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings().model_copy(update={'ENABLE_PEER_WHITELIST': True})
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -38,7 +37,7 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_no(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings().model_copy(update={'ENABLE_PEER_WHITELIST': True})
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -62,7 +61,7 @@ class WhitelistTestCase(unittest.TestCase):
 
     def test_whitelist_yes_yes(self) -> None:
         network = 'testnet'
-        self._settings = get_global_settings()._replace(ENABLE_PEER_WHITELIST=True)
+        self._settings = get_global_settings().model_copy(update={'ENABLE_PEER_WHITELIST': True})
 
         manager1 = self.create_peer(network)
         self.assertEqual(manager1.connections.get_enabled_sync_versions(), {SyncVersion.V2})
@@ -90,7 +89,7 @@ class WhitelistTestCase(unittest.TestCase):
         manager: HathorManager = self.create_peer(network)
         connections_manager = manager.connections
 
-        settings_mock = Mock(spec_set=HathorSettings)
+        settings_mock = Mock()
         settings_mock.WHITELIST_URL = 'some_url'
         connections_manager._settings = settings_mock
 

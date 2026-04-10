@@ -4,7 +4,6 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
@@ -81,14 +80,11 @@ class NCConsensusTestCase(SimulatorTestCase):
         super().setUp()
 
         self.myblueprint_id = b'x' * 32
-        self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
-        })
         self.nc_seqnum = 0
 
         self.manager = self.simulator.create_peer()
         self.manager.allow_mining_without_peers()
-        self.manager.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(self.myblueprint_id, MyBlueprint)
 
         self.wallet = self.manager.wallet
 

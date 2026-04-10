@@ -28,6 +28,7 @@ from twisted.internet.defer import Deferred
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
+from hathor.nanocontracts.storage import get_block_storage_from_block
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
@@ -52,14 +53,12 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.vertex_children import VertexChildrenService
 from hathor.types import VertexId
+from hathorlib.token_info import TokenDescription
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
-    from hathor.nanocontracts import OnChainBlueprint
-    from hathor.nanocontracts.blueprint import Blueprint
-    from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, NCStorageFactory
-    from hathor.nanocontracts.types import BlueprintId, ContractId
+    from hathor.nanocontracts.types import ContractId
     from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
 cpu = get_cpu_profiler()
@@ -95,7 +94,6 @@ class TransactionStorage(ABC):
     pubsub: Optional[PubSubManager]
     indexes: IndexesManager
     _latest_n_height_tips: list[HeightInfo]
-    nc_catalog: Optional['NCBlueprintCatalog'] = None
 
     log = get_logger()
 
@@ -574,6 +572,27 @@ class TransactionStorage(ABC):
             raise TokenCreationTransactionDoesNotExist(hash_bytes)
         return tx
 
+    def get_token_description(self, token_uid: bytes) -> Optional[TokenDescription]:
+        """Get the confirmed token description for `token_uid`.
+
+        :param token_uid: Unique token id to fetch.
+        :raises TransactionDoesNotExist: If the transaction with the given hash does not exist.
+        :raises TokenCreationTransactionDoesNotExist: If the transaction exists but is not a TokenCreationTransaction.
+        :return: The TokenCreationTransaction instance.
+        """
+        # Check the transaction storage for existing tokens
+        token_creation_tx = self.get_token_creation_transaction(token_uid)
+
+        if token_creation_tx.get_metadata().first_block is None:
+            return None
+
+        return TokenDescription(
+            token_version=token_creation_tx.token_version,
+            token_name=token_creation_tx.token_name,
+            token_symbol=token_creation_tx.token_symbol,
+            token_id=token_creation_tx.hash
+        )
+
     def get_block_by_height(self, height: int) -> Optional[Block]:
         """Return a block in the best blockchain from the height index. This is fast."""
         ancestor_hash = self.indexes.height.get(height)
@@ -1007,79 +1026,17 @@ class TransactionStorage(ABC):
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return a block storage for the given block."""
-        return self._nc_storage_factory.get_block_storage_from_block(block)
+        return get_block_storage_from_block(self._nc_storage_factory, block)
 
     def get_nc_storage(self, block: Block, contract_id: ContractId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
         from hathor.nanocontracts.types import ContractId, VertexId as NCVertexId
         if not block.is_genesis:
-            block_storage = self._nc_storage_factory.get_block_storage_from_block(block)
+            block_storage = get_block_storage_from_block(self._nc_storage_factory, block)
         else:
             block_storage = self._nc_storage_factory.get_empty_block_storage()
 
         return block_storage.get_contract_storage(ContractId(NCVertexId(contract_id)))
-
-    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
-        assert self.nc_catalog is not None
-
-        if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
-            return blueprint_class
-
-        self.log.debug(
-            'blueprint_id not in the catalog, looking for on-chain blueprint',
-            blueprint_id=blueprint_id.hex()
-        )
-        return self.get_on_chain_blueprint(blueprint_id)
-
-    def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
-        """Returns the source code associated with the given blueprint_id.
-
-        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
-        """
-        import inspect
-
-        from hathor.nanocontracts import OnChainBlueprint
-
-        blueprint = self._get_blueprint(blueprint_id)
-        if isinstance(blueprint, OnChainBlueprint):
-            return self.get_on_chain_blueprint(blueprint_id).code.text
-        else:
-            module = inspect.getmodule(blueprint)
-            assert module is not None
-            return inspect.getsource(module)
-
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
-        """Returns the blueprint class associated with the given blueprint_id.
-
-        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
-        """
-        from hathor.nanocontracts import OnChainBlueprint
-        blueprint = self._get_blueprint(blueprint_id)
-        if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
-        else:
-            return blueprint
-
-    def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
-        """Return an on-chain blueprint transaction."""
-        from hathor.nanocontracts import OnChainBlueprint
-        from hathor.nanocontracts.exception import (
-            BlueprintDoesNotExist,
-            OCBBlueprintNotConfirmed,
-            OCBInvalidBlueprintVertexType,
-        )
-        try:
-            blueprint_tx = self.get_transaction(blueprint_id)
-        except TransactionDoesNotExist:
-            self.log.debug('no transaction with the given id found', blueprint_id=blueprint_id.hex())
-            raise BlueprintDoesNotExist(blueprint_id.hex())
-        if not isinstance(blueprint_tx, OnChainBlueprint):
-            raise OCBInvalidBlueprintVertexType(blueprint_id.hex())
-        tx_meta = blueprint_tx.get_metadata()
-        if tx_meta.voided_by or not tx_meta.first_block:
-            raise OCBBlueprintNotConfirmed(blueprint_id.hex())
-        # XXX: maybe use N blocks confirmation, like reward-locks
-        return blueprint_tx
 
     @abstractmethod
     def migrate_vertex_children(self) -> None:

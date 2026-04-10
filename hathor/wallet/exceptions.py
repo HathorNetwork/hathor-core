@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from hathor.exception import HathorError
+from hathorlib.exceptions import InvalidAddress  # noqa: F401
 
 
 class HathorWalletError(HathorError):
@@ -58,9 +59,4 @@ class InvalidWords(HathorWalletError):
 
 class InputDuplicated(HathorWalletError):
     """User is trying to use same input more than one time
-    """
-
-
-class InvalidAddress(HathorWalletError):
-    """Address used in the wallet is invalid
     """

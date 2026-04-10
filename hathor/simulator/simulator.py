@@ -26,6 +26,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.p2p.peer import PrivatePeer
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
@@ -56,7 +57,9 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = get_global_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
+        self.settings = get_global_settings().model_copy(
+            update={"AVG_TIME_BETWEEN_BLOCKS": SIMULATOR_AVG_TIME_BETWEEN_BLOCKS}
+        )
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []
@@ -246,6 +249,7 @@ def _build_vertex_verifiers(
     daa: DifficultyAdjustmentAlgorithm,
     feature_service: FeatureService,
     tx_storage: TransactionStorage,
+    blueprint_service: BlueprintService,
 ) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
@@ -257,4 +261,5 @@ def _build_vertex_verifiers(
         daa=daa,
         feature_service=feature_service,
         tx_storage=tx_storage,
+        blueprint_service=blueprint_service,
     )

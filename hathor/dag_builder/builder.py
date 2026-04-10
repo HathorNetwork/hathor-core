@@ -88,14 +88,13 @@ class DAGBuilder:
         blueprints_module: ModuleType | None = None
     ) -> DAGBuilder:
         """Create a DAGBuilder instance from a HathorManager instance."""
-        assert manager.tx_storage.nc_catalog
         return DAGBuilder(
             settings=manager._settings,
             daa=manager.daa,
             genesis_wallet=initialize_hd_wallet(genesis_words),
             wallet_factory=wallet_factory,
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),
-            nc_catalog=manager.tx_storage.nc_catalog,
+            nc_catalog=manager.blueprint_service.nc_catalog,
             blueprints_module=blueprints_module,
         )
 

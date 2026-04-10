@@ -1,7 +1,16 @@
-# Copyright (c) Hathor Labs and its affiliates.
+# Copyright 2026 Hathor Labs
 #
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import json
 import re
 from typing import Any, Dict, List, NamedTuple, Optional, cast
@@ -172,7 +181,8 @@ class HathorClient:
 
         tx = tx_or_block_from_bytes(raw)
 
-        if tx.is_block:
+        is_block = tx.is_block
+        if is_block:
             data = {'hexdata': raw.hex()}
             resp = await self._session.post(self._get_url('submit_block'), json=data)
         else:
@@ -187,4 +197,13 @@ class HathorClient:
 
         json = await resp.json()
 
-        return cast(bool, json['result'])
+        if is_block:
+            return cast(bool, json['result'])
+
+        # /push_tx returns {'success': bool, 'message': str}
+        success = json.get('success', False)
+        if not success:
+            message = json.get('message', 'Unknown error')
+            self.log.error('Error pushing tx', message=message)
+            raise PushTxFailed(message)
+        return True

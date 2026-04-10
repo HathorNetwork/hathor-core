@@ -1,11 +1,10 @@
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.fields.container import INIT_NC_TYPE, KEY_SEPARATOR
-from hathor.nanocontracts.fields.deque_container import _METADATA_NC_TYPE as METADATA_NC_TYPE
 from hathor.nanocontracts.nc_types import StrNCType, VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.nanocontracts.fields.deque_container import _METADATA_NC_TYPE as METADATA_NC_TYPE
 
 INT_NC_TYPE = VarInt32NCType()
 STR_NC_TYPE = StrNCType()
@@ -68,7 +67,7 @@ class TestNestedContainers(unittest.TestCase):
         self.bp2 = b'2' * 32
         self.bp3 = b'3' * 32
         self.bp4 = b'4' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
+        self.manager.blueprint_service.register_blueprints({
             self.bp1: DictOfDictBlueprint,
             self.bp2: ListOfDictBlueprint,
             self.bp3: DictListDictBlueprint,

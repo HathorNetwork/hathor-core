@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import re
 import struct
-from math import ceil, floor
 from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from hathor.transaction.exceptions import InvalidFeeAmount, InvalidOutputValue, TransactionDataError
+from hathorlib.utils import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount  # noqa: F401
 
 if TYPE_CHECKING:
     from hathor import TokenUid
@@ -54,14 +54,6 @@ def unpack(fmt: str, buf: bytes | memoryview) -> tuple[Any, bytes | memoryview]:
 def unpack_len(n: int, buf: bytes | memoryview) -> tuple[bytes, bytes | memoryview]:
     ret = buf[:n] if isinstance(buf, bytes) else bytes(buf[:n])
     return ret, buf[n:]
-
-
-def get_deposit_token_deposit_amount(settings: HathorSettings, mint_amount: int) -> int:
-    return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
-
-
-def get_deposit_token_withdraw_amount(settings: HathorSettings, melt_amount: int) -> int:
-    return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
 
 
 def clean_token_string(string: str) -> str:

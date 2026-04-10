@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -19,6 +20,7 @@ class _BaseTest:
                 daa=daa,
                 feature_service=Mock(),
                 tx_storage=Mock(),
+                blueprint_service=Mock(),
             )
             self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 
@@ -41,7 +43,7 @@ class _BaseTest:
             self.assertEqual(key, 'version')
 
             tx_version = TxVersion(version)
-            self.assertEqual(tx_version.get_cls(), cls)
+            self.assertEqual(get_cls_from_tx_version(tx_version), cls)
             self.assertEqual(bytes(tx), self.tx_bytes)
 
 

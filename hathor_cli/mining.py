@@ -142,6 +142,7 @@ def execute(args: Namespace) -> None:
             from hathor.verification.vertex_verifiers import VertexVerifiers
             from hathor.feature_activation.utils import Features
             from hathor.transaction.scripts.opcode import OpcodesVersion
+            from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
             settings = get_global_settings()
             daa = DifficultyAdjustmentAlgorithm(settings=settings)
             verification_params = VerificationParams(nc_block_root_id=None, features=Features(
@@ -149,6 +150,7 @@ def execute(args: Namespace) -> None:
                 nanocontracts=False,
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V2,
+                nano_runtime_version=NanoRuntimeVersion.V2,
             ))
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),
@@ -156,6 +158,7 @@ def execute(args: Namespace) -> None:
                 daa=daa,
                 feature_service=Mock(),
                 tx_storage=Mock(),
+                blueprint_service=Mock(),
             )
             verification_service = VerificationService(settings=settings, verifiers=verifiers)
             verification_service.verify_without_storage(block, verification_params)

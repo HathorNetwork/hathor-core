@@ -2,30 +2,41 @@ from typing import Any
 
 from hathor.conf.settings import HathorSettings
 from hathor.manager import HathorManager
-from hathor.nanocontracts import Blueprint, NCRocksDBStorageFactory
+from hathor.nanocontracts import Blueprint, Context, NCRocksDBStorageFactory
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.method import Method
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.nanocontracts.nc_exec_logs import NCExecEntry, NCLogConfig
-from hathor.nanocontracts.runner import Runner
-from hathor.nanocontracts.storage import NCBlockStorage
+from hathor.nanocontracts.runner import CallInfo, Runner
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
 from hathor.nanocontracts.storage.backends import RocksDBNodeTrieStore
+from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.storage.patricia_trie import PatriciaTrie
+from hathor.nanocontracts.types import BlueprintId, ContractId, NCArgs, TokenUid
 from hathor.nanocontracts.utils import sign_pycoin
 from hathor.reactor import ReactorProtocol
 from hathor.transaction import Transaction
 from hathor.transaction.headers.nano_header import NanoHeader, NanoHeaderAction
-from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
+from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
+from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
 
 
-class TestRunner(Runner):
+class TestRunner:
+    """Limited test-facing wrapper around `Runner`."""
+
     __test__ = False
+    MAX_RECURSION_DEPTH = Runner.MAX_RECURSION_DEPTH
+    MAX_CALL_COUNTER = Runner.MAX_CALL_COUNTER
 
     def __init__(
         self,
         *,
-        tx_storage: TransactionStorage,
+        runtime_version: NanoRuntimeVersion,
+        tx_storage: NCTransactionStorageProtocol,
+        blueprint_service: BlueprintService,
         settings: HathorSettings,
         reactor: ReactorProtocol,
         seed: bytes | None = None,
@@ -37,14 +48,69 @@ class TestRunner(Runner):
         store = RocksDBNodeTrieStore(tx_storage._rocksdb_storage)
         block_trie = PatriciaTrie(store)
         block_storage = NCBlockStorage(block_trie)
-        super().__init__(
+        self._runner: Runner = Runner(
+            runtime_version=runtime_version,
             tx_storage=tx_storage,
+            blueprint_service=blueprint_service,
             storage_factory=storage_factory,
             block_storage=block_storage,
             settings=settings,
             reactor=reactor,
             seed=seed,
         )
+
+    def create_contract(
+        self,
+        contract_id: ContractId,
+        blueprint_id: BlueprintId,
+        ctx: Context,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        return self._runner.create_contract(contract_id, blueprint_id, ctx, *args, **kwargs)
+
+    def create_contract_with_nc_args(
+        self,
+        contract_id: ContractId,
+        blueprint_id: BlueprintId,
+        ctx: Context,
+        nc_args: NCArgs,
+    ) -> Any:
+        return self._runner.create_contract_with_nc_args(contract_id, blueprint_id, ctx, nc_args)
+
+    def call_public_method(
+        self,
+        contract_id: ContractId,
+        method_name: str,
+        ctx: Context,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        return self._runner.call_public_method(contract_id, method_name, ctx, *args, **kwargs)
+
+    def call_public_method_with_nc_args(
+        self,
+        contract_id: ContractId,
+        method_name: str,
+        ctx: Context,
+        nc_args: NCArgs,
+    ) -> Any:
+        return self._runner.call_public_method_with_nc_args(contract_id, method_name, ctx, nc_args)
+
+    def call_view_method(self, contract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
+        return self._runner.call_view_method(contract_id, method_name, *args, **kwargs)
+
+    def get_current_balance(self, contract_id: ContractId, token_uid: TokenUid | None) -> Balance:
+        return self._runner.get_current_balance(contract_id, token_uid)
+
+    def get_last_call_info(self) -> CallInfo:
+        return self._runner.get_last_call_info()
+
+    def get_storage(self, contract_id: ContractId) -> NCContractStorage:
+        return self._runner.get_storage(contract_id)
+
+    def has_contract_been_initialized(self, contract_id: ContractId) -> bool:
+        return self._runner.has_contract_been_initialized(contract_id)
 
 
 def get_nc_failure_entry(*, manager: HathorManager, tx_id: VertexId, block_id: VertexId) -> NCExecEntry:

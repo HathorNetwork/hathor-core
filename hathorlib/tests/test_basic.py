@@ -1,14 +1,21 @@
-"""
-Copyright (c) Hathor Labs and its affiliates.
-
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
-"""
+# Copyright 2026 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 
 from hathorlib import Block, TokenCreationTransaction, Transaction
-from hathorlib.base_transaction import tx_or_block_from_bytes
+from hathorlib.base_transaction import get_cls_from_tx_version, tx_or_block_from_bytes
 from hathorlib.conf import HathorSettings
 from hathorlib.scripts import create_output_script
 from hathorlib.utils import decode_address
@@ -257,9 +264,9 @@ class HathorCommonsTestCase(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_cls_from_tx_version(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_cls_from_tx_version(version), Transaction)
 
         # test serialization doesn't mess up with signal_bits and version
         data = bytes.fromhex('f00001ffffffe8b789180000001976a9147fd4ae0e4fb2d2854e76d359029d8078bb9'

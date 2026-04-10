@@ -1,9 +1,16 @@
-"""
-Copyright (c) Hathor Labs and its affiliates.
-
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
-"""
+# Copyright 2026 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -65,19 +72,50 @@ class ClientTestCase(IsolatedAsyncioTestCase):
                 self.status = 200
 
             async def json(self):
-                return {"result": "success"}
+                return {"success": True, "message": ""}
 
         self.client._session = Mock()
         self.client._session.post = AsyncMock(return_value=MockResponse())
 
         # Execution
-        await self.client.push_tx_or_block(data)
+        result = await self.client.push_tx_or_block(data)
 
         # Assertion
+        self.assertTrue(result)
         self.client._session.post.assert_called_once_with(
             'v1a/push_tx',
             json={'hex_tx': hex}
         )
+
+    async def test_push_transaction_failed(self) -> None:
+        # Preparation
+        hex = ('0001000102000001e0e88216036e4e52872ba60a96df7570c3e29cc30eda6dd92ea0fd'
+               '304c00006a4730450221009fa4798bb69f66035013063c13f1a970ec58111bcead277d'
+               '9c93e45c2b6885fe022012e039b26cc4a4cb0a8a5abb7deb7bb78610ed362bf422efa2'
+               '47db37c5a841e12102bc1213ea99ab55effcff760f94c09f8b1a0b7b990c01128d06b4'
+               'a8c5c5f41f8400089f0800001976a91438fb3bc92b76819e9c19ef7c079d327c8fcd19'
+               '9288ac02de2d3800001976a9148d880c42ddcf78a2da5d06558f13515508720b4088ac'
+               '403518509c63f9195ecfd7d40200001ea9d6e1d31da6893fcec594dc3fa8b6819ae126'
+               '8c190f7a1441302226e2000007d1c5add7b9085037cfc591f1008dff4fe8a9158fd1a4'
+               '840a6dd5d4e4e600d2da8d')
+
+        data = bytes.fromhex(hex)
+
+        class MockResponse:
+            def __init__(self):
+                self.status = 200
+
+            async def json(self):
+                return {"success": False, "message": "Transaction is invalid"}
+
+        self.client._session = Mock()
+        self.client._session.post = AsyncMock(return_value=MockResponse())
+
+        # Execution
+        with self.assertRaises(PushTxFailed) as context:
+            await self.client.push_tx_or_block(data)
+
+        self.assertIn('Transaction is invalid', str(context.exception))
 
     async def test_push_tx_or_block_error(self) -> None:
         # Preparation

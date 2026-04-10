@@ -12,31 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Type
-
-from hathor.nanocontracts.blueprints import _blueprints_mapper
-from hathor.nanocontracts.types import BlueprintId
-
-if TYPE_CHECKING:
-    from hathor.conf.settings import HathorSettings
-    from hathor.nanocontracts.blueprint import Blueprint
-
-
-class NCBlueprintCatalog:
-    """Catalog of blueprints available."""
-
-    def __init__(self, blueprints: dict[bytes, Type['Blueprint']]) -> None:
-        self.blueprints = blueprints
-
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> Type['Blueprint'] | None:
-        """Return the blueprint class related to the given blueprint id or None if it doesn't exist."""
-        return self.blueprints.get(blueprint_id, None)
-
-
-def generate_catalog_from_settings(settings: 'HathorSettings') -> NCBlueprintCatalog:
-    """Generate a catalog of blueprints based on the provided settings."""
-    assert settings.ENABLE_NANO_CONTRACTS
-    blueprints: dict[bytes, Type['Blueprint']] = {}
-    for _id, _name in settings.BLUEPRINTS.items():
-        blueprints[_id] = _blueprints_mapper[_name]
-    return NCBlueprintCatalog(blueprints)
+# Re-export from hathorlib for backward compatibility
+from hathorlib.nanocontracts.catalog import NCBlueprintCatalog  # noqa: F401

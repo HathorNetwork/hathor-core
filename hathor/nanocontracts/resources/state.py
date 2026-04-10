@@ -134,7 +134,7 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
 
         value: Any
         # Get balances.
@@ -249,9 +249,9 @@ class NCStateParams(QueryParams):
     fields: list[str] = Field(alias='fields[]', default_factory=list)
     balances: list[str] = Field(alias='balances[]', default_factory=list)
     calls: list[str] = Field(alias='calls[]', default_factory=list)
-    block_hash: Optional[str]
-    block_height: Optional[int]
-    timestamp: Optional[int]
+    block_hash: Optional[str] = None
+    block_height: Optional[int] = None
+    timestamp: Optional[int] = None
 
 
 class NCValueSuccessResponse(Response):

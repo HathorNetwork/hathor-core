@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-from enum import IntEnum
 from struct import error as StructError, pack
 from typing import Tuple
 
@@ -21,24 +20,15 @@ from hathorlib.base_transaction import TxInput, TxOutput
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import TransactionDataError
 from hathorlib.scripts import DataScript
+from hathorlib.token_info import TokenVersion
 from hathorlib.transaction import Transaction
 from hathorlib.utils import clean_token_string, int_to_bytes, unpack, unpack_len
-
-settings = HathorSettings()
 
 # Signal bits (B), version (B), inputs len (B), outputs len (B)
 _FUNDS_FORMAT_STRING = '!BBBB'
 
 # Signal bist (B), version (B), inputs len (B), outputs len (B)
 _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
-
-
-# used when (de)serializing token information
-# version 1 is the default behavior
-class TokenVersion(IntEnum):
-    NATIVE = 0
-    DEPOSIT = 1
-    FEE = 2
 
 
 class TokenCreationTransaction(Transaction):
@@ -198,6 +188,7 @@ class TokenCreationTransaction(Transaction):
     def verify_token_info(self) -> None:
         """ Validates token info
         """
+        settings = HathorSettings()
         name_len = len(self.token_name)
         symbol_len = len(self.token_symbol)
         if name_len == 0 or name_len > settings.MAX_LENGTH_TOKEN_NAME:

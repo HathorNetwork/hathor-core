@@ -30,10 +30,10 @@ from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
 from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
-from hathor.transaction.base_transaction import int_to_bytes
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
+from hathor.transaction.util import int_to_bytes
 from hathor.types import AddressB58, Amount, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 

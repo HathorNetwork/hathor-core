@@ -66,7 +66,7 @@ class EventResource(Resource):
 
 
 class GetEventsParams(QueryParams):
-    last_ack_event_id: Optional[NonNegativeInt]
+    last_ack_event_id: Optional[NonNegativeInt] = None
     size: int = Field(default=EVENT_API_DEFAULT_BATCH_SIZE, ge=0, le=EVENT_API_MAX_BATCH_SIZE)
 
 

@@ -16,7 +16,6 @@ from collections import deque
 from typing import cast
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
@@ -95,7 +94,7 @@ class TestDequeField(unittest.TestCase):
         self.manager = self.create_peer('unittests')
         self.bp_deque = b'1' * 32
         self.bp_list = b'2' * 32
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
+        self.manager.blueprint_service.register_blueprints({
             self.bp_deque: BlueprintWithDeque,
             self.bp_list: BlueprintWithList,
         })
