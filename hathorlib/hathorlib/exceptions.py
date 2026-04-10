@@ -20,6 +20,10 @@ class HathorError(Exception):
     pass
 
 
+class TransactionDoesNotExist(HathorError):
+    """You are trying to get a transaction that does not exist"""
+
+
 class InvalidAddress(HathorError):
     """Address is invalid"""
 
@@ -171,3 +175,107 @@ class TimeLocked(ScriptError):
 
 class PushTxFailed(HathorClientError):
     """An attempt to push a tx/block to the fullnode failed"""
+
+
+class InvalidFeeAmount(HathorError):
+    """Invalid fee amount"""
+
+
+class InvalidInputDataSize(TxValidationError):
+    """Input data is too big"""
+
+
+class TooFewInputs(TxValidationError):
+    """There are less inputs than the minimum required"""
+
+
+class InvalidScriptError(TxValidationError):
+    """Invalid script found when parsing"""
+
+
+class TooManySigOps(TxValidationError):
+    """Signature operations limit exceeded"""
+
+
+class TooManyHeaders(TxValidationError):
+    """Vertex has more vertex than the maximum allowed."""
+
+
+class HeaderNotSupported(TxValidationError):
+    """Vertex contains a header that is not supported by its type."""
+
+
+class ConflictWithConfirmedTxError(TxValidationError):
+    """Input has a conflict with a confirmed transaction."""
+
+
+class TooManyWithinConflicts(TxValidationError):
+    """Input has too many within conflicts already."""
+
+
+class TooManyBetweenConflicts(TxValidationError):
+    """Input has too many between conflicts already."""
+
+
+class InputVoidedAndConfirmed(TxValidationError):
+    """Input is spending from a voided transaction that has been confirmed by a block."""
+
+
+class InvalidOutputScriptSize(TxValidationError):
+    """Output's script's size is too big"""
+
+
+class BlockHeightError(TxValidationError):
+    """Block height is invalid."""
+
+
+class AuxPowNoMagicError(AuxPowError):
+    """Auxiliary Proof-of-work is not correct, magic number not found"""
+
+
+class AuxPowUnexpectedMagicError(AuxPowError):
+    """Auxiliary Proof-of-work is not correct, multiple magic numbers found"""
+
+
+class AuxPowLongMerklePathError(AuxPowError):
+    """Auxiliary Proof-of-work is not correct, merkle_path too long"""
+
+
+class PoaValidationError(TxValidationError):
+    """Block using invalid PoA signature"""
+
+
+class InvalidBlockReward(TxValidationError):
+    """Wrong amount of issued tokens"""
+
+
+class TooManyTokens(TxValidationError):
+    """Too many tokens."""
+
+
+class UnusedTokensError(TxValidationError):
+    """There are unused tokens in the transaction."""
+
+
+class InvalidVersionError(TxValidationError):
+    """Vertex version is invalid."""
+
+
+class CheckpointError(BlockError):
+    """Block hash does not match checkpoint hash for its height"""
+
+
+class BlockMustSignalError(BlockError):
+    """Block does not signal support for a feature during mandatory signaling."""
+
+
+class InvalidFeeHeader(TxValidationError):
+    """Invalid fee header"""
+
+
+class FeeHeaderTokenNotFound(InvalidFeeHeader):
+    """Token not found in the transaction tokens list"""
+
+
+class TokenNotFound(TxValidationError):
+    """Token not found."""

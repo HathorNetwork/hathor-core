@@ -17,7 +17,7 @@ All exceptions in this module MUST inherit from NCFail so they're
 correctly caught by the block consensus to fail NC transactions.
 """
 
-from hathorlib.exceptions import HathorError
+from hathorlib.exceptions import HathorError, TxValidationError
 
 
 class NCFail(HathorError):
@@ -195,3 +195,28 @@ class OCBOutOfMemoryDuringLoading(NCFail):
 class NCDisabledBuiltinError(NCFail):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """
+
+
+class NCTxValidationError(TxValidationError, NCFail):
+    pass
+
+
+class NCInvalidSignature(NCTxValidationError, NCFail):
+    pass
+
+
+class NCInvalidPubKey(NCTxValidationError, NCFail):
+    pass
+
+
+class NCInvalidSeqnum(NCTxValidationError, NCFail):
+    pass
+
+
+class NCMethodNotFound(NCTxValidationError):
+    """Raised when a method is not found in a nano contract."""
+    pass
+
+
+class NCInvalidMethodCall(NCTxValidationError):
+    """Raised when a contract calls another contract's invalid method."""

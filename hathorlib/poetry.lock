@@ -1518,10 +1518,9 @@ files = [
 name = "structlog"
 version = "22.3.0"
 description = "Structured Logging for Python"
-optional = true
+optional = false
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"client\""
 files = [
     {file = "structlog-22.3.0-py3-none-any.whl", hash = "sha256:b403f344f902b220648fa9f286a23c0cc5439a5844d271fec40562dbadbc70ad"},
     {file = "structlog-22.3.0.tar.gz", hash = "sha256:e7509391f215e4afb88b1b80fa3ea074be57a5a17d794bd436a5c949da023333"},
@@ -1773,9 +1772,9 @@ multidict = ">=4.0"
 propcache = ">=0.2.1"
 
 [extras]
-client = ["aiohttp", "structlog"]
+client = ["aiohttp"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<4"
-content-hash = "cb6fbc4ed90b7ea52a057875667cd77963ed45b6db27a8d51d9700d8029593ec"
+content-hash = "b79897e185ea1b54524fe7a1c3b146ba99452754e1fd333851925587688b4d1e"

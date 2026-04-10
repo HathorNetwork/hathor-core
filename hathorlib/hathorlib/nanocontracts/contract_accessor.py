@@ -20,8 +20,7 @@ from hathorlib.nanocontracts.faux_immutable import FauxImmutable, __set_faux_imm
 from hathorlib.nanocontracts.types import Amount, BlueprintId, ContractId, NCAction, NCFee, TokenUid
 
 if TYPE_CHECKING:
-    # XXX: Temporary lazy import from hathor
-    from hathor.nanocontracts.runner import Runner  # type: ignore[import-not-found]
+    from hathorlib.nanocontracts.runner import Runner
 
 
 @final
