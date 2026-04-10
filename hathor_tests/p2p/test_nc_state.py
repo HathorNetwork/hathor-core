@@ -1,3 +1,5 @@
+from typing import Any
+
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.states import ReadyState
 from hathor.simulator import FakeConnection
@@ -61,27 +63,35 @@ class NCStateTestCase(SimulatorTestCase):
         block_id = best_block1.hash
 
         # test simple GET-BLOCK-NC-ROOT-ID/BLOCK-NC-ROOT-ID
-        assert state1.peer_nc_block_root_id is None
-        assert state2.peer_nc_block_root_id is None
-        state1.send_get_block_nc_root_id(block_id)
-        state2.send_get_block_nc_root_id(block_id)
+        # send_get_block_nc_root_id now returns a Deferred[NodeId] directly
+        assert len(state1._pending_nc_block_root_ids) == 0
+        assert len(state2._pending_nc_block_root_ids) == 0
+        deferred1 = state1.send_get_block_nc_root_id(block_id)
+        deferred2 = state2.send_get_block_nc_root_id(block_id)
+        assert block_id in state1._pending_nc_block_root_ids
+        assert block_id in state2._pending_nc_block_root_ids
+        root_results: list[Any] = []
+        deferred1.addCallback(root_results.append)
+        deferred2.addCallback(root_results.append)
         self.simulator.run(5)
-        assert state1.peer_nc_block_root_id is not None
-        assert state2.peer_nc_block_root_id is not None
-        assert state1.peer_nc_block_root_id == state2.peer_nc_block_root_id
-        peer_block_id, peer_node_id = state1.peer_nc_block_root_id
-        assert peer_block_id == block_id
+        assert len(root_results) == 2
+        # Results are now NodeId directly (not tuples)
+        assert root_results[0] == root_results[1]
+        peer_node_id = root_results[0]
 
         # test simple GET-NC-DB-NODE/NC-DB-NODE
-        assert state1.peer_nc_node is None
-        assert state2.peer_nc_node is None
-        state1.send_get_nc_db_node(peer_node_id)
-        state2.send_get_nc_db_node(peer_node_id)
+        # send_get_nc_db_node now returns a Deferred[dict] directly
+        assert len(state1._pending_nc_db_nodes) == 0
+        assert len(state2._pending_nc_db_nodes) == 0
+        deferred3 = state1.send_get_nc_db_node(peer_node_id)
+        deferred4 = state2.send_get_nc_db_node(peer_node_id)
+        node_results: list[Any] = []
+        deferred3.addCallback(node_results.append)
+        deferred4.addCallback(node_results.append)
         self.simulator.run(5)
-        assert state1.peer_nc_node is not None
-        assert state2.peer_nc_node is not None
-        assert state1.peer_nc_node == state2.peer_nc_node
-        peer_node_data = state1.peer_nc_node
+        assert len(node_results) == 2
+        assert node_results[0] == node_results[1]
+        peer_node_data = node_results[0]
         # XXX: empty state is expected since there aren't any nano transactions
         expected_node_data = {
             'id': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',

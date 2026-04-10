@@ -193,6 +193,7 @@ class Builder:
 
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
+        self._nc_sync_check_start_height: int | None = None
 
         self._nc_storage_factory: NCStorageFactory | None = None
         self._nc_log_storage: NCLogStorage | None = None
@@ -481,13 +482,26 @@ class Builder:
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
         )
+        vertex_handler = self._get_or_create_vertex_handler()
         SyncSupportLevel.add_factories(
             self._get_or_create_settings(),
             self._p2p_manager,
             self._sync_v2_support,
             self._get_or_create_vertex_parser(),
-            self._get_or_create_vertex_handler(),
+            vertex_handler,
         )
+
+        if self._nc_sync_check_start_height is not None:
+            from hathor.nanocontracts.nc_sync_checker import NCSyncChecker
+            nc_sync_checker = NCSyncChecker(
+                tx_storage=self._get_or_create_tx_storage(),
+                p2p_manager=self._p2p_manager,
+                nc_storage_factory=self._get_or_create_nc_storage_factory(),
+                reactor=self._get_reactor(),
+                start_height=self._nc_sync_check_start_height,
+            )
+            vertex_handler.set_nc_sync_checker(nc_sync_checker)
+
         return self._p2p_manager
 
     def _get_or_create_indexes_manager(self) -> IndexesManager:
@@ -866,6 +880,11 @@ class Builder:
     def disable_ipv4(self) -> 'Builder':
         self.check_if_can_modify()
         self._disable_ipv4 = True
+        return self
+
+    def set_nc_sync_check_start_height(self, height: int) -> 'Builder':
+        self.check_if_can_modify()
+        self._nc_sync_check_start_height = height
         return self
 
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':

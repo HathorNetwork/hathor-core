@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from itertools import chain
-from typing import TYPE_CHECKING, Any, Iterable, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from structlog import get_logger
 
@@ -24,7 +24,6 @@ from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.utils import Features
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
@@ -35,8 +34,6 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 
 logger = get_logger()
-
-_base_transaction_log = logger.new()
 
 
 class BlockConsensusAlgorithm:
@@ -49,18 +46,11 @@ class BlockConsensusAlgorithm:
         block_executor: 'NCConsensusBlockExecutor',
         feature_service: 'FeatureService',
     ) -> None:
+        self.log = logger.new()
         self._settings = settings
         self.context = context
         self._block_executor = block_executor
         self.feature_service = feature_service
-
-    @classproperty
-    def log(cls) -> Any:
-        """ This is a workaround because of a bug on structlog (or abc).
-
-        See: https://github.com/hynek/structlog/issues/229
-        """
-        return _base_transaction_log
 
     def update_consensus(self, block: Block) -> None:
         assert self.context.nc_events is None

@@ -36,7 +36,6 @@ from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback
 from hathor.transaction.validation_state import ValidationState
 from hathor.types import TokenUid, TxOutputScript, VertexId
-from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 from hathorlib.base_transaction import TxVersion  # noqa: F401
 
@@ -106,8 +105,6 @@ def get_cls_from_tx_version(tx_version: TxVersion) -> type['BaseTransaction']:
         return cls
 
 
-_base_transaction_log = logger.new()
-
 StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covariant=True)
 
 
@@ -116,7 +113,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
                  'storage', '_settings', '_metadata', '_static_metadata', 'headers', 'name', 'MAX_NUM_INPUTS',
-                 'MAX_NUM_OUTPUTS', '__weakref__']
+                 'MAX_NUM_OUTPUTS', '__weakref__', 'log']
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -159,6 +156,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
+        self.log = logger.new()
         self._settings = settings or get_global_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
@@ -179,14 +177,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         self.MAX_NUM_INPUTS = self._settings.MAX_NUM_INPUTS
         self.MAX_NUM_OUTPUTS = self._settings.MAX_NUM_OUTPUTS
-
-    @classproperty
-    def log(cls):
-        """ This is a workaround because of a bug on structlog (or abc).
-
-        See: https://github.com/hynek/structlog/issues/229
-        """
-        return _base_transaction_log
 
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
         """ Used internally on __repr__ and __str__, returns a dict of `field_name: formatted_value`.

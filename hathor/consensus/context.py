@@ -17,8 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from structlog import get_logger
-
 from hathor.transaction import BaseTransaction, Block, Transaction
 
 if TYPE_CHECKING:
@@ -26,10 +24,6 @@ if TYPE_CHECKING:
     from hathor.consensus.consensus import ConsensusAlgorithm
     from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithm
     from hathor.nanocontracts.nc_exec_logs import NCEvent
-
-logger = get_logger()
-
-_base_transaction_log = logger.new()
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
