@@ -38,6 +38,7 @@ from hathorlib.utils.address import (  # noqa: F401
     get_hash160,
     get_public_key_bytes_compressed,
     get_public_key_from_bytes_compressed,
+    is_pubkey_compressed,
 )
 
 _BACKEND = default_backend()
@@ -81,17 +82,3 @@ def get_address_from_public_key_bytes(public_key_bytes):
     """
     public_key_hash = get_hash160(public_key_bytes)
     return get_address_from_public_key_hash(public_key_hash)
-
-
-def is_pubkey_compressed(pubkey: bytes) -> bool:
-    """ Receives a public key bytes and return True if in CompressedPoint format
-        This function will not test if this is a valid public key.
-        Only the byte that signals the format is tested.
-    """
-    if len(pubkey) == 0:
-        return False
-    # CompressedPoint encoding always starts with the bits "0000 001_"
-    # UncompressedPoint always starts with the bits "0000 0100"
-    # so testing if the first byte is 2 or 3 will make sure that this is an Unconpressed public key
-    # https://www.secg.org/sec1-v2.pdf [2.3.3 Elliptic-Curve-Point-to-Octet-String Conversion]
-    return pubkey[0] in [0x02, 0x03]

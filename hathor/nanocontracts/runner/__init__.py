@@ -12,8 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
-from hathor.nanocontracts.runner.runner import Runner
+from hathorlib.nanocontracts.runner import CallInfo, CallRecord, CallType, Runner
 
 __all__ = [
     'CallType',

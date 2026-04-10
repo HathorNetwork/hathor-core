@@ -59,7 +59,7 @@ class NanoRNG(FauxImmutable):
         size = (bits + 7) // 8
         ciphertext = self.randbytes(size)
         x = int.from_bytes(ciphertext, byteorder='little', signed=False)
-        return x % (2**bits)
+        return int(x % (2**bits))
 
     def randbelow(self, n: int) -> int:
         """Return a random integer in the range [0, n)."""
