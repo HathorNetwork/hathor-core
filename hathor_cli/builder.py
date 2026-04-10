@@ -326,6 +326,17 @@ class CliBuilder:
             log_vertex_bytes=self._args.log_vertex_bytes,
         )
 
+        if self._args.x_nc_sync_check is not None:
+            from hathor.nanocontracts.nc_sync_checker import NCSyncChecker
+            nc_sync_checker = NCSyncChecker(
+                tx_storage=tx_storage,
+                p2p_manager=p2p_manager,
+                nc_storage_factory=self.nc_storage_factory,
+                reactor=reactor,
+                start_height=self._args.x_nc_sync_check,
+            )
+            vertex_handler.set_nc_sync_checker(nc_sync_checker)
+
         SyncSupportLevel.add_factories(settings, p2p_manager, SyncSupportLevel.ENABLED, vertex_parser, vertex_handler)
 
         vertex_json_serializer = VertexJsonSerializer(

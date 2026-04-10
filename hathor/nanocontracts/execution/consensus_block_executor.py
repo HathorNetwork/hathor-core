@@ -46,8 +46,6 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-_base_transaction_log = logger.new()
-
 
 class NCConsensusBlockExecutor:
     """
@@ -82,10 +80,7 @@ class NCConsensusBlockExecutor:
         self._nc_storage_factory = nc_storage_factory
         self._nc_log_storage = nc_log_storage
         self._nc_exec_fail_trace = nc_exec_fail_trace
-
-    @property
-    def log(self) -> Any:
-        return _base_transaction_log
+        self.log = logger.new()
 
     def initialize_empty(self, block: Block, context: 'ConsensusAlgorithmContext') -> None:
         """Initialize a block with an empty contract trie."""

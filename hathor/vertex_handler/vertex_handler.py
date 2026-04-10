@@ -27,6 +27,7 @@ from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import Features
+from hathor.nanocontracts.nc_sync_checker import NCSyncChecker
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -52,6 +53,7 @@ class VertexHandler:
         '_pubsub',
         '_execution_manager',
         '_log_vertex_bytes',
+        '_nc_sync_checker',
     )
 
     def __init__(
@@ -77,6 +79,10 @@ class VertexHandler:
         self._pubsub = pubsub
         self._execution_manager = execution_manager
         self._log_vertex_bytes = log_vertex_bytes
+        self._nc_sync_checker: NCSyncChecker | None = None
+
+    def set_nc_sync_checker(self, checker: NCSyncChecker) -> None:
+        self._nc_sync_checker = checker
 
     @cpu.profiler('on_new_block')
     @inlineCallbacks
@@ -108,6 +114,9 @@ class VertexHandler:
         if not self._tx_storage.transaction_exists(block.hash):
             if not self._old_on_new_vertex(block, params):
                 return False
+
+        if self._nc_sync_checker is not None:
+            yield self._nc_sync_checker.check_block(block)
 
         return True
 

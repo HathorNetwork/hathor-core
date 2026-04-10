@@ -16,6 +16,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
 from structlog import get_logger
+from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 
 from hathor.conf.settings import HathorSettings
@@ -76,9 +77,9 @@ class ReadyState(BaseState):
         # The last blocks from the best blockchain in the peer
         self.peer_best_blockchain: list[HeightInfo] = []
 
-        # The last nc-state received
-        self.peer_nc_block_root_id: tuple[VertexId, NodeId] | None = None
-        self.peer_nc_node: dict[str, Any] | None = None
+        # Pending nc-state request deferreds (carry their result when resolved)
+        self._pending_nc_block_root_ids: dict[VertexId, Deferred[NodeId]] = {}
+        self._pending_nc_db_nodes: dict[NodeId, Deferred[dict[str, Any]]] = {}
 
         self.cmd_map.update({
             # p2p control messages
@@ -306,11 +307,17 @@ class ReadyState(BaseState):
             return
         self.peer_best_blockchain = best_blockchain
 
-    def send_get_block_nc_root_id(self, block_hash: VertexId) -> None:
-        """ Send a GET-NC-DB-NODE command requesting a node with a given node-id.
+    def send_get_block_nc_root_id(self, block_hash: VertexId) -> Deferred[NodeId]:
+        """ Send a GET-BLOCK-NC-ROOT-ID command requesting the NC root-id for a given block hash.
         """
+        if deferred := self._pending_nc_block_root_ids.get(block_hash):
+            assert not deferred.called
+            return deferred
+        deferred = Deferred()
+        self._pending_nc_block_root_ids[block_hash] = deferred
         payload = block_hash.hex()
         self.send_message(ProtocolMessages.GET_BLOCK_NC_ROOT_ID, payload)
+        return deferred
 
     def handle_get_block_nc_root_id(self, payload: str) -> None:
         """ Handle a GET-BLOCK-NC-ROOT-ID command by returning the root_id of a given block hash.
@@ -337,38 +344,59 @@ class ReadyState(BaseState):
         self.send_message(ProtocolMessages.BLOCK_NC_ROOT_ID, payload)
 
     def handle_block_nc_root_id(self, payload: str) -> None:
-        """ Handle a BLOCK-NC-ROOT-ID command, to be implemented in the future, for now just logs the response.
+        """ Handle a BLOCK-NC-ROOT-ID response by resolving the pending deferred.
         """
         payload_list = payload.split(maxsplit=1)
         if len(payload_list) != 2:
             self.protocol.send_error_and_close_connection('Invalid BLOCK-NC-ROOT-ID received (missing data).')
             return
+
         block_hash_payload, nc_root_id_payload = payload_list
         try:
             block_hash = bytes.fromhex(block_hash_payload)
         except ValueError:
             self.protocol.send_error_and_close_connection('Invalid block-hash received (not hex).')
             return
+
         if len(block_hash) != 32:
             self.protocol.send_error_and_close_connection('Invalid block-hash received (bad size).')
             return
-        block_id: VertexId = VertexId(block_hash)
+
+        block_id = VertexId(block_hash)
+        if block_id not in self._pending_nc_block_root_ids:
+            self.protocol.send_error_and_close_connection('Unexpected BLOCK-NC-ROOT-ID.')
+            return
+
+        deferred = self._pending_nc_block_root_ids.pop(block_id)
         try:
             nc_root_id: NodeId = NodeId(bytes.fromhex(nc_root_id_payload))
         except ValueError:
-            self.protocol.send_error_and_close_connection('Invalid root-id received (not hex)')
+            self._errback_nc_block_root_id(deferred, 'Invalid root-id received (not hex)')
             return
-        if len(nc_root_id) != 32:
-            self.protocol.send_error_and_close_connection('Invalid root-id received (bad size)')
-            return
-        self.peer_nc_block_root_id = (block_id, nc_root_id)
-        self.log.info('response received', block_id=block_id.hex(), nc_root_id=nc_root_id.hex())
 
-    def send_get_nc_db_node(self, node_id: NodeId) -> None:
+        if len(nc_root_id) != 32:
+            self._errback_nc_block_root_id(deferred, 'Invalid root-id received (bad size)')
+            return
+
+        self.log.debug('response received', block_id=block_id.hex(), nc_root_id=nc_root_id.hex())
+        deferred.callback(nc_root_id)
+
+    def _errback_nc_block_root_id(self, deferred: Deferred[NodeId], reason: str) -> None:
+        """Errback the pending deferred and close the connection."""
+        deferred.errback(Exception(reason))
+        self.protocol.send_error_and_close_connection(reason)
+
+    def send_get_nc_db_node(self, node_id: NodeId) -> Deferred[dict[str, Any]]:
         """ Send a GET-NC-DB-NODE command requesting a node with a given node-id.
         """
+        if deferred := self._pending_nc_db_nodes.get(node_id):
+            assert not deferred.called
+            return deferred
+        deferred = Deferred()
+        self._pending_nc_db_nodes[node_id] = deferred
         payload = node_id.hex()
         self.send_message(ProtocolMessages.GET_NC_DB_NODE, payload)
+        return deferred
 
     def handle_get_nc_db_node(self, payload: str) -> None:
         """ Handle a GET-NC-DB-NODE command by returning the storage Node of a given NodeId.
@@ -401,12 +429,29 @@ class ReadyState(BaseState):
         self.send_message(ProtocolMessages.NC_DB_NODE, json_dumps(data))
 
     def handle_nc_db_node(self, payload: str) -> None:
-        """ Handle a NC-DB-NODE command, to be implemented in the future, for now just logs the response.
+        """ Handle a NC-DB-NODE response by resolving the pending deferred.
         """
         try:
             nc_db_node_data = json_loads(payload)
         except ValueError:  # works for JSONDecodeError too
             self.protocol.send_error_and_close_connection('invalid nc-db-node received (not a json)')
             return
-        self.peer_nc_node = nc_db_node_data
-        self.log.info('response received', nc_node=nc_db_node_data)
+
+        node_id_hex = nc_db_node_data.get('id')
+        if node_id_hex is None:
+            self.protocol.send_error_and_close_connection('invalid nc-db-node received (missing node id)')
+            return
+
+        try:
+            node_id = NodeId(bytes.fromhex(node_id_hex))
+        except (ValueError, TypeError):
+            self.protocol.send_error_and_close_connection('invalid nc-db-node received (bad node id)')
+            return
+
+        deferred = self._pending_nc_db_nodes.pop(node_id, None)
+        if deferred is None:
+            self.protocol.send_error_and_close_connection('unexpected nc-db-node')
+            return
+
+        self.log.debug('response received', nc_node=nc_db_node_data)
+        deferred.callback(nc_db_node_data)
