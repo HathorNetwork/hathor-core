@@ -137,7 +137,7 @@ class BlueprintService:
         blueprint: type[Blueprint],
         *,
         strict: bool = False,
-        blueprint_version: BlueprintVersion = BlueprintVersion.V1,  # TODO: Change to V2 after all tests are updated
+        blueprint_version: BlueprintVersion | None = None
     ) -> None:
         """Register a single blueprint in the catalog."""
         self.nc_catalog.register_blueprints(
@@ -148,5 +148,4 @@ class BlueprintService:
 
     def register_blueprints(self, blueprints: dict[bytes, type[Blueprint]], *, strict: bool = False) -> None:
         """Register multiple blueprints in the catalog."""
-        # TODO: Change to V2 after all tests are updated
-        self.nc_catalog.register_blueprints(blueprints, strict=strict, blueprint_version=BlueprintVersion.V1)
+        self.nc_catalog.register_blueprints(blueprints, strict=strict)

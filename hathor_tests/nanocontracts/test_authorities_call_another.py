@@ -29,7 +29,8 @@ class CalleeBlueprint(Blueprint):
 
     @public(allow_grant_authority=True, allow_acquire_authority=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def revoke_from_self(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
@@ -50,11 +51,14 @@ class CallerBlueprint(Blueprint):
 
     @public(allow_grant_authority=True)
     def initialize(self, ctx: Context, other_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.other_id = other_id
 
     @public(allow_grant_authority=True, allow_reentrancy=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def grant_to_other(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
@@ -63,6 +67,8 @@ class CallerBlueprint(Blueprint):
 
     @public(allow_grant_authority=True, allow_reentrancy=True)
     def revoke_from_self(self, ctx: Context, token_uid: TokenUid, mint: bool, melt: bool) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.revoke_authorities(token_uid, revoke_mint=mint, revoke_melt=melt)
 
     @public
@@ -91,6 +97,8 @@ class CallerBlueprint(Blueprint):
 
     @public(allow_grant_authority=True)
     def call_revoke_all_from_other(self, ctx: Context, token_uid: TokenUid) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         assert self.syscall.can_mint(token_uid)
         assert self.syscall.can_melt(token_uid)
         self.syscall.get_contract(self.other_id, blueprint_id=None).public().revoke_all_from_other(

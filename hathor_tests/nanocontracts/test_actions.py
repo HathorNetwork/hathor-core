@@ -40,7 +40,8 @@ from hathor_tests.nanocontracts.utils import assert_nc_failure_reason, set_nano_
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_actions=[
         NCActionType.DEPOSIT,
@@ -49,7 +50,8 @@ class MyBlueprint(Blueprint):
         NCActionType.ACQUIRE_AUTHORITY,
     ])
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def revoke(self, ctx: Context, token_uid: TokenUid, revoke_mint: bool, revoke_melt: bool) -> None:
@@ -57,10 +59,14 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.mint_tokens(token_uid, amount)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def melt(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.melt_tokens(token_uid, amount)
 
 

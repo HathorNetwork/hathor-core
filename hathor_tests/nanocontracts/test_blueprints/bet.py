@@ -18,7 +18,6 @@ from hathor import (
     Address,
     Blueprint,
     Context,
-    NCAction,
     NCDepositAction,
     NCFail,
     NCWithdrawalAction,
@@ -35,19 +34,11 @@ Result: TypeAlias = str
 Amount: TypeAlias = int
 
 
-class InvalidToken(NCFail):
-    pass
-
-
 class ResultAlreadySet(NCFail):
     pass
 
 
 class ResultNotAvailable(NCFail):
-    pass
-
-
-class TooManyActions(NCFail):
     pass
 
 
@@ -110,8 +101,6 @@ class Bet(Blueprint):
     @public
     def initialize(self, ctx: Context, oracle_script: TxOutputScript, token_uid: TokenUid,
                    date_last_bet: Timestamp) -> None:
-        if len(ctx.actions) != 0:
-            raise NCFail('must be a single call')
         self.bets_total = {}
         self.bets_address = {}
         self.address_details = {}
@@ -137,28 +126,13 @@ class Bet(Blueprint):
         if not self.has_result():
             raise ResultNotAvailable
 
-    def fail_if_invalid_token(self, action: NCAction) -> None:
-        """Fail the execution if the token is invalid."""
-        if action.token_uid != self.token_uid:
-            token1 = self.token_uid.hex() if self.token_uid else None
-            token2 = action.token_uid.hex() if action.token_uid else None
-            raise InvalidToken(f'invalid token ({token1} != {token2})')
-
-    def _get_action(self, ctx: Context) -> NCAction:
-        """Return the only action available; fails otherwise."""
-        if len(ctx.actions) != 1:
-            raise TooManyActions('only one token supported')
-        if self.token_uid not in ctx.actions:
-            raise InvalidToken(f'token different from {self.token_uid.hex()}')
-        return ctx.get_single_action(self.token_uid)
-
     @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
-        action = self._get_action(ctx)
+        action = ctx.get_single_action(self.token_uid)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         self.fail_if_result_is_available()
-        self.fail_if_invalid_token(action)
         if ctx.block.timestamp > self.date_last_bet:
             raise TooLate(f'cannot place bets after {self.date_last_bet}')
         amount = Amount(action.amount)
@@ -189,10 +163,10 @@ class Bet(Blueprint):
     @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
         """Withdraw tokens after the final result is set."""
-        action = self._get_action(ctx)
+        action = ctx.get_single_action(self.token_uid)
+        ctx.authorize(action)
         assert isinstance(action, NCWithdrawalAction)
         self.fail_if_result_is_not_available()
-        self.fail_if_invalid_token(action)
         caller_address = ctx.get_caller_address()
         assert caller_address is not None
         address = Address(caller_address)

@@ -76,7 +76,7 @@ class BlueprintTestCase(unittest.TestCase):
         blueprint_class: type[Blueprint],
         blueprint_id: BlueprintId | None = None,
         *,
-        blueprint_version: BlueprintVersion = BlueprintVersion.V1,  # TODO: Change to V2 after all tests are updated
+        blueprint_version: BlueprintVersion | None = None,
     ) -> BlueprintId:
         """Register a blueprint class with an optional id, allowing contracts to be created from it."""
         if blueprint_id is None:

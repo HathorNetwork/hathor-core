@@ -24,10 +24,13 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True, allow_withdrawal=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_withdrawal=True)
     def create_deposit_token(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.create_deposit_token(
             token_name='deposit-based token',
             token_symbol='DBT',
@@ -36,7 +39,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
 
 class TokenCreationTestCase(BlueprintTestCase):

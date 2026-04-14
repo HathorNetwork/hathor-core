@@ -33,6 +33,8 @@ class TokenCreatorBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def create_and_withdraw_token(self, ctx: Context, amount: Amount) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.create_deposit_token(
             token_name='deposit-based token',
             token_symbol='DBT',
@@ -47,8 +49,10 @@ class WithdrawFromCreatorBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def create_token_in_another_contract(self, ctx: Context, creator_id: ContractId) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         creator = self.syscall.get_contract(creator_id, blueprint_id=None)
-        creator.public(*ctx.actions_list).create_and_withdraw_token(1000)
+        creator.public(*ctx.all_actions).create_and_withdraw_token(1000)
 
 
 class TokenCreation3TestCase(BlueprintTestCase):

@@ -39,11 +39,13 @@ class FlashLoan(Blueprint):
 
     @public(allow_withdrawal=True)
     def withdrawal(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_deposit=True, allow_reentrancy=True)
     def deposit(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def call(self, ctx: Context, contract_id: ContractId, method_name: str, amount: Amount) -> None:
@@ -70,12 +72,14 @@ class UseFlashLoan(Blueprint):
     @public(allow_deposit=True)
     def nop(self, ctx: Context, loan_id: ContractId) -> None:
         action = ctx.get_single_action(HATHOR_TOKEN_UID)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         assert action.amount == self.syscall.get_current_balance(HATHOR_TOKEN_UID)
 
     @public(allow_deposit=True)
     def nop_payback(self, ctx: Context, loan_id: ContractId) -> None:
         action = ctx.get_single_action(HATHOR_TOKEN_UID)
+        ctx.authorize(action)
         assert isinstance(action, NCDepositAction)
         assert action.amount == self.syscall.get_current_balance(action.token_uid)
 
