@@ -606,7 +606,8 @@ class VertexExporter:
 
     def _get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
         """Get a blueprint class from the catalog or from our own on-chain blueprints."""
-        if blueprint_class := self._nc_catalog.get_blueprint_class(blueprint_id):
+        if blueprint_and_version := self._nc_catalog.get_blueprint_class_and_version(blueprint_id):
+            blueprint_class, _ = blueprint_and_version
             return blueprint_class
         ocb = self._vertice_per_id.get(blueprint_id)
         if ocb is None or not isinstance(ocb, OnChainBlueprint):

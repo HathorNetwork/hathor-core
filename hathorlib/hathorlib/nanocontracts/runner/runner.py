@@ -90,6 +90,7 @@ from hathorlib.nanocontracts.utils import (
     is_nc_public_method,
     is_nc_view_method,
 )
+from hathorlib.nanocontracts.versions import BlueprintVersion
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import clean_token_string
 from hathorlib.utils.token_validation import validate_fee_amount, validate_token_name_and_symbol
@@ -595,7 +596,7 @@ class Runner:
 
         self._validate_context(ctx)
         changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        blueprint, blueprint_version = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
         called_method_name: str = method_name
@@ -648,7 +649,8 @@ class Runner:
         # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
         # impact the original context. Since the runner relies on the context for other critical checks, any
         # unauthorized modification would pose a serious security risk.
-        ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
+        ctx = ctx.__prepare_for_new_runner_call__(blueprint_version)
+        ret = self._metered_executor.call(method, args=(ctx, *args))
 
         # All calls must end with non-negative balances.
         call_record.changes_tracker.validate_balances_are_positive()
@@ -770,7 +772,7 @@ class Runner:
             self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
         changes_tracker = self._create_changes_tracker(contract_id)
-        blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
+        blueprint, _ = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
         if method is None:
@@ -1083,7 +1085,7 @@ class Runner:
 
     def _validate_context(self, ctx: Context) -> None:
         """Check whether the context is valid."""
-        for token_uid, actions in ctx.actions.items():
+        for token_uid, actions in ctx.__actions_by_token__.items():
             for action in actions:
                 if token_uid != action.token_uid:
                     raise NCInvalidContext('token_uid mismatch')
@@ -1106,17 +1108,21 @@ class Runner:
         allowed_actions: set[NCActionType] = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
         assert isinstance(allowed_actions, set)
 
-        for actions in ctx.actions.values():
+        for actions in ctx.__actions_by_token__.values():
             for action in actions:
                 if action.type not in allowed_actions:
                     raise NCForbiddenAction(f'action {action.name} is forbidden on method `{method_name}`')
 
-    def _create_blueprint_instance(self, blueprint_id: BlueprintId, changes_tracker: NCChangesTracker) -> Blueprint:
+    def _create_blueprint_instance(
+        self,
+        blueprint_id: BlueprintId,
+        changes_tracker: NCChangesTracker,
+    ) -> tuple[Blueprint, BlueprintVersion]:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
-        return blueprint_class(env)
+        blueprint_class, version = self.blueprint_service.get_blueprint_class_and_version(blueprint_id)
+        return blueprint_class(env), version
 
     @_forbid_syscall_from_view('create_deposit_token')
     def syscall_create_child_deposit_token(

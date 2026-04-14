@@ -14,12 +14,14 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import (
@@ -30,6 +32,7 @@ from hathor.nanocontracts.exception import (
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathorlib.nanocontracts.types import BlueprintId
+from hathorlib.nanocontracts.versions import BlueprintVersion
 
 if TYPE_CHECKING:
     from hathor import Blueprint
@@ -77,44 +80,73 @@ class BlueprintService:
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
         """
-        from hathor.nanocontracts import OnChainBlueprint
-        blueprint = self._get_blueprint(blueprint_id)
-        if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
-        else:
-            return blueprint
+        blueprint, _ = self.get_blueprint_class_and_version(blueprint_id)
+        return blueprint
+
+    def get_blueprint_class_and_version(self, blueprint_id: BlueprintId) -> tuple[type[Blueprint], BlueprintVersion]:
+        if blueprint_and_version := self.nc_catalog.get_blueprint_class_and_version(blueprint_id):
+            return blueprint_and_version
+        return self._get_ocb_class_and_version(blueprint_id)
 
     def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
         """Returns the source code associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
         """
-        import inspect
+        if source := self._get_builtin_blueprint_source(blueprint_id):
+            return source
+        return self._get_ocb_source(blueprint_id)
 
-        from hathor.nanocontracts import OnChainBlueprint
-
-        blueprint = self._get_blueprint(blueprint_id)
-        if isinstance(blueprint, OnChainBlueprint):
-            return self.get_on_chain_blueprint(blueprint_id).code.text
-        else:
-            module = inspect.getmodule(blueprint)
+    def _get_builtin_blueprint_source(self, blueprint_id: BlueprintId) -> str | None:
+        if blueprint_and_version := self.nc_catalog.get_blueprint_class_and_version(blueprint_id):
+            blueprint_class, _ = blueprint_and_version
+            module = inspect.getmodule(blueprint_class)
             assert module is not None
             return inspect.getsource(module)
 
-    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
-        if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
-            return blueprint_class
+        return None
 
-        self.log.debug(
-            'blueprint_id not in the catalog, looking for on-chain blueprint',
-            blueprint_id=blueprint_id.hex()
+    def _get_ocb_class_and_version(self, blueprint_id: BlueprintId) -> tuple[type[Blueprint], BlueprintVersion]:
+        ocb = self.get_on_chain_blueprint(blueprint_id)
+        first_block_hash = ocb.get_metadata().first_block
+        assert first_block_hash is not None
+        first_block = self.tx_storage.get_block(first_block_hash)
+        first_block_parent = first_block.get_block_parent()
+
+        # We get the feature state of the first_block's parent instead of the OCB transaction itself (which
+        # would use the closest ancestor block), so we don't depend on block rewards being spent by miners.
+        # This is safe to do here because the OCB class is by definition only available after it is confirmed,
+        # and also because a change of first_block can only be caused by a reorg, which would re-execute all
+        # nanos that depend on this Blueprint anyway.
+        # Considering BlueprintVersion.V2 for example, this means that OCBs deployed before its activation date can be
+        # confirmed by either V1 or V2 blocks, but OCBs deployed after the activation date are guaranteed to be V2.
+        features = Features.from_vertex(
+            settings=self.settings,
+            feature_service=self.feature_service,
+            vertex=first_block_parent,
         )
-        return self.get_on_chain_blueprint(blueprint_id)
+        return ocb.get_blueprint_class(), features.blueprint_version
 
-    def register_blueprint(self, blueprint_id: bytes, blueprint: type[Blueprint], *, strict: bool = False) -> None:
+    def _get_ocb_source(self, blueprint_id: BlueprintId) -> str:
+        ocb = self.get_on_chain_blueprint(blueprint_id)
+        return ocb.code.text
+
+    def register_blueprint(
+        self,
+        blueprint_id: bytes,
+        blueprint: type[Blueprint],
+        *,
+        strict: bool = False,
+        blueprint_version: BlueprintVersion = BlueprintVersion.V1,  # TODO: Change to V2 after all tests are updated
+    ) -> None:
         """Register a single blueprint in the catalog."""
-        self.nc_catalog.register_blueprints({blueprint_id: blueprint}, strict=strict)
+        self.nc_catalog.register_blueprints(
+            {blueprint_id: blueprint},
+            strict=strict,
+            blueprint_version=blueprint_version,
+        )
 
     def register_blueprints(self, blueprints: dict[bytes, type[Blueprint]], *, strict: bool = False) -> None:
         """Register multiple blueprints in the catalog."""
-        self.nc_catalog.register_blueprints(blueprints, strict=strict)
+        # TODO: Change to V2 after all tests are updated
+        self.nc_catalog.register_blueprints(blueprints, strict=strict, blueprint_version=BlueprintVersion.V1)

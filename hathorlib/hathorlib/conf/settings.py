@@ -523,6 +523,9 @@ class HathorSettings(BaseModel):
     # Used to enable Nano Runtime V2.
     ENABLE_NANO_RUNTIME_V2: FeatureSetting = FeatureSetting.DISABLED
 
+    # Used to enable Blueprint V2.
+    ENABLE_BLUEPRINT_V2: FeatureSetting = FeatureSetting.DISABLED
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}
 

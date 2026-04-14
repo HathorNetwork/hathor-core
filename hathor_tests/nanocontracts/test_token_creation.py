@@ -14,6 +14,7 @@ from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathorlib.nanocontracts.versions import BlueprintVersion
 
 settings = HathorSettings()
 
@@ -149,7 +150,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 
-        jkl_context = JKL.get_nano_header().get_context()
+        jkl_context = JKL.get_nano_header().get_context(BlueprintVersion.V1)
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
         assert jkl_context.actions[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
 

@@ -23,12 +23,12 @@ from typing import TYPE_CHECKING, Iterator
 
 from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathorlib.nanocontracts.runner.runner import MAX_SEQNUM_JUMP_SIZE
 from hathorlib.nanocontracts.types import Address, BlueprintId, ContractId, NCRawArgs, VertexId
+from hathorlib.nanocontracts.versions import NanoRuntimeVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -173,7 +173,7 @@ class NCBlockExecutor:
 
         nc_sorted_calls = self._nc_calls_sorter(block, nc_calls) if nc_calls else []
         block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)
-        features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
+        features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=parent)
 
         yield NCBeginBlock(
             block=block,

@@ -19,7 +19,6 @@ from structlog import get_logger
 from twisted.internet.defer import Deferred, inlineCallbacks
 
 from hathor.feature_activation.utils import Features
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.p2p.sync_v2.exception import (
     InvalidVertexError,
     StreamingError,
@@ -32,6 +31,7 @@ from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.types import VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.nanocontracts.versions import BlueprintVersion, NanoRuntimeVersion
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -63,6 +63,7 @@ class TransactionStreamingClient:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
                 nano_runtime_version=NanoRuntimeVersion.V1,
+                blueprint_version=BlueprintVersion.V1,
             )
         )
 
