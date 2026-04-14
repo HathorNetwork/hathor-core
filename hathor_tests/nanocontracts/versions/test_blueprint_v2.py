@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import re
 import textwrap
 
 import pytest
@@ -32,7 +33,14 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
 from hathorlib.conf.settings import FeatureSetting
 from hathorlib.nanocontracts.exception import NCFail
-from hathorlib.nanocontracts.types import NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
+from hathorlib.nanocontracts.types import (
+    BlueprintId,
+    ContractId,
+    NCActionType,
+    NCDepositAction,
+    NCWithdrawalAction,
+    TokenUid,
+)
 from hathorlib.nanocontracts.versions import BlueprintVersion
 
 TOKEN_UID1 = TokenUid(b'\x01')
@@ -59,27 +67,98 @@ class MyBlueprint(Blueprint):
         }
 
     @public(allow_deposit=True, allow_withdrawal=True)
-    def get_actions_by_token(self, ctx: Context) -> None:
+    def get_actions_by_token(self, ctx: Context, is_v2: bool) -> None:
         assert ctx.actions_by_token == {
             TOKEN_UID1: (ACTION_11, ACTION_12),
             TOKEN_UID2: (ACTION_21,),
         }
+        if is_v2:
+            for action in ctx.all_actions:
+                ctx.authorize(action)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def get_actions_list(self, ctx: Context) -> None:
         assert ctx.actions_list == (ACTION_11, ACTION_12, ACTION_21)
 
     @public(allow_deposit=True, allow_withdrawal=True)
-    def get_all_actions(self, ctx: Context) -> None:
+    def get_all_actions(self, ctx: Context, is_v2: bool) -> None:
         assert ctx.all_actions == (ACTION_11, ACTION_12, ACTION_21)
+        if is_v2:
+            for action in ctx.all_actions:
+                ctx.authorize(action)
 
     @public(allow_deposit=True, allow_withdrawal=True)
-    def get_single_action(self, ctx: Context) -> None:
+    def get_single_action(self, ctx: Context, is_v2: bool) -> None:
         ctx.get_single_action(TOKEN_UID1)
+        if is_v2:
+            for action in ctx.all_actions:
+                ctx.authorize(action)
 
     @public(allow_deposit=True, allow_withdrawal=True)
-    def get_token_single_action(self, ctx: Context) -> None:
+    def get_token_single_action(self, ctx: Context, is_v2: bool) -> None:
         ctx.get_token_single_action(TOKEN_UID1)
+        if is_v2:
+            for action in ctx.all_actions:
+                ctx.authorize(action)
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def try_authorize(self, ctx: Context) -> None:
+        ctx.authorize(ctx.actions_list[0])
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def try_is_authorized(self, ctx: Context) -> None:
+        ctx.is_authorized(ctx.actions_list[0])
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def authorize_all(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def duplicate_authorize(self, ctx: Context) -> None:
+        action = ctx.all_actions[0]
+        ctx.authorize(action)
+        ctx.authorize(action)
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def check_is_authorized(self, ctx: Context) -> None:
+        action = ctx.all_actions[0]
+        assert not ctx.is_authorized(action)
+        ctx.authorize(action)
+        assert ctx.is_authorized(action)
+        for action in ctx.all_actions[1:]:
+            ctx.authorize(action)
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def no_authorize(self, ctx: Context) -> None:
+        pass
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def partial_authorize(self, ctx: Context) -> None:
+        assert len(ctx.all_actions) > 1
+        ctx.authorize(ctx.all_actions[0])
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def call_another_no_no(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=self.syscall.get_blueprint_id())
+        contract.public(*ctx.all_actions).no_authorize()
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def call_another_no_all(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=self.syscall.get_blueprint_id())
+        contract.public(*ctx.all_actions).authorize_all()
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def call_another_all_no(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=self.syscall.get_blueprint_id())
+        self.authorize_all(ctx)
+        contract.public(*ctx.all_actions).no_authorize()
+
+    @public(allow_deposit=True, allow_withdrawal=True)
+    def call_another_all_all(self, ctx: Context, other_id: ContractId) -> None:
+        contract = self.syscall.get_contract(other_id, blueprint_id=self.syscall.get_blueprint_id())
+        self.authorize_all(ctx)
+        contract.public(*ctx.all_actions).authorize_all()
 
 
 class TestBlueprintV2(BlueprintTestCase):
@@ -91,9 +170,10 @@ class TestBlueprintV2(BlueprintTestCase):
         blueprint_id = self._register_blueprint_class(MyBlueprint, blueprint_version=BlueprintVersion.V1)
         self.runner.create_contract(self.contract_id, blueprint_id, self.create_context())
 
-    def _create_contract_v2(self) -> None:
+    def _create_contract_v2(self) -> BlueprintId:
         blueprint_id = self._register_blueprint_class(MyBlueprint, blueprint_version=BlueprintVersion.V2)
         self.runner.create_contract(self.contract_id, blueprint_id, self.create_context())
+        return blueprint_id
 
     def test_get_blueprint_version_v1(self) -> None:
         self._create_contract_v1()
@@ -118,12 +198,14 @@ class TestBlueprintV2(BlueprintTestCase):
     def test_get_actions_by_token_v1(self) -> None:
         self._create_contract_v1()
         with pytest.raises(NCFail, match='`Context.actions_by_token` is not supported yet.'):
-            self.runner.call_public_method(self.contract_id, 'get_actions_by_token', self.create_context())
+            self.runner.call_public_method(
+                self.contract_id, 'get_actions_by_token', self.create_context(), is_v2=False
+            )
 
     def test_get_actions_by_token_v2(self) -> None:
         self._create_contract_v2()
         ctx = self.create_context(actions=[ACTION_11, ACTION_12, ACTION_21])
-        self.runner.call_public_method(self.contract_id, 'get_actions_by_token', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_actions_by_token', ctx, is_v2=True)
 
     def test_get_actions_list_v1(self) -> None:
         self._create_contract_v1()
@@ -139,80 +221,147 @@ class TestBlueprintV2(BlueprintTestCase):
     def test_get_all_actions_v1(self) -> None:
         self._create_contract_v1()
         with pytest.raises(NCFail, match='`Context.all_actions` is not supported yet.'):
-            self.runner.call_public_method(self.contract_id, 'get_all_actions', self.create_context())
+            self.runner.call_public_method(self.contract_id, 'get_all_actions', self.create_context(), is_v2=False)
 
     def test_get_all_actions_v2(self) -> None:
         self._create_contract_v2()
         ctx = self.create_context(actions=[ACTION_11, ACTION_12, ACTION_21])
-        self.runner.call_public_method(self.contract_id, 'get_all_actions', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_all_actions', ctx, is_v2=True)
 
     def test_get_single_action_v1(self) -> None:
         self._create_contract_v1()
 
         # no actions
         with pytest.raises(NCFail, match='expected exactly 1 action for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_single_action', self.create_context())
+            self.runner.call_public_method(self.contract_id, 'get_single_action', self.create_context(), is_v2=False)
 
         # multiple actions on one token
         ctx = self.create_context(actions=[ACTION_11, ACTION_12])
         with pytest.raises(NCFail, match='expected exactly 1 action for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_single_action', ctx)
+            self.runner.call_public_method(self.contract_id, 'get_single_action', ctx, is_v2=False)
 
         # single action on one token
         # this passes, which is the behavior that is changed in V2 (see `test_get_single_action_v2` below)
         ctx = self.create_context(actions=[ACTION_11, ACTION_21])
-        self.runner.call_public_method(self.contract_id, 'get_single_action', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_single_action', ctx, is_v2=False)
 
         # single action on whole context
         ctx = self.create_context(actions=[ACTION_11])
-        self.runner.call_public_method(self.contract_id, 'get_single_action', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_single_action', ctx, is_v2=False)
 
     def test_get_single_action_v2(self) -> None:
         self._create_contract_v2()
 
         # no actions
         with pytest.raises(NCFail, match='expected exactly 1 action in the whole Context, for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_single_action', self.create_context())
+            self.runner.call_public_method(self.contract_id, 'get_single_action', self.create_context(), is_v2=True)
 
         # multiple actions on one token
         ctx = self.create_context(actions=[ACTION_11, ACTION_12])
         with pytest.raises(NCFail, match='expected exactly 1 action in the whole Context, for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_single_action', ctx)
+            self.runner.call_public_method(self.contract_id, 'get_single_action', ctx, is_v2=True)
 
         # single action on one token
         ctx = self.create_context(actions=[ACTION_11, ACTION_21])
         with pytest.raises(NCFail, match='expected exactly 1 action in the whole Context, for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_single_action', ctx)
+            self.runner.call_public_method(self.contract_id, 'get_single_action', ctx, is_v2=True)
 
         # single action on whole context
         ctx = self.create_context(actions=[ACTION_11])
-        self.runner.call_public_method(self.contract_id, 'get_single_action', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_single_action', ctx, is_v2=True)
 
     def test_get_token_single_action_v1(self) -> None:
         self._create_contract_v1()
         with pytest.raises(NCFail, match='`Context.get_token_single_action` is not supported yet.'):
-            self.runner.call_public_method(self.contract_id, 'get_token_single_action', self.create_context())
+            self.runner.call_public_method(
+                self.contract_id, 'get_token_single_action', self.create_context(), is_v2=False
+            )
 
     def test_get_token_single_action_v2(self) -> None:
         self._create_contract_v2()
 
         # no actions
         with pytest.raises(NCFail, match='expected exactly 1 action for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_token_single_action', self.create_context())
+            self.runner.call_public_method(
+                self.contract_id, 'get_token_single_action', self.create_context(), is_v2=True
+            )
 
         # multiple actions on one token
         ctx = self.create_context(actions=[ACTION_11, ACTION_12])
         with pytest.raises(NCFail, match='expected exactly 1 action for token 01'):
-            self.runner.call_public_method(self.contract_id, 'get_token_single_action', ctx)
+            self.runner.call_public_method(self.contract_id, 'get_token_single_action', ctx, is_v2=True)
 
         # single action on one token
         # this passes, which mimics the legacy behavior (V1) of `get_single_action`
         ctx = self.create_context(actions=[ACTION_11, ACTION_21])
-        self.runner.call_public_method(self.contract_id, 'get_token_single_action', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_token_single_action', ctx, is_v2=True)
 
         # single action on whole context
         ctx = self.create_context(actions=[ACTION_11])
-        self.runner.call_public_method(self.contract_id, 'get_token_single_action', ctx)
+        self.runner.call_public_method(self.contract_id, 'get_token_single_action', ctx, is_v2=True)
+
+    def test_action_authorization_v1(self) -> None:
+        self._create_contract_v1()
+
+        # test `authorize()` is not supported
+        ctx = self.create_context(actions=[ACTION_11])
+        with pytest.raises(NCFail, match=re.escape('`Context.authorize` is not supported yet.')):
+            self.runner.call_public_method(self.contract_id, 'try_authorize', ctx)
+
+        # test `is_authorized()` is not supported
+        ctx = self.create_context(actions=[ACTION_11])
+        with pytest.raises(NCFail, match=re.escape('`Context.is_authorized` is not supported yet.')):
+            self.runner.call_public_method(self.contract_id, 'try_is_authorized', ctx)
+
+        # test that V1 doesn't need authorization
+        ctx = self.create_context(actions=[ACTION_11])
+        self.runner.call_public_method(self.contract_id, 'no_authorize', ctx)
+
+    def test_action_authorization_v2(self) -> None:
+        self._create_contract_v2()
+
+        # test duplicate authorization
+        ctx = self.create_context(actions=[ACTION_11])
+        msg = re.escape("action is already authorized: NCDepositAction(token_uid=b'\\x01', amount=100)")
+        with pytest.raises(NCFail, match=msg):
+            self.runner.call_public_method(self.contract_id, 'duplicate_authorize', ctx)
+
+        # test `is_authorized()` returns correct values before and after authorizing
+        ctx = self.create_context(actions=[ACTION_11, ACTION_21])
+        self.runner.call_public_method(self.contract_id, 'check_is_authorized', ctx)
+
+        # test that unauthorized actions don't succeed
+        ctx = self.create_context(actions=[ACTION_11])
+        msg = re.escape("unauthorized action: NCDepositAction(token_uid=b'\\x01', amount=100)")
+        with pytest.raises(NCFail, match=msg):
+            self.runner.call_public_method(self.contract_id, 'no_authorize', ctx)
+
+        # test that partially authorized actions don't succeed
+        ctx = self.create_context(actions=[ACTION_11, ACTION_12])
+        msg = re.escape("unauthorized action: NCWithdrawalAction(token_uid=b'\\x01', amount=100)")
+        with pytest.raises(NCFail, match=msg):
+            self.runner.call_public_method(self.contract_id, 'partial_authorize', ctx)
+
+    def test_action_authorization_on_another_v2(self) -> None:
+        blueprint_id = self._create_contract_v2()
+        other_id = self.gen_random_contract_id()
+        self.runner.create_contract(other_id, blueprint_id, self.create_context())
+        self.create_token(token_uid=TOKEN_UID1, token_name='Token1', token_symbol='TK1')
+        self.create_token(token_uid=TOKEN_UID2, token_name='Token2', token_symbol='TK2')
+
+        ctx = self.create_context(actions=[ACTION_11, ACTION_12, ACTION_21])
+
+        msg = re.escape("unauthorized action: NCDepositAction(token_uid=b'\\x01', amount=100)")
+        with pytest.raises(NCFail, match=msg):
+            self.runner.call_public_method(self.contract_id, 'call_another_no_no', ctx, other_id)
+
+        with pytest.raises(NCFail, match=msg):
+            self.runner.call_public_method(self.contract_id, 'call_another_no_all', ctx, other_id)
+
+        with pytest.raises(NCFail, match=msg):
+            self.runner.call_public_method(self.contract_id, 'call_another_all_no', ctx, other_id)
+
+        self.runner.call_public_method(self.contract_id, 'call_another_all_all', ctx, other_id)
 
     def test_activation(self) -> None:
         feature_settings = FeatureSettings(

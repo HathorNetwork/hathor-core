@@ -49,6 +49,7 @@ class BlueprintVersion(IntEnum):
       - Deprecated `Context.actions_list` property, replaced by `Context.all_actions`.
       - Changed the behavior of `Context.get_single_action()` method.
       - Added `Context.get_token_single_action()` method.
+      - Requires all Context actions to be authorized by the Blueprint.
     """
     V1 = 1
     V2 = 2

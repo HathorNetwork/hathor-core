@@ -43,6 +43,7 @@ class Context:
         '__caller_id',
         '__vertex',
         '__block',
+        '__authorized_actions',
         '__actions_by_token__',
         '__all_actions__',
     )
@@ -84,6 +85,9 @@ class Context:
 
         # Address calling the method.
         self.__caller_id = caller_id
+
+        # Set of actions authorized by the user.
+        self.__authorized_actions: set[NCAction] = set()
 
     @property
     def vertex(self) -> VertexData:
@@ -227,16 +231,55 @@ class Context:
             raise NCFail(f'expected exactly 1 action for token {token_uid.hex()}')
         return token_actions[0]
 
-    def __prepare_for_new_runner_call__(self, blueprint_version: BlueprintVersion) -> Context:
-        """Return a copy of the context."""
+    @staticmethod
+    def __prepare_for_new_runner_call__(ctx: Context, blueprint_version: BlueprintVersion) -> Context:
+        """Return a copy of the context prepared for a new call by the Runner."""
+        # Although the context is immutable, each call must have its own
+        # instance because the instance holds authorized actions.
         ctx = Context(
-            caller_id=self.caller_id,
-            vertex_data=self.vertex,
-            block_data=self.block,  # We only copy during execution, so we know the block must not be `None`.
-            actions=self.__actions_by_token__,
+            caller_id=ctx.caller_id,
+            vertex_data=ctx.vertex,
+            block_data=ctx.block,  # We only copy during execution, so we know the block must not be `None`.
+            actions=ctx.__actions_by_token__,
         )
         ctx.__raw_blueprint_version = blueprint_version
         return ctx
+
+    def __validate_action_authorization__(self) -> None:
+        """Validate whether all actions in this context were authorized by the user."""
+        match self.__blueprint_version:
+            case BlueprintVersion.V1:
+                # Nothing to do, V1 doesn't validate action authorization.
+                pass
+            case BlueprintVersion.V2:
+                for action in self.__all_actions__:
+                    if action not in self.__authorized_actions:
+                        raise NCFail(f'unauthorized action: {action}')
+                assert len(self.__all_actions__) == len(self.__authorized_actions)
+            case _:  # pragma: no cover
+                assert_never(self.__blueprint_version)
+
+    def authorize(self, action: NCAction) -> None:
+        """Authorize an action."""
+        match self.__blueprint_version:
+            case BlueprintVersion.V1:
+                raise NCFail('`Context.authorize` is not supported yet.')
+            case BlueprintVersion.V2:
+                if action in self.__authorized_actions:
+                    raise NCFail(f'action is already authorized: {action}')
+                self.__authorized_actions.add(action)
+            case _:  # pragma: no cover
+                assert_never(self.__blueprint_version)
+
+    def is_authorized(self, action: NCAction) -> bool:
+        """Return whether an action is authorized."""
+        match self.__blueprint_version:
+            case BlueprintVersion.V1:
+                raise NCFail('`Context.is_authorized` is not supported yet.')
+            case BlueprintVersion.V2:
+                return action in self.__authorized_actions
+            case _:  # pragma: no cover
+                assert_never(self.__blueprint_version)
 
     def to_json(self) -> dict[str, Any]:
         """Return a JSON representation of the context."""
