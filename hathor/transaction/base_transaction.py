@@ -236,8 +236,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         return False
 
     def get_maximum_number_of_headers(self) -> int:
-        """Return the maximum number of headers for this vertex."""
-        return 2
+        """Return the maximum number of headers for this vertex.
+
+        Parsing accepts all known header formats; feature flags are enforced during verification.
+        """
+        return 3
 
     @classmethod
     @abstractmethod

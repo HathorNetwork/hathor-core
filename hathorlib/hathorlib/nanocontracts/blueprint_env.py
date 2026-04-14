@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from hathorlib.nanocontracts.rng import NanoRNG
     from hathorlib.nanocontracts.runner import Runner
     from hathorlib.nanocontracts.storage import NCContractStorage
+    from hathorlib.nanocontracts.types import Address
 
 
 NCAttrCache: TypeAlias = dict[bytes, Any] | None
@@ -102,6 +103,14 @@ class BlueprintEnvironment:
         contract_id = self.get_contract_id()
         balance = self.__runner.get_current_balance(contract_id, token_uid)
         return Amount(balance.value)
+
+    def get_address_balance_before_current_call(self, address: Address, token_uid: TokenUid | None = None) -> Amount:
+        """Return a global address balance before the current transaction began."""
+        return self.__runner.get_address_balance_before_current_call(address, token_uid)
+
+    def get_address_balance(self, address: Address, token_uid: TokenUid | None = None) -> Amount:
+        """Return the current global address balance including in-flight execution changes."""
+        return self.__runner.get_address_balance(address, token_uid)
 
     def can_mint_before_current_call(self, token_uid: TokenUid) -> bool:
         """
@@ -274,3 +283,7 @@ class BlueprintEnvironment:
         Settings are not constant, they may be changed over time.
         """
         return self.__runner.syscall_get_nano_settings()
+
+    def transfer_to_address(self, address: Address, amount: Amount, token: TokenUid) -> None:
+        """Transfer a given amount of token from this contract treasury to an address balance."""
+        self.__runner.syscall_transfer_to_address(address, amount, token)

@@ -272,6 +272,8 @@ class VerificationService:
             # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
             allow_nonexistent_tokens=tx.is_nano_contract()
         )
+        if tx.has_transfer_header():
+            self.verifiers.transfer_header.verify_balances(tx, params)
         self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
@@ -294,6 +296,8 @@ class VerificationService:
 
         if vertex.has_fees():
             self._verify_without_storage_fee_header(vertex)
+        if isinstance(vertex, Transaction) and vertex.has_transfer_header() and params.features.transfer_headers:
+            self._verify_without_storage_transfer_header(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -368,6 +372,10 @@ class VerificationService:
         assert tx.has_fees()
         assert isinstance(tx, Transaction)
         FeeHeaderVerifier.verify_fee_list(tx.get_fee_header(), tx)
+
+    def _verify_without_storage_transfer_header(self, tx: Transaction) -> None:
+        assert tx.has_transfer_header()
+        self.verifiers.transfer_header.verify_inputs_and_outputs(tx)
 
     def _verify_without_storage_on_chain_blueprint(
         self,

@@ -23,6 +23,7 @@ from typing_extensions import assert_never
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError, TransactionDoesNotExist
+from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES
 from hathorlib.nanocontracts.balance_rules import BalanceRules
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment
@@ -34,6 +35,7 @@ from hathorlib.nanocontracts.exception import (
     NCFail,
     NCForbiddenAction,
     NCForbiddenReentrancy,
+    NCInsufficientFunds,
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidFee,
@@ -68,6 +70,8 @@ from hathorlib.nanocontracts.types import (
     NC_ALLOWED_ACTIONS_ATTR,
     NC_FALLBACK_METHOD,
     NC_INITIALIZE_METHOD,
+    Address,
+    Amount,
     BaseTokenAction,
     BlueprintId,
     ContractId,
@@ -130,12 +134,14 @@ class Runner:
         blueprint_service: BlueprintServiceProtocol,
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
+        before_current_call_block_storage: NCBlockStorage | None,
         seed: bytes | None,
     ) -> None:
         self.tx_storage = tx_storage
         self.blueprint_service = blueprint_service
         self.storage_factory = storage_factory
         self.block_storage = block_storage
+        self._before_current_call_block_storage = before_current_call_block_storage or block_storage
         self._storages: dict[ContractId, NCContractStorage] = {}
         self._settings = settings
         self.reactor = reactor
@@ -509,6 +515,8 @@ class Runner:
             # Update total_diffs according to the diffs caused by each call, for each token.
             for balance_key, balance in change_tracker.get_balance_diff().items():
                 total_diffs[TokenUid(balance_key.token_uid)] += balance
+            for (_address, token_uid), balance in change_tracker.get_all_address_balance_diffs().items():
+                total_diffs[token_uid] += balance
 
         # Accumulate tokens totals from syscalls to compare with the totals from this runner.
         calculated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
@@ -818,6 +826,14 @@ class Runner:
         """
         return self._get_balance(contract_id=contract_id, token_uid=token_uid, before_current_call=False)
 
+    def get_address_balance_before_current_call(self, address: Address, token_uid: TokenUid | None) -> Amount:
+        """Return a global address balance before the current transaction began."""
+        return self._get_address_balance(address=address, token_uid=token_uid, before_current_call=True)
+
+    def get_address_balance(self, address: Address, token_uid: TokenUid | None) -> Amount:
+        """Return the current global address balance including in-flight execution changes."""
+        return self._get_address_balance(address=address, token_uid=token_uid, before_current_call=False)
+
     def _get_balance(
         self,
         *,
@@ -845,6 +861,31 @@ class Runner:
             storage = self.get_current_changes_tracker_or_storage(contract_id)
 
         return storage.get_balance(bytes(token_uid))
+
+    def _get_address_balance(
+        self,
+        *,
+        address: Address,
+        token_uid: TokenUid | None,
+        before_current_call: bool,
+    ) -> Amount:
+        """Internal implementation of global address-balance reads."""
+        if token_uid is None:
+            token_uid = TokenUid(HATHOR_TOKEN_UID)
+
+        if not isinstance(address, Address) or len(address) != ADDRESS_LEN_BYTES:
+            raise NCInvalidSyscall(f'only addresses with {ADDRESS_LEN_BYTES} bytes are allowed')
+
+        storage = self._before_current_call_block_storage if before_current_call else self.block_storage
+        balance = storage.get_address_balance(address, token_uid)
+        if before_current_call or self._call_info is None:
+            return balance
+
+        for change_trackers in self._call_info.change_trackers.values():
+            if not change_trackers:
+                continue
+            balance += change_trackers[-1].get_address_balance_diff(address, token_uid)
+        return Amount(balance)
 
     def get_current_call_record(self) -> CallRecord:
         """Return the call record for the current method being executed."""
@@ -1414,6 +1455,26 @@ class Runner:
         if current_call_record.type == CallType.VIEW:
             raise NCViewMethodError(f'@view method cannot call `syscall.{name}`')
 
+    @_forbid_syscall_from_view('transfer_to_address')
+    def syscall_transfer_to_address(self, address: Address, amount: Amount, token: TokenUid) -> None:
+        if amount < 0:
+            raise NCInvalidSyscall('amount cannot be negative')
+
+        if amount == 0:
+            return
+
+        if not isinstance(address, Address) or len(address) != ADDRESS_LEN_BYTES:
+            raise NCInvalidSyscall(f'only addresses with {ADDRESS_LEN_BYTES} bytes are allowed')
+
+        self._get_token(token)
+
+        changes_tracker = self.get_current_changes_tracker()
+        balance = changes_tracker.get_balance(token)
+        if balance.value < amount:
+            raise NCInsufficientFunds
+        changes_tracker.add_balance(token, -amount)
+        changes_tracker.add_address_balance(address, amount, token)
+
 
 class RunnerFactory:
     __slots__ = ('reactor', 'settings', 'tx_storage', 'nc_storage_factory', 'blueprint_service')
@@ -1438,6 +1499,7 @@ class RunnerFactory:
         *,
         runtime_version: NanoRuntimeVersion,
         block_storage: NCBlockStorage,
+        before_current_call_block_storage: NCBlockStorage | None = None,
         seed: bytes | None = None,
     ) -> Runner:
         return Runner(
@@ -1448,5 +1510,6 @@ class RunnerFactory:
             storage_factory=self.nc_storage_factory,
             blueprint_service=self.blueprint_service,
             block_storage=block_storage,
+            before_current_call_block_storage=before_current_call_block_storage,
             seed=seed,
         )

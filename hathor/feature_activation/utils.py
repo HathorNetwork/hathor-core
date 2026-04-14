@@ -37,17 +37,19 @@ class Features:
     nanocontracts: bool
     fee_tokens: bool
     opcodes_version: OpcodesVersion
-    nano_runtime_version: NanoRuntimeVersion
+    nano_runtime_version: NanoRuntimeVersion = NanoRuntimeVersion.V1
+    transfer_headers: bool = False
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
-        """Return information about each feature according to the state in the provided vertex."""
+        """Return active/inactive state for every runtime feature according to the provided settings and vertex."""
         from hathorlib.conf.settings import FeatureSetting
         feature_states = feature_service.get_feature_states(vertex=vertex)
         feature_settings = {
             Feature.COUNT_CHECKDATASIG_OP: FeatureSetting.FEATURE_ACTIVATION,
             Feature.NANO_CONTRACTS: settings.ENABLE_NANO_CONTRACTS,
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
+            Feature.TRANSFER_HEADER: settings.ENABLE_TRANSFER_HEADER,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
         }
@@ -68,6 +70,7 @@ class Features:
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
+            transfer_headers=feature_is_active[Feature.TRANSFER_HEADER],
         )
 
     @staticmethod
@@ -91,6 +94,7 @@ class Features:
             # Permissive features (come from the block state):
             nanocontracts=features.nanocontracts,
             fee_tokens=features.fee_tokens,
+            transfer_headers=features.transfer_headers,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
         )
@@ -114,6 +118,7 @@ class Features:
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
+            transfer_headers=True,
         )
 
 

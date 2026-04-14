@@ -26,12 +26,12 @@ from hathor.transaction import Block, Transaction
 from hathor.types import Address, VertexId
 
 
-def random_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
-    sorter = NCBlockSorter.create_from_block(block, nc_calls)
+def random_nc_calls_sorter(block: Block, txs: list[Transaction]) -> list[Transaction]:
+    sorter = NCBlockSorter.create_from_block(block, txs)
     seed = hashlib.sha256(block.hash).digest()
 
     order = sorter.generate_random_topological_order(seed)
-    tx_by_id = dict((tx.hash, tx) for tx in nc_calls)
+    tx_by_id = dict((tx.hash, tx) for tx in txs)
     assert set(order) == set(tx_by_id.keys())
 
     ret: list[Transaction] = []
@@ -56,8 +56,9 @@ class SorterNode:
 
 class NCBlockSorter:
     """This class is responsible for sorting a list of Nano cryptocurrency
-    transactions to be executed by the consensus algorithm. The transactions
-    are sorted in topological order, ensuring proper dependency management.
+    and transfer-header transactions to be executed by the consensus algorithm.
+    The transactions are sorted in topological order, ensuring proper dependency
+    management.
 
     Algorithm:
 
@@ -75,9 +76,9 @@ class NCBlockSorter:
         self._nc_hashes = nc_hashes
 
     @classmethod
-    def create_from_block(cls, block: Block, nc_calls: list[Transaction]) -> Self:
-        """Create a Sorter instance from the nano transactions confirmed by a block."""
-        nc_hashes = set(tx.hash for tx in nc_calls)
+    def create_from_block(cls, block: Block, txs: list[Transaction]) -> Self:
+        """Create a sorter instance from the stateful transactions confirmed by a block."""
+        nc_hashes = set(tx.hash for tx in txs)
         sorter = cls(nc_hashes)
         sorter._block = block
 
@@ -98,10 +99,9 @@ class NCBlockSorter:
         grouped_txs: defaultdict[Address, defaultdict[int, list[Transaction]]] = defaultdict(lambda: defaultdict(list))
         dummy_nodes = 0
 
-        for tx in nc_calls:
-            assert tx.is_nano_contract()
-            nano_header = tx.get_nano_header()
-            grouped_txs[nano_header.nc_address][nano_header.nc_seqnum].append(tx)
+        for tx in txs:
+            for address, seqnum in cls._iter_seqnums(tx):
+                grouped_txs[address][seqnum].append(tx)
 
         for _address, txs_by_seqnum in grouped_txs.items():
             sorted_by_seqnum = sorted(txs_by_seqnum.items())
@@ -124,6 +124,18 @@ class NCBlockSorter:
                         sorter.add_edge(curr_tx.hash, dummy_node_id)
 
         return sorter
+
+    @staticmethod
+    def _iter_seqnums(tx: Transaction) -> set[tuple[Address, int]]:
+        ret: set[tuple[Address, int]] = set()
+        if tx.is_nano_contract():
+            nano_header = tx.get_nano_header()
+            ret.add((Address(nano_header.nc_address), nano_header.nc_seqnum))
+        if tx.has_transfer_header():
+            transfer_header = tx.get_transfer_header()
+            for input_address in transfer_header.addresses:
+                ret.add((Address(input_address.address), input_address.seqnum))
+        return ret
 
     def copy(self) -> NCBlockSorter:
         """Copy the sorter. It is useful if one wants to call get_random_topological_order() multiple times."""

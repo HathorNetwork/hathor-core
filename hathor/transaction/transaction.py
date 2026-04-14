@@ -25,7 +25,7 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, TransferHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
@@ -154,6 +154,15 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         else:
             return True
 
+    def has_transfer_header(self) -> bool:
+        """Returns true if this transaction has a transfer header."""
+        try:
+            self.get_transfer_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
     def get_nano_header(self) -> NanoHeader:
         """Return the NanoHeader or raise ValueError."""
         return self._get_header(NanoHeader)
@@ -168,6 +177,10 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             if isinstance(header, header_type):
                 return header
         raise ValueError(f'{header_type.__name__.lower()} not found')
+
+    def get_transfer_header(self) -> TransferHeader:
+        """Return the TransferHeader or raise ValueError."""
+        return self._get_header(TransferHeader)
 
     def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
         """Return a serialization of the inputs, outputs and tokens without including any other field
@@ -203,6 +216,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         if self.is_nano_contract():
             nano_header = self.get_nano_header()
             ret.add(get_address_b58_from_bytes(nano_header.nc_address))
+        if self.has_transfer_header():
+            transfer_header = self.get_transfer_header()
+            for input_address in transfer_header.addresses:
+                ret.add(get_address_b58_from_bytes(input_address.address))
+            for output in transfer_header.outputs:
+                ret.add(get_address_b58_from_bytes(output.address))
         return ret
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
@@ -229,11 +248,42 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 for fee in fee_header.get_fees()
             ]
 
+        if self.has_transfer_header():
+            transfer_header = self.get_transfer_header()
+            json['transfer_header'] = {
+                'addresses': [
+                    {
+                        'address': get_address_b58_from_bytes(input_address.address),
+                        'seqnum': input_address.seqnum,
+                        'script': input_address.script.hex(),
+                    }
+                    for input_address in transfer_header.addresses
+                ],
+                'inputs': [
+                    {
+                        'address_index': txin.address_index,
+                        'amount': txin.amount,
+                        'token_index': txin.token_index,
+                        'token_uid': self.get_token_uid(txin.token_index).hex(),
+                    }
+                    for txin in transfer_header.inputs
+                ],
+                'outputs': [
+                    {
+                        'address': get_address_b58_from_bytes(txout.address),
+                        'amount': txout.amount,
+                        'token_index': txout.token_index,
+                        'token_uid': self.get_token_uid(txout.token_index).hex(),
+                    }
+                    for txout in transfer_header.outputs
+                ],
+            }
+
         return json
 
     def to_json_extended(self) -> dict[str, Any]:
         json_extended = super().to_json_extended()
-        if self.is_nano_contract():
+        if self.is_nano_contract() or self.has_transfer_header():
             json = self.to_json()
             return {**json, **json_extended}
         return json_extended
@@ -257,7 +307,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         token_dict = self._get_token_info_from_inputs(nc_block_storage)
         self._update_token_info_from_nano_actions(token_dict=token_dict, nc_block_storage=nc_block_storage)
-        # These must be called last so token_dict already contains all tokens in inputs and nano actions.
+        self._update_token_info_from_transfer_header(token_dict=token_dict, nc_block_storage=nc_block_storage)
+        # This one must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
         self._update_token_info_from_fees(token_dict=token_dict)
 
@@ -266,9 +317,38 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def get_minimum_number_of_inputs(self) -> int:
         """Return the minimum number of inputs for this transaction.
         This is used by the verification services."""
-        if self.is_nano_contract():
+        if self.is_nano_contract() or self.has_transfer_header():
             return 0
         return 1
+
+    def _update_token_info_from_transfer_header(
+        self,
+        *,
+        token_dict: TokenInfoDict,
+        nc_block_storage: NCBlockStorage,
+    ) -> None:
+        if not self.has_transfer_header():
+            return
+
+        transfer_header = self.get_transfer_header()
+
+        for input_ in transfer_header.inputs:
+            token_uid = self.get_token_uid(input_.token_index)
+            token_info = token_dict.get(token_uid)
+            if token_info is None:
+                assert self.storage is not None
+                token_info = TokenInfo(version=get_token_version(self.storage, nc_block_storage, token_uid))
+            token_info.amount += input_.amount
+            token_dict[token_uid] = token_info
+
+        for output_ in transfer_header.outputs:
+            token_uid = self.get_token_uid(output_.token_index)
+            token_info = token_dict.get(token_uid)
+            if token_info is None:
+                assert self.storage is not None
+                token_info = TokenInfo(version=get_token_version(self.storage, nc_block_storage, token_uid))
+            token_info.amount -= output_.amount
+            token_dict[token_uid] = token_info
 
     def _update_token_info_from_nano_actions(
         self,

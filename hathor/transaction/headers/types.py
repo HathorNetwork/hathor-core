@@ -19,3 +19,4 @@ from enum import Enum, unique
 class VertexHeaderId(Enum):
     NANO_HEADER = b'\x10'
     FEE_HEADER = b'\x11'
+    TRANSFER_HEADER = b'\x12'

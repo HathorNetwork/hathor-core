@@ -1,9 +1,10 @@
 from typing import TypeVar
 
+from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts import NCRocksDBStorageFactory
 from hathor.nanocontracts.nc_types import NCType, NullNCType, make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage import NCChangesTracker
-from hathor.nanocontracts.types import Amount, ContractId, Timestamp, VertexId
+from hathor.nanocontracts.types import Address, Amount, ContractId, Timestamp, TokenUid, VertexId
 from hathor_tests import unittest
 
 T = TypeVar('T')
@@ -19,8 +20,8 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
         super().setUp()
         rocksdb_storage = self.create_rocksdb_storage()
         factory = NCRocksDBStorageFactory(rocksdb_storage)
-        block_storage = factory.get_empty_block_storage()
-        self.storage = block_storage.get_empty_contract_storage(ContractId(VertexId(b'')))
+        self.block_storage = factory.get_empty_block_storage()
+        self.storage = self.block_storage.get_empty_contract_storage(ContractId(VertexId(b'')))
         super().setUp()
 
     def _run_test(self, data_in: T, value: NCType[T]) -> None:
@@ -135,3 +136,10 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
         with self.assertRaises(TypeError):
             # inner string is not int
             changes_tracker.put_obj(b'y', nested_nc_type, {1: {'foo'}})  # type: ignore[misc]
+
+    def test_add_address_balance_rejects_contract_id(self) -> None:
+        contract_id = ContractId(VertexId(b'c' * 32))
+        token_uid = TokenUid(HATHOR_TOKEN_UID)
+
+        with self.assertRaises(ValueError):
+            self.block_storage.add_address_balance(Address(contract_id), Amount(1), token_uid)

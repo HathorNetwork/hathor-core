@@ -15,9 +15,9 @@
 from hathor.transaction import Block, Transaction
 
 
-def timestamp_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
-    """Return the nc_calls sorted by (timestamp, hash).
+def timestamp_nc_calls_sorter(block: Block, txs: list[Transaction]) -> list[Transaction]:
+    """Return the stateful txs sorted by (timestamp, hash).
 
     DEPRECATED: This is used only to keep compatibility with the alpha nano-testnet.
     """
-    return sorted(nc_calls, key=lambda tx: (tx.timestamp, tx.hash))
+    return sorted(txs, key=lambda tx: (tx.timestamp, tx.hash))

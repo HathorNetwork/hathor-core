@@ -18,5 +18,5 @@ from hathor.transaction import Block, Transaction
 
 
 class NCSorterCallable(Protocol):
-    def __call__(self, block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
+    def __call__(self, block: Block, txs: list[Transaction]) -> list[Transaction]:
         ...

@@ -188,7 +188,7 @@ class BlueprintTestCase(unittest.TestCase):
         token_version: TokenVersion
     ) -> None:
         """Create a token in the runner block storage"""
-        self.runner._runner.block_storage.create_token(
+        self.runner.get_block_storage().create_token(
             token_id=token_uid,
             token_name=token_name,
             token_symbol=token_symbol,

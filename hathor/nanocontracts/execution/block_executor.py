@@ -18,11 +18,12 @@ from __future__ import annotations
 
 import hashlib
 import traceback
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterator
 
 from hathor.feature_activation.utils import Features
-from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.exception import NCFail, NCInsufficientFunds
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
 from hathor.transaction.exceptions import TokenNotFound
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     from hathor.nanocontracts.runner.runner import RunnerFactory
     from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
+    from hathor.nanocontracts.types import TokenUid
 
 
 # Transaction execution result types (also used as block execution effects)
@@ -44,22 +46,27 @@ if TYPE_CHECKING:
 class NCTxExecutionSuccess:
     """Result type for successful NC execution."""
     tx: Transaction
-    runner: 'Runner'
+    block_storage: 'NCBlockStorage'
+    runner: 'Runner | None' = None
 
 
 @dataclass(slots=True, frozen=True)
 class NCTxExecutionFailure:
     """Result type for failed NC execution."""
     tx: Transaction
-    runner: 'Runner'
+    block_storage: 'NCBlockStorage | None'
+    runner: 'Runner | None'
     exception: NCFail
     traceback: str
+    persist_block_storage: bool = False
 
 
 @dataclass(slots=True, frozen=True)
 class NCTxExecutionSkipped:
     """Result type for skipped NC execution (voided transactions)."""
     tx: Transaction
+    block_storage: 'NCBlockStorage | None' = None
+    persist_block_storage: bool = False
 
 
 NCTxExecutionResult = NCTxExecutionSuccess | NCTxExecutionFailure | NCTxExecutionSkipped
@@ -104,7 +111,7 @@ NCBlockEffect = (
 
 class NCBlockExecutor:
     """
-    Pure execution of nano contract transactions in a block.
+    Pure execution of nano contract and transfer-header transactions in a block.
 
     This class contains the core NC execution logic without any side effects.
     It yields execution events that can be processed by a caller to apply
@@ -161,8 +168,12 @@ class NCBlockExecutor:
         parent_root_id = parent_meta.nc_block_root_id
         assert parent_root_id is not None
 
+        stateful_txs: list[Transaction] = []
         nc_calls: list[Transaction] = []
         for tx in block.iter_transactions_in_this_block():
+            if not tx.is_nano_contract() and not tx.has_transfer_header():
+                continue
+            stateful_txs.append(tx)
             if not tx.is_nano_contract():
                 continue
             tx_meta = tx.get_metadata()
@@ -171,7 +182,8 @@ class NCBlockExecutor:
                 assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
             nc_calls.append(tx)
 
-        nc_sorted_calls = self._nc_calls_sorter(block, nc_calls) if nc_calls else []
+        stateful_sorted_txs = self._nc_calls_sorter(block, stateful_txs) if stateful_txs else []
+        nc_sorted_calls = [tx for tx in stateful_sorted_txs if tx.is_nano_contract()]
         block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)
         features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
 
@@ -184,10 +196,13 @@ class NCBlockExecutor:
 
         seed_hasher = hashlib.sha256(block.hash)
 
-        for tx in nc_sorted_calls:
+        current_root_id = parent_root_id
+
+        for tx in stateful_sorted_txs:
+            tx_block_storage = self._nc_storage_factory.get_block_storage(current_root_id)
             # Compute RNG seed for this transaction
             seed_hasher.update(tx.hash)
-            seed_hasher.update(block_storage.get_root_id())
+            seed_hasher.update(current_root_id)
             rng_seed = seed_hasher.digest()
 
             yield NCBeginTransaction(tx=tx, rng_seed=rng_seed)
@@ -196,16 +211,29 @@ class NCBlockExecutor:
             result = self.execute_transaction(
                 runtime_version=features.nano_runtime_version,
                 tx=tx,
-                block_storage=block_storage,
+                block_storage=tx_block_storage,
                 rng_seed=rng_seed,
             )
             yield result
 
+            match result:
+                case NCTxExecutionSuccess(block_storage=result_block_storage):
+                    current_root_id = result_block_storage.get_root_id()
+                case NCTxExecutionFailure(block_storage=result_block_storage, persist_block_storage=True):
+                    assert result_block_storage is not None
+                    current_root_id = result_block_storage.get_root_id()
+                case NCTxExecutionSkipped(block_storage=result_block_storage, persist_block_storage=True):
+                    assert result_block_storage is not None
+                    current_root_id = result_block_storage.get_root_id()
+                case _:
+                    pass
+
             yield NCEndTransaction(tx=tx)
 
         # Compute final root ID without committing
-        final_root_id = block_storage.get_root_id()
-        if not nc_sorted_calls:
+        final_root_id = current_root_id
+        block_storage = self._nc_storage_factory.get_block_storage(final_root_id)
+        if not stateful_sorted_txs:
             assert final_root_id == parent_root_id
         yield NCEndBlock(
             block=block,
@@ -228,26 +256,45 @@ class NCBlockExecutor:
         to handle success/failure cases."""
         tx_meta = tx.get_metadata()
         if tx_meta.voided_by:
-            # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
-            # mark this tx as voided.
-            # Check if seqnum needs to be updated.
-            nc_header = tx.get_nano_header()
-            nc_address = Address(nc_header.nc_address)
-            seqnum = block_storage.get_address_seqnum(nc_address)
-            if nc_header.nc_seqnum > seqnum:
-                block_storage.set_address_seqnum(nc_address, nc_header.nc_seqnum)
+            if tx.is_nano_contract() and not tx.has_transfer_header():
+                nc_header = tx.get_nano_header()
+                nc_address = Address(nc_header.nc_address)
+                seqnum = block_storage.get_address_seqnum(nc_address)
+                if nc_header.nc_seqnum > seqnum:
+                    block_storage.set_address_seqnum(nc_address, nc_header.nc_seqnum)
+                return NCTxExecutionSkipped(tx=tx, block_storage=block_storage, persist_block_storage=True)
             return NCTxExecutionSkipped(tx=tx)
 
+        if not tx.is_nano_contract():
+            try:
+                self._verify_transfer_header_balances(block_storage, tx)
+                self._verify_transfer_header_seqnums(block_storage, tx)
+                self._apply_transfer_header_diffs(block_storage, self._get_transfer_header_diffs(tx))
+                self._apply_transfer_header_seqnums(block_storage, tx)
+            except NCFail as e:
+                return NCTxExecutionFailure(
+                    tx=tx,
+                    block_storage=None,
+                    runner=None,
+                    exception=e,
+                    traceback=traceback.format_exc(),
+                )
+            return NCTxExecutionSuccess(tx=tx, block_storage=block_storage)
+
+        transfer_header_diffs = self._get_transfer_header_diffs(tx)
+        before_current_call_block_storage = self._nc_storage_factory.get_block_storage(block_storage.get_root_id())
         runner = self._runner_factory.create(
             runtime_version=runtime_version,
             block_storage=block_storage,
+            before_current_call_block_storage=before_current_call_block_storage,
             seed=rng_seed,
         )
 
         try:
-            assert isinstance(tx, Transaction)
+            if tx.has_transfer_header():
+                self._verify_transfer_header_balances(block_storage, tx)
+                self._apply_transfer_header_diffs(block_storage, transfer_header_diffs)
 
-            # Check seqnum.
             nano_header = tx.get_nano_header()
 
             if nano_header.is_creating_a_new_contract():
@@ -256,18 +303,12 @@ class NCBlockExecutor:
                 contract_id = ContractId(VertexId(nano_header.nc_id))
 
             assert nano_header.nc_seqnum >= 0
-            current_seqnum = runner.block_storage.get_address_seqnum(
-                Address(nano_header.nc_address)
-            )
+            current_seqnum = runner.block_storage.get_address_seqnum(Address(nano_header.nc_address))
             diff = nano_header.nc_seqnum - current_seqnum
             if diff <= 0 or diff > MAX_SEQNUM_JUMP_SIZE:
-                # Fail execution if seqnum is invalid.
                 runner._last_call_info = runner._build_call_info(contract_id)
-                # TODO: Set the seqnum in this case?
                 raise NCFail(f'invalid seqnum (diff={diff})')
-            runner.block_storage.set_address_seqnum(
-                Address(nano_header.nc_address), nano_header.nc_seqnum
-            )
+            runner.block_storage.set_address_seqnum(Address(nano_header.nc_address), nano_header.nc_seqnum)
 
             vertex_metadata = tx.get_metadata()
             assert vertex_metadata.first_block is not None, (
@@ -286,18 +327,99 @@ class NCBlockExecutor:
                     contract_id, nano_header.nc_method, context, nc_args
                 )
 
-            # after the execution we have the latest state in the storage
-            # and at this point no tokens pending creation
             self._verify_sum_after_execution(tx, block_storage)
         except NCFail as e:
+            self._ensure_runner_has_last_call_info(tx, runner)
             return NCTxExecutionFailure(
                 tx=tx,
+                block_storage=block_storage if not tx.has_transfer_header() else None,
                 runner=runner,
                 exception=e,
                 traceback=traceback.format_exc(),
+                persist_block_storage=not tx.has_transfer_header(),
             )
 
-        return NCTxExecutionSuccess(tx=tx, runner=runner)
+        return NCTxExecutionSuccess(tx=tx, block_storage=block_storage, runner=runner)
+
+    def _get_transfer_header_diffs(self, tx: Transaction) -> dict[tuple['Address', 'TokenUid'], int]:
+        from hathor.nanocontracts.types import Address, TokenUid
+
+        diffs: defaultdict[tuple[Address, TokenUid], int] = defaultdict(int)
+        if not tx.has_transfer_header():
+            return dict(diffs)
+
+        transfer_header = tx.get_transfer_header()
+        for txin in transfer_header.inputs:
+            token_uid = TokenUid(tx.get_token_uid(txin.token_index))
+            input_address = transfer_header.addresses[txin.address_index]
+            diffs[(Address(input_address.address), token_uid)] -= txin.amount
+
+        for txout in transfer_header.outputs:
+            token_uid = TokenUid(tx.get_token_uid(txout.token_index))
+            diffs[(Address(txout.address), token_uid)] += txout.amount
+
+        return dict(diffs)
+
+    def _verify_transfer_header_balances(
+        self,
+        block_storage: 'NCBlockStorage',
+        tx: Transaction,
+    ) -> None:
+        transfer_header_diffs = self._get_transfer_header_diffs(tx)
+        for (address, token_uid), diff in transfer_header_diffs.items():
+            if diff >= 0:
+                continue
+
+            balance = block_storage.get_address_balance(address, token_uid)
+            if balance + diff < 0:
+                raise NCInsufficientFunds(
+                    f'insufficient transfer-header balance for address={address.hex()} '
+                    f'token={token_uid.hex()}: available={balance} required={-diff}'
+                )
+
+    def _verify_transfer_header_seqnums(self, block_storage: 'NCBlockStorage', tx: Transaction) -> None:
+        if not tx.has_transfer_header():
+            return
+
+        transfer_header = tx.get_transfer_header()
+        for input_address in transfer_header.addresses:
+            current_seqnum = block_storage.get_address_seqnum(Address(input_address.address))
+            diff = input_address.seqnum - current_seqnum
+            if diff <= 0 or diff > MAX_SEQNUM_JUMP_SIZE:
+                raise NCFail(f'invalid transfer-header seqnum (diff={diff})')
+
+    def _apply_transfer_header_diffs(
+        self,
+        block_storage: 'NCBlockStorage',
+        transfer_header_diffs: dict[tuple['Address', 'TokenUid'], int],
+    ) -> None:
+        from hathor.nanocontracts.types import Amount
+
+        for (address, token_uid), diff in transfer_header_diffs.items():
+            if diff == 0:
+                continue
+            block_storage.add_address_balance(address, Amount(diff), token_uid)
+
+    def _apply_transfer_header_seqnums(self, block_storage: 'NCBlockStorage', tx: Transaction) -> None:
+        if not tx.has_transfer_header():
+            return
+
+        transfer_header = tx.get_transfer_header()
+        for input_address in transfer_header.addresses:
+            block_storage.set_address_seqnum(Address(input_address.address), input_address.seqnum)
+
+    def _ensure_runner_has_last_call_info(self, tx: Transaction, runner: 'Runner') -> None:
+        from hathor.nanocontracts.types import ContractId, VertexId
+
+        if runner._last_call_info is not None:
+            return
+
+        nano_header = tx.get_nano_header()
+        if nano_header.is_creating_a_new_contract():
+            contract_id = ContractId(VertexId(tx.hash))
+        else:
+            contract_id = ContractId(VertexId(nano_header.nc_id))
+        runner._last_call_info = runner._build_call_info(contract_id)
 
     def _verify_sum_after_execution(self, tx: Transaction, block_storage: 'NCBlockStorage') -> None:
         """Verify token sums after execution for dynamically created tokens."""
