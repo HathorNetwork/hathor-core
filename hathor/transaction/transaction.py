@@ -267,6 +267,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     def to_json_extended(self) -> dict[str, Any]:
         json_extended = super().to_json_extended()
+        json_extended['tokens'] = [h.hex() for h in self.tokens]
         if self.is_nano_contract():
             json = self.to_json()
             return {**json, **json_extended}
