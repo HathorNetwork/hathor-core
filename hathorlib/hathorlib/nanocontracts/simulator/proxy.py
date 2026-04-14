@@ -24,8 +24,8 @@ from hathorlib.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
 if TYPE_CHECKING:
     from hathorlib.nanocontracts import Blueprint
-    from hathorlib.simulator.result import TxResult
-    from hathorlib.simulator.simulator import Simulator
+    from hathorlib.nanocontracts.simulator.result import TxResult
+    from hathorlib.nanocontracts.simulator.simulator import NanoSimulator
 
 
 class ContractProxy:
@@ -41,7 +41,7 @@ class ContractProxy:
 
     def __init__(
         self,
-        simulator: Simulator,
+        simulator: NanoSimulator,
         contract_id: ContractId,
         blueprint_class: type[Blueprint],
         *,

@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib.simulator.builder import SimulatorBuilder
-from hathorlib.simulator.checksig import CHECKSIG_INVALID, CHECKSIG_VALID
-from hathorlib.simulator.proxy import ContractProxy
-from hathorlib.simulator.result import BlockResult, TxResult
-from hathorlib.simulator.simulator import Simulator
-from hathorlib.simulator.snapshot import SimulatorSnapshot
+from hathorlib.nanocontracts.simulator.builder import NanoSimulatorBuilder
+from hathorlib.nanocontracts.simulator.checksig import CHECKSIG_INVALID, CHECKSIG_VALID
+from hathorlib.nanocontracts.simulator.proxy import ContractProxy
+from hathorlib.nanocontracts.simulator.result import BlockResult, TxResult
+from hathorlib.nanocontracts.simulator.simulator import NanoSimulator
+from hathorlib.nanocontracts.simulator.snapshot import SimulatorSnapshot
 
 __all__ = [
     'BlockResult',
     'CHECKSIG_INVALID',
     'CHECKSIG_VALID',
     'ContractProxy',
-    'Simulator',
-    'SimulatorBuilder',
+    'NanoSimulator',
+    'NanoSimulatorBuilder',
     'SimulatorSnapshot',
     'TxResult',
 ]

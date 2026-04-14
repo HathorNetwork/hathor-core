@@ -22,8 +22,8 @@ from hathorlib.nanocontracts.types import Address, ContractId, NCAction
 from hathorlib.nanocontracts.vertex_data import BlockData, VertexData
 
 if TYPE_CHECKING:
-    from hathorlib.simulator.id_generator import IdGenerator
-    from hathorlib.simulator.in_memory_services import SimulatorClock
+    from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
+    from hathorlib.nanocontracts.simulator.in_memory_services import SimulatorClock
 
 # NC transaction version constant
 _NC_TX_VERSION = TxVersion(5)

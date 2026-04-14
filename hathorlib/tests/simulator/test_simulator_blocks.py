@@ -14,28 +14,28 @@
 
 """Tests for block lifecycle: auto_new_block, multi-tx blocks."""
 
-from hathorlib.simulator import SimulatorBuilder
+from hathorlib.nanocontracts.simulator import NanoSimulatorBuilder
 
 from .blueprints import Counter
 
 
 class TestSimulatorBlocks:
     def test_auto_new_block_true(self) -> None:
-        sim = SimulatorBuilder().build()  # auto_new_block=True by default
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()  # auto_new_block=True by default
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
         initial_height = sim.block_height
-        sim.create_contract(bid, caller=alice)
+        sim.create_contract_raw(bid, caller=alice)
         # auto_new_block advances the block
         assert sim.block_height == initial_height + 1
 
     def test_auto_new_block_false(self) -> None:
-        sim = SimulatorBuilder().with_auto_new_block(False).build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().with_auto_new_block(False).build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        result = sim.create_contract(bid, caller=alice)
+        result = sim.create_contract_raw(bid, caller=alice)
         cid = result.contract_id
 
         sim.call_public(cid, 'increment', caller=alice)
@@ -49,11 +49,11 @@ class TestSimulatorBlocks:
         assert sim.call_view(cid, 'get_count') == 2
 
     def test_multi_tx_same_block(self) -> None:
-        sim = SimulatorBuilder().with_auto_new_block(False).build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().with_auto_new_block(False).build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         cid = r.contract_id
 
         # All in the same block
@@ -66,11 +66,11 @@ class TestSimulatorBlocks:
         assert sim.call_view(cid, 'get_count') == 5
 
     def test_toggle_auto_new_block(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         cid = r.contract_id
 
         # Switch to manual blocks

@@ -14,29 +14,29 @@
 
 """Tests for event capture and query."""
 
-from hathorlib.simulator import SimulatorBuilder
+from hathorlib.nanocontracts.simulator import NanoSimulatorBuilder
 
 from .blueprints import Counter, EventEmitter
 
 
 class TestSimulatorEvents:
     def test_events_in_tx_result(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(EventEmitter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(EventEmitter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'emit_one', caller=alice)
 
         assert len(tx_result.events) == 1
         assert tx_result.events[0].data == b'event_one'
 
     def test_multiple_events(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(EventEmitter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(EventEmitter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'emit_two', caller=alice)
 
         assert len(tx_result.events) == 2
@@ -44,11 +44,11 @@ class TestSimulatorEvents:
         assert tx_result.events[1].data == b'event_b'
 
     def test_query_events_by_tx_hash(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(EventEmitter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(EventEmitter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'emit_one', caller=alice)
 
         events = sim.get_events(tx_hash=tx_result.tx_hash)
@@ -56,22 +56,22 @@ class TestSimulatorEvents:
         assert events[0].data == b'event_one'
 
     def test_query_events_by_block_hash(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(EventEmitter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(EventEmitter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'emit_one', caller=alice)
 
         events = sim.get_events(block_hash=tx_result.block_hash)
         assert len(events) == 1
 
     def test_query_all_events(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(EventEmitter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(EventEmitter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         sim.call_public(r.contract_id, 'emit_one', caller=alice)
         sim.call_public(r.contract_id, 'emit_two', caller=alice)
 
@@ -79,21 +79,21 @@ class TestSimulatorEvents:
         assert len(all_events) == 3  # 1 + 2
 
     def test_no_events_for_method_without_emit(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'increment', caller=alice)
 
         assert len(tx_result.events) == 0
 
     def test_events_with_increment_and_emit(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'increment_and_emit', caller=alice)
 
         assert len(tx_result.events) == 1
@@ -103,11 +103,11 @@ class TestSimulatorEvents:
 
 class TestSimulatorLogs:
     def test_logs_by_tx_hash(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         tx_result = sim.call_public(r.contract_id, 'increment', caller=alice)
 
         logs = sim.get_logs(tx_hash=tx_result.tx_hash)
@@ -115,11 +115,11 @@ class TestSimulatorLogs:
         assert logs[0].error_traceback is None
 
     def test_all_logs(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         sim.call_public(r.contract_id, 'increment', caller=alice)
         sim.call_public(r.contract_id, 'increment', caller=alice)
 
@@ -127,11 +127,11 @@ class TestSimulatorLogs:
         assert len(all_logs) == 3  # create + 2 increments
 
     def test_logs_by_block_hash(self) -> None:
-        sim = SimulatorBuilder().with_auto_new_block(False).build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().with_auto_new_block(False).build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         sim.call_public(r.contract_id, 'increment', caller=alice)
         block_result = sim.new_block()
 

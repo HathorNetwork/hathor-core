@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Blueprint Simulator — high-level API for testing NanoContract blueprints."""
+"""NanoContract Simulator — high-level API for testing NanoContract blueprints."""
 
 from __future__ import annotations
 
@@ -47,18 +47,18 @@ from hathorlib.nanocontracts.types import (
 )
 from hathorlib.nanocontracts.vertex_data import BlockData
 from hathorlib.scripts import P2PKH
-from hathorlib.simulator.context_factory import ContextFactory
-from hathorlib.simulator.event_store import EventStore
-from hathorlib.simulator.id_generator import IdGenerator
-from hathorlib.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
-from hathorlib.simulator.in_memory_storage import InMemoryNCStorageFactory
-from hathorlib.simulator.proxy import ContractProxy
-from hathorlib.simulator.result import BlockResult, TxResult
-from hathorlib.simulator.snapshot import SimulatorSnapshot
+from hathorlib.nanocontracts.simulator.context_factory import ContextFactory
+from hathorlib.nanocontracts.simulator.event_store import EventStore
+from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
+from hathorlib.nanocontracts.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
+from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
+from hathorlib.nanocontracts.simulator.proxy import ContractProxy
+from hathorlib.nanocontracts.simulator.result import BlockResult, TxResult
+from hathorlib.nanocontracts.simulator.snapshot import SimulatorSnapshot
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 
-class Simulator:
+class NanoSimulator:
     """High-level API for testing NanoContract blueprints in-memory.
 
     Mirrors the NCBlockExecutor pattern:
@@ -73,14 +73,14 @@ class Simulator:
     multi-tx-per-block testing.
 
     Example:
-        from hathorlib.simulator import Simulator, SimulatorBuilder
+        from hathorlib.nanocontracts.simulator import NanoSimulator, NanoSimulatorBuilder
 
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(MyBlueprint)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint('./blueprints/my_blueprint.py')
         alice = sim.create_address('alice')
-        result = sim.create_contract(bid, caller=alice)
-        sim.call_public(result.contract_id, 'do_something', caller=alice)
-        value = sim.call_view(result.contract_id, 'get_value')
+        contract = sim.create_contract(bid, caller=alice)
+        contract.do_something(caller=alice)
+        value = contract.get_value()
     """
 
     def __init__(
@@ -177,8 +177,11 @@ class Simulator:
 
     # Blueprint Management
 
-    def register_blueprint(self, blueprint_class: type[Blueprint]) -> BlueprintId:
-        """Register a blueprint class. Returns its deterministic ID.
+    def register_blueprint_class(self, blueprint_class: type[Blueprint]) -> BlueprintId:
+        """Register a blueprint from an already-imported Python class.
+
+        Advanced / special-case API: the preferred way to register a blueprint is from
+        a file via :meth:`register_blueprint`, which mirrors the on-chain flow.
 
         Idempotent: registering the same class again returns the same ID.
         """
@@ -190,8 +193,12 @@ class Simulator:
         self._blueprint_ids[blueprint_class] = blueprint_id
         return blueprint_id
 
-    def load_blueprint(self, file_path: str | Path) -> BlueprintId:
-        """Load and register a blueprint from a Python file.
+    def register_blueprint(self, file_path: str | Path) -> BlueprintId:
+        """Register a blueprint by loading it from a Python file.
+
+        This is the preferred way to register a blueprint — it mirrors the on-chain
+        ``OnChainBlueprint`` flow and exercises the ``from hathor import ...`` import
+        machinery blueprints use in production.
 
         The file must export a ``__blueprint__`` variable that is a subclass of Blueprint.
 
@@ -233,7 +240,7 @@ class Simulator:
         if not (isinstance(blueprint_class, type) and issubclass(blueprint_class, Blueprint)):
             raise ValueError(f'{BLUEPRINT_EXPORT_NAME} in {path} is not a Blueprint subclass')
 
-        return self.register_blueprint(blueprint_class)
+        return self.register_blueprint_class(blueprint_class)
 
     @staticmethod
     def _ensure_hathor_shim() -> ModuleType:
@@ -267,7 +274,7 @@ class Simulator:
 
     # Contract Lifecycle
 
-    def create_contract(
+    def create_contract_raw(
         self,
         blueprint_id: BlueprintId,
         *,
@@ -276,10 +283,14 @@ class Simulator:
         kwargs: dict[str, Any] | None = None,
         actions: list[NCAction] | None = None,
     ) -> TxResult:
-        """Create a new contract instance and call its initialize() method.
+        """Create a new contract and return the raw TxResult.
+
+        Low-level variant of :meth:`create_contract`. Prefer :meth:`create_contract`,
+        which wraps the new contract in a :class:`ContractProxy`; use this when you
+        need the TxResult but do not want a proxy.
 
         Args:
-            blueprint_id: The BlueprintId returned by register_blueprint() or load_blueprint().
+            blueprint_id: The BlueprintId returned by register_blueprint() or register_blueprint_class().
 
         Returns a TxResult with the contract_id, tx_hash, block_hash, events, and logs.
         On failure, raises the NCFail exception (changes are not committed).
@@ -298,7 +309,7 @@ class Simulator:
             fn=_do_create,
         )
 
-    def create_instance(
+    def create_contract(
         self,
         blueprint_id: BlueprintId,
         *,
@@ -307,16 +318,20 @@ class Simulator:
         kwargs: dict[str, Any] | None = None,
         actions: list[NCAction] | None = None,
     ) -> ContractProxy:
-        """Create a new contract and return a ContractProxy wrapping it.
+        """Create a new contract and return a :class:`ContractProxy` wrapping it.
 
-        This is a convenience that calls create_contract() internally, then wraps the result.
+        This is the preferred way to create contracts: the returned proxy exposes the
+        blueprint's public and view methods as regular Python methods, and its
+        ``tx_result`` attribute gives access to the underlying :class:`TxResult`.
+
+        Internally a thin wrapper around :meth:`create_contract_raw`.
         """
-        tx_result = self.create_contract(blueprint_id, caller=caller, args=args, kwargs=kwargs, actions=actions)
+        tx_result = self.create_contract_raw(blueprint_id, caller=caller, args=args, kwargs=kwargs, actions=actions)
         blueprint_class = self._blueprint_service.get_blueprint_class(blueprint_id)
         return ContractProxy(self, tx_result.contract_id, blueprint_class, tx_result=tx_result)
 
-    def wrap(self, contract_id: ContractId) -> ContractProxy:
-        """Wrap an existing contract in a ContractProxy.
+    def get_contract(self, contract_id: ContractId) -> ContractProxy:
+        """Return a :class:`ContractProxy` for an already-deployed contract.
 
         The blueprint is resolved from the contract's stored metadata.
         """

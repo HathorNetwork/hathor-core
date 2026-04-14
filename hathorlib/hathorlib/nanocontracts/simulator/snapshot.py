@@ -21,11 +21,11 @@ from typing import TYPE_CHECKING, Any
 from hathorlib.nanocontracts.types import VertexId
 
 if TYPE_CHECKING:
-    from hathorlib.simulator.context_factory import ContextFactory
-    from hathorlib.simulator.event_store import EventStore
-    from hathorlib.simulator.id_generator import IdGenerator
-    from hathorlib.simulator.in_memory_services import InMemoryTxStorage, SimulatorClock
-    from hathorlib.simulator.in_memory_storage import InMemoryNCStorageFactory
+    from hathorlib.nanocontracts.simulator.context_factory import ContextFactory
+    from hathorlib.nanocontracts.simulator.event_store import EventStore
+    from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
+    from hathorlib.nanocontracts.simulator.in_memory_services import InMemoryTxStorage, SimulatorClock
+    from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
 
 
 @dataclass(frozen=True)

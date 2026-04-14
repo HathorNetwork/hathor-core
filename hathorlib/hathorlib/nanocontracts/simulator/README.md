@@ -5,30 +5,27 @@ An in-memory simulator for developing and testing Hathor NanoContract blueprints
 ## Quick Start
 
 ```python
-from hathorlib.simulator import SimulatorBuilder
+from hathorlib.nanocontracts.simulator import NanoSimulatorBuilder
 
 # Create a simulator
-sim = SimulatorBuilder().build()
+sim = NanoSimulatorBuilder().build()
 
-# Register a blueprint and create addresses
-bid = sim.load_blueprint('./blueprints/my_blueprint.py')  # str | Path
+# Register a blueprint from a file (mirrors the on-chain flow)
+bid = sim.register_blueprint('./blueprints/my_blueprint.py')  # str or Path
 alice = sim.create_address('alice')
 
-# Deploy a contract
-result = sim.create_contract(bid, caller=alice)
-cid = result.contract_id
-
-# Call methods
-sim.call_public(cid, 'do_something', caller=alice)
-value = sim.call_view(cid, 'get_value')
+# Deploy a contract and interact with it via a ContractProxy
+contract = sim.create_contract(bid, caller=alice)
+contract.do_something(caller=alice)
+value = contract.get_value()
 ```
 
-## SimulatorBuilder
+## NanoSimulatorBuilder
 
-The builder configures and creates `Simulator` instances with a fluent API:
+The builder configures and creates `NanoSimulator` instances with a fluent API:
 
 ```python
-sim = (SimulatorBuilder()
+sim = (NanoSimulatorBuilder()
     .with_seed(b'my_test_seed')        # Deterministic RNG seed
     .with_initial_time(1700000000)     # Starting clock timestamp
     .with_auto_new_block(False)        # Manual block control
@@ -67,85 +64,110 @@ The built-in HTR token (`NC_HTR_TOKEN_UID`) is always available.
 
 ## Blueprint Registration
 
-There are two ways to register blueprints:
-
-### From a file
-
-```python
-bid = sim.load_blueprint('./blueprints/bet.py')
-```
-
-The file must contain a class decorated with `@export` that subclasses `Blueprint`. The file uses `from hathor import ...` imports, which the simulator resolves automatically via a shim module.
-
-This is the intended way to register a blueprint since it is closer to production,
-the correct modules are available via `from hathor ...` imports and the file works as the OnChainBlueprint source code.
-
-### From a Python class
+The preferred way to register a blueprint is to load it from a file. This mirrors the
+on-chain `OnChainBlueprint` flow, uses the same `from hathor import ...` import surface
+blueprints run against in production, and keeps your simulator tests honest about the
+blueprint's actual source layout.
 
 ```python
-from my_module import MyBlueprint
-bid = sim.register_blueprint(MyBlueprint)
+bid = sim.register_blueprint('./blueprints/bet.py')
 ```
 
-Registration is idempotent -- registering the same class again returns the same ID.
+The file must contain a class decorated with `@export` that subclasses `Blueprint`. The
+simulator resolves `from hathor import ...` imports automatically via a shim module.
 
-This is meant to provide an easy interface to test simple contracts and develop features.
+For special cases (not entirely bound to the on-chain constraints) the developer can define a
+blueprint class and register it into the simulator with `register_blueprint_class`:
+
+```python
+class MyBlueprint(Blueprint):
+    def initialize(self, ctx: Context):
+        self.value = 0
+
+    @public
+    def increase(self, ctx: Context, value: int):
+        self.value += value
+
+    @value
+    def get_value(self, ctx: Context):
+        return self.value
+
+bid = sim.register_blueprint_class(MyBlueprint)
+```
+
+Both forms are idempotent: calling them again with the same file or class returns the
+same `BlueprintId`.
 
 ## Contract Lifecycle
 
 ### Creating contracts
 
+`create_contract` returns a `ContractProxy` that exposes the blueprint's public and view
+methods as regular Python methods.
+
 ```python
 # Basic creation
-result = sim.create_contract(bid, caller=alice)
-cid = result.contract_id
+contract = sim.create_contract(bid, caller=alice)
 
 # With constructor arguments
-result = sim.create_contract(bid, caller=alice, args=(oracle_script, token_uid, Timestamp(1000)))
+contract = sim.create_contract(bid, caller=alice, args=(oracle_script, token_uid, Timestamp(1000)))
 
-# With actions (e.g., initial deposit)
-result = sim.create_contract(
+# With actions (e.g. initial deposit)
+contract = sim.create_contract(
     bid,
     caller=alice,
     actions=[sim.deposit(NC_HTR_TOKEN_UID, 1000)],
 )
 ```
 
-### ContractProxy (object-oriented API)
+The proxy also exposes the underlying `TxResult` via `contract.tx_result` and the
+contract's id via `contract.contract_id`.
 
-`create_instance` returns a `ContractProxy` that exposes blueprint methods as regular Python methods:
+### Calling methods via the proxy
+
+Public methods require `caller` (and optionally `actions`) as keyword arguments and
+return a `TxResult`. View methods take positional arguments and return the view's value
+directly.
 
 ```python
-contract = sim.create_instance(bid, caller=alice, args=(oracle_script,))
-
-# Public methods require `caller` and optionally `actions`
 contract.bet(alice, '1x0', caller=alice, actions=[sim.deposit(NC_HTR_TOKEN_UID, 1000)])
-
-# View methods are called directly
 result = contract.has_result()
 amount = contract.get_max_withdrawal(bob)
 ```
 
-You can also wrap an existing contract:
+### Retrieving an existing contract
 
 ```python
-contract = sim.wrap(contract_id)
+contract = sim.get_contract(contract_id)
 ```
 
-### Calling methods (low-level API)
+### Low-level API
+
+For generic tooling, dynamic calls, or tests that want to pin down the low-level
+surface, the simulator exposes string-based primitives:
 
 ```python
-# Public methods
+# Raw creation returns TxResult instead of a proxy
+tx_result = sim.create_contract_raw(
+    bid,
+    caller=alice,
+    args=(...),
+    actions=[sim.deposit(NC_HTR_TOKEN_UID, 500)],
+)
+
+# Public method calls by name
 tx_result = sim.call_public(
-    cid, 'method_name',
+    contract_id, 'method_name',
     caller=alice,
     args=(arg1, arg2),
     actions=[sim.deposit(NC_HTR_TOKEN_UID, 500)],
 )
 
-# View methods (read-only, no state changes)
-value = sim.call_view(cid, 'get_something', arg1, arg2)
+# View method calls by name
+value = sim.call_view(contract_id, 'get_something', arg1, arg2)
 ```
+
+Prefer the proxy-based API above for day-to-day blueprint testing.
 
 ## Actions (Deposits, Withdrawals, Authority)
 
@@ -170,7 +192,7 @@ Actions are passed as a list to `actions=` in `call_public`, `create_contract`, 
 
 ## TxResult
 
-Every successful `call_public` or `create_contract` returns a `TxResult`:
+Every successful `call_public` or `create_contract_raw` returns a `TxResult`:
 
 ```python
 result = sim.call_public(cid, 'emit_one', caller=alice)
@@ -189,7 +211,7 @@ Failed calls raise `NCFail` (or a subclass). Changes are **not** committed on fa
 The simulator has a virtual clock that you control:
 
 ```python
-sim = SimulatorBuilder().with_initial_time(100).build()
+sim = NanoSimulatorBuilder().with_initial_time(100).build()
 
 # Advance time by a number of seconds
 sim.advance_time(1000)
@@ -209,7 +231,7 @@ By default (`auto_new_block=True`), each successful call creates its own block. 
 
 ```python
 # Option 1: Disable at build time
-sim = SimulatorBuilder().with_auto_new_block(False).build()
+sim = NanoSimulatorBuilder().with_auto_new_block(False).build()
 
 # Option 2: Toggle at runtime
 sim.auto_new_block = False
@@ -256,7 +278,7 @@ Each event has a `.data` attribute (bytes). Execution logs (`NCExecEntry`) inclu
 The simulator provides a simulated checksig backend so you can test `SignedData` without real cryptography:
 
 ```python
-from hathorlib.simulator import CHECKSIG_VALID, CHECKSIG_INVALID
+from hathorlib.nanocontracts.simulator import CHECKSIG_VALID, CHECKSIG_INVALID
 from hathorlib.nanocontracts.types import SignedData
 
 # Create signed data that will pass checksig
@@ -272,13 +294,13 @@ To disable checksig or provide a custom backend:
 
 ```python
 # Disable (checksig raises NotImplementedError)
-sim = SimulatorBuilder().with_checksig(None).build()
+sim = NanoSimulatorBuilder().with_checksig(None).build()
 
 # Custom backend
 def my_backend(sighash_all_data: bytes, script_input: bytes, script: bytes) -> bool:
     return verify_signature(script_input, script)
 
-sim = SimulatorBuilder().with_checksig(my_backend).build()
+sim = NanoSimulatorBuilder().with_checksig(my_backend).build()
 ```
 
 ## Snapshot and Restore
@@ -368,7 +390,7 @@ class MyBlueprint(Blueprint):
 ```
 
 Key decorators:
-- `@export` -- marks the class as the blueprint to be loaded by `load_blueprint()`
+- `@export` -- marks the class as the blueprint to be loaded by `register_blueprint()`
 - `@public` -- marks a method as callable via transactions
 - `@public(allow_deposit=True)` / `@public(allow_withdrawal=True)` -- allows deposit/withdrawal actions
 - `@view` -- marks a read-only method (no `ctx` parameter, no state changes)
@@ -378,11 +400,11 @@ Key decorators:
 ```python
 import pytest
 from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID
-from hathorlib.simulator import SimulatorBuilder
+from hathorlib.nanocontracts.simulator import NanoSimulatorBuilder
 
 @pytest.fixture
 def sim():
-    return SimulatorBuilder().with_initial_time(100).build()
+    return NanoSimulatorBuilder().with_initial_time(100).build()
 
 @pytest.fixture
 def alice(sim):
@@ -390,8 +412,8 @@ def alice(sim):
 
 @pytest.fixture
 def contract(sim, alice):
-    bid = sim.load_blueprint('./blueprints/my_blueprint.py')
-    return sim.create_instance(bid, caller=alice)
+    bid = sim.register_blueprint('./blueprints/my_blueprint.py')
+    return sim.create_contract(bid, caller=alice)
 
 class TestMyBlueprint:
     def test_initial_state(self, contract):

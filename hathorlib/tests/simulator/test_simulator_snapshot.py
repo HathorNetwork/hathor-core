@@ -14,18 +14,18 @@
 
 """Tests for snapshot/restore functionality."""
 
-from hathorlib.simulator import SimulatorBuilder
+from hathorlib.nanocontracts.simulator import NanoSimulatorBuilder
 
 from .blueprints import Counter
 
 
 class TestSimulatorSnapshot:
     def test_snapshot_and_restore(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         cid = r.contract_id
 
         sim.call_public(cid, 'increment', caller=alice)
@@ -44,7 +44,7 @@ class TestSimulatorSnapshot:
         assert sim.call_view(cid, 'get_count') == 2
 
     def test_restore_preserves_clock(self) -> None:
-        sim = SimulatorBuilder().build()
+        sim = NanoSimulatorBuilder().build()
         sim.set_time(5000)
 
         snap = sim.snapshot()
@@ -56,11 +56,11 @@ class TestSimulatorSnapshot:
         assert sim.clock_time == 5000
 
     def test_restore_preserves_block_height(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         height_after_create = sim.block_height
 
         snap = sim.snapshot()
@@ -72,11 +72,11 @@ class TestSimulatorSnapshot:
         assert sim.block_height == height_after_create
 
     def test_multiple_snapshots(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         cid = r.contract_id
 
         snap0 = sim.snapshot()
@@ -95,11 +95,11 @@ class TestSimulatorSnapshot:
         assert sim.call_view(cid, 'get_count') == 0
 
     def test_operations_after_restore(self) -> None:
-        sim = SimulatorBuilder().build()
-        bid = sim.register_blueprint(Counter)
+        sim = NanoSimulatorBuilder().build()
+        bid = sim.register_blueprint_class(Counter)
         alice = sim.create_address('alice')
 
-        r = sim.create_contract(bid, caller=alice)
+        r = sim.create_contract_raw(bid, caller=alice)
         cid = r.contract_id
 
         sim.call_public(cid, 'increment', caller=alice)

@@ -20,14 +20,14 @@ from hathorlib.conf.settings import FeatureSetting, HathorSettings
 from hathorlib.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathorlib.nanocontracts.runner.runner import RunnerFactory
 from hathorlib.nanocontracts.types import ChecksigBackend
-from hathorlib.simulator.checksig import simulated_checksig_backend
-from hathorlib.simulator.context_factory import ContextFactory
-from hathorlib.simulator.id_generator import IdGenerator
-from hathorlib.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
-from hathorlib.simulator.in_memory_storage import InMemoryNCStorageFactory
+from hathorlib.nanocontracts.simulator.checksig import simulated_checksig_backend
+from hathorlib.nanocontracts.simulator.context_factory import ContextFactory
+from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
+from hathorlib.nanocontracts.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
+from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
 
 if TYPE_CHECKING:
-    from hathorlib.simulator.simulator import Simulator
+    from hathorlib.nanocontracts.simulator.simulator import NanoSimulator
 
 # Default settings suitable for simulation (mainnet-like)
 _SIMULATOR_SETTINGS = HathorSettings(
@@ -39,14 +39,14 @@ _SIMULATOR_SETTINGS = HathorSettings(
 )
 
 
-class SimulatorBuilder:
-    """Configures and creates a Simulator instance.
+class NanoSimulatorBuilder:
+    """Configures and creates a NanoSimulator instance.
 
     Example:
-        sim = SimulatorBuilder().build()
+        sim = NanoSimulatorBuilder().build()
 
         # Or with configuration:
-        sim = (SimulatorBuilder()
+        sim = (NanoSimulatorBuilder()
             .with_seed(b'my_test_seed')
             .with_runtime_version(NanoRuntimeVersion.V2)
             .with_initial_time(1700000000.0)
@@ -63,37 +63,37 @@ class SimulatorBuilder:
         self._unlimited_fuel: bool = False
         self._checksig_backend: ChecksigBackend | None = simulated_checksig_backend
 
-    def with_seed(self, seed: bytes) -> SimulatorBuilder:
+    def with_seed(self, seed: bytes) -> NanoSimulatorBuilder:
         """Set the RNG seed for deterministic execution."""
         self._seed = seed
         return self
 
-    def with_runtime_version(self, version: NanoRuntimeVersion) -> SimulatorBuilder:
+    def with_runtime_version(self, version: NanoRuntimeVersion) -> NanoSimulatorBuilder:
         """Set the nano runtime version."""
         self._runtime_version = version
         return self
 
-    def with_initial_time(self, timestamp: float) -> SimulatorBuilder:
+    def with_initial_time(self, timestamp: float) -> NanoSimulatorBuilder:
         """Set the initial clock time."""
         self._initial_time = timestamp
         return self
 
-    def with_settings(self, settings: HathorSettings) -> SimulatorBuilder:
+    def with_settings(self, settings: HathorSettings) -> NanoSimulatorBuilder:
         """Provide custom HathorSettings."""
         self._settings = settings
         return self
 
-    def with_auto_new_block(self, enabled: bool) -> SimulatorBuilder:
+    def with_auto_new_block(self, enabled: bool) -> NanoSimulatorBuilder:
         """Set whether new_block() is called automatically after each successful call."""
         self._auto_new_block = enabled
         return self
 
-    def with_unlimited_fuel(self) -> SimulatorBuilder:
+    def with_unlimited_fuel(self) -> NanoSimulatorBuilder:
         """Disable fuel metering for rapid prototyping."""
         self._unlimited_fuel = True
         return self
 
-    def with_checksig(self, backend: ChecksigBackend | None) -> SimulatorBuilder:
+    def with_checksig(self, backend: ChecksigBackend | None) -> NanoSimulatorBuilder:
         """Set the checksig backend used during simulated execution.
 
         By default, the simulator uses a simulated backend that recognizes CHECKSIG_VALID
@@ -103,9 +103,9 @@ class SimulatorBuilder:
         self._checksig_backend = backend
         return self
 
-    def build(self) -> Simulator:
-        """Build and return a configured Simulator instance."""
-        from hathorlib.simulator.simulator import Simulator
+    def build(self) -> NanoSimulator:
+        """Build and return a configured NanoSimulator instance."""
+        from hathorlib.nanocontracts.simulator.simulator import NanoSimulator
 
         settings = self._settings or _SIMULATOR_SETTINGS
 
@@ -130,7 +130,7 @@ class SimulatorBuilder:
             blueprint_service=blueprint_service,
         )
 
-        return Simulator(
+        return NanoSimulator(
             runner_factory=runner_factory,
             runtime_version=self._runtime_version,
             storage_factory=storage_factory,

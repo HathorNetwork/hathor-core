@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Simulated checksig backend for testing SignedData in the Simulator."""
+"""Simulated checksig backend for testing SignedData in the NanoSimulator."""
 
 from __future__ import annotations
 
