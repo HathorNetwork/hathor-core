@@ -90,8 +90,10 @@ class BaseNCExecLogs(unittest.TestCase):
     def _get_initialize_entries(self, tx: Transaction) -> list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry]:
         assert tx.is_nano_contract()
         nano_header = tx.get_nano_header()
-        blueprint_class = self.manager.blueprint_service.nc_catalog.get_blueprint_class(BlueprintId(nano_header.nc_id))
-        assert blueprint_class is not None
+        nc_catalog = self.manager.blueprint_service.nc_catalog
+        blueprint_and_version = nc_catalog.get_blueprint_class_and_version(BlueprintId(nano_header.nc_id))
+        assert blueprint_and_version is not None
+        blueprint_class, _ = blueprint_and_version
         return [
             NCCallBeginEntry.model_construct(
                 nc_id=ContractId(tx.hash),

@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, assert_never
 
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathorlib.nanocontracts.versions import BlueprintVersion, NanoRuntimeVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -38,6 +38,7 @@ class Features:
     fee_tokens: bool
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
+    blueprint_version: BlueprintVersion
 
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
@@ -50,6 +51,7 @@ class Features:
             Feature.FEE_TOKENS: settings.ENABLE_FEE_BASED_TOKENS,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
+            Feature.BLUEPRINT_V2: settings.ENABLE_BLUEPRINT_V2,
         }
 
         feature_is_active: dict[Feature, bool] = {
@@ -61,6 +63,7 @@ class Features:
         nano_runtime_version = (
             NanoRuntimeVersion.V2 if feature_is_active[Feature.NANO_RUNTIME_V2] else NanoRuntimeVersion.V1
         )
+        blueprint_version = BlueprintVersion.V2 if feature_is_active[Feature.BLUEPRINT_V2] else BlueprintVersion.V1
 
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
@@ -68,6 +71,7 @@ class Features:
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
+            blueprint_version=blueprint_version,
         )
 
     @staticmethod
@@ -93,6 +97,7 @@ class Features:
             fee_tokens=features.fee_tokens,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
+            blueprint_version=features.blueprint_version,
         )
 
     @staticmethod
@@ -114,6 +119,7 @@ class Features:
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
+            blueprint_version=BlueprintVersion.V2,
         )
 
 
