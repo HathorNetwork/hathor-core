@@ -1093,6 +1093,105 @@ class TestToJsonExtended:
         input_data = result['inputs'][0]
         assert input_data.get('type') == 'shielded'
 
+    def test_tokens_array_included(self) -> None:
+        """to_json_extended must include the tokens array for regular transactions."""
+        from hathor.transaction.transaction import Transaction
+
+        custom_token_uid = os.urandom(32)
+
+        meta = MagicMock()
+        meta.voided_by = set()
+        meta.first_block = None
+        meta.get_output_spent_by = MagicMock(return_value=None)
+        meta.spent_outputs = {}
+
+        storage = MagicMock()
+
+        tx = MagicMock(spec=Transaction)
+        tx.hash_hex = 'aabb'
+        tx.hash = b'\x01' * 32
+        tx.version = 1
+        tx.weight = 1.0
+        tx.timestamp = 1000
+        tx.storage = storage
+        tx.inputs = []
+        tx.outputs = []
+        tx.shielded_outputs = []
+        tx.parents = []
+        tx.tokens = [custom_token_uid]
+        tx.get_metadata = MagicMock(return_value=meta)
+        tx.is_nano_contract = MagicMock(return_value=False)
+
+        result = Transaction.to_json_extended(tx)
+        assert 'tokens' in result, 'to_json_extended must include tokens array'
+        assert result['tokens'] == [custom_token_uid.hex()]
+
+    def test_amount_shielded_output_has_token_field(self) -> None:
+        """AmountShielded outputs in to_json_extended must have a resolved 'token' field."""
+        from hathor.transaction.base_transaction import GenericVertex, TxOutput
+
+        custom_token_uid = os.urandom(32)
+        shielded = _make_amount_shielded(token_data=1)
+
+        meta = MagicMock()
+        meta.voided_by = set()
+        meta.first_block = None
+        meta.get_output_spent_by = MagicMock(return_value=None)
+
+        storage = MagicMock()
+
+        tx = MagicMock()
+        tx.hash_hex = 'ccdd'
+        tx.hash = b'\x02' * 32
+        tx.version = 1
+        tx.weight = 1.0
+        tx.timestamp = 1000
+        tx.storage = storage
+        tx.inputs = []
+        tx.outputs = []
+        tx.shielded_outputs = [shielded]
+        tx.parents = []
+        tx.get_metadata = MagicMock(return_value=meta)
+        tx.get_token_uid = MagicMock(return_value=custom_token_uid)
+
+        result = GenericVertex.to_json_extended(tx)
+        shielded_output = result['outputs'][0]
+        assert shielded_output.get('type') == 'shielded'
+        assert 'token' in shielded_output, 'AmountShielded output must have resolved token field'
+        assert shielded_output['token'] == custom_token_uid.hex()
+        tx.get_token_uid.assert_called_with(1 & TxOutput.TOKEN_INDEX_MASK)
+
+    def test_full_shielded_output_has_no_token_field(self) -> None:
+        """FullShielded outputs in to_json_extended must NOT have a 'token' field (token is hidden)."""
+        from hathor.transaction.base_transaction import GenericVertex
+
+        shielded = _make_full_shielded()
+
+        meta = MagicMock()
+        meta.voided_by = set()
+        meta.first_block = None
+        meta.get_output_spent_by = MagicMock(return_value=None)
+
+        storage = MagicMock()
+
+        tx = MagicMock()
+        tx.hash_hex = 'eeff'
+        tx.hash = b'\x03' * 32
+        tx.version = 1
+        tx.weight = 1.0
+        tx.timestamp = 1000
+        tx.storage = storage
+        tx.inputs = []
+        tx.outputs = []
+        tx.shielded_outputs = [shielded]
+        tx.parents = []
+        tx.get_metadata = MagicMock(return_value=meta)
+
+        result = GenericVertex.to_json_extended(tx)
+        shielded_output = result['outputs'][0]
+        assert shielded_output.get('type') == 'shielded'
+        assert 'token' not in shielded_output, 'FullShielded output must not have token field'
+
 
 # ============================================================================
 # op_find_p2pkh crashes on shielded input spend

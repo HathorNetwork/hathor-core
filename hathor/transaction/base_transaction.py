@@ -873,6 +873,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             spent_by = meta.get_output_spent_by(output_index)
             s_data = _shielded_output_to_json(shielded_out, decode_script=True)
             s_data['spent_by'] = spent_by.hex() if spent_by else None
+            from hathor.transaction.shielded_tx_output import AmountShieldedOutput
+            if isinstance(shielded_out, AmountShieldedOutput):
+                s_data['token'] = self.get_token_uid(shielded_out.token_data & TxOutput.TOKEN_INDEX_MASK).hex()
             ret['outputs'].append(s_data)
 
         return ret
