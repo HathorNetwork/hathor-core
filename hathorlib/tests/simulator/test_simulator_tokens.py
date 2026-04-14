@@ -17,8 +17,8 @@
 import pytest
 
 from hathorlib.nanocontracts.exception import NCFail
-from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID
 from hathorlib.nanocontracts.simulator import NanoSimulator, NanoSimulatorBuilder
+from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID
 
 from .blueprints import Vault
 

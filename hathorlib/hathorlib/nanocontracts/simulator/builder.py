@@ -19,12 +19,16 @@ from typing import TYPE_CHECKING
 from hathorlib.conf.settings import FeatureSetting, HathorSettings
 from hathorlib.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathorlib.nanocontracts.runner.runner import RunnerFactory
-from hathorlib.nanocontracts.types import ChecksigBackend
 from hathorlib.nanocontracts.simulator.checksig import simulated_checksig_backend
 from hathorlib.nanocontracts.simulator.context_factory import ContextFactory
 from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
-from hathorlib.nanocontracts.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
+from hathorlib.nanocontracts.simulator.in_memory_services import (
+    InMemoryBlueprintService,
+    InMemoryTxStorage,
+    SimulatorClock,
+)
 from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
+from hathorlib.nanocontracts.types import ChecksigBackend
 
 if TYPE_CHECKING:
     from hathorlib.nanocontracts.simulator.simulator import NanoSimulator

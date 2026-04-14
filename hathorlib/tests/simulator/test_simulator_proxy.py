@@ -20,8 +20,14 @@ import pytest
 
 import hathorlib.nanocontracts.types as _nc_types
 from hathorlib.nanocontracts.exception import NCFail
+from hathorlib.nanocontracts.simulator import (
+    CHECKSIG_INVALID,
+    CHECKSIG_VALID,
+    ContractProxy,
+    NanoSimulatorBuilder,
+    TxResult,
+)
 from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, SignedData, TxOutputScript
-from hathorlib.nanocontracts.simulator import CHECKSIG_INVALID, CHECKSIG_VALID, ContractProxy, NanoSimulatorBuilder, TxResult
 
 from .blueprints import CollectionArgs, Counter, FailingBlueprint, SignedMessage, Vault
 

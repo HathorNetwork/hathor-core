@@ -27,6 +27,18 @@ from typing import Any, Callable
 
 from hathorlib.nanocontracts import Blueprint, Context, NanoRuntimeVersion, NCFail, Runner, RunnerFactory
 from hathorlib.nanocontracts.nc_exec_logs import NCEvent, NCExecEntry
+from hathorlib.nanocontracts.simulator.context_factory import ContextFactory
+from hathorlib.nanocontracts.simulator.event_store import EventStore
+from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
+from hathorlib.nanocontracts.simulator.in_memory_services import (
+    InMemoryBlueprintService,
+    InMemoryTxStorage,
+    SimulatorClock,
+)
+from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
+from hathorlib.nanocontracts.simulator.proxy import ContractProxy
+from hathorlib.nanocontracts.simulator.result import BlockResult, TxResult
+from hathorlib.nanocontracts.simulator.snapshot import SimulatorSnapshot
 from hathorlib.nanocontracts.storage import NCBlockStorage
 from hathorlib.nanocontracts.storage.contract_storage import Balance
 from hathorlib.nanocontracts.types import (
@@ -47,14 +59,6 @@ from hathorlib.nanocontracts.types import (
 )
 from hathorlib.nanocontracts.vertex_data import BlockData
 from hathorlib.scripts import P2PKH
-from hathorlib.nanocontracts.simulator.context_factory import ContextFactory
-from hathorlib.nanocontracts.simulator.event_store import EventStore
-from hathorlib.nanocontracts.simulator.id_generator import IdGenerator
-from hathorlib.nanocontracts.simulator.in_memory_services import InMemoryBlueprintService, InMemoryTxStorage, SimulatorClock
-from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
-from hathorlib.nanocontracts.simulator.proxy import ContractProxy
-from hathorlib.nanocontracts.simulator.result import BlockResult, TxResult
-from hathorlib.nanocontracts.simulator.snapshot import SimulatorSnapshot
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 
