@@ -296,10 +296,15 @@ class TransactionVerifier:
         token_dict: TokenInfoDict,
         *,
         allow_nonexistent_tokens: bool = False,
+        is_shielded: bool = False,
     ) -> tuple[int, bool]:
         """Check token permissions and compute deposit/withdraw balance.
 
         Shared logic between verify_sum and verify_token_rules.
+
+        For shielded transactions (is_shielded=True), the amount-based melt/mint check and
+        deposit/withdraw calculation are skipped for non-native tokens because transparent
+        deficits are expected — value moved to shielded outputs.
 
         Returns:
             (htr_expected_amount, has_nonexistent_tokens)
@@ -309,7 +314,7 @@ class TransactionVerifier:
         has_nonexistent_tokens = False
 
         for token_uid, token_info in token_dict.items():
-            cls._check_token_permissions(token_uid, token_info)
+            cls._check_token_permissions(token_uid, token_info, is_shielded=is_shielded)
             match token_info.version:
                 case None:
                     if not allow_nonexistent_tokens:
@@ -320,10 +325,11 @@ class TransactionVerifier:
                     continue
 
                 case TokenVersion.DEPOSIT:
-                    if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
-                    if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+                    if not is_shielded:
+                        if token_info.has_been_melted():
+                            withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                        if token_info.has_been_minted():
+                            deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
 
                 case TokenVersion.FEE:
                     continue
@@ -408,7 +414,7 @@ class TransactionVerifier:
         :raises ForbiddenMelt: if tokens were melted without authority
         :raises InputOutputMismatch: if fee amounts are incorrect
         """
-        cls._check_token_permissions_and_deposits(settings, token_dict)
+        cls._check_token_permissions_and_deposits(settings, token_dict, is_shielded=True)
 
         expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
@@ -416,8 +422,20 @@ class TransactionVerifier:
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
     @staticmethod
-    def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
-        """Verify whether token can be minted/melted based on its authority."""
+    def _check_token_permissions(
+        token_uid: TokenUid,
+        token_info: TokenInfo,
+        *,
+        is_shielded: bool = False,
+    ) -> None:
+        """Verify whether token can be minted/melted based on its authority.
+
+        For shielded transactions (is_shielded=True), the amount-based melt/mint check is
+        skipped for non-native tokens because the transparent deficit is expected — value
+        moved to shielded outputs and balance is verified cryptographically by
+        verify_shielded_balance. Authority-based mint/melt is separately blocked by
+        verify_no_mint_melt.
+        """
         from hathor.conf.settings import HATHOR_TOKEN_UID
         if token_info.version == TokenVersion.NATIVE:
             assert token_uid == HATHOR_TOKEN_UID
@@ -425,6 +443,11 @@ class TransactionVerifier:
             assert not token_info.can_melt
             return
         assert token_uid != HATHOR_TOKEN_UID
+        if is_shielded:
+            # In shielded txs, transparent deficit/surplus is expected — balance is
+            # verified cryptographically. verify_no_mint_melt already blocks authorized
+            # mint/melt operations.
+            return
         if token_info.has_been_melted() and not token_info.can_melt:
             raise ForbiddenMelt.from_token(token_info.amount, token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:

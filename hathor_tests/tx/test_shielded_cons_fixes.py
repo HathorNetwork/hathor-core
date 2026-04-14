@@ -25,9 +25,8 @@ import pytest
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import (
-    ForbiddenMelt,
-    ForbiddenMint,
     InputOutputMismatch,
+    InvalidShieldedOutputError,
     ShieldedMintMeltForbiddenError,
 )
 from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
@@ -118,13 +117,13 @@ class TestVerifySumBypass:
     MUST still be enforced. These tests verify they are.
     """
 
-    def test_mint_without_authority_rejected_for_shielded_tx(self) -> None:
-        """A shielded tx that mints tokens without mint authority must be rejected.
+    def test_transparent_surplus_without_authority_allowed_for_shielded_tx(self) -> None:
+        """A shielded tx with transparent surplus (amount > 0) and no mint authority must pass.
 
-        Attack: create a tx with shielded outputs that mints custom tokens
-        (amount > 0 in token_dict) but has no mint authority input.
-        Before the fix, verify_sum is completely skipped for shielded txs,
-        so this goes unchecked.
+        In shielded txs, a transparent surplus means shielded inputs provided more
+        value than shielded outputs consumed, leaving extra transparent output value.
+        This is NOT minting — balance is verified cryptographically by
+        verify_shielded_balance. The amount-based ForbiddenMint check must be skipped.
         """
         from hathor.transaction import Transaction
 
@@ -132,7 +131,6 @@ class TestVerifySumBypass:
 
         token_uid = os.urandom(32)
 
-        # Create a mock tx with shielded outputs
         tx = MagicMock(spec=Transaction)
         tx.is_genesis = False
         tx.has_shielded_outputs = MagicMock(return_value=True)
@@ -141,22 +139,37 @@ class TestVerifySumBypass:
         tx.hash = b'\x00' * 32
         tx.hash_hex = tx.hash.hex()
 
-        # Token dict: token has been minted (amount > 0), but can_mint=False
+        # Token dict: transparent surplus — NOT actual minting, just value from shielded inputs
         token_dict = TokenInfoDict()
         token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(version=TokenVersion.NATIVE, amount=0)
         token_dict[token_uid] = TokenInfo(
             version=TokenVersion.DEPOSIT,
-            amount=100,  # positive = minted
-            can_mint=False,  # NO mint authority!
+            amount=100,  # transparent surplus — shielded inputs cover the difference
+            can_mint=False,
         )
+        token_dict.fees_from_fee_header = 0
         tx.get_complete_token_info = MagicMock(return_value=token_dict)
 
         with patch.object(VerificationService, 'verify_without_storage'):
-            with pytest.raises(ForbiddenMint):
-                service._verify_tx(tx, params)
+            # Should not raise ForbiddenMint — balance is verified cryptographically
+            service._verify_tx(tx, params)
 
-    def test_melt_without_authority_rejected_for_shielded_tx(self) -> None:
-        """A shielded tx that melts tokens without melt authority must be rejected."""
+        # Ensure that the cryptographic balance check is still enforced:
+        # _verify_shielded_header calls verify_shielded_outputs_with_storage,
+        # which would reject the tx if commitments don't balance.
+        balance_error = InvalidShieldedOutputError('shielded balance mismatch')
+        verifiers.tx.verify_shielded_outputs_with_storage.side_effect = balance_error
+        with pytest.raises(InvalidShieldedOutputError):
+            service._verify_shielded_header(tx)
+
+    def test_transparent_deficit_without_authority_allowed_for_shielded_tx(self) -> None:
+        """A shielded tx with transparent deficit (amount < 0) and no melt authority must pass.
+
+        In shielded txs, a transparent deficit means value moved from transparent
+        inputs to shielded outputs. This is NOT melting — balance is verified
+        cryptographically by verify_shielded_balance. The amount-based ForbiddenMelt
+        check must be skipped.
+        """
         from hathor.transaction import Transaction
 
         service, settings, verifiers, params = _make_service_and_mocks()
@@ -171,19 +184,28 @@ class TestVerifySumBypass:
         tx.hash = b'\x00' * 32
         tx.hash_hex = tx.hash.hex()
 
-        # Token dict: token has been melted (amount < 0), but can_melt=False
+        # Token dict: transparent deficit — NOT actual melting, value went to shielded outputs
         token_dict = TokenInfoDict()
         token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(version=TokenVersion.NATIVE, amount=0)
         token_dict[token_uid] = TokenInfo(
             version=TokenVersion.DEPOSIT,
-            amount=-100,  # negative = melted
-            can_melt=False,  # NO melt authority!
+            amount=-100,  # transparent deficit — value went to shielded outputs
+            can_melt=False,
         )
+        token_dict.fees_from_fee_header = 0
         tx.get_complete_token_info = MagicMock(return_value=token_dict)
 
         with patch.object(VerificationService, 'verify_without_storage'):
-            with pytest.raises(ForbiddenMelt):
-                service._verify_tx(tx, params)
+            # Should not raise ForbiddenMelt — balance is verified cryptographically
+            service._verify_tx(tx, params)
+
+        # Ensure that the cryptographic balance check is still enforced:
+        # _verify_shielded_header calls verify_shielded_outputs_with_storage,
+        # which would reject the tx if commitments don't balance.
+        balance_error = InvalidShieldedOutputError('shielded balance mismatch')
+        verifiers.tx.verify_shielded_outputs_with_storage.side_effect = balance_error
+        with pytest.raises(InvalidShieldedOutputError):
+            service._verify_shielded_header(tx)
 
     def test_deposit_enforced_for_shielded_tx_with_mint(self) -> None:
         """A shielded tx minting deposit-based tokens is now forbidden.
@@ -389,6 +411,57 @@ class TestVerifySumBypass:
 
         with patch.object(VerificationService, 'verify_without_storage'):
             service._verify_tx(tx, params)
+
+    def test_custom_token_to_shielded_output_not_rejected(self) -> None:
+        """A shielded tx where custom tokens move to shielded outputs must not be rejected.
+
+        Scenario: 1000 custom token transparent input -> 500 AmountShielded output + 500
+        transparent change. token_dict only sees the transparent side, so
+        token_info.amount = -500 (looks like melting). This must NOT raise
+        ForbiddenMelt because the balance is verified cryptographically by
+        verify_shielded_balance, and verify_no_mint_melt already blocks
+        authorized minting/melting in shielded txs.
+        """
+        from hathor.transaction import Transaction
+
+        service, settings, verifiers, params = _make_service_and_mocks()
+
+        token_uid = os.urandom(32)
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        # Token dict: custom token has transparent deficit because value went to shielded outputs
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(
+            version=TokenVersion.NATIVE,
+            amount=0,
+        )
+        token_dict[token_uid] = TokenInfo(
+            version=TokenVersion.DEPOSIT,
+            amount=-500,  # transparent deficit — custom tokens went into shielded outputs
+            can_mint=False,
+            can_melt=False,
+        )
+        token_dict.fees_from_fee_header = 0
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            # Should not raise ForbiddenMelt — balance is verified cryptographically
+            service._verify_tx(tx, params)
+
+        # Ensure that the cryptographic balance check is still enforced:
+        # _verify_shielded_header calls verify_shielded_outputs_with_storage,
+        # which would reject the tx if commitments don't balance.
+        balance_error = InvalidShieldedOutputError('shielded balance mismatch')
+        verifiers.tx.verify_shielded_outputs_with_storage.side_effect = balance_error
+        with pytest.raises(InvalidShieldedOutputError):
+            service._verify_shielded_header(tx)
 
 
 # ============================================================================
