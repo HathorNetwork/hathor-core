@@ -1,4 +1,4 @@
-# Copyright 2021 Hathor Labs
+# Copyright 2026 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,8 +88,8 @@ class PeersWhitelist(ABC):
            and ends up stopping the looping call.
            We log the error and start the looping call again with exponential backoff.
         """
-        self._on_update_failure()
         retry_interval = self._get_retry_interval()
+        self._on_update_failure()
         self.log.error(
             'whitelist refresh had an exception. Start looping call again.',
             args=args,
