@@ -412,6 +412,69 @@ class TestVerifySumBypass:
         with patch.object(VerificationService, 'verify_without_storage'):
             service._verify_tx(tx, params)
 
+    def test_valid_shielded_tx_with_htr_surplus_from_unshielding(self) -> None:
+        """Unshielding tx where HTR moves from shielded inputs to transparent outputs.
+
+        Scenario: shielded inputs (amounts hidden, skipped by _get_token_info_from_inputs)
+        produce transparent outputs. token_dict only sees the transparent side, so
+        htr_info.amount is positive (looks like a surplus). This must NOT raise
+        InputOutputMismatch because balance integrity is verified by
+        verify_shielded_balance (cryptographic proof).
+        """
+        from hathor.transaction import Transaction
+
+        service, settings, verifiers, params = _make_service_and_mocks()
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        # Token dict: HTR has a transparent surplus because shielded inputs are skipped
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(
+            version=TokenVersion.NATIVE,
+            amount=1000,  # transparent surplus — HTR came from shielded inputs
+        )
+        token_dict.fees_from_fee_header = 0
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            # Should not raise — balance is verified cryptographically
+            service._verify_tx(tx, params)
+
+    def test_valid_shielded_tx_with_partial_htr_surplus_from_unshielding(self) -> None:
+        """Unshielding tx where only part of HTR comes from shielded inputs.
+
+        Some HTR comes from shielded inputs (skipped), some from transparent inputs.
+        Net transparent amount is positive. Must not be rejected.
+        """
+        from hathor.transaction import Transaction
+
+        service, settings, verifiers, params = _make_service_and_mocks()
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(
+            version=TokenVersion.NATIVE,
+            amount=500,  # partial surplus from unshielding
+        )
+        token_dict.fees_from_fee_header = 0
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            service._verify_tx(tx, params)
+
     def test_custom_token_to_shielded_output_not_rejected(self) -> None:
         """A shielded tx where custom tokens move to shielded outputs must not be rejected.
 
