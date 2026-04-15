@@ -20,7 +20,7 @@ from .factory import (
     create_peers_whitelist,
 )
 from .file_whitelist import FilePeersWhitelist
-from .parsing import WhitelistPolicy, parse_whitelist, parse_whitelist_with_policy
+from .parsing import WhitelistPolicy, parse_whitelist_with_policy
 from .peers_whitelist import (
     WHITELIST_REFRESH_INTERVAL,
     WHITELIST_RETRY_INTERVAL_MAX,
@@ -32,7 +32,6 @@ from .url_whitelist import WHITELIST_REQUEST_TIMEOUT, URLPeersWhitelist
 
 __all__ = [
     'WhitelistPolicy',
-    'parse_whitelist',
     'parse_whitelist_with_policy',
     'PeersWhitelist',
     'OnRemoveCallbackType',

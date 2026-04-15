@@ -29,28 +29,6 @@ class WhitelistPolicy(Enum):
     ONLY_WHITELISTED_PEERS = 'only-whitelisted-peers'
 
 
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[PeerId]:
-    """ Parses the list of whitelist peer ids
-
-    Example:
-
-    parse_whitelist('''hathor-whitelist
-# node1
- 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-
-# node3
-G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-''')
-    {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
-
-    """
-    lines = parse_file(text, header=header)
-    return {PeerId(line.split()[0]) for line in lines}
-
-
 def parse_whitelist_with_policy(
     text: str,
     *,
