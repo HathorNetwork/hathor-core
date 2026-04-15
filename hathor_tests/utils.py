@@ -284,7 +284,7 @@ def run_server(
         '--allow-mining-without-peers',
         '--wallet-index',
         # Disable whitelist for testing (empty whitelist with restrictive policy blocks all)
-        '--x-p2p-whitelist disabled'
+        '--p2p-whitelist-source disabled'
     ])
 
     if bootstrap:

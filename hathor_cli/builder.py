@@ -304,7 +304,7 @@ class CliBuilder:
         cpu_mining_service = CpuMiningService()
 
         # Check whitelist pathing. Default values:
-        whitelist_spec = self._args.x_p2p_whitelist or 'default'
+        whitelist_spec = self._args.p2p_whitelist_source or 'default'
         whitelist_spec = whitelist_spec.strip()
 
         peers_whitelist = create_peers_whitelist(
