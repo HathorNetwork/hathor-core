@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from twisted.internet.defer import Deferred
 from twisted.web.client import Agent
+from twisted.web.iweb import IResponse
 
 from hathor.p2p.whitelist.parsing import parse_whitelist_with_policy
 from hathor.p2p.whitelist.peers_whitelist import PeersWhitelist
@@ -116,8 +117,15 @@ class URLPeersWhitelist(PeersWhitelist):
             self._url.encode(),
             Headers({'User-Agent': ['hathor-core']}),
             None)
+        d.addCallback(self._check_response_status)
         d.addCallback(readBody)  # type: ignore[call-overload]
         d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self._reactor)
         d.addCallback(self._update_whitelist_cb)  # type: ignore[call-overload]
         d.addErrback(self._update_whitelist_err)
         return d
+
+    def _check_response_status(self, response: IResponse) -> IResponse:
+        """Check HTTP response status code before reading body."""
+        if response.code < 200 or response.code >= 300:
+            raise ValueError(f'Whitelist URL returned HTTP {response.code}')
+        return response

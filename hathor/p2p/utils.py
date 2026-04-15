@@ -24,7 +24,6 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
-from structlog import get_logger
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.get_settings import get_global_settings
@@ -33,8 +32,6 @@ from hathor.indexes.height_index import HeightInfo
 from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.transaction.genesis import get_representation_for_all_genesis
-
-logger = get_logger()
 
 
 def discover_hostname(timeout: float | None = None) -> Optional[str]:

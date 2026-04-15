@@ -50,7 +50,9 @@ def create_peers_whitelist(
     spec_lower = whitelist_spec.lower()
 
     if spec_lower in (WHITELIST_SPEC_DEFAULT, WHITELIST_SPEC_HATHORLABS):
-        peers_whitelist = URLPeersWhitelist(reactor, str(settings.WHITELIST_URL), True)
+        if settings.WHITELIST_URL is None:
+            return None
+        peers_whitelist = URLPeersWhitelist(reactor, settings.WHITELIST_URL, True)
     elif spec_lower in (WHITELIST_SPEC_NONE, WHITELIST_SPEC_DISABLED):
         peers_whitelist = None
     elif os.path.isfile(whitelist_spec):

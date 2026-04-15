@@ -108,13 +108,6 @@ class HathorSettings(BaseModel):
     # Initial bootstrap servers
     BOOTSTRAP_DNS: list[str] = []
 
-    # enable peer whitelist
-    ENABLE_PEER_WHITELIST: bool = False
-
-    # weather to use the whitelist with sync-v2 peers, does not affect whether the whitelist is enabled or not, it will
-    # always be enabled for sync-v1 if it is enabled
-    USE_PEER_WHITELIST_ON_SYNC_V2: bool = True
-
     # Genesis pre-mined tokens
     GENESIS_TOKEN_UNITS: int = 1 * (10 ** 9)  # 1B
 

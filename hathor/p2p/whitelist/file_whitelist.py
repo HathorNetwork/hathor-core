@@ -35,7 +35,7 @@ class FilePeersWhitelist(PeersWhitelist):
         return self._path
 
     def refresh(self) -> Deferred[None]:
-        return self._unsafe_update()
+        return self.update()
 
     def _read_file(self) -> str:
         """Read the whitelist file. Runs in a thread to avoid blocking."""

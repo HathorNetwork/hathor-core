@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from structlog import get_logger
 from twisted.internet.defer import Deferred
+from twisted.internet.interfaces import IDelayedCall
 from twisted.internet.task import LoopingCall
 
 from hathor.p2p.peer_id import PeerId
@@ -47,6 +48,7 @@ class PeersWhitelist(ABC):
         self._consecutive_failures: int = 0
         self._has_successful_fetch: bool = False
         self._bootstrap_peers: set[PeerId] = set()
+        self._pending_retry: IDelayedCall | None = None
 
     def add_bootstrap_peer(self, peer_id: PeerId) -> None:
         """Add a bootstrap peer ID. These are allowed during grace period."""
@@ -64,6 +66,9 @@ class PeersWhitelist(ABC):
         d.addErrback(self._handle_refresh_err)
 
     def stop(self) -> None:
+        if self._pending_retry is not None and self._pending_retry.active():
+            self._pending_retry.cancel()
+            self._pending_retry = None
         if self.lc_refresh.running:
             self.lc_refresh.stop()
 
@@ -97,7 +102,7 @@ class PeersWhitelist(ABC):
             retry_interval=retry_interval,
             consecutive_failures=self._consecutive_failures
         )
-        self._reactor.callLater(retry_interval, self._start_lc)
+        self._pending_retry = self._reactor.callLater(retry_interval, self._start_lc)
 
     def update(self) -> Deferred[None]:
         # Avoiding re-entrancy. If running, should not update once more.
@@ -118,9 +123,9 @@ class PeersWhitelist(ABC):
             self._current.add(peer_id)
             self.log.info('Peer added to whitelist', peer_id=peer_id)
 
-    def current_whitelist(self) -> set[PeerId]:
-        """ Returns the current whitelist as a set of PeerId."""
-        return self._current
+    def current_whitelist(self) -> frozenset[PeerId]:
+        """ Returns the current whitelist as a frozenset of PeerId."""
+        return frozenset(self._current)
 
     def policy(self) -> WhitelistPolicy:
         """ Returns the current whitelist policy."""
@@ -153,19 +158,24 @@ class PeersWhitelist(ABC):
 
         This is the common logic used by both URL and file-based whitelists after
         successfully parsing new whitelist content.
+        State is updated before callbacks so that any re-entrant is_peer_whitelisted
+        check during disconnect sees the new whitelist.
         """
         current_whitelist = set(self._current)
         self._log_diff(current_whitelist, new_whitelist)
 
         peers_to_remove = current_whitelist - new_whitelist
-        for peer_id in peers_to_remove:
-            if self._on_remove_callback:
-                self._on_remove_callback(peer_id)
 
+        # Update state before callbacks to avoid stale reads during disconnect
         self._current = new_whitelist
         self._policy = new_policy
         self._has_successful_fetch = True
+        self._bootstrap_peers.clear()
         self._on_update_success()
+
+        for peer_id in peers_to_remove:
+            if self._on_remove_callback:
+                self._on_remove_callback(peer_id)
 
     @abstractmethod
     def source(self) -> str | None:

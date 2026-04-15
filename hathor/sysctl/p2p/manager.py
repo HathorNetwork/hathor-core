@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
+from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.sync_version import SyncVersion
@@ -81,10 +82,11 @@ def pretty_sync_version(sync_version: SyncVersion) -> str:
 
 
 class ConnectionsManagerSysctl(Sysctl):
-    def __init__(self, connections: ConnectionsManager) -> None:
+    def __init__(self, connections: ConnectionsManager, settings: HathorSettings | None = None) -> None:
         super().__init__()
 
         self.connections = connections
+        self._settings = settings if settings is not None else connections._settings
         self._suspended_whitelist: PeersWhitelist | None = None
         self.register(
             'max_enabled_sync',
@@ -337,7 +339,7 @@ class ConnectionsManagerSysctl(Sysctl):
         whitelist = create_peers_whitelist(
             self.connections.reactor,
             new_whitelist,
-            self.connections._settings,
+            self._settings,
         )
 
         if whitelist is None:
