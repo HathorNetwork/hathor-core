@@ -19,6 +19,46 @@ Write rules as precise, testable statements — not tutorial prose. Prefer table
 for enumerations, state transitions, and configuration mappings. Use "MUST",
 "MUST NOT", "SHOULD", and "MAY" (RFC 2119) when precision matters.
 
+## What belongs in the spec vs. in the RFC
+
+The spec is the forever-contract: behaviors the feature guarantees no matter
+who implements it or how. An RFC is the narrative for a specific change to
+that contract. Keep the two separated.
+
+| Belongs in the **spec** (RULE-XX / DEC-XX) | Belongs in the **RFC** |
+|---|---|
+| CLI flag names and accepted values | Which module parses them |
+| Wire / file formats (headers, ordering, encoding) | Which function does the parsing |
+| State machine: states, transitions, triggers | Private field names that encode the state |
+| Constants: value, unit, intent | File the constant lives in |
+| Error outcomes visible to peers / operators / callers | Exact exception class / message text (unless part of a public contract) |
+| Architectural invariants ("file I/O MUST NOT block the reactor") | Mechanism that realizes them (library primitive, thread pool size) |
+| Observable ordering guarantees ("state updated before disconnect callbacks") | Which lines of which function enforce the ordering |
+| HTTP endpoint paths, field names, and shapes | Resource class that serves them |
+
+When in doubt: if the sentence only makes sense to someone reading *this
+specific codebase today*, it's an RFC-level detail. If it makes sense to
+someone integrating against the feature from outside, it's a spec rule.
+
+### Rule smells — reject or rewrite
+
+If a rule in this section exhibits any of the following, it is almost
+certainly implementation bleed and should be rewritten or demoted to an RFC:
+
+- Names a **private field** (`_current`, `_consecutive_failures`).
+- Names a **function, method, or class** (`create_peers_whitelist`,
+  `URLPeersWhitelist._unsafe_update`).
+- Names a **file path** (`hathor_cli/builder.py`).
+- Names a **library primitive** (`LoopingCall`, `Deferred`, `deferToThread`).
+- Asserts a **specific exception class or message text** unless it is part
+  of a public API others depend on.
+- **Numbered steps that mirror source-file order.** Either collapse to the
+  invariant ("state is updated before callbacks fire") or move the
+  step-by-step to the RFC that proposed this implementation.
+
+The test: if the rule stops being true after a behavior-preserving refactor
+(same contract, different code shape), the rule is over-specified.
+
 ## Sub-section guidelines
 
 Break the specification into logical sub-sections. Common patterns:
@@ -34,7 +74,10 @@ Break the specification into logical sub-sections. Common patterns:
 - **Integration points** — how this feature interacts with other subsystems.
   Specify the contract at each boundary (function signature, callback shape,
   sysctl key, API field).
-- **Constants** — all magic numbers, intervals, limits, with rationale inline.
+- **Constants** — all magic numbers, intervals, limits. Columns: name, value,
+  unit, purpose (the *intent*), rationale (why this value — `?` if unknown).
+  Do NOT include a "Defined in" / "Module" column; where the constant lives
+  is an implementation detail.
 
 Example of a verifiable rule:
 

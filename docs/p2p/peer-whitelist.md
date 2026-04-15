@@ -8,8 +8,8 @@
 # Overview
 
 A peer whitelist mechanism for the P2P layer that restricts which peers a node
-may connect to. The whitelist is fetched from a remote URL or read from a local
-file, refreshed periodically, and supports two policies: `only-whitelisted-peers`
+may connect to. The whitelist is sourced from a remote URL or a local file,
+refreshed periodically, and supports two policies: `only-whitelisted-peers`
 (default) and `allow-all`. Selection happens at startup via a single CLI spec
 string, and the whitelist can be replaced, suspended, or inspected at runtime
 via sysctl.
@@ -30,35 +30,33 @@ The whitelist is configured via a single CLI argument:
 --p2p-whitelist-source <spec>
 ```
 
-**RULE-01**: When `--p2p-whitelist-source` is omitted (or its value is falsy),
-the builder MUST substitute the literal string `default`
-(`hathor_cli/builder.py`).
+**RULE-01**: When `--p2p-whitelist-source` is omitted or its value is falsy,
+the node MUST behave as if `default` was passed.
 
-**RULE-02**: The `<spec>` value MUST be resolved case-insensitively by
-`create_peers_whitelist` (`hathor/p2p/whitelist/factory.py`) in the following
-order:
+**RULE-02**: The `<spec>` value MUST be resolved case-insensitively, in the
+following order:
 
 | `<spec>` value (lowercased) | Resolution |
 |---|---|
-| `default` or `hathorlabs` | If `settings.WHITELIST_URL` is `None`, the whitelist MUST be disabled (return `None`). Otherwise construct `URLPeersWhitelist(reactor, settings.WHITELIST_URL, mainnet=True)`. |
-| `none` or `disabled` | Whitelist MUST be disabled — all peers allowed. |
-| A value for which `os.path.isfile(<spec>)` is `True` | Construct `FilePeersWhitelist(reactor, <spec>)`. |
-| Anything else | Construct `URLPeersWhitelist(reactor, <spec>, mainnet=True)`. |
+| `default` or `hathorlabs` | Use the URL from `settings.WHITELIST_URL`. If `WHITELIST_URL` is unset, the whitelist MUST be disabled (all peers allowed). |
+| `none` or `disabled` | Whitelist MUST be disabled. |
+| A value that resolves to an existing local file | Use a file-based whitelist reading from that path. |
+| Anything else | Treat the value as a URL. |
 
-**RULE-03**: `URLPeersWhitelist` with `mainnet=True` MUST reject the URL with
-`ValueError` when the scheme is not `https` or the netloc is empty. With
-`mainnet=False`, no scheme/netloc validation is performed.
+**RULE-03**: On mainnet, URL sources MUST use the `https` scheme and MUST have
+a non-empty host. A URL that violates either constraint MUST be rejected at
+construction time.
 
-**RULE-04**: `URLPeersWhitelist` MUST treat the literal URL string `"none"`
-(case-insensitive) as equivalent to `None`: `_url` is reset to `None` and all
-subsequent fetches become no-ops (an already-resolved `Deferred`).
+**RULE-04**: A URL source whose value is the literal string `none`
+(case-insensitive) MUST behave as if no URL were configured: the source is
+treated as inactive and refreshes are no-ops.
 
 ### Hathor settings used
 
 | Setting | Type | Default | Effect |
 |---|---|---|---|
-| `WHITELIST_URL` | `str \| None` | Mainnet: `https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids`. Testnet/other: `None`. | Source URL for the `default` / `hathorlabs` spec. |
-| `WHITELIST_WARN_BLOCKED_PEERS` | `bool` | `False` | Controls verbosity of the rejection error sent to a blocked peer (see RULE-18). |
+| `WHITELIST_URL` | `str \| None` | Mainnet: `https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids`. Testnet/other: unset. | Source URL for the `default` / `hathorlabs` spec. |
+| `WHITELIST_WARN_BLOCKED_PEERS` | `bool` | `false` | Controls verbosity of the rejection error sent to a blocked peer (see RULE-18). |
 
 Note: the P2P handshake capability `CAPABILITY_WHITELIST` (`'whitelist'`,
 advertised in HELLO) is a separate mechanism and is not part of this
@@ -67,12 +65,12 @@ overlaps; see Open Questions.
 
 ### Constants
 
-| Constant | Value | Defined in | Purpose |
-|---|---|---|---|
-| `WHITELIST_REFRESH_INTERVAL` | 30 s | `peers_whitelist.py` | Period of the refresh `LoopingCall`. |
-| `WHITELIST_RETRY_INTERVAL_MIN` | 30 s | `peers_whitelist.py` | Base of exponential backoff on looping-call crash. |
-| `WHITELIST_RETRY_INTERVAL_MAX` | 300 s | `peers_whitelist.py` | Cap of exponential backoff. |
-| `WHITELIST_REQUEST_TIMEOUT` | 45 s | `url_whitelist.py` | Timeout applied to the whole HTTP round trip. |
+| Constant | Value | Purpose |
+|---|---|---|
+| `WHITELIST_REFRESH_INTERVAL` | 30 s | Refresh period for the whitelist. |
+| `WHITELIST_RETRY_INTERVAL_MIN` | 30 s | Base of exponential backoff when the refresh mechanism crashes. |
+| `WHITELIST_RETRY_INTERVAL_MAX` | 300 s | Cap of exponential backoff. |
+| `WHITELIST_REQUEST_TIMEOUT` | 45 s | Timeout for a single URL fetch (full round trip). |
 
 ## Data format
 
@@ -82,96 +80,83 @@ MUST conform to:
 ```
 hathor-whitelist
 # Optional comment
-policy: <policy-type>
+# policy: <policy-type>
 <peer-id-hex>
 <peer-id-hex>
 ...
 ```
 
-**RULE-06**: The first line MUST be the literal string `hathor-whitelist`. If
-the header does not match, `parse_file` MUST raise `ValueError('invalid header')`.
+**RULE-06**: The first line MUST be the literal string `hathor-whitelist`.
+Content with any other first line MUST be rejected.
 
-**RULE-07**: After the header, lines MUST be stripped. Empty lines (after
-strip) and lines starting with `#` MUST be ignored.
+**RULE-07**: After the header, empty lines MUST be ignored.
 
-**RULE-08**: The `policy:` directive is optional. If present, it MUST appear
-before any peer-ID line. A `policy:` line that appears after at least one peer
-ID has been accumulated MUST cause
-`ValueError('policy must be defined in the header, before any peer IDs')`.
+**RULE-08**: The `policy:` directive is optional and MUST be written as a
+commented line (`# policy: <value>`) for backward compatibility with parsers
+that do not recognize the directive. If present, it MUST appear before any
+peer-ID line. A `policy:` line that appears after at least one peer ID has
+been accumulated MUST cause the content to be rejected.
 
 **RULE-09**: Valid policy values (case-insensitive) are:
 
-| Value | Maps to | Behavior |
-|---|---|---|
-| `only-whitelisted-peers` | `WhitelistPolicy.ONLY_WHITELISTED_PEERS` | Default when no `policy:` line is present. Only peers in the list are accepted. |
-| `allow-all` | `WhitelistPolicy.ALLOW_ALL` | All peers are accepted regardless of list membership. |
+| Value | Behavior |
+|---|---|
+| `only-whitelisted-peers` | Default when no `policy:` line is present. Only peers in the list are accepted. |
+| `allow-all` | All peers are accepted regardless of list membership. |
 
-Any other policy value MUST raise `ValueError('invalid whitelist policy: ...')`.
+Any other policy value MUST cause the content to be rejected.
 
 **RULE-10**: Each non-policy, non-comment, non-blank line MUST be parsed as a
-peer ID by taking the first whitespace-delimited token and passing it to
-`PeerId(...)`. A line that fails to parse (`ValueError` or `IndexError`) MUST
-be logged as a warning and skipped; it MUST NOT fail the entire update.
+peer ID (first whitespace-delimited token). A line that fails to parse as a
+valid peer ID MUST be logged as a warning and skipped; it MUST NOT fail the
+entire update.
 
 ## Lifecycle
 
 ### Operational states
 
-| State | Detection | Peer admission |
+| State | Description | Peer admission |
 |---|---|---|
-| DISABLED | `connections.peers_whitelist is None` and nothing suspended | All peers allowed. |
-| GRACE_PERIOD | whitelist exists AND `_has_successful_fetch == False` | Only peers in `_bootstrap_peers`. |
-| ENFORCING | whitelist exists AND `_has_successful_fetch == True` | Policy-driven (see RULE-16). |
-| SUSPENDED | whitelist moved to `P2pManagerSysctl._suspended_whitelist`; `connections.peers_whitelist is None` | All peers allowed (same as DISABLED). |
+| DISABLED | No whitelist configured. | All peers allowed. |
+| GRACE_PERIOD | Whitelist configured but no successful fetch yet. | Only bootstrap peers (see RULE-12) allowed. |
+| ENFORCING | Whitelist loaded from at least one successful fetch. | Policy-driven (see RULE-17). |
+| SUSPENDED | Whitelist configured but temporarily not enforced (via sysctl). | All peers allowed (same as DISABLED). |
 
 ### State transitions
 
 | From | Event | To | Side effects |
 |---|---|---|---|
-| GRACE_PERIOD | Fetch succeeds | ENFORCING | Apply whitelist; clear `_bootstrap_peers`; reset backoff. |
-| GRACE_PERIOD | Fetch fails | GRACE_PERIOD | Increment `_consecutive_failures`. Keep bootstrap-only mode. |
+| GRACE_PERIOD | Fetch succeeds | ENFORCING | Apply whitelist; drop bootstrap-peer state; reset backoff. |
+| GRACE_PERIOD | Fetch fails | GRACE_PERIOD | Increment failure counter. Keep bootstrap-only admission. |
 | ENFORCING | Fetch succeeds | ENFORCING | Apply new whitelist (diff, disconnect removed peers); reset backoff. |
-| ENFORCING | Fetch fails | ENFORCING | Preserve `_current` and `_policy`. Increment `_consecutive_failures`. |
-| ENFORCING / GRACE_PERIOD | Looping call crashes | same (restarted after backoff) | `_handle_refresh_err` schedules `_start_lc` after `_get_retry_interval()`. |
-| ENFORCING | Sysctl `off` | SUSPENDED | Whitelist stored in `_suspended_whitelist`; active set to `None`. |
-| SUSPENDED | Sysctl `on` | ENFORCING | Restore `_suspended_whitelist` as active; immediately disconnect non-whitelisted peers. |
-| Any | Sysctl set URL/path | GRACE_PERIOD → ENFORCING | Old whitelist `stop()`ped; `_suspended_whitelist` discarded; new whitelist starts refresh loop. |
+| ENFORCING | Fetch fails | ENFORCING | Preserve the active whitelist and policy. Increment failure counter. |
+| ENFORCING / GRACE_PERIOD | Refresh mechanism crashes | same (restarted after backoff) | Restart scheduled after `min(BASE * 2^failures, MAX)` (see RULE-14). |
+| ENFORCING | Sysctl `off` | SUSPENDED | Whitelist retained for later restore; enforcement paused. |
+| SUSPENDED | Sysctl `on` | ENFORCING | Enforcement resumes; currently-connected non-whitelisted peers MUST be disconnected immediately (see DEC-07). |
+| Any | Sysctl set URL/path | GRACE_PERIOD → ENFORCING | Old whitelist stopped; any suspended whitelist discarded; new whitelist begins refreshing. |
 
 ### Startup
 
-**RULE-11**: `Builder.build()` MUST pass the constructed `peers_whitelist`
-into `ConnectionsManager`. On `ConnectionsManager.start()`, if
-`peers_whitelist` is not `None`, the manager MUST call
-`peers_whitelist.start(self.drop_connection_by_peer_id)`. `start()` installs
-the callback and schedules the first iteration of the refresh `LoopingCall` at
-period `WHITELIST_REFRESH_INTERVAL`.
+**RULE-11**: When the node starts and a whitelist is configured, the whitelist
+MUST begin refreshing periodically and MUST be registered with a
+disconnect-on-removal callback that drops any peer removed from the list.
 
-**RULE-12**: During `do_discovery()`, for every discovered entrypoint whose
-`peer_id` is not `None`, the manager MUST call
-`peers_whitelist.add_bootstrap_peer(entrypoint.peer_id)`. This seeds the
-grace-period allowlist so the node can connect to bootstrap peers before the
-first successful fetch.
+**RULE-12**: During peer discovery, every entrypoint whose peer ID is known
+MUST be registered as a bootstrap peer so the node can connect to it during
+the grace period.
 
 ### Periodic refresh
 
-**RULE-13**: The refresh looping call MUST fire every
-`WHITELIST_REFRESH_INTERVAL` (30 s). Each invocation calls `update()`, which
-MUST be re-entrancy-guarded by `_is_running`: a call while `_is_running` is
-`True` MUST log a warning (`'whitelist update already running, skipping
-execution.'`) and return an already-resolved `Deferred[None]` without starting
-a new fetch. The flag MUST be cleared by an `addBoth` callback on the update
-deferred.
+**RULE-13**: The whitelist MUST be refreshed every `WHITELIST_REFRESH_INTERVAL`.
+Refreshes MUST NOT overlap: if a refresh is triggered while another is still
+in progress, the new invocation MUST be skipped (with a warning log) and MUST
+NOT start a parallel fetch.
 
-**RULE-14**: If `_unsafe_update()` raises an unhandled exception that kills
-the looping call, `_handle_refresh_err` MUST:
+**RULE-14**: If the refresh mechanism fails unexpectedly (not a single fetch
+failure, but the refresh loop itself), it MUST be restarted after a delay of
+`min(WHITELIST_RETRY_INTERVAL_MIN * 2^failures, WHITELIST_RETRY_INTERVAL_MAX)`:
 
-1. Compute `retry_interval = min(WHITELIST_RETRY_INTERVAL_MIN * 2^_consecutive_failures, WHITELIST_RETRY_INTERVAL_MAX)`.
-2. Call `_on_update_failure()` (increments `_consecutive_failures`).
-3. Log an error with the retry interval and failure count.
-4. Schedule `_start_lc` via `reactor.callLater(retry_interval, ...)`, storing
-   the `IDelayedCall` in `_pending_retry`.
-
-| `_consecutive_failures` before error | Retry interval |
+| Consecutive failures | Retry interval |
 |---|---|
 | 0 | 30 s |
 | 1 | 60 s |
@@ -179,263 +164,230 @@ the looping call, `_handle_refresh_err` MUST:
 | 3 | 240 s |
 | 4+ | 300 s (cap) |
 
-**RULE-15**: On a successful update, `_on_update_success()` MUST reset
-`_consecutive_failures` to 0.
+**RULE-15**: A successful refresh MUST reset the consecutive-failure counter
+to 0.
 
 ### Shutdown
 
-**RULE-16**: On `ConnectionsManager.stop()`, if `peers_whitelist` is not
-`None`, the manager MUST call `peers_whitelist.stop()`. `stop()` MUST cancel
-`_pending_retry` if active and MUST stop `lc_refresh` if it is running.
+**RULE-16**: When the node shuts down, any pending retry MUST be cancelled and
+the refresh mechanism MUST stop cleanly.
 
 ## Behavior
 
 ### Peer admission check
 
-**RULE-17**: The whitelist check occurs in `PeerIdState` during the PEER-ID
-handshake, after the remote peer sends its identity. The check logic is:
+**RULE-17**: The whitelist check occurs during the PEER-ID handshake, after
+the remote peer has sent its identity. The check MUST follow this logic:
 
-1. If the connection has no manager or `connections.peers_whitelist is None`
-   → peer is **allowed**.
-2. Delegate to `PeersWhitelist.is_peer_whitelisted(peer_id)`:
-   1. If `_has_successful_fetch` is `False` (grace period) → allowed **only
-      if** `peer_id in _bootstrap_peers`.
-   2. Else if `_policy == ALLOW_ALL` → **allowed**.
-   3. Else (`_policy == ONLY_WHITELISTED_PEERS`) → allowed **only if**
-      `peer_id in _current`.
+1. If no whitelist is configured → peer is **allowed**.
+2. If the whitelist has never completed a successful fetch (grace period) →
+   peer is allowed **only if** it is a registered bootstrap peer.
+3. Else if the active policy is `allow-all` → peer is **allowed**.
+4. Else (`only-whitelisted-peers`) → peer is allowed **only if** its ID is in
+   the active whitelist.
 
-**RULE-18**: When admission returns `False`, the protocol MUST close the
-connection with an error message:
+**RULE-18**: When admission fails, the connection MUST be closed with an error
+message:
 
-- If `settings.WHITELIST_WARN_BLOCKED_PEERS` is `True`:
+- If `WHITELIST_WARN_BLOCKED_PEERS` is `true`:
   `"Blocked (by {peer_id}). Get in touch with Hathor team."`
 - Otherwise: `"Connection rejected."`
 
 ### Applying a new whitelist
 
-**RULE-19**: When a new whitelist is successfully parsed,
-`_apply_whitelist_update(new_whitelist, new_policy)` MUST, **in this order**:
+**RULE-19**: When a refresh successfully parses a new whitelist, the system
+MUST update the active whitelist, active policy, and grace-period flag
+**before** invoking any disconnect-on-removal callback for peers that left
+the set. This ordering is observable: a re-entrant admission check performed
+inside a disconnect callback MUST see the new whitelist, not the old one.
+(See DEC-03.)
 
-1. Compute the diff between the old and new peer sets; log additions and
-   removals.
-2. Replace `_current` with `new_whitelist`.
-3. Replace `_policy` with `new_policy`.
-4. Set `_has_successful_fetch = True`.
-5. Clear `_bootstrap_peers`.
-6. Call `_on_update_success()` (resets the backoff counter to 0).
-7. For each removed peer, call `_on_remove_callback(peer_id)` if the callback
-   is set. The callback (`drop_connection_by_peer_id`) disconnects the peer.
-
-State MUST be updated **before** the remove callbacks fire, so that any
-re-entrant `is_peer_whitelisted` check triggered during disconnect observes
-the new whitelist rather than the stale one. See DEC-03.
-
-**RULE-20**: On fetch failure (network error, non-2xx HTTP status, decode
-error, parse error, file read error), `_current` and `_policy` MUST be
-preserved. The failure MUST increment `_consecutive_failures` via
-`_on_update_failure()`.
+**RULE-20**: A refresh failure (network error, non-2xx HTTP status, decode
+error, parse error, or file I/O error) MUST preserve the active whitelist
+and policy unchanged. The failure MUST increment the consecutive-failure
+counter.
 
 ### URL source
 
-**RULE-21**: `URLPeersWhitelist._unsafe_update()` MUST:
+**RULE-21**: A URL fetch MUST:
 
-1. If `_url is None`, return an immediately-resolved `Deferred[None]`.
-2. Issue an HTTP GET via `twisted.web.client.Agent` with header
-   `User-Agent: hathor-core`.
-3. Validate HTTP response status: if `code < 200` or `code >= 300`, raise
-   `ValueError(f'Whitelist URL returned HTTP {code}')` so the errback runs.
-4. Read the full response body.
-5. Apply a `WHITELIST_REQUEST_TIMEOUT` (45 s) timeout to the deferred chain.
-6. Decode the body as UTF-8. On `UnicodeDecodeError`, log at `error` and call
-   `_on_update_failure()`.
-7. Parse via `parse_whitelist_with_policy`. On `ValueError` or other
-   exception, log and call `_on_update_failure()`.
-8. On success, call `_apply_whitelist_update(new_whitelist, new_policy)`.
+1. Issue an HTTP GET with header `User-Agent: hathor-core`.
+2. Reject any HTTP status outside the 2xx range.
+3. Apply `WHITELIST_REQUEST_TIMEOUT` to the entire round trip.
+4. Decode the body as UTF-8.
+5. Parse the body per the data-format rules above.
+6. On success, apply the parsed whitelist per RULE-19.
+7. On any failure, leave the active whitelist unchanged per RULE-20.
 
-**RULE-22**: The errback `_update_whitelist_err` MUST call
-`_on_update_failure()` and MUST log at `warning` for
-`twisted.internet.defer.TimeoutError`, and at `error` for any other failure
-type.
+**RULE-22**: A fetch timeout SHOULD be logged at a lower severity (e.g.
+`warning`) than other fetch failures (e.g. `error`), since timeouts are
+expected during transient network issues.
 
 ### File source
 
-**RULE-23**: `FilePeersWhitelist._unsafe_update()` MUST read the file via
-`twisted.internet.threads.deferToThread` to avoid blocking the reactor.
+**RULE-23**: File reads for the whitelist MUST NOT block the reactor thread.
 
-**RULE-24**: File-source failure handling:
-
-| Failure | Log level | Effect |
-|---|---|---|
-| `FileNotFoundError` | warning | Keep existing whitelist; call `_on_update_failure()`. |
-| `PermissionError` | warning | Keep existing whitelist; call `_on_update_failure()`. |
-| Any other read error | error | Keep existing whitelist; call `_on_update_failure()`. |
-| Parse error (`ValueError` / other) | error / exception | Keep existing whitelist; call `_on_update_failure()`. |
+**RULE-24**: A file that is missing or unreadable MUST be treated as a
+transient failure: the active whitelist is preserved, the failure counter
+is incremented, and the event is logged. A missing file MUST NOT cause the
+node to lock out all peers.
 
 ## Integration points
 
-### ConnectionsManager
+### Runtime replacement
 
-**RULE-25**: `ConnectionsManager.set_peers_whitelist(new)` MUST:
+**RULE-25**: Replacing the active whitelist at runtime MUST:
 
-1. Call `self.peers_whitelist.stop()` if the current one is not `None`.
-2. Assign `self.peers_whitelist = new`.
-3. If `new is not None`: call `new.start(self.drop_connection_by_peer_id)`,
-   then call `self._disconnect_non_whitelisted_peers()`.
+1. Stop the previous whitelist (if any).
+2. Install the new whitelist and begin refreshing it.
+3. Immediately disconnect any currently-connected peer that is not admitted
+   by the new whitelist.
 
-**RULE-26**: `_disconnect_non_whitelisted_peers()` MUST iterate all current
-connections. For each connection whose peer ID is known and is not currently
-whitelisted, it MUST force-disconnect with reason `'Whitelist updated'`.
-Connections whose peer ID is still unknown (mid-handshake) MUST be skipped.
+**RULE-26**: When disconnecting peers on a whitelist change, peers whose
+identity is not yet known (still handshaking) MUST be skipped — their
+admission will be evaluated when they reach the PEER-ID state.
 
 ### Status HTTP resource
 
 **RULE-27**: The `/v1a/status` response MUST include a `peers_whitelist` key
-containing the list of hex-string peer IDs from
-`connections.peers_whitelist.current_whitelist()`. If the whitelist is `None`,
-the list MUST be empty.
+containing the list of currently whitelisted peer IDs as hex strings. If no
+whitelist is active, the list MUST be empty.
 
 ### Sysctl
 
-**RULE-28**: The sysctl key `p2p.connections.whitelist` MUST support get and
-set:
+**RULE-28**: The sysctl key `p2p.connections.whitelist` MUST support:
 
-- **Get**: return `whitelist.source()` when an active whitelist exists and its
-  source is not `None`; otherwise return the literal string `'none'` (this
-  covers both DISABLED and SUSPENDED, and the edge case of a URL whitelist
-  whose `_url` was normalized to `None`).
-- **Set `"on"`**: if `_suspended_whitelist is None`, this is a silent no-op
-  (returns without changing state). Otherwise
-  `connections.set_peers_whitelist(_suspended_whitelist)` and clear
-  `_suspended_whitelist`.
-- **Set `"off"`**: if `connections.peers_whitelist is None`, this is a silent
-  no-op. Otherwise move the active whitelist into `_suspended_whitelist` and
-  call `connections.set_peers_whitelist(None)`.
-- **Set URL/path (any other string)**: call
-  `create_peers_whitelist(reactor, value, settings)`. If the result is
-  `None`, raise
-  `SysctlException('Sysctl does not allow whitelist swap to None. Use "off" to disable it.')`.
-  Otherwise set `_suspended_whitelist = None` and call
-  `connections.set_peers_whitelist(new)`. Any previously suspended whitelist
-  is discarded.
+- **Get**: returns the source string (URL or file path) of the active
+  whitelist, or the literal `"none"` if no whitelist is currently active
+  (covers DISABLED, SUSPENDED, and a URL source whose URL is unset).
+- **Set `"on"`**: resume enforcement of a previously suspended whitelist. If
+  nothing is suspended, this is a silent no-op. (See DEC-08.)
+- **Set `"off"`**: suspend the active whitelist (retain it for a later `on`).
+  If no whitelist is active, this is a silent no-op.
+- **Set any other value**: treat it as a new whitelist spec, construct the
+  corresponding whitelist, and replace the active one. If the spec resolves
+  to "no whitelist", the operation MUST fail (operators must use `off` to
+  disable). Any previously suspended whitelist MUST be discarded.
 
 **RULE-29**: The sysctl key `p2p.connections.whitelist.status` MUST be
-read-only and return a `WhitelistStatus` dataclass:
+read-only and MUST return a structured status value with the following
+fields:
 
-| Field | Type | Value when ON | Value when OFF | Value when DISABLED |
-|---|---|---|---|---|
-| `state` | `WhitelistState` | `ON` | `OFF` | `DISABLED` |
-| `policy` | `WhitelistPolicy \| None` | active whitelist's policy | suspended whitelist's policy | `None` |
-| `peer_count` | `int` | `len(current_whitelist())` | `len(current_whitelist())` | `0` |
-| `source` | `str \| None` | `whitelist.source()` | `whitelist.source()` | `None` |
+| Field | Value when ON | Value when OFF (suspended) | Value when DISABLED |
+|---|---|---|---|
+| `state` | `ON` | `OFF` | `DISABLED` |
+| `policy` | active whitelist's policy | suspended whitelist's policy | unset |
+| `peer_count` | size of the whitelist | size of the suspended whitelist | 0 |
+| `source` | source string (URL or file path) | source string | unset |
 
 # Edge Cases & Decisions
 
 **DEC-01: Grace period uses bootstrap peers, not open admission**
-Decision: Before the first successful fetch, admit only peers seeded via
-`add_bootstrap_peer` (entrypoints discovered during `do_discovery`) — not all
-peers.
+Decision: Before the first successful fetch, admit only peers discovered via
+entrypoints (bootstrap peers) — not all peers.
 Rationale: Open admission during the grace period would allow connecting to
 arbitrary peers before the authoritative list is loaded, defeating the
 whitelist during the most vulnerable window (startup).
-Alternative rejected: Allow all peers during grace period. Rejected because it
-creates a window for eclipse attacks at startup.
+Alternative rejected: Allow all peers during grace period. Rejected because
+it creates a window for eclipse attacks at startup.
 
 **DEC-02: Whitelist failures preserve the existing list**
-Decision: When a fetch fails (network error, HTTP error, decode error, parse
-error, file I/O error), the previously loaded whitelist remains in effect.
-Rationale: Transient failures should not cause the node to either lock out all
-peers (empty list) or admit all peers. The last known good state is the
-safest default.
+Decision: When a refresh fails (network error, HTTP error, decode error,
+parse error, file I/O error), the previously loaded whitelist remains in
+effect.
+Rationale: Transient failures must not cause the node to either lock out all
+peers (empty list) or admit all peers. Last-known-good is the only safe
+default.
 Alternative rejected: Clear the whitelist on failure (too disruptive). Fall
 back to `allow-all` on failure (defeats the security purpose).
 
-**DEC-03: State is mutated before remove callbacks fire**
-Decision: `_apply_whitelist_update` assigns `_current`, `_policy`,
-`_has_successful_fetch`, and clears `_bootstrap_peers` *before* invoking
-`_on_remove_callback`.
-Rationale: The disconnect callback (`drop_connection_by_peer_id`) can trigger
-synchronous re-entrant calls into `is_peer_whitelisted`. If state were still
-stale at that point, a just-removed peer would still appear whitelisted while
-its disconnect was propagating.
+**DEC-03: State is updated before disconnect callbacks fire**
+Decision: On a whitelist update, the active whitelist and policy are updated
+before any disconnect-on-removal callback is invoked.
+Rationale: A disconnect callback can trigger a synchronous re-entrant
+admission check. If the state were still stale at that point, a just-removed
+peer would still appear whitelisted while its disconnect was propagating, and
+the reverse for newly-added peers.
 
 **DEC-04: Identity-based whitelisting, not IP-based**
 Decision: The whitelist operates on peer IDs (derived from public keys), not
-on IP addresses. The enforcement point is inside `PeerIdState`, after
-TLS+PEER-ID.
+on IP addresses. Enforcement happens after TLS+PEER-ID.
 Rationale: IP-based filtering is trivially bypassed via spoofing or NAT. Peer
-IDs are cryptographically bound to the TLS handshake, so they cannot be
-forged. Earlier stages do not yet know the peer's cryptographic identity.
+IDs are cryptographically bound to the TLS handshake and cannot be forged.
+The earliest point at which identity is known is after PEER-ID.
 Alternative rejected: IP-based filtering via netfilter. Rejected because
 netfilter has no peer-identity awareness at decision time.
 
-**DEC-05: File I/O runs in a thread**
-Decision: `FilePeersWhitelist` reads the file via `deferToThread`.
-Rationale: The Twisted reactor is single-threaded; blocking on file I/O would
-stall all networking. Thread delegation keeps the reactor responsive even on
-slow storage (NFS, slow disks).
-Alternative rejected: Synchronous read in the reactor thread.
+**DEC-05: File I/O MUST NOT block the reactor**
+Decision: File reads are performed off the reactor thread.
+Rationale: The reactor is single-threaded; blocking on file I/O stalls all
+networking. This must hold even on slow storage (NFS, slow disks).
+Alternative rejected: Synchronous reads on the reactor thread.
 
 **DEC-06: Sysctl `off` suspends but does not destroy the whitelist**
-Decision: `set_whitelist("off")` stores the current whitelist object in
-`_suspended_whitelist` and sets the active whitelist to `None`.
-`set_whitelist("on")` restores it.
+Decision: `off` retains the configured whitelist so `on` can restore it
+without re-specifying the URL/path.
 Rationale: Operators need a quick toggle for debugging or emergencies without
-losing the configured source. A destroy-and-recreate cycle would require
-re-specifying the URL/path.
+losing the configured source.
 Alternative rejected: Destroy the whitelist on `off`. Rejected for poor
 operational ergonomics.
 
 **DEC-07: Sysctl `on` re-runs enforcement immediately**
-Decision: When the whitelist is re-enabled via sysctl `on`, the manager
-immediately disconnects all currently-connected peers that are not
-whitelisted.
-Rationale: Peers that connected while the whitelist was suspended should not
+Decision: When the whitelist is re-enabled via sysctl `on`, currently-connected
+peers that are not admitted by the whitelist are disconnected immediately.
+Rationale: Peers that connected while the whitelist was suspended must not
 remain connected after enforcement resumes. Immediate enforcement closes the
 gap that would otherwise last up to a refresh interval.
 Alternative rejected: Wait for the next refresh cycle.
 
 **DEC-08: Sysctl on/off on empty state are silent no-ops, not errors**
-Decision: `set_whitelist("on")` with no suspended whitelist, and
-`set_whitelist("off")` with no active whitelist, both return silently
-without raising.
-Rationale: Idempotent operator semantics — an operator can script `off`
-safely regardless of current state. Only illegal transitions (swap-to-None)
-raise `SysctlException`.
+Decision: `on` with no suspended whitelist, and `off` with no active
+whitelist, both return silently.
+Rationale: Idempotent operator semantics — operators can script `off`/`on`
+safely regardless of current state. Only illegal transitions
+(swap-to-disabled) raise errors.
 
 **DEC-09: Swapping the whitelist source discards the suspended one**
-Decision: When `set_whitelist(<url-or-path>)` installs a new whitelist, any
-`_suspended_whitelist` is cleared first.
+Decision: When sysctl sets a new URL/path, any suspended whitelist is
+discarded before the new one is installed.
 Rationale: After an explicit swap, a later `on` would have ambiguous
 semantics (restore the old suspended one? the new one?). Discarding on swap
 makes `on` always mean "resume the most recently active whitelist".
 
 **DEC-10: The `allow-all` policy still fetches and tracks the peer list**
-Decision: Under `ALLOW_ALL`, fetches and diffs still occur; only the
-admission check short-circuits to `True`.
-Rationale: This allows monitoring which peers are on the list without
+Decision: Under `allow-all`, refreshes still occur; only the admission check
+short-circuits to allowed.
+Rationale: This lets operators monitor which peers are on the list without
 enforcing it, and a remote flip from `allow-all` to `only-whitelisted-peers`
 takes effect on the next refresh without any local action.
 
 **DEC-11: Invalid peer-ID lines are skipped, not fatal**
 Decision: A line that fails to parse as a peer ID is logged as a warning and
-skipped. The rest of the whitelist is still applied.
-Rationale: A single typo in a large whitelist should not block the entire
+skipped; the rest of the whitelist is still applied.
+Rationale: A single typo in a large whitelist must not block the entire
 update. Operators can detect the issue via logs.
 Alternative rejected: Reject the entire whitelist on any parse error.
 Rejected because it makes the system too brittle for operational use.
 
-**DEC-12: Factory disambiguates file vs URL by filesystem probe**
-Decision: `create_peers_whitelist` checks `os.path.isfile(<spec>)` before
-falling back to URL interpretation. Reserved words (`default`, `hathorlabs`,
-`none`, `disabled`) are matched first.
-Rationale: Allows operators to pass a plain path without any prefix. The
-file check is unambiguous — if the file exists, it's a file source.
+**DEC-12: The `policy:` directive is written as a comment**
+Decision: The policy directive is a commented line (`# policy: <value>`),
+not a bare `policy: <value>` line.
+Rationale: Older parsers that predate the policy feature must still accept
+newer whitelist files without error. A commented directive is ignored by
+them (treated as an ordinary comment) while a new parser recognizes it.
+Alternative rejected: A bare directive. Rejected because it would cause
+older nodes to reject otherwise-valid whitelist content.
+
+**DEC-13: File-vs-URL spec disambiguation by filesystem probe**
+Decision: The CLI spec resolver checks whether the value is an existing
+file before falling back to URL interpretation. Reserved words (`default`,
+`hathorlabs`, `none`, `disabled`) are matched first.
+Rationale: Allows operators to pass a plain path without any prefix.
 Alternative rejected: Require a `file://` prefix. Rejected for unnecessary
 verbosity.
 
-**DEC-13: Mainnet requires HTTPS for URL-based whitelists**
-Decision: On mainnet (`URLPeersWhitelist(..., mainnet=True)`), the URL MUST
-use `https`.
+**DEC-14: Mainnet requires HTTPS for URL-based whitelists**
+Decision: On mainnet, URL whitelists MUST use `https`.
 Rationale: An HTTP whitelist can be MITM'd to inject arbitrary peer IDs,
 defeating the security purpose.
 Alternative rejected: Allow HTTP everywhere. Rejected for security.
@@ -445,23 +397,21 @@ Alternative rejected: Allow HTTP everywhere. Rejected for security.
 - Should the grace period have a timeout after which the node falls back to
   DISABLED (or refuses all peers) rather than remaining in bootstrap-only
   mode indefinitely?
-- Should `_on_remove_callback` be async / return a `Deferred` so the
-  whitelist can await graceful disconnect (e.g. draining in-flight sync)
-  before considering the update complete?
-- `Builder.set_url_whitelist(..., mainnet=False)` exists as a second entry
-  point that bypasses the HTTPS constraint on mainnet. Is this intended only
-  for tests, or is it a supported production affordance? If the former,
-  consider renaming or restricting it.
-- `CAPABILITY_WHITELIST` shares the "whitelist" name with this feature but is
-  a distinct handshake capability. Consider renaming one of them to avoid
+- Should the disconnect-on-removal callback be async so the whitelist can
+  await graceful disconnect (e.g. draining in-flight sync) before considering
+  the update complete?
+- There is a second entry point for constructing a URL whitelist that
+  bypasses the mainnet HTTPS constraint. Is this intended only for tests,
+  or is it a supported production affordance? If the former, consider
+  restricting it.
+- `CAPABILITY_WHITELIST` shares the "whitelist" name with this feature but
+  is a distinct handshake capability. Consider renaming one of them to avoid
   confusion.
-- `FilePeersWhitelist.refresh()` is a public method that simply calls
-  `update()` and has no in-tree caller. Delete or document its intended
-  audience.
 
 # Changelog
 
 | Date | Author | Description |
 |------|--------|-------------|
 | 2026-04-15 | Hathor Labs | Initial draft. |
-| 2026-04-15 | Compiled | Merged authored spec and codebase-bootstrapped draft into a single document; fixed step order in the update routine, completed the backoff table, clarified sysctl no-op semantics, added settings table and errback log levels. |
+| 2026-04-15 | Hathor Labs | Merged authored spec and codebase-bootstrapped draft: fixed step order in the update routine, completed the backoff table, clarified sysctl no-op semantics, added settings table, errback log-level guidance. |
+| 2026-04-15 | Hathor Labs | Removed implementation bleed (private field names, function names, file paths, library primitives, exception-class assertions) per review; fixed `# policy:` directive format for backward compatibility (new DEC-12); constants table dropped "Defined in" column. |
