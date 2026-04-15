@@ -339,7 +339,7 @@ class TransactionVerifier:
 
         htr_expected_amount = withdraw - deposit
         htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount > htr_expected_amount:
+        if not is_shielded and htr_info.amount > htr_expected_amount:
             raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
