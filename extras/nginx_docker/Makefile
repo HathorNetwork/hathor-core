@@ -102,6 +102,26 @@ hathor-testnet-playground-no-rate-limit: clean set_real_ip_from_cloudfront
 	$(call generate_nginx_conf,--override hathor-testnet-playground --disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
+# GCP / Hathor Testnet Shielded Outputs
+HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet-shielded-output/fullnodes/webtank
+HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES = --trusted-proxy-ip 34.117.3.220 --trusted-proxy-ip 2600:1901:0:74bf::
+
+.PHONY: hathor-testnet-shielded-outputs
+hathor-testnet-shielded-outputs: hathor-testnet-shielded-outputs-default hathor-testnet-shielded-outputs-no-rate-limit
+	@echo "All Hathor Testnet Shielded Outputs images built and pushed successfully!"
+
+.PHONY: hathor-testnet-shielded-outputs-default
+hathor-testnet-shielded-outputs-default: clean set_real_ip_from_cloudfront
+	@echo "Building and pushing latest image for Hathor Testnet Shielded Outputs..."
+	$(call generate_nginx_conf,$(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES))
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY):$(DEFAULT_LATEST_TAG) .
+
+.PHONY: hathor-testnet-shielded-outputs-no-rate-limit
+hathor-testnet-shielded-outputs-no-rate-limit: clean set_real_ip_from_cloudfront
+	@echo "Building and pushing no-rate-limit image for Hathor Testnet Shielded Outputs..."
+	$(call generate_nginx_conf,--disable-rate-limits $(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES))
+	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
+
 # AWS / Main Account
 AWS_MAIN_REGISTRY = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank
 
@@ -123,7 +143,7 @@ aws-main-no-rate-limit: clean set_real_ip_from_cloudfront
 
 # Build All (convenience command)
 .PHONY: build-all
-build-all: hathor-testnet standalone-fullnodes ekvilibro hathor-testnet-playground aws-main
+build-all: hathor-testnet standalone-fullnodes ekvilibro hathor-testnet-playground hathor-testnet-shielded-outputs aws-main
 	@echo "All images built and pushed successfully!"
 
 # Legacy commands for backward compatibility
@@ -186,6 +206,9 @@ help:
 	@echo "  hathor-testnet-playground                 - Build and push all images for GCP Project Hathor Testnet Playground"
 	@echo "  hathor-testnet-playground-default         - Build and push default image for GCP Project Hathor Testnet Playground"
 	@echo "  hathor-testnet-playground-no-rate-limit   - Build and push no-rate-limit image for GCP Project Hathor Testnet Playground"
+	@echo "  hathor-testnet-shielded-outputs                   - Build and push all images for GCP Project Hathor Testnet Shielded Outputs"
+	@echo "  hathor-testnet-shielded-outputs-default           - Build and push default image for GCP Project Hathor Testnet Shielded Outputs"
+	@echo "  hathor-testnet-shielded-outputs-no-rate-limit     - Build and push no-rate-limit image for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  aws-main                  			- Build and push all images for AWS Main Account"
 	@echo "  aws-main-default          			- Build and push default image for AWS Main Account"
 	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
@@ -206,5 +229,6 @@ help:
 	@echo "  - Standalone Fullnodes: $(STANDALONE_FULLNODES_REGISTRY)"
 	@echo "  - Ekvilibro: $(EKVILIBRO_REGISTRY)"
 	@echo "  - Hathor Testnet Playground: $(HATHOR_TESTNET_PLAYGROUND_REGISTRY)"
+	@echo "  - Hathor Testnet Shielded Outputs: $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY)"
 	@echo "  - AWS Main Account: $(AWS_MAIN_REGISTRY)"
 	@echo ""

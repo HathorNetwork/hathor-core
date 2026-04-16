@@ -110,6 +110,26 @@ def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str)
         return fallback, True, False
 
 
+_HTTP_METHODS = ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace')
+_OPENAPI_EXTENSIONS = ('x-visibility', 'x-visibility-override', 'x-rate-limit', 'x-path-params-regex', 'x-proxy-buffers')
+
+
+def _lift_operation_extensions(params: dict[str, Any]) -> None:
+    """Lift operation-level OpenAPI extensions to path level if not already present.
+
+    Old-style resources place custom extensions (x-visibility, x-rate-limit, etc.) at the path
+    item level. New-style resources (via @api_endpoint) place them at the operation level.
+    This normalizes them to path level so the nginx config generator can find them.
+    """
+    for ext in _OPENAPI_EXTENSIONS:
+        if ext in params:
+            continue
+        for method in _HTTP_METHODS:
+            if method in params and isinstance(params[method], dict) and ext in params[method]:
+                params[ext] = params[method][ext]
+                break
+
+
 def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: float = 1.0,
                           fallback_visibility: Visibility = Visibility.PRIVATE,
                           disable_rate_limits: bool = False,
@@ -127,6 +147,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     locations: dict[str, dict[str, Any]] = {}
     limit_rate_zones: list[RateLimitZone] = []
     for path, params in openapi['paths'].items():
+        _lift_operation_extensions(params)
         visibility, did_fallback, did_override = _get_visibility(params, fallback_visibility, override)
         if did_fallback:
             warn(f'Visibility not set for path `{path}`, falling back to {fallback_visibility}')
@@ -386,7 +407,7 @@ def main():
                         help='Input file with OpenAPI json, if not specified the spec is generated on-the-fly')
     parser.add_argument('--fallback-visibility', type=Visibility, default=Visibility.PRIVATE,
                         help='Set the visibility for paths without `x-visibility`, defaults to private')
-    parser.add_argument('--disable-rate-limits', type=bool, default=False,
+    parser.add_argument('--disable-rate-limits', action='store_true', default=False,
                         help='Disable including rate-limits in the config, defaults to False')
     parser.add_argument('--override', type=str, default='',
                         help='Override visibility for paths with `x-visibility-override` for the given value')
