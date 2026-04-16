@@ -33,7 +33,7 @@ from hathorlib.nanocontracts.types import (
 from hathorlib.token_info import TokenVersion
 
 if TYPE_CHECKING:
-    from hathor.transaction.token_info import TokenInfoDict  # type: ignore[import-not-found]
+    from hathor.transaction.token_info import TokenInfoDict
 
 T = TypeVar('T', bound=BaseAction)
 

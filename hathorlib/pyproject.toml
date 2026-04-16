@@ -86,6 +86,11 @@ module = [
 check_untyped_defs = false
 disallow_untyped_defs = false
 
+[[tool.mypy.overrides]]
+module = ["hathor.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
