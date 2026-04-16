@@ -25,12 +25,12 @@ class SortedTransactions:
 
 
 class NCSorterCallable(Protocol):
-    def __call__(self, block: Block, nc_calls: list[Transaction]) -> SortedTransactions:
+    def __call__(self, block: Block, txs: list[Transaction]) -> SortedTransactions:
         """
         Return the sorted execution order plus any transactions that must fail due to cyclic dependencies.
 
         `SortedTransactions.cyclic` is empty in the normal case. A non-empty tuple means the sorter
         detected a cycle in the dependency graph; the caller must mark those transactions as failed
-        NC executions and skip executing them.
+        stateful executions and skip executing them.
         """
         ...

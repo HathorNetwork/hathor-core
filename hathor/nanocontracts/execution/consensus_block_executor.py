@@ -247,8 +247,12 @@ class NCConsensusBlockExecutor:
                     # as that is added by the executor itself after a failure
                     assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
 
-            case NCTxExecutionSuccess(tx=tx, runner=runner):
+            case NCTxExecutionSuccess(tx=tx, block_storage=block_storage, runner=runner):
                 from hathor.nanocontracts.runner.call_info import CallType
+
+                if runner is None:
+                    block_storage.commit()
+                    return
 
                 tx_meta = tx.get_metadata()
 
@@ -262,6 +266,7 @@ class NCConsensusBlockExecutor:
                 #      for the block_storage. This ensures we will have a clean database with
                 #      no orphan nodes.
                 runner.commit()
+                block_storage.commit()
 
                 # Derive call_info, nc_calls_records, and events from runner
                 call_info = runner.get_last_call_info()
@@ -297,7 +302,28 @@ class NCConsensusBlockExecutor:
                 # Save logs
                 self._nc_log_storage.save_logs(tx, call_info.nc_logger.__entries__, None)
 
-            case NCTxExecutionFailure(tx=tx, call_info=call_info, exception=exception, traceback=tb):
+            case NCTxExecutionFailure(
+                tx=tx,
+                block_storage=block_storage,
+                runner=runner,
+                exception=exception,
+                traceback=tb,
+                persist_block_storage=persist_block_storage,
+            ):
+                if persist_block_storage:
+                    assert block_storage is not None
+                    block_storage.commit()
+
+                if runner is None and not tx.is_nano_contract():
+                    self.log.info(
+                        'transfer-header execution failed',
+                        tx=tx.hash.hex(),
+                        error=repr(exception),
+                        cause=repr(exception.__cause__),
+                    )
+                    on_failure(tx)
+                    return
+
                 # Log the failure
                 kwargs: dict[str, Any] = {}
                 if tx.name:
@@ -315,10 +341,16 @@ class NCConsensusBlockExecutor:
                 on_failure(tx)
 
                 # Save logs with exception info
-                log_entries = call_info.nc_logger.__entries__ if call_info is not None else []
+                failure_call_info = runner.get_last_call_info() if runner is not None else None
+                log_entries = failure_call_info.nc_logger.__entries__ if failure_call_info is not None else []
                 self._nc_log_storage.save_logs(tx, log_entries, (exception, tb))
 
-            case NCTxExecutionSkipped(tx=tx):
+            case NCTxExecutionSkipped(tx=tx, block_storage=block_storage, persist_block_storage=persist_block_storage):
+                if persist_block_storage:
+                    assert block_storage is not None
+                    block_storage.commit()
+                if not tx.is_nano_contract():
+                    return
                 tx_meta = tx.get_metadata()
                 tx_meta.nc_execution = NCExecutionState.SKIPPED
                 context.save(tx)
