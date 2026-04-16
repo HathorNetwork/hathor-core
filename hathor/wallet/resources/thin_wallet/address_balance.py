@@ -11,6 +11,7 @@ from hathor.api_util import APIVersion, Resource, get_args, get_missing_params_m
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address_strict
 from hathor.manager import HathorManager
+from hathor.nanocontracts.types import Address as NCAddress
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
@@ -85,7 +86,7 @@ class AddressBalanceResource(Resource):
 
         try:
             # Check if address is valid for this network
-            decode_address_strict(requested_address, settings=self._settings)
+            requested_address_bytes = decode_address_strict(requested_address, settings=self._settings)
         except InvalidAddress:
             return json_dumpb({
                 'success': False,
@@ -125,27 +126,40 @@ class AddressBalanceResource(Resource):
                         has_shielded = True
                         break
 
+        def get_token_metadata(token_uid: bytes) -> tuple[str, str]:
+            if token_uid == self._settings.HATHOR_TOKEN_UID:
+                return self._settings.HATHOR_TOKEN_NAME, self._settings.HATHOR_TOKEN_SYMBOL
+            try:
+                token_info = tokens_index.get_token_info(token_uid)
+                return not_none(token_info.get_name()), not_none(token_info.get_symbol())
+            except KeyError:
+                # This should not happen for a token in the wallet index or global balance state,
+                # but returning a placeholder is better than failing the whole request.
+                return '- (unable to fetch token information)', '- (unable to fetch token information)'
+
         return_tokens_data: dict[str, dict[str, Any]] = {}
         for token_uid in tokens_data.keys():
-            if token_uid == self._settings.HATHOR_TOKEN_UID:
-                tokens_data[token_uid].name = self._settings.HATHOR_TOKEN_NAME
-                tokens_data[token_uid].symbol = self._settings.HATHOR_TOKEN_SYMBOL
-            else:
-                try:
-                    token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid].name = not_none(token_info.get_name())
-                    tokens_data[token_uid].symbol = not_none(token_info.get_symbol())
-                except KeyError:
-                    # Should never get here because this token appears in our wallet index
-                    # But better than get a 500 error
-                    tokens_data[token_uid].name = '- (unable to fetch token information)'
-                    tokens_data[token_uid].symbol = '- (unable to fetch token information)'
+            tokens_data[token_uid].name, tokens_data[token_uid].symbol = get_token_metadata(token_uid)
             return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict()
+
+        best_block = self.manager.tx_storage.get_best_block()
+        block_storage = self.manager.get_nc_block_storage(best_block)
+        requested_nc_address = NCAddress(requested_address_bytes)
+        global_tokens_data: dict[str, dict[str, Any]] = {}
+        for token_uid, balance in block_storage.iter_address_balances(requested_nc_address):
+            name, symbol = get_token_metadata(token_uid)
+            global_tokens_data[token_uid.hex()] = {
+                'balance': int(balance),
+                'name': name,
+                'symbol': symbol,
+            }
 
         data: dict[str, Any] = {
             'success': True,
             'total_transactions': len(tx_hashes),
             'tokens_data': return_tokens_data,
+            'global_tokens_data': global_tokens_data,
+            'global_seqnum': block_storage.get_address_seqnum(requested_nc_address),
         }
         data['has_shielded'] = has_shielded
         return json_dumpb(data)

@@ -13,6 +13,7 @@ from hathor.transaction.headers import (
     FeeHeader,
     NanoHeader,
     ShieldedOutputsHeader,
+    TransferHeader,
     UnshieldBalanceHeader,
     VertexHeaderId,
 )
@@ -31,12 +32,12 @@ class VertexParser:
 
     @staticmethod
     def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[AnyVertexHeader]]:
-        """Return a dict of supported headers."""
-        supported_headers: dict[VertexHeaderId, Type[AnyVertexHeader]] = {}
-        if settings.ENABLE_NANO_CONTRACTS:
-            supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
-        if settings.ENABLE_FEE_BASED_TOKENS:
-            supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
+        """Return a dict of headers understood by the parser."""
+        supported_headers: dict[VertexHeaderId, Type[AnyVertexHeader]] = {
+            VertexHeaderId.NANO_HEADER: NanoHeader,
+            VertexHeaderId.FEE_HEADER: FeeHeader,
+            VertexHeaderId.TRANSFER_HEADER: TransferHeader,
+        }
         if settings.ENABLE_SHIELDED_TRANSACTIONS:
             supported_headers[VertexHeaderId.SHIELDED_OUTPUTS_HEADER] = ShieldedOutputsHeader
             supported_headers[VertexHeaderId.UNSHIELD_BALANCE_HEADER] = UnshieldBalanceHeader

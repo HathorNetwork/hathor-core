@@ -68,6 +68,16 @@ def deserialize_headers(
                 assert isinstance(vertex, Transaction)
                 excess_bf = deserialize_unshield_balance_header(deserializer)
                 header = UnshieldBalanceHeader(excess_blinding_factor=excess_bf)
+            case VertexHeaderId.TRANSFER_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import TransferHeader
+                from hathor.transaction.vertex_parser._transfer_header import deserialize_transfer_header
+                assert isinstance(vertex, Transaction)
+                addresses, inputs, outputs = deserialize_transfer_header(
+                    deserializer,
+                    token_amount_version=vertex.get_token_amount_version(),
+                )
+                header = TransferHeader(tx=vertex, addresses=addresses, inputs=inputs, outputs=outputs)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
@@ -84,6 +94,7 @@ def serialize_header(
         FeeHeader,
         NanoHeader,
         ShieldedOutputsHeader,
+        TransferHeader,
         UnshieldBalanceHeader,
     )
 
@@ -104,13 +115,16 @@ def serialize_header(
                 serialize_unshield_balance_header,
             )
             serialize_unshield_balance_header(serializer, header)
+        case TransferHeader():
+            from hathor.transaction.vertex_parser._transfer_header import serialize_transfer_header
+            serialize_transfer_header(serializer, header, token_amount_version=token_amount_version)
         case _:
             raise AssertionError('unreachable')
 
 
 def get_header_sighash_bytes(header: AnyVertexHeader, *, token_amount_version: TokenAmountVersion) -> bytes:
     """Get sighash bytes for a header."""
-    from hathor.transaction.headers import FeeHeader, NanoHeader
+    from hathor.transaction.headers import FeeHeader, NanoHeader, TransferHeader
 
     match header:
         case NanoHeader():
@@ -122,6 +136,16 @@ def get_header_sighash_bytes(header: AnyVertexHeader, *, token_amount_version: T
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
             serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header, token_amount_version=token_amount_version)
+            return bytes(serializer.finalize())
+        case TransferHeader():
+            from hathor.transaction.vertex_parser._transfer_header import serialize_transfer_header
+            serializer = Serializer.build_bytes_serializer()
+            serialize_transfer_header(
+                serializer,
+                header,
+                skip_signature=True,
+                token_amount_version=token_amount_version,
+            )
             return bytes(serializer.finalize())
         case _:
             raise AssertionError('unreachable')

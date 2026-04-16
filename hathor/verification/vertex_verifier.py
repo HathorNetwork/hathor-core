@@ -29,6 +29,7 @@ from hathor.transaction.headers import (
     FeeHeader,
     NanoHeader,
     ShieldedOutputsHeader,
+    TransferHeader,
     UnshieldBalanceHeader,
 )
 from hathor.verification.verification_params import VerificationParams
@@ -223,11 +224,15 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                if params.features.transfer_headers:
+                    allowed_headers.add(TransferHeader)
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                if params.features.transfer_headers:
+                    allowed_headers.add(TransferHeader)
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)

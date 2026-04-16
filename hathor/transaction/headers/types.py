@@ -10,3 +10,4 @@ class VertexHeaderId(Enum):
     FEE_HEADER = b'\x11'
     SHIELDED_OUTPUTS_HEADER = b'\x12'
     UNSHIELD_BALANCE_HEADER = b'\x13'
+    TRANSFER_HEADER = b'\x16'
