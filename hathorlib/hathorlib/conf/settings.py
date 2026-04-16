@@ -533,6 +533,9 @@ class HathorSettings(BaseModel):
     # Used to restrict duplicate actions.
     RESTRICT_DUP_ACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
+    # Used to enable transfer headers.
+    ENABLE_TRANSFER_HEADER: FeatureSetting = FeatureSetting.DISABLED
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}
 
