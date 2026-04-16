@@ -46,7 +46,7 @@ class HathorStringTransport(StringTransport):
         assert isinstance(self._peer, PrivatePeer)
         return X509.from_cryptography(self._peer.certificate)
 
-
+# A
 class FakeConnection:
     _next_port: int = 49000
     _port_per_manager: dict['HathorManager', int] = {}
