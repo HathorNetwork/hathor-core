@@ -10,7 +10,15 @@ from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.types import NCAction, NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
+from hathor.nanocontracts.types import (
+    Address,
+    Amount,
+    NCAction,
+    NCActionType,
+    NCDepositAction,
+    NCWithdrawalAction,
+    TokenUid,
+)
 from hathor.nanocontracts.utils import sign_pycoin
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks
 from hathor.simulator.utils import add_new_blocks
@@ -73,6 +81,64 @@ class MyBlueprint(Blueprint):
     def fail_on_zero(self, ctx: Context) -> None:
         if self.counter == 0:
             raise NCFail('counter is zero')
+
+
+class AddressBalanceBlueprint(Blueprint):
+    token_uid: TokenUid
+
+    @public(allow_deposit=True)
+    def initialize(self, ctx: Context, token_uid: TokenUid) -> None:
+        self.token_uid = token_uid
+
+    @public
+    def transfer_to_caller(self, ctx: Context, amount: int) -> None:
+        self.syscall.transfer_to_address(Address(ctx.caller_id), Amount(amount), self.token_uid)
+
+
+class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
+    __test__ = True
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.blueprint_id = b'z' * 32
+        self.manager = self.simulator.create_peer()
+        self.manager.allow_mining_without_peers()
+        self.manager.blueprint_service.register_blueprint(self.blueprint_id, AddressBalanceBlueprint)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+    def _get_address_balance(self, address: bytes, *, block: Block | None = None) -> int:
+        if block is None:
+            block = self.manager.tx_storage.get_best_block()
+        block_storage = self.manager.get_nc_block_storage(block)
+        return block_storage.get_address_balance(Address(address), TokenUid(settings.HATHOR_TOKEN_UID))
+
+    def test_address_balance_execution_with_transfer_from_contract_is_successful(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            b10 < dummy
+
+            tx_init.nc_id = "{self.blueprint_id.hex()}"
+            tx_init.nc_method = initialize("00")
+            tx_init.nc_address = wallet_contract
+            tx_init.nc_seqnum = 0
+            tx_init.nc_deposit = 20 HTR
+
+            tx_contract.nc_id = tx_init
+            tx_contract.nc_method = transfer_to_caller(7)
+            tx_contract.nc_address = wallet_caller
+            tx_contract.nc_seqnum = 0
+
+            tx_init <-- b30
+            tx_contract <-- b31
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        tx_contract = artifacts.get_typed_vertex('tx_contract', Transaction)
+        assert tx_contract.get_metadata().nc_execution == NCExecutionState.SUCCESS
+
+        caller = tx_contract.get_nano_header().nc_address
+        assert self._get_address_balance(caller) == 7
 
 
 class NCConsensusTestCase(SimulatorTestCase):

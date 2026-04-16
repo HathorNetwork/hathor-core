@@ -27,7 +27,7 @@ from hathorlib.nanocontracts.storage.maybedeleted_nc_type import MaybeDeletedNCT
 from hathorlib.nanocontracts.storage.patricia_trie import PatriciaTrie
 from hathorlib.nanocontracts.storage.token_proxy import TokenProxy
 from hathorlib.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
-from hathorlib.nanocontracts.types import BlueprintId, TokenUid, VertexId
+from hathorlib.nanocontracts.types import Address, Amount, BlueprintId, TokenUid, VertexId
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.token_info import TokenDescription, TokenVersion
 
@@ -174,6 +174,9 @@ class NCContractStorage:
             token_symbol=token_symbol,
             token_version=token_version
         )
+
+    def add_address_balance(self, address: Address, amount: Amount, token_id: TokenUid) -> None:
+        self._token_proxy.add_address_balance(address, amount, token_id)
 
     def lock(self) -> None:
         """Lock the storage for changes or commits."""

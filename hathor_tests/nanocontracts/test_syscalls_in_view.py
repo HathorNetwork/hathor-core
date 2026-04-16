@@ -17,7 +17,7 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathor.nanocontracts.exception import NCViewMethodError
-from hathor.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathor.nanocontracts.types import Address, Amount, BlueprintId, ContractId, TokenUid, VertexId
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -53,6 +53,14 @@ class DirectSyscalls(Blueprint):
     @view
     def get_current_balance(self) -> None:
         self.syscall.get_current_balance()
+
+    @view
+    def get_address_balance_before_current_call(self) -> None:
+        self.syscall.get_address_balance_before_current_call(Address(b'\0' * 25), TokenUid(b'\0' * 32))
+
+    @view
+    def get_address_balance(self) -> None:
+        self.syscall.get_address_balance(Address(b'\0' * 25), TokenUid(b'\0' * 32))
 
     @view
     def can_mint(self) -> None:
@@ -113,6 +121,10 @@ class DirectSyscalls(Blueprint):
     @view
     def get_settings(self) -> None:
         self.syscall.get_settings()
+
+    @view
+    def transfer_to_address(self) -> None:
+        self.syscall.transfer_to_address(Address(b''), amount=Amount(0), token=TokenUid(b''))
 
 
 class IndirectSyscalls(Blueprint):
@@ -180,6 +192,8 @@ class TestSyscallsInView(BlueprintTestCase):
             'get_blueprint_id',
             'get_balance_before_current_call',
             'get_current_balance',
+            'get_address_balance_before_current_call',
+            'get_address_balance',
             'can_mint',
             'can_mint_before_current_call',
             'can_melt',
