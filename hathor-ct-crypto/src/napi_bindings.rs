@@ -9,6 +9,18 @@ fn to_napi_err(e: HathorCtError) -> napi::Error {
     napi::Error::from_reason(e.to_string())
 }
 
+/// Convert a napi BigInt to u64, returning an error if the value is negative or too large.
+fn bigint_to_u64(value: &BigInt) -> napi::Result<u64> {
+    let (signed, val, lossless) = value.get_u64();
+    if signed {
+        return Err(napi::Error::from_reason("value must be non-negative"));
+    }
+    if !lossless {
+        return Err(napi::Error::from_reason("value exceeds u64 range"));
+    }
+    Ok(val)
+}
+
 fn parse_tweak(bytes: &[u8]) -> napi::Result<Tweak> {
     if bytes.len() != 32 {
         return Err(napi::Error::from_reason("must be 32 bytes"));
@@ -84,24 +96,24 @@ pub fn create_asset_commitment(tag_bytes: Buffer, r_asset: Buffer) -> napi::Resu
 
 /// Create a Pedersen commitment.
 #[napi]
-pub fn create_commitment(amount: i64, blinding: Buffer, generator: Buffer) -> napi::Result<Buffer> {
-    if amount < 0 {
-        return Err(napi::Error::from_reason("amount must be non-negative"));
-    }
+pub fn create_commitment(
+    amount: BigInt,
+    blinding: Buffer,
+    generator: Buffer,
+) -> napi::Result<Buffer> {
+    let amount = bigint_to_u64(&amount)?;
     let bf = parse_tweak(blinding.as_ref())?;
     let gen = parse_generator(generator.as_ref())?;
-    let c = crate::pedersen::create_commitment(amount as u64, &bf, &gen).map_err(to_napi_err)?;
+    let c = crate::pedersen::create_commitment(amount, &bf, &gen).map_err(to_napi_err)?;
     Ok(Buffer::from(c.serialize().to_vec()))
 }
 
 /// Create a trivial (zero-blinding) Pedersen commitment.
 #[napi]
-pub fn create_trivial_commitment(amount: i64, generator: Buffer) -> napi::Result<Buffer> {
-    if amount < 0 {
-        return Err(napi::Error::from_reason("amount must be non-negative"));
-    }
+pub fn create_trivial_commitment(amount: BigInt, generator: Buffer) -> napi::Result<Buffer> {
+    let amount = bigint_to_u64(&amount)?;
     let gen = parse_generator(generator.as_ref())?;
-    let c = crate::pedersen::create_trivial_commitment(amount as u64, &gen).map_err(to_napi_err)?;
+    let c = crate::pedersen::create_trivial_commitment(amount, &gen).map_err(to_napi_err)?;
     Ok(Buffer::from(c.serialize().to_vec()))
 }
 
@@ -122,16 +134,14 @@ pub fn verify_commitments_sum(positive: Vec<Buffer>, negative: Vec<Buffer>) -> n
 /// Create a Borromean range proof.
 #[napi]
 pub fn create_range_proof(
-    amount: i64,
+    amount: BigInt,
     blinding: Buffer,
     commitment: Buffer,
     generator: Buffer,
     message: Option<Buffer>,
     nonce: Option<Buffer>,
 ) -> napi::Result<Buffer> {
-    if amount < 0 {
-        return Err(napi::Error::from_reason("amount must be non-negative"));
-    }
+    let amount = bigint_to_u64(&amount)?;
     let bf = parse_tweak(blinding.as_ref())?;
     let comm = crate::pedersen::deserialize_commitment(commitment.as_ref()).map_err(to_napi_err)?;
     let gen = parse_generator(generator.as_ref())?;
@@ -141,7 +151,7 @@ pub fn create_range_proof(
         .transpose()?;
     let msg_bytes = message.as_ref().map(|m| m.as_ref());
     let proof = crate::rangeproof::create_range_proof(
-        amount as u64,
+        amount,
         &bf,
         &comm,
         &gen,
@@ -176,7 +186,7 @@ pub fn verify_range_proof(
 /// Rewind a Borromean range proof to recover the committed value, blinding factor, and message.
 #[napi(object)]
 pub struct RewindResult {
-    pub value: i64,
+    pub value: BigInt,
     pub blinding_factor: Buffer,
     pub message: Buffer,
 }
@@ -195,7 +205,7 @@ pub fn rewind_range_proof(
     let (value, blinding, message) =
         crate::rangeproof::rewind_range_proof(&p, &c, &sk, &gen).map_err(to_napi_err)?;
     Ok(RewindResult {
-        value: value as i64,
+        value: BigInt::from(value),
         blinding_factor: Buffer::from(blinding.as_ref().to_vec()),
         message: Buffer::from(message),
     })
@@ -284,7 +294,7 @@ pub fn verify_surjection_proof(
 
 #[napi(object)]
 pub struct TransparentEntry {
-    pub amount: i64,
+    pub amount: BigInt,
     pub token_uid: Buffer,
 }
 
@@ -304,7 +314,7 @@ pub fn verify_balance(
             .try_into()
             .map_err(|_| napi::Error::from_reason("token_uid must be 32 bytes"))?;
         inputs.push(crate::balance::BalanceEntry::Transparent {
-            amount: entry.amount as u64,
+            amount: bigint_to_u64(&entry.amount)?,
             token_uid: uid,
         });
     }
@@ -323,7 +333,7 @@ pub fn verify_balance(
             .try_into()
             .map_err(|_| napi::Error::from_reason("token_uid must be 32 bytes"))?;
         outputs.push(crate::balance::BalanceEntry::Transparent {
-            amount: entry.amount as u64,
+            amount: bigint_to_u64(&entry.amount)?,
             token_uid: uid,
         });
     }
@@ -345,18 +355,19 @@ pub fn verify_balance(
 /// Compute the balancing blinding factor for the last output.
 #[napi]
 pub fn compute_balancing_blinding_factor(
-    value: i64,
+    value: BigInt,
     generator_blinding_factor: Buffer,
     inputs: Vec<BlindingEntry>,
     other_outputs: Vec<BlindingEntry>,
 ) -> napi::Result<Buffer> {
+    let value = bigint_to_u64(&value)?;
     let gbf = parse_tweak(generator_blinding_factor.as_ref())?;
 
     let in_entries: Vec<(u64, Tweak, Tweak)> = inputs
         .iter()
         .map(|e| {
             Ok((
-                e.value as u64,
+                bigint_to_u64(&e.value)?,
                 parse_tweak(e.value_blinding_factor.as_ref())?,
                 parse_tweak(e.generator_blinding_factor.as_ref())?,
             ))
@@ -367,27 +378,23 @@ pub fn compute_balancing_blinding_factor(
         .iter()
         .map(|e| {
             Ok((
-                e.value as u64,
+                bigint_to_u64(&e.value)?,
                 parse_tweak(e.value_blinding_factor.as_ref())?,
                 parse_tweak(e.generator_blinding_factor.as_ref())?,
             ))
         })
         .collect::<napi::Result<Vec<_>>>()?;
 
-    let result = crate::balance::compute_balancing_blinding_factor(
-        value as u64,
-        &gbf,
-        &in_entries,
-        &out_entries,
-    )
-    .map_err(to_napi_err)?;
+    let result =
+        crate::balance::compute_balancing_blinding_factor(value, &gbf, &in_entries, &out_entries)
+            .map_err(to_napi_err)?;
 
     Ok(Buffer::from(result.as_ref().to_vec()))
 }
 
 #[napi(object)]
 pub struct BlindingEntry {
-    pub value: i64,
+    pub value: BigInt,
     pub value_blinding_factor: Buffer,
     pub generator_blinding_factor: Buffer,
 }
@@ -457,15 +464,13 @@ pub struct CreatedShieldedOutput {
 /// where the balance equation requires pre-computing the vbf using a known abf.
 #[napi]
 pub fn create_shielded_output_with_both_blindings(
-    value: i64,
+    value: BigInt,
     recipient_pubkey: Buffer,
     token_uid: Buffer,
     value_blinding_factor: Buffer,
     asset_blinding_factor: Buffer,
 ) -> napi::Result<CreatedShieldedOutput> {
-    if value < 0 {
-        return Err(napi::Error::from_reason("value must be non-negative"));
-    }
+    let value = bigint_to_u64(&value)?;
     let tuid: [u8; 32] = token_uid
         .as_ref()
         .try_into()
@@ -480,7 +485,11 @@ pub fn create_shielded_output_with_both_blindings(
         .map_err(|_| napi::Error::from_reason("asset_blinding_factor must be 32 bytes"))?;
 
     let result = crate::ecdh::create_full_shielded_output(
-        value as u64, recipient_pubkey.as_ref(), &tuid, &vbf, &abf,
+        value,
+        recipient_pubkey.as_ref(),
+        &tuid,
+        &vbf,
+        &abf,
     )
     .map_err(to_napi_err)?;
 
@@ -508,14 +517,12 @@ pub struct CreatedAmountShieldedOutput {
 /// Uses `derive_asset_tag(token_uid)` as the unblinded generator.
 #[napi]
 pub fn create_amount_shielded_output(
-    value: i64,
+    value: BigInt,
     recipient_pubkey: Buffer,
     token_uid: Buffer,
     value_blinding_factor: Buffer,
 ) -> napi::Result<CreatedAmountShieldedOutput> {
-    if value < 0 {
-        return Err(napi::Error::from_reason("value must be non-negative"));
-    }
+    let value = bigint_to_u64(&value)?;
     let tuid: [u8; 32] = token_uid
         .as_ref()
         .try_into()
@@ -525,10 +532,9 @@ pub fn create_amount_shielded_output(
         .try_into()
         .map_err(|_| napi::Error::from_reason("value_blinding_factor must be 32 bytes"))?;
 
-    let result = crate::ecdh::create_amount_shielded_output(
-        value as u64, recipient_pubkey.as_ref(), &tuid, &vbf,
-    )
-    .map_err(to_napi_err)?;
+    let result =
+        crate::ecdh::create_amount_shielded_output(value, recipient_pubkey.as_ref(), &tuid, &vbf)
+            .map_err(to_napi_err)?;
 
     Ok(CreatedAmountShieldedOutput {
         ephemeral_pubkey: Buffer::from(result.ephemeral_pubkey.to_vec()),
@@ -541,7 +547,7 @@ pub fn create_amount_shielded_output(
 /// Result of rewinding an AmountShielded output.
 #[napi(object)]
 pub struct RewoundAmountShieldedOutput {
-    pub value: i64,
+    pub value: BigInt,
     pub blinding_factor: Buffer,
 }
 
@@ -569,7 +575,7 @@ pub fn rewind_amount_shielded_output(
     .map_err(to_napi_err)?;
 
     Ok(RewoundAmountShieldedOutput {
-        value: result.value as i64,
+        value: BigInt::from(result.value),
         blinding_factor: Buffer::from(result.blinding_factor),
     })
 }
@@ -577,7 +583,7 @@ pub fn rewind_amount_shielded_output(
 /// Result of rewinding a FullShielded output.
 #[napi(object)]
 pub struct RewoundFullShieldedOutput {
-    pub value: i64,
+    pub value: BigInt,
     pub blinding_factor: Buffer,
     pub token_uid: Buffer,
     pub asset_blinding_factor: Buffer,
@@ -602,7 +608,7 @@ pub fn rewind_full_shielded_output(
     .map_err(to_napi_err)?;
 
     Ok(RewoundFullShieldedOutput {
-        value: result.value as i64,
+        value: BigInt::from(result.value),
         blinding_factor: Buffer::from(result.blinding_factor),
         token_uid: Buffer::from(result.token_uid.to_vec()),
         asset_blinding_factor: Buffer::from(result.asset_blinding_factor.to_vec()),
@@ -625,4 +631,131 @@ pub fn get_generator_size() -> u32 {
 #[napi]
 pub fn get_zero_tweak() -> Buffer {
     Buffer::from(ZERO_TWEAK.as_ref().to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    //! Rust-side tests for the BigInt <-> u64 conversion at the napi boundary.
+    //!
+    //! End-to-end BigInt flow through the bindings (create_commitment, rewind_*, etc.)
+    //! is exercised by the JS integration tests in `tests/bigint.test.mjs`, because
+    //! those functions return napi `Buffer`s whose `Drop` impl links against symbols
+    //! only available at runtime inside Node.js.
+    use super::*;
+
+    fn bigint_pos(words: Vec<u64>) -> BigInt {
+        BigInt {
+            sign_bit: false,
+            words,
+        }
+    }
+
+    fn bigint_neg(words: Vec<u64>) -> BigInt {
+        BigInt {
+            sign_bit: true,
+            words,
+        }
+    }
+
+    #[test]
+    fn bigint_to_u64_zero() {
+        assert_eq!(bigint_to_u64(&BigInt::from(0u64)).unwrap(), 0);
+    }
+
+    #[test]
+    fn bigint_to_u64_small() {
+        assert_eq!(bigint_to_u64(&BigInt::from(12_345u64)).unwrap(), 12_345);
+    }
+
+    #[test]
+    fn bigint_to_u64_js_safe_integer_boundary() {
+        // 2^53 - 1 is the largest integer JS Number can represent exactly.
+        let v = (1u64 << 53) - 1;
+        assert_eq!(bigint_to_u64(&BigInt::from(v)).unwrap(), v);
+    }
+
+    #[test]
+    fn bigint_to_u64_above_js_safe_integer() {
+        // 2^53 + 1 cannot be represented exactly as a JS Number but is exact in u64/BigInt.
+        // This is the motivating case for using BigInt at the napi boundary.
+        let v = (1u64 << 53) + 1;
+        assert_eq!(bigint_to_u64(&BigInt::from(v)).unwrap(), v);
+    }
+
+    #[test]
+    fn bigint_to_u64_i64_max() {
+        // Values above i64::MAX used to be unrepresentable because the old signature was i64.
+        let v = i64::MAX as u64 + 1;
+        assert_eq!(bigint_to_u64(&BigInt::from(v)).unwrap(), v);
+    }
+
+    #[test]
+    fn bigint_to_u64_max() {
+        assert_eq!(bigint_to_u64(&BigInt::from(u64::MAX)).unwrap(), u64::MAX);
+    }
+
+    #[test]
+    fn bigint_to_u64_negative_rejected() {
+        let Err(err) = bigint_to_u64(&bigint_neg(vec![1])) else {
+            panic!("expected error for negative BigInt");
+        };
+        assert!(err.reason.contains("non-negative"), "got: {}", err.reason);
+    }
+
+    #[test]
+    fn bigint_to_u64_negative_large_rejected() {
+        // Negative value that also spans multiple words.
+        let Err(err) = bigint_to_u64(&bigint_neg(vec![5, 7])) else {
+            panic!("expected error for negative BigInt");
+        };
+        // `signed` is checked first, so negative wins over "exceeds u64 range".
+        assert!(err.reason.contains("non-negative"), "got: {}", err.reason);
+    }
+
+    #[test]
+    fn bigint_to_u64_overflow_rejected() {
+        // 2^64 = [0, 1] in little-endian u64 words — just past u64::MAX.
+        let Err(err) = bigint_to_u64(&bigint_pos(vec![0, 1])) else {
+            panic!("expected error for overflow BigInt");
+        };
+        assert!(
+            err.reason.contains("exceeds u64 range"),
+            "got: {}",
+            err.reason
+        );
+    }
+
+    #[test]
+    fn bigint_to_u64_huge_overflow_rejected() {
+        // (2^64)^2 = [0, 0, 1] — three words, far beyond u64.
+        let Err(err) = bigint_to_u64(&bigint_pos(vec![0, 0, 1])) else {
+            panic!("expected error for overflow BigInt");
+        };
+        assert!(
+            err.reason.contains("exceeds u64 range"),
+            "got: {}",
+            err.reason
+        );
+    }
+
+    #[test]
+    fn bigint_from_u64_round_trip() {
+        // The return-value path: BigInt::from(u64) -> .get_u64() -> u64.
+        // This is what rewind_* callers rely on to recover the committed value.
+        for v in [
+            0u64,
+            1,
+            12_345,
+            (1u64 << 53) - 1,
+            (1u64 << 53) + 1,
+            i64::MAX as u64 + 1,
+            u64::MAX - 1,
+            u64::MAX,
+        ] {
+            let (signed, recovered, lossless) = BigInt::from(v).get_u64();
+            assert!(!signed, "v={v}");
+            assert!(lossless, "v={v}");
+            assert_eq!(recovered, v, "v={v}");
+        }
+    }
 }

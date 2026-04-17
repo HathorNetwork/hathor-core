@@ -43,14 +43,14 @@ pub fn create_range_proof(
         SECP256K1,
         1, // min_value: reject zero-amount commitments
         *commitment,
-        amount,     // value
-        *blinding,  // commitment_blinding
-        msg,        // message
-        &[],        // additional_commitment
-        sk,         // sk (nonce key)
-        0,                          // exp
-        RANGE_PROOF_BITS as u8,     // min_bits: fixed to prevent size side-channel
-        *generator, // additional_generator
+        amount,                 // value
+        *blinding,              // commitment_blinding
+        msg,                    // message
+        &[],                    // additional_commitment
+        sk,                     // sk (nonce key)
+        0,                      // exp
+        RANGE_PROOF_BITS as u8, // min_bits: fixed to prevent size side-channel
+        *generator,             // additional_generator
     )
     .map_err(|e| HathorCtError::RangeProofError(e.to_string()))?;
 
