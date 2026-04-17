@@ -343,6 +343,8 @@ class VertexExporter:
         self.add_fee_header_if_needed(node, vertex)
         self.add_shielded_outputs_header_if_needed(node, vertex)
         self._add_or_augment_shielded_fee(node, vertex)
+        # Ensure headers are in canonical (ascending VertexHeaderId) order.
+        vertex.headers.sort(key=lambda h: h.get_header_id())
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
