@@ -121,7 +121,7 @@ fn verify_commitments_sum(positive: Vec<Vec<u8>>, negative: Vec<Vec<u8>>) -> PyR
     Ok(crate::pedersen::verify_commitments_sum(&pos, &neg))
 }
 
-/// Create a Bulletproof range proof.
+/// Create a Borromean range proof.
 ///
 /// If `nonce` is provided (32 bytes), it is used as the nonce key, enabling
 /// `rewind_range_proof` to recover the committed values. If None, a random nonce is used.
@@ -152,7 +152,7 @@ fn create_range_proof(
     Ok(PyBytes::new_bound(py, &proof.serialize()).into())
 }
 
-/// Rewind a Bulletproof range proof to recover the committed value, blinding factor, and message.
+/// Rewind a Borromean range proof to recover the committed value, blinding factor, and message.
 ///
 /// Requires the same nonce key that was used when creating the proof.
 /// Returns a tuple (value: int, blinding_factor: bytes, message: bytes).
@@ -178,7 +178,7 @@ fn rewind_range_proof(
         .into_py(py))
 }
 
-/// Verify a Bulletproof range proof.
+/// Verify a Borromean range proof.
 ///
 /// Returns True if the proof is valid, False if cryptographic verification fails.
 /// Raises ValueError if deserialization of any input fails.

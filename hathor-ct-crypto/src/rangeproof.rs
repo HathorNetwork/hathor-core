@@ -4,7 +4,17 @@ use secp256k1_zkp::{Generator, PedersenCommitment, RangeProof, SecretKey, Tweak,
 
 use crate::error::{HathorCtError, Result};
 
-/// Create a Bulletproof range proof proving that the committed amount is in [0, 2^64).
+/// Fixed number of bits proven by every range proof.
+///
+/// Using a constant ensures all proofs are the same size regardless of the
+/// committed value, preventing proof-size side-channels.
+///
+/// 40 bits covers values up to 2^40 − 1 = 1,099,511,627,775 (≈1 trillion).
+/// HTR has 2 decimal places so this is ~10 trillion cents, well above the
+/// maximum token supply.  Borromean proofs at 40 bits are ~3213 bytes.
+pub const RANGE_PROOF_BITS: usize = 40;
+
+/// Create a Borromean range proof proving that the committed amount is in [1, 2^RANGE_PROOF_BITS).
 ///
 /// # Arguments
 /// * `amount` - The secret value to prove is in range
@@ -38,8 +48,8 @@ pub fn create_range_proof(
         msg,        // message
         &[],        // additional_commitment
         sk,         // sk (nonce key)
-        0,          // exp
-        0,          // min_bits (0 = auto)
+        0,                          // exp
+        RANGE_PROOF_BITS as u8,     // min_bits: fixed to prevent size side-channel
         *generator, // additional_generator
     )
     .map_err(|e| HathorCtError::RangeProofError(e.to_string()))?;
@@ -47,7 +57,7 @@ pub fn create_range_proof(
     Ok(proof)
 }
 
-/// Rewind a Bulletproof range proof to recover the committed value, blinding factor, and message.
+/// Rewind a Borromean range proof to recover the committed value, blinding factor, and message.
 ///
 /// This requires the same nonce key that was used when creating the proof.
 /// Returns (value, blinding_factor, message) on success.
@@ -68,7 +78,7 @@ pub fn rewind_range_proof(
     ))
 }
 
-/// Verify a Bulletproof range proof.
+/// Verify a Borromean range proof.
 ///
 /// Checks that the committed value is in the valid range.
 /// Returns the proven range [min, max) on success.
@@ -281,6 +291,55 @@ mod tests {
         assert_eq!(recovered_blinding.as_ref(), blinding.as_ref());
         // The message is padded to 4096 bytes; check that it starts with our message
         assert!(recovered_message.starts_with(msg));
+    }
+
+    #[test]
+    fn test_proof_size_fits_fullnode_cap() {
+        // The fullnode deserializer rejects proofs larger than MAX_RANGE_PROOF_SIZE.
+        // With min_bits=0 (auto → 64-bit Borromean), proofs are ~5070 bytes —
+        // far above the 1024-byte cap the Python layer enforces.  This test
+        // confirms the proof fits after we pin min_bits to RANGE_PROOF_BITS.
+        const MAX_RANGE_PROOF_SIZE: usize = 3328;
+
+        let gen = htr_asset_tag();
+        let blinding = Tweak::new(&mut rand::thread_rng());
+        // Use several representative amounts: small, medium, and large
+        for &amount in &[1u64, 1000, 1_000_000_000, u64::MAX >> 24] {
+            let commitment = create_commitment(amount, &blinding, &gen).unwrap();
+            let proof =
+                create_range_proof(amount, &blinding, &commitment, &gen, None, None).unwrap();
+            let serialized = serialize_range_proof(&proof);
+            assert!(
+                serialized.len() <= MAX_RANGE_PROOF_SIZE,
+                "range proof for amount={} is {} bytes, exceeds cap of {} bytes",
+                amount,
+                serialized.len(),
+                MAX_RANGE_PROOF_SIZE,
+            );
+        }
+    }
+
+    #[test]
+    fn test_proof_size_is_constant() {
+        // All proofs must be the same size regardless of amount, to prevent
+        // leaking information about the committed value.
+        let gen = htr_asset_tag();
+        let mut sizes = Vec::new();
+        for &amount in &[1u64, 42, 1000, 1_000_000_000, u64::MAX >> 24] {
+            let blinding = Tweak::new(&mut rand::thread_rng());
+            let commitment = create_commitment(amount, &blinding, &gen).unwrap();
+            let proof =
+                create_range_proof(amount, &blinding, &commitment, &gen, None, None).unwrap();
+            sizes.push(serialize_range_proof(&proof).len());
+        }
+        let first = sizes[0];
+        for (i, &sz) in sizes.iter().enumerate() {
+            assert_eq!(
+                sz, first,
+                "proof size varies: index {} is {} bytes but index 0 is {} bytes",
+                i, sz, first,
+            );
+        }
     }
 
     #[test]
