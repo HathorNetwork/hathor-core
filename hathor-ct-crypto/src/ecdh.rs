@@ -29,10 +29,7 @@ pub fn generate_ephemeral_keypair() -> ([u8; 32], [u8; 33]) {
 /// Compute ECDH shared secret using libsecp256k1's default hash: SHA256(version || x).
 ///
 /// Returns 32-byte shared secret.
-pub fn derive_ecdh_shared_secret(
-    private_key: &SecretKey,
-    peer_pubkey: &PublicKey,
-) -> [u8; 32] {
+pub fn derive_ecdh_shared_secret(private_key: &SecretKey, peer_pubkey: &PublicKey) -> [u8; 32] {
     SharedSecret::new(peer_pubkey, private_key).secret_bytes()
 }
 
@@ -55,7 +52,7 @@ pub fn derive_rewind_nonce(shared_secret: &[u8; 32]) -> [u8; 32] {
     while SecretKey::from_slice(&result).is_err() {
         let mut retry_hasher = Sha256::new();
         retry_hasher.update(NONCE_DOMAIN_SEPARATOR);
-        retry_hasher.update(&result);
+        retry_hasher.update(result);
         retry_hasher.update([counter]);
         result = retry_hasher.finalize().into();
         counter = counter.wrapping_add(1);
@@ -67,7 +64,9 @@ pub fn derive_rewind_nonce(shared_secret: &[u8; 32]) -> [u8; 32] {
 /// Parse a 32-byte slice into a SecretKey.
 pub fn parse_secret_key(bytes: &[u8]) -> Result<SecretKey, HathorCtError> {
     if bytes.len() != 32 {
-        return Err(HathorCtError::Secp256k1Error("secret key must be 32 bytes".into()));
+        return Err(HathorCtError::Secp256k1Error(
+            "secret key must be 32 bytes".into(),
+        ));
     }
     SecretKey::from_slice(bytes).map_err(|e| HathorCtError::Secp256k1Error(e.to_string()))
 }
@@ -117,7 +116,12 @@ pub fn create_full_shielded_output(
     message[..32].copy_from_slice(token_uid);
     message[32..64].copy_from_slice(asset_blinding_factor);
     let proof = crate::rangeproof::create_range_proof(
-        value, &vbf_tweak, &comm, &asset_comm, Some(&message), Some(&nonce_sk),
+        value,
+        &vbf_tweak,
+        &comm,
+        &asset_comm,
+        Some(&message),
+        Some(&nonce_sk),
     )?;
 
     Ok(FullShieldedOutputResult {
@@ -162,7 +166,12 @@ pub fn create_amount_shielded_output(
         .map_err(|e| HathorCtError::Secp256k1Error(e.to_string()))?;
     let comm = crate::pedersen::create_commitment(value, &vbf_tweak, &generator)?;
     let proof = crate::rangeproof::create_range_proof(
-        value, &vbf_tweak, &comm, &generator, None, Some(&nonce_sk),
+        value,
+        &vbf_tweak,
+        &comm,
+        &generator,
+        None,
+        Some(&nonce_sk),
     )?;
 
     Ok(AmountFullShieldedOutputResult {
@@ -248,7 +257,8 @@ pub fn rewind_full_shielded_output(
     // 4. Extract token_uid and asset_blinding_factor from message
     if message.len() < 64 {
         return Err(HathorCtError::RangeProofError(
-            "message too short: expected at least 64 bytes (token_uid + asset_blinding_factor)".into(),
+            "message too short: expected at least 64 bytes (token_uid + asset_blinding_factor)"
+                .into(),
         ));
     }
     let mut token_uid = [0u8; 32];
@@ -285,8 +295,8 @@ fn generate_ecdh_nonce(recipient_pubkey: &[u8]) -> Result<([u8; 33], SecretKey),
     let recipient_pk = parse_public_key(recipient_pubkey)?;
     let shared_secret = derive_ecdh_shared_secret(&eph_sk, &recipient_pk);
     let nonce = derive_rewind_nonce(&shared_secret);
-    let nonce_sk = SecretKey::from_slice(&nonce)
-        .map_err(|e| HathorCtError::Secp256k1Error(e.to_string()))?;
+    let nonce_sk =
+        SecretKey::from_slice(&nonce).map_err(|e| HathorCtError::Secp256k1Error(e.to_string()))?;
     Ok((eph_pk_bytes, nonce_sk))
 }
 
