@@ -29,7 +29,7 @@ from hathor.api_util import (
 )
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import Block
-from hathor.transaction.base_transaction import BaseTransaction, TxVersion
+from hathor.transaction.base_transaction import BaseTransaction, TxVersion, _shielded_output_to_json
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
 
@@ -93,6 +93,17 @@ def get_tx_extra_data(
     for index, tx_in in enumerate(tx.inputs):
         if tx.storage:
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
+
+            if tx2.is_shielded_output(tx_in.index):
+                from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+                shielded_out = tx2.resolve_spent_output(tx_in.index)
+                assert isinstance(shielded_out, (AmountShieldedOutput, FullShieldedOutput))
+                output = _shielded_output_to_json(shielded_out, decode_script=True)
+                output['tx_id'] = tx2.hash_hex
+                output['index'] = tx_in.index
+                inputs.append(output)
+                continue
+
             tx2_out = tx2.outputs[tx_in.index]
             output = tx2_out.to_json(decode_script=True)
             output['tx_id'] = tx2.hash_hex
