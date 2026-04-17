@@ -21,7 +21,7 @@ from enum import IntEnum
 COMMITMENT_SIZE = 33
 ASSET_COMMITMENT_SIZE = 33
 EPHEMERAL_PUBKEY_SIZE = 33        # Compressed secp256k1 public key
-MAX_RANGE_PROOF_SIZE = 1024       # Valid Bulletproofs are ~675 bytes
+MAX_RANGE_PROOF_SIZE = 3328       # Borromean @ 40-bit: 3213 B + headroom
 MAX_SURJECTION_PROOF_SIZE = 4096  # Surjection proofs grow with input count
 MAX_SHIELDED_OUTPUTS = 32         # Maximum number of shielded outputs per transaction
 MAX_SHIELDED_OUTPUT_SCRIPT_SIZE = 1024  # Match settings.MAX_OUTPUT_SCRIPT_SIZE
@@ -38,7 +38,7 @@ class OutputMode(IntEnum):
 class AmountShieldedOutput:
     """Amount hidden, token ID visible. No surjection proof needed."""
     commitment: bytes       # 33B Pedersen commitment (C = amount*H_token + r*G)
-    range_proof: bytes      # ~675B Bulletproof
+    range_proof: bytes      # ~3213B Borromean (40-bit)
     script: bytes           # Locking script
     token_data: int         # Token index (like TxOutput.token_data)
     ephemeral_pubkey: bytes = b''  # 33B compressed secp256k1 pubkey for ECDH recovery
@@ -52,7 +52,7 @@ class AmountShieldedOutput:
 class FullShieldedOutput:
     """Both amount and token type hidden. Surjection proof required."""
     commitment: bytes           # 33B Pedersen commitment
-    range_proof: bytes          # ~675B Bulletproof
+    range_proof: bytes          # ~3213B Borromean (40-bit)
     script: bytes               # Locking script
     asset_commitment: bytes     # 33B blinded asset tag (A = H_token + r_asset*G)
     surjection_proof: bytes     # Variable, asset surjection proof

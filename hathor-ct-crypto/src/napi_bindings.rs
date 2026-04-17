@@ -119,7 +119,7 @@ pub fn verify_commitments_sum(positive: Vec<Buffer>, negative: Vec<Buffer>) -> n
     Ok(crate::pedersen::verify_commitments_sum(&pos, &neg))
 }
 
-/// Create a Bulletproof range proof.
+/// Create a Borromean range proof.
 #[napi]
 pub fn create_range_proof(
     amount: i64,
@@ -152,7 +152,7 @@ pub fn create_range_proof(
     Ok(Buffer::from(proof.serialize().to_vec()))
 }
 
-/// Verify a Bulletproof range proof.
+/// Verify a Borromean range proof.
 #[napi]
 pub fn verify_range_proof(
     proof: Buffer,
@@ -173,7 +173,7 @@ pub fn verify_range_proof(
     }
 }
 
-/// Rewind a Bulletproof range proof to recover the committed value, blinding factor, and message.
+/// Rewind a Borromean range proof to recover the committed value, blinding factor, and message.
 #[napi(object)]
 pub struct RewindResult {
     pub value: i64,
