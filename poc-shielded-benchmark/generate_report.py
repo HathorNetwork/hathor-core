@@ -162,7 +162,7 @@ def main():
         fig.text(0.5, 0.70, 'Shielded Outputs', ha='center', fontsize=28, weight='bold')
         fig.text(0.5, 0.64, 'Cryptography Benchmark Report', ha='center', fontsize=20)
         fig.text(0.5, 0.55, 'Hathor Network — Issue #1603 PoC', ha='center', fontsize=14, style='italic')
-        fig.text(0.5, 0.40, 'Pedersen commitments, Bulletproof range proofs,',
+        fig.text(0.5, 0.40, 'Pedersen commitments, Borromean range proofs,',
                  ha='center', fontsize=11)
         fig.text(0.5, 0.375, 'and asset surjection proofs.', ha='center', fontsize=11)
         fig.text(0.5, 0.08, '2026-04-13', ha='center', fontsize=10)
@@ -174,7 +174,7 @@ def main():
             'This report summarizes the performance of the shielded-outputs cryptography '
             'being prototyped for the Hathor Network (issue #1603). It quantifies the cost '
             'of constructing and verifying the cryptographic objects required by a fully '
-            'shielded transaction: blinded Pedersen commitments, Bulletproof range proofs, '
+            'shielded transaction: blinded Pedersen commitments, Borromean range proofs, '
             'and asset surjection proofs.',
 
             'Three benchmark sweeps were run: (a) surjection proofs in isolation across an '
@@ -254,10 +254,16 @@ def main():
         # ---- 4. Full per-output workload ----
         text_page(pdf, '4. Full Per-Output Workload', [
             'This section measures the three primitives that a real shielded output requires, '
-            'in three pairs (creation, then verification): Pedersen + Bulletproof range proof, '
+            'in three pairs (creation, then verification): Pedersen + Borromean range proof, '
             'asset surjection, and the total. The range proof is fixed-cost per output (it '
             'does not depend on N), so it dominates at small input sets and gradually loses '
             'relative weight as N grows.',
+
+            'Note: verification of the Pedersen commitment sum (checking that inputs minus '
+            'outputs commit to zero) is not included in the figures below. It is a single '
+            'elliptic-curve sum-to-zero check per transaction and costs at most ~150 us on '
+            'this hardware — negligible next to the per-output range and surjection proofs, '
+            'so omitting it does not meaningfully affect the totals reported here.',
         ], level=2)
 
         section_for(pdf, '4.1', 'Pedersen + Range Proof: Creation Time',
@@ -265,7 +271,7 @@ def main():
                     [
                         'Creation cost is essentially flat in N (the Pedersen commitment and '
                         'range proof do not consult the input set) and grows linearly in M. '
-                        'Each per-output Pedersen + Bulletproof costs roughly 1.2 ms to construct '
+                        'Each per-output Pedersen + Borromean range proof costs roughly 1.2 ms to construct '
                         'on this hardware, dominating per-output total cost up to N ~ 16.',
                     ])
 
@@ -274,7 +280,7 @@ def main():
                     [
                         'Verification is also flat in N and linear in M. Per-output verify is '
                         'around 0.8 ms — roughly 30% cheaper than creation, again the standard '
-                        'prover/verifier asymmetry for Bulletproofs.',
+                        'prover/verifier asymmetry for Borromean range proofs.',
                     ])
 
         section_for(pdf, '4.3', 'Surjection: Creation Time (Full Workload Run)',
@@ -355,7 +361,7 @@ def main():
             'Verification is consistently 30-50% cheaper than creation, a healthy asymmetry '
             'for a network where each transaction is verified by many nodes.',
 
-            'Per-output cost is dominated by the Bulletproof range proof for small input sets '
+            'Per-output cost is dominated by the Borromean range proof for small input sets '
             'and shifts toward the surjection proof as N grows past ~16. The ZERO_TWEAK trick '
             'for transparent inputs in the surjection domain has negligible cost overhead, '
             'making mixed shielded/transparent transactions cheap relative to fully-shielded '
