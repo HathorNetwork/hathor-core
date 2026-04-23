@@ -26,6 +26,8 @@ NanoHeader when requested), and serialisation round-trips the tx bytes back
 into a tx preserving the excess scalar.
 """
 
+from collections.abc import Callable
+
 from hathor.conf.settings import FeatureSetting
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.transaction import Transaction
@@ -197,8 +199,8 @@ class UnshieldDAGBuilderMatrixTestCase(unittest.TestCase):
 # ----------------------------------------------------------------------
 # Dynamic test generation: 3 × 3 × 2 × 3 = 54.
 # ----------------------------------------------------------------------
-def _make_test(ik: str, ok: str, nano: bool, tm: str):
-    def _test(self) -> None:
+def _make_test(ik: str, ok: str, nano: bool, tm: str) -> Callable[['UnshieldDAGBuilderMatrixTestCase'], None]:
+    def _test(self: 'UnshieldDAGBuilderMatrixTestCase') -> None:
         self._run_matrix_case(ik, ok, nano, tm)
     _test.__name__ = _matrix_name(ik, ok, nano, tm)
     return _test
