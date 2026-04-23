@@ -345,15 +345,23 @@ pub fn verify_balance(
         });
     }
 
-    // Mutual-exclusivity invariant: a tx must carry either shielded outputs or
-    // an excess blinding factor, never both. The transaction serialization layer
-    // enforces this at header level; we re-enforce at the FFI boundary because
-    // the structured signature here still separates shielded from transparent.
+    // Structural invariants on the excess blinding factor. These also live in
+    // the Python verifier (which enforces them at the tx-header level), but we
+    // re-check at the FFI boundary because the structured signature here
+    // still separates shielded from transparent:
+    //   - excess and shielded_outputs cannot coexist;
+    //   - excess requires at least one shielded input (otherwise there's no
+    //     sum(r_in)·G term to cancel, and the scalar is meaningless).
     let excess = match excess_blinding_factor {
         Some(buf) => {
             if !shielded_outputs.is_empty() {
                 return Err(napi::Error::from_reason(
                     "excess_blinding_factor must be None when shielded_outputs is non-empty",
+                ));
+            }
+            if shielded_inputs.is_empty() {
+                return Err(napi::Error::from_reason(
+                    "excess_blinding_factor requires at least one shielded input",
                 ));
             }
             Some(parse_tweak(buf.as_ref())?)

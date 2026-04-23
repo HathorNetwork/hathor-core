@@ -223,6 +223,7 @@ class TestAuthorityOutputsBalance:
         tx.shielded_outputs = []
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.has_fees = MagicMock(return_value=True)
+        tx.excess_blinding_factor = None
         tx.get_fee_header = MagicMock(return_value=fee_header)
         tx.storage = MagicMock()
         tx.storage.get_transaction = MagicMock(return_value=spent_tx)
@@ -278,6 +279,7 @@ class TestAuthorityOutputsBalance:
         tx.shielded_outputs = []
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.has_fees = MagicMock(return_value=True)
+        tx.excess_blinding_factor = None
         tx.get_fee_header = MagicMock(return_value=fee_header)
         tx.storage = MagicMock()
 

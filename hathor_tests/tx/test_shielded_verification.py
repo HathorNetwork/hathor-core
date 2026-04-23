@@ -104,6 +104,7 @@ def _mock_tx(
     tx.inputs = []
     tx.tokens = []
     tx.get_token_uid = MagicMock(return_value=token_uid)
+    tx.excess_blinding_factor = None
     if fee_amount > 0:
         fee_header = MagicMock()
         fee_header.total_fee_amount = MagicMock(return_value=fee_amount)
@@ -344,6 +345,7 @@ class TestBalanceVerification:
         tx.outputs = []
         tx.inputs = []
         tx.has_fees = MagicMock(return_value=False)
+        tx.excess_blinding_factor = None
 
         # No shielded outputs, no transparent outputs → trivially balanced
         verifier.verify_shielded_balance(tx)
@@ -379,6 +381,7 @@ class TestBalanceVerification:
         tx.shielded_outputs = []
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.has_fees = MagicMock(return_value=False)
+        tx.excess_blinding_factor = None
         tx.storage = MagicMock()
         tx.storage.get_transaction = MagicMock(return_value=spent_tx)
 
@@ -413,6 +416,7 @@ class TestBalanceVerification:
         tx.shielded_outputs = []
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.has_fees = MagicMock(return_value=False)
+        tx.excess_blinding_factor = None
         tx.storage = MagicMock()
         tx.storage.get_transaction = MagicMock(return_value=spent_tx)
 
@@ -455,6 +459,7 @@ class TestBalanceVerification:
         tx.shielded_outputs = []
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.has_fees = MagicMock(return_value=True)
+        tx.excess_blinding_factor = None
         tx.get_fee_header = MagicMock(return_value=fee_header)
         tx.storage = MagicMock()
         tx.storage.get_transaction = MagicMock(return_value=spent_tx)

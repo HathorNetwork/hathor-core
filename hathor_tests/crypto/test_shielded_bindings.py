@@ -362,6 +362,13 @@ class TestBalance:
         with pytest.raises(ValueError, match='excess_blinding_factor must be None'):
             lib.verify_balance([], [c_in], [(1000, htr)], [c_out], excess)
 
+    def test_excess_without_shielded_inputs_is_rejected_at_ffi(self) -> None:
+        """Structural invariant: excess requires at least one shielded input."""
+        htr = bytes(32)
+        excess = os.urandom(32)
+        with pytest.raises(ValueError, match='requires at least one shielded input'):
+            lib.verify_balance([(1000, htr)], [], [(1000, htr)], [], excess)
+
 
 class TestVerifyBalanceWrapper:
     """Tests for the Python wrapper at hathor/crypto/shielded/balance.py.
@@ -415,6 +422,14 @@ class TestVerifyBalanceWrapper:
             verify_balance([], [c_in], [(1000, htr)], [], b'\x01' * 16)
         with pytest.raises(ValueError, match='must be 32 bytes'):
             verify_balance([], [c_in], [(1000, htr)], [], b'\x01' * 33)
+
+    def test_wrapper_rejects_excess_without_shielded_inputs(self) -> None:
+        """Wrapper must reject excess when there are no shielded inputs to cancel."""
+        from hathor.crypto.shielded import verify_balance
+        htr = bytes(32)
+        excess = os.urandom(32)
+        with pytest.raises(ValueError, match='requires at least one shielded input'):
+            verify_balance([(1000, htr)], [], [(1000, htr)], [], excess)
 
     def test_wrapper_full_unshield_without_excess_is_rejected(self) -> None:
         """Wrapper forwards None excess; FFI still rejects shielded-in -> transparent-out."""

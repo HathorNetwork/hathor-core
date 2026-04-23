@@ -25,7 +25,7 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, ShieldedOutputsHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.shielded_tx_output import ShieldedOutput
 from hathor.transaction.static_metadata import TransactionStaticMetadata
@@ -195,6 +195,26 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         if self.has_shielded_outputs():
             return self.get_shielded_outputs_header().shielded_outputs
         return []
+
+    def has_unshield_balance_header(self) -> bool:
+        """Returns true if this tx carries an excess blinding factor for full-unshield."""
+        try:
+            self.get_unshield_balance_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_unshield_balance_header(self) -> UnshieldBalanceHeader:
+        """Return the UnshieldBalanceHeader or raise ValueError."""
+        return self._get_header(UnshieldBalanceHeader)
+
+    @property
+    def excess_blinding_factor(self) -> bytes | None:
+        """Return the 32-byte excess blinding factor, or None if not a full unshield."""
+        if self.has_unshield_balance_header():
+            return self.get_unshield_balance_header().excess_blinding_factor
+        return None
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
