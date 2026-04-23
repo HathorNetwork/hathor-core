@@ -843,7 +843,11 @@ class TransactionVerifier:
         #   2) a tx with shielded inputs and no shielded outputs must carry excess
         #      (otherwise sum(r_in)*G has no counterpart and the equation cannot hold).
         #   3) excess is only meaningful for txs with shielded inputs.
-        has_shielded_outputs_ = bool(shielded_outputs)
+        #
+        # Invariant (1) is keyed on ShieldedOutputsHeader *presence*, not on
+        # whether the header happens to carry a non-empty commitment list, so
+        # a malformed empty-list header can't evade the check.
+        has_shielded_outputs_ = tx.has_shielded_outputs()
         has_shielded_inputs_ = bool(shielded_inputs)
         excess_bf = tx.excess_blinding_factor
         has_excess = excess_bf is not None

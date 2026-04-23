@@ -167,6 +167,7 @@ class TestVerifyShieldedBalanceUnshield:
         tx.inputs = [tx_input]
         tx.outputs = [tx_output]
         tx.shielded_outputs = []
+        tx.has_shielded_outputs = MagicMock(return_value=False)
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.excess_blinding_factor = excess
         tx.storage = MagicMock()
@@ -220,6 +221,7 @@ class TestVerifyShieldedBalanceUnshield:
         shielded_out = MagicMock()
         shielded_out.commitment = b'\x02' + bytes(32)
         tx.shielded_outputs = [shielded_out]
+        tx.has_shielded_outputs = MagicMock(return_value=True)
         with pytest.raises(ShieldedBalanceMismatchError, match='cannot carry both'):
             verifier.verify_shielded_balance(tx)
 
@@ -250,6 +252,7 @@ class TestVerifyShieldedBalanceUnshield:
         tx.inputs = [tx_input]
         tx.outputs = [tx_output]
         tx.shielded_outputs = []
+        tx.has_shielded_outputs = MagicMock(return_value=False)
         tx.get_token_uid = MagicMock(return_value=token_uid)
         tx.has_fees = MagicMock(return_value=False)
         tx.excess_blinding_factor = os.urandom(32)  # stray excess, no shielded input
@@ -320,6 +323,7 @@ class TestVerifyShieldedBalanceUnshield:
         tx.inputs = [input_htr, input_custom]
         tx.outputs = [out_htr, out_custom]
         tx.shielded_outputs = []
+        tx.has_shielded_outputs = MagicMock(return_value=False)
         tx.get_token_uid = MagicMock(side_effect=get_token_uid)
         tx.excess_blinding_factor = excess
         tx.has_fees = MagicMock(return_value=False)

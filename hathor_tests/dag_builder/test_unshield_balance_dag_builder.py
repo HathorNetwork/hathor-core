@@ -213,3 +213,120 @@ for _ik in INPUT_KINDS:
                     _matrix_name(_ik, _ok, _n, _tm),
                     _make_test(_ik, _ok, _n, _tm),
                 )
+
+
+class MutualExclusionRejectionTestCase(unittest.TestCase):
+    """Real DAG-built tx carrying BOTH ShieldedOutputsHeader and
+    UnshieldBalanceHeader must be rejected by verify_shielded_balance.
+
+    The DAG builder never produces this shape on its own
+    (add_unshield_balance_header_if_needed early-returns when a shielded
+    output exists), so we inject the second header manually post-build to
+    exercise the verifier's invariant on a real Transaction object — not
+    just a MagicMock as in test_unshield_balance_header.py.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        from hathor.simulator.patches import SimulatorCpuMiningService
+        from hathor.simulator.simulator import _build_vertex_verifiers
+
+        cpu_mining_service = SimulatorCpuMiningService()
+        settings = self._settings.model_copy(update={
+            'ENABLE_SHIELDED_TRANSACTIONS': FeatureSetting.ENABLED,
+        })
+        builder = self.get_builder(settings) \
+            .set_vertex_verifiers_builder(_build_vertex_verifiers) \
+            .set_cpu_mining_service(cpu_mining_service)
+        self.manager = self.create_peer_from_builder(builder)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+    def _get_shielded_verifier(self):
+        """The TransactionVerifier instance the manager uses for shielded checks."""
+        return self.manager.verification_service.verifiers.tx
+
+    def _build_tx_and_sources(self, dsl: str) -> tuple[Transaction, dict]:
+        """Return the built `tx` plus a spent_txs mapping so verify_shielded_balance
+        can resolve inputs without requiring the source to be in storage.
+
+        The DAG builder produces valid tx objects in memory, but propagation
+        through the manager requires global settings to have shielded enabled
+        (not the case in the test env). Supplying `spent_txs` lets us bypass
+        that and exercise the verifier directly on real tx objects.
+        """
+        artifacts = self.dag_builder.build_from_str(dsl)
+        tx = artifacts.get_typed_vertex('tx', Transaction)
+        # The verifier asserts `tx.storage is not None`; any non-None storage
+        # object satisfies it — we route all spent-tx lookups through the
+        # explicit spent_txs dict. Index every vertex by hash so the DAG
+        # builder's implicit dummy-funded inputs also resolve.
+        tx.storage = self.manager.tx_storage
+        spent_txs = {pair.vertex.hash: pair.vertex for pair in artifacts.list}
+        return tx, spent_txs
+
+    def test_partial_unshield_tx_with_extra_unshield_header_rejected(self) -> None:
+        """Partial unshield (has ShieldedOutputsHeader) + injected UnshieldBalanceHeader → rejected."""
+        from hathor.transaction.exceptions import ShieldedBalanceMismatchError
+
+        tx, spent_txs = self._build_tx_and_sources("""
+            blockchain genesis b[1..50]
+            b30 < dummy
+
+            src_S.out[0] = 60 HTR [shielded]
+            src_S.out[0] <<< tx
+
+            tx.out[0] = 30 HTR
+            tx.out[1] = 30 HTR [shielded]
+        """)
+
+        # Sanity: the builder produced a partial unshield with ONLY the
+        # ShieldedOutputsHeader (no UnshieldBalanceHeader).
+        self.assertTrue(tx.has_shielded_outputs())
+        self.assertFalse(tx.has_unshield_balance_header())
+
+        # Inject a synthetic UnshieldBalanceHeader so the tx now carries both.
+        tx.headers.append(
+            UnshieldBalanceHeader(tx=tx, excess_blinding_factor=b'\x01' * 32)
+        )
+        self.assertTrue(tx.has_unshield_balance_header())
+        self.assertTrue(tx.has_shielded_outputs())
+
+        # Verifier rejects on the mutual-exclusion invariant, not on
+        # cryptographic balance — the "cannot carry both" message is specific.
+        verifier = self._get_shielded_verifier()
+        with self.assertRaises(ShieldedBalanceMismatchError) as ctx:
+            verifier.verify_shielded_balance(tx, spent_txs=spent_txs)
+        self.assertIn('cannot carry both', str(ctx.exception))
+
+    def test_full_unshield_tx_with_extra_shielded_outputs_header_rejected(self) -> None:
+        """Full unshield (has UnshieldBalanceHeader) + injected ShieldedOutputsHeader → rejected."""
+        from hathor.transaction.exceptions import ShieldedBalanceMismatchError
+        from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader as SOHdr
+
+        tx, spent_txs = self._build_tx_and_sources("""
+            blockchain genesis b[1..50]
+            b30 < dummy
+
+            src_S.out[0] = 60 HTR [shielded]
+            src_S.out[0] <<< tx
+
+            tx.out[0] = 60 HTR
+        """)
+
+        # Sanity: full unshield — UnshieldBalanceHeader but no ShieldedOutputsHeader.
+        self.assertTrue(tx.has_unshield_balance_header())
+        self.assertFalse(tx.has_shielded_outputs())
+
+        # Inject an (empty) ShieldedOutputsHeader so the tx now carries both.
+        # Empty shielded_outputs wouldn't normally be accepted by the outputs-
+        # header's own validation, but that's verified separately — here we
+        # only probe the invariant in verify_shielded_balance.
+        tx.headers.append(SOHdr(tx=tx, shielded_outputs=[]))
+        self.assertTrue(tx.has_shielded_outputs())
+        self.assertTrue(tx.has_unshield_balance_header())
+
+        verifier = self._get_shielded_verifier()
+        with self.assertRaises(ShieldedBalanceMismatchError) as ctx:
+            verifier.verify_shielded_balance(tx, spent_txs=spent_txs)
+        self.assertIn('cannot carry both', str(ctx.exception))
