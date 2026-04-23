@@ -26,6 +26,7 @@ from hathor.transaction.headers import UnshieldBalanceHeader
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.headers.unshield_balance_header import EXCESS_BLINDING_FACTOR_SIZE
 from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.verification.vertex_verifier import VertexVerifier
 
 
 def _make_settings() -> HathorSettings:
@@ -110,6 +111,56 @@ class TestUnshieldBalanceHeaderUnit:
         mutated[0] ^= 0xFF
         header_mut = UnshieldBalanceHeader(tx=tx, excess_blinding_factor=bytes(mutated))
         assert header_mut.get_sighash_bytes() != original_sighash
+
+
+class TestVertexVerifierAllowedHeaders:
+    """`verify_headers` must accept an UnshieldBalanceHeader on REGULAR_TRANSACTION
+    when the shielded_transactions feature is active, and reject it otherwise.
+
+    Regression for a bug where `get_allowed_headers` whitelisted only
+    `ShieldedOutputsHeader` under `params.features.shielded_transactions`,
+    so a real full-unshield tx would be rejected by the verifier even though
+    the parser, DAG builder, and balance checker all accepted it.
+    """
+
+    def _make_vertex_verifier(self) -> VertexVerifier:
+        return VertexVerifier(settings=_make_settings(), reactor=MagicMock(), feature_service=MagicMock())
+
+    def _make_tx_with_unshield_header(self) -> MagicMock:
+        from hathor.transaction import TxVersion
+        tx = MagicMock()
+        tx.version = TxVersion.REGULAR_TRANSACTION
+        tx.get_maximum_number_of_headers = MagicMock(return_value=8)
+        tx.headers = [UnshieldBalanceHeader(tx=tx, excess_blinding_factor=os.urandom(32))]
+        return tx
+
+    def _make_params(self, *, shielded: bool) -> MagicMock:
+        features = MagicMock()
+        features.nanocontracts = False
+        features.fee_tokens = False
+        features.shielded_transactions = shielded
+        params = MagicMock()
+        params.features = features
+        return params
+
+    def test_unshield_header_allowed_when_feature_active(self) -> None:
+        verifier = self._make_vertex_verifier()
+        tx = self._make_tx_with_unshield_header()
+        params = self._make_params(shielded=True)
+
+        allowed = verifier.get_allowed_headers(tx, params)
+        assert UnshieldBalanceHeader in allowed
+        # Must not raise — a real full-unshield tx would carry exactly this header.
+        verifier.verify_headers(tx, params)
+
+    def test_unshield_header_rejected_when_feature_disabled(self) -> None:
+        from hathor.transaction.exceptions import HeaderNotSupported
+        verifier = self._make_vertex_verifier()
+        tx = self._make_tx_with_unshield_header()
+        params = self._make_params(shielded=False)
+
+        with pytest.raises(HeaderNotSupported, match='UnshieldBalanceHeader'):
+            verifier.verify_headers(tx, params)
 
 
 class TestVerifyShieldedBalanceUnshield:
