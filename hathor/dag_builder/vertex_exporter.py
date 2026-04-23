@@ -86,6 +86,11 @@ class VertexExporter:
 
         self._next_nc_seqnum: defaultdict[bytes, int] = defaultdict(int)
 
+        # Track blinding factors of shielded outputs so later txs spending them
+        # can compute the excess scalar required by UnshieldBalanceHeader on
+        # full-unshield txs. Keyed by (node_name, dsl_output_index) → 32-byte vbf.
+        self._shielded_blinding_factors: dict[tuple[str, int], bytes] = {}
+
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
         return self._builder._get_node(name)
@@ -343,6 +348,7 @@ class VertexExporter:
         self.add_fee_header_if_needed(node, vertex)
         self.add_shielded_outputs_header_if_needed(node, vertex)
         self._add_or_augment_shielded_fee(node, vertex)
+        self.add_unshield_balance_header_if_needed(node, vertex)
         # Ensure headers are in canonical (ascending VertexHeaderId) order.
         vertex.headers.sort(key=lambda h: h.get_header_id())
 
@@ -533,7 +539,7 @@ class VertexExporter:
 
         shielded_outputs: list[ShieldedOutput] = []
 
-        for txout in node.outputs:
+        for dsl_index, txout in enumerate(node.outputs):
             if txout is None:
                 continue
             amount, token_name, attrs = txout
@@ -549,6 +555,9 @@ class VertexExporter:
                 token_uid = token_uid.ljust(32, b'\x00')
             script = self.get_next_p2pkh_script()
             blinding = os.urandom(32)
+            # Record the value blinding factor keyed by (node_name, DSL output index)
+            # so a later unshielding tx can compute the excess scalar.
+            self._shielded_blinding_factors[(node.name, dsl_index)] = blinding
 
             # Generate ephemeral keypair for ECDH-based recovery
             ephemeral_privkey, ephemeral_pubkey = generate_ephemeral_keypair()
@@ -629,6 +638,71 @@ class VertexExporter:
 
         assert isinstance(vertex, Transaction)
         header = ShieldedOutputsHeader(tx=vertex, shielded_outputs=shielded_outputs)
+        vertex.headers.append(header)
+
+    def add_unshield_balance_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Attach an UnshieldBalanceHeader when this is a full unshield.
+
+        A full unshield is a tx with at least one shielded input and no
+        shielded outputs. The scalar we compute is
+        `excess = sum(r_in) − sum(r_out) = sum(r_in)` (transparent outputs
+        have blinding factor 0), so the verifier can synthesise the
+        missing `excess*G` on the output side of the balance equation.
+        """
+        from hathor.crypto.shielded import compute_balancing_blinding_factor
+        from hathor.transaction.headers.unshield_balance_header import UnshieldBalanceHeader
+
+        if not isinstance(vertex, Transaction):
+            return
+
+        # Gather shielded input blinding factors.
+        input_entries: list[tuple[int, bytes, bytes]] = []
+        for tx_name, out_idx in node.inputs:
+            bf = self._shielded_blinding_factors.get((tx_name, out_idx))
+            if bf is None:
+                continue  # transparent input (vbf = 0, no contribution)
+            spent_node = self._get_node(tx_name)
+            spent_output = spent_node.outputs[out_idx]
+            assert spent_output is not None
+            input_entries.append((spent_output.amount, bf, bytes(32)))
+
+        if not input_entries:
+            # No shielded inputs — no excess needed. Verifier invariant (3)
+            # would reject a stray excess here, so we simply don't attach one.
+            return
+
+        # If there are shielded outputs, the ShieldedOutputsHeader path
+        # balances blinding factors through compute_balancing_blinding_factor
+        # on the last shielded output — no excess is needed (and attaching
+        # both headers would violate the mutual-exclusion invariant).
+        has_shielded_output = any(
+            txout is not None and (txout.attrs.get('shielded') or txout.attrs.get('full-shielded'))
+            for txout in node.outputs
+        )
+        if has_shielded_output:
+            return
+
+        # Build the "other outputs" set for the balancing computation. All
+        # outputs (and any transparent fees) are unblinded, so only the
+        # structure matters; exact values drop out when gbf = 0.
+        other_outputs: list[tuple[int, bytes, bytes]] = []
+        for txout in node.outputs:
+            if txout is None:
+                continue
+            other_outputs.append((txout.amount, bytes(32), bytes(32)))
+        fees = node.get_attr_list(FEE_KEY, default=[])
+        for _token_name, fee_amount in fees:
+            assert isinstance(fee_amount, int)
+            other_outputs.append((fee_amount, bytes(32), bytes(32)))
+
+        excess = compute_balancing_blinding_factor(
+            0,
+            bytes(32),
+            input_entries,
+            other_outputs,
+        )
+
+        header = UnshieldBalanceHeader(tx=vertex, excess_blinding_factor=excess)
         vertex.headers.append(header)
 
     def _get_recipient_pubkey_from_script(self, script: bytes) -> bytes | None:
