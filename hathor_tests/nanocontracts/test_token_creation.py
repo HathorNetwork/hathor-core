@@ -146,7 +146,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
 
         jkl_token_info = JKL._get_token_info_from_inputs(Mock())
-        JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
+        JKL._update_token_info_from_outputs(token_dict=jkl_token_info, nc_block_storage=Mock())
         assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
 
         jkl_context = JKL.get_nano_header().get_context()
