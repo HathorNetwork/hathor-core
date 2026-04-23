@@ -1,6 +1,6 @@
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
+from hathor import HATHOR_TOKEN_UID
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
@@ -21,6 +21,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, initial: int) -> None:
+        action = ctx.get_single_action(HATHOR_TOKEN_UID)
+        ctx.authorize(action)
         self.counter = initial
 
     @public
@@ -286,14 +288,14 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx2 = artifacts.by_name['tx2'].vertex
         tx3 = artifacts.by_name['tx3'].vertex
 
-        ctx2 = tx2.get_nano_header().get_context(blueprint_version=BlueprintVersion.V1)
-        self.assertEqual(dict(ctx2.actions), {
+        ctx2 = tx2.get_nano_header().get_context(BlueprintVersion.V2)
+        self.assertEqual(dict(ctx2.actions_by_token), {
             tka_id: (NCDepositAction(token_uid=tka_id, amount=5),),
             htr_id: (NCDepositAction(token_uid=htr_id, amount=10),),
         })
 
-        ctx3 = tx3.get_nano_header().get_context(blueprint_version=BlueprintVersion.V1)
-        self.assertEqual(dict(ctx3.actions), {
+        ctx3 = tx3.get_nano_header().get_context(BlueprintVersion.V2)
+        self.assertEqual(dict(ctx3.actions_by_token), {
             htr_id: (NCDepositAction(token_uid=htr_id, amount=3),),
             tka_id: (NCWithdrawalAction(token_uid=tka_id, amount=2),),
         })

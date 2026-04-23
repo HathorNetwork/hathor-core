@@ -188,7 +188,7 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         action = NCDepositAction(token_uid=token_uid, amount=1)
         context = self.create_context(caller_id=address_bytes, actions=[action])
         score = '1x1'
-        with self.assertNCFail('InvalidToken', 'token different from 00'):
+        with self.assertNCFail('NCFail', 'expected exactly 1 action for token 00'):
             self.runner.call_public_method(self.nc_id, 'bet', context, address_bytes, score)
 
     def test_withdraw_wrong_token(self) -> None:
@@ -198,5 +198,5 @@ class NCBetBlueprintTestCase(BlueprintTestCase):
         self.assertNotEqual(token_uid, self.token_uid)
         action = NCWithdrawalAction(token_uid=token_uid, amount=1)
         context = self.create_context(caller_id=bet1.address, actions=[action])
-        with self.assertNCFail('InvalidToken', 'token different from 00'):
+        with self.assertNCFail('NCFail', 'expected exactly 1 action for token 00'):
             self.runner.call_public_method(self.nc_id, 'withdraw', context)

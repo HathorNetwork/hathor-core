@@ -35,6 +35,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.message = 'initialize called'
 
     @view
@@ -43,7 +45,9 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def simple_public_method(self, ctx: Context, name: str) -> str:
-        actions = ctx.actions.get(HATHOR_TOKEN_UID, ())
+        for action in ctx.all_actions:
+            ctx.authorize(action)
+        actions = ctx.actions_by_token.get(HATHOR_TOKEN_UID, ())
 
         # Setting the attribute makes it easier to test on OCBs with the DagBuilder,
         # as the returned value is not accessible.

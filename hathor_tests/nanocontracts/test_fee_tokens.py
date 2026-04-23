@@ -32,10 +32,13 @@ from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_withdrawal=True)
     def create_deposit_token(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.create_deposit_token(
             token_name='deposit-based token',
             token_symbol='DBT',
@@ -44,6 +47,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True)
     def create_fee_token(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.create_fee_token(
             token_name='fee-based token',
             token_symbol='FBT',
@@ -52,7 +57,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_withdrawal=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
 
 class FeeTokensTestCase(BlueprintTestCase):

@@ -24,10 +24,11 @@ KNOWN_CASES = [
     'hathor.Blueprint.log',
     'hathor.Blueprint.some_new_attribute',
     'hathor.Blueprint.syscall',
-    'hathor.Context.actions',
-    'hathor.Context.actions_list',
+    'hathor.Context.actions_by_token',
+    'hathor.Context.all_actions',
     'hathor.Context.authorize',
     'hathor.Context.block',
+    'hathor.Context.blueprint_version',
     'hathor.Context.caller_id',
     'hathor.Context.get_caller_address',
     'hathor.Context.get_caller_contract_id',
@@ -160,10 +161,9 @@ if version_info[1] == 13:
 
 KNOWN_CASES.sort()
 
-BLUEPRINT_V2_ONLY = (
-    'blueprint_version',
-    'all_actions',
-    'actions_by_token',
+BLUEPRINT_V1_DEPRECATED = (
+    'actions',
+    'actions_list',
 )
 
 
@@ -229,8 +229,8 @@ def check_property_writeable(obj: object, prop_name: str) -> tuple[bool, object 
 
 def should_skip_attr(prop_name: str) -> bool:
     """Used to simulate AST restrictions and prevent loops."""
-    if prop_name in BLUEPRINT_V2_ONLY:
-        # Since the test harness uses Blueprint V1, calling V2 properties raises NCFail.
+    if prop_name in BLUEPRINT_V1_DEPRECATED:
+        # Since the test harness uses Blueprint V2, calling V1 properties raises NCFail.
         # We can simply skip them, for now.
         return True
     return '__' in prop_name

@@ -42,19 +42,23 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def deposit(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_withdrawal=True)
     def withdrawal(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_grant_authority=True)
     def grant_authority(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_acquire_authority=True)
     def acquire_authority(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @fallback
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> None:

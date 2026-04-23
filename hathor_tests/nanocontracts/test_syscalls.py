@@ -47,11 +47,13 @@ class MyBlueprint(Blueprint):
 class OtherBlueprint(Blueprint):
     @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_grant_authority=True)
     def nop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def revoke(self, ctx: Context, token_uid: TokenUid, revoke_mint: bool, revoke_melt: bool) -> None:
@@ -70,11 +72,14 @@ class FeeTokenBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def create_fee_token(self, ctx: Context, name: str, symbol: str, amount: int,
                          fee_payment_token: TokenUid) -> TokenUid:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         token_uid = self.syscall.create_fee_token(
             token_name=name,
             token_symbol=symbol,
@@ -86,14 +91,20 @@ class FeeTokenBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_grant_authority=True)
     def create_deposit_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         return self.syscall.create_deposit_token(token_name=name, token_symbol=symbol, amount=amount)
 
     @public(allow_deposit=True)
     def mint(self, ctx: Context, token: TokenUid, amount: int, fee_payment_token: TokenUid) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.mint_tokens(token, amount=amount, fee_payment_token=fee_payment_token)
 
     @public(allow_deposit=True)
     def melt(self, ctx: Context, token: TokenUid, amount: int, fee_payment_token: TokenUid) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.melt_tokens(token, amount=amount, fee_payment_token=fee_payment_token)
 
 
@@ -102,10 +113,14 @@ class ProxyCallerBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter = 0
 
     @public(allow_deposit=True)
     def increment(self, ctx: Context, value: int) -> int:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter += value
         return self.counter
 
@@ -115,15 +130,21 @@ class TargetBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter = 0
 
     @public(allow_deposit=True)
     def increment(self, ctx: Context, value: int) -> int:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.counter += value
         return self.counter
 
     @public(allow_deposit=True)
     def proxy_increment(self, ctx: Context, blueprint_id: BlueprintId, value: int) -> int:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         """Call the increment method of another blueprint using proxy_call_public_method_nc_args."""
         args_parser = ArgsOnly.from_arg_types((int,))
         args_bytes = args_parser.serialize_args_bytes((value,))
@@ -131,7 +152,7 @@ class TargetBlueprint(Blueprint):
         # Pay 1 HTR as fee for the proxy call
         fees: list[NCFee] = [NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)]
         result = self.syscall.get_proxy(blueprint_id) \
-            .public(*ctx.actions_list, fees=fees) \
+            .public(*ctx.all_actions, fees=fees) \
             .increment \
             .call_with_nc_args(nc_args)
         assert isinstance(result, int)

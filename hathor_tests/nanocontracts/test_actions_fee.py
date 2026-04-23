@@ -16,10 +16,13 @@ from hathor_tests.nanocontracts.test_reentrancy import HTR_TOKEN_UID
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_deposit=True, allow_grant_authority=True, allow_withdrawal=True,)
     def create_fee_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         return self.syscall.create_fee_token(
             token_name=name,
             token_symbol=symbol,
@@ -30,11 +33,14 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def create_deposit_token(self, ctx: Context, name: str, symbol: str, amount: int) -> TokenUid:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         return self.syscall.create_deposit_token(token_name=name, token_symbol=symbol, amount=amount)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def noop(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public(allow_deposit=True, allow_withdrawal=True)
     def get_tokens_from_nc(
@@ -46,6 +52,8 @@ class MyBlueprint(Blueprint):
         fee_payment_token: TokenUid,
         fee_amount: int
     ) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         action = NCWithdrawalAction(token_uid=token_uid, amount=token_amount)
         fees = [NCFee(token_uid=TokenUid(fee_payment_token), amount=fee_amount)]
         self.syscall.get_contract(nc_id, blueprint_id=None).public(action, fees=fees).noop()
@@ -60,6 +68,8 @@ class MyBlueprint(Blueprint):
         fee_payment_token: TokenUid,
         fee_amount: int
     ) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         action = NCDepositAction(token_uid=token_uid, amount=token_amount)
         fees = [NCFee(token_uid=TokenUid(fee_payment_token), amount=fee_amount)]
         self.syscall.get_contract(nc_id, blueprint_id=None).public(action, fees=fees).noop()
@@ -72,6 +82,8 @@ class MyOtherBlueprint(Blueprint):
 
     @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.fbt_uid = self.syscall.create_fee_token(
             token_name='FBT',
             token_symbol='FBT',
@@ -101,6 +113,8 @@ class MyOtherBlueprint(Blueprint):
         nc_id: ContractId,
         pay_with_dbt: bool,
     ) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         if pay_with_dbt:
             fees = [NCFee(token_uid=TokenUid(self.dbt_uid), amount=100)]
         else:
@@ -116,6 +130,8 @@ class MyOtherBlueprint(Blueprint):
         ctx: Context,
         nc_id: ContractId
     ) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.get_contract(nc_id, blueprint_id=None).public(
             NCDepositAction(token_uid=self.fbt_uid, amount=1000),
             NCDepositAction(token_uid=self.ftt_uid, amount=1000),

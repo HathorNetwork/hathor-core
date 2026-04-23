@@ -42,7 +42,7 @@ class ProxyBlueprint(Blueprint):
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> None:
         blueprint_id = self.syscall.get_contract(self.contract, blueprint_id=None).get_blueprint_id()
         self.syscall.get_proxy(blueprint_id) \
-            .get_public_method(method_name, *ctx.actions_list) \
+            .get_public_method(method_name, *ctx.all_actions) \
             .call_with_nc_args(nc_args)
 
 

@@ -24,7 +24,8 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 class MyBlueprint1(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def test_initialize_method(self, ctx: Context, blueprint_id: BlueprintId, name: str) -> str:
@@ -54,6 +55,8 @@ class MyBlueprint1(Blueprint):
 class MyBlueprint2(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, name: str) -> str:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         return f'hello {name}'
 
 

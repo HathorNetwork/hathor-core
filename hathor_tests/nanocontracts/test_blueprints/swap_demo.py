@@ -46,8 +46,11 @@ class SwapDemo(Blueprint):
         if token_a == token_b:
             raise NCFail
 
-        if set(ctx.actions.keys()) != {token_a, token_b}:
+        if set(ctx.actions_by_token.keys()) != {token_a, token_b}:
             raise InvalidTokens
+
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
         self.token_a = token_a
         self.token_b = token_b
@@ -59,11 +62,11 @@ class SwapDemo(Blueprint):
     def swap(self, ctx: Context) -> None:
         """Execute a token swap."""
 
-        if set(ctx.actions.keys()) != {self.token_a, self.token_b}:
+        if set(ctx.actions_by_token.keys()) != {self.token_a, self.token_b}:
             raise InvalidTokens
 
-        action_a = ctx.get_single_action(self.token_a)
-        action_b = ctx.get_single_action(self.token_b)
+        action_a = ctx.get_token_single_action(self.token_a)
+        action_b = ctx.get_token_single_action(self.token_b)
 
         if not (
             (isinstance(action_a, NCDepositAction) and isinstance(action_b, NCWithdrawalAction))
@@ -73,6 +76,9 @@ class SwapDemo(Blueprint):
 
         if not self.is_ratio_valid(action_a.amount, action_b.amount):
             raise InvalidRatio
+
+        ctx.authorize(action_a)
+        ctx.authorize(action_b)
 
         # All good! Let's accept the transaction.
         self.swaps_counter += 1

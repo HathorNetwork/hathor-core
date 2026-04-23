@@ -25,6 +25,8 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 class MyBlueprint(Blueprint):
     @public(allow_deposit=True)
     def initialize(self, ctx: Context, amount: int) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.syscall.create_deposit_token(token_name='token a', token_symbol='TKA', amount=amount)
 
 

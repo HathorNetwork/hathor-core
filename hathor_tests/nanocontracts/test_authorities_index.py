@@ -33,6 +33,8 @@ class MyBlueprint(Blueprint):
 
     @public(allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.token_uid = None
 
     @public
@@ -44,11 +46,14 @@ class MyBlueprint(Blueprint):
 
     @public(allow_deposit=True)
     def create_token(self, ctx: Context) -> None:
+        for action in ctx.all_actions:
+            ctx.authorize(action)
         self.token_uid = self.syscall.create_deposit_token(token_name='token a', token_symbol='TKA', amount=1000)
 
     @public(allow_acquire_authority=True)
     def allow_acquire_authority(self, ctx: Context) -> None:
-        pass
+        for action in ctx.all_actions:
+            ctx.authorize(action)
 
     @public
     def acquire_authority(self, ctx: Context, other_id: ContractId) -> None:

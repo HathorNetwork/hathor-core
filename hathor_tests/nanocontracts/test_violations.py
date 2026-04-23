@@ -14,7 +14,7 @@ class MyBlueprint(Blueprint):
 
     @public
     def modify_actions(self, ctx: Context) -> None:
-        ctx.actions[b'\00'] = NCDepositAction(token_uid=b'\00', amount=1_000)  # type: ignore
+        ctx.actions_by_token[b'\00'] = NCDepositAction(token_uid=b'\00', amount=1_000)  # type: ignore
 
     @public
     def modify_vertex(self, ctx: Context) -> None:
