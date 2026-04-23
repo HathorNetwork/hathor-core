@@ -291,15 +291,15 @@ class TestC001WalletExceptionHandler:
 
 
 # ---------------------------------------------------------------------------
-# C-002: Explicit type guard for shielded verify_sum bypass
+# C-002: Explicit type guard for shielded verify_transparent_balance bypass
 # ---------------------------------------------------------------------------
 
 
 class TestC002TypeGuardVerifySum:
-    """The shielded verify_sum bypass must explicitly exclude
+    """The shielded verify_transparent_balance bypass must explicitly exclude
     TokenCreationTransaction to prevent minting bypass."""
 
-    def test_verify_sum_bypass_excludes_token_creation_tx(self):
+    def test_verify_transparent_balance_bypass_excludes_token_creation_tx(self):
         """In _verify_tx, the shielded branch must exclude TokenCreationTransaction."""
         import inspect
         import textwrap
@@ -312,7 +312,7 @@ class TestC002TypeGuardVerifySum:
         # The shielded branch must explicitly mention TokenCreationTransaction
         # to guard against subclass matching.
         assert 'TokenCreationTransaction' in source, (
-            "The shielded verify_sum bypass in _verify_tx must explicitly "
+            "The shielded verify_transparent_balance bypass in _verify_tx must explicitly "
             "exclude TokenCreationTransaction to prevent minting bypass."
         )
 

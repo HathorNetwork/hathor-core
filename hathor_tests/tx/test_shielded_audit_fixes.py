@@ -240,8 +240,8 @@ class TestLegacyVerifierShieldedRouting:
 # ============================================================================
 
 class TestVerifySumSkipped:
-    def test_verify_sum_skipped_for_shielded_transactions(self) -> None:
-        """When a tx has shielded outputs, verify_sum should not be called.
+    def test_verify_transparent_balance_skipped_for_shielded_transactions(self) -> None:
+        """When a tx has shielded outputs, verify_transparent_balance should not be called.
 
         We call _verify_tx directly and patch verify_without_storage to no-op.
         """
@@ -281,8 +281,8 @@ class TestVerifySumSkipped:
         with patch.object(VerificationService, 'verify_without_storage'):
             service._verify_tx(tx, params)
 
-        # verify_sum should NOT have been called because tx.has_shielded_outputs() is True
-        verifiers.tx.verify_sum.assert_not_called()
+        # verify_transparent_balance should NOT have been called because tx.has_shielded_outputs() is True
+        verifiers.tx.verify_transparent_balance.assert_not_called()
 
 
 # ============================================================================

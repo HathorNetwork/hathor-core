@@ -300,7 +300,7 @@ class TransactionVerifier:
     ) -> tuple[int, bool]:
         """Check token permissions and compute deposit/withdraw balance.
 
-        Shared logic between verify_sum and verify_token_rules.
+        Shared logic between verify_transparent_balance and verify_token_rules.
 
         For shielded transactions (is_shielded=True), the amount-based melt/mint check and
         deposit/withdraw calculation are skipped for non-native tokens because transparent
@@ -348,7 +348,7 @@ class TransactionVerifier:
         return htr_expected_amount, has_nonexistent_tokens
 
     @classmethod
-    def verify_sum(
+    def verify_transparent_balance(
         cls,
         settings: HathorSettings,
         tx: Transaction,
@@ -359,6 +359,9 @@ class TransactionVerifier:
     ) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
+
+        Counterpart of verify_shielded_balance: exactly one balance check runs per tx,
+        dispatched by tx.is_shielded() at the caller.
 
         When `allow_nonexistent_tokens` flag is set to `True` and a nonexistent token is provided,
         this method will skip the fee and HTR balance checks.
@@ -407,8 +410,8 @@ class TransactionVerifier:
         """Verify token authority permissions, deposit requirements, and fee correctness.
 
         Uses _check_token_permissions_and_deposits for shared permission/deposit logic,
-        then checks fee amounts. Used for shielded transactions where verify_sum's balance
-        equation is replaced by verify_shielded_balance.
+        then checks fee amounts. Used for shielded transactions where the transparent
+        balance equation is replaced by verify_shielded_balance.
 
         :raises ForbiddenMint: if tokens were minted without authority
         :raises ForbiddenMelt: if tokens were melted without authority
@@ -596,24 +599,25 @@ class TransactionVerifier:
         self.verify_shielded_fee(tx)
 
     def verify_shielded_outputs_with_storage(self, tx: Transaction) -> None:
-        """Shielded verifications that need storage (balance, surjection).
+        """Outputs-only shielded checks that need storage (surjection proofs).
 
-        Builds shared caches for spent transactions and asset tags to avoid
-        redundant storage lookups and crypto operations across sub-methods.
+        Gated on has_shielded_outputs() — surjection proves each shielded output's
+        asset came from some input, so it only runs when there are shielded outputs.
+
+        Whole-tx balance (verify_shielded_balance) is NOT called here — it's
+        dispatched from _verify_tx as the counterpart to verify_transparent_balance,
+        so every tx gets exactly one balance check regardless of shape.
         """
         assert tx.storage is not None
 
-        # Build spent_txs cache once — shared by surjection, balance, and trivial commitment
         spent_txs: dict[bytes, BaseTransaction] = {}
         for tx_input in tx.inputs:
             if tx_input.tx_id not in spent_txs:
                 spent_txs[tx_input.tx_id] = tx.storage.get_transaction(tx_input.tx_id)
 
-        # Build asset_tag cache once — shared by surjection and balance
         asset_tag_cache: dict[bytes, bytes] = {}
 
         self.verify_surjection_proofs(tx, spent_txs=spent_txs, asset_tag_cache=asset_tag_cache)
-        self.verify_shielded_balance(tx, spent_txs=spent_txs, asset_tag_cache=asset_tag_cache)
 
     def verify_commitments_valid(self, tx: Transaction) -> None:
         """Validate all commitments are exactly 33 bytes, valid curve points, and count is within limits."""
