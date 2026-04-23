@@ -17,6 +17,7 @@ from hathorlib.headers.fee_header import FeeEntry, FeeHeader, FeeHeaderEntry
 from hathorlib.headers.nano_header import NC_INITIALIZE_METHOD, NanoHeader
 from hathorlib.headers.shielded_outputs_header import ShieldedOutputsHeader
 from hathorlib.headers.types import VertexHeaderId
+from hathorlib.headers.unshield_balance_header import UnshieldBalanceHeader
 
 __all__ = [
     'VertexBaseHeader',
@@ -27,4 +28,5 @@ __all__ = [
     'FeeEntry',
     'NC_INITIALIZE_METHOD',
     'ShieldedOutputsHeader',
+    'UnshieldBalanceHeader',
 ]
