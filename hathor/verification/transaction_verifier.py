@@ -785,7 +785,19 @@ class TransactionVerifier:
         spent_txs: dict[bytes, BaseTransaction] | None = None,
         asset_tag_cache: dict[bytes, bytes] | None = None,
     ) -> None:
-        """Homomorphic balance verification: sum(C_in) == sum(C_out) + fee*H_HTR."""
+        """Homomorphic balance verification.
+
+        For mixed and partial-unshield txs (at least one shielded output):
+          sum(C_in) == sum(C_out) + fee*H_HTR
+        For full-unshield txs (shielded inputs, no shielded outputs): the tx
+        carries an UnshieldBalanceHeader with `excess = sum(r_in) − sum(r_out)`
+        and verification checks:
+          sum(C_in) == sum(C_out) + excess*G + fee*H_HTR
+
+        Mutual-exclusion invariant: a shielded tx must carry either a
+        ShieldedOutputsHeader or an UnshieldBalanceHeader, not both and not
+        neither.
+        """
         from hathor.crypto.shielded import verify_balance
 
         assert tx.storage is not None
@@ -826,12 +838,36 @@ class TransactionVerifier:
                 token_uid = self._normalize_token_uid(fee_entry.token_uid)
                 transparent_outputs.append((fee_entry.amount, token_uid))
 
+        # Mutual-exclusion invariants on the excess blinding factor:
+        #   1) excess and shielded outputs cannot coexist.
+        #   2) a tx with shielded inputs and no shielded outputs must carry excess
+        #      (otherwise sum(r_in)*G has no counterpart and the equation cannot hold).
+        #   3) excess is only meaningful for txs with shielded inputs.
+        has_shielded_outputs_ = bool(shielded_outputs)
+        has_shielded_inputs_ = bool(shielded_inputs)
+        excess_bf = tx.excess_blinding_factor
+        has_excess = excess_bf is not None
+        if has_shielded_outputs_ and has_excess:
+            raise ShieldedBalanceMismatchError(
+                'a shielded tx cannot carry both shielded outputs and an unshield balance header'
+            )
+        if has_shielded_inputs_ and not has_shielded_outputs_ and not has_excess:
+            raise ShieldedBalanceMismatchError(
+                'a full-unshield tx (shielded inputs, no shielded outputs) must carry an '
+                'unshield balance header'
+            )
+        if has_excess and not has_shielded_inputs_:
+            raise ShieldedBalanceMismatchError(
+                'unshield balance header requires at least one shielded input'
+            )
+
         try:
             if not verify_balance(
                 transparent_inputs,
                 shielded_inputs,
                 transparent_outputs,
                 shielded_outputs,
+                excess_bf,
             ):
                 raise ShieldedBalanceMismatchError(
                     'shielded balance equation does not hold'

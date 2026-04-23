@@ -26,12 +26,13 @@ def verify_balance(
     """
     if _lib is None:
         raise RuntimeError('hathor_ct_crypto native library is not available')
-    if excess_blinding_factor is not None and shielded_outputs:
-        raise ValueError(
-            'excess_blinding_factor must be None when shielded_outputs is non-empty'
-        )
-    if excess_blinding_factor is not None and len(excess_blinding_factor) != 32:
-        raise ValueError('excess_blinding_factor must be 32 bytes')
+    if excess_blinding_factor is not None:
+        if shielded_outputs:
+            raise ValueError('excess_blinding_factor must be None when shielded_outputs is non-empty')
+        if not shielded_inputs:
+            raise ValueError('excess_blinding_factor requires at least one shielded input')
+        if len(excess_blinding_factor) != 32:
+            raise ValueError('excess_blinding_factor must be 32 bytes')
     return _lib.verify_balance(
         transparent_inputs,
         shielded_inputs,

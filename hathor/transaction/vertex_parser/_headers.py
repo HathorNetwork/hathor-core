@@ -68,6 +68,14 @@ def deserialize_headers(
                 header = shielded_header
                 # Push unconsumed bytes back into the deserializer
                 deserializer.replace_remaining(leftover)
+            case VertexHeaderId.UNSHIELD_BALANCE_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import UnshieldBalanceHeader
+                assert isinstance(vertex, Transaction)
+                remaining_bytes = bytes(deserializer.read_all())
+                unshield_header, leftover = UnshieldBalanceHeader.deserialize(vertex, remaining_bytes)
+                header = unshield_header
+                deserializer.replace_remaining(leftover)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
