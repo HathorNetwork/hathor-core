@@ -75,7 +75,7 @@ class UnshieldDAGBuilderMatrixTestCase(unittest.TestCase):
         cpu_mining_service = SimulatorCpuMiningService()
         settings = self._settings.model_copy(update={
             'ENABLE_SHIELDED_TRANSACTIONS': FeatureSetting.ENABLED,
-            'ENABLE_NANO_CONTRACTS': True,
+            'ENABLE_NANO_CONTRACTS': FeatureSetting.ENABLED,
         })
         builder = self.get_builder(settings) \
             .set_vertex_verifiers_builder(_build_vertex_verifiers) \
@@ -183,11 +183,7 @@ class UnshieldDAGBuilderMatrixTestCase(unittest.TestCase):
             header = tx.get_unshield_balance_header()
             self.assertEqual(len(header.excess_blinding_factor), 32)
 
-        # Header-level serialization round-trip on the unshield header (when
-        # present). The full-tx round-trip (Transaction.create_from_struct)
-        # consults global settings which default to shielded=DISABLED in the
-        # test env, so we stay at the header level here — the full-tx path is
-        # exercised separately in test_unshield_balance_header.py.
+        # Header-level serialization round-trip on the unshield header.
         if expects_unshield:
             header = tx.get_unshield_balance_header()
             data = header.serialize()
@@ -332,3 +328,89 @@ class MutualExclusionRejectionTestCase(unittest.TestCase):
         with self.assertRaises(ShieldedBalanceMismatchError) as ctx:
             verifier.verify_shielded_balance(tx, spent_txs=spent_txs)
         self.assertIn('cannot carry both', str(ctx.exception))
+
+
+class UnshieldVerifyHeadersTestCase(unittest.TestCase):
+    """Run `VertexVerifier.verify_headers` on DAG-builder-produced txs.
+
+    This is the gate that rejected full-unshield txs before the fix:
+    `get_allowed_headers` whitelisted only `ShieldedOutputsHeader` under the
+    shielded feature, so a DAG-built tx carrying `UnshieldBalanceHeader`
+    would be rejected with `HeaderNotSupported` on a live node. Other
+    shielded/unshield tests never exercised this path.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        from hathor.simulator.patches import SimulatorCpuMiningService
+        from hathor.simulator.simulator import _build_vertex_verifiers
+
+        cpu_mining_service = SimulatorCpuMiningService()
+        settings = self._settings.model_copy(update={
+            'ENABLE_SHIELDED_TRANSACTIONS': FeatureSetting.ENABLED,
+        })
+        builder = self.get_builder(settings) \
+            .set_vertex_verifiers_builder(_build_vertex_verifiers) \
+            .set_cpu_mining_service(cpu_mining_service)
+        self.manager = self.create_peer_from_builder(builder)
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+    def _verify_headers(self, tx: Transaction) -> None:
+        from hathor.feature_activation.utils import Features
+        from hathor.verification.verification_params import VerificationParams
+        best_block = self.manager.tx_storage.get_best_block()
+        features = Features.for_mempool(
+            settings=self.manager._settings,
+            feature_service=self.manager.feature_service,
+            best_block=best_block,
+        )
+        params = VerificationParams(
+            nc_block_root_id=best_block.get_metadata().nc_block_root_id,
+            features=features,
+        )
+        self.manager.verification_service.verifiers.vertex.verify_headers(tx, params)
+
+    def test_full_unshield_headers_accepted(self) -> None:
+        """A DAG-built full-unshield tx carries UnshieldBalanceHeader, which
+        `verify_headers` must accept when the shielded feature is active."""
+        dsl = """
+            blockchain genesis b[1..50]
+            b30 < dummy
+
+            src.out[0] = 30 HTR [shielded]
+            src.out[1] = 30 HTR [shielded]
+
+            src.out[0] <<< tx
+            tx.out[0] = 30 HTR
+        """
+        artifacts = self.dag_builder.build_from_str(dsl)
+        tx = artifacts.get_typed_vertex('tx', Transaction)
+
+        self.assertTrue(tx.has_unshield_balance_header())
+        self.assertFalse(tx.has_shielded_outputs())
+
+        self._verify_headers(tx)
+
+    def test_partial_unshield_headers_accepted(self) -> None:
+        """A DAG-built partial-unshield tx carries ShieldedOutputsHeader only;
+        `verify_headers` must accept it too (baseline for the pair)."""
+        dsl = """
+            blockchain genesis b[1..50]
+            b30 < dummy
+
+            src.out[0] = 30 HTR [shielded]
+            src.out[1] = 30 HTR [shielded]
+
+            src.out[0] <<< tx
+            tx.out[0] = 15 HTR
+            tx.out[1] = 15 HTR [shielded]
+            tx.out[2] = 15 HTR [shielded]
+        """
+        artifacts = self.dag_builder.build_from_str(dsl)
+        tx = artifacts.get_typed_vertex('tx', Transaction)
+
+        self.assertTrue(tx.has_shielded_outputs())
+        self.assertFalse(tx.has_unshield_balance_header())
+
+        self._verify_headers(tx)
