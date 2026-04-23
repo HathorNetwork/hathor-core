@@ -62,7 +62,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_postponed_verification_success(self) -> None:
-        """Postponed verification means running verify_sum on NC execution-time instead of verification-time."""
+        """Postponed verification: run verify_transparent_balance at NC execution-time, not verification-time."""
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..12]
             b10 < dummy
@@ -145,7 +145,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert tx2.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, tx2.hash}
 
         # It fails with a balance error caused by the withdrawal,
-        # because this check runs before the postponed verify_sum.
+        # because this check runs before the postponed verify_transparent_balance.
         assert_nc_failure_reason(
             manager=self.manager,
             tx_id=tx2.hash,

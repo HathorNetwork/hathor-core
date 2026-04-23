@@ -27,6 +27,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import (
     InputOutputMismatch,
     InvalidShieldedOutputError,
+    ShieldedBalanceMismatchError,
     ShieldedMintMeltForbiddenError,
 )
 from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
@@ -111,7 +112,7 @@ def _make_service_and_mocks():
 # ============================================================================
 
 class TestVerifySumBypass:
-    """When a tx has shielded outputs, verify_sum is skipped.
+    """When a tx has shielded outputs, verify_transparent_balance is skipped.
 
     But authority permissions, deposit requirements, and fee correctness
     MUST still be enforced. These tests verify they are.
@@ -246,7 +247,7 @@ class TestVerifySumBypass:
         """A shielded tx must have correct fee amounts in its fee header.
 
         The fee_header says fee=0, but the expected fee (from outputs/inputs) is 100.
-        Before the fix, fee correctness is only checked inside verify_sum which is skipped.
+        Before the fix, fee correctness is only checked inside verify_transparent_balance which is skipped.
         """
         from hathor.transaction import Transaction
 
@@ -1565,3 +1566,75 @@ class TestHeaderOrdering:
                           return_value={NanoHeader}):
             # Should not raise
             verifier.verify_headers(vertex, params)
+
+
+# ============================================================================
+# Unshielding: shielded inputs → transparent outputs only
+# ============================================================================
+
+class TestUnshieldingBalance:
+    """A tx with shielded inputs and only transparent outputs must still have
+    its balance verified cryptographically by verify_shielded_balance.
+
+    Regression for the missing-gate bug: _verify_tx used to skip verify_sum for
+    is_shielded() txs while routing verify_shielded_balance through a
+    has_shielded_outputs() gate — so unshielding txs ran neither check, letting
+    an attacker mint arbitrary transparent value from any shielded UTXO.
+    """
+
+    def _make_unshielding_tx(self, settings):
+        """Shielded inputs + transparent-only outputs."""
+        from hathor.transaction import Transaction
+
+        token_uid = os.urandom(32)
+
+        tx = MagicMock(spec=Transaction)
+        tx.is_genesis = False
+        # Inputs-only shielded shape:
+        tx.has_shielded_outputs = MagicMock(return_value=False)
+        tx.has_shielded_inputs = MagicMock(return_value=True)
+        tx.is_shielded = MagicMock(return_value=True)
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.has_fees = MagicMock(return_value=True)
+        tx.hash = b'\x00' * 32
+        tx.hash_hex = tx.hash.hex()
+
+        # Token dict shape seen when unshielding: transparent side shows a
+        # surplus because shielded-input amounts are hidden from _get_token_info_from_inputs.
+        token_dict = TokenInfoDict()
+        token_dict[settings.HATHOR_TOKEN_UID] = TokenInfo(version=TokenVersion.NATIVE, amount=0)
+        token_dict[token_uid] = TokenInfo(
+            version=TokenVersion.DEPOSIT,
+            amount=500,
+            can_mint=False,
+            can_melt=False,
+        )
+        token_dict.fees_from_fee_header = 0
+        tx.get_complete_token_info = MagicMock(return_value=token_dict)
+        return tx
+
+    def test_verify_shielded_balance_is_called_for_unshielding(self) -> None:
+        """The shielded balance check must run when is_shielded() is true, even
+        if has_shielded_outputs() is false — otherwise unshielding is unchecked."""
+        service, settings, verifiers, params = _make_service_and_mocks()
+        tx = self._make_unshielding_tx(settings)
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            service._verify_tx(tx, params)
+
+        verifiers.tx.verify_shielded_balance.assert_called_once_with(tx)
+        verifiers.tx.verify_transparent_balance.assert_not_called()
+
+    def test_tampered_transparent_output_rejected_for_unshielding(self) -> None:
+        """If verify_shielded_balance rejects (tampered transparent amount),
+        _verify_tx must propagate the error — no silent pass."""
+        service, settings, verifiers, params = _make_service_and_mocks()
+        tx = self._make_unshielding_tx(settings)
+
+        verifiers.tx.verify_shielded_balance.side_effect = ShieldedBalanceMismatchError(
+            'shielded balance equation does not hold'
+        )
+
+        with patch.object(VerificationService, 'verify_without_storage'):
+            with pytest.raises(ShieldedBalanceMismatchError):
+                service._verify_tx(tx, params)

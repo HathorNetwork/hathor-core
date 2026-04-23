@@ -308,28 +308,26 @@ class VerificationService:
         self.verifiers.tx.verify_inputs(tx, params)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
-        # Skip verify_sum for shielded transactions — balance is
-        # checked by verify_shielded_balance in _verify_shielded_header instead.
-        # But authority permissions, deposit requirements, and fee correctness
-        # must still be enforced via verify_token_rules.
-        # Explicitly exclude TokenCreationTransaction to prevent
-        # bypass of minting verification via shielded outputs.
+        # Balance verification: exactly one check runs per tx, dispatched by is_shielded().
+        # TokenCreationTransaction is explicitly excluded from the shielded branch to
+        # prevent bypass of minting verification via shielded outputs; since TCT cannot
+        # carry shielded components in practice, it falls through to the transparent check.
+        block_storage = self._get_block_storage(params)
+        _token_dict = token_dict or tx.get_complete_token_info(block_storage)
         if (
             not isinstance(tx, TokenCreationTransaction)
             and isinstance(tx, Transaction)
             and tx.is_shielded()
         ):
-            block_storage = self._get_block_storage(params)
-            _token_dict = token_dict or tx.get_complete_token_info(block_storage)
             shielded_fee = TransactionVerifier.calculate_shielded_fee(self._settings, tx)
             self.verifiers.tx.verify_no_mint_melt(_token_dict)
             self.verifiers.tx.verify_token_rules(self._settings, _token_dict, shielded_fee=shielded_fee)
+            self.verifiers.tx.verify_shielded_balance(tx)
         else:
-            block_storage = self._get_block_storage(params)
-            self.verifiers.tx.verify_sum(
+            self.verifiers.tx.verify_transparent_balance(
                 self._settings,
                 tx,
-                token_dict or tx.get_complete_token_info(block_storage),
+                _token_dict,
                 # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
                 allow_nonexistent_tokens=tx.is_nano_contract()
             )
@@ -341,7 +339,7 @@ class VerificationService:
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
 
-        We also overload verify_sum to make some different checks
+        We also overload verify_transparent_balance to make some different checks
         """
         # we should validate the token info before verifying the tx
         self.verifiers.token_creation_tx.verify_token_info(tx, params)

@@ -616,7 +616,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
         verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
-        verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
+        verify_transparent_balance_wrapped = Mock(wraps=self.verifiers.tx.verify_transparent_balance)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
         verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
@@ -632,7 +632,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
-            patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
+            patch.object(TransactionVerifier, 'verify_transparent_balance', verify_transparent_balance_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
         ):
@@ -652,7 +652,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped.assert_called_once()
         verify_script_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
-        verify_sum_wrapped.assert_called_once()
+        verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
         verify_tx_version_wrapped.assert_called_once()
 
@@ -756,7 +756,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
         verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
-        verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
+        verify_transparent_balance_wrapped = Mock(wraps=self.verifiers.tx.verify_transparent_balance)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
         verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
@@ -775,7 +775,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
-            patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
+            patch.object(TransactionVerifier, 'verify_transparent_balance', verify_transparent_balance_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
         ):
@@ -798,7 +798,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped.assert_called_once()
         verify_script_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
-        verify_sum_wrapped.assert_called_once()
+        verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
         verify_headers_wrapped.assert_called_once()
 
@@ -923,7 +923,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
         verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
-        verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
+        verify_transparent_balance_wrapped = Mock(wraps=self.verifiers.tx.verify_transparent_balance)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
         verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
@@ -942,7 +942,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
-            patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
+            patch.object(TransactionVerifier, 'verify_transparent_balance', verify_transparent_balance_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
@@ -964,7 +964,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped.assert_called_once()
         verify_script_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
-        verify_sum_wrapped.assert_called_once()
+        verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
         verify_tx_version_wrapped.assert_called_once()
 
@@ -1072,7 +1072,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped = Mock(wraps=self.verifiers.tx.verify_inputs)
         verify_script_wrapped = Mock(wraps=self.verifiers.tx.verify_script)
         verify_parents_wrapped = Mock(wraps=self.verifiers.vertex.verify_parents)
-        verify_sum_wrapped = Mock(wraps=self.verifiers.tx.verify_sum)
+        verify_transparent_balance_wrapped = Mock(wraps=self.verifiers.tx.verify_transparent_balance)
         verify_reward_locked_wrapped = Mock(wraps=self.verifiers.tx.verify_reward_locked)
         verify_tx_version_wrapped = Mock(wraps=self.verifiers.tx.verify_version)
 
@@ -1094,7 +1094,7 @@ class VerificationTest(unittest.TestCase):
             patch.object(TransactionVerifier, 'verify_inputs', verify_inputs_wrapped),
             patch.object(TransactionVerifier, 'verify_script', verify_script_wrapped),
             patch.object(VertexVerifier, 'verify_parents', verify_parents_wrapped),
-            patch.object(TransactionVerifier, 'verify_sum', verify_sum_wrapped),
+            patch.object(TransactionVerifier, 'verify_transparent_balance', verify_transparent_balance_wrapped),
             patch.object(TransactionVerifier, 'verify_reward_locked', verify_reward_locked_wrapped),
             patch.object(TransactionVerifier, 'verify_version', verify_tx_version_wrapped),
             patch.object(TokenCreationTransactionVerifier, 'verify_token_info', verify_token_info_wrapped),
@@ -1119,7 +1119,7 @@ class VerificationTest(unittest.TestCase):
         verify_inputs_wrapped.assert_called_once()
         verify_script_wrapped.assert_called_once()
         verify_parents_wrapped.assert_called_once()
-        verify_sum_wrapped.assert_called_once()
+        verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
         verify_tx_version_wrapped.assert_called_once()
 
