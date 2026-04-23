@@ -36,6 +36,8 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
 )
 from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -57,12 +59,13 @@ class VertexVerifier:
         self._settings = settings
         self._feature_service = feature_service
 
-    def verify_version_basic(self, vertex: BaseTransaction) -> None:
+    def verify_version_basic(self, vertex: BaseTransaction, *, ctx: VerificationContext) -> None:
         """Verify that the vertex version is valid."""
         if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(vertex.version, settings=self._settings):
             raise InvalidVersionError(f"invalid vertex version: {vertex.version}")
+        ctx.record(VerificationCheck.VERSION_BASIC)
 
-    def verify_parents(self, vertex: BaseTransaction) -> None:
+    def verify_parents(self, vertex: BaseTransaction, *, ctx: VerificationContext) -> None:
         """All parents must exist and their timestamps must be smaller than ours.
 
         Also, txs should have 2 other txs as parents, while blocks should have 2 txs + 1 block.
@@ -138,8 +141,15 @@ class VertexVerifier:
         if my_parents_txs != parents_txs:
             raise IncorrectParents('wrong number of parents (tx type): {}, expecting {}'.format(
                 my_parents_txs, parents_txs))
+        ctx.record(VerificationCheck.PARENTS)
 
-    def verify_pow(self, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
+    def verify_pow(
+        self,
+        vertex: BaseTransaction,
+        *,
+        override_weight: Optional[float] = None,
+        ctx: VerificationContext,
+    ) -> None:
         """Verify proof-of-work
 
         :raises PowError: when the hash is equal or greater than the target
@@ -149,15 +159,16 @@ class VertexVerifier:
         minimum_target = vertex.get_target(override_weight)
         if numeric_hash >= minimum_target:
             raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
+        ctx.record(VerificationCheck.POW)
 
-    def verify_outputs(self, vertex: BaseTransaction) -> None:
+    def verify_outputs(self, vertex: BaseTransaction, *, ctx: VerificationContext) -> None:
         """Verify there are no hathor authority UTXOs and outputs are all positive
 
         :raises InvalidToken: when there's a hathor authority utxo
         :raises InvalidOutputValue: output has negative value
         :raises TooManyOutputs: when there are too many outputs
         """
-        self.verify_number_of_outputs(vertex)
+        self.verify_number_of_outputs(vertex, ctx=ctx)
         for index, output in enumerate(vertex.outputs):
             # no hathor authority UTXO
             if (output.get_token_index() == 0) and output.is_token_authority():
@@ -173,19 +184,30 @@ class VertexVerifier:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
                     len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
+        ctx.record(VerificationCheck.OUTPUTS)
 
-    def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
+    def verify_number_of_outputs(
+        self, vertex: BaseTransaction, *, ctx: VerificationContext
+    ) -> None:
         """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
             raise TooManyOutputs('Maximum number of outputs exceeded')
+        ctx.record(VerificationCheck.NUMBER_OF_OUTPUTS)
 
-    def verify_sigops_output(self, vertex: BaseTransaction, enable_checkdatasig_count: bool = True) -> None:
+    def verify_sigops_output(
+        self,
+        vertex: BaseTransaction,
+        enable_checkdatasig_count: bool = True,
+        *,
+        ctx: VerificationContext,
+    ) -> None:
         """Alias to `_verify_sigops_output` for compatibility."""
         self._verify_sigops_output(
             settings=self._settings,
             vertex=vertex,
             enable_checkdatasig_count=enable_checkdatasig_count,
         )
+        ctx.record(VerificationCheck.SIGOPS_OUTPUT)
 
     @staticmethod
     def _verify_sigops_output(
@@ -234,7 +256,9 @@ class VertexVerifier:
                 assert_never(vertex.version)
         return allowed_headers
 
-    def verify_headers(self, vertex: BaseTransaction, params: VerificationParams) -> None:
+    def verify_headers(
+        self, vertex: BaseTransaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
         """Verify the headers."""
         if len(vertex.headers) > vertex.get_maximum_number_of_headers():
             raise TooManyHeaders('Maximum number of headers exceeded')
@@ -251,13 +275,19 @@ class VertexVerifier:
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
             seen_header_types.add(type(header))
+        ctx.record(VerificationCheck.HEADERS)
 
-    def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
-        """Verify that the timestamp is not too old. Mempool only."""
-        if not params.reject_too_old_vertices:
-            return
-
-        now = self._reactor.seconds()
-        t_diff = now - vertex.timestamp
-        if t_diff > MAX_PAST_TIMESTAMP_ALLOWED:
-            raise TimestampError(f'transaction is too old (now={now}, timestamp={vertex.timestamp}, diff={t_diff})')
+    def verify_old_timestamp(
+        self, vertex: BaseTransaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
+        """Verify that the timestamp is not too old. Mempool only. Records
+        OLD_TIMESTAMP either way — the invariant is "this check ran", regardless
+        of whether it was a no-op for these params."""
+        if params.reject_too_old_vertices:
+            now = self._reactor.seconds()
+            t_diff = now - vertex.timestamp
+            if t_diff > MAX_PAST_TIMESTAMP_ALLOWED:
+                raise TimestampError(
+                    f'transaction is too old (now={now}, timestamp={vertex.timestamp}, diff={t_diff})'
+                )
+        ctx.record(VerificationCheck.OLD_TIMESTAMP)

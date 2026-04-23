@@ -27,6 +27,7 @@ from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
+from hathor.verification.verification_context import VerificationContext
 
 
 def test_get_hashed_poa_data() -> None:
@@ -119,51 +120,51 @@ def test_verify_poa() -> None:
     # Test no rewards
     block.outputs = [TxOutput(123, b'')]
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'blocks must not have rewards in a PoA network'
     block.outputs = []
 
     # Test timestamp
     block.timestamp = 152
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'blocks must have at least 30 seconds between them'
     block.timestamp = 153
 
     # Test no signers
     settings.CONSENSUS_ALGORITHM = PoaSettings.model_construct(signers=())
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'invalid PoA signature'
 
     # Test no data
     settings.CONSENSUS_ALGORITHM = PoaSettings(signers=(PoaSignerSettings(public_key=public_key_bytes),))
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'invalid PoA signature'
 
     # Test invalid data
     block.data = b'some_data'
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'invalid PoA signature'
 
     # Test incorrect private key
     PoaSigner(ec.generate_private_key(ec.SECP256K1())).sign_block(block)
     block.signer_id = poa_signer._signer_id  # we set the correct signer id to test only the signature
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'invalid PoA signature'
 
     # Test valid signature
     poa_signer.sign_block(block)
-    block_verifier.verify_poa(block)
+    block_verifier.verify_poa(block, ctx=VerificationContext())
 
     # Test some random weight fails
     block.weight = 123
     poa_signer.sign_block(block)
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'block weight is 123, expected 2.0'
 
     # For this part we use two signers, so the ordering matters
@@ -176,23 +177,23 @@ def test_verify_poa() -> None:
     # Test valid signature with two signers, in turn
     block.weight = poa.BLOCK_WEIGHT_IN_TURN
     first_poa_signer.sign_block(block)
-    block_verifier.verify_poa(block)
+    block_verifier.verify_poa(block, ctx=VerificationContext())
 
     # And the other signature fails for the weight
     second_poa_signer.sign_block(block)
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'block weight is 2.0, expected 1.0'
 
     # Test valid signature with two signers, out of turn
     block.weight = poa.BLOCK_WEIGHT_OUT_OF_TURN
     second_poa_signer.sign_block(block)
-    block_verifier.verify_poa(block)
+    block_verifier.verify_poa(block, ctx=VerificationContext())
 
     # And the other signature fails for the weight
     first_poa_signer.sign_block(block)
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'block weight is 1.0, expected 2.0'
 
     # When we increment the height, the turn inverts
@@ -215,23 +216,23 @@ def test_verify_poa() -> None:
     # Test valid signature with two signers, in turn
     block.weight = poa.BLOCK_WEIGHT_IN_TURN
     second_poa_signer.sign_block(block)
-    block_verifier.verify_poa(block)
+    block_verifier.verify_poa(block, ctx=VerificationContext())
 
     # And the other signature fails for the weight
     first_poa_signer.sign_block(block)
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'block weight is 2.0, expected 1.0'
 
     # Test valid signature with two signers, out of turn
     block.weight = poa.BLOCK_WEIGHT_OUT_OF_TURN
     first_poa_signer.sign_block(block)
-    block_verifier.verify_poa(block)
+    block_verifier.verify_poa(block, ctx=VerificationContext())
 
     # And the other signature fails for the weight
     second_poa_signer.sign_block(block)
     with pytest.raises(PoaValidationError) as e:
-        block_verifier.verify_poa(block)
+        block_verifier.verify_poa(block, ctx=VerificationContext())
     assert str(e.value) == 'block weight is 1.0, expected 2.0'
 
 

@@ -51,6 +51,8 @@ from hathor.transaction.scripts import SigopCounter, create_output_script
 from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.verification_params import VerificationParams
 
 MAX_SEQNUM_DIFF_MEMPOOL = MAX_SEQNUM_JUMP_SIZE + 30
@@ -85,9 +87,12 @@ class NanoHeaderVerifier:
         self._tx_storage = tx_storage
         self.blueprint_service = blueprint_service
 
-    def verify_nc_signature(self, tx: BaseTransaction, params: VerificationParams) -> None:
+    def verify_nc_signature(
+        self, tx: BaseTransaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
         """Verify if the caller's signature is valid."""
         self._verify_nc_signature(self._settings, tx, params.features.opcodes_version)
+        ctx.record(VerificationCheck.NANO_NC_SIGNATURE)
 
     @staticmethod
     def _verify_nc_signature(settings: HathorSettings, tx: BaseTransaction, opcodes_version: OpcodesVersion) -> None:
@@ -122,7 +127,7 @@ class NanoHeaderVerifier:
             raise NCInvalidSignature from e
 
     @staticmethod
-    def verify_actions(tx: BaseTransaction) -> None:
+    def verify_actions(tx: BaseTransaction, *, ctx: VerificationContext) -> None:
         """Verify nc_actions."""
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
@@ -141,6 +146,7 @@ class NanoHeaderVerifier:
                 raise NCInvalidAction(
                     f'{action.name} action requires token {action.token_uid.hex()} in tokens list'
                 )
+        ctx.record(VerificationCheck.NANO_ACTIONS)
 
     @staticmethod
     def verify_action_list(actions: Sequence[NCAction]) -> None:
@@ -157,72 +163,74 @@ class NanoHeaderVerifier:
             if action_types not in ALLOWED_ACTION_SETS:
                 raise NCInvalidAction(f'conflicting actions for token {token_uid.hex()}')
 
-    def verify_method_call(self, tx: BaseTransaction, params: VerificationParams) -> None:
-        if not params.harden_nano_restrictions:
-            return
+    def verify_method_call(
+        self, tx: BaseTransaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
+        if params.harden_nano_restrictions:
+            assert tx.is_nano_contract()
+            assert isinstance(tx, Transaction)
 
-        assert tx.is_nano_contract()
-        assert isinstance(tx, Transaction)
+            blueprint_id: BlueprintId
+            nano_header = tx.get_nano_header()
+            if nano_header.is_creating_a_new_contract():
+                # creating a new contract
+                blueprint_id = BlueprintId(nano_header.nc_id)
+                allow_fallback = False
+            else:
+                # contract already exists
+                best_block = self._tx_storage.get_best_block()
+                block_storage = self._tx_storage.get_nc_block_storage(best_block)
+                try:
+                    contract_storage = block_storage.get_contract_storage(ContractId(nano_header.nc_id))
+                except NanoContractDoesNotExist as e:
+                    raise NCTxValidationError from e
+                blueprint_id = contract_storage.get_blueprint_id()
+                allow_fallback = True
 
-        blueprint_id: BlueprintId
-        nano_header = tx.get_nano_header()
-        if nano_header.is_creating_a_new_contract():
-            # creating a new contract
-            blueprint_id = BlueprintId(nano_header.nc_id)
-            allow_fallback = False
-        else:
-            # contract already exists
-            best_block = self._tx_storage.get_best_block()
-            block_storage = self._tx_storage.get_nc_block_storage(best_block)
             try:
-                contract_storage = block_storage.get_contract_storage(ContractId(nano_header.nc_id))
-            except NanoContractDoesNotExist as e:
-                raise NCTxValidationError from e
-            blueprint_id = contract_storage.get_blueprint_id()
-            allow_fallback = True
-
-        try:
-            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
-        except NCFail as e:
-            raise NCTxValidationError from e
-
-        method_name = nano_header.nc_method
-        method = getattr(blueprint_class, method_name, None)
-        allowed_actions: set[NCActionType]
-        if method is None:
-            if not allow_fallback:
-                raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is allowed')
-            method = getattr(blueprint_class, NC_FALLBACK_METHOD, None)
-            if method is None:
-                raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
-            method_name = 'fallback'
-        else:
-            if not is_nc_public_method(method):
-                raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
-            parser = Method.from_callable(method)
-            try:
-                parser.deserialize_args_bytes(nano_header.nc_args_bytes)
+                blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
             except NCFail as e:
                 raise NCTxValidationError from e
 
-        allowed_actions = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
-        assert isinstance(allowed_actions, set)
-        for action in nano_header.nc_actions:
-            if action.type not in allowed_actions:
-                exception = NCForbiddenAction(f'action {action.type} is forbidden on method `{method_name}`')
-                raise NCTxValidationError from exception
+            method_name = nano_header.nc_method
+            method = getattr(blueprint_class, method_name, None)
+            allowed_actions: set[NCActionType]
+            if method is None:
+                if not allow_fallback:
+                    raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is allowed')
+                method = getattr(blueprint_class, NC_FALLBACK_METHOD, None)
+                if method is None:
+                    raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
+                method_name = 'fallback'
+            else:
+                if not is_nc_public_method(method):
+                    raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
+                parser = Method.from_callable(method)
+                try:
+                    parser.deserialize_args_bytes(nano_header.nc_args_bytes)
+                except NCFail as e:
+                    raise NCTxValidationError from e
 
-    def verify_seqnum(self, tx: BaseTransaction, params: VerificationParams) -> None:
-        if not params.harden_nano_restrictions:
-            return
+            allowed_actions = getattr(method, NC_ALLOWED_ACTIONS_ATTR, set())
+            assert isinstance(allowed_actions, set)
+            for action in nano_header.nc_actions:
+                if action.type not in allowed_actions:
+                    exception = NCForbiddenAction(f'action {action.type} is forbidden on method `{method_name}`')
+                    raise NCTxValidationError from exception
+        ctx.record(VerificationCheck.NANO_METHOD_CALL)
 
-        assert tx.is_nano_contract()
-        assert isinstance(tx, Transaction)
+    def verify_seqnum(
+        self, tx: BaseTransaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
+        if params.harden_nano_restrictions:
+            assert tx.is_nano_contract()
+            assert isinstance(tx, Transaction)
 
-        nano_header = tx.get_nano_header()
-        best_block = self._tx_storage.get_best_block()
-        block_storage = self._tx_storage.get_nc_block_storage(best_block)
-        seqnum = block_storage.get_address_seqnum(Address(nano_header.nc_address))
-        diff = nano_header.nc_seqnum - seqnum
-        if diff < 0 or diff > MAX_SEQNUM_DIFF_MEMPOOL:
-            raise NCInvalidSeqnum(f'invalid seqnum (diff={diff})')
+            nano_header = tx.get_nano_header()
+            best_block = self._tx_storage.get_best_block()
+            block_storage = self._tx_storage.get_nc_block_storage(best_block)
+            seqnum = block_storage.get_address_seqnum(Address(nano_header.nc_address))
+            diff = nano_header.nc_seqnum - seqnum
+            if diff < 0 or diff > MAX_SEQNUM_DIFF_MEMPOOL:
+                raise NCInvalidSeqnum(f'invalid seqnum (diff={diff})')
+        ctx.record(VerificationCheck.NANO_SEQNUM)

@@ -23,6 +23,7 @@ from hathor.manager import HathorManager
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.verification_params import VerificationParams
 
 
@@ -112,20 +113,23 @@ class CreateTxResource(Resource):
         """ Same as .verify but skipping pow and signature verification."""
         assert type(tx) is Transaction
         verifiers = self.manager.verification_service.verifiers
-        verifiers.tx.verify_number_of_inputs(tx)
-        verifiers.vertex.verify_number_of_outputs(tx)
-        verifiers.vertex.verify_outputs(tx)
-        verifiers.tx.verify_output_token_indexes(tx)
-        verifiers.vertex.verify_sigops_output(tx, enable_checkdatasig_count=True)
-        verifiers.tx.verify_sigops_input(tx, enable_checkdatasig_count=True)
+        ctx = VerificationContext()
+        verifiers.tx.verify_number_of_inputs(tx, ctx=ctx)
+        verifiers.vertex.verify_number_of_outputs(tx, ctx=ctx)
+        verifiers.vertex.verify_outputs(tx, ctx=ctx)
+        verifiers.tx.verify_output_token_indexes(tx, ctx=ctx)
+        verifiers.vertex.verify_sigops_output(tx, enable_checkdatasig_count=True, ctx=ctx)
+        verifiers.tx.verify_sigops_input(tx, enable_checkdatasig_count=True, ctx=ctx)
         best_block = self.manager.tx_storage.get_best_block()
         params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
         # need to run verify_inputs first to check if all inputs exist
-        verifiers.tx.verify_inputs(tx, params, skip_script=True)
-        verifiers.vertex.verify_parents(tx)
+        verifiers.tx.verify_inputs(tx, params, skip_script=True, ctx=ctx)
+        verifiers.vertex.verify_parents(tx, ctx=ctx)
 
         block_storage = self.manager.get_nc_block_storage(best_block)
-        verifiers.tx.verify_sum(self.manager._settings, tx, tx.get_complete_token_info(block_storage))
+        verifiers.tx.verify_sum(
+            self.manager._settings, tx, tx.get_complete_token_info(block_storage), ctx=ctx,
+        )
 
 
 CreateTxResource.openapi = {

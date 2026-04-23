@@ -16,6 +16,8 @@ from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.transaction import MergeMinedBlock
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 
 
 class MergeMinedBlockVerifier:
@@ -25,7 +27,7 @@ class MergeMinedBlockVerifier:
         self._settings = settings
         self._feature_service = feature_service
 
-    def verify_aux_pow(self, block: MergeMinedBlock) -> None:
+    def verify_aux_pow(self, block: MergeMinedBlock, *, ctx: VerificationContext) -> None:
         """ Verify auxiliary proof-of-work (for merged mining).
         """
         assert block.aux_pow is not None
@@ -40,3 +42,4 @@ class MergeMinedBlockVerifier:
         )
 
         block.aux_pow.verify(block.get_mining_base_hash(), max_merkle_path_length)
+        ctx.record(VerificationCheck.AUX_POW)

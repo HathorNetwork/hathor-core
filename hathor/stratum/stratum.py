@@ -43,6 +43,7 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction, BitcoinAuxPow, Block, MergeMinedBlock, Transaction, sum_weights
 from hathor.transaction.exceptions import PowError, ScriptError, TxValidationError
 from hathor.util import json_dumpb, json_loadb
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.wallet.exceptions import InvalidAddress
 
@@ -537,7 +538,7 @@ class StratumProtocol(JSONRPC):
         )
 
         try:
-            verifier.verify_pow(tx, override_weight=job.weight)
+            verifier.verify_pow(tx, override_weight=job.weight, ctx=VerificationContext(vertex_hash=tx.hash or b''))
         except PowError:
             self.log.error('bad share, discard', job_weight=job.weight, tx=tx)
             return self.send_error(INVALID_SOLUTION, msgid, {
@@ -553,7 +554,7 @@ class StratumProtocol(JSONRPC):
         self.manager.reactor.callLater(0, self.job_request)
 
         try:
-            verifier.verify_pow(tx)
+            verifier.verify_pow(tx, ctx=VerificationContext(vertex_hash=tx.hash or b''))
         except PowError:
             # Transaction pow was not enough, but the share was succesfully submited
             self.log.info('high hash, keep mining', tx=tx)

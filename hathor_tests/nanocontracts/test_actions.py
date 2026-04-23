@@ -30,6 +30,7 @@ from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.util import not_none
 from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import HDWallet
 from hathor_tests import unittest
@@ -768,7 +769,9 @@ class TestActions(unittest.TestCase):
         )
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+            self.manager.verification_service.verifiers.nano_header.verify_actions(
+                self.tx1, ctx=VerificationContext(),
+            )
         assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
 
     def test_acquire_and_grant_same_token_not_allowed(self) -> None:
@@ -788,7 +791,9 @@ class TestActions(unittest.TestCase):
         self._set_nano_header(tx=self.tx1, nc_actions=nc_actions)
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+            self.manager.verification_service.verifiers.nano_header.verify_actions(
+                self.tx1, ctx=VerificationContext(),
+            )
         assert str(e.value) == 'conflicting actions for token 00'
 
     def test_conflicting_actions(self) -> None:
@@ -857,7 +862,9 @@ class TestActions(unittest.TestCase):
 
         with patch('hathor.transaction.headers.NanoHeader.get_actions', lambda _: fake_actions):
             with pytest.raises(NCInvalidAction) as e:
-                self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+                self.manager.verification_service.verifiers.nano_header.verify_actions(
+                    self.tx1, ctx=VerificationContext(),
+                )
         assert str(e.value) == f'DEPOSIT action requires token {fake_token_uid.hex()} in tokens list'
 
     def _test_invalid_unknown_authority(self, action_type: NCActionType) -> None:

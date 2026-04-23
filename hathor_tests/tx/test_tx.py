@@ -38,6 +38,7 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.transaction.util import int_to_bytes
 from hathor.transaction.validation_state import ValidationState
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import Wallet
 from hathor_tests import unittest
@@ -90,8 +91,11 @@ class TransactionTest(unittest.TestCase):
 
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
+        ctx = VerificationContext()
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(
+                self._settings, tx, tx.get_complete_token_info(block_storage), ctx=ctx,
+            )
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -111,8 +115,11 @@ class TransactionTest(unittest.TestCase):
 
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
+        ctx = VerificationContext()
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_sum(
+                self._settings, tx, tx.get_complete_token_info(block_storage), ctx=ctx,
+            )
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -152,7 +159,7 @@ class TransactionTest(unittest.TestCase):
         _input.data = data_wrong
 
         with self.assertRaises(InvalidInputData):
-            self._verifiers.tx.verify_inputs(tx, params=self.verification_params)
+            self._verifiers.tx.verify_inputs(tx, params=self.verification_params, ctx=VerificationContext())
 
     def test_too_many_inputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -163,13 +170,13 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(inputs=inputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyInputs):
-            self._verifiers.tx.verify_number_of_inputs(tx)
+            self._verifiers.tx.verify_number_of_inputs(tx, ctx=VerificationContext())
 
     def test_no_inputs(self):
         tx = Transaction(inputs=[], storage=self.tx_storage)
 
         with self.assertRaises(TooFewInputs):
-            self._verifiers.tx.verify_number_of_inputs(tx)
+            self._verifiers.tx.verify_number_of_inputs(tx, ctx=VerificationContext())
 
     def test_too_many_outputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
@@ -180,7 +187,7 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(outputs=outputs, storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            self._verifiers.vertex.verify_number_of_outputs(tx)
+            self._verifiers.vertex.verify_number_of_outputs(tx, ctx=VerificationContext())
 
     def _gen_tx_spending_genesis_block(self):
         parents = [tx.hash for tx in self.genesis_txs]
@@ -281,11 +288,11 @@ class TransactionTest(unittest.TestCase):
 
         b.init_static_metadata_from_storage(self._settings, self.tx_storage)
         with self.assertRaises(AuxPowNoMagicError):
-            self._verifiers.merge_mined_block.verify_aux_pow(b)
+            self._verifiers.merge_mined_block.verify_aux_pow(b, ctx=VerificationContext())
 
         # adding the MAGIC_NUMBER makes it work:
         b.aux_pow = b.aux_pow._replace(coinbase_head=b.aux_pow.coinbase_head + MAGIC_NUMBER)
-        self._verifiers.merge_mined_block.verify_aux_pow(b)
+        self._verifiers.merge_mined_block.verify_aux_pow(b, ctx=VerificationContext())
 
     def test_merge_mined_multiple_magic(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -355,9 +362,9 @@ class TransactionTest(unittest.TestCase):
 
         b1.init_static_metadata_from_storage(self._settings, self.tx_storage)
         b2.init_static_metadata_from_storage(self._settings, self.tx_storage)
-        self._verifiers.merge_mined_block.verify_aux_pow(b1)  # OK
+        self._verifiers.merge_mined_block.verify_aux_pow(b1, ctx=VerificationContext())  # OK
         with self.assertRaises(AuxPowUnexpectedMagicError):
-            self._verifiers.merge_mined_block.verify_aux_pow(b2)
+            self._verifiers.merge_mined_block.verify_aux_pow(b2, ctx=VerificationContext())
 
     def test_merge_mined_long_merkle_path(self):
         from hathor.merged_mining import MAGIC_NUMBER
@@ -396,11 +403,11 @@ class TransactionTest(unittest.TestCase):
         # Test with the INCREASE_MAX_MERKLE_PATH_LENGTH feature disabled
         with patch(patch_path, is_feature_active_false):
             with self.assertRaises(AuxPowLongMerklePathError):
-                self._verifiers.merge_mined_block.verify_aux_pow(b)
+                self._verifiers.merge_mined_block.verify_aux_pow(b, ctx=VerificationContext())
 
             # removing one path makes it work
             b.aux_pow.merkle_path.pop()
-            self._verifiers.merge_mined_block.verify_aux_pow(b)
+            self._verifiers.merge_mined_block.verify_aux_pow(b, ctx=VerificationContext())
 
         b2 = MergeMinedBlock(
             timestamp=self.genesis_blocks[0].timestamp + 1,
@@ -419,11 +426,11 @@ class TransactionTest(unittest.TestCase):
         # Test with the INCREASE_MAX_MERKLE_PATH_LENGTH feature enabled
         with patch(patch_path, is_feature_active_true):
             with self.assertRaises(AuxPowLongMerklePathError):
-                self._verifiers.merge_mined_block.verify_aux_pow(b2)
+                self._verifiers.merge_mined_block.verify_aux_pow(b2, ctx=VerificationContext())
 
             # removing one path makes it work
             b2.aux_pow.merkle_path.pop()
-            self._verifiers.merge_mined_block.verify_aux_pow(b2)
+            self._verifiers.merge_mined_block.verify_aux_pow(b2, ctx=VerificationContext())
 
     def test_block_outputs(self):
         from hathor.transaction.exceptions import TooManyOutputs
@@ -443,7 +450,7 @@ class TransactionTest(unittest.TestCase):
             storage=self.tx_storage)
 
         with self.assertRaises(TooManyOutputs):
-            self._verifiers.vertex.verify_outputs(block)
+            self._verifiers.vertex.verify_outputs(block, ctx=VerificationContext())
 
     def test_tx_number_parents(self):
         genesis_block = self.genesis_blocks[0]
@@ -614,7 +621,7 @@ class TransactionTest(unittest.TestCase):
         tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):
-            self._verifiers.tx.verify_weight(tx)
+            self._verifiers.tx.verify_weight(tx, ctx=VerificationContext())
 
     def test_weight_nan(self):
         # this should succeed
@@ -767,34 +774,34 @@ class TransactionTest(unittest.TestCase):
         self.assertFalse(tx_equal.is_genesis)
 
         # Pow error
-        self._verifiers.vertex.verify_pow(tx2)
+        self._verifiers.vertex.verify_pow(tx2, ctx=VerificationContext())
         tx2.weight = 100
         with self.assertRaises(PowError):
-            self._verifiers.vertex.verify_pow(tx2)
+            self._verifiers.vertex.verify_pow(tx2, ctx=VerificationContext())
 
         # Verify parent timestamps
-        self._verifiers.vertex.verify_parents(tx2)
+        self._verifiers.vertex.verify_parents(tx2, ctx=VerificationContext())
         tx2_timestamp = tx2.timestamp
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.vertex.verify_parents(tx2)
+            self._verifiers.vertex.verify_parents(tx2, ctx=VerificationContext())
         tx2.timestamp = tx2_timestamp
 
         # Verify inputs timestamps
-        self._verifiers.tx.verify_inputs(tx2, params=self.verification_params)
+        self._verifiers.tx.verify_inputs(tx2, params=self.verification_params, ctx=VerificationContext())
         tx2.timestamp = 2
         with self.assertRaises(TimestampError):
-            self._verifiers.tx.verify_inputs(tx2, params=self.verification_params)
+            self._verifiers.tx.verify_inputs(tx2, params=self.verification_params, ctx=VerificationContext())
         tx2.timestamp = tx2_timestamp
 
         # Validate maximum distance between blocks
         block = blocks[0]
         block2 = blocks[1]
         block2.timestamp = block.timestamp + self._settings.MAX_DISTANCE_BETWEEN_BLOCKS
-        self._verifiers.vertex.verify_parents(block2)
+        self._verifiers.vertex.verify_parents(block2, ctx=VerificationContext())
         block2.timestamp += 1
         with self.assertRaises(TimestampError):
-            self._verifiers.vertex.verify_parents(block2)
+            self._verifiers.vertex.verify_parents(block2, ctx=VerificationContext())
 
     def test_block_big_nonce(self):
         block = self.genesis_blocks[0]
@@ -974,8 +981,8 @@ class TransactionTest(unittest.TestCase):
         _output = TxOutput(value, script)
 
         tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
-        self._verifiers.vertex.verify_outputs(tx)
-        self._verifiers.tx.verify_output_token_indexes(tx)
+        self._verifiers.vertex.verify_outputs(tx, ctx=VerificationContext())
+        self._verifiers.tx.verify_output_token_indexes(tx, ctx=VerificationContext())
 
     def test_txout_script_limit_exceeded(self):
         with self.assertRaises(InvalidOutputScriptSize):
@@ -999,7 +1006,9 @@ class TransactionTest(unittest.TestCase):
             outputs=[_output],
             storage=self.tx_storage
         )
-        self._verifiers.tx.verify_inputs(tx, skip_script=True, params=self.verification_params)
+        self._verifiers.tx.verify_inputs(
+            tx, skip_script=True, params=self.verification_params, ctx=VerificationContext(),
+        )
 
     def test_txin_data_limit_exceeded(self):
         with self.assertRaises(InvalidInputDataSize):
@@ -1156,7 +1165,7 @@ class TransactionTest(unittest.TestCase):
         output3 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.vertex.verify_sigops_output(tx)
+        self._verifiers.vertex.verify_sigops_output(tx, ctx=VerificationContext())
 
     def test_sigops_output_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1168,7 +1177,7 @@ class TransactionTest(unittest.TestCase):
         output4 = TxOutput(value, hscript)
         tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.vertex.verify_sigops_output(tx)
+        self._verifiers.vertex.verify_sigops_output(tx, ctx=VerificationContext())
 
     def test_sigops_input_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1210,7 +1219,7 @@ class TransactionTest(unittest.TestCase):
         input3 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input3], outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.tx.verify_sigops_input(tx)
+        self._verifiers.tx.verify_sigops_input(tx, ctx=VerificationContext())
 
     def test_sigops_input_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
@@ -1224,7 +1233,7 @@ class TransactionTest(unittest.TestCase):
         input4 = TxInput(genesis_block.hash, 0, hscript)
         tx = Transaction(inputs=[input4]*num_inputs, outputs=[_output], storage=self.tx_storage)
         tx.update_hash()
-        self._verifiers.tx.verify_sigops_input(tx)
+        self._verifiers.tx.verify_sigops_input(tx, ctx=VerificationContext())
 
     def test_compare_bytes_equal(self) -> None:
         # create some block

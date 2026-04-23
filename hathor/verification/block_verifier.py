@@ -30,6 +30,8 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.storage import TransactionStorage
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 
 
 class BlockVerifier:
@@ -50,14 +52,15 @@ class BlockVerifier:
         self._checkpoints: dict[int, Checkpoint] = {cp.height: cp for cp in settings.CHECKPOINTS}
         self._latest_checkpoint: Checkpoint | None = settings.CHECKPOINTS[-1] if settings.CHECKPOINTS else None
 
-    def verify_height(self, block: Block) -> None:
+    def verify_height(self, block: Block, *, ctx: VerificationContext) -> None:
         """Validate that the block height is enough to confirm all transactions being confirmed."""
         height = block.static_metadata.height
         min_height = block.static_metadata.min_height
         if height < min_height:
             raise RewardLocked(f'Block needs {min_height} height but has {height}')
+        ctx.record(VerificationCheck.HEIGHT)
 
-    def verify_weight(self, block: Block) -> None:
+    def verify_weight(self, block: Block, *, ctx: VerificationContext) -> None:
         """Validate minimum block difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         assert block.storage is not None
@@ -65,8 +68,9 @@ class BlockVerifier:
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
+        ctx.record(VerificationCheck.BLOCK_WEIGHT)
 
-    def verify_reward(self, block: Block) -> None:
+    def verify_reward(self, block: Block, *, ctx: VerificationContext) -> None:
         """Validate reward amount."""
         parent_block = block.get_block_parent()
         tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
@@ -75,49 +79,51 @@ class BlockVerifier:
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={block.hash_hex} '
                 f'issued={block.sum_outputs} allowed={tokens_issued_per_block}'
             )
+        ctx.record(VerificationCheck.REWARD)
 
-    def verify_no_inputs(self, block: Block) -> None:
+    def verify_no_inputs(self, block: Block, *, ctx: VerificationContext) -> None:
         inputs = getattr(block, 'inputs', None)
         if inputs:
             raise BlockWithInputs('number of inputs {}'.format(len(inputs)))
+        ctx.record(VerificationCheck.NO_INPUTS)
 
-    def verify_output_token_indexes(self, block: Block) -> None:
+    def verify_output_token_indexes(self, block: Block, *, ctx: VerificationContext) -> None:
         for output in block.outputs:
             if output.get_token_index() > 0:
                 raise BlockWithTokensError('in output: {}'.format(output.to_human_readable()))
+        ctx.record(VerificationCheck.BLOCK_OUTPUT_TOKEN_INDEXES)
 
-    def verify_data(self, block: Block) -> None:
+    def verify_data(self, block: Block, *, ctx: VerificationContext) -> None:
         if len(block.data) > self._settings.BLOCK_DATA_MAX_SIZE:
             raise TransactionDataError('block data has {} bytes'.format(len(block.data)))
+        ctx.record(VerificationCheck.BLOCK_DATA)
 
-    def verify_mandatory_signaling(self, block: Block) -> None:
+    def verify_mandatory_signaling(self, block: Block, *, ctx: VerificationContext) -> None:
         """Verify whether this block is missing mandatory signaling for any feature."""
         signaling_state = self._feature_service.is_signaling_mandatory_features(block)
 
         match signaling_state:
             case BlockIsSignaling():
-                return
+                pass
             case BlockIsMissingSignal(feature):
                 raise BlockMustSignalError(
                     f"Block must signal support for feature '{feature.value}' during MUST_SIGNAL phase."
                 )
             case _:
                 assert_never(signaling_state)
+        ctx.record(VerificationCheck.MANDATORY_SIGNALING)
 
-    def verify_checkpoints(self, block: Block) -> None:
+    def verify_checkpoints(self, block: Block, *, ctx: VerificationContext) -> None:
         """Verify whether this block would fork a checkpoint."""
-        if self._latest_checkpoint is None:
-            return
+        if self._latest_checkpoint is not None:
+            block_height = block.get_height()
+            if block_height <= self._latest_checkpoint.height:
+                best_block = self._tx_storage.get_best_block()
+                if best_block.get_height() >= self._latest_checkpoint.height:
+                    raise CheckpointError('forking within checkpoints is forbidden')
 
-        block_height = block.get_height()
-        if block_height > self._latest_checkpoint.height:
-            return
-
-        best_block = self._tx_storage.get_best_block()
-        if best_block.get_height() >= self._latest_checkpoint.height:
-            raise CheckpointError('forking within checkpoints is forbidden')
-
-        # still syncing checkpoints, so we just enforce the hash at checkpoint heights.
-        cp = self._checkpoints.get(block.get_height())
-        if cp is not None and cp.hash != block.hash:
-            raise CheckpointError(f'invalid checkpoint block (height={cp.height})')
+                # still syncing checkpoints, so we just enforce the hash at checkpoint heights.
+                cp = self._checkpoints.get(block.get_height())
+                if cp is not None and cp.hash != block.hash:
+                    raise CheckpointError(f'invalid checkpoint block (height={cp.height})')
+        ctx.record(VerificationCheck.CHECKPOINTS)

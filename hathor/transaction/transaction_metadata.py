@@ -25,6 +25,7 @@ from hathor.transaction.types import MetaNCCallRecord
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import collect_n, json_dumpb, json_loadb, practically_equal
 from hathor.utils.weight import work_to_weight
+from hathor.verification.verification_check import VerificationCheck
 
 if TYPE_CHECKING:
     from weakref import ReferenceType  # noqa: F401
@@ -49,6 +50,12 @@ class TransactionMetadata:
     score: int
     first_block: Optional[bytes]
     validation: ValidationState
+
+    # Bitfield of VerificationCheck flags recorded during verification. Used
+    # by VerificationContext to enforce that every required check actually
+    # ran. Persisted so postponed checks (nano contracts) can be tracked
+    # across the verify → block-execution boundary.
+    verification_checks: VerificationCheck
 
     # Used to store the root node id of the contract tree related to this block.
     nc_block_root_id: Optional[bytes]
@@ -126,6 +133,7 @@ class TransactionMetadata:
 
         # Validation
         self.validation = ValidationState.INITIAL
+        self.verification_checks = VerificationCheck(0)
 
         settings = settings or get_global_settings()
 
@@ -190,6 +198,7 @@ class TransactionMetadata:
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
                       'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
+                      'verification_checks',
                       'feature_states', 'nc_block_root_id', 'nc_calls', 'nc_execution', 'nc_events']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
@@ -244,6 +253,7 @@ class TransactionMetadata:
         else:
             data['first_block'] = None
         data['validation'] = self.validation.name.lower()
+        data['verification_checks'] = int(self.verification_checks)
         data['nc_block_root_id'] = self.nc_block_root_id.hex() if self.nc_block_root_id else None
         data['nc_calls'] = [x.to_json() for x in self.nc_calls] if self.nc_calls else None
         data['nc_execution'] = self.nc_execution.value if self.nc_execution else None
@@ -262,6 +272,10 @@ class TransactionMetadata:
         limited_children, has_more_children = collect_n(iter(self.get_tx().get_children()), _MAX_JSON_CHILDREN)
         data['children'] = [child_id.hex() for child_id in limited_children]
         data['has_more_children'] = has_more_children
+
+        # Internal bookkeeping — not API surface. Kept in storage JSON for
+        # persistence so postponed checks can be tracked across restarts.
+        data.pop('verification_checks', None)
 
         return data
 
@@ -316,6 +330,8 @@ class TransactionMetadata:
 
         _val_name = data.get('validation', None)
         meta.validation = ValidationState.from_name(_val_name) if _val_name is not None else ValidationState.INITIAL
+
+        meta.verification_checks = VerificationCheck(data.get('verification_checks', 0))
 
         nc_block_root_id_raw = data.get('nc_block_root_id')
         if nc_block_root_id_raw is not None:

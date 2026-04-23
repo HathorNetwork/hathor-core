@@ -50,9 +50,10 @@ class TwinTxTest(unittest.TestCase):
         self.assertEqual(twin_tx.parents[0], self.tx.parents[1])
         self.assertEqual(twin_tx.parents[1], self.tx.parents[0])
 
-        # Testing metadata creation from json
+        # Testing metadata creation from json — use storage-json for a
+        # lossless round-trip (to_json is public API and omits internal fields).
         meta_before_conflict = self.tx.get_metadata()
-        meta_before_conflict_json = meta_before_conflict.to_json()
+        meta_before_conflict_json = meta_before_conflict.to_storage_json()
         del meta_before_conflict_json['conflict_with']
         del meta_before_conflict_json['voided_by']
         del meta_before_conflict_json['twins']

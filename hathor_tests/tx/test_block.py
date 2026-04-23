@@ -26,6 +26,7 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
 from hathor.verification.block_verifier import BlockVerifier
+from hathor.verification.verification_context import VerificationContext
 from hathor_tests.unittest import TestBuilder
 
 
@@ -148,7 +149,7 @@ def test_verify_must_signal() -> None:
     block = Block()
 
     with pytest.raises(BlockMustSignalError) as e:
-        verifier.verify_mandatory_signaling(block)
+        verifier.verify_mandatory_signaling(block, ctx=VerificationContext())
 
     assert str(e.value) == "Block must signal support for feature 'NOP_FEATURE_1' during MUST_SIGNAL phase."
 
@@ -161,4 +162,4 @@ def test_verify_must_not_signal() -> None:
     verifier = BlockVerifier(settings=settings, feature_service=feature_service, daa=Mock(), tx_storage=Mock())
     block = Block()
 
-    verifier.verify_mandatory_signaling(block)
+    verifier.verify_mandatory_signaling(block, ctx=VerificationContext())

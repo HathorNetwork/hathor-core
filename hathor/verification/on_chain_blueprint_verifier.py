@@ -26,6 +26,8 @@ from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import AST_NAME_BLACKLIST
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 
 
 class _RestrictionsVisitor(ast.NodeVisitor):
@@ -141,14 +143,15 @@ class OnChainBlueprintVerifier:
     def __init__(self, *, settings: HathorSettings):
         self._settings = settings
 
-    def verify_pubkey_is_allowed(self, tx: OnChainBlueprint) -> None:
+    def verify_pubkey_is_allowed(self, tx: OnChainBlueprint, *, ctx: VerificationContext) -> None:
         """Verify if the on-chain blueprint's pubkey is allowed."""
         if self._settings.NC_ON_CHAIN_BLUEPRINT_RESTRICTED:
             address = get_address_b58_from_public_key_bytes(tx.nc_pubkey)
             if address not in self._settings.NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
                 raise OCBPubKeyNotAllowed(f'nc_pubkey with address {address} is not allowed')
+        ctx.record(VerificationCheck.OCB_PUBKEY_ALLOWED)
 
-    def verify_nc_signature(self, tx: OnChainBlueprint) -> None:
+    def verify_nc_signature(self, tx: OnChainBlueprint, *, ctx: VerificationContext) -> None:
         """Verify if the creatos's signature is valid."""
         data = tx.get_sighash_all_data()
 
@@ -162,6 +165,7 @@ class OnChainBlueprintVerifier:
             pubkey.verify(tx.nc_signature, data, ec.ECDSA(hashes.SHA256()))
         except InvalidSignature as e:
             raise NCInvalidSignature from e
+        ctx.record(VerificationCheck.OCB_NC_SIGNATURE)
 
     def _get_python_code_ast(self, tx: OnChainBlueprint) -> ast.Module:
         from hathor.nanocontracts.on_chain_blueprint import CodeKind
@@ -227,13 +231,14 @@ class OnChainBlueprintVerifier:
             self._verify_blueprint_type,
         )
 
-    def verify_code(self, tx: OnChainBlueprint) -> None:
+    def verify_code(self, tx: OnChainBlueprint, *, ctx: VerificationContext) -> None:
         """Run all verification related to the blueprint code."""
         for rule in self.blueprint_code_rules():
             try:
                 rule(tx)
             except SyntaxError as e:
                 raise OCBInvalidScript('forbidden syntax') from e
+        ctx.record(VerificationCheck.OCB_CODE)
 
     def _verify_python_script(self, tx: OnChainBlueprint) -> None:
         """Verify that the script can be parsed at all."""

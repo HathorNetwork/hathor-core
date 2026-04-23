@@ -19,6 +19,8 @@ from typing_extensions import override
 
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import BaseTransaction
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.vertex_verifier import VertexVerifier
 
 logger = get_logger()
@@ -26,8 +28,15 @@ logger = get_logger()
 
 class SimulatorVertexVerifier(VertexVerifier):
     @classmethod
-    def verify_pow(cls, vertex: BaseTransaction, *, override_weight: Optional[float] = None) -> None:
+    def verify_pow(
+        cls,
+        vertex: BaseTransaction,
+        *,
+        override_weight: Optional[float] = None,
+        ctx: VerificationContext,
+    ) -> None:
         logger.new().debug('Skipping VertexVerifier.verify_pow() for simulator')
+        ctx.record(VerificationCheck.POW)
 
 
 class SimulatorCpuMiningService(CpuMiningService):
