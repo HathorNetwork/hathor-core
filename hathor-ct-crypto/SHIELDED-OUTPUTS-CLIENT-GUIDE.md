@@ -2,27 +2,32 @@
 
 This guide explains how wallets and explorers interact with Hathor's shielded outputs using the `hathor-ct-crypto` library. All three bindings -- Rust (direct), Python (PyO3), and Node.js/TypeScript (NAPI) -- wrap the same Rust implementation.
 
-> **Scope:** This guide covers creating, verifying, and recovering shielded outputs. Transaction assembly (attaching outputs to a `ShieldedOutputsHeader`) and spending shielded outputs are covered in the transaction format specification.
+> **Scope:** This guide covers creating, verifying, recovering, and spending shielded outputs. Transaction assembly (attaching headers, signing, etc.) is covered in the transaction format specification; this guide focuses on the `hathor-ct-crypto` primitives the wallet and explorer need.
 
 ---
 
 ## Workflow Overview
 
-Shielded outputs attach to regular v1/v2 transactions via a `ShieldedOutputsHeader` -- no new transaction version is needed. A transaction can mix transparent and shielded outputs freely.
+Shielded outputs attach to regular v1/v2 transactions via a `ShieldedOutputsHeader` -- no new transaction version is needed. A transaction can mix transparent and shielded outputs freely. When a tx spends shielded inputs into *only* transparent outputs (a **full unshield**), it additionally carries an `UnshieldBalanceHeader` with a revealed excess blinding factor (Section 2.4).
 
-**Sender workflow:**
+**Sender workflow (shielding or partial unshield, at least one shielded output):**
 
 1. Generate blinding factors (Section 2.0)
 2. Create shielded outputs (Section 2.1 / 2.2)
-3. Compute the balancing blinding factor for the last output (Section 2.3)
+3. Compute the balancing blinding factor for the last shielded output (Section 2.3)
 4. Attach outputs to the transaction's `ShieldedOutputsHeader`
+
+**Sender workflow (full unshield, shielded inputs only → transparent outputs only):**
+
+1. Compute the excess blinding factor `excess = sum(r_in) − sum(r_out)` (Section 2.4)
+2. Attach the scalar to the transaction's `UnshieldBalanceHeader`
 
 **Verifier workflow (full nodes, explorers):**
 
 1. Validate curve points (Section 3.1)
 2. Verify range proofs (Section 3.2)
 3. Verify surjection proofs for FullShielded outputs (Section 3.3)
-4. Verify commitment balance (Section 3.4)
+4. Verify commitment balance, passing the excess scalar when a `UnshieldBalanceHeader` is present (Section 3.4)
 
 **Recipient workflow:**
 
@@ -315,6 +320,91 @@ const lastVbf = computeBalancingBlindingFactor(
 );
 ```
 
+### 2.4 Unshielding (Shielded input → Transparent output, no shielded output)
+
+A **full unshield** tx spends one or more shielded inputs into transparent outputs only -- there are no shielded outputs to absorb the residual blinding factor. Section 2.3's trick (put a balancing `vbf` on the last shielded output) does not apply, and the balance equation `sum(C_in) = sum(C_out)` cannot hold because the input side still carries `sum(r_in)*G` that has no counterpart on the transparent-output side.
+
+The sender resolves this by revealing the residual `excess = sum(r_in) − sum(r_out)` as a 32-byte scalar, attached to the transaction's `UnshieldBalanceHeader` (header id `0x13`, 32-byte field, fully covered by the tx sighash). The verifier reconstructs `excess * G` and adds it to the output side so the equation balances (Section 3.4).
+
+**Attaching the header is mutually exclusive with `ShieldedOutputsHeader`**: a tx must carry either one, never both, never neither (for shielded txs). These invariants are enforced at the FFI boundary (see Section 3.4).
+
+#### Privacy note
+
+Revealing `excess` leaks a scalar on `G`:
+
+- With **exactly one shielded input**, `excess = r_in` of that input -- effectively the input's blinding factor is exposed. This is not a privacy regression: the transparent outputs of a full unshield already disclose the spent amount, and the input is being spent, so nothing previously-hidden remains private after the tx exists.
+- With **two or more shielded inputs**, only the *sum* of their blinding factors is revealed. Individual blinding factors -- and therefore individual input amounts -- remain confidential. An observer learns the total unshielded amount (from the transparent outputs) but cannot tell how it was split across the inputs.
+
+#### Computing the excess
+
+Use `compute_balancing_blinding_factor` with `value = 0` and an empty "last gbf" -- the function then returns the pure sum `sum(input_vbfs) − sum(other_output_vbfs)`, which is the excess we want. All transparent entries carry `vbf = 0, gbf = 0`; include any transparent fee entries in `other_outputs` so the scalar covers the full output side.
+
+#### Python
+
+```python
+import hathor_ct_crypto as ct
+
+# Shielded inputs: the recipient already knows these blinding factors from rewind
+# (Section 4.1). For a multi-input unshield, include every shielded input.
+shielded_input_entries = [
+    (amount_1, r_in_1, b'\x00' * 32),  # AmountShielded: gbf = 0
+    (amount_2, r_in_2, b'\x00' * 32),
+]
+
+# All transparent entries (outputs + any transparent fee) contribute (value, 0, 0).
+transparent_entries = [
+    (transparent_out_1_amount, b'\x00' * 32, b'\x00' * 32),
+    (fee_amount, b'\x00' * 32, b'\x00' * 32),  # if the tx has a transparent fee
+]
+
+excess = ct.compute_balancing_blinding_factor(
+    value=0,                          # last "output" has value 0 (placeholder)
+    generator_blinding_factor=b'\x00' * 32,
+    inputs=shielded_input_entries,
+    other_outputs=transparent_entries,
+)
+
+# Attach `excess` (32 B) to the tx's UnshieldBalanceHeader.
+```
+
+#### Rust
+
+```rust
+use hathor_ct_crypto::balance::compute_balancing_blinding_factor;
+
+let excess = compute_balancing_blinding_factor(
+    0,                                // last "output" value = 0
+    &[0u8; 32],                       // last gbf = 0
+    &[
+        (amount_1, r_in_1, [0u8; 32]),
+        (amount_2, r_in_2, [0u8; 32]),
+    ],
+    &[
+        (transparent_out_1_amount, [0u8; 32], [0u8; 32]),
+        (fee_amount, [0u8; 32], [0u8; 32]),
+    ],
+)?;
+```
+
+#### TypeScript
+
+```typescript
+import { computeBalancingBlindingFactor } from 'hathor-ct-crypto';
+
+const excess = computeBalancingBlindingFactor(
+  0,
+  Buffer.alloc(32),
+  [
+    { value: amount1, valueBlindingFactor: rIn1, generatorBlindingFactor: Buffer.alloc(32) },
+    { value: amount2, valueBlindingFactor: rIn2, generatorBlindingFactor: Buffer.alloc(32) },
+  ],
+  [
+    { value: out1Amount, valueBlindingFactor: Buffer.alloc(32), generatorBlindingFactor: Buffer.alloc(32) },
+    { value: feeAmount,  valueBlindingFactor: Buffer.alloc(32), generatorBlindingFactor: Buffer.alloc(32) },
+  ],
+);
+```
+
 ---
 
 ## 3. Verifying Shielded Outputs
@@ -389,29 +479,93 @@ const valid: boolean = verifySurjectionProof(proof, codomain, domain);
 
 ### 3.4 Balance Verification
 
-Verifies the homomorphic balance equation: sum of input commitments equals sum of output commitments (per token). Supports mixed transactions with both transparent and shielded inputs/outputs.
+Verifies the homomorphic balance equation. In the normal case (at least one shielded output, balanced by the sender via Section 2.3):
+
+```
+sum(C_in) = sum(C_out)
+```
+
+For a full unshield (shielded inputs, no shielded outputs), the sender supplied an excess scalar in an `UnshieldBalanceHeader` (Section 2.4); the verifier reconstructs `excess * G` on the output side:
+
+```
+sum(C_in) = sum(C_out) + excess * G
+```
+
+The `excess_blinding_factor` parameter is optional across all three bindings. Pass `None` / `null` / omit when the tx does not have an `UnshieldBalanceHeader`; pass the 32-byte scalar otherwise.
+
+#### Rust
+
+```rust
+use hathor_ct_crypto::balance::{BalanceEntry, verify_balance};
+
+// No excess (normal path).
+verify_balance(&inputs, &outputs, None)?;
+
+// Full-unshield path.
+verify_balance(&inputs, &outputs, Some(tweak_from_excess))?;
+```
+
+#### Python
 
 ```python
-# Python -- uses positional args with tuples: (amount, token_uid_32B)
+# Normal path (excess defaults to None).
 valid: bool = ct.verify_balance(
     [(100, token_uid)],         # transparent inputs
     [shielded_commitment],      # shielded input commitments (33 B each)
     [(50, token_uid)],          # transparent outputs
     [shielded_commitment_out],  # shielded output commitments (33 B each)
 )
+
+# Full-unshield path: pass excess as the fifth positional arg (or kwarg).
+valid = ct.verify_balance(
+    [(100, token_uid)],         # transparent inputs (possibly empty)
+    [shielded_commitment],      # shielded input commitment(s)
+    [(100, token_uid)],         # transparent outputs + any transparent fees
+    [],                          # shielded outputs MUST be empty
+    excess_blinding_factor,     # 32-byte scalar from the UnshieldBalanceHeader
+)
 ```
 
+#### TypeScript
+
 ```typescript
-// TypeScript -- uses objects: { amount, tokenUid }
+// Normal path.
 const valid: boolean = verifyBalance(
   [{ amount: 100, tokenUid: htrUid }],   // transparent inputs
   [shieldedInputCommitment],               // shielded inputs
   [{ amount: 50, tokenUid: htrUid }],     // transparent outputs
   [shieldedOutputCommitment],              // shielded outputs
 );
+
+// Full-unshield path.
+const validUnshield: boolean = verifyBalance(
+  [],                                            // transparent inputs
+  [shieldedInputCommitment],                    // shielded input(s)
+  [{ amount: 100, tokenUid: htrUid }],          // transparent outputs + fees
+  [],                                            // shielded outputs MUST be empty
+  excessBlindingFactor,                          // 32-byte Buffer
+);
 ```
 
-> Python uses tuples `(amount, token_uid)` for transparent entries; TypeScript uses objects `{ amount, tokenUid }`.
+> Python uses tuples `(amount, token_uid)` for transparent entries; TypeScript uses objects `{ amount, tokenUid }`. The excess parameter is always a raw 32-byte value (`bytes` in Python, `Buffer` in TypeScript, `Tweak`/`[u8; 32]` in Rust).
+
+#### Structural invariants (enforced at the FFI boundary)
+
+When `excess_blinding_factor` is present, the bindings validate three invariants *before* doing any cryptographic work and reject with a binding-native error (`ValueError` in Python, thrown `Error` in TypeScript, `Err` in Rust FFI):
+
+| Invariant | Error message |
+|-----------|--------------|
+| excess and shielded outputs cannot coexist | `excess_blinding_factor must be None when shielded_outputs is non-empty` |
+| excess requires at least one shielded input | `excess_blinding_factor requires at least one shielded input` |
+| excess scalar must be 32 bytes | `must be 32 bytes` |
+
+Explorers and full nodes should additionally enforce, at the transaction-header layer:
+
+| Invariant | Where |
+|-----------|-------|
+| A shielded tx with shielded inputs and no shielded outputs must carry an `UnshieldBalanceHeader` (full unshields cannot omit it) | Python node: `ShieldedBalanceMismatchError("a full-unshield tx ... must carry an unshield balance header")` |
+| A tx must not carry both an `UnshieldBalanceHeader` and a `ShieldedOutputsHeader` | Python node: `ShieldedBalanceMismatchError("a shielded tx cannot carry both shielded outputs and an unshield balance header")` |
+| `UnshieldBalanceHeader` requires at least one shielded input | Python node: `ShieldedBalanceMismatchError("unshield balance header requires at least one shielded input")` |
 
 ---
 
@@ -581,9 +735,13 @@ If the rewind nonce doesn't match (wrong recipient), the rewind call raises an e
 |---------------|-------------|-------|
 | Invalid public key | No | Malformed 33-byte key input (not a valid curve point) |
 | Invalid blinding factor | No | Scalar is zero or >= curve order -- use `generate_random_blinding_factor()` |
+| Invalid excess blinding factor size | No | `excess_blinding_factor` must be exactly 32 bytes (Section 2.4) |
+| Excess + shielded outputs both present | No | Violates mutual-exclusion; the tx is malformed (Section 3.4) |
+| Excess without shielded inputs | No | Meaningless scalar; the tx is malformed (Section 3.4) |
 | Range proof creation failure | No | Internal error (should not happen with valid inputs) |
 | Range proof verification failure | N/A | Returns `false` (Python/TS) or `Err` (Rust) -- the proof is invalid |
 | Surjection proof verification failure | N/A | Returns `false` / `Err` -- the proof is invalid |
+| Balance verification failure (wrong excess) | N/A | Returns `false` / `Err` -- `excess * G` does not close the equation |
 | Rewind failure (wrong key) | Expected | Not your output -- this is the normal "not for me" signal |
 | Rewind failure (corrupted data) | No | On-chain data is malformed |
 
@@ -630,6 +788,7 @@ nonce = derive_rewind_nonce(s)
 | Raw tag | 32 B | From `derive_tag` (used for surjection proofs and `create_asset_commitment`) |
 | Blinding factor (value) | 32 B | secp256k1 scalar |
 | Blinding factor (asset) | 32 B | secp256k1 scalar |
+| Excess blinding factor | 32 B | secp256k1 scalar; revealed in `UnshieldBalanceHeader` on full unshields |
 | Shared secret | 32 B | SHA256 output |
 | Rewind nonce | 32 B | SHA256 output |
 | Token UID | 32 B | HTR = `0x00 * 32` |
