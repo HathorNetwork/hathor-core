@@ -285,3 +285,140 @@ class TestBalance:
         )
         assert isinstance(result, bytes)
         assert len(result) == 32
+
+    # --- Excess blinding factor: full-unshield path ---
+
+    def test_full_unshield_without_excess_is_rejected(self) -> None:
+        """Full unshield (shielded in -> transparent out) without excess: rejected."""
+        htr = bytes(32)
+        gen = lib.htr_asset_tag()
+        vbf_in = os.urandom(32)
+        c_in = lib.create_commitment(1000, vbf_in, gen)
+
+        ok = lib.verify_balance([], [c_in], [(1000, htr)], [])
+        assert ok is False
+
+    def test_full_unshield_with_correct_excess(self) -> None:
+        """Full unshield with excess = sum(r_in) - sum(r_out) balances."""
+        htr = bytes(32)
+        gen = lib.htr_asset_tag()
+        vbf_in = os.urandom(32)
+        c_in = lib.create_commitment(1000, vbf_in, gen)
+
+        excess = lib.compute_balancing_blinding_factor(
+            0,
+            bytes(32),
+            [(1000, vbf_in, bytes(32))],
+            [(1000, bytes(32), bytes(32))],
+        )
+
+        ok = lib.verify_balance([], [c_in], [(1000, htr)], [], excess)
+        assert ok is True
+
+    def test_full_unshield_with_wrong_excess_is_rejected(self) -> None:
+        """An arbitrary scalar that isn't the actual excess doesn't balance."""
+        htr = bytes(32)
+        gen = lib.htr_asset_tag()
+        vbf_in = os.urandom(32)
+        c_in = lib.create_commitment(1000, vbf_in, gen)
+
+        wrong_excess = os.urandom(32)
+        ok = lib.verify_balance([], [c_in], [(1000, htr)], [], wrong_excess)
+        assert ok is False
+
+    def test_multi_token_full_unshield_with_excess(self) -> None:
+        """HTR + custom token fully unshielded in one tx balances with excess."""
+        htr = bytes(32)
+        custom = b'\x07' * 32
+        htr_gen = lib.htr_asset_tag()
+        custom_gen = lib.derive_asset_tag(custom)
+
+        vbf_htr = os.urandom(32)
+        vbf_custom = os.urandom(32)
+        c_htr = lib.create_commitment(500, vbf_htr, htr_gen)
+        c_custom = lib.create_commitment(300, vbf_custom, custom_gen)
+
+        excess = lib.compute_balancing_blinding_factor(
+            0,
+            bytes(32),
+            [(500, vbf_htr, bytes(32)), (300, vbf_custom, bytes(32))],
+            [(500, bytes(32), bytes(32)), (300, bytes(32), bytes(32))],
+        )
+
+        ok = lib.verify_balance(
+            [], [c_htr, c_custom], [(500, htr), (300, custom)], [], excess
+        )
+        assert ok is True
+
+    def test_excess_with_shielded_outputs_is_rejected_at_ffi(self) -> None:
+        """Mutual-exclusivity invariant enforced at the Rust FFI boundary."""
+        htr = bytes(32)
+        gen = lib.htr_asset_tag()
+        vbf = os.urandom(32)
+        c_in = lib.create_commitment(1000, vbf, gen)
+        c_out = lib.create_commitment(1000, vbf, gen)
+        excess = os.urandom(32)
+
+        with pytest.raises(ValueError, match='excess_blinding_factor must be None'):
+            lib.verify_balance([], [c_in], [(1000, htr)], [c_out], excess)
+
+
+class TestVerifyBalanceWrapper:
+    """Tests for the Python wrapper at hathor/crypto/shielded/balance.py.
+
+    The wrapper adds input validation on top of the raw FFI call:
+      (a) mutual-exclusivity between excess_blinding_factor and shielded_outputs,
+      (b) a 32-byte length check on the excess scalar.
+    """
+
+    def _htr_commitment(self, amount: int) -> tuple[bytes, bytes]:
+        """Build a shielded HTR commitment and return (commitment, blinding_factor)."""
+        gen = lib.htr_asset_tag()
+        vbf = os.urandom(32)
+        return lib.create_commitment(amount, vbf, gen), vbf
+
+    def test_wrapper_full_unshield_happy_path(self) -> None:
+        from hathor.crypto.shielded import verify_balance
+        htr = bytes(32)
+        c_in, vbf_in = self._htr_commitment(1000)
+        excess = lib.compute_balancing_blinding_factor(
+            0,
+            bytes(32),
+            [(1000, vbf_in, bytes(32))],
+            [(1000, bytes(32), bytes(32))],
+        )
+        assert verify_balance([], [c_in], [(1000, htr)], [], excess) is True
+
+    def test_wrapper_none_excess_passes_through(self) -> None:
+        """No excess -> wrapper forwards as None; balanced tx still accepted."""
+        from hathor.crypto.shielded import verify_balance
+        htr = bytes(32)
+        assert verify_balance([(1000, htr)], [], [(1000, htr)], []) is True
+
+    def test_wrapper_rejects_excess_with_shielded_outputs(self) -> None:
+        """Wrapper raises before even hitting the FFI when the invariant is violated."""
+        from hathor.crypto.shielded import verify_balance
+        htr = bytes(32)
+        c_in, _ = self._htr_commitment(1000)
+        c_out, _ = self._htr_commitment(1000)
+        excess = os.urandom(32)
+
+        with pytest.raises(ValueError, match='excess_blinding_factor must be None'):
+            verify_balance([], [c_in], [(1000, htr)], [c_out], excess)
+
+    def test_wrapper_rejects_wrong_sized_excess(self) -> None:
+        from hathor.crypto.shielded import verify_balance
+        htr = bytes(32)
+        c_in, _ = self._htr_commitment(1000)
+
+        with pytest.raises(ValueError, match='must be 32 bytes'):
+            verify_balance([], [c_in], [(1000, htr)], [], b'\x01' * 16)
+        with pytest.raises(ValueError, match='must be 32 bytes'):
+            verify_balance([], [c_in], [(1000, htr)], [], b'\x01' * 33)
+
+    def test_wrapper_full_unshield_without_excess_is_rejected(self) -> None:
+        """Wrapper forwards None excess; FFI still rejects shielded-in -> transparent-out."""
+        from hathor.crypto.shielded import verify_balance
+        htr = bytes(32)
+        c_in, _ = self._htr_commitment(1000)
+        assert verify_balance([], [c_in], [(1000, htr)], []) is False

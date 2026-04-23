@@ -8,6 +8,7 @@ def verify_balance(
     shielded_inputs: list[bytes],
     transparent_outputs: list[tuple[int, bytes]],
     shielded_outputs: list[bytes],
+    excess_blinding_factor: bytes | None = None,
 ) -> bool:
     """Verify the homomorphic balance equation.
 
@@ -17,10 +18,27 @@ def verify_balance(
         transparent_outputs: List of (amount, token_uid_32B) for each transparent output.
             Fee entries should be included here as transparent outputs.
         shielded_outputs: List of 33B commitment bytes for each shielded output.
+        excess_blinding_factor: Optional 32B scalar used on full-unshield txs to
+            carry `sum(r_in) - sum(r_out)` to the output side. Mutually exclusive
+            with `shielded_outputs`: must be None whenever there is at least one
+            shielded output, and must be set whenever there are shielded inputs
+            but no shielded outputs.
     """
     if _lib is None:
         raise RuntimeError('hathor_ct_crypto native library is not available')
-    return _lib.verify_balance(transparent_inputs, shielded_inputs, transparent_outputs, shielded_outputs)
+    if excess_blinding_factor is not None and shielded_outputs:
+        raise ValueError(
+            'excess_blinding_factor must be None when shielded_outputs is non-empty'
+        )
+    if excess_blinding_factor is not None and len(excess_blinding_factor) != 32:
+        raise ValueError('excess_blinding_factor must be 32 bytes')
+    return _lib.verify_balance(
+        transparent_inputs,
+        shielded_inputs,
+        transparent_outputs,
+        shielded_outputs,
+        excess_blinding_factor,
+    )
 
 
 def compute_balancing_blinding_factor(

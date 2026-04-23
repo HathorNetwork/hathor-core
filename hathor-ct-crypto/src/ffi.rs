@@ -288,11 +288,19 @@ fn verify_surjection_proof(proof: &[u8], codomain: &[u8], domain: Vec<Vec<u8>>) 
 
 /// Verify the homomorphic balance equation.
 #[pyfunction]
+#[pyo3(signature = (
+    transparent_inputs,
+    shielded_inputs,
+    transparent_outputs,
+    shielded_outputs,
+    excess_blinding_factor=None,
+))]
 fn verify_balance(
     transparent_inputs: Vec<(u64, Vec<u8>)>,
     shielded_inputs: Vec<Vec<u8>>,
     transparent_outputs: Vec<(u64, Vec<u8>)>,
     shielded_outputs: Vec<Vec<u8>>,
+    excess_blinding_factor: Option<Vec<u8>>,
 ) -> PyResult<bool> {
     let mut inputs = Vec::new();
     for (amount, token_uid) in &transparent_inputs {
@@ -330,7 +338,23 @@ fn verify_balance(
         });
     }
 
-    crate::balance::verify_balance(&inputs, &outputs)
+    // Mutual-exclusivity invariant: a tx must carry either shielded outputs or
+    // an excess blinding factor, never both. The transaction serialization layer
+    // enforces this at header level; we re-enforce at the FFI boundary because
+    // the structured signature here still separates shielded from transparent.
+    let excess = match excess_blinding_factor {
+        Some(bytes) => {
+            if !shielded_outputs.is_empty() {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "excess_blinding_factor must be None when shielded_outputs is non-empty",
+                ));
+            }
+            Some(parse_tweak(&bytes)?)
+        }
+        None => None,
+    };
+
+    crate::balance::verify_balance(&inputs, &outputs, excess)
         .map(|()| true)
         .or_else(|e| match e {
             // Balance mismatch is a verification failure, not an error
