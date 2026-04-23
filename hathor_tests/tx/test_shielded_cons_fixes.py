@@ -711,6 +711,68 @@ class TestGetTokenInfoFromInputsCrash:
         # but it should not crash
         assert settings.HATHOR_TOKEN_UID in token_dict
 
+    def test_unshielding_custom_token_does_not_raise_invalid_token(self) -> None:
+        """A tx with a shielded input of custom token X and a transparent output of X
+        must not raise InvalidToken('no inputs for token X').
+
+        Shielded inputs are skipped by _get_token_info_from_inputs (amount hidden,
+        and FullShielded also hides the token_uid). The transparent output must
+        still be accepted and its value recorded in token_dict — balance integrity
+        is enforced cryptographically by verify_shielded_balance, and the verifier's
+        is_shielded bypass prevents spurious ForbiddenMint.
+        """
+        from hathor.transaction import Transaction, TxOutput
+
+        settings = MagicMock(spec=HathorSettings)
+        settings.HATHOR_TOKEN_UID = b'\x00'
+
+        custom_token_uid = os.urandom(32)
+
+        # Spent tx has a single shielded output holding the custom token
+        shielded_out = _make_amount_shielded(amount=1000, token_data=1)
+        spent_tx = MagicMock()
+        spent_tx.outputs = []
+        spent_tx.shielded_outputs = [shielded_out]
+        spent_tx.get_token_uid = MagicMock(return_value=custom_token_uid)
+
+        # Input references the shielded output
+        tx_input = MagicMock()
+        tx_input.tx_id = b'\x01' * 32
+        tx_input.index = 0
+
+        # Transparent output of the same custom token
+        tx_output = MagicMock(spec=TxOutput)
+        tx_output.value = 500
+        tx_output.get_token_index = MagicMock(return_value=1)
+        tx_output.can_mint_token = MagicMock(return_value=False)
+        tx_output.can_melt_token = MagicMock(return_value=False)
+        tx_output.is_token_authority = MagicMock(return_value=False)
+
+        tx = MagicMock(spec=Transaction)
+        tx._settings = settings
+        tx.inputs = [tx_input]
+        tx.outputs = [tx_output]
+        tx.shielded_outputs = []
+        tx.tokens = [custom_token_uid]
+        tx.storage = MagicMock()
+        tx.storage.get_token_creation_transaction = MagicMock(
+            return_value=MagicMock(token_version=TokenVersion.DEPOSIT)
+        )
+        tx.get_spent_tx = MagicMock(return_value=spent_tx)
+        tx.get_token_uid = MagicMock(return_value=custom_token_uid)
+
+        nc_block_storage = MagicMock()
+
+        token_dict = Transaction._get_token_info_from_inputs(tx, nc_block_storage)
+        # This must not raise InvalidToken('no inputs for token X')
+        Transaction._update_token_info_from_outputs(
+            tx, token_dict=token_dict, nc_block_storage=nc_block_storage
+        )
+
+        assert custom_token_uid in token_dict
+        # Output value is accumulated; shielded input contributed nothing (amount hidden).
+        assert token_dict[custom_token_uid].amount == 500
+
 
 # ============================================================================
 # TokenCreationTransaction should not allow shielded outputs
