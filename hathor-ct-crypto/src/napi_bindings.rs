@@ -305,6 +305,7 @@ pub fn verify_balance(
     shielded_inputs: Vec<Buffer>,
     transparent_outputs: Vec<TransparentEntry>,
     shielded_outputs: Vec<Buffer>,
+    excess_blinding_factor: Option<Buffer>,
 ) -> napi::Result<bool> {
     let mut inputs = Vec::new();
     for entry in &transparent_inputs {
@@ -344,7 +345,23 @@ pub fn verify_balance(
         });
     }
 
-    crate::balance::verify_balance(&inputs, &outputs)
+    // Mutual-exclusivity invariant: a tx must carry either shielded outputs or
+    // an excess blinding factor, never both. The transaction serialization layer
+    // enforces this at header level; we re-enforce at the FFI boundary because
+    // the structured signature here still separates shielded from transparent.
+    let excess = match excess_blinding_factor {
+        Some(buf) => {
+            if !shielded_outputs.is_empty() {
+                return Err(napi::Error::from_reason(
+                    "excess_blinding_factor must be None when shielded_outputs is non-empty",
+                ));
+            }
+            Some(parse_tweak(buf.as_ref())?)
+        }
+        None => None,
+    };
+
+    crate::balance::verify_balance(&inputs, &outputs, excess)
         .map(|()| true)
         .or_else(|e| match e {
             HathorCtError::BalanceError(_) => Ok(false),
