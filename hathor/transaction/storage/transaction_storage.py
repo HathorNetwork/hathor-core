@@ -47,6 +47,7 @@ from hathor.transaction.storage.migrations import (
     include_funds_for_first_block,
     migrate_vertex_children,
     nc_storage_compat2,
+    reset_feature_state_cache,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -116,6 +117,7 @@ class TransactionStorage(ABC):
         include_funds_for_first_block.Migration,
         nc_storage_compat2.Migration,
         migrate_vertex_children.Migration,
+        reset_feature_state_cache.Migration,
     ]
 
     _migrations: list[BaseMigration]
