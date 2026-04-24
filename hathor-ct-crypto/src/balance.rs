@@ -1,6 +1,6 @@
 use secp256k1_zkp::{
     compute_adaptive_blinding_factor, verify_commitments_sum_to_equal, CommitmentSecrets,
-    PedersenCommitment, Tweak, SECP256K1,
+    PedersenCommitment, Tweak, SECP256K1, ZERO_TWEAK,
 };
 
 use crate::error::{HathorCtError, Result};
@@ -86,10 +86,19 @@ pub fn verify_balance(
     // Excess blinding factor: synthesise `0*H + bf*G` on the negative side. The
     // generator is irrelevant when value == 0 (0 * gen = identity), so any asset
     // tag works.
+    //
+    // When bf itself is zero the commitment is the identity point, which
+    // libsecp256k1 refuses to serialize (the inner FFI returns 0 and
+    // PedersenCommitment::new panics). The contribution is also trivially zero,
+    // so skip it. This case arises legitimately whenever sum(r_in) = 0 — for
+    // example when a recipient spends together all shielded outputs of a
+    // transparent-funded shielding tx, whose vbfs sum to zero by construction.
     if let Some(bf) = excess_blinding_factor {
-        let gen = crate::generators::htr_asset_tag();
-        let excess_commitment = PedersenCommitment::new(SECP256K1, 0, bf, gen);
-        negative_commitments.push(excess_commitment);
+        if bf != ZERO_TWEAK {
+            let gen = crate::generators::htr_asset_tag();
+            let excess_commitment = PedersenCommitment::new(SECP256K1, 0, bf, gen);
+            negative_commitments.push(excess_commitment);
+        }
     }
 
     // If both sides are empty (all entries were zero-valued and skipped), the balance
@@ -667,6 +676,41 @@ mod tests {
         }];
 
         assert!(verify_balance(&inputs, &outputs, Some(wrong_excess)).is_err());
+    }
+
+    // Full unshield where sum(r_in) = 0 by construction. Spending together all
+    // shielded outputs of a transparent-funded shielding tx forces the excess
+    // to be ZERO_TWEAK. `0*H + 0*G` is the identity point and libsecp256k1
+    // refuses to build it; the verifier must accept zero excess by skipping
+    // the synthetic commitment rather than panicking.
+    #[test]
+    fn test_full_unshield_with_zero_excess() {
+        let gen = htr_asset_tag();
+
+        // Simulate the prior transparent-funded shielding tx's outputs: two
+        // shielded outputs totalling 1000, whose vbfs sum to zero.
+        let vbf_a = Tweak::new(&mut rand::thread_rng());
+        let vbf_b = compute_balancing_blinding_factor(
+            400,
+            &ZERO_TWEAK,
+            &[(1000, ZERO_TWEAK, ZERO_TWEAK)],
+            &[(600, vbf_a, ZERO_TWEAK)],
+        )
+        .unwrap();
+
+        let c_a = create_commitment(600, &vbf_a, &gen).unwrap();
+        let c_b = create_commitment(400, &vbf_b, &gen).unwrap();
+
+        let inputs = vec![
+            BalanceEntry::Shielded { value_commitment: c_a },
+            BalanceEntry::Shielded { value_commitment: c_b },
+        ];
+        let outputs = vec![BalanceEntry::Transparent {
+            amount: 1000,
+            token_uid: HTR_UID,
+        }];
+
+        assert!(verify_balance(&inputs, &outputs, Some(ZERO_TWEAK)).is_ok());
     }
 
     // --- Non-bug coverage: these must remain green after the fix lands. ---
