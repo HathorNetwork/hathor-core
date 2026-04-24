@@ -1,21 +1,41 @@
 {
-  description = "virtual environments";
+  description = "Hathor Network full-node";
 
-  inputs.devshell.url = "github:numtide/devshell";
-  inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/master";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/master";
+    flake-utils.url = "github:numtide/flake-utils";
+    devshell.url = "github:numtide/devshell";
+    poetry2nix = {
+      url = "github:nix-community/poetry2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
-  outputs = { self, flake-utils, devshell, nixpkgs }:
+  outputs = { self, flake-utils, devshell, nixpkgs, poetry2nix }:
+    let
+      # The HM module is system-independent
+      hmOutput = {
+        homeManagerModules.default = import ./nix/hm-module.nix;
+      };
 
-    flake-utils.lib.eachDefaultSystem (system: {
-      devShells.default =
+      # Per-system outputs (packages + devShells)
+      perSystemOutput = flake-utils.lib.eachDefaultSystem (system:
         let
           pkgs = import nixpkgs {
             inherit system;
-            overlays = [ devshell.overlays.default ];
+            overlays = [
+              devshell.overlays.default
+              poetry2nix.overlays.default
+            ];
           };
         in
-          pkgs.mkShell {
+        {
+          packages = {
+            hathor-core = pkgs.callPackage ./nix/package.nix { };
+            default = self.packages.${system}.hathor-core;
+          };
+
+          devShells.default = pkgs.mkShell {
             buildInputs = [
               pkgs.python312
               pkgs.poetry
@@ -36,5 +56,8 @@
               poetry env use python3.12
             '';
           };
-    });
+        });
+
+    in
+    hmOutput // perSystemOutput;
 }
