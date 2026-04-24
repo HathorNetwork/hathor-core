@@ -51,6 +51,7 @@ yamllint = "~1.35.1"
 types-requests = "=2.28.11.4"
 types-pyopenssl = "=22.1.0.2"
 types-pyyaml = "=6.0.12.9"
+towncrier = "~23.11.0"
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4"
@@ -189,3 +190,35 @@ norecursedirs = ["hathor_tests/nanocontracts/test_blueprints"]
 [build-system]
 requires = ["poetry-core >= 1.3.2", "cython < 0.30"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.towncrier]
+name = "hathor"
+filename = "CHANGELOG.md"
+directory = "changelogs/unreleased"
+title_format = "## [{version}] - {project_date}"
+issue_format = "[#{issue}](https://github.com/HathorNetwork/hathor-core/pull/{issue})"
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "packaging"
+name = "Packaging"
+showcontent = true
