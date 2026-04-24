@@ -27,8 +27,6 @@ The fix should extract the format step as a top-level helper
 extension safely, and have the inner observer delegate to it.
 """
 
-from typing import Any
-
 
 def test_format_twisted_event_handles_previous_extension() -> None:
     """The helper must substitute Twisted's `{name()}` callable extension.
@@ -40,7 +38,7 @@ def test_format_twisted_event_handles_previous_extension() -> None:
     """
     from hathor_cli.util import _format_twisted_event
 
-    event: dict[str, Any] = {
+    event: dict[str, object] = {
         'log_format': 'while handling timed call {previous()}',
         'previous': lambda: '<DelayedCall sentinel>',
         'log_level': None,
@@ -58,7 +56,7 @@ def test_format_twisted_event_preserves_simple_format() -> None:
     """Plain `{key}` substitutions still work after the fix."""
     from hathor_cli.util import _format_twisted_event
 
-    event = {
+    event: dict[str, object] = {
         'log_format': 'connection from {peer}',
         'peer': '127.0.0.1:1234',
         'log_level': None,

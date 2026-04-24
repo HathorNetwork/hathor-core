@@ -31,7 +31,7 @@ def create_parser(*, prefix: str | None = None, add_help: bool = True) -> Argume
     return configargparse.ArgumentParser(auto_env_var_prefix=prefix or 'hathor_', add_help=add_help)
 
 
-def _format_twisted_event(event: dict[str, Any]) -> str:
+def _format_twisted_event(event: dict[str, object]) -> str:
     """Render a Twisted log event to a string, safely.
 
     Uses ``twisted.logger.formatEvent`` so Twisted's own format extensions
@@ -342,7 +342,9 @@ def setup_logging(
 
     twisted_logger = structlog.get_logger('twisted')
 
-    def twisted_structlog_observer(event):
+    from twisted.python.failure import Failure
+
+    def twisted_structlog_observer(event: dict[str, object]) -> None:
         level = twisted_to_logging_level.get(event.get('log_level'), logging.INFO)
         try:
             msg = _format_twisted_event(event)
@@ -350,11 +352,11 @@ def setup_logging(
             # Never let a rendering failure swallow the real exception that's
             # being logged — fall back to the raw template so log_failure
             # below still flows through to structlog as exc_info.
-            msg = event.get('log_format') or event.get('format') or '<unrenderable twisted event>'
+            msg = str(event.get('log_format') or event.get('format') or '<unrenderable twisted event>')
 
-        kwargs: dict[str, Any] = {}
+        kwargs: dict[str, object] = {}
         failure = event.get('log_failure')
-        if failure is not None:
+        if isinstance(failure, Failure):
             kwargs['exc_info'] = (failure.type, failure.value, failure.getTracebackObject())
 
         try:
