@@ -59,6 +59,7 @@ dependencies = [
     "cffi==1.17.1",
     "zope-interface==8.2",
     "packaging==26.0",
+    "htr_lib",
 ]
 
 [project.urls]
@@ -144,6 +145,7 @@ hathorlib = {path = "hathorlib", develop = true}
 cffi = "=1.17.1"
 zope-interface = "=8.2"
 packaging = "=26.0"
+htr-lib = {path = "htr-rs/crates/htr-lib", develop = true}
 
 [tool.uv.sources]
 hathorlib = { path = "hathorlib", editable = true }

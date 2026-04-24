@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+
+members = ["crates/*"]
+
+[workspace.lints.rust]
+
+# This is better for solving lifetime issues.
+elided_lifetimes_in_paths = "deny"
+
+[workspace.dependencies]
+pyo3 = "0.28.3"
+
+# Overflows must always panic.
+[profile.release]
+overflow-checks = true
+
+[profile.bench]
+overflow-checks = true
+
+[profile.dev]
+overflow-checks = true
