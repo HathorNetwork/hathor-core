@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, TypeAlias
+from typing import Any, Literal, Optional, TypeAlias
 
 from pydantic import ConfigDict, model_validator
 from typing_extensions import Self
@@ -43,10 +43,29 @@ class TxOutput(BaseModel):
     decoded: DecodedTxOutput | dict[Any, Any]
 
 
+class ShieldedTxOutput(BaseModel):
+    """Shape emitted by ``_shielded_output_to_json`` for spent shielded outputs.
+
+    Shielded outputs hide the public value, so this carries the cryptographic
+    fields instead of ``value``/``decoded``. The ``type`` discriminator lets a
+    smart union with ``TxOutput`` route shielded inputs here without ambiguity.
+    """
+    model_config = ConfigDict(extra='ignore')
+    type: Literal['shielded']
+    commitment: str
+    range_proof: str
+    script: str
+    ephemeral_pubkey: str | None = None
+    token_data: int | None = None
+    asset_commitment: str | None = None
+    surjection_proof: str | None = None
+    decoded: DecodedTxOutput | dict[Any, Any] | None = None
+
+
 class TxInput(BaseModel):
     tx_id: str
     index: int
-    spent_output: TxOutput
+    spent_output: TxOutput | ShieldedTxOutput
 
 
 class NcExecInfo(BaseModel):

@@ -25,8 +25,9 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader, VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
+from hathor.transaction.shielded_tx_output import ShieldedOutput
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
@@ -162,6 +163,59 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
 
+    def has_shielded_outputs(self) -> bool:
+        """Returns true if this transaction has a shielded outputs header."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def has_shielded_inputs(self) -> bool:
+        """Return whether any input references a shielded output (needs storage)."""
+        assert self.storage is not None
+        for tx_input in self.inputs:
+            spent_tx = self.storage.get_transaction(tx_input.tx_id)
+            if tx_input.index >= len(spent_tx.outputs):
+                return True
+        return False
+
+    def is_shielded(self) -> bool:
+        """Return whether this tx involves any shielded components (inputs or outputs)."""
+        return self.has_shielded_outputs() or self.has_shielded_inputs()
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        return self._get_header(ShieldedOutputsHeader)
+
+    @property
+    def shielded_outputs(self) -> list[ShieldedOutput]:
+        """Return the list of shielded outputs, or empty list if no header."""
+        if self.has_shielded_outputs():
+            return self.get_shielded_outputs_header().shielded_outputs
+        return []
+
+    def has_unshield_balance_header(self) -> bool:
+        """Returns true if this tx carries an excess blinding factor for full-unshield."""
+        try:
+            self.get_unshield_balance_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_unshield_balance_header(self) -> UnshieldBalanceHeader:
+        """Return the UnshieldBalanceHeader or raise ValueError."""
+        return self._get_header(UnshieldBalanceHeader)
+
+    @property
+    def excess_blinding_factor(self) -> bytes | None:
+        """Return the 32-byte excess blinding factor, or None if not a full unshield."""
+        if self.has_unshield_balance_header():
+            return self.get_unshield_balance_header().excess_blinding_factor
+        return None
+
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
         for header in self.headers:
@@ -233,6 +287,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     def to_json_extended(self) -> dict[str, Any]:
         json_extended = super().to_json_extended()
+        json_extended['tokens'] = [h.hex() for h in self.tokens]
         if self.is_nano_contract():
             json = self.to_json()
             return {**json, **json_extended}
@@ -258,7 +313,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         token_dict = self._get_token_info_from_inputs(nc_block_storage)
         self._update_token_info_from_nano_actions(token_dict=token_dict, nc_block_storage=nc_block_storage)
         # These must be called last so token_dict already contains all tokens in inputs and nano actions.
-        self._update_token_info_from_outputs(token_dict=token_dict)
+        self._update_token_info_from_outputs(token_dict=token_dict, nc_block_storage=nc_block_storage)
         self._update_token_info_from_fees(token_dict=token_dict)
 
         return token_dict
@@ -301,7 +356,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         fee_header = self.get_fee_header()
         fees = fee_header.get_fees()
-        # we store the total fee amount from the header to be used in the verify_sum
+        # we store the total fee amount from the header to be used in verify_transparent_balance
         token_dict.fees_from_fee_header = fee_header.total_fee_amount()
         for fee in fees:
             token_info = token_dict.get(fee.token_uid)
@@ -329,8 +384,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
 
+            # Use resolve_spent_output for shielded-aware lookup.
+            # Shielded inputs are skipped for token accounting — their amounts
+            # are verified by the homomorphic balance equation instead.
+            try:
+                resolved = spent_tx.resolve_spent_output(tx_input.index)
+            except IndexError:
+                # Out of bounds — will be caught by _verify_inputs
+                continue
+
+            from hathor.transaction.shielded_tx_output import OutputMode
+            if resolved.mode() != OutputMode.TRANSPARENT:
+                # Shielded input: skip for token info (amount is hidden)
+                continue
+
+            assert isinstance(resolved, TxOutput)
+            spent_output = resolved
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)
 
@@ -348,19 +418,35 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_dict[token_uid] = token_info
         return token_dict
 
-    def _update_token_info_from_outputs(self, *, token_dict: TokenInfoDict) -> None:
+    def _update_token_info_from_outputs(
+        self,
+        *,
+        token_dict: TokenInfoDict,
+        nc_block_storage: NCBlockStorage,
+    ) -> None:
         """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
 
         Also, checks if no token has authorities on the outputs not present on the inputs
 
         :raises InvalidToken: when there's an error in token operations
         """
+        assert self.storage is not None
         # iterate over outputs and add values to token_dict
         for index, tx_output in enumerate(self.outputs):
             token_uid = self.get_token_uid(tx_output.get_token_index())
             token_info = token_dict.get(token_uid)
             if token_info is None:
-                raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
+                # Seed a default entry when the token isn't in inputs/nano-actions. This is
+                # needed for unshielding: shielded inputs contribute nothing to token_dict
+                # (amount hidden, and FullShielded also hides token_uid), so a transparent
+                # output of a custom token would otherwise be rejected here. Integrity is
+                # enforced downstream: non-shielded txs that truly mint without authority
+                # will be caught by ForbiddenMint in _check_token_permissions; shielded txs
+                # are verified cryptographically by verify_shielded_balance.
+                token_info = TokenInfo(
+                    version=get_token_version(self.storage, nc_block_storage, token_uid)
+                )
+                token_dict[token_uid] = token_info
 
             # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
             if tx_output.can_mint_token() and not token_info.can_mint:

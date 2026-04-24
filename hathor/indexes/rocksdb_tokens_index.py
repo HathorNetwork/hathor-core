@@ -420,6 +420,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
+            if spent_tx.is_shielded_output(tx_input.index):
+                # Shielded outputs have no public value/token to remove from this index.
+                continue
             self._remove_utxo(spent_tx, tx_input.index)
 
         for index in range(len(tx.outputs)):
@@ -448,6 +451,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
+            if spent_tx.is_shielded_output(tx_input.index):
+                # Shielded outputs have no public value/token to add back to this index.
+                continue
             self._add_utxo(spent_tx, tx_input.index)
 
         for index in range(len(tx.outputs)):

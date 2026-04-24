@@ -241,6 +241,59 @@ class HathorCommonsTestCase(unittest.TestCase):
         # Verify the nano header has expected method
         self.assertEqual(nano_header.nc_method, 'noop')
 
+    def test_tx_with_unshield_balance_header(self):
+        """Test Transaction with UnshieldBalanceHeader: serialization round-trip,
+        parser dispatch, length validation, and accessors."""
+        from hathorlib.headers import UnshieldBalanceHeader, VertexHeaderId
+        from hathorlib.vertex_parser import VertexParser
+
+        tx = Transaction()
+        excess = bytes(range(32))
+        header = UnshieldBalanceHeader(tx=tx, excess_blinding_factor=excess)
+
+        # Wire format: header_id(1) | excess_blinding_factor(32)
+        wire = header.serialize()
+        self.assertEqual(len(wire), 33)
+        self.assertEqual(wire[:1], VertexHeaderId.UNSHIELD_BALANCE_HEADER.value)
+        self.assertEqual(wire[:1], b'\x13')
+        self.assertEqual(wire[1:], excess)
+
+        # Parser registry dispatches the correct class by header id.
+        parser_cls = VertexParser.get_header_parser(b'\x13')
+        self.assertIs(parser_cls, UnshieldBalanceHeader)
+
+        # Deserialization recovers the header with no leftover bytes.
+        parsed, leftover = parser_cls.deserialize(tx, wire)
+        self.assertEqual(leftover, b'')
+        self.assertEqual(parsed.excess_blinding_factor, excess)
+
+        # Extra bytes after the header are returned as leftover.
+        trailing = b'\xde\xad\xbe\xef'
+        parsed2, leftover2 = parser_cls.deserialize(tx, wire + trailing)
+        self.assertEqual(leftover2, trailing)
+        self.assertEqual(parsed2.excess_blinding_factor, excess)
+
+        # sighash bytes equal the full serialization (signature-bound).
+        self.assertEqual(header.get_sighash_bytes(), wire)
+
+        # Wrong scalar length is rejected at construction time.
+        with self.assertRaises(ValueError):
+            UnshieldBalanceHeader(tx=tx, excess_blinding_factor=b'\x00' * 31)
+
+        # Truncated buffer is rejected at deserialization time.
+        with self.assertRaises(ValueError):
+            parser_cls.deserialize(tx, wire[:20])
+
+        # Wrong header id byte is rejected.
+        with self.assertRaises(ValueError):
+            parser_cls.deserialize(tx, b'\x99' + excess)
+
+        # Transaction accessor finds the header once attached.
+        self.assertFalse(tx.has_unshield_balance())
+        tx.headers.append(header)
+        self.assertTrue(tx.has_unshield_balance())
+        self.assertIs(tx.get_unshield_balance_header(), header)
+
     def test_tx_version_and_signal_bits(self):
         from hathorlib.base_transaction import TxVersion
 

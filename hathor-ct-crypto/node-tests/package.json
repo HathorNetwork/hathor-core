@@ -1,0 +1,20 @@
+{
+  "name": "hathor-ct-crypto-node-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js integration tests for the hathor-ct-crypto napi binding.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "hathor-ct-crypto"
+  },
+  "scripts": {
+    "build": "napi build --cargo-cwd .. --features napi --platform --release",
+    "build:debug": "napi build --cargo-cwd .. --features napi --platform",
+    "test": "node --test tests/*.test.mjs",
+    "test:build": "npm run build:debug && npm test"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4"
+  }
+}

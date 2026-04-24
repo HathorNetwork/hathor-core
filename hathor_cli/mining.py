@@ -151,6 +151,7 @@ def execute(args: Namespace) -> None:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V2,
                 nano_runtime_version=NanoRuntimeVersion.V2,
+                shielded_transactions=False,
             ))
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),

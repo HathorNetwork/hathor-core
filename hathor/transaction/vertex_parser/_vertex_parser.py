@@ -19,7 +19,15 @@ from typing import TYPE_CHECKING, Type
 
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.base_transaction import get_cls_from_tx_version
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
+from hathor.transaction.headers import (
+    FeeHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexBaseHeader,
+    VertexHeaderId,
+)
+from hathorlib.conf.settings import FeatureSetting
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -41,6 +49,9 @@ class VertexParser:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
         if settings.ENABLE_FEE_BASED_TOKENS:
             supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
+        if settings.ENABLE_SHIELDED_TRANSACTIONS != FeatureSetting.DISABLED:
+            supported_headers[VertexHeaderId.SHIELDED_OUTPUTS_HEADER] = ShieldedOutputsHeader
+            supported_headers[VertexHeaderId.UNSHIELD_BALANCE_HEADER] = UnshieldBalanceHeader
         return supported_headers
 
     @staticmethod
