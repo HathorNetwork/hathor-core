@@ -25,7 +25,7 @@ from hathorlib.nanocontracts.simulator import (
     CHECKSIG_VALID,
     ContractProxy,
     NanoSimulatorBuilder,
-    TxResult,
+    NcCallResult,
 )
 from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, SignedData, TxOutputScript
 
@@ -42,7 +42,7 @@ class TestContractProxy:
         assert sim.call_view(counter.contract_id, 'get_count') == 0
 
         result = counter.increment(caller=alice)
-        assert isinstance(result, TxResult)
+        assert isinstance(result, NcCallResult)
         assert sim.call_view(counter.contract_id, 'get_count') == 1
 
     def test_proxy_view_method(self) -> None:
@@ -97,7 +97,7 @@ class TestContractProxy:
 
         counter = sim.create_contract(bid, caller=alice)
         assert counter.tx_result is not None
-        assert isinstance(counter.tx_result, TxResult)
+        assert isinstance(counter.tx_result, NcCallResult)
         assert counter.tx_result.contract_id == counter.contract_id
 
     def test_wrap_existing_contract(self) -> None:

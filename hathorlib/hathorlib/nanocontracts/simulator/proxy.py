@@ -24,20 +24,20 @@ from hathorlib.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 
 if TYPE_CHECKING:
     from hathorlib.nanocontracts import Blueprint
-    from hathorlib.nanocontracts.simulator.result import TxResult
+    from hathorlib.nanocontracts.simulator.result import NcCallResult
     from hathorlib.nanocontracts.simulator.simulator import NanoSimulator
 
 
 class ContractProxy:
     """Wraps a deployed contract and exposes its blueprint methods as regular Python methods.
 
-    Public methods require ``caller`` as a keyword argument and return ``TxResult``.
+    Public methods require ``caller`` as a keyword argument and return ``NcCallResult``.
     View methods take only positional args and return the view's return value directly.
     The ``initialize`` method is excluded from the proxy.
     """
 
     contract_id: ContractId
-    tx_result: TxResult | None
+    tx_result: NcCallResult | None
 
     def __init__(
         self,
@@ -45,7 +45,7 @@ class ContractProxy:
         contract_id: ContractId,
         blueprint_class: type[Blueprint],
         *,
-        tx_result: TxResult | None = None,
+        tx_result: NcCallResult | None = None,
     ) -> None:
         self.contract_id = contract_id
         self.tx_result = tx_result
@@ -67,7 +67,7 @@ class ContractProxy:
         contract_id = self.contract_id
         sim = self._simulator
 
-        def wrapper(*args: Any, caller: Address, actions: list[NCAction] | None = None) -> TxResult:
+        def wrapper(*args: Any, caller: Address, actions: list[NCAction] | None = None) -> NcCallResult:
             return sim.call_public(
                 contract_id, method_name, caller=caller, args=args, actions=actions,
             )

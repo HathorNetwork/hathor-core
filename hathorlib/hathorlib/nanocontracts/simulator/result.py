@@ -21,7 +21,7 @@ from hathorlib.nanocontracts.types import ContractId, VertexId
 
 
 @dataclass(frozen=True, slots=True)
-class TxResult:
+class NcCallResult:
     """Result of a single call_public or create_contract call."""
     tx_hash: VertexId
     block_hash: VertexId
@@ -31,8 +31,8 @@ class TxResult:
 
 
 @dataclass(frozen=True, slots=True)
-class BlockResult:
+class NcExecResult:
     """Result of new_block(), summarizing all transactions in the block."""
     block_hash: VertexId
     block_height: int
-    tx_results: list[TxResult]
+    tx_results: list[NcCallResult]

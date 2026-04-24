@@ -37,7 +37,7 @@ from hathorlib.nanocontracts.simulator.in_memory_services import (
 )
 from hathorlib.nanocontracts.simulator.in_memory_storage import InMemoryNCStorageFactory
 from hathorlib.nanocontracts.simulator.proxy import ContractProxy
-from hathorlib.nanocontracts.simulator.result import BlockResult, TxResult
+from hathorlib.nanocontracts.simulator.result import NcCallResult, NcExecResult
 from hathorlib.nanocontracts.simulator.snapshot import SimulatorSnapshot
 from hathorlib.nanocontracts.storage import NCBlockStorage
 from hathorlib.nanocontracts.storage.contract_storage import Balance
@@ -120,7 +120,7 @@ class NanoSimulator:
         self._current_block_hash: VertexId | None = None
         self._current_block_data_cache: BlockData | None = None
         self._current_block_storage: NCBlockStorage | None = None
-        self._current_block_results: list[TxResult] = []
+        self._current_block_results: list[NcCallResult] = []
 
         # RNG seed state (mirrors block_executor's seed_hasher)
         self._seed_hasher = hashlib.sha256(b'simulator')
@@ -155,7 +155,7 @@ class NanoSimulator:
             self._current_block_hash = block_data.hash
             self._current_block_data_cache = block_data
 
-    def new_block(self) -> BlockResult:
+    def new_block(self) -> NcExecResult:
         """End the current block and start a new one.
 
         Commits the block storage (like ConsensusBlockExecutor does on NCEndBlock)
@@ -169,7 +169,7 @@ class NanoSimulator:
         # Commit block storage (mirrors consensus_block_executor NCEndBlock handling)
         self._current_block_storage.commit()
 
-        result = BlockResult(
+        result = NcExecResult(
             block_hash=self._current_block_hash,
             block_height=self._ctx_factory.block_height,
             tx_results=list(self._current_block_results),
@@ -286,17 +286,17 @@ class NanoSimulator:
         args: tuple = (),
         kwargs: dict[str, Any] | None = None,
         actions: list[NCAction] | None = None,
-    ) -> TxResult:
-        """Create a new contract and return the raw TxResult.
+    ) -> NcCallResult:
+        """Create a new contract and return the raw NcCallResult.
 
         Low-level variant of :meth:`create_contract`. Prefer :meth:`create_contract`,
         which wraps the new contract in a :class:`ContractProxy`; use this when you
-        need the TxResult but do not want a proxy.
+        need the NcCallResult but do not want a proxy.
 
         Args:
             blueprint_id: The BlueprintId returned by register_blueprint() or register_blueprint_class().
 
-        Returns a TxResult with the contract_id, tx_hash, block_hash, events, and logs.
+        Returns a NcCallResult with the contract_id, tx_hash, block_hash, events, and logs.
         On failure, raises the NCFail exception (changes are not committed).
         """
         contract_id = self._id_gen.create_contract_id()
@@ -326,7 +326,7 @@ class NanoSimulator:
 
         This is the preferred way to create contracts: the returned proxy exposes the
         blueprint's public and view methods as regular Python methods, and its
-        ``tx_result`` attribute gives access to the underlying :class:`TxResult`.
+        ``tx_result`` attribute gives access to the underlying :class:`NcCallResult`.
 
         Internally a thin wrapper around :meth:`create_contract_raw`.
         """
@@ -356,10 +356,10 @@ class NanoSimulator:
         args: tuple = (),
         kwargs: dict[str, Any] | None = None,
         actions: list[NCAction] | None = None,
-    ) -> TxResult:
+    ) -> NcCallResult:
         """Call a public method on a contract.
 
-        Returns a TxResult with tx_hash, block_hash, events, and logs.
+        Returns a NcCallResult with tx_hash, block_hash, events, and logs.
         On failure, raises the NCFail exception (changes are not committed).
         """
         def _do_call(runner: Runner, ctx: Context) -> Any:
@@ -415,7 +415,7 @@ class NanoSimulator:
         caller: Address | ContractId,
         actions: list[NCAction] | None,
         fn: Callable[[Runner, Context], Any],
-    ) -> TxResult:
+    ) -> NcCallResult:
         """Execute a contract call following the block_executor pattern.
 
         1. Create a Runner (per-call, like block_executor creates per-tx)
@@ -471,7 +471,7 @@ class NanoSimulator:
             exec_entry=exec_entry,
         )
 
-        result = TxResult(
+        result = NcCallResult(
             tx_hash=tx_hash,
             block_hash=self._current_block_hash,
             contract_id=contract_id,
