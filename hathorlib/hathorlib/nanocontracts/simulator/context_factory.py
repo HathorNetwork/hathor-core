@@ -60,7 +60,7 @@ class ContextFactory:
             hash=self._id_gen.create_vertex_id('tx'),
             nonce=0,
             signal_bits=0,
-            weight=1.0,
+            work=1,
             inputs=(),
             outputs=(),
             tokens=(),
