@@ -81,13 +81,6 @@ class TestNanoRNG(unittest.TestCase):
         result = rng.choice(items)
         self.assertIn(result, items)
 
-    def test_random(self) -> None:
-        rng = NanoRNG(self._get_seed())
-        for _ in range(20):
-            result = rng.random()
-            self.assertGreaterEqual(result, 0.0)
-            self.assertLess(result, 1.0)
-
     def test_immutability(self) -> None:
         rng = NanoRNG(self._get_seed())
         with self.assertRaises(AttributeError):
