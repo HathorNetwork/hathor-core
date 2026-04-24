@@ -53,6 +53,8 @@ from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
@@ -79,7 +81,7 @@ class TransactionVerifier:
         self._daa = daa
         self._feature_service = feature_service
 
-    def verify_parents_basic(self, tx: Transaction) -> None:
+    def verify_parents_basic(self, tx: Transaction, *, ctx: VerificationContext) -> None:
         """Verify number and non-duplicity of parents."""
         assert tx.storage is not None
 
@@ -90,8 +92,9 @@ class TransactionVerifier:
 
         if len(tx.parents) != 2:
             raise IncorrectParents(f'wrong number of parents (tx type): {len(tx.parents)}, expecting 2')
+        ctx.record(VerificationCheck.PARENTS_BASIC)
 
-    def verify_weight(self, tx: Transaction) -> None:
+    def verify_weight(self, tx: Transaction, *, ctx: VerificationContext) -> None:
         """Validate minimum tx difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         min_tx_weight = self._daa.minimum_tx_weight(tx)
@@ -102,8 +105,15 @@ class TransactionVerifier:
         elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
+        ctx.record(VerificationCheck.WEIGHT)
 
-    def verify_sigops_input(self, tx: Transaction, enable_checkdatasig_count: bool = True) -> None:
+    def verify_sigops_input(
+        self,
+        tx: Transaction,
+        enable_checkdatasig_count: bool = True,
+        *,
+        ctx: VerificationContext,
+    ) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
         """
         from hathor.transaction.scripts import SigopCounter
@@ -128,10 +138,19 @@ class TransactionVerifier:
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
+        ctx.record(VerificationCheck.SIGOPS_INPUT)
 
-    def verify_inputs(self, tx: Transaction, params: VerificationParams, *, skip_script: bool = False) -> None:
+    def verify_inputs(
+        self,
+        tx: Transaction,
+        params: VerificationParams,
+        *,
+        skip_script: bool = False,
+        ctx: VerificationContext,
+    ) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
         self._verify_inputs(self._settings, tx, params.features.opcodes_version, skip_script=skip_script)
+        ctx.record(VerificationCheck.INPUTS)
 
     @classmethod
     def _verify_inputs(
@@ -189,12 +208,13 @@ class TransactionVerifier:
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
-    def verify_reward_locked(self, tx: Transaction) -> None:
+    def verify_reward_locked(self, tx: Transaction, *, ctx: VerificationContext) -> None:
         """Will raise `RewardLocked` if any reward is spent before the best block height is enough, considering both
         the block rewards spent by this tx itself, and the inherited `min_height`."""
         assert tx.storage is not None
         best_height = get_minimum_best_height(tx.storage)
         self.verify_reward_locked_for_height(self._settings, tx, best_height)
+        ctx.record(VerificationCheck.REWARD_LOCKED)
 
     @staticmethod
     def verify_reward_locked_for_height(
@@ -235,7 +255,7 @@ class TransactionVerifier:
                 f'Tx {tx.hash_hex} has min_height={min_height}, but the best_height={best_height}.'
             )
 
-    def verify_number_of_inputs(self, tx: Transaction) -> None:
+    def verify_number_of_inputs(self, tx: Transaction, *, ctx: VerificationContext) -> None:
         """Verify number of inputs is in a valid range"""
         if len(tx.inputs) > self._settings.MAX_NUM_INPUTS:
             raise TooManyInputs('Maximum number of inputs exceeded')
@@ -244,8 +264,9 @@ class TransactionVerifier:
         if len(tx.inputs) < minimum:
             if not tx.is_genesis:
                 raise TooFewInputs(f'Transaction must have at least {minimum} input(s)')
+        ctx.record(VerificationCheck.NUMBER_OF_INPUTS)
 
-    def verify_output_token_indexes(self, tx: Transaction) -> None:
+    def verify_output_token_indexes(self, tx: Transaction, *, ctx: VerificationContext) -> None:
         """Verify outputs reference an existing token uid in the tokens list
 
         :raises InvalidToken: output references non existent token uid
@@ -254,6 +275,7 @@ class TransactionVerifier:
             # check index is valid
             if output.get_token_index() > len(tx.tokens):
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
+        ctx.record(VerificationCheck.OUTPUT_TOKEN_INDEXES)
 
     @classmethod
     def verify_sum(
@@ -262,6 +284,8 @@ class TransactionVerifier:
         tx: Transaction,
         token_dict: TokenInfoDict,
         allow_nonexistent_tokens: bool = False,
+        *,
+        ctx: VerificationContext,
     ) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
@@ -273,6 +297,11 @@ class TransactionVerifier:
         amount = outputs - inputs, thus:
         - amount < 0 when melting
         - amount > 0 when minting
+
+        Records into `ctx` (if provided):
+            VerificationCheck.BALANCE when fully verified, or
+            VerificationCheck.BALANCE_POSTPONED when a nonexistent token was encountered
+            and the check was deferred to block-execution time (nano contracts only).
 
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
@@ -320,6 +349,7 @@ class TransactionVerifier:
             # The skipped checks below are simply postponed to execution-time
             # and run when a block confirms the nano tx.
             assert tx.is_nano_contract()
+            ctx.record(VerificationCheck.BALANCE_POSTPONED)
             return
 
         expected_fee = token_dict.calculate_fee(settings)
@@ -334,6 +364,7 @@ class TransactionVerifier:
             ))
 
         assert htr_info.amount == htr_expected_amount
+        ctx.record(VerificationCheck.BALANCE)
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
@@ -350,7 +381,9 @@ class TransactionVerifier:
         if token_info.has_been_minted() and not token_info.can_mint:
             raise ForbiddenMint(token_info.amount, token_uid)
 
-    def verify_version(self, tx: Transaction, params: VerificationParams) -> None:
+    def verify_version(
+        self, tx: Transaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
         """Verify that the vertex version is valid."""
         allowed_tx_versions = {
             TxVersion.REGULAR_TRANSACTION,
@@ -362,66 +395,72 @@ class TransactionVerifier:
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
+        ctx.record(VerificationCheck.VERSION)
 
-    def verify_tokens(self, tx: Transaction, params: VerificationParams) -> None:
-        """Verify that all tokens are used and unique."""
-        if not params.harden_token_restrictions:
-            return
+    def verify_tokens(
+        self, tx: Transaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
+        """Verify that all tokens are used and unique. Records TOKENS
+        unconditionally — the invariant is "this check ran for these params"."""
+        if params.harden_token_restrictions:
+            if len(tx.tokens) > MAX_TOKENS_LENGTH:
+                raise TooManyTokens('too many tokens')
 
-        if len(tx.tokens) > MAX_TOKENS_LENGTH:
-            raise TooManyTokens('too many tokens')
+            if len(tx.tokens) != len(set(tx.tokens)):
+                raise InvalidToken('repeated tokens are not allowed')
 
-        if len(tx.tokens) != len(set(tx.tokens)):
-            raise InvalidToken('repeated tokens are not allowed')
+            seen_token_indexes = set()
+            for txout in tx.outputs:
+                seen_token_indexes.add(txout.get_token_index())
 
-        seen_token_indexes = set()
-        for txout in tx.outputs:
-            seen_token_indexes.add(txout.get_token_index())
+            if tx.is_nano_contract():
+                nano_header = tx.get_nano_header()
+                for action in nano_header.nc_actions:
+                    seen_token_indexes.add(action.token_index)
 
-        if tx.is_nano_contract():
-            nano_header = tx.get_nano_header()
-            for action in nano_header.nc_actions:
-                seen_token_indexes.add(action.token_index)
+            seen_token_indexes.discard(0)
+            if sorted(seen_token_indexes) != list(range(1, len(tx.tokens) + 1)):
+                raise UnusedTokensError('unused tokens are not allowed')
+        ctx.record(VerificationCheck.TOKENS)
 
-        seen_token_indexes.discard(0)
-        if sorted(seen_token_indexes) != list(range(1, len(tx.tokens) + 1)):
-            raise UnusedTokensError('unused tokens are not allowed')
-
-    def verify_conflict(self, tx: Transaction, params: VerificationParams) -> None:
+    def verify_conflict(
+        self, tx: Transaction, params: VerificationParams, *, ctx: VerificationContext
+    ) -> None:
         """Verify that this transaction has no conflicts with confirmed transactions."""
         assert tx.storage is not None
 
-        if not params.reject_conflicts_with_confirmed_txs:
-            return
-
-        between_counter = 0
-        for txin in tx.inputs:
-            spent_tx = tx.get_spent_tx(txin)
-            spent_tx_meta = spent_tx.get_metadata()
-            if spent_tx_meta.first_block is not None and spent_tx_meta.voided_by:
-                # spent_tx has been confirmed by a block and is voided, so its
-                # outputs cannot be spent.
-                raise InputVoidedAndConfirmed(spent_tx.hash.hex())
-            if txin.index not in spent_tx_meta.spent_outputs:
-                continue
-            spent_by_list = spent_tx_meta.spent_outputs[txin.index]
-            within_counter = 0
-            for h in spent_by_list:
-                if h == tx.hash:
-                    # Skip tx itself.
+        if params.reject_conflicts_with_confirmed_txs:
+            between_counter = 0
+            for txin in tx.inputs:
+                spent_tx = tx.get_spent_tx(txin)
+                spent_tx_meta = spent_tx.get_metadata()
+                if spent_tx_meta.first_block is not None and spent_tx_meta.voided_by:
+                    # spent_tx has been confirmed by a block and is voided, so its
+                    # outputs cannot be spent.
+                    raise InputVoidedAndConfirmed(spent_tx.hash.hex())
+                if txin.index not in spent_tx_meta.spent_outputs:
                     continue
-                conflict_tx = tx.storage.get_transaction(h)
-                conflict_meta = conflict_tx.get_metadata()
-                if conflict_meta.first_block is not None and not conflict_meta.voided_by:
-                    # only mempool conflicts are allowed or failed nano executions
-                    raise ConflictWithConfirmedTxError('transaction has a conflict with a confirmed transaction')
-                if within_counter == 0:
-                    # Only increment once per input.
-                    between_counter += 1
-                within_counter += 1
+                spent_by_list = spent_tx_meta.spent_outputs[txin.index]
+                within_counter = 0
+                for h in spent_by_list:
+                    if h == tx.hash:
+                        # Skip tx itself.
+                        continue
+                    conflict_tx = tx.storage.get_transaction(h)
+                    conflict_meta = conflict_tx.get_metadata()
+                    if conflict_meta.first_block is not None and not conflict_meta.voided_by:
+                        # only mempool conflicts are allowed or failed nano executions
+                        raise ConflictWithConfirmedTxError(
+                            'transaction has a conflict with a confirmed transaction'
+                        )
+                    if within_counter == 0:
+                        # Only increment once per input.
+                        between_counter += 1
+                    within_counter += 1
 
-            if within_counter >= MAX_WITHIN_CONFLICTS:
-                raise TooManyWithinConflicts
+                if within_counter >= MAX_WITHIN_CONFLICTS:
+                    raise TooManyWithinConflicts
 
-        if between_counter > MAX_BETWEEN_CONFLICTS:
-            raise TooManyBetweenConflicts
+            if between_counter > MAX_BETWEEN_CONFLICTS:
+                raise TooManyBetweenConflicts
+        ctx.record(VerificationCheck.CONFLICT)

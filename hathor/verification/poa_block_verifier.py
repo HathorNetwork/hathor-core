@@ -17,6 +17,8 @@ from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings
 from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
+from hathor.verification.verification_check import VerificationCheck
+from hathor.verification.verification_context import VerificationContext
 
 
 class PoaBlockVerifier:
@@ -25,7 +27,7 @@ class PoaBlockVerifier:
     def __init__(self, *, settings: HathorSettings):
         self._settings = settings
 
-    def verify_poa(self, block: PoaBlock) -> None:
+    def verify_poa(self, block: PoaBlock, *, ctx: VerificationContext) -> None:
         """Validate the Proof-of-Authority."""
         poa_settings = self._settings.CONSENSUS_ALGORITHM
         assert isinstance(poa_settings, PoaSettings)
@@ -49,3 +51,4 @@ class PoaBlockVerifier:
         expected_weight = poa.calculate_weight(poa_settings, block, signature_validation.signer_index)
         if block.weight != expected_weight:
             raise PoaValidationError(f'block weight is {block.weight}, expected {expected_weight}')
+        ctx.record(VerificationCheck.POA)

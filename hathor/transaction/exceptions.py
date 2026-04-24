@@ -75,6 +75,12 @@ from hathorlib.exceptions import (  # noqa: F401
 )
 
 
+class VerificationChecksMissingError(TxValidationError):
+    """Raised when the verification pipeline finishes a stage without having
+    recorded every required VerificationCheck flag — indicates a dispatcher
+    bug where a check was silently skipped."""
+
+
 class ForbiddenMint(InputOutputMismatch):
     """Tokens were minted without authority inputs"""
 

@@ -2,6 +2,7 @@ from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced, Trigger
+from hathor.verification.verification_context import VerificationContext
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor_tests.simulation.base import SimulatorTestCase
 
@@ -17,7 +18,7 @@ class RandomSimulatorTestCase(SimulatorTestCase):
             reactor=self.reactor,
             settings=self._settings,
             feature_service=feature_service
-        ).verify_pow(tx, override_weight=0.)
+        ).verify_pow(tx, override_weight=0., ctx=VerificationContext())
 
     def test_one_node(self) -> None:
         manager1 = self.create_peer()

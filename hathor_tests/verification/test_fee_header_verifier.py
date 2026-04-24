@@ -5,6 +5,7 @@ from hathor.transaction.exceptions import FeeHeaderTokenNotFound, InvalidFeeAmou
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.types import TokenUid
 from hathor.verification.fee_header_verifier import MAX_FEES_LEN, FeeHeaderVerifier
+from hathor.verification.verification_context import VerificationContext
 from hathor_tests import unittest
 
 
@@ -49,7 +50,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         fees = [FeeHeaderEntry(token_index=0, amount=100)]  # HTR fee
         header = self._create_fee_header(tx, fees)
 
-        FeeHeaderVerifier.verify_fee_list(header, tx)  # +1 for HTR
+        FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())  # +1 for HTR
 
         # Multiple fee entries with different tokens
         tx = self._create_transaction_with_tokens(2)  # Custom tokens at indices 1,2
@@ -59,7 +60,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         ]
         header = self._create_fee_header(tx, fees)
 
-        FeeHeaderVerifier.verify_fee_list(header, tx)
+        FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_verify_without_storage_invalid_fee_amounts(self) -> None:
         """Test valid scenarios for verify_without_storage."""
@@ -70,20 +71,20 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got 0"):
             fees = [FeeHeaderEntry(token_index=0, amount=0)]  # HTR fee
             header = self._create_fee_header(tx, fees)
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
         # Invalid negative amount
         with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got -50"):
             fees = [FeeHeaderEntry(token_index=0, amount=-50)]  # HTR fee
             header = self._create_fee_header(tx, fees)
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
         # Invalid non-multiple of 100
         with pytest.raises(InvalidFeeAmount,
                            match="fees using deposit custom tokens should be a multiple of 100, got 150"):
             fees = [FeeHeaderEntry(token_index=1, amount=150)]
             header = self._create_fee_header(tx, fees)
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_verify_fee_list_size_empty(self) -> None:
         """Test that empty fees list raises InvalidFeeHeader."""
@@ -91,7 +92,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         header = self._create_fee_header(tx, [])
 
         with pytest.raises(InvalidFeeHeader, match="fees cannot be empty"):
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_verify_fee_list_size_exceeds_max(self) -> None:
         """Test that fees list exceeding MAX_FEES_LEN raises InvalidFeeHeader."""
@@ -102,7 +103,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
 
         expected_msg = f"more fees than the max allowed: {MAX_FEES_LEN + 1} > {MAX_FEES_LEN}"
         with pytest.raises(InvalidFeeHeader, match=expected_msg):
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_verify_fee_list_size_at_max(self) -> None:
         """Test that fees list exactly at MAX_FEES_LEN is valid."""
@@ -112,7 +113,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         header = self._create_fee_header(tx, fees)
 
         # Should not raise any exception
-        FeeHeaderVerifier.verify_fee_list(header, tx)
+        FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_duplicate_token_indexes_in_fees(self) -> None:
         """Test that duplicate token indices in fees raise InvalidFeeHeader."""
@@ -124,7 +125,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         header = self._create_fee_header(tx, fees)
 
         with pytest.raises(InvalidFeeHeader, match="duplicate token indexes in fees list"):
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_invalid_token_indexes_out_of_bounds(self) -> None:
         """Test that token indices out of bounds raise FeeHeaderTokenNotFound."""
@@ -134,7 +135,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
 
         with pytest.raises(FeeHeaderTokenNotFound,
                            match="fees contains token index 5 which is not in tokens list"):
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())
 
     def test_invalid_token_index_greater_than_tx_tokens_len(self) -> None:
         """Test that token index greater than tx_tokens_len raises FeeHeaderTokenNotFound."""
@@ -144,4 +145,4 @@ class TestFeeHeaderVerifier(unittest.TestCase):
 
         with pytest.raises(FeeHeaderTokenNotFound,
                            match="fees contains token index 2 which is not in tokens list"):
-            FeeHeaderVerifier.verify_fee_list(header, tx)
+            FeeHeaderVerifier.verify_fee_list(header, tx, ctx=VerificationContext())

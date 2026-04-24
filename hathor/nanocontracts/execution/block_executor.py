@@ -289,6 +289,11 @@ class NCBlockExecutor:
             # after the execution we have the latest state in the storage
             # and at this point no tokens pending creation
             self._verify_sum_after_execution(tx, block_storage)
+
+            # Defense-in-depth: the flag-set must now be complete.
+            # If _verify_sum_after_execution is ever removed or bypassed, the tx
+            # will arrive here with BALANCE_POSTPONED but no BALANCE → void it.
+            self._assert_verification_checks_complete_after_execution(tx)
         except NCFail as e:
             return NCTxExecutionFailure(
                 tx=tx,
@@ -300,14 +305,37 @@ class NCBlockExecutor:
         return NCTxExecutionSuccess(tx=tx, runner=runner)
 
     def _verify_sum_after_execution(self, tx: Transaction, block_storage: 'NCBlockStorage') -> None:
-        """Verify token sums after execution for dynamically created tokens."""
+        """Verify token sums after execution for dynamically created tokens.
+
+        Passes a VerificationContext so verify_sum records BALANCE into tx
+        metadata on success — letting the post-execution completeness check
+        confirm re-verification ran."""
         from hathor.verification.transaction_verifier import TransactionVerifier
+        from hathor.verification.verification_context import VerificationContext
         try:
             token_dict = tx.get_complete_token_info(block_storage)
-            TransactionVerifier.verify_sum(self._settings, tx, token_dict)
+            ctx = VerificationContext(vertex_hash=tx.hash or b'')
+            TransactionVerifier.verify_sum(self._settings, tx, token_dict, ctx=ctx)
+            tx.get_metadata().verification_checks |= ctx.checks_run
         except TokenNotFound as e:
             # At this point, any nonexistent token would have made a prior validation fail. For example, if there
             # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.
             raise AssertionError from e
         except Exception as e:
             raise NCFail from e
+
+    def _assert_verification_checks_complete_after_execution(self, tx: Transaction) -> None:
+        """After nano execution, every required VerificationCheck flag must be
+        recorded. Missing flags mean a check was silently skipped — void the
+        tx by raising NCFail, which the caller converts to NCTxExecutionFailure."""
+        from hathor.transaction.exceptions import VerificationChecksMissingError
+        from hathor.verification.required_checks import Stage, required_post_nano_checks
+        from hathor.verification.verification_context import VerificationContext
+
+        meta = tx.get_metadata()
+        ctx = VerificationContext(vertex_hash=tx.hash or b'', checks_run=meta.verification_checks)
+        required = required_post_nano_checks(tx, self._settings)
+        try:
+            ctx.check(required, stage=Stage.POST_NANO_EXECUTION.value)
+        except VerificationChecksMissingError as e:
+            raise NCFail(str(e)) from e

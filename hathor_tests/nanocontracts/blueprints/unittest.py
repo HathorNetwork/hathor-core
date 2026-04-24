@@ -111,8 +111,9 @@ class BlueprintTestCase(unittest.TestCase):
         ocb = OnChainBlueprint(hash=b'', code=code)
 
         if not skip_verification:
+            from hathor.verification.verification_context import VerificationContext
             verifier = OnChainBlueprintVerifier(settings=self._settings)
-            verifier.verify_code(ocb)
+            verifier.verify_code(ocb, ctx=VerificationContext())
 
         blueprint_class = ocb.get_blueprint_class()
         if inject_in_class is not None:
