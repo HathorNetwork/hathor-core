@@ -112,17 +112,16 @@ class VerificationService:
         self.verifiers.vertex.verify_version_basic(vertex)
         self.verifiers.vertex.verify_old_timestamp(vertex, params)
 
-        # Feature gate: reject shielded outputs early, before any verification touches shielded data.
+        # Feature gate: reject shielded outputs and Mint/Melt headers early,
+        # before any verification touches shielded data.
         if vertex.has_shielded_outputs():
             if not params.features.shielded_transactions:
                 from hathor.transaction.exceptions import InvalidShieldedOutputError
                 raise InvalidShieldedOutputError('shielded transactions are not enabled')
-
-        # Feature gate: reject MintHeader/MeltHeader before they touch downstream logic.
         if isinstance(vertex, Transaction) and (vertex.has_mint_header() or vertex.has_melt_header()):
-            if not params.features.shielded_mint_melt:
+            if not params.features.shielded_transactions:
                 from hathor.transaction.exceptions import HeaderNotSupported
-                raise HeaderNotSupported('shielded mint/melt is not enabled')
+                raise HeaderNotSupported('shielded transactions are not enabled')
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -257,17 +256,14 @@ class VerificationService:
             self._verify_shielded_header(vertex, params)
 
     def _verify_shielded_header(self, tx: Transaction, params: VerificationParams) -> None:
-        """Shielded verifications that need storage (balance, surjection)."""
+        """Shielded verifications that need storage (balance, surjection).
+
+        A TokenCreationTransaction may carry shielded outputs of the new token
+        and declare its initial supply via MintHeader (RFC
+        0000-shielded-outputs-mint-melt §4.4) when shielded transactions are
+        active.
+        """
         from hathor.transaction.exceptions import InvalidShieldedOutputError, TxValidationError
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
-        if isinstance(tx, TokenCreationTransaction) and not params.features.shielded_mint_melt:
-            # Parent RFC Rule 8: TCT cannot carry shielded outputs unless the
-            # mint/melt extension (RFC 0000-shielded-outputs-mint-melt §4.4) is
-            # active. With the extension on, a TCT may declare its initial
-            # supply via MintHeader and emit shielded outputs of the new token.
-            raise InvalidShieldedOutputError(
-                'shielded outputs are not allowed in TokenCreationTransaction'
-            )
         try:
             self.verifiers.tx.verify_shielded_outputs_with_storage(tx)
         except TxValidationError:
@@ -335,23 +331,12 @@ class VerificationService:
         self.verifiers.tx.verify_version(tx, params)
 
         # Balance verification: exactly one check runs per tx, dispatched by is_shielded().
-        # TokenCreationTransaction is normally excluded from the shielded branch to
-        # prevent bypass of minting verification via shielded outputs. With the
-        # SHIELDED_MINT_MELT extension active and a TCT carrying shielded outputs,
-        # it joins the shielded branch — the new token's supply is reconciled by
-        # the augmented balance equation against the public MintHeader entry.
+        # A TokenCreationTransaction with shielded outputs joins the shielded branch —
+        # the new token's supply is reconciled by the augmented balance equation
+        # against the public MintHeader entry (RFC 0000-shielded-outputs-mint-melt §4.4).
         block_storage = self._get_block_storage(params)
         _token_dict = token_dict or tx.get_complete_token_info(block_storage)
-        tct_in_shielded_branch = (
-            isinstance(tx, TokenCreationTransaction)
-            and params.features.shielded_mint_melt
-            and tx.is_shielded()
-        )
-        if (
-            isinstance(tx, Transaction)
-            and tx.is_shielded()
-            and (not isinstance(tx, TokenCreationTransaction) or tct_in_shielded_branch)
-        ):
+        if isinstance(tx, Transaction) and tx.is_shielded():
             shielded_fee = TransactionVerifier.calculate_shielded_fee(self._settings, tx)
             self.verifiers.tx.verify_no_undeclared_mint_melt(tx, _token_dict)
             self.verifiers.tx.verify_mint_melt_authority_inputs(tx)

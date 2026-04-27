@@ -133,6 +133,9 @@ class TestC013ShieldedReorgRevalidation:
 
         tx = MagicMock(spec=Transaction)
         tx.has_shielded_outputs.return_value = False
+        tx.has_unshield_balance_header.return_value = False
+        tx.has_mint_header.return_value = False
+        tx.has_melt_header.return_value = False
         tx.is_nano_contract.return_value = False
         tx.has_fees.return_value = False
 

@@ -463,9 +463,6 @@ class ConsensusAlgorithm:
                 case Feature.SHIELDED_TRANSACTIONS:
                     if not self._shielded_activation_rule(tx, is_active):
                         return False
-                case Feature.SHIELDED_MINT_MELT:
-                    if not self._shielded_mint_melt_activation_rule(tx, is_active):
-                        return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.FAILED_FEE_TOKENS
@@ -519,25 +516,23 @@ class ConsensusAlgorithm:
         return True
 
     def _shielded_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
-        """Check whether a tx became invalid because the reorg changed the shielded feature activation state."""
-        if is_active:
-            return True
+        """Check whether a tx became invalid because the reorg changed the shielded feature activation state.
 
-        if tx.has_shielded_outputs():
-            return False
-
-        return True
-
-    def _shielded_mint_melt_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
-        """Check whether a tx became invalid because the reorg changed the shielded mint/melt activation state.
-
-        Mirrors `_shielded_activation_rule`: when the feature deactivates, any tx
-        that carries a MintHeader or MeltHeader is now invalid.
+        When the feature deactivates, any tx carrying a header gated by
+        shielded transactions (ShieldedOutputsHeader, UnshieldBalanceHeader,
+        MintHeader, MeltHeader) is now invalid.
         """
         if is_active:
             return True
-        if isinstance(tx, Transaction) and (tx.has_mint_header() or tx.has_melt_header()):
+
+        if (
+            tx.has_shielded_outputs()
+            or tx.has_unshield_balance_header()
+            or tx.has_mint_header()
+            or tx.has_melt_header()
+        ):
             return False
+
         return True
 
     def _checkdatasig_count_rule(self, tx: Transaction) -> bool:

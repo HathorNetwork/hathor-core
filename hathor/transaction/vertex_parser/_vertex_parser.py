@@ -54,7 +54,6 @@ class VertexParser:
         if settings.ENABLE_SHIELDED_TRANSACTIONS != FeatureSetting.DISABLED:
             supported_headers[VertexHeaderId.SHIELDED_OUTPUTS_HEADER] = ShieldedOutputsHeader
             supported_headers[VertexHeaderId.UNSHIELD_BALANCE_HEADER] = UnshieldBalanceHeader
-        if settings.ENABLE_SHIELDED_MINT_MELT != FeatureSetting.DISABLED:
             supported_headers[VertexHeaderId.MINT_HEADER] = MintHeader
             supported_headers[VertexHeaderId.MELT_HEADER] = MeltHeader
         return supported_headers

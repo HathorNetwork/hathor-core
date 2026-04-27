@@ -476,7 +476,12 @@ class TestEntryConstructionBounds:
 
 
 class TestFeatureGating:
-    def test_basic_verification_rejects_when_feature_off(self) -> None:
+    def test_basic_verification_rejects_when_shielded_off(self) -> None:
+        """MintHeader/MeltHeader are gated by ENABLE_SHIELDED_TRANSACTIONS.
+
+        When the feature is inactive, verify_basic short-circuits with
+        HeaderNotSupported before any downstream verification runs.
+        """
         from hathor.verification.verification_service import VerificationService
         settings = _make_settings()
         verifiers = MagicMock()
@@ -493,11 +498,9 @@ class TestFeatureGating:
 
         params = MagicMock()
         params.features = MagicMock()
-        params.features.shielded_transactions = True
-        params.features.shielded_mint_melt = False
+        params.features.shielded_transactions = False
 
-        # The feature-flag short-circuit fires before any other verification.
-        with pytest.raises(HeaderNotSupported, match='shielded mint/melt is not enabled'):
+        with pytest.raises(HeaderNotSupported, match='shielded transactions are not enabled'):
             from hathor.transaction import TxVersion
             tx.version = TxVersion.REGULAR_TRANSACTION
             tx.signal_bits = 0

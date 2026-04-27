@@ -87,10 +87,10 @@ def _make_service_and_mocks():
     verifiers = MagicMock()
     # Wire the real classmethod so authority/deposit/fee checks execute
     verifiers.tx.verify_token_rules = TransactionVerifier.verify_token_rules
-    # Wire the real shielded-tx mint/melt prohibition (header-aware) so undeclared
-    # mint/melt is rejected. With SHIELDED_MINT_MELT off (the default in this
-    # fixture's params), no MintHeader/MeltHeader can be present, so the call
-    # behaves like the legacy verify_no_mint_melt for any shielded surplus/deficit.
+    # Wire the real header-aware shielded mint/melt prohibition so undeclared
+    # mint/melt is rejected. The fixture txs in this file don't carry
+    # MintHeader/MeltHeader, so the call behaves like the legacy
+    # verify_no_mint_melt for any shielded surplus/deficit.
     tx_verifier = TransactionVerifier(settings=settings, daa=MagicMock(), feature_service=MagicMock())
     verifiers.tx.verify_no_undeclared_mint_melt = tx_verifier.verify_no_undeclared_mint_melt
     verifiers.tx.verify_mint_melt_authority_inputs = MagicMock()
@@ -107,7 +107,6 @@ def _make_service_and_mocks():
     params.reject_locked_reward = False
     params.features = MagicMock()
     params.features.shielded_transactions = True
-    params.features.shielded_mint_melt = False
 
     return service, settings, verifiers, params
 
@@ -784,12 +783,11 @@ class TestGetTokenInfoFromInputsCrash:
 # ============================================================================
 
 class TestTokenCreationShielded:
-    """Token creation transactions should not be allowed to have shielded outputs."""
+    """Token creation transactions should follow the shielded_transactions gate."""
 
-    def test_token_creation_rejects_shielded_header(self) -> None:
-        """When SHIELDED_MINT_MELT is off, get_allowed_headers must NOT include
-        ShieldedOutputsHeader for TOKEN_CREATION_TRANSACTION (parent Rule 8).
-        The mint/melt extension lifts this only when its own feature flag is on."""
+    def test_token_creation_rejects_shielded_header_when_feature_off(self) -> None:
+        """When ENABLE_SHIELDED_TRANSACTIONS is off, get_allowed_headers must NOT
+        include ShieldedOutputsHeader for TOKEN_CREATION_TRANSACTION."""
         from hathor.transaction import TxVersion
         from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
         from hathor.verification.vertex_verifier import VertexVerifier
@@ -804,12 +802,39 @@ class TestTokenCreationShielded:
         params.features = MagicMock()
         params.features.nanocontracts = True
         params.features.fee_tokens = True
-        params.features.shielded_transactions = True
-        params.features.shielded_mint_melt = False
+        params.features.shielded_transactions = False
 
         allowed = verifier.get_allowed_headers(vertex, params)
         assert ShieldedOutputsHeader not in allowed, \
-            'TOKEN_CREATION_TRANSACTION should not allow ShieldedOutputsHeader without SHIELDED_MINT_MELT'
+            'TOKEN_CREATION_TRANSACTION should not allow ShieldedOutputsHeader without shielded transactions'
+
+    def test_token_creation_allows_shielded_header_when_feature_on(self) -> None:
+        """When ENABLE_SHIELDED_TRANSACTIONS is on, a TCT may carry shielded
+        outputs of the new token plus a MintHeader declaring its initial supply
+        (RFC 0000-shielded-outputs-mint-melt §4.4)."""
+        from hathor.transaction import TxVersion
+        from hathor.transaction.headers import MeltHeader, MintHeader
+        from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
+        from hathor.transaction.headers.unshield_balance_header import UnshieldBalanceHeader
+        from hathor.verification.vertex_verifier import VertexVerifier
+
+        settings = MagicMock(spec=HathorSettings)
+        verifier = VertexVerifier(settings=settings, reactor=MagicMock(), feature_service=MagicMock())
+
+        vertex = MagicMock()
+        vertex.version = TxVersion.TOKEN_CREATION_TRANSACTION
+
+        params = MagicMock()
+        params.features = MagicMock()
+        params.features.nanocontracts = True
+        params.features.fee_tokens = True
+        params.features.shielded_transactions = True
+
+        allowed = verifier.get_allowed_headers(vertex, params)
+        assert ShieldedOutputsHeader in allowed
+        assert UnshieldBalanceHeader in allowed
+        assert MintHeader in allowed
+        assert MeltHeader in allowed
 
 
 # ============================================================================

@@ -39,7 +39,6 @@ class Features:
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
     shielded_transactions: bool
-    shielded_mint_melt: bool
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -55,7 +54,6 @@ class Features:
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
             Feature.SHIELDED_TRANSACTIONS: settings.ENABLE_SHIELDED_TRANSACTIONS,
-            Feature.SHIELDED_MINT_MELT: settings.ENABLE_SHIELDED_MINT_MELT,
         }
 
     @staticmethod
@@ -81,7 +79,6 @@ class Features:
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
             shielded_transactions=feature_is_active[Feature.SHIELDED_TRANSACTIONS],
-            shielded_mint_melt=feature_is_active[Feature.SHIELDED_MINT_MELT],
         )
 
     @staticmethod
@@ -106,7 +103,6 @@ class Features:
             nanocontracts=features.nanocontracts,
             fee_tokens=features.fee_tokens,
             shielded_transactions=features.shielded_transactions,
-            shielded_mint_melt=features.shielded_mint_melt,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
         )
@@ -131,7 +127,6 @@ class Features:
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
             shielded_transactions=True,
-            shielded_mint_melt=True,
         )
 
 

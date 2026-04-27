@@ -249,11 +249,11 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
-                # When SHIELDED_MINT_MELT is active, a TCT may carry shielded outputs
-                # of the new token plus a MintHeader declaring its initial supply
-                # (RFC 0000-shielded-outputs-mint-melt §4.4). Without the flag, parent
-                # Rule 8 still applies and these headers are forbidden on TCTs.
-                if params.features.shielded_mint_melt:
+                # A TCT may carry shielded outputs of the new token plus a
+                # MintHeader declaring its initial supply (RFC
+                # 0000-shielded-outputs-mint-melt §4.4) when shielded
+                # transactions are active.
+                if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
                     allowed_headers.add(MintHeader)
@@ -266,7 +266,6 @@ class VertexVerifier:
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
-                if params.features.shielded_mint_melt:
                     allowed_headers.add(MintHeader)
                     allowed_headers.add(MeltHeader)
             case _:  # pragma: no cover
