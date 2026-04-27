@@ -12,6 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""MintHeader/MeltHeader for shielded transactions.
+
+The wire format and per-entry validation live in
+`hathorlib.headers.mint_melt_header`. This module re-exports the shared
+`MintMeltEntry` plus thin hathor-core subclasses whose `deserialize` raises
+the consensus-typed `InvalidMintMeltHeaderError` and whose `tx` field is
+typed against hathor-core's `Transaction`.
+"""
+
 from __future__ import annotations
 
 import struct
@@ -20,103 +29,27 @@ from typing import TYPE_CHECKING, ClassVar
 
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathor.transaction.util import VerboseCallback
+from hathorlib.headers.mint_melt_header import (
+    ENTRY_SIZE,
+    MAX_MINT_MELT_ENTRIES,
+    MintMeltEntry,
+    deserialize_entries,
+    serialize_entries,
+)
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.transaction import Transaction
 
 
-# Per RFC 0000-shielded-outputs-mint-melt §4.1.
-MAX_MINT_MELT_ENTRIES = 16
-ENTRY_SIZE = 1 + 8  # token_index(1) + amount(8 BE)
-
-
-@dataclass(slots=True, frozen=True)
-class MintMeltEntry:
-    """A single (token_index, amount) entry in a MintHeader or MeltHeader.
-
-    Wire format: token_index(1B) | amount(8B BE).
-    Constraints: 1 <= token_index <= MAX_MINT_MELT_ENTRIES (16); 1 <= amount < 2**64.
-    Validated both at construction (here) and at deserialize-time so programmatic
-    builders fail fast at the call site rather than at serialize time.
-    """
-
-    token_index: int
-    amount: int
-
-    def __post_init__(self) -> None:
-        if not 1 <= self.token_index <= MAX_MINT_MELT_ENTRIES:
-            raise ValueError(
-                f'token_index must be in [1, {MAX_MINT_MELT_ENTRIES}]; got {self.token_index}'
-            )
-        if not 1 <= self.amount < 2 ** 64:
-            raise ValueError(f'amount must be in [1, 2**64); got {self.amount}')
-
-
-def _serialize_entries(entries: list[MintMeltEntry]) -> bytes:
-    parts: list[bytes] = []
-    parts.append(int_to_bytes(len(entries), 1))
-    for entry in entries:
-        parts.append(int_to_bytes(entry.token_index, 1))
-        parts.append(struct.pack('!Q', entry.amount))
-    return b''.join(parts)
-
-
-def _deserialize_entries(buf: bytes, *, header_name: str) -> tuple[list[MintMeltEntry], bytes]:
-    """Parse `num_entries(1) | entries...`. Returns (entries, leftover).
-
-    Wire-format level checks only: count bounds, per-entry token_index/amount bounds,
-    and uniqueness of token_index within this header. Cross-header rules (Rule M3,
-    bounds against tx.tokens length) are enforced later in the verifier.
-    """
-    from hathor.transaction.exceptions import InvalidMintMeltHeaderError
-
-    if len(buf) < 1:
-        raise InvalidMintMeltHeaderError(f'{header_name}: missing num_entries byte')
-    num_entries = buf[0]
-    if num_entries < 1:
-        raise InvalidMintMeltHeaderError(f'{header_name}: must contain at least 1 entry')
-    if num_entries > MAX_MINT_MELT_ENTRIES:
-        raise InvalidMintMeltHeaderError(
-            f'{header_name}: too many entries: {num_entries} exceeds maximum {MAX_MINT_MELT_ENTRIES}'
-        )
-
-    needed = 1 + num_entries * ENTRY_SIZE
-    if len(buf) < needed:
-        raise InvalidMintMeltHeaderError(
-            f'{header_name}: requires {needed} bytes, got {len(buf)}'
-        )
-
-    entries: list[MintMeltEntry] = []
-    seen_indexes: set[int] = set()
-    offset = 1
-    for _ in range(num_entries):
-        token_index = buf[offset]
-        offset += 1
-        (amount,) = struct.unpack_from('!Q', buf, offset)
-        offset += 8
-
-        if token_index < 1:
-            raise InvalidMintMeltHeaderError(
-                f'{header_name}: token_index must be >= 1 (got {token_index}); HTR is forbidden'
-            )
-        if token_index > MAX_MINT_MELT_ENTRIES:
-            raise InvalidMintMeltHeaderError(
-                f'{header_name}: token_index {token_index} exceeds maximum {MAX_MINT_MELT_ENTRIES}'
-            )
-        if amount < 1:
-            raise InvalidMintMeltHeaderError(
-                f'{header_name}: amount must be >= 1 (got {amount})'
-            )
-        if token_index in seen_indexes:
-            raise InvalidMintMeltHeaderError(
-                f'{header_name}: duplicate token_index {token_index}'
-            )
-        seen_indexes.add(token_index)
-        entries.append(MintMeltEntry(token_index=token_index, amount=amount))
-
-    return entries, bytes(buf[offset:])
+__all__ = [
+    'ENTRY_SIZE',
+    'MAX_MINT_MELT_ENTRIES',
+    'MintMeltEntry',
+    'MintHeader',
+    'MeltHeader',
+]
 
 
 @dataclass(slots=True, kw_only=True)
@@ -125,6 +58,14 @@ class _MintMeltHeaderBase(VertexBaseHeader):
 
     Subclasses set `_HEADER_ID` and `_HEADER_NAME`. The wire format and entry
     constraints are identical (RFC §4.1).
+
+    Design note: a single header carries a list of (token_index, amount)
+    entries rather than spreading entries across multiple headers. The
+    codebase enforces one-instance-per-header-type (see `verify_headers` in
+    `vertex_verifier.py`) and a strict ascending canonical order on header
+    IDs, so allowing repeated MintHeader/MeltHeader instances would require
+    relaxing those invariants. Bundling the entries keeps the canonical-order
+    rule intact and the per-entry uniqueness check local to the header.
     """
 
     _HEADER_ID: ClassVar[bytes] = b''
@@ -164,10 +105,10 @@ class _MintMeltHeaderBase(VertexBaseHeader):
             )
 
         try:
-            entries, leftover = _deserialize_entries(buf[1:], header_name=cls._HEADER_NAME)
-        except InvalidMintMeltHeaderError:
-            raise
-        except (IndexError, struct.error, ValueError) as e:
+            entries, leftover = deserialize_entries(buf[1:], header_name=cls._HEADER_NAME)
+        except ValueError as e:
+            raise InvalidMintMeltHeaderError(str(e)) from e
+        except (IndexError, struct.error) as e:
             raise InvalidMintMeltHeaderError(f'{cls._HEADER_NAME}: malformed: {e}') from e
 
         if verbose:
@@ -179,7 +120,7 @@ class _MintMeltHeaderBase(VertexBaseHeader):
         return cls(tx=tx, entries=entries), leftover
 
     def serialize(self) -> bytes:
-        return self._HEADER_ID + _serialize_entries(self.entries)
+        return self._HEADER_ID + serialize_entries(self.entries)
 
     def get_sighash_bytes(self) -> bytes:
         # Full serialization is bound to the signature: any mutation to the

@@ -28,6 +28,8 @@ class VertexParser:
         """Return a dict of supported headers."""
         from hathorlib.headers import (
             FeeHeader,
+            MeltHeader,
+            MintHeader,
             NanoHeader,
             ShieldedOutputsHeader,
             UnshieldBalanceHeader,
@@ -38,6 +40,8 @@ class VertexParser:
             VertexHeaderId.FEE_HEADER: FeeHeader,
             VertexHeaderId.SHIELDED_OUTPUTS_HEADER: ShieldedOutputsHeader,
             VertexHeaderId.UNSHIELD_BALANCE_HEADER: UnshieldBalanceHeader,
+            VertexHeaderId.MINT_HEADER: MintHeader,
+            VertexHeaderId.MELT_HEADER: MeltHeader,
         }
 
     @staticmethod
