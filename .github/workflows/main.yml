@@ -64,14 +64,16 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # https://github.com/actions/checkout/releases/tag/v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: ./.github/actions/setup-hathor-env
         name: Setup Hathor node environment
         with:
           python: ${{ matrix.python }}
           os: ${{ matrix.os }}
       - name: Cache mypy
-        uses: actions/cache@v4
+        # https://github.com/actions/cache/releases/tag/v5.0.5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: .mypy_cache
           # this key is setup such that every branch has its cache and new branches can reuse dev's cache, but not the other way around
@@ -91,7 +93,8 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+      # https://github.com/actions/checkout/releases/tag/v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: ./.github/actions/setup-hathor-env
         name: Setup Hathor node environment
         with:
@@ -100,7 +103,8 @@ jobs:
       - name: Run CLI tests
         run: poetry run make tests-cli
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        # https://github.com/codecov/codecov-action/releases/tag/v6.0.0
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
         if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
         with:
           flags: test-cli
@@ -116,7 +120,8 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+      # https://github.com/actions/checkout/releases/tag/v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: ./.github/actions/setup-hathor-env
         name: Setup Hathor node environment
         with:
@@ -125,7 +130,8 @@ jobs:
       - name: Run lib tests
         run: poetry run make tests-lib
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        # https://github.com/actions/checkout/releases/tag/v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
         with:
           flags: test-lib
@@ -141,7 +147,8 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+      # https://github.com/actions/checkout/releases/tag/v6.0.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - uses: ./.github/actions/setup-hathor-env
         name: Setup Hathor node environment
         with:
@@ -157,7 +164,8 @@ jobs:
       - name: Run CI tests
         run: poetry run pytest --cov=hathor --cov-append extras/github/
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        # https://github.com/codecov/codecov-action/releases/tag/v6.0.0
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
         if: matrix.python == 3.12 && startsWith(matrix.os, 'ubuntu')
         with:
           flags: test-other

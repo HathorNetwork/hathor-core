@@ -17,8 +17,10 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: bencherdev/bencher@main
+      # https://github.com/actions/checkout/releases/tag/v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      # https://github.com/bencherdev/bencher/releases/tag/v0.6.3
+      - uses: bencherdev/bencher@46d007c103827da37db1a25b705dc73d3aaff7e6
       - name: Install hyperfine
         run: |
           wget https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_amd64.deb
