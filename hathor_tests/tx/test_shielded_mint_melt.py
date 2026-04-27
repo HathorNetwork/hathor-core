@@ -425,6 +425,50 @@ class TestTokenCreationTransactionShielded:
         with pytest.raises(InvalidToken, match='exactly one MintHeader entry'):
             verifier.verify_minted_tokens(tct, {tct.hash: MagicMock()})
 
+    def test_shielded_tct_cannot_melt_the_new_token(self) -> None:
+        """A TCT cannot include the new token in MeltHeader — there's nothing to destroy yet.
+        Defense-in-depth on top of Rule M3."""
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
+        tct = MagicMock(spec=TokenCreationTransaction)
+        tct.is_shielded = MagicMock(return_value=True)
+        tct.has_mint_header = MagicMock(return_value=True)
+        tct.has_melt_header = MagicMock(return_value=True)
+        mint_header = MagicMock()
+        mint_header.entries = [MintMeltEntry(token_index=1, amount=1_000_000)]
+        melt_header = MagicMock()
+        melt_header.entries = [MintMeltEntry(token_index=1, amount=500)]
+        tct.get_mint_header = MagicMock(return_value=mint_header)
+        tct.get_melt_header = MagicMock(return_value=melt_header)
+        tct.hash = b'\xff' * 32
+        verifier = TokenCreationTransactionVerifier(settings=_make_settings())
+        with pytest.raises(InvalidToken, match='cannot melt the new token'):
+            verifier.verify_minted_tokens(tct, {tct.hash: MagicMock()})
+
+
+class TestEntryConstructionBounds:
+    """MintMeltEntry validates bounds at construction time (developer-experience)."""
+
+    def test_zero_amount_rejected(self) -> None:
+        with pytest.raises(ValueError, match='amount must be in'):
+            MintMeltEntry(token_index=1, amount=0)
+
+    def test_negative_amount_rejected(self) -> None:
+        with pytest.raises(ValueError, match='amount must be in'):
+            MintMeltEntry(token_index=1, amount=-1)
+
+    def test_amount_too_large_rejected(self) -> None:
+        with pytest.raises(ValueError, match='amount must be in'):
+            MintMeltEntry(token_index=1, amount=2 ** 64)
+
+    def test_zero_token_index_rejected(self) -> None:
+        with pytest.raises(ValueError, match='token_index must be in'):
+            MintMeltEntry(token_index=0, amount=1)
+
+    def test_token_index_too_large_rejected(self) -> None:
+        with pytest.raises(ValueError, match='token_index must be in'):
+            MintMeltEntry(token_index=17, amount=1)
+
 
 # ---------------------------------------------------------------------------
 # Feature gating

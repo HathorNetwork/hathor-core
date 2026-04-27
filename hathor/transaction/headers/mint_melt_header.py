@@ -37,11 +37,21 @@ class MintMeltEntry:
     """A single (token_index, amount) entry in a MintHeader or MeltHeader.
 
     Wire format: token_index(1B) | amount(8B BE).
-    Constraints (enforced at deserialize-time): 1 <= token_index <= 16, amount >= 1.
+    Constraints: 1 <= token_index <= MAX_MINT_MELT_ENTRIES (16); 1 <= amount < 2**64.
+    Validated both at construction (here) and at deserialize-time so programmatic
+    builders fail fast at the call site rather than at serialize time.
     """
 
     token_index: int
     amount: int
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.token_index <= MAX_MINT_MELT_ENTRIES:
+            raise ValueError(
+                f'token_index must be in [1, {MAX_MINT_MELT_ENTRIES}]; got {self.token_index}'
+            )
+        if not 1 <= self.amount < 2 ** 64:
+            raise ValueError(f'amount must be in [1, 2**64); got {self.amount}')
 
 
 def _serialize_entries(entries: list[MintMeltEntry]) -> bytes:

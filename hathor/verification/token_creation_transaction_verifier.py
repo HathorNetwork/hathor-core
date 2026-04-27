@@ -56,6 +56,16 @@ class TokenCreationTransactionVerifier:
                 )
             if new_token_entries[0].amount <= 0:
                 raise InvalidToken('Token creation transaction must mint new tokens')
+            # A TCT cannot melt the token it is creating in the same tx — there
+            # is nothing to destroy yet. Rule M3 also forbids the same token
+            # appearing in both headers, but we reject this explicitly so the
+            # invariant survives any future relaxation of M3.
+            if tx.has_melt_header():
+                melt_new_token = [e for e in tx.get_melt_header().entries if e.token_index == 1]
+                if melt_new_token:
+                    raise InvalidToken(
+                        'token creation transaction cannot melt the new token (token_index=1)'
+                    )
             return
 
         # Non-shielded TCT: the existing transparent path checks token_info.amount.
