@@ -1109,37 +1109,15 @@ class TransactionVerifier:
         token_uid: bytes,
         nc_block_storage: 'NCBlockStorage | None',
     ) -> TokenVersion:
-        """Return the token version for a token referenced in a Mint/Melt header.
+        """Thin wrapper around the shared ``resolve_token_version_for_mint_melt``.
 
-        Special-cases TokenCreationTransaction: the new token's version is
-        `tx.token_version` because the TCT itself is not yet in storage at
-        verification time.
-
-        Raises TokenNotFound if the version cannot be resolved. Returning a
-        sentinel here would silently bypass the DEPOSIT-version 1% deposit term
-        in the augmented balance equation, allowing token inflation — exactly
-        what Rule M4 is meant to prevent.
+        Kept as an instance method so existing tests that monkeypatch this on
+        the verifier class keep working. The shared helper lives in
+        ``token_info`` so the tokens index can call the same logic without
+        depending on the verifier.
         """
-        from hathor.transaction.token_info import get_token_version
-        if isinstance(tx, TokenCreationTransaction) and token_uid == self._normalize_token_uid(tx.hash):
-            return tx.token_version
-        if nc_block_storage is None:
-            # Fall back to tx_storage only. Nano-issued tokens require nc_block_storage
-            # to resolve, so callers that may encounter them must provide it.
-            from hathor.transaction.storage.exceptions import TransactionDoesNotExist
-            assert tx.storage is not None
-            try:
-                return tx.storage.get_token_creation_transaction(token_uid).token_version
-            except TransactionDoesNotExist:
-                raise TokenNotFound(
-                    f'cannot resolve token version for {token_uid.hex()}: '
-                    f'not a TCT-issued token and nc_block_storage was not provided'
-                )
-        assert tx.storage is not None
-        version = get_token_version(tx.storage, nc_block_storage, token_uid)
-        if version is None:
-            raise TokenNotFound(f'cannot resolve token version for {token_uid.hex()}')
-        return version
+        from hathor.transaction.token_info import resolve_token_version_for_mint_melt
+        return resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
 
     def verify_mint_melt_authority_inputs(
         self,

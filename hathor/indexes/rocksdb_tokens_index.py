@@ -44,6 +44,8 @@ from hathor.util import collect_n, json_dumpb, json_loadb
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
+    from hathor.nanocontracts.storage import NCBlockStorage
+
 logger = get_logger()
 
 _CF_NAME_TOKENS_INDEX = b'tokens-index'
@@ -393,12 +395,12 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             self.add_to_total(token_uid, -tx_output.value)
 
     def _transparent_net_for_index_correction(self, tx: 'Transaction') -> dict[bytes, int]:
-        """Per-token transparent net (outputs - inputs) for non-HTR tokens that
-        need a correction layered on top of the per-utxo flow.
+        """Per-token transparent net (outputs - inputs) for tokens that need a
+        correction layered on top of the per-utxo flow.
 
         The per-utxo flow tracks transparent visible supply only. Total
         declared supply (visible + shielded) needs the per-utxo contribution
-        cancelled in two cases:
+        cancelled in three cases:
 
         1. **Tokens covered by MintHeader/MeltHeader.** The header amount is
            the authoritative supply change; the visible portion already
@@ -414,11 +416,12 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
            ``tx.tokens`` (a superset that's safe — uninvolved tokens have
            transparent_net = 0 and the cancellation is a no-op).
 
-        HTR is intentionally excluded from this helper. Correct HTR
-        cancellation requires reading FeeHeader fees, DEPOSIT mint/melt
-        deposits/withdraws, and per-entry FEE charges — which in turn need
-        ``nc_block_storage`` to resolve nano-issued token versions. See
-        TODOS.md.
+        3. **HTR with shielded involvement.** The per-utxo flow captures the
+           total HTR outflow (fees + DEPOSIT deposits + per-entry FEE charges
+           + the shielded HTR portion). We want only the burns to land on
+           the index — the shielded portion preserves supply. The caller
+           layers ``_compute_htr_burn`` on top of this helper's HTR entry
+           to land the right delta. See ``_compute_htr_burn`` for details.
 
         Authority outputs/inputs contribute zero (``_add_utxo`` /
         ``_remove_utxo`` already skip them) so they are skipped here too.
@@ -446,11 +449,12 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if not has_shielded and not header_token_uids:
             return {}
 
-        # Candidate tokens: header tokens always, plus all non-HTR tokens
-        # in tx.tokens when there's any shielded involvement.
+        # Candidate tokens: header tokens always, plus all non-HTR tokens in
+        # tx.tokens AND HTR when there's any shielded involvement.
         candidate_tokens: set[bytes] = set(header_token_uids)
         if has_shielded:
             candidate_tokens.update(tx.tokens)
+            candidate_tokens.add(self._settings.HATHOR_TOKEN_UID)
 
         if not candidate_tokens:
             return {}
@@ -475,6 +479,114 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         # Drop zero entries — the caller skips them anyway, and an empty
         # return value cleanly signals "no correction needed".
         return {uid: n for uid, n in net.items() if n != 0}
+
+    def _compute_htr_burn(self, tx: 'Transaction') -> int:
+        """Total HTR burned by this tx (positive = burned, negative = returned).
+
+        Components:
+
+        - ``FeeHeader`` entries paid in HTR (always burns).
+        - DEPOSIT-version mint deposits (per ``MintHeader`` entry on a
+          DEPOSIT token: ``ceil(0.01 × amount)`` HTR locked).
+        - DEPOSIT-version melt withdraws (per ``MeltHeader`` entry on a
+          DEPOSIT token: ``floor(0.01 × amount)`` HTR returned — subtracts
+          from the burn).
+        - Per-entry ``FEE_PER_OUTPUT`` charges (per ``MintHeader`` /
+          ``MeltHeader`` entry on a FEE token).
+
+        Used to compute the HTR cancellation: the per-utxo flow records
+        ``transparent_net_HTR = -(HTR_burn + shielded_HTR_amount)``, but
+        the desired delta for total declared supply is ``-HTR_burn``. The
+        caller applies ``correction = -transparent_net_HTR - HTR_burn``,
+        which equals ``shielded_HTR_amount`` — exactly what was hidden.
+
+        Token version resolution falls back to ``tx.storage`` only when
+        ``nc_block_storage`` is not derivable from the tx's closest
+        ancestor block (e.g., during initial index rebuild before nc
+        storage is available). In that fallback, nano-issued
+        DEPOSIT/FEE tokens raise ``TokenNotFound`` — matching the
+        verifier's fail-closed semantic. The index never silently
+        under-counts HTR burns.
+        """
+        from hathor.transaction.token_info import TokenVersion, resolve_token_version_for_mint_melt
+        from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
+
+        burn = 0
+
+        if tx.has_fees():
+            for fee_entry in tx.get_fee_header().get_fees():
+                if fee_entry.token_uid == self._settings.HATHOR_TOKEN_UID:
+                    burn += fee_entry.amount
+
+        if not (tx.has_mint_header() or tx.has_melt_header()):
+            return burn
+
+        nc_block_storage = self._derive_nc_block_storage_for_tx(tx)
+
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                version = resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
+                if version == TokenVersion.DEPOSIT:
+                    burn += get_deposit_token_deposit_amount(self._settings, entry.amount)
+                elif version == TokenVersion.FEE:
+                    burn += self._settings.FEE_PER_OUTPUT
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                version = resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
+                if version == TokenVersion.DEPOSIT:
+                    burn -= get_deposit_token_withdraw_amount(self._settings, entry.amount)
+                elif version == TokenVersion.FEE:
+                    burn += self._settings.FEE_PER_OUTPUT
+        return burn
+
+    def _tx_has_shielded_involvement(self, tx: 'Transaction') -> bool:
+        """Return True if the tx has any shielded component (output, input, or
+        a header that requires shielded involvement per RFC Rule M1).
+
+        Used to gate the HTR-burn correction: only shielded txs have a hidden
+        HTR portion that the per-utxo flow miscounts. Transparent-only txs
+        already account for fees correctly via the per-utxo flow itself.
+        """
+        if tx.has_shielded_outputs():
+            return True
+        if tx.has_unshield_balance_header():
+            return True
+        if tx.has_mint_header() or tx.has_melt_header():
+            return True
+        # Walk inputs once to detect shielded inputs without an
+        # UnshieldBalanceHeader. In practice the verifier rejects this
+        # combination, but the index processes whatever passed verification.
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            if spent_tx.is_shielded_output(tx_input.index):
+                return True
+        return False
+
+    def _derive_nc_block_storage_for_tx(self, tx: 'Transaction') -> 'NCBlockStorage | None':
+        """Derive the tx's nc block storage from its closest ancestor block.
+
+        Returns ``None`` if static_metadata isn't populated yet (e.g., during
+        initial index rebuild before consensus has run) or the closest
+        ancestor is genesis. In the ``None`` path,
+        ``resolve_token_version_for_mint_melt`` falls back to ``tx.storage``
+        for TCT-issued tokens and raises ``TokenNotFound`` for nano-issued
+        tokens — fail-closed.
+        """
+        if tx.storage is None:
+            return None
+        try:
+            ancestor_hash = tx.static_metadata.closest_ancestor_block
+        except (AttributeError, AssertionError):
+            return None
+        if not ancestor_hash:
+            return None
+        try:
+            block = tx.storage.get_block(ancestor_hash)
+        except Exception:
+            return None
+        return tx.storage.get_nc_block_storage(block)
 
     def add_tx(self, tx: BaseTransaction) -> None:
         # if it's a TokenCreationTransaction, update name and symbol
@@ -533,8 +645,8 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                         assert_never(action)
 
         # Reconcile the per-utxo flow with total declared supply (visible +
-        # shielded). See `_transparent_net_for_index_correction` for the full
-        # rationale. Two cases:
+        # shielded). See `_transparent_net_for_index_correction` and
+        # `_compute_htr_burn` for the full rationale. Three cases:
         #
         # 1. MintHeader / MeltHeader: header is the authoritative supply
         #    delta. Cancel per-utxo for those tokens, then apply header
@@ -542,8 +654,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         # 2. Non-HTR shielding/unshielding/transferring shielded value
         #    without a header: total supply is unchanged. Cancel per-utxo
         #    for the affected non-HTR tokens.
-        #
-        # HTR cancellation is intentionally deferred — see TODOS.md.
+        # 3. HTR with shielded involvement: cancel per-utxo (covers the
+        #    shielded HTR portion), then apply the HTR burn (FeeHeader
+        #    fees + DEPOSIT mint/melt deposits/withdraws + per-entry FEE
+        #    charges) so the index reflects only the actual burn.
         if isinstance(tx, Transaction):
             for token_uid, net in self._transparent_net_for_index_correction(tx).items():
                 if net != 0:
@@ -556,6 +670,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 for entry in tx.get_melt_header().entries:
                     token_uid = tx.get_token_uid(entry.token_index)
                     self.add_to_total(token_uid, -entry.amount)
+            if self._tx_has_shielded_involvement(tx):
+                burn = self._compute_htr_burn(tx)
+                if burn != 0:
+                    self.add_to_total(self._settings.HATHOR_TOKEN_UID, -burn)
 
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
@@ -594,7 +712,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
 
         # Reverse the index correction applied in add_tx (mirrors the block
         # above with signs flipped). Re-add the per-utxo visible portion that
-        # was cancelled, then undo the header delta itself.
+        # was cancelled, undo the header delta, and reverse the HTR burn.
         if isinstance(tx, Transaction):
             for token_uid, net in self._transparent_net_for_index_correction(tx).items():
                 if net != 0:
@@ -607,6 +725,10 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 for entry in tx.get_melt_header().entries:
                     token_uid = tx.get_token_uid(entry.token_index)
                     self.add_to_total(token_uid, entry.amount)
+            if self._tx_has_shielded_involvement(tx):
+                burn = self._compute_htr_burn(tx)
+                if burn != 0:
+                    self.add_to_total(self._settings.HATHOR_TOKEN_UID, burn)
 
         # if it's a TokenCreationTransaction, remove it from index. Run last so
         # add_to_total calls above don't re-create the token info row with a

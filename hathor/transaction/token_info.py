@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCBlockStorage
     from hathor.transaction.storage import TransactionStorage
+    from hathor.transaction.transaction import Transaction
 
 
 # used when (de)serializing token information
@@ -112,3 +113,50 @@ def get_token_version(
         if nc_block_storage.has_token(TokenUid(token_uid)):
             return nc_block_storage.get_token_description(TokenUid(token_uid)).token_version
     return None
+
+
+def resolve_token_version_for_mint_melt(
+    tx: 'Transaction',
+    token_uid: bytes,
+    nc_block_storage: 'NCBlockStorage | None',
+) -> TokenVersion:
+    """Return the token version for a token referenced in a Mint/Melt header.
+
+    Special-cases TokenCreationTransaction: the new token's version is
+    `tx.token_version` because the TCT itself is not yet in storage at
+    verification time.
+
+    Raises ``TokenNotFound`` if the version cannot be resolved. Returning a
+    sentinel here would silently bypass the DEPOSIT-version 1% deposit term
+    in the augmented balance equation, allowing token inflation — exactly
+    what RFC 0000-shielded-outputs-mint-melt Rule M4 is meant to prevent.
+
+    Shared between the verifier (where it gates the augmented balance
+    equation) and the tokens index (where it gates the HTR-burn correction
+    so total declared supply stays consistent across mint/melt and
+    shielding/unshielding flows).
+    """
+    from hathor.crypto.shielded.asset_tag import normalize_token_uid
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
+    from hathorlib.exceptions import TokenNotFound
+
+    normalized = normalize_token_uid(token_uid)
+    if isinstance(tx, TokenCreationTransaction) and normalized == normalize_token_uid(tx.hash):
+        return tx.token_version
+    if nc_block_storage is None:
+        # Fall back to tx_storage only. Nano-issued tokens require nc_block_storage
+        # to resolve, so callers that may encounter them must provide it.
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        assert tx.storage is not None
+        try:
+            return tx.storage.get_token_creation_transaction(token_uid).token_version
+        except TransactionDoesNotExist:
+            raise TokenNotFound(
+                f'cannot resolve token version for {token_uid.hex()}: '
+                f'not a TCT-issued token and nc_block_storage was not provided'
+            )
+    assert tx.storage is not None
+    version = get_token_version(tx.storage, nc_block_storage, token_uid)
+    if version is None:
+        raise TokenNotFound(f'cannot resolve token version for {token_uid.hex()}')
+    return version
