@@ -14,12 +14,16 @@
 
 """Tests for shielded mint/melt headers (RFC 0000-shielded-outputs-mint-melt)."""
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 
 from hathor.conf.settings import HathorSettings
 from hathor.transaction import Transaction
+
+if TYPE_CHECKING:
+    from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
 from hathor.transaction.exceptions import (
     ForbiddenMelt,
     ForbiddenMint,
@@ -540,3 +544,213 @@ class TestIndexerSupplyUpdate:
             for entry in tx.get_melt_header().entries:
                 deltas.append((tx.get_token_uid(entry.token_index), -entry.amount))
         assert deltas == [(token_uid, -999)]
+
+
+class TestIndexerHeaderTokenNetCancellation:
+    """RocksDBTokensIndex must cancel its per-utxo flow for tokens covered by
+    Mint/Melt headers, otherwise mixed transparent + shielded mints/melts get
+    double-counted in the per-token total.
+    """
+
+    @staticmethod
+    def _make_index() -> 'RocksDBTokensIndex':
+        from unittest.mock import MagicMock as _MM
+
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+
+        # Bypass __init__ — we only need _transparent_net_for_header_tokens.
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = _MM()
+        return idx
+
+    def _make_tx_with_io(
+        self,
+        *,
+        tokens: list[bytes],
+        mint_entries: list[MintMeltEntry] | None = None,
+        melt_entries: list[MintMeltEntry] | None = None,
+        transparent_inputs: list[tuple[bytes, int, bool]] | None = None,
+        transparent_outputs: list[tuple[bytes, int, bool]] | None = None,
+    ) -> MagicMock:
+        """Builds a mock tx with the requested transparent inputs/outputs.
+
+        Each (token_uid, value, is_authority) tuple becomes one tx_input/tx_output.
+        """
+        tx = _make_mock_tx(
+            tokens=tokens,
+            mint_entries=mint_entries,
+            melt_entries=melt_entries,
+            has_shielded_outputs=True,
+        )
+
+        # Build outputs.
+        outputs = []
+        for token_uid, value, is_authority in transparent_outputs or []:
+            o = MagicMock()
+            o.is_token_authority = MagicMock(return_value=is_authority)
+            o.value = value
+            o.get_token_index = MagicMock(return_value=tokens.index(token_uid) + 1)
+            outputs.append(o)
+        tx.outputs = outputs
+
+        # Build inputs + their spent_txs.
+        inputs = []
+        spent_txs: dict[bytes, MagicMock] = {}
+        for i, (token_uid, value, is_authority) in enumerate(transparent_inputs or []):
+            tx_id = bytes([i]) * 32
+            tx_input = MagicMock()
+            tx_input.tx_id = tx_id
+            tx_input.index = 0
+
+            spent_output = MagicMock()
+            spent_output.is_token_authority = MagicMock(return_value=is_authority)
+            spent_output.value = value
+            spent_output.get_token_index = MagicMock(return_value=1)
+
+            spent_tx = MagicMock()
+            spent_tx.outputs = [spent_output]
+            spent_tx.shielded_outputs = []
+            spent_tx.is_shielded_output = MagicMock(return_value=False)
+            spent_tx.get_token_uid = MagicMock(return_value=token_uid)
+
+            inputs.append(tx_input)
+            spent_txs[tx_id] = spent_tx
+        tx.inputs = inputs
+        tx.get_spent_tx = MagicMock(side_effect=lambda i: spent_txs[i.tx_id])
+        return tx
+
+    def test_pure_shielded_mint_zero_net(self) -> None:
+        """A mint with no transparent T outputs/inputs has zero per-utxo net,
+        so no cancellation is needed.
+        """
+        idx = self._make_index()
+        token_uid = b'\x11' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=1000)],
+            transparent_inputs=[(token_uid, 0, True)],   # mint authority only
+            transparent_outputs=[(token_uid, 0, True)],  # authority refresh only
+        )
+        net = idx._transparent_net_for_header_tokens(tx)
+        assert net == {token_uid: 0}
+
+    def test_mixed_mint_transparent_and_shielded_outputs(self) -> None:
+        """Mint 1000 with 600 to transparent + 400 to shielded → per-utxo net
+        is +600. The header contribution must subtract that to land on +1000.
+        """
+        idx = self._make_index()
+        token_uid = b'\x11' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=1000)],
+            transparent_inputs=[(token_uid, 0, True)],   # mint authority
+            transparent_outputs=[
+                (token_uid, 0, True),     # authority refresh
+                (token_uid, 600, False),  # transparent portion of mint
+            ],
+        )
+        net = idx._transparent_net_for_header_tokens(tx)
+        assert net == {token_uid: 600}
+
+    def test_mixed_melt_transparent_input(self) -> None:
+        """Melt 800 with 100 transparent T input + shielded T inputs → per-utxo
+        net is -100 for T. The melt-header reversal must subtract that signed
+        value to land on -800 net.
+        """
+        idx = self._make_index()
+        token_uid = b'\x22' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=800)],
+            transparent_inputs=[
+                (token_uid, 0, True),    # melt authority
+                (token_uid, 100, False),  # transparent portion being melted
+            ],
+            transparent_outputs=[(token_uid, 0, True)],  # authority refresh
+        )
+        net = idx._transparent_net_for_header_tokens(tx)
+        assert net == {token_uid: -100}
+
+    def test_skips_authority_outputs_and_shielded_inputs(self) -> None:
+        """Authority outputs/inputs and shielded inputs contribute zero."""
+        idx = self._make_index()
+        token_uid = b'\x33' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=500)],
+            transparent_inputs=[
+                (token_uid, 0, True),    # mint authority
+                (token_uid, 0, True),    # melt authority (unused, but counted as authority)
+            ],
+            transparent_outputs=[
+                (token_uid, 0, True),    # authority refresh
+            ],
+        )
+        net = idx._transparent_net_for_header_tokens(tx)
+        assert net == {token_uid: 0}
+
+    def test_no_headers_returns_empty(self) -> None:
+        """When the tx has no Mint/Melt header, the helper short-circuits."""
+        idx = self._make_index()
+        tx = _make_mock_tx(tokens=[b'\x11' * 32], has_shielded_outputs=True)
+        assert idx._transparent_net_for_header_tokens(tx) == {}
+
+
+class TestIndexerReorgOrderingTct:
+    """remove_tx for a shielded TokenCreationTransaction must reverse Mint/Melt
+    header deltas BEFORE destroy_token, otherwise the post-reversal
+    `add_to_total` re-creates the row with a negative total.
+    """
+
+    def test_destroy_token_runs_after_mint_header_reversal(self) -> None:
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+        from hathor.transaction import TxVersion
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = MagicMock()
+        idx._db = MagicMock()
+        idx._cf = MagicMock()
+        idx._settings = MagicMock()
+        idx._settings.HATHOR_TOKEN_UID = b'\x00'
+
+        # Track the order of destroy_token vs add_to_total calls.
+        call_log: list[str] = []
+        idx.destroy_token = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda *a, **kw: call_log.append('destroy_token')
+        )
+        idx.add_to_total = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda *a, **kw: call_log.append('add_to_total')
+        )
+        idx._add_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._remove_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._remove_transaction = MagicMock()  # type: ignore[method-assign]
+
+        # Build a TCT mock that carries a MintHeader.
+        token_uid = b'\xff' * 32
+        tct = MagicMock(spec=TokenCreationTransaction)
+        tct.hash = token_uid
+        tct.hash_hex = token_uid.hex()
+        tct.version = TxVersion.TOKEN_CREATION_TRANSACTION
+        tct.is_transaction = True
+        tct.is_nano_contract = MagicMock(return_value=False)
+        tct.has_mint_header = MagicMock(return_value=True)
+        tct.has_melt_header = MagicMock(return_value=False)
+        mint_header = MagicMock()
+        mint_header.entries = [MintMeltEntry(token_index=1, amount=1000)]
+        tct.get_mint_header = MagicMock(return_value=mint_header)
+        tct.tokens = [token_uid]
+        tct.get_token_uid = MagicMock(return_value=token_uid)
+        tct.timestamp = 0
+        tct.inputs = []
+        tct.outputs = []
+        tct.get_spent_tx = MagicMock()
+
+        idx.remove_tx(tct)
+
+        # destroy_token must be the LAST call so the negative-delta add_to_total
+        # doesn't re-create an empty row after the token has been destroyed.
+        assert 'destroy_token' in call_log
+        assert call_log[-1] == 'destroy_token', (
+            f'destroy_token must run last; call order was {call_log}'
+        )

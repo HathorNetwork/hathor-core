@@ -487,8 +487,8 @@ class TestVerifySumBypass:
         transparent change. token_dict only sees the transparent side, so
         token_info.amount = -500 (looks like melting). This must NOT raise
         ForbiddenMelt because the balance is verified cryptographically by
-        verify_shielded_balance, and verify_no_mint_melt already blocks
-        authorized minting/melting in shielded txs.
+        verify_shielded_balance, and verify_no_undeclared_mint_melt already
+        blocks undeclared mint/melt in shielded txs.
         """
         from hathor.transaction import Transaction
 

@@ -438,8 +438,8 @@ class TransactionVerifier:
         For shielded transactions (is_shielded=True), the amount-based melt/mint check is
         skipped for non-native tokens because the transparent deficit is expected — value
         moved to shielded outputs and balance is verified cryptographically by
-        verify_shielded_balance. Authority-based mint/melt is separately blocked by
-        verify_no_mint_melt.
+        verify_shielded_balance. Undeclared authority-based mint/melt is separately
+        blocked by verify_no_undeclared_mint_melt.
         """
         from hathor.conf.settings import HATHOR_TOKEN_UID
         if token_info.version == TokenVersion.NATIVE:
@@ -450,8 +450,8 @@ class TransactionVerifier:
         assert token_uid != HATHOR_TOKEN_UID
         if is_shielded:
             # In shielded txs, transparent deficit/surplus is expected — balance is
-            # verified cryptographically. verify_no_mint_melt already blocks authorized
-            # mint/melt operations.
+            # verified cryptographically. Undeclared authority-based mint/melt is
+            # separately blocked by verify_no_undeclared_mint_melt.
             return
         if token_info.has_been_melted() and not token_info.can_melt:
             raise ForbiddenMelt.from_token(token_info.amount, token_uid)

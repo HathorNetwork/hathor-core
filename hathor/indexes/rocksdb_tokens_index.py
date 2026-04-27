@@ -392,6 +392,49 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         else:
             self.add_to_total(token_uid, -tx_output.value)
 
+    def _transparent_net_for_header_tokens(self, tx: 'Transaction') -> dict[bytes, int]:
+        """Return the per-utxo transparent net (outputs - inputs) for each token
+        covered by the tx's MintHeader/MeltHeader.
+
+        Used to cancel out the per-utxo loops' contribution for header-covered
+        tokens: the headers declare the authoritative supply change for those
+        tokens, so the visible portion already counted by `_add_utxo` /
+        `_remove_utxo` has to be undone to avoid double-counting.
+
+        Authority outputs/inputs contribute zero (`_add_utxo` / `_remove_utxo`
+        already skip them), so they are skipped here too. Shielded inputs are
+        skipped — they reference a parent's shielded output and have no
+        transparent value.
+        """
+        header_token_uids: set[bytes] = set()
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                header_token_uids.add(tx.get_token_uid(entry.token_index))
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                header_token_uids.add(tx.get_token_uid(entry.token_index))
+        if not header_token_uids:
+            return {}
+
+        net: dict[bytes, int] = {uid: 0 for uid in header_token_uids}
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            if spent_tx.is_shielded_output(tx_input.index):
+                continue
+            spent_output = spent_tx.outputs[tx_input.index]
+            if spent_output.is_token_authority():
+                continue
+            spent_token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+            if spent_token_uid in header_token_uids:
+                net[spent_token_uid] -= spent_output.value
+        for output in tx.outputs:
+            if output.is_token_authority():
+                continue
+            output_token_uid = tx.get_token_uid(output.get_token_index())
+            if output_token_uid in header_token_uids:
+                net[output_token_uid] += output.value
+        return net
+
     def add_tx(self, tx: BaseTransaction) -> None:
         # if it's a TokenCreationTransaction, update name and symbol
         self.log.debug('add_tx', tx=tx.hash_hex, ver=tx.version)
@@ -449,16 +492,23 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                         assert_never(action)
 
         # Apply MintHeader/MeltHeader supply deltas (RFC 0000-shielded-outputs-mint-melt §4.8).
-        # Per-token totals must reflect the public supply change even though the
-        # shielded outputs are not indexed at the UTXO level.
-        if isinstance(tx, Transaction) and tx.has_mint_header():
-            for entry in tx.get_mint_header().entries:
-                token_uid = tx.get_token_uid(entry.token_index)
-                self.add_to_total(token_uid, entry.amount)
-        if isinstance(tx, Transaction) and tx.has_melt_header():
-            for entry in tx.get_melt_header().entries:
-                token_uid = tx.get_token_uid(entry.token_index)
-                self.add_to_total(token_uid, -entry.amount)
+        # When a token is covered by Mint/Melt headers, the header amount is the
+        # authoritative supply change for that token (including any portion that
+        # ended up in transparent outputs). Cancel the per-utxo loops' visible
+        # contribution for those tokens before applying the header delta so a
+        # mixed transparent + shielded mint/melt is not double-counted.
+        if isinstance(tx, Transaction) and (tx.has_mint_header() or tx.has_melt_header()):
+            for token_uid, net in self._transparent_net_for_header_tokens(tx).items():
+                if net != 0:
+                    self.add_to_total(token_uid, -net)
+            if tx.has_mint_header():
+                for entry in tx.get_mint_header().entries:
+                    token_uid = tx.get_token_uid(entry.token_index)
+                    self.add_to_total(token_uid, entry.amount)
+            if tx.has_melt_header():
+                for entry in tx.get_melt_header().entries:
+                    token_uid = tx.get_token_uid(entry.token_index)
+                    self.add_to_total(token_uid, -entry.amount)
 
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
@@ -476,10 +526,6 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             assert isinstance(tx, Transaction)
             for token_uid in tx.tokens:
                 self._remove_transaction(token_uid, tx.timestamp, tx.hash)
-
-        # if it's a TokenCreationTransaction, remove it from index
-        if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
-            self.destroy_token(tx.hash)
 
         # Handle actions from Nano Contracts.
         if tx.is_nano_contract():
@@ -499,15 +545,27 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                     case _:
                         assert_never(action)
 
-        # Reverse MintHeader/MeltHeader supply deltas (mirrors add_tx).
-        if isinstance(tx, Transaction) and tx.has_mint_header():
-            for entry in tx.get_mint_header().entries:
-                token_uid = tx.get_token_uid(entry.token_index)
-                self.add_to_total(token_uid, -entry.amount)
-        if isinstance(tx, Transaction) and tx.has_melt_header():
-            for entry in tx.get_melt_header().entries:
-                token_uid = tx.get_token_uid(entry.token_index)
-                self.add_to_total(token_uid, entry.amount)
+        # Reverse MintHeader/MeltHeader supply deltas (mirrors add_tx). Re-add
+        # the per-utxo visible portion that add_tx cancelled for header-covered
+        # tokens, then undo the header delta itself.
+        if isinstance(tx, Transaction) and (tx.has_mint_header() or tx.has_melt_header()):
+            for token_uid, net in self._transparent_net_for_header_tokens(tx).items():
+                if net != 0:
+                    self.add_to_total(token_uid, net)
+            if tx.has_mint_header():
+                for entry in tx.get_mint_header().entries:
+                    token_uid = tx.get_token_uid(entry.token_index)
+                    self.add_to_total(token_uid, -entry.amount)
+            if tx.has_melt_header():
+                for entry in tx.get_melt_header().entries:
+                    token_uid = tx.get_token_uid(entry.token_index)
+                    self.add_to_total(token_uid, entry.amount)
+
+        # if it's a TokenCreationTransaction, remove it from index. Run last so
+        # add_to_total calls above don't re-create the token info row with a
+        # negative total after destroy_token has cleared it.
+        if tx.version == TxVersion.TOKEN_CREATION_TRANSACTION:
+            self.destroy_token(tx.hash)
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         self.log.debug('seek to start')
