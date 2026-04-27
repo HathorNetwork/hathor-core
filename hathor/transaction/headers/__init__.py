@@ -14,6 +14,7 @@
 
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.fee_header import FeeHeader
+from hathor.transaction.headers.mint_melt_header import MeltHeader, MintHeader, MintMeltEntry
 from hathor.transaction.headers.nano_header import NanoHeader
 from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
 from hathor.transaction.headers.types import VertexHeaderId
@@ -26,4 +27,7 @@ __all__ = [
     'FeeHeader',
     'ShieldedOutputsHeader',
     'UnshieldBalanceHeader',
+    'MintHeader',
+    'MeltHeader',
+    'MintMeltEntry',
 ]

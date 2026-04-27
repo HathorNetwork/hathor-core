@@ -239,6 +239,15 @@ class Builder:
         from hathor.crypto.shielded import validate_shielded_crypto_available
         validate_shielded_crypto_available(settings.ENABLE_SHIELDED_TRANSACTIONS)
 
+        from hathorlib.conf.settings import FeatureSetting
+        if (
+            settings.ENABLE_SHIELDED_MINT_MELT != FeatureSetting.DISABLED
+            and settings.ENABLE_SHIELDED_TRANSACTIONS == FeatureSetting.DISABLED
+        ):
+            raise ValueError(
+                'ENABLE_SHIELDED_MINT_MELT requires ENABLE_SHIELDED_TRANSACTIONS to be enabled'
+            )
+
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
 

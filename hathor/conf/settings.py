@@ -39,6 +39,9 @@ class HathorSettings(LibSettings):
     # Used to enable shielded transactions.
     ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
+    # Used to enable shielded mint/melt headers. Requires ENABLE_SHIELDED_TRANSACTIONS.
+    ENABLE_SHIELDED_MINT_MELT: FeatureSetting = FeatureSetting.DISABLED
+
     # Block checkpoints
     CHECKPOINTS: list[Checkpoint] = []
 

@@ -276,6 +276,7 @@ class TransactionStreamingClient:
                 nanocontracts=features.nanocontracts,
                 fee_tokens=features.fee_tokens,
                 shielded_transactions=features.shielded_transactions,
+                shielded_mint_melt=features.shielded_mint_melt,
                 nano_runtime_version=features.nano_runtime_version,
             )
         )

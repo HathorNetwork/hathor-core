@@ -448,6 +448,18 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                     case _:
                         assert_never(action)
 
+        # Apply MintHeader/MeltHeader supply deltas (RFC 0000-shielded-outputs-mint-melt §4.8).
+        # Per-token totals must reflect the public supply change even though the
+        # shielded outputs are not indexed at the UTXO level.
+        if isinstance(tx, Transaction) and tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                self.add_to_total(token_uid, entry.amount)
+        if isinstance(tx, Transaction) and tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                self.add_to_total(token_uid, -entry.amount)
+
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
@@ -486,6 +498,16 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                         pass
                     case _:
                         assert_never(action)
+
+        # Reverse MintHeader/MeltHeader supply deltas (mirrors add_tx).
+        if isinstance(tx, Transaction) and tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                self.add_to_total(token_uid, -entry.amount)
+        if isinstance(tx, Transaction) and tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                self.add_to_total(token_uid, entry.amount)
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         self.log.debug('seek to start')

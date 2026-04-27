@@ -37,6 +37,8 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.headers import (
     FeeHeader,
+    MeltHeader,
+    MintHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
@@ -247,7 +249,15 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
-                # Token creation txs must NOT allow shielded outputs.
+                # When SHIELDED_MINT_MELT is active, a TCT may carry shielded outputs
+                # of the new token plus a MintHeader declaring its initial supply
+                # (RFC 0000-shielded-outputs-mint-melt §4.4). Without the flag, parent
+                # Rule 8 still applies and these headers are forbidden on TCTs.
+                if params.features.shielded_mint_melt:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
@@ -256,6 +266,9 @@ class VertexVerifier:
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
+                if params.features.shielded_mint_melt:
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers

@@ -266,7 +266,15 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         return False
 
     def get_maximum_number_of_headers(self) -> int:
-        """Return the maximum number of headers for this vertex."""
+        """Return the maximum number of headers for this vertex.
+
+        Bumped to 5 when shielded mint/melt is enabled so a single tx can carry
+        FeeHeader + (ShieldedOutputs|UnshieldBalance) + MintHeader + MeltHeader,
+        with one slot of margin for NanoHeader coexistence.
+        """
+        from hathorlib.conf.settings import FeatureSetting
+        if self._settings.ENABLE_SHIELDED_MINT_MELT != FeatureSetting.DISABLED:
+            return 5
         return 3
 
     @classmethod

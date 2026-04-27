@@ -25,7 +25,14 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    MeltHeader,
+    MintHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexBaseHeader,
+)
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.shielded_tx_output import ShieldedOutput
 from hathor.transaction.static_metadata import TransactionStaticMetadata
@@ -215,6 +222,30 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         if self.has_unshield_balance_header():
             return self.get_unshield_balance_header().excess_blinding_factor
         return None
+
+    def has_mint_header(self) -> bool:
+        """Returns true if this transaction carries a MintHeader."""
+        try:
+            self.get_mint_header()
+        except ValueError:
+            return False
+        return True
+
+    def get_mint_header(self) -> MintHeader:
+        """Return the MintHeader or raise ValueError."""
+        return self._get_header(MintHeader)
+
+    def has_melt_header(self) -> bool:
+        """Returns true if this transaction carries a MeltHeader."""
+        try:
+            self.get_melt_header()
+        except ValueError:
+            return False
+        return True
+
+    def get_melt_header(self) -> MeltHeader:
+        """Return the MeltHeader or raise ValueError."""
+        return self._get_header(MeltHeader)
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""

@@ -32,10 +32,33 @@ class TokenCreationTransactionVerifier:
         - only HTR tokens on the inputs;
         - new tokens are actually being minted;
 
+        For a shielded TCT (RFC 0000-shielded-outputs-mint-melt §4.4), the
+        token amount is hidden in shielded outputs and `token_info.amount` is
+        therefore not a reliable check. The supply is instead declared via the
+        MintHeader, and that entry must reference the new token (token_index=1)
+        with a positive amount. The balance equation reconciles the declared
+        supply against the shielded outputs.
+
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        # make sure tokens are being minted
+        if tx.is_shielded():
+            if not tx.has_mint_header():
+                raise InvalidToken(
+                    'shielded token creation transaction must declare initial supply via MintHeader'
+                )
+            mint_entries = tx.get_mint_header().entries
+            new_token_entries = [e for e in mint_entries if e.token_index == 1]
+            if len(new_token_entries) != 1:
+                raise InvalidToken(
+                    'shielded token creation transaction must have exactly one MintHeader entry '
+                    f'for the new token (token_index=1); got {len(new_token_entries)}'
+                )
+            if new_token_entries[0].amount <= 0:
+                raise InvalidToken('Token creation transaction must mint new tokens')
+            return
+
+        # Non-shielded TCT: the existing transparent path checks token_info.amount.
         token_info = token_dict[tx.hash]
         if token_info.amount <= 0:
             raise InvalidToken('Token creation transaction must mint new tokens')
