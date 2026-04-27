@@ -675,8 +675,11 @@ class TransactionVerifier:
         Phase 1 (no storage): "shielded" is detected via header presence —
         ShieldedOutputsHeader covers the mixed/partial-unshield case, and
         UnshieldBalanceHeader covers the full-unshield case (RFC unresolved Q6).
-        Shielded inputs without either header would require storage to detect
-        and are caught later by the augmented balance equation.
+        A tx that carries shielded inputs with neither header would also fail
+        here (no shielded marker found), and is independently rejected by the
+        parent shielded RFC's mutual-exclusion invariant inside
+        verify_shielded_balance — so the storage-bound case is already covered
+        upstream and downstream.
         """
         if not tx.has_mint_header() and not tx.has_melt_header():
             return

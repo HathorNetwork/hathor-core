@@ -392,19 +392,38 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         else:
             self.add_to_total(token_uid, -tx_output.value)
 
-    def _transparent_net_for_header_tokens(self, tx: 'Transaction') -> dict[bytes, int]:
-        """Return the per-utxo transparent net (outputs - inputs) for each token
-        covered by the tx's MintHeader/MeltHeader.
+    def _transparent_net_for_index_correction(self, tx: 'Transaction') -> dict[bytes, int]:
+        """Per-token transparent net (outputs - inputs) for non-HTR tokens that
+        need a correction layered on top of the per-utxo flow.
 
-        Used to cancel out the per-utxo loops' contribution for header-covered
-        tokens: the headers declare the authoritative supply change for those
-        tokens, so the visible portion already counted by `_add_utxo` /
-        `_remove_utxo` has to be undone to avoid double-counting.
+        The per-utxo flow tracks transparent visible supply only. Total
+        declared supply (visible + shielded) needs the per-utxo contribution
+        cancelled in two cases:
 
-        Authority outputs/inputs contribute zero (`_add_utxo` / `_remove_utxo`
-        already skip them), so they are skipped here too. Shielded inputs are
-        skipped — they reference a parent's shielded output and have no
-        transparent value.
+        1. **Tokens covered by MintHeader/MeltHeader.** The header amount is
+           the authoritative supply change; the visible portion already
+           counted by ``_add_utxo`` / ``_remove_utxo`` has to be undone to
+           avoid double-counting in mixed transparent + shielded mint/melt.
+
+        2. **Non-HTR tokens with shielded involvement (no header).** A
+           shielding (transparent → shielded) or unshielding (shielded →
+           transparent) tx preserves total supply, but the per-utxo flow
+           reports a non-zero delta. Cancel it so the index stays stable.
+           ``FullShieldedOutput`` hides the asset, so the cancellation
+           covers the union of MintHeader/MeltHeader tokens and
+           ``tx.tokens`` (a superset that's safe — uninvolved tokens have
+           transparent_net = 0 and the cancellation is a no-op).
+
+        HTR is intentionally excluded from this helper. Correct HTR
+        cancellation requires reading FeeHeader fees, DEPOSIT mint/melt
+        deposits/withdraws, and per-entry FEE charges — which in turn need
+        ``nc_block_storage`` to resolve nano-issued token versions. See
+        TODOS.md.
+
+        Authority outputs/inputs contribute zero (``_add_utxo`` /
+        ``_remove_utxo`` already skip them) so they are skipped here too.
+        Shielded inputs are skipped — they reference a parent's shielded
+        output and have no transparent value.
         """
         header_token_uids: set[bytes] = set()
         if tx.has_mint_header():
@@ -413,10 +432,30 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.has_melt_header():
             for entry in tx.get_melt_header().entries:
                 header_token_uids.add(tx.get_token_uid(entry.token_index))
-        if not header_token_uids:
+
+        # Detect shielded inputs while walking — we need it anyway for the
+        # transparent_net computation.
+        has_shielded_inputs = False
+        for tx_input in tx.inputs:
+            spent_tx = tx.get_spent_tx(tx_input)
+            if spent_tx.is_shielded_output(tx_input.index):
+                has_shielded_inputs = True
+                break
+
+        has_shielded = tx.has_shielded_outputs() or has_shielded_inputs
+        if not has_shielded and not header_token_uids:
             return {}
 
-        net: dict[bytes, int] = {uid: 0 for uid in header_token_uids}
+        # Candidate tokens: header tokens always, plus all non-HTR tokens
+        # in tx.tokens when there's any shielded involvement.
+        candidate_tokens: set[bytes] = set(header_token_uids)
+        if has_shielded:
+            candidate_tokens.update(tx.tokens)
+
+        if not candidate_tokens:
+            return {}
+
+        net: dict[bytes, int] = {uid: 0 for uid in candidate_tokens}
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
             if spent_tx.is_shielded_output(tx_input.index):
@@ -425,15 +464,17 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             if spent_output.is_token_authority():
                 continue
             spent_token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
-            if spent_token_uid in header_token_uids:
+            if spent_token_uid in candidate_tokens:
                 net[spent_token_uid] -= spent_output.value
         for output in tx.outputs:
             if output.is_token_authority():
                 continue
             output_token_uid = tx.get_token_uid(output.get_token_index())
-            if output_token_uid in header_token_uids:
+            if output_token_uid in candidate_tokens:
                 net[output_token_uid] += output.value
-        return net
+        # Drop zero entries — the caller skips them anyway, and an empty
+        # return value cleanly signals "no correction needed".
+        return {uid: n for uid, n in net.items() if n != 0}
 
     def add_tx(self, tx: BaseTransaction) -> None:
         # if it's a TokenCreationTransaction, update name and symbol
@@ -491,14 +532,20 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                     case _:
                         assert_never(action)
 
-        # Apply MintHeader/MeltHeader supply deltas (RFC 0000-shielded-outputs-mint-melt §4.8).
-        # When a token is covered by Mint/Melt headers, the header amount is the
-        # authoritative supply change for that token (including any portion that
-        # ended up in transparent outputs). Cancel the per-utxo loops' visible
-        # contribution for those tokens before applying the header delta so a
-        # mixed transparent + shielded mint/melt is not double-counted.
-        if isinstance(tx, Transaction) and (tx.has_mint_header() or tx.has_melt_header()):
-            for token_uid, net in self._transparent_net_for_header_tokens(tx).items():
+        # Reconcile the per-utxo flow with total declared supply (visible +
+        # shielded). See `_transparent_net_for_index_correction` for the full
+        # rationale. Two cases:
+        #
+        # 1. MintHeader / MeltHeader: header is the authoritative supply
+        #    delta. Cancel per-utxo for those tokens, then apply header
+        #    amounts. Covers RFC 0000-shielded-outputs-mint-melt §4.8.
+        # 2. Non-HTR shielding/unshielding/transferring shielded value
+        #    without a header: total supply is unchanged. Cancel per-utxo
+        #    for the affected non-HTR tokens.
+        #
+        # HTR cancellation is intentionally deferred — see TODOS.md.
+        if isinstance(tx, Transaction):
+            for token_uid, net in self._transparent_net_for_index_correction(tx).items():
                 if net != 0:
                     self.add_to_total(token_uid, -net)
             if tx.has_mint_header():
@@ -545,11 +592,11 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                     case _:
                         assert_never(action)
 
-        # Reverse MintHeader/MeltHeader supply deltas (mirrors add_tx). Re-add
-        # the per-utxo visible portion that add_tx cancelled for header-covered
-        # tokens, then undo the header delta itself.
-        if isinstance(tx, Transaction) and (tx.has_mint_header() or tx.has_melt_header()):
-            for token_uid, net in self._transparent_net_for_header_tokens(tx).items():
+        # Reverse the index correction applied in add_tx (mirrors the block
+        # above with signs flipped). Re-add the per-utxo visible portion that
+        # was cancelled, then undo the header delta itself.
+        if isinstance(tx, Transaction):
+            for token_uid, net in self._transparent_net_for_index_correction(tx).items():
                 if net != 0:
                     self.add_to_total(token_uid, net)
             if tx.has_mint_header():

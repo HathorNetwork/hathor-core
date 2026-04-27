@@ -559,7 +559,7 @@ class TestIndexerHeaderTokenNetCancellation:
 
         from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
 
-        # Bypass __init__ — we only need _transparent_net_for_header_tokens.
+        # Bypass __init__ — we only need _transparent_net_for_index_correction.
         idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
         idx.log = _MM()
         return idx
@@ -622,7 +622,8 @@ class TestIndexerHeaderTokenNetCancellation:
 
     def test_pure_shielded_mint_zero_net(self) -> None:
         """A mint with no transparent T outputs/inputs has zero per-utxo net,
-        so no cancellation is needed.
+        so no cancellation is needed. The helper drops zero entries, so the
+        return value is empty.
         """
         idx = self._make_index()
         token_uid = b'\x11' * 32
@@ -632,8 +633,8 @@ class TestIndexerHeaderTokenNetCancellation:
             transparent_inputs=[(token_uid, 0, True)],   # mint authority only
             transparent_outputs=[(token_uid, 0, True)],  # authority refresh only
         )
-        net = idx._transparent_net_for_header_tokens(tx)
-        assert net == {token_uid: 0}
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {}
 
     def test_mixed_mint_transparent_and_shielded_outputs(self) -> None:
         """Mint 1000 with 600 to transparent + 400 to shielded → per-utxo net
@@ -650,7 +651,7 @@ class TestIndexerHeaderTokenNetCancellation:
                 (token_uid, 600, False),  # transparent portion of mint
             ],
         )
-        net = idx._transparent_net_for_header_tokens(tx)
+        net = idx._transparent_net_for_index_correction(tx)
         assert net == {token_uid: 600}
 
     def test_mixed_melt_transparent_input(self) -> None:
@@ -669,7 +670,7 @@ class TestIndexerHeaderTokenNetCancellation:
             ],
             transparent_outputs=[(token_uid, 0, True)],  # authority refresh
         )
-        net = idx._transparent_net_for_header_tokens(tx)
+        net = idx._transparent_net_for_index_correction(tx)
         assert net == {token_uid: -100}
 
     def test_skips_authority_outputs_and_shielded_inputs(self) -> None:
@@ -687,14 +688,83 @@ class TestIndexerHeaderTokenNetCancellation:
                 (token_uid, 0, True),    # authority refresh
             ],
         )
-        net = idx._transparent_net_for_header_tokens(tx)
-        assert net == {token_uid: 0}
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {}
 
-    def test_no_headers_returns_empty(self) -> None:
-        """When the tx has no Mint/Melt header, the helper short-circuits."""
+    def test_no_headers_no_shielded_returns_empty(self) -> None:
+        """A tx with no Mint/Melt header AND no shielded involvement needs no
+        correction — the per-utxo flow is correct as-is.
+        """
         idx = self._make_index()
-        tx = _make_mock_tx(tokens=[b'\x11' * 32], has_shielded_outputs=True)
-        assert idx._transparent_net_for_header_tokens(tx) == {}
+        tx = _make_mock_tx(tokens=[b'\x11' * 32], has_shielded_outputs=False)
+        assert idx._transparent_net_for_index_correction(tx) == {}
+
+    def test_shielding_non_htr_token_cancels_per_utxo(self) -> None:
+        """Shielding a non-HTR token: 100 T transparent input → 100 T shielded
+        output (no header). Per-utxo would record −100. The helper reports
+        the −100 so add_tx can cancel it, keeping total supply stable.
+        """
+        idx = self._make_index()
+        token_uid = b'\x44' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            transparent_inputs=[(token_uid, 100, False)],  # transparent T being shielded
+            transparent_outputs=[],                         # all to shielded
+        )
+        # _make_tx_with_io leaves has_shielded_outputs at the default the
+        # caller set; ensure shielded involvement is detected.
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {token_uid: -100}
+
+    def test_unshielding_non_htr_token_cancels_per_utxo(self) -> None:
+        """Unshielding a non-HTR token: shielded input → 100 T transparent
+        output. has_shielded_inputs is detected via the input walk; the
+        helper reports +100 so add_tx can cancel it.
+        """
+        idx = self._make_index()
+        token_uid = b'\x55' * 32
+
+        # Build a shielded-input tx by hand: spent_tx.is_shielded_output=True
+        # for the input.
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=False)
+        tx_input = MagicMock()
+        tx_input.tx_id = b'\x55' * 32
+        tx_input.index = 0
+        spent_tx = MagicMock()
+        spent_tx.is_shielded_output = MagicMock(return_value=True)
+        tx.inputs = [tx_input]
+        tx.get_spent_tx = MagicMock(return_value=spent_tx)
+        # Transparent T output (the unshielded value).
+        out = MagicMock()
+        out.is_token_authority = MagicMock(return_value=False)
+        out.value = 100
+        out.get_token_index = MagicMock(return_value=1)
+        tx.outputs = [out]
+
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {token_uid: 100}
+
+    def test_shielded_transfer_no_transparent_flow_returns_empty(self) -> None:
+        """A pure shielded transfer (shielded input → shielded output, both
+        of token T, no transparent flow) needs no correction — per-utxo
+        contributes 0.
+        """
+        idx = self._make_index()
+        token_uid = b'\x66' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx_input = MagicMock()
+        tx_input.tx_id = b'\x77' * 32
+        tx_input.index = 0
+        spent_tx = MagicMock()
+        spent_tx.is_shielded_output = MagicMock(return_value=True)
+        tx.inputs = [tx_input]
+        tx.get_spent_tx = MagicMock(return_value=spent_tx)
+        tx.outputs = []
+
+        # has_shielded_outputs=True, has_shielded_inputs=True. tx.tokens=[T].
+        # No transparent flow → net is 0 for T → filtered out.
+        assert idx._transparent_net_for_index_correction(tx) == {}
 
 
 class TestIndexerReorgOrderingTct:
