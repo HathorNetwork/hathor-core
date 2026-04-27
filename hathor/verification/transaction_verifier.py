@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 from structlog import get_logger
 
@@ -990,15 +990,17 @@ class TransactionVerifier:
         # equation. Mint amounts enter the input side; melt amounts enter the
         # output side. For DEPOSIT-version tokens the 1% deposit moves HTR from
         # the input side (deposit -> HTR output) on mint and the reverse on melt.
+        # For FEE-version tokens the per-entry FEE_PER_OUTPUT charge is added to
+        # the output side (paid by the user from HTR inputs).
         if tx.has_mint_header() or tx.has_melt_header():
             htr_uid = self._normalize_token_uid(HATHOR_TOKEN_UID)
             if tx.has_mint_header():
                 for entry in tx.get_mint_header().entries:
                     self._fold_mint_melt_entry(
                         tx, entry,
-                        primary_side=transparent_inputs,
-                        htr_offset_side=transparent_outputs,
-                        htr_amount_fn=get_deposit_token_deposit_amount,
+                        is_mint=True,
+                        transparent_inputs=transparent_inputs,
+                        transparent_outputs=transparent_outputs,
                         htr_uid=htr_uid,
                         nc_block_storage=nc_block_storage,
                     )
@@ -1006,9 +1008,9 @@ class TransactionVerifier:
                 for entry in tx.get_melt_header().entries:
                     self._fold_mint_melt_entry(
                         tx, entry,
-                        primary_side=transparent_outputs,
-                        htr_offset_side=transparent_inputs,
-                        htr_amount_fn=get_deposit_token_withdraw_amount,
+                        is_mint=False,
+                        transparent_inputs=transparent_inputs,
+                        transparent_outputs=transparent_outputs,
                         htr_uid=htr_uid,
                         nc_block_storage=nc_block_storage,
                     )
@@ -1059,27 +1061,44 @@ class TransactionVerifier:
         tx: Transaction,
         entry: 'MintMeltEntry',
         *,
-        primary_side: list[tuple[int, bytes]],
-        htr_offset_side: list[tuple[int, bytes]],
-        htr_amount_fn: 'Callable[[HathorSettings, int], int]',
+        is_mint: bool,
+        transparent_inputs: list[tuple[int, bytes]],
+        transparent_outputs: list[tuple[int, bytes]],
         htr_uid: bytes,
         nc_block_storage: 'NCBlockStorage | None',
     ) -> None:
         """Fold one MintHeader/MeltHeader entry into the augmented balance equation.
 
-        For mint: ``primary_side`` is ``transparent_inputs`` and
-        ``htr_offset_side`` is ``transparent_outputs`` (the DEPOSIT-version 1%
-        deposit moves HTR from the user's inputs into the implicit deposit
-        output). For melt: the sides are swapped and the HTR amount is the
-        withdraw value flowing back to the user.
+        - The primary ``(amount, token_uid)`` term lands on the input side for
+          mint and on the output side for melt.
+        - DEPOSIT-version tokens add a 1% HTR offset: deposit on the output
+          side for mint (paid by the user from HTR inputs), withdraw on the
+          input side for melt (returned to the user).
+        - FEE-version tokens add ``FEE_PER_OUTPUT`` HTR on the output side for
+          BOTH mint and melt — the per-entry fee is always paid by the user.
         """
         token_uid = self._normalize_token_uid(tx.get_token_uid(entry.token_index))
+        primary_side = transparent_inputs if is_mint else transparent_outputs
         primary_side.append((entry.amount, token_uid))
         version = self._resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
         if version == TokenVersion.DEPOSIT:
-            htr_amount = htr_amount_fn(self._settings, entry.amount)
+            if is_mint:
+                htr_amount = get_deposit_token_deposit_amount(self._settings, entry.amount)
+                deposit_side = transparent_outputs
+            else:
+                htr_amount = get_deposit_token_withdraw_amount(self._settings, entry.amount)
+                deposit_side = transparent_inputs
             if htr_amount > 0:
-                htr_offset_side.append((htr_amount, htr_uid))
+                deposit_side.append((htr_amount, htr_uid))
+        elif version == TokenVersion.FEE:
+            # Match transparent semantics: each declared mint/melt action pays
+            # one FEE_PER_OUTPUT, regardless of how many shielded recipients
+            # the entry's amount is split across. FullShieldedOutput hides the
+            # asset, so a per-recipient charge would either leak the asset or
+            # require an asset-blind shielded_fee bump — keeping the charge on
+            # the header entry preserves both the FEE-token-specific knob and
+            # the privacy of the recipient set.
+            transparent_outputs.append((self._settings.FEE_PER_OUTPUT, htr_uid))
 
     def _resolve_token_version_for_mint_melt(
         self,

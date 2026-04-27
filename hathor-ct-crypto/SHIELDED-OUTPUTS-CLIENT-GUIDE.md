@@ -549,6 +549,78 @@ const validUnshield: boolean = verifyBalance(
 
 > Python uses tuples `(amount, token_uid)` for transparent entries; TypeScript uses objects `{ amount, tokenUid }`. The excess parameter is always a raw 32-byte value (`bytes` in Python, `Buffer` in TypeScript, `Tweak`/`[u8; 32]` in Rust).
 
+#### Balance with Mint/Melt headers
+
+When the transaction carries a `MintHeader` or `MeltHeader` (the
+shielded-mint/melt extension), the caller folds each header entry into the
+transparent-side lists *before* calling `verify_balance`. The crypto API
+itself does not change — only the tuples you pass in.
+
+For each token `T` referenced by a `MintHeader` entry `(token_index, amount)`:
+
+- Append `(amount, token_uid_T)` to **transparent inputs**. The minted scalar
+  enters the input side of the balance equation as an unblinded term.
+- If `T` is `DEPOSIT`-version: append `(deposit, HTR_uid)` to **transparent
+  outputs**, where `deposit = ceil(0.01 × amount)`. Skip when `deposit == 0`.
+- If `T` is `FEE`-version: append `(FEE_PER_OUTPUT, HTR_uid)` to **transparent
+  outputs**. The charge is one `FEE_PER_OUTPUT` per `MintHeader` entry,
+  regardless of how many shielded recipients the entry is split across.
+
+Symmetric for each `MeltHeader` entry `(token_index, amount)`:
+
+- Append `(amount, token_uid_T)` to **transparent outputs**.
+- If `T` is `DEPOSIT`-version: append `(withdraw, HTR_uid)` to **transparent
+  inputs**, where `withdraw = floor(0.01 × amount)`. Skip when `withdraw == 0`.
+- If `T` is `FEE`-version: append `(FEE_PER_OUTPUT, HTR_uid)` to **transparent
+  outputs** (the per-entry charge is paid by the user on melt as well as on
+  mint).
+
+Notes:
+
+- The FEE-token per-entry `FEE_PER_OUTPUT` charge is folded into the balance
+  equation directly — it is NOT declared in the `FeeHeader`. `FeeHeader`
+  continues to cover only chargeable transparent outputs and shielded
+  outputs.
+- All token UIDs must be normalized to 32 bytes before being passed to
+  `verify_balance` (HTR's 1-byte UID is left-padded with zeros to 32 bytes).
+- A token cannot appear in both `MintHeader` and `MeltHeader` in the same
+  transaction (RFC Rule M3), so the input and output sides of the
+  augmentation never overlap on the same token.
+
+Worked example: shielded mint of 10,000 units of a `DEPOSIT`-version token
+`TD` to two shielded recipients, with a `FEE_PER_OUTPUT` of 100 HTR.
+
+```python
+# Existing transparent flow (mint authority input has value 0).
+transparent_inputs = []
+transparent_outputs = []
+
+# MintHeader entry: (token_index=1, amount=10_000)
+transparent_inputs.append((10_000, td_uid_32B))   # primary side
+transparent_outputs.append((100, htr_uid_32B))    # 1% deposit (10_000 * 0.01)
+
+# Two AmountShieldedOutputs of TD (commitments encode the 10_000 split).
+shielded_outputs = [commit_a, commit_b]
+shielded_inputs = []
+
+valid = ct.verify_balance(
+    transparent_inputs,
+    shielded_inputs,
+    transparent_outputs,
+    shielded_outputs,
+)
+```
+
+Same example with a `FEE`-version token `TF`:
+
+```python
+# MintHeader entry: (token_index=1, amount=10_000)
+transparent_inputs.append((10_000, tf_uid_32B))   # primary side
+transparent_outputs.append((100, htr_uid_32B))    # FEE_PER_OUTPUT (per-entry)
+
+# ...same shielded outputs and verify_balance call as above.
+```
+
 #### Structural invariants (enforced at the FFI boundary)
 
 When `excess_blinding_factor` is present, the bindings validate three invariants *before* doing any cryptographic work and reject with a binding-native error (`ValueError` in Python, thrown `Error` in TypeScript, `Err` in Rust FFI):
