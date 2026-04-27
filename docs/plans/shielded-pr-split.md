@@ -157,14 +157,14 @@ hathorlib:
   - Add `is_shielded` parameter to `_check_token_permissions()`.
   - Add `verify_transparent_balance(..., shielded_fee=0)` (super-set of original `verify_sum`).
   - Add `verify_token_rules()` — used for shielded txs in place of `verify_transparent_balance`.
-  - Add shielded-only methods: `verify_shielded_outputs`, `verify_shielded_outputs_with_storage`, `verify_commitments_valid`, `verify_authority_restriction`, `verify_range_proofs`, `verify_surjection_proofs`, `verify_shielded_balance`, `verify_trivial_commitment_protection`, `verify_no_mint_melt`, `verify_shielded_fee`, `calculate_shielded_fee`, `_normalize_token_uid`, `_get_or_derive_asset_tag`.
+  - Add shielded-only methods: `verify_shielded_outputs`, `verify_shielded_outputs_with_storage`, `verify_commitments_valid`, `verify_authority_restriction`, `verify_range_proofs`, `verify_surjection_proofs`, `verify_shielded_balance`, `verify_trivial_commitment_protection`, `verify_no_undeclared_mint_melt`, `verify_shielded_fee`, `calculate_shielded_fee`, `_normalize_token_uid`, `_get_or_derive_asset_tag`. (PR 5 originally landed `verify_no_mint_melt`; the post-plan mint/melt-headers extension renamed it to `verify_no_undeclared_mint_melt`.)
 - `hathor/verification/verification_service.py`:
   - `verify_basic` — early feature-gate check; new `_verify_basic_shielded_header` (no storage).
   - `verify` (storage-bound) — new `_verify_shielded_header` (surjection needs storage); reject shielded outputs in `TokenCreationTransaction`.
   - `_verify_tx` — balance dispatch split (transparent vs shielded).
 - `hathor/transaction/transaction.py`:
   - `_get_token_info_from_inputs` — skip shielded inputs for transparent token accounting (amount hidden).
-  - `_update_token_info_from_outputs` — seed `TokenInfo` for output tokens that were not in inputs, so unshielding (transparent output of a hidden-asset shielded input) is not rejected. Mint/melt safety still enforced downstream by `verify_no_mint_melt` for shielded txs and the standard `ForbiddenMint`/`ForbiddenMelt` for transparent txs.
+  - `_update_token_info_from_outputs` — seed `TokenInfo` for output tokens that were not in inputs, so unshielding (transparent output of a hidden-asset shielded input) is not rejected. Mint/melt safety still enforced downstream by `verify_no_undeclared_mint_melt` for shielded txs (renamed from `verify_no_mint_melt` by the post-plan mint/melt-headers extension) and the standard `ForbiddenMint`/`ForbiddenMelt` for transparent txs.
   - `to_json_extended` — include `tokens` array.
 - `hathor/transaction/token_info.py` — `calculate_fee(settings, *, shielded_fee=0)` parameter.
 - `hathor/consensus/consensus.py` — `_shielded_activation_rule` reorg handling for `SHIELDED_TRANSACTIONS`; add `FAILED_FEE_TOKENS` / `FAILED_OPCODES_V2` to the no-op feature list.
@@ -270,3 +270,11 @@ Could be split further (7a indexes, 7b sync + migrations, 7c API + events, 7d DA
 1. **PR 3 chain-data scan result** — does any existing testnet/mainnet tx with multiple headers violate canonical ordering? Need a one-off node-side scan script.
 2. **Should PR 7 be split further?** Current single-PR shape is the simplest, but indexes/sync/API/DAG-builder are independent surfaces.
 3. **Hathorlib release/versioning cadence** — when paired hathorlib changes ship, is a hathorlib version bump cut per PR or batched?
+
+---
+
+## Post-plan extensions (not in the original 1–8 sequence)
+
+This plan was authored before the mint/melt-headers RFC, so follow-on PRs that extend the parent RFC's invariants live outside this sequence and are tracked on their own branches.
+
+- **`feat/shielded-mint-melt`** — lifts parent RFC Rule 8 ("no mint/melt in shielded txs") via `MintHeader (0x14)` and `MeltHeader (0x15)` declaring per-token supply changes that enter the augmented homomorphic balance equation as unblinded scalars. Renames `verify_no_mint_melt` → `verify_no_undeclared_mint_melt`, lets `TokenCreationTransaction` carry shielded outputs of the new token, and extends the `rocksdb_tokens_index` to track the public supply delta. Gated by the parent `ENABLE_SHIELDED_TRANSACTIONS` flag — no separate feature flag.

@@ -54,8 +54,9 @@ class TokenCreationTransactionVerifier:
                     'shielded token creation transaction must have exactly one MintHeader entry '
                     f'for the new token (token_index=1); got {len(new_token_entries)}'
                 )
-            if new_token_entries[0].amount <= 0:
-                raise InvalidToken('Token creation transaction must mint new tokens')
+            # MintMeltEntry.__post_init__ already enforces 1 <= amount < 2**64,
+            # so an entry with amount <= 0 cannot be constructed.
+            assert new_token_entries[0].amount >= 1
             # A TCT cannot melt the token it is creating in the same tx — there
             # is nothing to destroy yet. Rule M3 also forbids the same token
             # appearing in both headers, but we reject this explicitly so the

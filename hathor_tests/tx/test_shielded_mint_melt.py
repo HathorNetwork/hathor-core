@@ -754,3 +754,349 @@ class TestIndexerReorgOrderingTct:
         assert call_log[-1] == 'destroy_token', (
             f'destroy_token must run last; call order was {call_log}'
         )
+
+
+# ---------------------------------------------------------------------------
+# Rule M4: augmented homomorphic balance equation
+# ---------------------------------------------------------------------------
+
+
+def _make_minimal_balance_tx(
+    *,
+    mint_entries: list[MintMeltEntry] | None = None,
+    melt_entries: list[MintMeltEntry] | None = None,
+) -> MagicMock:
+    """Build a tx that satisfies verify_shielded_balance's surface area without
+    real crypto: 2 mocked shielded outputs, no transparent in/out, no fees,
+    no unshield-balance header. The mutual-exclusion invariants pass because
+    has_shielded_outputs=True and excess_blinding_factor=None.
+    """
+    tx = _make_mock_tx(
+        tokens=[b'\xaa' * 32, b'\xbb' * 32],
+        mint_entries=mint_entries,
+        melt_entries=melt_entries,
+        has_shielded_outputs=True,
+    )
+    tx.outputs = []
+    out1 = MagicMock()
+    out1.commitment = b'\x01' * 33
+    out2 = MagicMock()
+    out2.commitment = b'\x02' * 33
+    tx.shielded_outputs = [out1, out2]
+    tx.has_fees = MagicMock(return_value=False)
+    tx.excess_blinding_factor = None
+    tx.storage = MagicMock()
+    tx.get_spent_tx = MagicMock()
+    return tx
+
+
+def _patch_verify_balance(monkeypatch: pytest.MonkeyPatch) -> dict:
+    """Patch hathor.crypto.shielded.verify_balance to capture its arguments."""
+    captured: dict = {}
+
+    def fake(
+        transparent_inputs,
+        shielded_inputs,
+        transparent_outputs,
+        shielded_outputs,
+        excess_blinding_factor,
+    ):
+        captured['ti'] = list(transparent_inputs)
+        captured['si'] = list(shielded_inputs)
+        captured['to'] = list(transparent_outputs)
+        captured['so'] = list(shielded_outputs)
+        captured['excess'] = excess_blinding_factor
+        return True
+
+    monkeypatch.setattr('hathor.crypto.shielded.verify_balance', fake)
+    return captured
+
+
+class TestRuleM4AugmentedBalanceEquation:
+    """Verify Mint/Melt entries land on the right side of the augmented
+    balance equation. Any sign flip or dropped term in `_fold_mint_melt_entry`
+    would change the captured args.
+    """
+
+    def test_mint_amount_lands_on_transparent_inputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.NATIVE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=12345)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (12345, token) in captured['ti']
+        # NATIVE token: no HTR deposit/withdraw term.
+        htr = b'\x00' * 32
+        assert not any(uid == htr for _, uid in captured['ti'])
+        assert not any(uid == htr for _, uid in captured['to'])
+
+    def test_melt_amount_lands_on_transparent_outputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.NATIVE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xbb' * 32
+        tx = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=2, amount=999)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (999, token) in captured['to']
+        htr = b'\x00' * 32
+        assert not any(uid == htr for _, uid in captured['ti'])
+        assert not any(uid == htr for _, uid in captured['to'])
+
+    def test_deposit_version_mint_emits_htr_deposit_on_outputs(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.DEPOSIT,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['ti']
+        # 1% of 10_000 = 100 HTR deposit on the OUTPUTS side.
+        assert (100, htr) in captured['to']
+
+    def test_deposit_version_melt_emits_htr_withdraw_on_inputs(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.DEPOSIT,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['to']
+        # 1% of 10_000 = 100 HTR withdraw on the INPUTS side.
+        assert (100, htr) in captured['ti']
+
+
+class TestDepositBoundaryRounding:
+    """get_deposit_token_deposit_amount uses ceil; get_deposit_token_withdraw_amount
+    uses floor. The augmented balance equation skips the HTR term when the rounded
+    amount is zero. Pin the boundaries so a rounding-direction regression
+    (e.g., floor for deposit) is caught.
+    """
+
+    @pytest.mark.parametrize('amount,expected_deposit,expected_withdraw', [
+        (1, 1, 0),
+        (50, 1, 0),
+        (99, 1, 0),
+        (100, 1, 1),
+        (101, 2, 1),
+        (150, 2, 1),
+        (10_000, 100, 100),
+    ])
+    def test_deposit_boundaries(
+        self,
+        amount: int,
+        expected_deposit: int,
+        expected_withdraw: int,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.DEPOSIT,
+        )
+        htr = b'\x00' * 32
+
+        # Mint side.
+        captured_mint = _patch_verify_balance(monkeypatch)
+        tx_mint = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=amount)],
+        )
+        verifier.verify_shielded_balance(tx_mint)
+        if expected_deposit > 0:
+            assert (expected_deposit, htr) in captured_mint['to']
+        else:
+            assert not any(uid == htr for _, uid in captured_mint['to'])
+
+        # Melt side.
+        captured_melt = _patch_verify_balance(monkeypatch)
+        tx_melt = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=1, amount=amount)],
+        )
+        verifier.verify_shielded_balance(tx_melt)
+        if expected_withdraw > 0:
+            assert (expected_withdraw, htr) in captured_melt['ti']
+        else:
+            assert not any(uid == htr for _, uid in captured_melt['ti'])
+
+
+# ---------------------------------------------------------------------------
+# _resolve_token_version_for_mint_melt — all three branches
+# ---------------------------------------------------------------------------
+
+
+class TestResolveTokenVersionForMintMelt:
+    """Returning a sentinel here would silently bypass the DEPOSIT 1% deposit
+    term in the augmented balance equation — pin every branch.
+    """
+
+    def test_tct_self_reference(self) -> None:
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        verifier = _make_verifier()
+        token_uid = b'\xff' * 32
+        tct = MagicMock(spec=TokenCreationTransaction)
+        tct.hash = token_uid
+        tct.token_version = TokenVersion.DEPOSIT
+        tct.storage = MagicMock()
+
+        version = verifier._resolve_token_version_for_mint_melt(tct, token_uid, None)
+
+        assert version == TokenVersion.DEPOSIT
+        # Storage must NOT be consulted for the TCT-self-reference branch.
+        tct.storage.get_token_creation_transaction.assert_not_called()
+
+    def test_no_nc_storage_falls_back_to_tx_storage(self) -> None:
+        verifier = _make_verifier()
+        token_uid = b'\x11' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        issuing_tct = MagicMock()
+        issuing_tct.token_version = TokenVersion.DEPOSIT
+        tx.storage.get_token_creation_transaction = MagicMock(return_value=issuing_tct)
+
+        result = verifier._resolve_token_version_for_mint_melt(tx, token_uid, None)
+        assert result == TokenVersion.DEPOSIT
+
+    def test_no_nc_storage_for_nano_issued_token_raises(self) -> None:
+        from hathor.transaction.exceptions import TokenNotFound
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        verifier = _make_verifier()
+        token_uid = b'\x22' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        tx.storage.get_token_creation_transaction = MagicMock(
+            side_effect=TransactionDoesNotExist(),
+        )
+
+        with pytest.raises(TokenNotFound, match='nc_block_storage was not provided'):
+            verifier._resolve_token_version_for_mint_melt(tx, token_uid, None)
+
+    def test_nc_storage_returns_none_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from hathor.transaction.exceptions import TokenNotFound
+        verifier = _make_verifier()
+        token_uid = b'\x33' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.get_token_version',
+            lambda *a, **kw: None,
+        )
+
+        with pytest.raises(TokenNotFound):
+            verifier._resolve_token_version_for_mint_melt(tx, token_uid, MagicMock())
+
+    def test_nc_storage_returns_resolved_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        verifier = _make_verifier()
+        token_uid = b'\x44' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.get_token_version',
+            lambda *a, **kw: TokenVersion.FEE,
+        )
+
+        result = verifier._resolve_token_version_for_mint_melt(tx, token_uid, MagicMock())
+        assert result == TokenVersion.FEE
+
+
+# ---------------------------------------------------------------------------
+# Rule M2 negative-path coverage
+# ---------------------------------------------------------------------------
+
+
+class TestRuleM2AuthorityNegativePaths:
+    """verify_mint_melt_authority_inputs must reject when the authority does
+    not match the header's token, even if some other authority is present.
+    """
+
+    def test_authority_for_wrong_token_does_not_satisfy_mint(self) -> None:
+        verifier = _make_verifier()
+        token_a = b'\xaa' * 32
+        token_b = b'\xbb' * 32
+        tx = _make_mock_tx(
+            tokens=[token_a, token_b],
+            mint_entries=[MintMeltEntry(token_index=2, amount=100)],  # token_b
+            has_shielded_outputs=True,
+        )
+        # Input grants mint authority for token_a, NOT token_b.
+        tx_input, spent_tx = _make_authority_input(token_a, can_mint=True, can_melt=False)
+        tx.inputs = [tx_input]
+        tx.storage = MagicMock()
+
+        with pytest.raises(ForbiddenMint):
+            verifier.verify_mint_melt_authority_inputs(tx, spent_txs={tx_input.tx_id: spent_tx})
+
+    def test_non_authority_output_ignored(self) -> None:
+        verifier = _make_verifier()
+        token_uid = b'\x11' * 32
+        tx = _make_mock_tx(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=100)],
+            has_shielded_outputs=True,
+        )
+        # is_token_authority=False → input is NOT an authority and must not satisfy
+        # the mint header even though it points at the right token.
+        tx_input, spent_tx = _make_authority_input(token_uid, can_mint=True, can_melt=False)
+        spent_tx.outputs[0].is_token_authority = MagicMock(return_value=False)
+        tx.inputs = [tx_input]
+        tx.storage = MagicMock()
+
+        with pytest.raises(ForbiddenMint):
+            verifier.verify_mint_melt_authority_inputs(tx, spent_txs={tx_input.tx_id: spent_tx})
+
+    def test_melt_only_authority_cannot_satisfy_mint_header(self) -> None:
+        verifier = _make_verifier()
+        token_uid = b'\x11' * 32
+        tx = _make_mock_tx(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=100)],
+            has_shielded_outputs=True,
+        )
+        tx_input, spent_tx = _make_authority_input(token_uid, can_mint=False, can_melt=True)
+        tx.inputs = [tx_input]
+        tx.storage = MagicMock()
+
+        with pytest.raises(ForbiddenMint):
+            verifier.verify_mint_melt_authority_inputs(tx, spent_txs={tx_input.tx_id: spent_tx})
+
+    def test_combined_authority_satisfies_mint_header(self) -> None:
+        """An input with can_mint=True AND can_melt=True passes a MintHeader for
+        its token. (Set semantics — both bits live on a single output.)
+        """
+        verifier = _make_verifier()
+        token_uid = b'\x11' * 32
+        tx = _make_mock_tx(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=100)],
+            has_shielded_outputs=True,
+        )
+        tx_input, spent_tx = _make_authority_input(token_uid, can_mint=True, can_melt=True)
+        tx.inputs = [tx_input]
+        tx.storage = MagicMock()
+
+        verifier.verify_mint_melt_authority_inputs(tx, spent_txs={tx_input.tx_id: spent_tx})

@@ -14,10 +14,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Callable, assert_never
 
 from structlog import get_logger
 
+from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
@@ -60,6 +61,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -68,6 +70,7 @@ from hathor.verification.verification_params import VerificationParams
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCBlockStorage
+    from hathor.transaction.headers.mint_melt_header import MintMeltEntry
 
 cpu = get_cpu_profiler()
 
@@ -441,7 +444,6 @@ class TransactionVerifier:
         verify_shielded_balance. Undeclared authority-based mint/melt is separately
         blocked by verify_no_undeclared_mint_melt.
         """
-        from hathor.conf.settings import HATHOR_TOKEN_UID
         if token_info.version == TokenVersion.NATIVE:
             assert token_uid == HATHOR_TOKEN_UID
             assert not token_info.can_mint
@@ -989,26 +991,27 @@ class TransactionVerifier:
         # output side. For DEPOSIT-version tokens the 1% deposit moves HTR from
         # the input side (deposit -> HTR output) on mint and the reverse on melt.
         if tx.has_mint_header() or tx.has_melt_header():
-            from hathor.conf.settings import HATHOR_TOKEN_UID
             htr_uid = self._normalize_token_uid(HATHOR_TOKEN_UID)
             if tx.has_mint_header():
                 for entry in tx.get_mint_header().entries:
-                    token_uid = self._normalize_token_uid(tx.get_token_uid(entry.token_index))
-                    transparent_inputs.append((entry.amount, token_uid))
-                    version = self._resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
-                    if version == TokenVersion.DEPOSIT:
-                        deposit = get_deposit_token_deposit_amount(self._settings, entry.amount)
-                        if deposit > 0:
-                            transparent_outputs.append((deposit, htr_uid))
+                    self._fold_mint_melt_entry(
+                        tx, entry,
+                        primary_side=transparent_inputs,
+                        htr_offset_side=transparent_outputs,
+                        htr_amount_fn=get_deposit_token_deposit_amount,
+                        htr_uid=htr_uid,
+                        nc_block_storage=nc_block_storage,
+                    )
             if tx.has_melt_header():
                 for entry in tx.get_melt_header().entries:
-                    token_uid = self._normalize_token_uid(tx.get_token_uid(entry.token_index))
-                    transparent_outputs.append((entry.amount, token_uid))
-                    version = self._resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
-                    if version == TokenVersion.DEPOSIT:
-                        withdraw = get_deposit_token_withdraw_amount(self._settings, entry.amount)
-                        if withdraw > 0:
-                            transparent_inputs.append((withdraw, htr_uid))
+                    self._fold_mint_melt_entry(
+                        tx, entry,
+                        primary_side=transparent_outputs,
+                        htr_offset_side=transparent_inputs,
+                        htr_amount_fn=get_deposit_token_withdraw_amount,
+                        htr_uid=htr_uid,
+                        nc_block_storage=nc_block_storage,
+                    )
 
         # Mutual-exclusion invariants on the excess blinding factor:
         #   1) excess and shielded outputs cannot coexist.
@@ -1051,12 +1054,39 @@ class TransactionVerifier:
         except ValueError as e:
             raise ShieldedBalanceMismatchError(f'balance verification error: {e}') from e
 
+    def _fold_mint_melt_entry(
+        self,
+        tx: Transaction,
+        entry: 'MintMeltEntry',
+        *,
+        primary_side: list[tuple[int, bytes]],
+        htr_offset_side: list[tuple[int, bytes]],
+        htr_amount_fn: 'Callable[[HathorSettings, int], int]',
+        htr_uid: bytes,
+        nc_block_storage: 'NCBlockStorage | None',
+    ) -> None:
+        """Fold one MintHeader/MeltHeader entry into the augmented balance equation.
+
+        For mint: ``primary_side`` is ``transparent_inputs`` and
+        ``htr_offset_side`` is ``transparent_outputs`` (the DEPOSIT-version 1%
+        deposit moves HTR from the user's inputs into the implicit deposit
+        output). For melt: the sides are swapped and the HTR amount is the
+        withdraw value flowing back to the user.
+        """
+        token_uid = self._normalize_token_uid(tx.get_token_uid(entry.token_index))
+        primary_side.append((entry.amount, token_uid))
+        version = self._resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
+        if version == TokenVersion.DEPOSIT:
+            htr_amount = htr_amount_fn(self._settings, entry.amount)
+            if htr_amount > 0:
+                htr_offset_side.append((htr_amount, htr_uid))
+
     def _resolve_token_version_for_mint_melt(
         self,
         tx: Transaction,
         token_uid: bytes,
         nc_block_storage: 'NCBlockStorage | None',
-    ) -> 'TokenVersion':
+    ) -> TokenVersion:
         """Return the token version for a token referenced in a Mint/Melt header.
 
         Special-cases TokenCreationTransaction: the new token's version is
@@ -1068,7 +1098,6 @@ class TransactionVerifier:
         in the augmented balance equation, allowing token inflation — exactly
         what Rule M4 is meant to prevent.
         """
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
         from hathor.transaction.token_info import get_token_version
         if isinstance(tx, TokenCreationTransaction) and token_uid == self._normalize_token_uid(tx.hash):
             return tx.token_version
@@ -1110,7 +1139,6 @@ class TransactionVerifier:
         """
         if not tx.has_mint_header() and not tx.has_melt_header():
             return
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
 
         assert tx.storage is not None
 
