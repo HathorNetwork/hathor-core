@@ -891,6 +891,54 @@ class TestRuleM4AugmentedBalanceEquation:
         # 1% of 10_000 = 100 HTR withdraw on the INPUTS side.
         assert (100, htr) in captured['ti']
 
+    def test_fee_version_mint_emits_no_htr_offset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FEE-version tokens get no augmented-balance HTR offset on shielded
+        mint. Per-output fees on FEE tokens are accounted for separately via
+        chargeable_outputs / chargeable_inputs in TokenInfoDict.calculate_fee,
+        which is driven by the transparent flow only.
+
+        NOTE for review: a shielded mint of a FEE token therefore does not
+        trigger any per-output FEE_PER_OUTPUT charge — the user only pays the
+        generic shielded_fee for each shielded output. If the design intent is
+        for shielded mint/melt of FEE tokens to be subject to FEE_PER_OUTPUT
+        as well, the augmented balance equation (or the calculate_fee path)
+        would need to account for MintHeader/MeltHeader entries on FEE tokens.
+        """
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.FEE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['ti']
+        # No HTR term on either side for FEE-version mint.
+        assert not any(uid == htr for _, uid in captured['ti'])
+        assert not any(uid == htr for _, uid in captured['to'])
+
+    def test_fee_version_melt_emits_no_htr_offset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Symmetric to the FEE-version mint case."""
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.FEE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['to']
+        assert not any(uid == htr for _, uid in captured['ti'])
+        assert not any(uid == htr for _, uid in captured['to'])
+
 
 class TestDepositBoundaryRounding:
     """get_deposit_token_deposit_amount uses ceil; get_deposit_token_withdraw_amount
