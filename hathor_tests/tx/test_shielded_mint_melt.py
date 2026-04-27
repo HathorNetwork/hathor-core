@@ -24,6 +24,7 @@ from hathor.transaction import Transaction
 
 if TYPE_CHECKING:
     from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+
 from hathor.transaction.exceptions import (
     ForbiddenMelt,
     ForbiddenMint,
@@ -562,6 +563,7 @@ class TestIndexerHeaderTokenNetCancellation:
         # Bypass __init__ — we only need _transparent_net_for_index_correction.
         idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
         idx.log = _MM()
+        idx._settings = _make_settings()
         return idx
 
     def _make_tx_with_io(
@@ -807,6 +809,12 @@ class TestIndexerReorgOrderingTct:
         tct.is_nano_contract = MagicMock(return_value=False)
         tct.has_mint_header = MagicMock(return_value=True)
         tct.has_melt_header = MagicMock(return_value=False)
+        tct.has_shielded_outputs = MagicMock(return_value=True)
+        tct.has_unshield_balance_header = MagicMock(return_value=False)
+        tct.has_fees = MagicMock(return_value=False)
+        tct.token_version = TokenVersion.NATIVE  # don't trigger HTR burn for the new token
+        tct.static_metadata = MagicMock()
+        tct.static_metadata.closest_ancestor_block = b''
         mint_header = MagicMock()
         mint_header.entries = [MintMeltEntry(token_index=1, amount=1000)]
         tct.get_mint_header = MagicMock(return_value=mint_header)
@@ -816,6 +824,7 @@ class TestIndexerReorgOrderingTct:
         tct.inputs = []
         tct.outputs = []
         tct.get_spent_tx = MagicMock()
+        tct.storage = MagicMock()
 
         idx.remove_tx(tct)
 
@@ -1173,6 +1182,266 @@ class TestResolveTokenVersionForMintMelt:
 # ---------------------------------------------------------------------------
 
 
+class TestIndexerHtrBurn:
+    """RocksDBTokensIndex._compute_htr_burn must aggregate FeeHeader HTR
+    fees + DEPOSIT mint deposits + per-entry FEE charges - DEPOSIT melt
+    withdraws so the index reflects only the actual HTR that left
+    circulation, not the shielded HTR portion (which preserves supply).
+    """
+
+    @staticmethod
+    def _make_index() -> 'RocksDBTokensIndex':
+        from unittest.mock import MagicMock as _MM
+
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = _MM()
+        idx._settings = _make_settings()
+        return idx
+
+    @staticmethod
+    def _make_tx_with_fees_and_headers(
+        *,
+        tokens: list[bytes] | None = None,
+        mint_entries: list[MintMeltEntry] | None = None,
+        melt_entries: list[MintMeltEntry] | None = None,
+        fee_entries: list[tuple[bytes, int]] | None = None,
+        token_version_for: dict[bytes, TokenVersion] | None = None,
+    ) -> MagicMock:
+        """Tx with optional FeeHeader entries and a token-version map for
+        resolve_token_version_for_mint_melt to consume via monkeypatch.
+        """
+        tx = _make_mock_tx(
+            tokens=tokens or [],
+            mint_entries=mint_entries,
+            melt_entries=melt_entries,
+            has_shielded_outputs=True,
+        )
+        if fee_entries is not None:
+            fee_header = MagicMock()
+            fee_objects = []
+            for token_uid, amount in fee_entries:
+                fe = MagicMock()
+                fe.token_uid = token_uid
+                fe.amount = amount
+                fee_objects.append(fe)
+            fee_header.get_fees = MagicMock(return_value=fee_objects)
+            tx.has_fees = MagicMock(return_value=True)
+            tx.get_fee_header = MagicMock(return_value=fee_header)
+        else:
+            tx.has_fees = MagicMock(return_value=False)
+        tx.storage = MagicMock()
+        tx.static_metadata = MagicMock()
+        tx.static_metadata.closest_ancestor_block = b''
+        tx.token_version_for = token_version_for or {}
+        return tx
+
+    def test_no_fees_no_headers_zero_burn(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sanity: a shielded tx with neither fees nor mint/melt headers has
+        zero HTR burn — there's nothing to subtract.
+        """
+        idx = self._make_index()
+        tx = self._make_tx_with_fees_and_headers()
+        assert idx._compute_htr_burn(tx) == 0
+
+    def test_fee_header_only_burns_fees(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Shielded transfer paying 5 HTR FeeHeader burns 5."""
+        idx = self._make_index()
+        htr_uid = b'\x00'
+        tx = self._make_tx_with_fees_and_headers(
+            fee_entries=[(htr_uid, 5)],
+        )
+        assert idx._compute_htr_burn(tx) == 5
+
+    def test_fee_in_non_htr_token_does_not_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FeeHeader entries denominated in non-HTR (FEE-version) tokens
+        don't contribute to HTR burn — they affect their own token.
+        """
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            fee_entries=[(token_uid, 100)],  # fee paid in token, not HTR
+        )
+        assert idx._compute_htr_burn(tx) == 0
+
+    def test_deposit_mint_adds_one_percent_to_burn(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A DEPOSIT-version mint of 10_000 burns 100 HTR (1% deposit)."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.DEPOSIT,
+        )
+        assert idx._compute_htr_burn(tx) == 100
+
+    def test_deposit_melt_subtracts_one_percent_from_burn(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A DEPOSIT-version melt of 10_000 RETURNS 100 HTR — burn is -100."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.DEPOSIT,
+        )
+        assert idx._compute_htr_burn(tx) == -100
+
+    def test_fee_version_mint_burns_fee_per_output(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A FEE-version mint burns FEE_PER_OUTPUT (100 in the fixture)."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=999_999)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.FEE,
+        )
+        assert idx._compute_htr_burn(tx) == 100
+
+    def test_fee_version_melt_burns_fee_per_output(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """FEE-version melt also burns FEE_PER_OUTPUT (paid by the user)."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=999_999)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.FEE,
+        )
+        assert idx._compute_htr_burn(tx) == 100
+
+    def test_combined_fee_deposit_mint_and_per_entry_fee_charge(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Combined: 5 HTR FeeHeader + DEPOSIT mint of 10_000 (= 100 deposit)
+        + FEE-version mint of any amount (= 100 per-entry charge) → total
+        burn 205.
+        """
+        idx = self._make_index()
+        deposit_token = b'\xaa' * 32
+        fee_token = b'\xbb' * 32
+        htr_uid = b'\x00'
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[deposit_token, fee_token],
+            mint_entries=[
+                MintMeltEntry(token_index=1, amount=10_000),
+                MintMeltEntry(token_index=2, amount=42),
+            ],
+            fee_entries=[(htr_uid, 5)],
+        )
+
+        def fake_resolver(tx_arg: object, token_uid: bytes, ncs: object) -> TokenVersion:
+            if token_uid == deposit_token:
+                return TokenVersion.DEPOSIT
+            return TokenVersion.FEE
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            fake_resolver,
+        )
+
+        # 5 (fee) + 100 (DEPOSIT 1%) + 100 (FEE per-entry) = 205.
+        assert idx._compute_htr_burn(tx) == 205
+
+    def test_native_token_in_mint_does_not_contribute(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A NATIVE-version token in MintHeader contributes nothing to the
+        burn (only DEPOSIT and FEE versions do).
+        """
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.NATIVE,
+        )
+        assert idx._compute_htr_burn(tx) == 0
+
+
+class TestIndexerHtrCancellation:
+    """End-to-end: the add_tx HTR correction (cancel + burn) lands the right
+    HTR delta on the index for a representative shielded scenario.
+    """
+
+    def test_shielded_transfer_with_fee_burns_only_fee(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Shielded HTR transfer: 100 HTR transparent in, 50 HTR transparent
+        change, 5 HTR FeeHeader, 45 HTR shielded. True supply change = -5
+        (only the fee burn). Index applies per-utxo (-50) then correction
+        (+50 cancel) then burn (-5) → net -5.
+        """
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = MagicMock()
+        idx._db = MagicMock()
+        idx._cf = MagicMock()
+        idx._settings = _make_settings()
+
+        deltas: list[tuple[bytes, int]] = []
+        idx.add_to_total = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda token_uid, amount: deltas.append((token_uid, amount))
+        )
+        idx._add_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._remove_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._add_transaction = MagicMock()  # type: ignore[method-assign]
+
+        htr_uid = b'\x00'
+        tx = _make_mock_tx(tokens=[], has_shielded_outputs=True)
+        # FeeHeader of 5 HTR.
+        fee_header = MagicMock()
+        fe = MagicMock()
+        fe.token_uid = htr_uid
+        fe.amount = 5
+        fee_header.get_fees = MagicMock(return_value=[fe])
+        tx.has_fees = MagicMock(return_value=True)
+        tx.get_fee_header = MagicMock(return_value=fee_header)
+        tx.has_unshield_balance_header = MagicMock(return_value=False)
+        tx.is_transaction = True
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.timestamp = 0
+        tx.hash = b'\xee' * 32
+        tx.hash_hex = tx.hash.hex()
+        from hathor.transaction import TxVersion
+        tx.version = TxVersion.REGULAR_TRANSACTION
+        tx.inputs = []
+        tx.outputs = []
+        tx.get_spent_tx = MagicMock()
+        tx.storage = MagicMock()
+        tx.static_metadata = MagicMock()
+        tx.static_metadata.closest_ancestor_block = b''
+
+        idx.add_tx(tx)
+
+        # Sum of HTR add_to_total calls applied by the correction block.
+        # The per-utxo flow (mocked) doesn't apply anything here, so the
+        # total HTR delta should match the burn (-5).
+        htr_deltas = [d for uid, d in deltas if uid == htr_uid]
+        assert sum(htr_deltas) == -5
+
+
 class TestParserGating:
     """Mint/melt headers are registered in the vertex parser's supported_headers
     only when ENABLE_SHIELDED_TRANSACTIONS is non-DISABLED. There is no separate
@@ -1180,8 +1449,8 @@ class TestParserGating:
     """
 
     def test_supported_headers_include_mint_melt_when_shielded_enabled(self) -> None:
-        from hathor.transaction.vertex_parser import VertexParser
         from hathor.transaction.headers.types import VertexHeaderId
+        from hathor.transaction.vertex_parser import VertexParser
         from hathorlib.conf.settings import FeatureSetting
         settings = MagicMock(spec=HathorSettings)
         settings.ENABLE_NANO_CONTRACTS = False
@@ -1196,8 +1465,8 @@ class TestParserGating:
         assert supported[VertexHeaderId.MELT_HEADER] is MeltHeader
 
     def test_supported_headers_exclude_mint_melt_when_shielded_disabled(self) -> None:
-        from hathor.transaction.vertex_parser import VertexParser
         from hathor.transaction.headers.types import VertexHeaderId
+        from hathor.transaction.vertex_parser import VertexParser
         from hathorlib.conf.settings import FeatureSetting
         settings = MagicMock(spec=HathorSettings)
         settings.ENABLE_NANO_CONTRACTS = False
@@ -1220,6 +1489,7 @@ class TestMaxHeadersLimit:
     @staticmethod
     def _make_tx_with_settings(enable_shielded: bool) -> 'Transaction':
         from hathorlib.conf.settings import FeatureSetting
+
         # Build a real Transaction-shaped instance via __new__ to exercise the
         # get_maximum_number_of_headers method without invoking heavy ctors.
         tx = Transaction.__new__(Transaction)
