@@ -36,7 +36,7 @@ class HathorSettings(LibSettings):
     FEE_PER_AMOUNT_SHIELDED_OUTPUT: int = 1
     FEE_PER_FULL_SHIELDED_OUTPUT: int = 2
 
-    # Used to enable shielded transactions.
+    # Used to enable shielded transactions (including mint/melt headers).
     ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
     # Block checkpoints

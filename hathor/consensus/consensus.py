@@ -516,11 +516,21 @@ class ConsensusAlgorithm:
         return True
 
     def _shielded_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
-        """Check whether a tx became invalid because the reorg changed the shielded feature activation state."""
+        """Check whether a tx became invalid because the reorg changed the shielded feature activation state.
+
+        When the feature deactivates, any tx carrying a header gated by
+        shielded transactions (ShieldedOutputsHeader, UnshieldBalanceHeader,
+        MintHeader, MeltHeader) is now invalid.
+        """
         if is_active:
             return True
 
-        if tx.has_shielded_outputs():
+        if (
+            tx.has_shielded_outputs()
+            or tx.has_unshield_balance_header()
+            or tx.has_mint_header()
+            or tx.has_melt_header()
+        ):
             return False
 
         return True

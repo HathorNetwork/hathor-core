@@ -21,6 +21,8 @@ from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.headers import (
     FeeHeader,
+    MeltHeader,
+    MintHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
@@ -52,6 +54,8 @@ class VertexParser:
         if settings.ENABLE_SHIELDED_TRANSACTIONS != FeatureSetting.DISABLED:
             supported_headers[VertexHeaderId.SHIELDED_OUTPUTS_HEADER] = ShieldedOutputsHeader
             supported_headers[VertexHeaderId.UNSHIELD_BALANCE_HEADER] = UnshieldBalanceHeader
+            supported_headers[VertexHeaderId.MINT_HEADER] = MintHeader
+            supported_headers[VertexHeaderId.MELT_HEADER] = MeltHeader
         return supported_headers
 
     @staticmethod

@@ -73,7 +73,7 @@ def _make_full_shielded(amount: int = 500, token_uid: bytes = bytes(32)) -> Full
 
 def _make_service_and_mocks():
     """Create a VerificationService with mock verifiers, but wire the real
-    verify_token_rules and verify_no_mint_melt so checks actually execute."""
+    verify_token_rules and verify_no_undeclared_mint_melt so checks actually execute."""
     from hathor.verification.transaction_verifier import TransactionVerifier
 
     settings = MagicMock(spec=HathorSettings)
@@ -87,9 +87,13 @@ def _make_service_and_mocks():
     verifiers = MagicMock()
     # Wire the real classmethod so authority/deposit/fee checks execute
     verifiers.tx.verify_token_rules = TransactionVerifier.verify_token_rules
-    # Wire the real verify_no_mint_melt so mint/melt prohibition is enforced
+    # Wire the real header-aware shielded mint/melt prohibition so undeclared
+    # mint/melt is rejected. The fixture txs in this file don't carry
+    # MintHeader/MeltHeader, so the call behaves like the legacy
+    # verify_no_mint_melt for any shielded surplus/deficit.
     tx_verifier = TransactionVerifier(settings=settings, daa=MagicMock(), feature_service=MagicMock())
-    verifiers.tx.verify_no_mint_melt = tx_verifier.verify_no_mint_melt
+    verifiers.tx.verify_no_undeclared_mint_melt = tx_verifier.verify_no_undeclared_mint_melt
+    verifiers.tx.verify_mint_melt_authority_inputs = MagicMock()
 
     nc_storage_factory = MagicMock()
     service = VerificationService(
@@ -161,7 +165,7 @@ class TestVerifySumBypass:
         balance_error = InvalidShieldedOutputError('shielded balance mismatch')
         verifiers.tx.verify_shielded_outputs_with_storage.side_effect = balance_error
         with pytest.raises(InvalidShieldedOutputError):
-            service._verify_shielded_header(tx)
+            service._verify_shielded_header(tx, params)
 
     def test_transparent_deficit_without_authority_allowed_for_shielded_tx(self) -> None:
         """A shielded tx with transparent deficit (amount < 0) and no melt authority must pass.
@@ -206,7 +210,7 @@ class TestVerifySumBypass:
         balance_error = InvalidShieldedOutputError('shielded balance mismatch')
         verifiers.tx.verify_shielded_outputs_with_storage.side_effect = balance_error
         with pytest.raises(InvalidShieldedOutputError):
-            service._verify_shielded_header(tx)
+            service._verify_shielded_header(tx, params)
 
     def test_deposit_enforced_for_shielded_tx_with_mint(self) -> None:
         """A shielded tx minting deposit-based tokens is now forbidden.
@@ -240,7 +244,7 @@ class TestVerifySumBypass:
         tx.get_complete_token_info = MagicMock(return_value=token_dict)
 
         with patch.object(VerificationService, 'verify_without_storage'):
-            with pytest.raises(ShieldedMintMeltForbiddenError, match='minting is not allowed'):
+            with pytest.raises(ShieldedMintMeltForbiddenError, match='undeclared mint'):
                 service._verify_tx(tx, params)
 
     def test_fee_correctness_enforced_for_shielded_tx(self) -> None:
@@ -483,8 +487,8 @@ class TestVerifySumBypass:
         transparent change. token_dict only sees the transparent side, so
         token_info.amount = -500 (looks like melting). This must NOT raise
         ForbiddenMelt because the balance is verified cryptographically by
-        verify_shielded_balance, and verify_no_mint_melt already blocks
-        authorized minting/melting in shielded txs.
+        verify_shielded_balance, and verify_no_undeclared_mint_melt already
+        blocks undeclared mint/melt in shielded txs.
         """
         from hathor.transaction import Transaction
 
@@ -525,7 +529,7 @@ class TestVerifySumBypass:
         balance_error = InvalidShieldedOutputError('shielded balance mismatch')
         verifiers.tx.verify_shielded_outputs_with_storage.side_effect = balance_error
         with pytest.raises(InvalidShieldedOutputError):
-            service._verify_shielded_header(tx)
+            service._verify_shielded_header(tx, params)
 
 
 # ============================================================================
@@ -563,7 +567,7 @@ class TestShieldedMintMeltProhibition:
         tx.get_complete_token_info = MagicMock(return_value=token_dict)
 
         with patch.object(VerificationService, 'verify_without_storage'):
-            with pytest.raises(ShieldedMintMeltForbiddenError, match='minting is not allowed'):
+            with pytest.raises(ShieldedMintMeltForbiddenError, match='undeclared mint'):
                 service._verify_tx(tx, params)
 
     def test_melting_with_authority_forbidden_in_shielded_tx(self) -> None:
@@ -593,7 +597,7 @@ class TestShieldedMintMeltProhibition:
         tx.get_complete_token_info = MagicMock(return_value=token_dict)
 
         with patch.object(VerificationService, 'verify_without_storage'):
-            with pytest.raises(ShieldedMintMeltForbiddenError, match='melting is not allowed'):
+            with pytest.raises(ShieldedMintMeltForbiddenError, match='undeclared melt'):
                 service._verify_tx(tx, params)
 
     def test_authority_passthrough_allowed_in_shielded_tx(self) -> None:
@@ -779,13 +783,39 @@ class TestGetTokenInfoFromInputsCrash:
 # ============================================================================
 
 class TestTokenCreationShielded:
-    """Token creation transactions should not be allowed to have shielded outputs."""
+    """Token creation transactions should follow the shielded_transactions gate."""
 
-    def test_token_creation_rejects_shielded_header(self) -> None:
-        """get_allowed_headers should NOT include ShieldedOutputsHeader for
-        TOKEN_CREATION_TRANSACTION."""
+    def test_token_creation_rejects_shielded_header_when_feature_off(self) -> None:
+        """When ENABLE_SHIELDED_TRANSACTIONS is off, get_allowed_headers must NOT
+        include ShieldedOutputsHeader for TOKEN_CREATION_TRANSACTION."""
         from hathor.transaction import TxVersion
         from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
+        from hathor.verification.vertex_verifier import VertexVerifier
+
+        settings = MagicMock(spec=HathorSettings)
+        verifier = VertexVerifier(settings=settings, reactor=MagicMock(), feature_service=MagicMock())
+
+        vertex = MagicMock()
+        vertex.version = TxVersion.TOKEN_CREATION_TRANSACTION
+
+        params = MagicMock()
+        params.features = MagicMock()
+        params.features.nanocontracts = True
+        params.features.fee_tokens = True
+        params.features.shielded_transactions = False
+
+        allowed = verifier.get_allowed_headers(vertex, params)
+        assert ShieldedOutputsHeader not in allowed, \
+            'TOKEN_CREATION_TRANSACTION should not allow ShieldedOutputsHeader without shielded transactions'
+
+    def test_token_creation_allows_shielded_header_when_feature_on(self) -> None:
+        """When ENABLE_SHIELDED_TRANSACTIONS is on, a TCT may carry shielded
+        outputs of the new token plus a MintHeader declaring its initial supply
+        (RFC 0000-shielded-outputs-mint-melt §4.4)."""
+        from hathor.transaction import TxVersion
+        from hathor.transaction.headers import MeltHeader, MintHeader
+        from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
+        from hathor.transaction.headers.unshield_balance_header import UnshieldBalanceHeader
         from hathor.verification.vertex_verifier import VertexVerifier
 
         settings = MagicMock(spec=HathorSettings)
@@ -801,8 +831,10 @@ class TestTokenCreationShielded:
         params.features.shielded_transactions = True
 
         allowed = verifier.get_allowed_headers(vertex, params)
-        assert ShieldedOutputsHeader not in allowed, \
-            'TOKEN_CREATION_TRANSACTION should not allow ShieldedOutputsHeader'
+        assert ShieldedOutputsHeader in allowed
+        assert UnshieldBalanceHeader in allowed
+        assert MintHeader in allowed
+        assert MeltHeader in allowed
 
 
 # ============================================================================
@@ -1684,7 +1716,10 @@ class TestUnshieldingBalance:
         with patch.object(VerificationService, 'verify_without_storage'):
             service._verify_tx(tx, params)
 
-        verifiers.tx.verify_shielded_balance.assert_called_once_with(tx)
+        verifiers.tx.verify_shielded_balance.assert_called_once()
+        call_args = verifiers.tx.verify_shielded_balance.call_args
+        assert call_args.args == (tx,)
+        assert 'nc_block_storage' in call_args.kwargs
         verifiers.tx.verify_transparent_balance.assert_not_called()
 
     def test_tampered_transparent_output_rejected_for_unshielding(self) -> None:

@@ -76,6 +76,22 @@ def deserialize_headers(
                 unshield_header, leftover = UnshieldBalanceHeader.deserialize(vertex, remaining_bytes)
                 header = unshield_header
                 deserializer.replace_remaining(leftover)
+            case VertexHeaderId.MINT_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import MintHeader
+                assert isinstance(vertex, Transaction)
+                remaining_bytes = bytes(deserializer.read_all())
+                mint_header, leftover = MintHeader.deserialize(vertex, remaining_bytes)
+                header = mint_header
+                deserializer.replace_remaining(leftover)
+            case VertexHeaderId.MELT_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import MeltHeader
+                assert isinstance(vertex, Transaction)
+                remaining_bytes = bytes(deserializer.read_all())
+                melt_header, leftover = MeltHeader.deserialize(vertex, remaining_bytes)
+                header = melt_header
+                deserializer.replace_remaining(leftover)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
