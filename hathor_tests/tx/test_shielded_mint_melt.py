@@ -1173,6 +1173,71 @@ class TestResolveTokenVersionForMintMelt:
 # ---------------------------------------------------------------------------
 
 
+class TestParserGating:
+    """Mint/melt headers are registered in the vertex parser's supported_headers
+    only when ENABLE_SHIELDED_TRANSACTIONS is non-DISABLED. There is no separate
+    flag for mint/melt — they ride on the parent shielded-transactions gate.
+    """
+
+    def test_supported_headers_include_mint_melt_when_shielded_enabled(self) -> None:
+        from hathor.transaction.vertex_parser import VertexParser
+        from hathor.transaction.headers.types import VertexHeaderId
+        from hathorlib.conf.settings import FeatureSetting
+        settings = MagicMock(spec=HathorSettings)
+        settings.ENABLE_NANO_CONTRACTS = False
+        settings.ENABLE_FEE_BASED_TOKENS = False
+        settings.ENABLE_SHIELDED_TRANSACTIONS = FeatureSetting.ENABLED
+
+        supported = VertexParser.get_supported_headers(settings)
+
+        assert VertexHeaderId.MINT_HEADER in supported
+        assert VertexHeaderId.MELT_HEADER in supported
+        assert supported[VertexHeaderId.MINT_HEADER] is MintHeader
+        assert supported[VertexHeaderId.MELT_HEADER] is MeltHeader
+
+    def test_supported_headers_exclude_mint_melt_when_shielded_disabled(self) -> None:
+        from hathor.transaction.vertex_parser import VertexParser
+        from hathor.transaction.headers.types import VertexHeaderId
+        from hathorlib.conf.settings import FeatureSetting
+        settings = MagicMock(spec=HathorSettings)
+        settings.ENABLE_NANO_CONTRACTS = False
+        settings.ENABLE_FEE_BASED_TOKENS = False
+        settings.ENABLE_SHIELDED_TRANSACTIONS = FeatureSetting.DISABLED
+
+        supported = VertexParser.get_supported_headers(settings)
+
+        assert VertexHeaderId.MINT_HEADER not in supported
+        assert VertexHeaderId.MELT_HEADER not in supported
+
+
+class TestMaxHeadersLimit:
+    """get_maximum_number_of_headers must return 5 when shielded is enabled so a
+    single tx can carry FeeHeader + (ShieldedOutputs|UnshieldBalance) + Nano +
+    MintHeader + MeltHeader. With shielded disabled the legacy limit of 3
+    applies.
+    """
+
+    @staticmethod
+    def _make_tx_with_settings(enable_shielded: bool) -> 'Transaction':
+        from hathorlib.conf.settings import FeatureSetting
+        # Build a real Transaction-shaped instance via __new__ to exercise the
+        # get_maximum_number_of_headers method without invoking heavy ctors.
+        tx = Transaction.__new__(Transaction)
+        tx._settings = MagicMock(spec=HathorSettings)
+        tx._settings.ENABLE_SHIELDED_TRANSACTIONS = (
+            FeatureSetting.ENABLED if enable_shielded else FeatureSetting.DISABLED
+        )
+        return tx
+
+    def test_max_is_5_when_shielded_enabled(self) -> None:
+        tx = self._make_tx_with_settings(enable_shielded=True)
+        assert tx.get_maximum_number_of_headers() == 5
+
+    def test_max_is_3_when_shielded_disabled(self) -> None:
+        tx = self._make_tx_with_settings(enable_shielded=False)
+        assert tx.get_maximum_number_of_headers() == 3
+
+
 class TestRuleM2AuthorityNegativePaths:
     """verify_mint_melt_authority_inputs must reject when the authority does
     not match the header's token, even if some other authority is present.
