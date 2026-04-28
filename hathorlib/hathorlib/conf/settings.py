@@ -313,9 +313,12 @@ class HathorSettings(BaseModel):
     #     print('w1 is greater than or equal to w2')
     WEIGHT_TOL: float = 1e-10
 
-    # Maximum difference between the weight and the min_weight.
+    # Maximum difference between the tx weight and its min_weight once the activation threshold is crossed.
     MAX_TX_WEIGHT_DIFF: float = 4.0
+    # Apply the maximum tx weight difference rule only when tx.weight is strictly greater than this threshold.
     MAX_TX_WEIGHT_DIFF_ACTIVATION: float = 32.0
+    # Maximum serialized size in bytes for any non-genesis tx or block accepted by consensus.
+    MAX_SERIALIZED_VERTEX_SIZE: int = 48_000
 
     # Maximum number of txs or blocks (each, not combined) to show on the dashboard
     MAX_DASHBOARD_COUNT: int = 15

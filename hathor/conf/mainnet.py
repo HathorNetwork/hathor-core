@@ -26,6 +26,9 @@ SETTINGS = HathorSettings(
     BOOTSTRAP_DNS=['mainnet.hathor.network'],
     ENABLE_PEER_WHITELIST=True,
     WHITELIST_URL='https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids',
+    # Keep the activation above the historical mainnet outlier at weight 35.0.
+    MAX_TX_WEIGHT_DIFF=1.0,
+    MAX_TX_WEIGHT_DIFF_ACTIVATION=35.0,
     # Genesis stuff
     # output addr: HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD
     GENESIS_OUTPUT_SCRIPT=bytes.fromhex('76a9147fd4ae0e4fb2d2854e76d359029d8078bb99649e88ac'),

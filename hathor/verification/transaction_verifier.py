@@ -99,7 +99,7 @@ class TransactionVerifier:
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'smaller than the minimum weight ({min_tx_weight})')
-        elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
+        elif tx.weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 

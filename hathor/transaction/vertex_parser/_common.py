@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.base_transaction import TX_HASH_SIZE
+from hathor.transaction.exceptions import SerializedSizeError
 from hathor.transaction.util import VerboseCallback, int_to_bytes, output_value_to_bytes
 
 if TYPE_CHECKING:
@@ -77,9 +78,13 @@ def serialize_tx_output(serializer: Serializer, tx_output: TxOutput) -> None:
 # ---------------------------------------------------------------------------
 
 
-def make_vertex_deserializer(struct_bytes: bytes, _settings: 'HathorSettings | None' = None) -> Deserializer:
-    """Build a deserializer for a serialized vertex."""
-    return Deserializer.build_bytes_deserializer(struct_bytes)
+def make_vertex_deserializer(struct_bytes: bytes, settings: 'HathorSettings') -> Deserializer:
+    """Build a deserializer that enforces the consensus serialized vertex size limit."""
+    vertex_size = len(struct_bytes)
+    max_size = settings.MAX_SERIALIZED_VERTEX_SIZE
+    if vertex_size > max_size:
+        raise SerializedSizeError(f'Serialized vertex has {vertex_size} bytes, maximum size is {max_size}')
+    return Deserializer.build_bytes_deserializer(struct_bytes).with_max_bytes(max_size)
 
 
 def deserialize_graph_fields(

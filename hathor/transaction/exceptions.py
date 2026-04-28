@@ -56,6 +56,7 @@ from hathorlib.exceptions import (  # noqa: F401
     PowError,
     RewardLocked,
     ScriptError,
+    SerializedSizeError,
     TimeLocked,
     TimestampError,
     TokenNotFound,

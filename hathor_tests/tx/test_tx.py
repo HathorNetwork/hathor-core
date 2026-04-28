@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
-from hathor.daa import TestMode
+from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -27,6 +27,7 @@ from hathor.transaction.exceptions import (
     InvalidOutputValue,
     ParentDoesNotExist,
     PowError,
+    SerializedSizeError,
     TimestampError,
     TooFewInputs,
     TooManyInputs,
@@ -619,6 +620,83 @@ class TransactionTest(unittest.TestCase):
         tx.update_hash()
         with self.assertRaises(WeightError):
             self._verifiers.tx.verify_weight(tx)
+
+    def test_tx_weight_activation_uses_tx_weight(self):
+        settings = self._settings.model_copy(update={
+            'MAX_TX_WEIGHT_DIFF': 4.0,
+            'MAX_TX_WEIGHT_DIFF_ACTIVATION': 32.0,
+        })
+        verifier = self._verifiers.tx.__class__(
+            settings=settings,
+            daa=DifficultyAdjustmentAlgorithm(settings=settings),
+            feature_service=FeatureService(settings=settings, tx_storage=self.tx_storage),
+        )
+
+        tx = Transaction(
+            weight=33.0,
+            inputs=[TxInput(b'', 0, b'')],
+            outputs=[TxOutput(1, b'')],
+            parents=[tx.hash for tx in self.genesis_txs],
+        )
+
+        with self.assertRaises(WeightError):
+            verifier.verify_weight(tx)
+
+    def test_tx_weight_at_activation_does_not_trigger_cap(self):
+        settings = self._settings.model_copy(update={
+            'MAX_TX_WEIGHT_DIFF': 4.0,
+            'MAX_TX_WEIGHT_DIFF_ACTIVATION': 32.0,
+        })
+        verifier = self._verifiers.tx.__class__(
+            settings=settings,
+            daa=DifficultyAdjustmentAlgorithm(settings=settings),
+            feature_service=FeatureService(settings=settings, tx_storage=self.tx_storage),
+        )
+
+        tx = Transaction(
+            weight=32.0,
+            inputs=[TxInput(b'', 0, b'')],
+            outputs=[TxOutput(1, b'')],
+            parents=[tx.hash for tx in self.genesis_txs],
+        )
+
+        verifier.verify_weight(tx)
+
+    def test_tx_serialized_size_too_high(self):
+        tx = Transaction(
+            weight=1.0,
+            inputs=[TxInput(b'', 0, b'')],
+            outputs=[TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
+            parents=[tx.hash for tx in self.genesis_txs],
+        )
+        while len(tx.get_struct()) <= self._settings.MAX_SERIALIZED_VERTEX_SIZE:
+            tx.outputs.append(TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
+
+        tx.update_hash()
+        tx_bytes = tx.get_struct()
+        self.assertGreater(len(tx_bytes), self._settings.MAX_SERIALIZED_VERTEX_SIZE)
+        with self.assertRaises(SerializedSizeError):
+            Transaction.create_from_struct(tx_bytes)
+
+    def test_block_serialized_size_too_high(self):
+        block = Block(
+            weight=1.0,
+            outputs=[TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
+            parents=[
+                self._settings.GENESIS_BLOCK_HASH,
+                self._settings.GENESIS_TX1_HASH,
+                self._settings.GENESIS_TX2_HASH,
+            ],
+            data=b'',
+        )
+        while len(block.get_struct()) <= self._settings.MAX_SERIALIZED_VERTEX_SIZE:
+            block.outputs.append(TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
+
+        block.update_hash()
+        block_bytes = block.get_struct()
+        self.assertGreater(len(block_bytes), self._settings.MAX_SERIALIZED_VERTEX_SIZE)
+        with self.assertRaises(SerializedSizeError):
+            Block.create_from_struct(block_bytes)
 
     def test_weight_nan(self):
         # this should succeed

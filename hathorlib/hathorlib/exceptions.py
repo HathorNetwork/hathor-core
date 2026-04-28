@@ -115,6 +115,10 @@ class TransactionDataError(TxValidationError):
     """Block data max length exceeded"""
 
 
+class SerializedSizeError(TxValidationError):
+    """Serialized vertex size exceeded."""
+
+
 class RewardLocked(TxValidationError):
     """Block reward cannot be spent yet, needs more confirmations"""
 
