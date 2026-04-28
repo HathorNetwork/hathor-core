@@ -17,10 +17,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Sequence
 
-from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.nanocontracts.types import CallerId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import create_block_data_from_block, create_vertex_data_from_vertex
-from hathor.transaction.exceptions import TxValidationError
 
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.context import *  # noqa: F401,F403
@@ -44,12 +42,6 @@ def create_context_from_vertex(
     if not actions:
         actions_map = _EMPTY_MAP
     else:
-        from hathor.verification.nano_header_verifier import NanoHeaderVerifier
-        try:
-            NanoHeaderVerifier.verify_action_list(actions)
-        except TxValidationError as e:
-            raise NCInvalidContext('invalid nano context') from e
-
         actions_map = Context.__group_actions__(actions)
 
     vertex_data = create_vertex_data_from_vertex(vertex)

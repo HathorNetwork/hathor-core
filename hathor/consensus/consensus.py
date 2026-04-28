@@ -33,6 +33,7 @@ from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooManySigOps
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
+from hathorlib.nanocontracts.exception import NCInvalidAction
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -448,6 +449,9 @@ class ConsensusAlgorithm:
                 case Feature.OPCODES_V2:
                     if not self._opcodes_v2_activation_rule(tx):
                         return False
+                case Feature.RESTRICT_DUP_ACTIONS:
+                    if not self._restrict_dup_actions_rule(tx):
+                        return False
                 case Feature.NANO_RUNTIME_V2:
                     # This feature does not affect verification, only the Nano runtime.
                     pass
@@ -548,6 +552,25 @@ class ConsensusAlgorithm:
                     self.log.exception('unexpected exception in mempool-reverification')
                 return False
 
+        return True
+
+    def _restrict_dup_actions_rule(self, tx: Transaction) -> bool:
+        from hathorlib.nanocontracts.verification import verify_action_list
+        if not tx.is_nano_contract():
+            return True
+
+        nano_header = tx.get_nano_header()
+
+        # We check all nano txs regardless of the feature state, because this rule
+        # already prohibited mempool txs before the block feature activation.
+        # Any exception in the verification will be considered a fail and
+        # the tx will be removed from the mempool.
+        try:
+            verify_action_list(nano_header.get_actions(), restrict_dup_actions=True)
+        except Exception as e:
+            if not isinstance(e, NCInvalidAction):
+                self.log.exception('unexpected exception in mempool-reverification')
+            return False
         return True
 
 

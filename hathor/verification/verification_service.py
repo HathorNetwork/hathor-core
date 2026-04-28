@@ -362,7 +362,7 @@ class VerificationService:
     def _verify_without_storage_nano_header(self, tx: BaseTransaction, params: VerificationParams) -> None:
         assert tx.is_nano_contract()
         self.verifiers.nano_header.verify_nc_signature(tx, params)
-        self.verifiers.nano_header.verify_actions(tx)
+        self.verifiers.nano_header.verify_actions(tx, params)
 
     def _verify_without_storage_fee_header(self, tx: BaseTransaction) -> None:
         assert tx.has_fees()

@@ -63,6 +63,7 @@ class TransactionStreamingClient:
                 fee_tokens=False,
                 opcodes_version=OpcodesVersion.V1,
                 nano_runtime_version=NanoRuntimeVersion.V1,
+                restrict_dup_actions=False,
             )
         )
 

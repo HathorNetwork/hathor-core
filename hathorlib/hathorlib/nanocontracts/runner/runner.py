@@ -450,6 +450,8 @@ class Runner:
             raise NCInvalidPublicMethodCallFromView('cannot call a public method from a view method')
 
         # Validate actions.
+        from hathorlib.nanocontracts.verification import verify_action_list
+        verify_action_list(actions, restrict_dup_actions=True)
         for action in actions:
             if isinstance(action, BaseTokenAction) and action.amount < 0:
                 raise NCInvalidContext('action amount must be positive')
