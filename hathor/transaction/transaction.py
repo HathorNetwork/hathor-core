@@ -328,7 +328,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+            spent_output = spent_tx.resolve_spent_output(tx_input.index)
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)
