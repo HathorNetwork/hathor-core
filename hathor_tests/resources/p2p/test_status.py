@@ -15,8 +15,10 @@ class StatusTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(StatusResource(self.manager))
         address1 = IPv4Address('TCP', '192.168.1.1', 54321)
         self.manager.connections.my_peer.info.entrypoints.add(PeerAddress.from_address(address1))
-        self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
-        self.manager.peers_whitelist.append(self.get_random_peer_from_pool().id)
+        # add_peer asserts enabled, so populate the set directly to keep this fixture working
+        # when ENABLE_PEER_WHITELIST is False.
+        self.manager.connections.whitelist.peers.add(self.get_random_peer_from_pool().id)
+        self.manager.connections.whitelist.peers.add(self.get_random_peer_from_pool().id)
 
         self.manager2 = self.create_peer('testnet')
         address2 = IPv4Address('TCP', '192.168.1.1', 54322)

@@ -104,7 +104,7 @@ class StatusResource(Resource):
                 'uptime': now - self.manager.start_time,
                 'entrypoints': self.manager.connections.my_peer.info.entrypoints_as_str(),
             },
-            'peers_whitelist': [str(peer_id) for peer_id in self.manager.peers_whitelist],
+            'peers_whitelist': [str(peer_id) for peer_id in self.manager.connections.whitelist.peers],
             'known_peers': known_peers,
             'connections': {
                 'connected_peers': connected_peers,

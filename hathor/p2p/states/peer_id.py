@@ -162,29 +162,10 @@ class PeerIdState(BaseState):
         self.send_ready()
 
     def _should_block_peer(self, peer_id: PeerId) -> bool:
-        """ Determine if peer should not be allowed to connect.
+        """Determine whether the peer should be denied admission.
 
-        Currently this is only because the peer is not in a whitelist and whitelist blocking is active.
+        The decision is delegated to the connection's WhitelistManager, which knows the
+        active policy, the whitelist contents, and the local enforcement flags.
         """
-        peer_is_whitelisted = peer_id in self.protocol.node.peers_whitelist
-        # never block whitelisted peers
-        if peer_is_whitelisted:
-            return False
-
-        # when ENABLE_PEER_WHITELIST is set, we check if we're on sync-v1 to block non-whitelisted peers
-        if self._settings.ENABLE_PEER_WHITELIST:
-            assert self.protocol.sync_version is not None
-            if not peer_is_whitelisted:
-                if self.protocol.sync_version.is_v1():
-                    return True
-                elif self._settings.USE_PEER_WHITELIST_ON_SYNC_V2:
-                    return True
-
-        # otherwise we block non-whitelisted peers when on "whitelist-only mode"
-        if self.protocol.connections is not None:
-            protocol_is_whitelist_only = self.protocol.connections.whitelist_only
-            if protocol_is_whitelist_only and not peer_is_whitelisted:
-                return True
-
-        # default is not blocking, this will be sync-v2 peers not on whitelist when not on whitelist-only mode
-        return False
+        assert self.protocol.connections is not None
+        return not self.protocol.connections.whitelist.is_connection_allowed(peer_id)

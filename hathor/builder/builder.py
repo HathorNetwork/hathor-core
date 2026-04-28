@@ -476,7 +476,6 @@ class Builder:
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
-            whitelist_only=False,
             rng=self._rng,
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
