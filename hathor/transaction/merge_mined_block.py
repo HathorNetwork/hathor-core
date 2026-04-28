@@ -63,10 +63,10 @@ class MergeMinedBlock(Block):
     @override
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> Self:
-        from hathor.serialization import Deserializer
         from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
+        from hathor.transaction.vertex_parser._common import make_vertex_deserializer
         block = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserializer = make_vertex_deserializer(struct_bytes)
         deserialize_block_funds(deserializer, block, verbose=verbose)
         deserialize_block_graph_fields(deserializer, block, verbose=verbose)
         block.aux_pow = BitcoinAuxPow.from_bytes(bytes(deserializer.read_all()))
