@@ -1,0 +1,41 @@
+export CARGO_TERM_COLOR := "always"
+export RUSTFLAGS := "-D warnings"
+
+# List available recipes.
+help:
+  @just --list
+
+# Run the full local check suite: check, fmt, clippy, test, sort, audit.
+all: check fmt clippy test sort audit
+
+# Type-check all workspace crates, including tests/benches/examples, with every feature enabled.
+check:
+  cargo check --workspace --all-targets --all-features
+
+# Verify formatting of all workspace crates without modifying files.
+fmt:
+  cargo fmt --all -- --check
+
+# Lint all workspace crates, including tests/benches/examples, with every feature enabled; warnings fail the build.
+clippy:
+  cargo clippy --workspace --all-targets --all-features
+
+# Run the test suite for all workspace crates.
+test:
+  cargo nextest run --workspace
+
+# Sort every workspace Cargo.toml in place.
+sort:
+  cargo sort --workspace
+
+# Audit dependencies against the RustSec advisory database for known vulnerabilities.
+audit:
+  cargo audit
+
+# Install the third-party cargo extensions required by `test`, `sort`, and `audit`.
+install:
+  cargo install --locked cargo-nextest cargo-sort cargo-audit
+
+# Generate the CI file for building/uploading wheels. This is currently unused and kept here for reference.
+maturin-generate-ci:
+  maturin generate-ci github -m crates/htr-lib/Cargo.toml
