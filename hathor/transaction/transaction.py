@@ -300,7 +300,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         fee_header = self.get_fee_header()
         fees = fee_header.get_fees()
-        # we store the total fee amount from the header to be used in the verify_sum
+        # we store the total fee amount from the header to be used in verify_transparent_balance
         token_dict.fees_from_fee_header = fee_header.total_fee_amount()
         for fee in fees:
             token_info = token_dict.get(fee.token_uid)

@@ -288,7 +288,7 @@ class NCBlockExecutor:
 
             # after the execution we have the latest state in the storage
             # and at this point no tokens pending creation
-            self._verify_sum_after_execution(tx, block_storage)
+            self._verify_transparent_balance_after_execution(tx, block_storage)
         except NCFail as e:
             return NCTxExecutionFailure(
                 tx=tx,
@@ -299,12 +299,14 @@ class NCBlockExecutor:
 
         return NCTxExecutionSuccess(tx=tx, runner=runner)
 
-    def _verify_sum_after_execution(self, tx: Transaction, block_storage: 'NCBlockStorage') -> None:
+    def _verify_transparent_balance_after_execution(
+        self, tx: Transaction, block_storage: 'NCBlockStorage'
+    ) -> None:
         """Verify token sums after execution for dynamically created tokens."""
         from hathor.verification.transaction_verifier import TransactionVerifier
         try:
             token_dict = tx.get_complete_token_info(block_storage)
-            TransactionVerifier.verify_sum(self._settings, tx, token_dict)
+            TransactionVerifier.verify_transparent_balance(self._settings, tx, token_dict)
         except TokenNotFound as e:
             # At this point, any nonexistent token would have made a prior validation fail. For example, if there
             # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.

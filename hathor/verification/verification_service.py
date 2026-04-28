@@ -265,7 +265,7 @@ class VerificationService:
         self.verifiers.tx.verify_version(tx, params)
 
         block_storage = self._get_block_storage(params)
-        self.verifiers.tx.verify_sum(
+        self.verifiers.tx.verify_transparent_balance(
             self._settings,
             tx,
             token_dict or tx.get_complete_token_info(block_storage),
@@ -280,7 +280,7 @@ class VerificationService:
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
 
-        We also overload verify_sum to make some different checks
+        We also overload verify_transparent_balance to make some different checks
         """
         # we should validate the token info before verifying the tx
         self.verifiers.token_creation_tx.verify_token_info(tx, params)

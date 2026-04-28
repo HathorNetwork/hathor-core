@@ -256,7 +256,7 @@ class TransactionVerifier:
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     @classmethod
-    def verify_sum(
+    def verify_transparent_balance(
         cls,
         settings: HathorSettings,
         tx: Transaction,
