@@ -105,13 +105,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> Self:
         from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
+        from hathor.transaction.vertex_parser._common import deserialize_graph_fields, make_vertex_deserializer
         from hathor.transaction.vertex_parser._headers import deserialize_headers
         from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
         settings = get_global_settings()
         tx = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserializer = make_vertex_deserializer(struct_bytes, settings)
         deserialize_tx_funds(deserializer, tx, verbose=verbose)
         deserialize_graph_fields(deserializer, tx, verbose=verbose)
         (tx.nonce,) = deserializer.read_struct('!I')

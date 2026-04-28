@@ -92,12 +92,12 @@ class Block(GenericVertex[BlockStaticMetadata]):
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> Self:
         from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
         from hathor.transaction.vertex_parser._block import deserialize_block_funds, deserialize_block_graph_fields
+        from hathor.transaction.vertex_parser._common import make_vertex_deserializer
         from hathor.transaction.vertex_parser._headers import deserialize_headers
         settings = get_global_settings()
         block = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserializer = make_vertex_deserializer(struct_bytes, settings)
         deserialize_block_funds(deserializer, block, verbose=verbose)
         deserialize_block_graph_fields(deserializer, block, verbose=verbose)
         block.nonce = int.from_bytes(deserializer.read_bytes(cls.SERIALIZATION_NONCE_SIZE), byteorder='big')
