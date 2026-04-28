@@ -175,6 +175,9 @@ class CliBuilder:
         self.tx_storage = tx_storage
         self.log.info('with indexes', indexes_class=type(tx_storage.indexes).__name__)
 
+        from hathor.crypto.shielded import validate_shielded_crypto_available
+        validate_shielded_crypto_available(settings.ENABLE_SHIELDED_TRANSACTIONS)
+
         self.wallet = None
         if self._args.wallet:
             self.wallet = self.create_wallet()

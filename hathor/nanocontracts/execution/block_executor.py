@@ -368,7 +368,7 @@ class NCBlockExecutor:
         block_storage: 'NCBlockStorage',
         runner: 'Runner',
     ) -> None:
-        """Run strict verify_sum after execution using uncommitted token overlay visibility."""
+        """Run strict verify_transparent_balance after execution using uncommitted token overlay visibility."""
         from hathor.transaction.exceptions import TokenNotFound
         from hathor.verification.transaction_verifier import TransactionVerifier
 

@@ -32,6 +32,13 @@ HATHOR_TOKEN_UID: bytes = b'\x00'
 class HathorSettings(LibSettings):
     model_config = ConfigDict(extra='forbid')
 
+    # Fee rate settings for shielded outputs
+    FEE_PER_AMOUNT_SHIELDED_OUTPUT: int = 1
+    FEE_PER_FULL_SHIELDED_OUTPUT: int = 2
+
+    # Used to enable shielded transactions (including mint/melt headers).
+    ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
+
     # Block checkpoints
     CHECKPOINTS: list[Checkpoint] = []
 

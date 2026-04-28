@@ -45,8 +45,8 @@ class DbImport(RunNode):
         self.in_file = io.BufferedReader(self._args.import_file)
 
     def run(self) -> None:
-        from hathor_cli.db_export import MAGIC_HEADER
         from hathor.util import tx_progress
+        from hathor_cli.db_export import MAGIC_HEADER
 
         header = self.in_file.read(len(MAGIC_HEADER))
         if header != MAGIC_HEADER:

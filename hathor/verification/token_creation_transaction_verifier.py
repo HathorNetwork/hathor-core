@@ -32,10 +32,44 @@ class TokenCreationTransactionVerifier:
         - only HTR tokens on the inputs;
         - new tokens are actually being minted;
 
+        For a shielded TCT (RFC 0000-shielded-outputs-mint-melt §4.4), the
+        token amount is hidden in shielded outputs and `token_info.amount` is
+        therefore not a reliable check. The supply is instead declared via the
+        MintHeader, and that entry must reference the new token (token_index=1)
+        with a positive amount. The balance equation reconciles the declared
+        supply against the shielded outputs.
+
         :raises InvalidToken: when there's an error in token operations
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        # make sure tokens are being minted
+        if tx.is_shielded():
+            if not tx.has_mint_header():
+                raise InvalidToken(
+                    'shielded token creation transaction must declare initial supply via MintHeader'
+                )
+            mint_entries = tx.get_mint_header().entries
+            new_token_entries = [e for e in mint_entries if e.token_index == 1]
+            if len(new_token_entries) != 1:
+                raise InvalidToken(
+                    'shielded token creation transaction must have exactly one MintHeader entry '
+                    f'for the new token (token_index=1); got {len(new_token_entries)}'
+                )
+            # MintMeltEntry.__post_init__ already enforces 1 <= amount < 2**64,
+            # so an entry with amount <= 0 cannot be constructed.
+            assert new_token_entries[0].amount >= 1
+            # A TCT cannot melt the token it is creating in the same tx — there
+            # is nothing to destroy yet. Rule M3 also forbids the same token
+            # appearing in both headers, but we reject this explicitly so the
+            # invariant survives any future relaxation of M3.
+            if tx.has_melt_header():
+                melt_new_token = [e for e in tx.get_melt_header().entries if e.token_index == 1]
+                if melt_new_token:
+                    raise InvalidToken(
+                        'token creation transaction cannot melt the new token (token_index=1)'
+                    )
+            return
+
+        # Non-shielded TCT: the existing transparent path checks token_info.amount.
         token_info = token_dict[tx.hash]
         if token_info.amount <= 0:
             raise InvalidToken('Token creation transaction must mint new tokens')

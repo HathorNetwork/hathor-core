@@ -21,12 +21,12 @@ from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
 
 def main():
-    from hathor_cli.util import create_parser
     from hathor.crypto.util import (
         get_address_b58_from_public_key,
         get_private_key_bytes,
         get_public_key_bytes_compressed,
     )
+    from hathor_cli.util import create_parser
     parser = create_parser()
     parser.add_argument('--config-yaml', type=str, help='Configuration yaml filepath')
     args = parser.parse_args(sys.argv[1:])

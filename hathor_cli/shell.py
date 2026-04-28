@@ -73,8 +73,9 @@ class Shell(RunNode):
 
         if self._shell_run_node:
             import asyncio
-            from twisted.internet.defer import Deferred
+
             from traitlets.config import Config
+            from twisted.internet.defer import Deferred
 
             async def await_deferred(deferred: Deferred[T]) -> T:
                 loop = asyncio.get_running_loop()

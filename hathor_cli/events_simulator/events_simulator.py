@@ -46,10 +46,10 @@ def create_parser() -> ArgumentParser:
 def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     from hathorlib.conf import UNITTESTS_SETTINGS_FILEPATH
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
-    from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
-    from hathor_cli.events_simulator.scenario import Scenario
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator import Simulator
+    from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
+    from hathor_cli.events_simulator.scenario import Scenario
 
     try:
         scenario = Scenario[args.scenario]

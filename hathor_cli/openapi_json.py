@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import json
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 
 def get_base_path() -> Path:

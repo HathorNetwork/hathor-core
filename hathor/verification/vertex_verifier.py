@@ -35,7 +35,15 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    FeeHeader,
+    MeltHeader,
+    MintHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexBaseHeader,
+)
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -157,6 +165,13 @@ class VertexVerifier:
                     len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
+        if hasattr(vertex, 'shielded_outputs'):
+            for shielded_output in vertex.shielded_outputs:
+                if len(shielded_output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
+                    raise InvalidOutputScriptSize('shielded output script size: {} and max-size: {}'.format(
+                        len(shielded_output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
+                    ))
+
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
         """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
@@ -192,6 +207,10 @@ class VertexVerifier:
         for tx_output in vertex.outputs:
             n_txops += counter.get_sigops_count(tx_output.script)
 
+        # Count shielded output scripts too
+        for shielded_output in vertex.shielded_outputs:
+            n_txops += counter.get_sigops_count(shielded_output.script)
+
         if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
@@ -208,14 +227,38 @@ class VertexVerifier:
                 pass
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
-            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                # A TCT may carry shielded outputs of the new token plus a
+                # MintHeader declaring its initial supply (RFC
+                # 0000-shielded-outputs-mint-melt §4.4) when shielded
+                # transactions are active.
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
+            case TxVersion.REGULAR_TRANSACTION:
+                if params.features.nanocontracts:
+                    allowed_headers.add(NanoHeader)
+                if params.features.fee_tokens:
+                    allowed_headers.add(FeeHeader)
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
+
+    @staticmethod
+    def _get_header_order(header: VertexBaseHeader) -> int:
+        """Return the sort key for canonical header ordering."""
+        return int.from_bytes(header.get_header_id(), 'big')
 
     def verify_headers(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify the headers."""
@@ -234,6 +277,15 @@ class VertexVerifier:
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
             seen_header_types.add(type(header))
+
+        # Verify headers are in canonical order (ascending VertexHeaderId)
+        if len(vertex.headers) > 1:
+            ids = [self._get_header_order(h) for h in vertex.headers]
+            for i in range(1, len(ids)):
+                if ids[i] <= ids[i - 1]:
+                    raise HeaderNotSupported(
+                        'Headers must be in canonical order (ascending VertexHeaderId)'
+                    )
 
     def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify that the timestamp is not too old. Mempool only."""

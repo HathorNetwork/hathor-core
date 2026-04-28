@@ -19,8 +19,8 @@ from autobahn.websocket import ConnectionRequest
 from hathor.event.websocket import EventWebsocketProtocol  # skip-cli-import-custom-check
 
 if TYPE_CHECKING:
-    from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
     from hathor.simulator import Simulator
+    from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
 
 
 class EventForwardingWebsocketProtocol(EventWebsocketProtocol):
