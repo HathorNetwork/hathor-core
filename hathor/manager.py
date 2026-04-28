@@ -761,7 +761,7 @@ class HathorManager:
         self.rng.shuffle(parents_any)  # shuffle parents_any to get rid of biases if clients don't shuffle themselves
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
-            reward=self.daa_factory.get_reward_for_next_block(parent_block),
+            reward=daa.get_reward_for_next_block(parent_block),
             weight=weight,
             timestamp_now=current_timestamp,
             timestamp_min=timestamp_min,
@@ -798,7 +798,8 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return self.daa_factory.get_tokens_issued_per_block(height)
+        best_block = self.tx_storage.get_best_block()
+        return self.daa_factory.create_from_parent(best_block).get_tokens_issued_per_block(height)
 
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.

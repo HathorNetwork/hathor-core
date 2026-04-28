@@ -22,7 +22,9 @@ from hathor.daa.common import (
     DAAConfig,
     TestMode,
     _calculate_next_weight,
+    _get_base_tokens_issued_per_block,
     _get_block_dependencies,
+    _get_mined_tokens,
 )
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
@@ -35,11 +37,15 @@ cpu = get_cpu_profiler()
 
 
 class DifficultyAdjustmentAlgorithm:
-    """The Hathor DAA — calculates block weight, rewards, and transaction weight.
+    """The Hathor DAA — calculates block weight and version-dependent rewards.
 
     A single instance is parameterized by a ``DAAConfig`` value object that captures
-    the per-version values (currently just the target block time). Use ``DAAFactory``
-    to build instances configured for a given block's context.
+    the per-version values (target block time, reward reduction factor). Use
+    ``DAAFactory`` to build instances that match a given block's feature state.
+
+    Version-INDEPENDENT helpers (``minimum_tx_weight``, ``get_weight_decay_amount``)
+    live on ``DAAFactory`` so callers don't have to construct a per-block DAA just to
+    compute a value that doesn't depend on which version applies.
     """
 
     __slots__ = ('_settings', '_config', 'TEST_MODE', 'MIN_BLOCK_WEIGHT')
@@ -95,3 +101,29 @@ class DifficultyAdjustmentAlgorithm:
     ) -> list[VertexId]:
         """Return the ids of the required blocks to call calculate_block_difficulty."""
         return _get_block_dependencies(self._settings, block, parent_block_getter)
+
+    def get_tokens_issued_per_block(self, height: int) -> int:
+        """Return the number of tokens issued (aka reward) per block of a given height."""
+        amount = _get_base_tokens_issued_per_block(self._settings, height)
+        return amount // self._config.reward_reduction_factor
+
+    def get_reward_for_next_block(self, parent_block: Block) -> int:
+        """Return the reward for the next block after parent_block."""
+        return self.get_tokens_issued_per_block(parent_block.get_height() + 1)
+
+    def get_mined_tokens(self, height: int) -> int:
+        """Return the number of tokens mined in total at height.
+
+        ``reward_reduction_factor`` only applies to heights at or above ``v2_start_height``.
+        For V2 configs (factor > 1), ``v2_start_height`` must be set on the config —
+        otherwise the cumulative sum cannot tell pre-activation V1 blocks apart from
+        post-activation V2 blocks.
+        """
+        assert self._config.reward_reduction_factor == 1 or self._config.v2_start_height is not None, (
+            'V2 DAAConfig must carry v2_start_height to compute cumulative mined tokens'
+        )
+        return _get_mined_tokens(
+            self._settings, height,
+            reward_reduction_factor=self._config.reward_reduction_factor,
+            v2_start_height=self._config.v2_start_height,
+        )

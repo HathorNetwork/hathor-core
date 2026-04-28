@@ -70,7 +70,8 @@ class BlockVerifier:
     def verify_reward(self, block: Block) -> None:
         """Validate reward amount."""
         parent_block = block.get_block_parent()
-        tokens_issued_per_block = self._daa_factory.get_tokens_issued_per_block(parent_block.get_height() + 1)
+        daa = self._daa_factory.create_from_parent(parent_block)
+        tokens_issued_per_block = daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={block.hash_hex} '

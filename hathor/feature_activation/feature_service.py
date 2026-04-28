@@ -224,6 +224,33 @@ class FeatureService:
             for feature, info in feature_infos.items()
         }
 
+    def get_activation_height(self, *, block: 'Block', feature: Feature) -> int | None:
+        """Return the height of the first boundary block where `feature` became ACTIVE in
+        `block`'s chain history, or None if the feature is not yet ACTIVE for `block`.
+        """
+        interval = self._feature_settings.evaluation_interval
+        height = block.static_metadata.height
+        boundary_height = (height // interval) * interval
+        if boundary_height == 0:
+            return None
+
+        boundary_block = block if boundary_height == height else self._get_ancestor_at_height(
+            block=block, ancestor_height=boundary_height,
+        )
+        if self.get_state(block=boundary_block, feature=feature) != FeatureState.ACTIVE:
+            return None
+
+        # Walk back boundary by boundary while still ACTIVE; stop at the first non-ACTIVE one.
+        while boundary_height > interval:
+            prev_height = boundary_height - interval
+            prev_block = self._get_ancestor_at_height(block=boundary_block, ancestor_height=prev_height)
+            if self.get_state(block=prev_block, feature=feature) != FeatureState.ACTIVE:
+                return boundary_height
+            boundary_height = prev_height
+            boundary_block = prev_block
+
+        return boundary_height
+
     def _get_ancestor_at_height(self, *, block: 'Block', ancestor_height: int) -> 'Block':
         """
         Given a block, return its ancestor at a specific height.

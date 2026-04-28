@@ -210,8 +210,8 @@ class DefaultFiller:
                     assert set(balance.keys()).issubset({'HTR'})
                     diff = balance.get('HTR', 0)
 
-                    # TODO Use the actual height.
-                    target = self._daa_factory.get_tokens_issued_per_block(1)
+                    # TODO Use the actual height. DAG construction has no chain context, so V1.
+                    target = self._daa_factory.create_v1().get_tokens_issued_per_block(1)
                     assert diff >= 0
                     assert diff <= target
 
