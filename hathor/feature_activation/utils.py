@@ -38,6 +38,7 @@ class Features:
     fee_tokens: bool
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
+    restrict_dup_actions: bool
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -52,6 +53,7 @@ class Features:
             Feature.FAILED_OPCODES_V2: FeatureSetting.FEATURE_ACTIVATION,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
+            Feature.RESTRICT_DUP_ACTIONS: settings.RESTRICT_DUP_ACTIONS,
         }
 
     @staticmethod
@@ -76,6 +78,7 @@ class Features:
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
+            restrict_dup_actions=feature_is_active[Feature.RESTRICT_DUP_ACTIONS],
         )
 
     @staticmethod
@@ -96,6 +99,7 @@ class Features:
             # Restrictive features (hardcoded as enabled):
             count_checkdatasig_op=True,
             opcodes_version=OpcodesVersion.V2,
+            restrict_dup_actions=True,
             # Permissive features (come from the block state):
             nanocontracts=features.nanocontracts,
             fee_tokens=features.fee_tokens,
@@ -122,6 +126,7 @@ class Features:
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
+            restrict_dup_actions=True,
         )
 
 
