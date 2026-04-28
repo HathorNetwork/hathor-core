@@ -29,6 +29,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.util import bytes_from_hex, not_none
 from hathor.utils.api import ErrorResponse, QueryParams, Response
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_api_exec
 
 
 @register_resource
@@ -179,11 +180,12 @@ class NCCreationResource(Resource):
         return tx
 
     def _get_nc_creation_item(self, nc_id: bytes) -> NCCreationItem | None:
+        executor = create_sandbox_for_api_exec()
         tx = self._try_get_contract_creation_vertex(nc_id)
         if tx is not None:
             nano_header = tx.get_nano_header()
             blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-            blueprint_class = self.bp_service.get_blueprint_class(blueprint_id)
+            blueprint_class = self.bp_service.get_blueprint_class(executor, blueprint_id)
             created_at = tx.timestamp
 
         else:
@@ -193,7 +195,7 @@ class NCCreationResource(Resource):
                 return None
 
             blueprint_id = nc_storage.get_blueprint_id()
-            blueprint_class = self.bp_service.get_blueprint_class(blueprint_id)
+            blueprint_class = self.bp_service.get_blueprint_class(executor, blueprint_id)
             created_at = 0
 
         assert self.nc_history_index is not None

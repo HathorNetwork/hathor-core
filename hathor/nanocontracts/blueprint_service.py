@@ -29,6 +29,7 @@ from hathor.nanocontracts.exception import (
 )
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+from hathorlib.nanocontracts.blueprint_exec import SandboxedExecutor, exec_ocb_class_checked
 from hathorlib.nanocontracts.types import BlueprintId
 
 if TYPE_CHECKING:
@@ -72,7 +73,7 @@ class BlueprintService:
         # XXX: maybe use N blocks confirmation, like reward-locks
         return blueprint_tx
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+    def get_blueprint_class(self, executor: SandboxedExecutor, blueprint_id: BlueprintId) -> type[Blueprint]:
         """Returns the blueprint class associated with the given blueprint_id.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
@@ -80,7 +81,7 @@ class BlueprintService:
         from hathor.nanocontracts import OnChainBlueprint
         blueprint = self._get_blueprint(blueprint_id)
         if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
+            return exec_ocb_class_checked(executor, blueprint)
         else:
             return blueprint
 

@@ -182,16 +182,6 @@ class OCBPubKeyNotAllowed(NCFail):
     """
 
 
-class OCBOutOfFuelDuringLoading(NCFail):
-    """Raised when loading an On-chain Blueprint and the execution exceeds the fuel limit.
-    """
-
-
-class OCBOutOfMemoryDuringLoading(NCFail):
-    """Raised when loading an On-chain Blueprint and the execution exceeds the memory limit.
-    """
-
-
 class NCDisabledBuiltinError(NCFail):
     """Raised when a disabled builtin is used during creation or execution of a nanocontract.
     """

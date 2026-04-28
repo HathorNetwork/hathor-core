@@ -27,10 +27,7 @@ from typing_extensions import Self, override
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import get_address_b58_from_public_key_bytes, get_public_key_bytes_compressed
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
-from hathor.nanocontracts.method import Method
-from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME, BlueprintId, blueprint_id_from_bytes
+from hathor.nanocontracts.types import BlueprintId, blueprint_id_from_bytes
 from hathor.serialization import Serializer
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
@@ -221,40 +218,6 @@ class OnChainBlueprint(Transaction):
         serialize_ocb_extra_fields(serializer, self, skip_signature=False)
         return bytes(serializer.finalize())
 
-    def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
-        """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
-        from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
-        fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
-        memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
-        metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
-        try:
-            env = metered_executor.exec(self.code.text)
-        except OutOfFuelError as e:
-            self.log.error('loading blueprint module failed, fuel limit exceeded')
-            raise OCBOutOfFuelDuringLoading from e
-        except OutOfMemoryError as e:
-            self.log.error('loading blueprint module failed, memory limit exceeded')
-            raise OCBOutOfMemoryDuringLoading from e
-        blueprint_class = env[BLUEPRINT_EXPORT_NAME]
-        return blueprint_class, env
-
-    def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
-        """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
-        blueprint_class, env = self._load_blueprint_code_exec()
-        assert isinstance(blueprint_class, type)
-        assert issubclass(blueprint_class, Blueprint)
-        return blueprint_class, env
-
-    def get_blueprint_object_bypass(self) -> object:
-        """Loads the code and returns the object exported with @export"""
-        blueprint_class, _ = self._load_blueprint_code_exec()
-        return blueprint_class
-
-    def get_blueprint_class(self) -> type[Blueprint]:
-        """Returns the blueprint class, loads and executes the code as needed."""
-        blueprint_class, _ = self._load_blueprint_code()
-        return blueprint_class
-
     def serialize_code(self) -> bytes:
         """Serialization of self.code, to be used for the serialization of this transaction type."""
         buf = bytearray()
@@ -307,11 +270,6 @@ class OnChainBlueprint(Transaction):
     @override
     def get_minimum_number_of_inputs(self) -> int:
         return 0
-
-    def get_method(self, method_name: str) -> Method:
-        # XXX: possibly do this by analyzing the source AST instead of using the loaded code
-        blueprint_class = self.get_blueprint_class()
-        return Method.from_callable(getattr(blueprint_class, method_name))
 
     def sign(self, private_key: ec.EllipticCurvePrivateKey) -> None:
         """Sign this blueprint with the provided private key."""

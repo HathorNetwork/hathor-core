@@ -24,6 +24,7 @@ from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
 from hathor_tests.nanocontracts.test_blueprints.bet import Bet
+from hathor_tests.nanocontracts.utils import create_sandbox_for_tests
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import get_genesis_key
 
@@ -110,7 +111,8 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         assert nc.is_nano_contract()
         nano_header = nc.get_nano_header()
         blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-        blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
+        executor = create_sandbox_for_tests()
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(executor, blueprint_id)
         return dict(
             nano_contract_id=nc.hash_hex,
             blueprint_id=blueprint_id.hex(),

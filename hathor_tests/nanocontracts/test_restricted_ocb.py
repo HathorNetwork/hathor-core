@@ -24,6 +24,8 @@ from hathor.util import not_none
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.nanocontracts.utils import create_sandbox_for_tests
+from hathorlib.nanocontracts.blueprint_exec import exec_ocb_class_checked
 
 
 class TestRestrictedOCB(unittest.TestCase):
@@ -55,9 +57,10 @@ class TestRestrictedOCB(unittest.TestCase):
 
         assert nc.is_nano_contract()
 
-        assert ocb.get_blueprint_class().__name__ == 'TestBlueprint1'
+        executor = create_sandbox_for_tests()
+        assert exec_ocb_class_checked(executor, ocb).__name__ == 'TestBlueprint1'
         assert nc.get_nano_header().nc_id == ocb.hash
-        blueprint_class = manager.blueprint_service.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
+        blueprint_class = manager.blueprint_service.get_blueprint_class(executor, BlueprintId(VertexId(ocb.hash)))
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
     def test_ocb_address_not_allowed(self) -> None:
@@ -117,9 +120,10 @@ class TestRestrictedOCB(unittest.TestCase):
 
         assert nc.is_nano_contract()
 
-        assert ocb.get_blueprint_class().__name__ == 'TestBlueprint1'
+        executor = create_sandbox_for_tests()
+        assert exec_ocb_class_checked(executor, ocb).__name__ == 'TestBlueprint1'
         assert nc.get_nano_header().nc_id == ocb.hash
-        blueprint_class = manager.blueprint_service.get_blueprint_class(BlueprintId(VertexId(ocb.hash)))
+        blueprint_class = manager.blueprint_service.get_blueprint_class(executor, BlueprintId(VertexId(ocb.hash)))
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
     def test_ocb_invalid_pubkey(self) -> None:

@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypeVar, TypeVarTuple, Unpack, cast
+from typing import Callable, TypeVar, TypeVarTuple, Unpack, cast
 
 from structlog import get_logger
 
@@ -26,36 +26,10 @@ _T = TypeVar('_T')
 _Ts = TypeVarTuple('_Ts')
 
 
-# https://docs.python.org/3/library/sys.html#sys.settrace
-# 110 opcodes
-# [x for x in dis.opname if not x.startswith('<')]
-# TODO: cost for each opcode
-FUEL_COST_MAP = [1] * 256
+class CPythonExecutor:
+    __slots__ = ()
 
-
-class OutOfFuelError(RuntimeError):
-    pass
-
-
-class OutOfMemoryError(MemoryError):
-    pass
-
-
-class MeteredExecutor:
-    __slots__ = ('_fuel', '_memory_limit', '_debug')
-
-    def __init__(self, fuel: int, memory_limit: int) -> None:
-        self._fuel = fuel
-        self._memory_limit = memory_limit
-        self._debug = False
-
-    def get_fuel(self) -> int:
-        return self._fuel
-
-    def get_memory_limit(self) -> int:
-        return self._memory_limit
-
-    def exec(self, source: str, /) -> dict[str, Any]:
+    def exec(self, source: str, /) -> dict[str, object]:
         """ This is equivalent to `exec(source)` but with execution metering and memory limiting.
         """
         from hathorlib.nanocontracts.custom_builtins import EXEC_BUILTINS

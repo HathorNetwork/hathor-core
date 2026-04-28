@@ -546,13 +546,6 @@ class HathorSettings(BaseModel):
     NC_ON_CHAIN_BLUEPRINT_RESTRICTED: bool = True
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES: list[str] = []
 
-    # TODO: align this with a realistic value later
-    # fuel units are arbitrary but it's roughly the number of opcodes, memory_limit is in bytes
-    NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE: int = 100_000  # 100K opcodes
-    NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE: int = 100 * 1024 * 1024  # 100MiB
-    NC_INITIAL_FUEL_TO_CALL_METHOD: int = 1_000_000  # 1M opcodes
-    NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
-
     @model_validator(mode='after')
     def _validate_genesis_tokens(self) -> Self:
         """Validate genesis tokens."""

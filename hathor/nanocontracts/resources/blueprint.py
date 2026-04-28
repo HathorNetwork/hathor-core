@@ -33,6 +33,7 @@ from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 from hathor.utils.typing import get_args, get_origin
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_api_exec
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -95,8 +96,9 @@ class BlueprintInfoResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')
             return error_response.json_dumpb()
 
+        executor = create_sandbox_for_api_exec()
         try:
-            blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
+            blueprint_class = self.manager.blueprint_service.get_blueprint_class(executor, blueprint_id)
         except OCBInvalidBlueprintVertexType:
             request.setResponseCode(400)
             error_response = ErrorResponse(

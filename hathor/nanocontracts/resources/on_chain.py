@@ -29,6 +29,7 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.util import bytes_from_hex
 from hathor.utils.api import ErrorResponse, QueryParams, Response
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_api_exec, exec_ocb_class_checked
 
 
 @register_resource
@@ -72,7 +73,8 @@ class BlueprintOnChainResource(Resource):
                 except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed):
                     pass
                 else:
-                    bp_class = bp_tx.get_blueprint_class()
+                    executor = create_sandbox_for_api_exec()
+                    bp_class = exec_ocb_class_checked(executor, bp_tx)
                     bp_item = OnChainBlueprintItem(
                         id=search,
                         name=bp_class.__name__,
@@ -119,7 +121,8 @@ class BlueprintOnChainResource(Resource):
             except OCBBlueprintNotConfirmed:
                 # unconfirmed OCBs are simply not added to the response
                 continue
-            bp_class = bp_tx.get_blueprint_class()
+            executor = create_sandbox_for_api_exec()
+            bp_class = exec_ocb_class_checked(executor, bp_tx)
             bp_item = OnChainBlueprintItem(
                 id=bp_id.hex(),
                 name=bp_class.__name__,

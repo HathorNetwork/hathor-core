@@ -18,6 +18,7 @@ from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.nanocontracts.utils import create_sandbox_for_tests
 
 
 class TestAllFields(unittest.TestCase):
@@ -54,7 +55,8 @@ class TestAllFields(unittest.TestCase):
         assert nc1.get_metadata().first_block == b12.hash
         assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
-        runner = manager.get_nc_runner(b12)
+        executor = create_sandbox_for_tests()
+        runner = manager.get_nc_runner(executor, b12)
         method_address = runner.call_view_method(nc1.hash, 'get_last_address_str')
         expected_address = get_address_b58_from_bytes(nc1.get_nano_header().nc_address)
         assert method_address == expected_address

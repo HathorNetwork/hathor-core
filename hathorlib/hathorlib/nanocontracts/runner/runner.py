@@ -26,6 +26,7 @@ from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError, Transac
 from hathorlib.nanocontracts.balance_rules import BalanceRules
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment
+from hathorlib.nanocontracts.blueprint_exec import SandboxedExecutor
 from hathorlib.nanocontracts.blueprint_service import BlueprintServiceProtocol
 from hathorlib.nanocontracts.clock import ClockProtocol
 from hathorlib.nanocontracts.context import Context
@@ -46,7 +47,6 @@ from hathorlib.nanocontracts.exception import (
     NCViewMethodError,
 )
 from hathorlib.nanocontracts.faux_immutable import create_with_shell
-from hathorlib.nanocontracts.metered_exec import MeteredExecutor
 from hathorlib.nanocontracts.method import Method, ReturnOnly
 from hathorlib.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathorlib.nanocontracts.nano_settings import NanoSettings
@@ -131,6 +131,7 @@ class Runner:
         storage_factory: NCStorageFactory,
         block_storage: NCBlockStorage,
         seed: bytes | None,
+        executor: SandboxedExecutor,
     ) -> None:
         self.tx_storage = tx_storage
         self.blueprint_service = blueprint_service
@@ -141,10 +142,7 @@ class Runner:
         self.reactor = reactor
         self._runtime_version = runtime_version
 
-        # For tracking fuel and memory usage
-        self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
-        self._memory_limit = self._settings.NC_MEMORY_LIMIT_TO_CALL_METHOD
-        self._metered_executor: MeteredExecutor | None = None
+        self._executor = executor
 
         # Flag indicating to keep record of all calls.
         self._enable_call_trace = True
@@ -261,8 +259,6 @@ class Runner:
 
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
-
-        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
 
         blueprint_id = self.get_blueprint_id(contract_id)
 
@@ -623,7 +619,6 @@ class Runner:
         """An internal method that actually execute the public method call.
         It is also used when a contract calls another contract.
         """
-        assert self._metered_executor is not None
         assert self._call_info is not None
 
         self._validate_context(ctx)
@@ -681,7 +676,7 @@ class Runner:
         # This ensures that, even if the blueprint method attempts to exploit or alter the context, it cannot
         # impact the original context. Since the runner relies on the context for other critical checks, any
         # unauthorized modification would pose a serious security risk.
-        ret = self._metered_executor.call(method, args=(ctx.copy(), *args))
+        ret = self._executor.call(method, args=(ctx.copy(), *args))
 
         # All calls must end with non-negative balances.
         call_record.changes_tracker.validate_balances_are_positive()
@@ -799,9 +794,6 @@ class Runner:
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        if self._metered_executor is None:
-            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
-
         changes_tracker = self._create_changes_tracker(contract_id)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
@@ -829,7 +821,7 @@ class Runner:
         )
         self._call_info.pre_call(call_record)
 
-        ret = self._metered_executor.call(method, args=args)
+        ret = self._executor.call(method, args=args)
 
         if not changes_tracker.is_empty():
             raise NCViewMethodError('view methods cannot change the state')
@@ -1148,7 +1140,7 @@ class Runner:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
+        blueprint_class = self.blueprint_service.get_blueprint_class(self._executor, blueprint_id)
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_deposit_token')
@@ -1273,7 +1265,7 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.blueprint_service.get_blueprint_class(blueprint_id)
+        self.blueprint_service.get_blueprint_class(self._executor, blueprint_id)
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
@@ -1472,6 +1464,7 @@ class RunnerFactory:
         runtime_version: NanoRuntimeVersion,
         block_storage: NCBlockStorage,
         seed: bytes | None = None,
+        executor: SandboxedExecutor,
     ) -> Runner:
         return Runner(
             reactor=self.reactor,
@@ -1482,4 +1475,5 @@ class RunnerFactory:
             blueprint_service=self.blueprint_service,
             block_storage=block_storage,
             seed=seed,
+            executor=executor,
         )

@@ -13,6 +13,8 @@ from hathor.transaction.token_info import TokenVersion
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
+from hathor_tests.nanocontracts.utils import create_sandbox_for_tests
+from hathorlib.nanocontracts.blueprint_exec import exec_ocb_class_checked
 
 
 class MyBlueprint(Blueprint):
@@ -407,19 +409,20 @@ if foo:
         assert nc2.is_nano_contract()
         assert nc3.is_nano_contract()
 
-        assert ocb1.get_blueprint_class().__name__ == 'Bet'
+        executor = create_sandbox_for_tests()
+        assert exec_ocb_class_checked(executor, ocb1).__name__ == 'Bet'
         assert nc1.get_nano_header().nc_id == ocb1.hash
-        blueprint_class = self.manager.blueprint_service.get_blueprint_class(ocb1.hash)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(executor, ocb1.hash)
         assert blueprint_class.__name__ == 'Bet'
 
-        assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
+        assert exec_ocb_class_checked(executor, ocb2).__name__ == 'TestBlueprint1'
         assert nc2.get_nano_header().nc_id == ocb2.hash
-        blueprint_class = self.manager.blueprint_service.get_blueprint_class(ocb2.hash)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(executor, ocb2.hash)
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
-        assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
+        assert exec_ocb_class_checked(executor, ocb3).__name__ == 'MyBlueprint'
         assert nc3.get_nano_header().nc_id == ocb3.hash
-        blueprint_class = self.manager.blueprint_service.get_blueprint_class(ocb3.hash)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(executor, ocb3.hash)
         assert blueprint_class.__name__ == 'MyBlueprint'
 
     def test_fee_based_token(self) -> None:

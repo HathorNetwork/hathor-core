@@ -70,6 +70,7 @@ from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
+from hathorlib.nanocontracts.blueprint_exec import SandboxedExecutor
 
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory
@@ -414,7 +415,7 @@ class HathorManager:
         if save_to:
             self.profiler.dump_stats(save_to)
 
-    def get_nc_runner(self, block: Block) -> Runner:
+    def get_nc_runner(self, executor: SandboxedExecutor, block: Block) -> Runner:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = get_block_storage_from_block(nc_storage_factory, block)
@@ -422,12 +423,13 @@ class HathorManager:
         return self.runner_factory.create(
             runtime_version=features.nano_runtime_version,
             block_storage=block_storage,
+            executor=executor
         )
 
-    def get_best_block_nc_runner(self) -> Runner:
+    def get_best_block_nc_runner(self, executor: SandboxedExecutor) -> Runner:
         """Return a contract runner for the best block."""
         best_block = self.tx_storage.get_best_block()
-        return self.get_nc_runner(best_block)
+        return self.get_nc_runner(executor, best_block)
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return the nano block storage for a given block."""

@@ -26,6 +26,7 @@ from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import AST_NAME_BLACKLIST
 from hathor.nanocontracts.exception import NCInvalidPubKey, NCInvalidSignature, OCBInvalidScript, OCBPubKeyNotAllowed
 from hathor.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_verification_exec, exec_ocb_class_unchecked
 
 
 class _RestrictionsVisitor(ast.NodeVisitor):
@@ -262,7 +263,8 @@ class OnChainBlueprintVerifier:
     def _verify_blueprint_type(self, tx: OnChainBlueprint) -> None:
         """Verify that the exported blueprint is a Blueprint, this will load and execute the code."""
         from hathor.nanocontracts.blueprint import Blueprint
-        blueprint_class = tx.get_blueprint_object_bypass()
+        executor = create_sandbox_for_verification_exec()
+        blueprint_class = exec_ocb_class_unchecked(executor, tx)
         if not isinstance(blueprint_class, type):
             raise OCBInvalidScript('exported Blueprint is not a class')
         if not issubclass(blueprint_class, Blueprint):

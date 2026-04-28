@@ -27,6 +27,7 @@ from hathor.nanocontracts.nc_types import make_nc_type_for_field_type
 from hathor.nanocontracts.types import ContractId, VertexId
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 from hathor.wallet.exceptions import InvalidAddress
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_api_exec, create_sandbox_for_api_method_call
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -135,8 +136,9 @@ class NanoContractStateResource(Resource):
         else:
             block = self.manager.tx_storage.get_best_block()
 
+        executor = create_sandbox_for_api_method_call()
         try:
-            runner = self.manager.get_nc_runner(block)
+            runner = self.manager.get_nc_runner(executor, block)
             nc_storage = runner.get_storage(nc_id_bytes)
         except NanoContractDoesNotExist:
             # Nano contract does not exist at this block
@@ -148,7 +150,8 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
+        executor = create_sandbox_for_api_exec()
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(executor, blueprint_id)
 
         value: Any
         # Get balances.

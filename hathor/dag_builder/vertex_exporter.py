@@ -45,8 +45,10 @@ from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+from hathorlib.nanocontracts.blueprint_exec import UsageLimits, create_sandbox, exec_ocb_class_checked
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
+_MAX_USAGE_FOR_VERTEX_EXPORTER = UsageLimits(compute=0, memory=0)
 
 
 class VertexExporter:
@@ -611,4 +613,5 @@ class VertexExporter:
         ocb = self._vertice_per_id.get(blueprint_id)
         if ocb is None or not isinstance(ocb, OnChainBlueprint):
             raise SyntaxError(f'{blueprint_id.hex()} is not a valid blueprint id')
-        return ocb.get_blueprint_class()
+        executor = create_sandbox(_MAX_USAGE_FOR_VERTEX_EXPORTER)
+        return exec_ocb_class_checked(executor, ocb)
