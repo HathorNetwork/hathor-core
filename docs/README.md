@@ -17,6 +17,7 @@ Documents in this directory:
 
 - [Developing](developing.md)
 - [Debugging](debugging.md)
+- [Process: RFC / Spec / Code triangle](process.md)
 - [Feature: event queue](event-queue-feature.md)
 - [Feature: RocksDB index](rocksdb-index-feature.md)
 - [Legacy documentation of Hathor Network](legacy)

@@ -75,10 +75,17 @@ class SysctlRunner:
     def serialize(self, value: Any) -> str:
         """Serialize the return of a sysctl getter."""
         if isinstance(value, tuple):
-            parts = (json.dumps(x) for x in value)
+            parts = (self._dumps(x) for x in value)
             return ', '.join(parts)
         else:
-            return json.dumps(value)
+            return self._dumps(value)
+
+    @staticmethod
+    def _dumps(value: Any) -> str:
+        from pydantic import BaseModel
+        if isinstance(value, BaseModel):
+            return value.model_dump_json()
+        return json.dumps(value)
 
     def deserialize(self, value_str: str) -> Any:
         """Deserialize a value sent by the client."""

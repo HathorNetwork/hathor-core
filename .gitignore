@@ -30,3 +30,6 @@ keys.json
 
 # Pycharm
 .idea
+
+# Vscode
+.vscode/
