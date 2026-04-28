@@ -150,7 +150,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         if set_timestamp:
             tx.timestamp = int(self.manager.get_timestamp_for_new_vertex())
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         return tx
 
     def _run_invalid_signature(self, attr, value, cause=NCInvalidSignature):
@@ -163,7 +163,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         nano_header = tx.get_nano_header()
         self.assertNotEqual(getattr(nano_header, attr), value)
         setattr(nano_header, attr, value)
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         self.manager.cpu_mining_service.resolve(tx)
 
         tx.clear_sighash_cache()

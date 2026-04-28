@@ -22,7 +22,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer, PoaSigner
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.event import EventManager
 from hathor.event.storage import EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -113,7 +113,7 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [Reactor, HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService, TransactionStorage, BlueprintService],
+    [Reactor, HathorSettingsType, DAAFactory, FeatureService, TransactionStorage, BlueprintService],
     VertexVerifiers
 ]
 
@@ -147,7 +147,7 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
-        self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
+        self._daa_factory: Optional[DAAFactory] = None
         self._cpu_mining_service: Optional[CpuMiningService] = None
 
         self._vertex_verifiers: Optional[VertexVerifiers] = None
@@ -228,7 +228,7 @@ class Builder:
         feature_service = self._get_or_create_feature_service()
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
-        daa = self._get_or_create_daa()
+        daa_factory = self._get_or_create_daa_factory()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
@@ -259,7 +259,7 @@ class Builder:
             settings=settings,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
-            daa=daa,
+            daa_factory=daa_factory,
             peer=peer,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
@@ -610,7 +610,7 @@ class Builder:
             reactor = self._get_reactor()
             settings = self._get_or_create_settings()
             feature_service = self._get_or_create_feature_service()
-            daa = self._get_or_create_daa()
+            daa_factory = self._get_or_create_daa_factory()
             tx_storage = self._get_or_create_tx_storage()
             blueprint_service = self._get_or_create_blueprint_service()
 
@@ -618,7 +618,7 @@ class Builder:
                 self._vertex_verifiers = self._vertex_verifiers_builder(
                     reactor,
                     settings,
-                    daa,
+                    daa_factory,
                     feature_service,
                     tx_storage,
                     blueprint_service,
@@ -627,7 +627,7 @@ class Builder:
                 self._vertex_verifiers = VertexVerifiers.create_defaults(
                     reactor=reactor,
                     settings=settings,
-                    daa=daa,
+                    daa_factory=daa_factory,
                     feature_service=feature_service,
                     tx_storage=tx_storage,
                     blueprint_service=blueprint_service,
@@ -635,12 +635,16 @@ class Builder:
 
         return self._vertex_verifiers
 
-    def _get_or_create_daa(self) -> DifficultyAdjustmentAlgorithm:
-        if self._daa is None:
+    def _get_or_create_daa_factory(self) -> DAAFactory:
+        if self._daa_factory is None:
             settings = self._get_or_create_settings()
-            self._daa = DifficultyAdjustmentAlgorithm(settings=settings)
+            feature_service = self._get_or_create_feature_service()
+            self._daa_factory = DAAFactory(
+                settings=settings,
+                feature_service=feature_service,
+            )
 
-        return self._daa
+        return self._daa_factory
 
     def _get_or_create_cpu_mining_service(self) -> CpuMiningService:
         if self._cpu_mining_service is None:
@@ -822,9 +826,9 @@ class Builder:
         self._vertex_verifiers_builder = builder
         return self
 
-    def set_daa(self, daa: DifficultyAdjustmentAlgorithm) -> 'Builder':
+    def set_daa_factory(self, daa_factory: DAAFactory) -> 'Builder':
         self.check_if_can_modify()
-        self._daa = daa
+        self._daa_factory = daa_factory
         return self
 
     def set_cpu_mining_service(self, cpu_mining_service: CpuMiningService) -> 'Builder':

@@ -92,7 +92,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
     def finish_and_broadcast_tx(self, tx: BaseTransaction, confirmations: int = 1) -> None:
         tx.timestamp = int(self.manager.reactor.seconds())
         tx.parents = self.manager.get_new_tx_parents()
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
 
         # broadcast
         self.manager.cpu_mining_service.resolve(tx)

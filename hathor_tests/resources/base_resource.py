@@ -19,7 +19,7 @@ class _BaseResourceTest:
                 unlock_wallet=unlock_wallet
             )
             self.manager.allow_mining_without_peers()
-            self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
+            self.manager.daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         def tearDown(self):
             return self.manager.stop()

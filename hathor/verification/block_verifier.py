@@ -16,7 +16,7 @@ from typing_extensions import assert_never
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import BlockIsMissingSignal, BlockIsSignaling, FeatureService
 from hathor.transaction import Block
 from hathor.transaction.exceptions import (
@@ -33,18 +33,18 @@ from hathor.transaction.storage import TransactionStorage
 
 
 class BlockVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service', '_checkpoints', '_latest_checkpoint', '_tx_storage')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', '_checkpoints', '_latest_checkpoint', '_tx_storage')
 
     def __init__(
         self,
         *,
         settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
     ) -> None:
         self._settings = settings
-        self._daa = daa
+        self._daa_factory = daa_factory
         self._feature_service = feature_service
         self._tx_storage = tx_storage
         self._checkpoints: dict[int, Checkpoint] = {cp.height: cp for cp in settings.CHECKPOINTS}
@@ -61,7 +61,8 @@ class BlockVerifier:
         """Validate minimum block difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
         assert block.storage is not None
-        min_block_weight = self._daa.calculate_block_difficulty(block, block.storage.get_parent_block)
+        daa = self._daa_factory.create_from_block(block)
+        min_block_weight = daa.calculate_block_difficulty(block, block.storage.get_parent_block)
         if block.weight < min_block_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new block {block.hash_hex}: weight ({block.weight}) is '
                               f'smaller than the minimum weight ({min_block_weight})')
@@ -69,7 +70,7 @@ class BlockVerifier:
     def verify_reward(self, block: Block) -> None:
         """Validate reward amount."""
         parent_block = block.get_block_parent()
-        tokens_issued_per_block = self._daa.get_tokens_issued_per_block(parent_block.get_height() + 1)
+        tokens_issued_per_block = self._daa_factory.get_tokens_issued_per_block(parent_block.get_height() + 1)
         if block.sum_outputs != tokens_issued_per_block:
             raise InvalidBlockReward(
                 f'Invalid number of issued tokens tag=invalid_issued_tokens tx.hash={block.hash_hex} '

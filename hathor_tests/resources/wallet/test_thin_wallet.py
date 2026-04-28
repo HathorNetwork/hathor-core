@@ -81,7 +81,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx2.inputs = [i]
         tx2.timestamp = int(self.clock.seconds())
-        tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
+        tx2.weight = self.manager.daa_factory.minimum_tx_weight(tx2)
 
         response_wrong_amount = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx2.get_struct().hex()})
         data_wrong_amount = response_wrong_amount.json_value()
@@ -96,7 +96,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx3.inputs = [i]
         tx3.timestamp = int(self.clock.seconds())
-        tx3.weight = self.manager.daa.minimum_tx_weight(tx3)
+        tx3.weight = self.manager.daa_factory.minimum_tx_weight(tx3)
 
         # Then send tokens
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': tx3.get_struct().hex()})
@@ -496,7 +496,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         i.data = P2PKH.create_input_data(public_key_bytes, signature_bytes)
         tx2.inputs = [i]
         tx2.timestamp = int(self.clock.seconds())
-        tx2.weight = self.manager.daa.minimum_tx_weight(tx2)
+        tx2.weight = self.manager.daa_factory.minimum_tx_weight(tx2)
         tx2.parents = self.manager.get_new_tx_parents()
         self.manager.cpu_mining_service.resolve(tx2)
         self.manager.propagate_tx(tx2)

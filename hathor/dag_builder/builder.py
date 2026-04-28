@@ -23,7 +23,7 @@ from structlog import get_logger
 from typing_extensions import Self
 
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.dag_builder.tokenizer import Token, TokenType
 from hathor.dag_builder.types import (
@@ -53,7 +53,7 @@ class DAGBuilder:
     def __init__(
         self,
         settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         genesis_wallet: BaseWallet,
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
@@ -68,11 +68,11 @@ class DAGBuilder:
 
         self._nodes: dict[str, DAGNode] = {}
         self._tokenize = tokenize
-        self._filler = DefaultFiller(self, settings, daa)
+        self._filler = DefaultFiller(self, settings, daa_factory)
         self._exporter = VertexExporter(
             builder=self,
             settings=settings,
-            daa=daa,
+            daa_factory=daa_factory,
             genesis_wallet=genesis_wallet,
             wallet_factory=wallet_factory,
             vertex_resolver=vertex_resolver,
@@ -90,7 +90,7 @@ class DAGBuilder:
         """Create a DAGBuilder instance from a HathorManager instance."""
         return DAGBuilder(
             settings=manager._settings,
-            daa=manager.daa,
+            daa_factory=manager.daa_factory,
             genesis_wallet=initialize_hd_wallet(genesis_words),
             wallet_factory=wallet_factory,
             vertex_resolver=lambda x: manager.cpu_mining_service.resolve(x),

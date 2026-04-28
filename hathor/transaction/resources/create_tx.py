@@ -90,7 +90,7 @@ class CreateTxResource(Resource):
         for tx_input in fake_signed_tx.inputs:
             # conservative estimate of the input data size to estimate a valid weight
             tx_input.data = b'\0' * 107
-        tx.weight = self.manager.daa.minimum_tx_weight(fake_signed_tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(fake_signed_tx)
         tx.init_static_metadata_from_storage(self.manager._settings, self.manager.tx_storage)
         self._verify_unsigned_skip_pow(tx)
 

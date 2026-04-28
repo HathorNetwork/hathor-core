@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.transaction import Block, MergeMinedBlock, Transaction, TxVersion
 from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -13,11 +13,11 @@ class _BaseTest:
     class _DeserializationTest(unittest.TestCase):
         def setUp(self) -> None:
             super().setUp()
-            daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
+            daa_factory = DAAFactory(settings=self._settings)
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),
                 settings=self._settings,
-                daa=daa,
+                daa_factory=daa_factory,
                 feature_service=Mock(),
                 tx_storage=Mock(),
                 blueprint_service=Mock(),

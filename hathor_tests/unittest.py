@@ -17,7 +17,7 @@ from hathor.builder import BuildArtifacts, Builder
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
 from hathor.feature_activation.utils import Features
@@ -259,8 +259,8 @@ class TestCase(unittest.TestCase):
         if disable_ipv4:
             builder.disable_ipv4()
 
-        daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder.set_daa(daa)
+        daa_factory = DAAFactory(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder.set_daa_factory(daa_factory)
 
         if nc_indexes:
             builder.enable_nc_indexes()

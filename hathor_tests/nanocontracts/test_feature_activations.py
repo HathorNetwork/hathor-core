@@ -18,7 +18,7 @@ import pytest
 
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key_hash
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
@@ -48,8 +48,8 @@ class MyBluprint(Blueprint):
 
 class TestFeatureActivations(unittest.TestCase):
     def prepare(self, settings: HathorSettings) -> None:
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder = self.get_builder(settings).set_daa(daa)
+        daa_factory = DAAFactory(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder = self.get_builder(settings).set_daa_factory(daa_factory)
 
         self.manager = self.create_peer_from_builder(builder)
         self.vertex_handler = self.manager.vertex_handler

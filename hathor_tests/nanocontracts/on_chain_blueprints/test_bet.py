@@ -106,7 +106,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
             timestamp=timestamp,
             code=code,
         )
-        blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
+        blueprint.weight = self.manager.daa_factory.minimum_tx_weight(blueprint)
         blueprint.sign(get_ocb_private_key())
         self.manager.cpu_mining_service.resolve(blueprint)
         self.manager.reactor.advance(2)
@@ -143,7 +143,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         sign_pycoin(nano_header, private_key)
 
         # mine
-        nc.weight = self.manager.daa.minimum_tx_weight(nc)
+        nc.weight = self.manager.daa_factory.minimum_tx_weight(nc)
         self.manager.cpu_mining_service.resolve(nc)
 
         # advance

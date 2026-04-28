@@ -136,20 +136,18 @@ def execute(args: Namespace) -> None:
             from unittest.mock import Mock
 
             from hathor.conf.get_settings import get_global_settings
-            from hathor.daa import DifficultyAdjustmentAlgorithm
+            from hathor.daa import DAAFactory
+            from hathor.feature_activation.utils import Features
             from hathor.verification.verification_params import VerificationParams
             from hathor.verification.verification_service import VerificationService
             from hathor.verification.vertex_verifiers import VertexVerifiers
-            from hathor.feature_activation.utils import Features
-            from hathor.transaction.scripts.opcode import OpcodesVersion
-            from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
             settings = get_global_settings()
-            daa = DifficultyAdjustmentAlgorithm(settings=settings)
+            daa_factory = DAAFactory(settings=settings)
             verification_params = VerificationParams(nc_block_root_id=None, features=Features.all_enabled())
             verifiers = VertexVerifiers.create_defaults(
                 reactor=Mock(),
                 settings=settings,
-                daa=daa,
+                daa_factory=daa_factory,
                 feature_service=Mock(),
                 tx_storage=Mock(),
                 blueprint_service=Mock(),

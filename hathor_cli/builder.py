@@ -21,7 +21,7 @@ from typing import Any, Optional
 from structlog import get_logger
 
 from hathor.consensus import ConsensusAlgorithm
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.event import EventManager
 from hathor.exception import BuilderError
 from hathor.execution_manager import ExecutionManager
@@ -291,12 +291,16 @@ class CliBuilder:
         if self._args.test_mode_block_weight:
             test_mode |= TestMode.TEST_BLOCK_WEIGHT
 
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=test_mode)
+        daa_factory = DAAFactory(
+            settings=settings,
+            feature_service=self.feature_service,
+            test_mode=test_mode,
+        )
 
         vertex_verifiers = VertexVerifiers.create_defaults(
             reactor=reactor,
             settings=settings,
-            daa=daa,
+            daa_factory=daa_factory,
             feature_service=self.feature_service,
             tx_storage=tx_storage,
             blueprint_service=blueprint_service,
@@ -359,7 +363,7 @@ class CliBuilder:
             hostname=hostname,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
-            daa=daa,
+            daa_factory=daa_factory,
             peer=peer,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,

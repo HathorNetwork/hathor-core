@@ -30,7 +30,7 @@ class GenericNanoResourceTest(_BaseResourceTest._ResourceTest):
             timestamp=timestamp,
             code=code,
         )
-        blueprint.weight = manager.daa.minimum_tx_weight(blueprint)
+        blueprint.weight = manager.daa_factory.minimum_tx_weight(blueprint)
         blueprint.sign(get_ocb_private_key())
         manager.cpu_mining_service.resolve(blueprint)
         manager.reactor.advance(2)  # type: ignore

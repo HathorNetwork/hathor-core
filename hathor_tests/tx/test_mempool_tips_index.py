@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.graphviz import GraphvizVisualizer
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
@@ -26,8 +26,8 @@ class TestMempoolTipsIndex(unittest.TestCase):
         super().setUp()
         assert self._settings is not None
         settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})  # for simplicity
-        daa = DifficultyAdjustmentAlgorithm(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder = self.get_builder(settings).set_daa(daa)
+        daa_factory = DAAFactory(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder = self.get_builder(settings).set_daa_factory(daa_factory)
 
         self.manager = self.create_peer_from_builder(builder)
         self.tx_storage = self.manager.tx_storage

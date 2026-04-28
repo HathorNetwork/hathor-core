@@ -136,7 +136,7 @@ class RandomTransactionGenerator:
                 self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
                 return
 
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         tx.update_hash()
 
         geometric_p = 2**(-tx.weight)

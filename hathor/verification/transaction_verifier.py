@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
@@ -66,17 +66,17 @@ MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service')
 
     def __init__(
         self,
         *,
         settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         feature_service: FeatureService,
     ) -> None:
         self._settings = settings
-        self._daa = daa
+        self._daa_factory = daa_factory
         self._feature_service = feature_service
 
     def verify_parents_basic(self, tx: Transaction) -> None:
@@ -94,7 +94,7 @@ class TransactionVerifier:
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
-        min_tx_weight = self._daa.minimum_tx_weight(tx)
+        min_tx_weight = self._daa_factory.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '

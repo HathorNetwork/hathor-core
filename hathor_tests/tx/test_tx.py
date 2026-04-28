@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
@@ -615,7 +615,7 @@ class TransactionTest(unittest.TestCase):
         inputs = [TxInput(b'', 0, b'')]
         tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):
@@ -628,7 +628,7 @@ class TransactionTest(unittest.TestCase):
         })
         verifier = self._verifiers.tx.__class__(
             settings=settings,
-            daa=DifficultyAdjustmentAlgorithm(settings=settings),
+            daa_factory=DAAFactory(settings=settings),
             feature_service=FeatureService(settings=settings, tx_storage=self.tx_storage),
         )
 
@@ -649,7 +649,7 @@ class TransactionTest(unittest.TestCase):
         })
         verifier = self._verifiers.tx.__class__(
             settings=settings,
-            daa=DifficultyAdjustmentAlgorithm(settings=settings),
+            daa_factory=DAAFactory(settings=settings),
             feature_service=FeatureService(settings=settings, tx_storage=self.tx_storage),
         )
 
@@ -793,7 +793,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_propagation_error(self):
         manager = self.create_peer('testnet', unlock_wallet=True)
-        manager.daa.TEST_MODE = TestMode.DISABLED
+        manager.daa_factory.TEST_MODE = TestMode.DISABLED
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]

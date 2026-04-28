@@ -29,7 +29,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
     BlockTemplateTimestampError,
@@ -103,7 +103,7 @@ class HathorManager:
         settings: HathorSettings,
         pubsub: PubSubManager,
         consensus_algorithm: ConsensusAlgorithm,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         peer: PrivatePeer,
         tx_storage: TransactionStorage,
         p2p_manager: ConnectionsManager,
@@ -146,7 +146,7 @@ class HathorManager:
 
         self._execution_manager = execution_manager
         self._settings = settings
-        self.daa = daa
+        self.daa_factory = daa_factory
         self._cmd_path: Optional[str] = None
 
         self.log = logger.new()
@@ -741,8 +741,9 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
+        daa = self.daa_factory.create_from_parent(parent_block)
         weight = max(
-            self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage.get_parent_block),
+            daa.calculate_next_weight(parent_block, timestamp, self.tx_storage.get_parent_block),
             min_significant_weight
         )
         height = parent_block.get_height() + 1
@@ -760,7 +761,7 @@ class HathorManager:
         self.rng.shuffle(parents_any)  # shuffle parents_any to get rid of biases if clients don't shuffle themselves
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
-            reward=self.daa.get_tokens_issued_per_block(height),
+            reward=self.daa_factory.get_reward_for_next_block(parent_block),
             weight=weight,
             timestamp_now=current_timestamp,
             timestamp_min=timestamp_min,
@@ -797,7 +798,7 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return self.daa.get_tokens_issued_per_block(height)
+        return self.daa_factory.get_tokens_issued_per_block(height)
 
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.

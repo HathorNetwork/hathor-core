@@ -46,7 +46,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             timestamp=timestamp,
             code=code,
         )
-        blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
+        blueprint.weight = self.manager.daa_factory.minimum_tx_weight(blueprint)
         blueprint.sign(get_ocb_private_key())
         self._ocb_mine(blueprint)
         return blueprint

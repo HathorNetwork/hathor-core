@@ -130,7 +130,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.assertEqual(set(tx_parents_hash), {self.genesis_txs[0].hash, self.genesis_txs[1].hash})
 
     def test_vertices_count(self):
-        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
+        self.manager.daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         blocks_count = 1
         txs_count = 2
@@ -514,7 +514,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         return block
 
     def test_topological_sort(self):
-        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
+        self.manager.daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         _total = 0
         blocks = add_new_blocks(self.manager, 1, advance_clock=1)
         _total += len(blocks)

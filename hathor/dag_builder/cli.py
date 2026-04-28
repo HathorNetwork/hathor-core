@@ -22,7 +22,7 @@ def main(filename: str, genesis_seed: str) -> None:
     _ = initialize_global_reactor(use_asyncio_reactor=False)
 
     from hathor.conf.get_settings import get_global_settings
-    from hathor.daa import DifficultyAdjustmentAlgorithm
+    from hathor.daa import DAAFactory
     from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.wallet import HDWallet
     settings = get_global_settings()
@@ -36,14 +36,14 @@ def main(filename: str, genesis_seed: str) -> None:
         return hd
 
     genesis_wallet = wallet_factory(genesis_seed)
-    daa = DifficultyAdjustmentAlgorithm(settings=settings)
+    daa_factory = DAAFactory(settings=settings)
     nc_catalog = NCBlueprintCatalog()
     blueprints = NCBlueprintCatalog.generate_blueprints_from_settings(settings)
     nc_catalog.register_blueprints(blueprints)
 
     builder = DAGBuilder(
         settings=settings,
-        daa=daa,
+        daa_factory=daa_factory,
         genesis_wallet=genesis_wallet,
         wallet_factory=wallet_factory,
         vertex_resolver=lambda x: None,

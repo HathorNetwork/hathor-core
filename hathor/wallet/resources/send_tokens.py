@@ -130,7 +130,7 @@ class SendTokensResource(Resource):
         tx.parents = values['parents']
         weight = values['weight']
         if weight is None:
-            weight = self.manager.daa.minimum_tx_weight(tx)
+            weight = self.manager.daa_factory.minimum_tx_weight(tx)
         tx.weight = weight
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)

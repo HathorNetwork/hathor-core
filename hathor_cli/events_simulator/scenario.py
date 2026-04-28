@@ -84,13 +84,13 @@ def simulate_single_chain_blocks_and_transactions(
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 1000)
-    tx.weight = manager.daa.minimum_tx_weight(tx)
+    tx.weight = manager.daa_factory.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx)
     simulator.run(60)
 
     tx = gen_new_tx(manager, address, 2000)
-    tx.weight = manager.daa.minimum_tx_weight(tx)
+    tx.weight = manager.daa_factory.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx)
     simulator.run(60)
@@ -183,7 +183,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
     assert balance_per_address[address] == 6400
     tx = gen_new_tx(manager, address, 1000)
-    tx.weight = manager.daa.minimum_tx_weight(tx)
+    tx.weight = manager.daa_factory.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx)
     simulator.run(60)
@@ -224,7 +224,7 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> O
     tx1 = gen_new_tx(manager, address, 1000)
     original_script = tx1.outputs[1].script
     tx1.outputs[1].script = b''
-    tx1.weight = manager.daa.minimum_tx_weight(tx1)
+    tx1.weight = manager.daa_factory.minimum_tx_weight(tx1)
     tx1.update_hash()
     assert manager.propagate_tx(tx1)
     simulator.run(60)
@@ -232,7 +232,7 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> O
     tx2 = gen_new_tx(manager, address, 1000)
     tx2.inputs = [TxInput(tx_id=tx1.hash, index=1, data=b'\x51')]
     tx2.outputs = [TxOutput(value=1000, script=original_script)]
-    tx2.weight = manager.daa.minimum_tx_weight(tx2)
+    tx2.weight = manager.daa_factory.minimum_tx_weight(tx2)
     tx2.update_hash()
     assert manager.propagate_tx(tx2)
     simulator.run(60)
@@ -264,7 +264,7 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
     s.addOpcode(Opcode.OP_1)
     original_script = tx1.outputs[1].script
     tx1.outputs[1].script = s.data
-    tx1.weight = manager.daa.minimum_tx_weight(tx1)
+    tx1.weight = manager.daa_factory.minimum_tx_weight(tx1)
     tx1.update_hash()
     assert manager.propagate_tx(tx1)
     simulator.run(60)
@@ -272,7 +272,7 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
     tx2 = gen_new_tx(manager, address, 1000)
     tx2.inputs = [TxInput(tx_id=tx1.hash, index=1, data=bytes([len(some_data)]) + some_data)]
     tx2.outputs = [TxOutput(value=1000, script=original_script)]
-    tx2.weight = manager.daa.minimum_tx_weight(tx2)
+    tx2.weight = manager.daa_factory.minimum_tx_weight(tx2)
     tx2.update_hash()
     assert manager.propagate_tx(tx2)
     simulator.run(60)
