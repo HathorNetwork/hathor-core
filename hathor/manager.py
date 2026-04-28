@@ -256,6 +256,10 @@ class HathorManager:
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
 
+        # Temporary check to make sure the htr_lib integration works in production.
+        import htr_lib
+        assert htr_lib.sum_as_string(1, 2) == '3'
+
     def _subscribe_wallet(self, wallet: BaseWallet) -> None:
         """Register a wallet on pubsub."""
         def handler(event: HathorEvents, args: EventArguments) -> None:

@@ -280,7 +280,10 @@ class RunNode:
             import sentry_sdk
             from structlog_sentry import SentryProcessor  # noqa: F401
         except ModuleNotFoundError:
-            self.log.error('Please use `poetry install -E sentry` for enabling Sentry.')
+            self.log.error(
+                'Please install the `sentry` extra (for example, `poetry install -E sentry` or'
+                ' `uv sync --extra sentry`) to enable Sentry.'
+            )
             sys.exit(-3)
 
         import hathor

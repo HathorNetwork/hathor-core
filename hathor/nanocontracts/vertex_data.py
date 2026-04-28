@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from hathor.transaction.scripts import P2PKH, MultiSig, parse_address_script
 from hathor.utils.weight import weight_to_work
 from hathorlib.nanocontracts.types import VertexId
+
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.vertex_data import *  # noqa: F401,F403
 from hathorlib.nanocontracts.vertex_data import (  # noqa: F401

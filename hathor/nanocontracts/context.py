@@ -21,6 +21,7 @@ from hathor.nanocontracts.exception import NCInvalidContext
 from hathor.nanocontracts.types import CallerId, NCAction, TokenUid
 from hathor.nanocontracts.vertex_data import create_block_data_from_block, create_vertex_data_from_vertex
 from hathor.transaction.exceptions import TxValidationError
+
 # Re-export from hathorlib for backward compatibility
 from hathorlib.nanocontracts.context import *  # noqa: F401,F403
 from hathorlib.nanocontracts.context import Context  # noqa: F401
