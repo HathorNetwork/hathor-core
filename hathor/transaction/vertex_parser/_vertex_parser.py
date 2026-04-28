@@ -19,7 +19,17 @@ from typing import TYPE_CHECKING, Type
 
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.base_transaction import get_cls_from_tx_version
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
+from hathor.transaction.headers import (
+    FeeHeader,
+    MeltHeader,
+    MintHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexBaseHeader,
+    VertexHeaderId,
+)
+from hathorlib.conf.settings import FeatureSetting
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -41,6 +51,17 @@ class VertexParser:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
         if settings.ENABLE_FEE_BASED_TOKENS:
             supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
+        if settings.ENABLE_SHIELDED_TRANSACTIONS != FeatureSetting.DISABLED:
+            # The shielded headers are owned by hathorlib (they extend the
+            # hathorlib `VertexBaseHeader` ABC, not hathor-core's), but the
+            # runtime contract — `deserialize / serialize / get_sighash_bytes`
+            # — is identical. Once the two ABCs are unified the cast goes away.
+            shielded_id = VertexHeaderId.SHIELDED_OUTPUTS_HEADER
+            unshield_id = VertexHeaderId.UNSHIELD_BALANCE_HEADER
+            supported_headers[shielded_id] = ShieldedOutputsHeader  # type: ignore[assignment]
+            supported_headers[unshield_id] = UnshieldBalanceHeader  # type: ignore[assignment]
+            supported_headers[VertexHeaderId.MINT_HEADER] = MintHeader  # type: ignore[assignment]
+            supported_headers[VertexHeaderId.MELT_HEADER] = MeltHeader  # type: ignore[assignment]
         return supported_headers
 
     @staticmethod

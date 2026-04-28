@@ -74,3 +74,13 @@ class BytesDeserializer(Deserializer):
         b = self._view
         self._view = _EMPTY_VIEW
         return b
+
+    def replace_remaining(self, data: Buffer) -> None:
+        """Replace this deserializer's remaining bytes with `data`.
+
+        Used by adapter code that delegates to a raw-bytes-style deserializer
+        (legacy `header_class.deserialize(tx, buf) -> (header, leftover)`)
+        and needs to push the unconsumed leftover back into the parent stream
+        so the next read continues where the wrapper stopped.
+        """
+        self._view = memoryview(data) if data else _EMPTY_VIEW

@@ -517,6 +517,10 @@ class HathorSettings(BaseModel):
     # Used to enable fee-based tokens.
     ENABLE_FEE_BASED_TOKENS: FeatureSetting = FeatureSetting.DISABLED
 
+    # Used to enable shielded transactions (ShieldedOutputs, UnshieldBalance,
+    # Mint, and Melt headers, plus the surrounding verification rules).
+    ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
+
     # Used to enable opcodes V2.
     ENABLE_OPCODES_V2: FeatureSetting = FeatureSetting.DISABLED
 

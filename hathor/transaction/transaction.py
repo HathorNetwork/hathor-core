@@ -25,12 +25,18 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexBaseHeader,
+)
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
+from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
@@ -160,6 +166,52 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def get_fee_header(self) -> FeeHeader:
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
+
+    def has_shielded_outputs(self) -> bool:
+        """Return True iff this transaction carries a ShieldedOutputsHeader."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        return True
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        for header in self.headers:
+            if isinstance(header, ShieldedOutputsHeader):
+                return header
+        raise ValueError('shieldedoutputsheader not found')
+
+    def has_unshield_balance_header(self) -> bool:
+        """Return True iff this transaction carries an UnshieldBalanceHeader."""
+        try:
+            self.get_unshield_balance_header()
+        except ValueError:
+            return False
+        return True
+
+    def get_unshield_balance_header(self) -> UnshieldBalanceHeader:
+        """Return the UnshieldBalanceHeader or raise ValueError."""
+        for header in self.headers:
+            if isinstance(header, UnshieldBalanceHeader):
+                return header
+        raise ValueError('unshieldbalanceheader not found')
+
+    def is_shielded(self) -> bool:
+        """Return True iff this transaction carries any shielded-related header.
+
+        Header-only signal — does not walk inputs to detect shielded
+        spends. Verifier code with storage access does that walk separately.
+        """
+        return self.has_shielded_outputs() or self.has_unshield_balance_header()
+
+    @property
+    @override
+    def shielded_outputs(self) -> list[ShieldedOutput]:
+        """Override of GenericVertex.shielded_outputs that reads from the header."""
+        if self.has_shielded_outputs():
+            return self.get_shielded_outputs_header().shielded_outputs
+        return []
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""

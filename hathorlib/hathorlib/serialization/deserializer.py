@@ -89,6 +89,14 @@ class Deserializer(ABC):
         data = self.read_bytes(size)
         return struct.unpack_from(format, data)
 
+    def replace_remaining(self, data: Buffer) -> None:
+        """Replace this deserializer's remaining bytes with `data`.
+
+        Optional operation; the default raises so adapters that need this
+        capability fall back loudly. ``BytesDeserializer`` overrides it.
+        """
+        raise TypeError(f'{type(self).__name__} does not support replace_remaining')
+
     def with_max_bytes(self, max_bytes: int) -> MaxBytesDeserializer[Self]:
         """Helper method to wrap the current deserializer with MaxBytesDeserializer."""
         from .adapters import MaxBytesDeserializer

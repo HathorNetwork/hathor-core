@@ -58,7 +58,20 @@ def deserialize_headers(
                 fees = deserialize_fee_header(deserializer)
                 header = FeeHeader(settings=settings, tx=vertex, fees=fees)
             case _:
-                raise ValueError(f'Unknown header type: {header_type!r}')
+                # Headers owned by hathorlib (ShieldedOutputs, UnshieldBalance,
+                # Mint, Melt) dispatch through the hathorlib central header
+                # dispatcher. The class came from `supported` above. Cross-ABC
+                # type-ignores: the hathorlib helpers operate on parallel
+                # `VertexBaseHeader` / `BaseTransaction` ABCs with the same
+                # duck-typed shape as hathor-core's; the dispatcher's runtime
+                # `isinstance` accepts both.
+                from hathorlib.vertex_parser._headers import (
+                    deserialize_header as _hathorlib_deserialize_header,
+                )
+                header_class = supported[header_id]
+                header = _hathorlib_deserialize_header(  # type: ignore[assignment]
+                    deserializer, vertex, header_class,  # type: ignore[arg-type]
+                )
         vertex.headers.append(header)
 
 

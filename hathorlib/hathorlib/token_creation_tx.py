@@ -143,8 +143,9 @@ class TokenCreationTransaction(Transaction):
 
         struct_bytes += self.serialize_token_info()
 
+        from hathorlib.vertex_parser._headers import get_sighash_bytes as _header_sighash_bytes
         for header in self.headers:
-            struct_bytes += header.get_sighash_bytes()
+            struct_bytes += _header_sighash_bytes(header)
 
         return struct_bytes
 

@@ -14,13 +14,12 @@
 import base64
 import datetime
 import hashlib
+from _hashlib import HASH
 from abc import ABC, abstractmethod
 from enum import IntEnum
 from math import isfinite, log
 from struct import error as StructError, pack
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
-
-from _hashlib import HASH
 
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidOutputValue, WeightError
@@ -207,14 +206,18 @@ class BaseTransaction(ABC):
 
     def get_header_from_bytes(self, buf: bytes) -> bytes:
         """Parse bytes and return the next header in buffer."""
+        from hathorlib.serialization import Deserializer
+        from hathorlib.vertex_parser._headers import deserialize_header
+
         if len(self.headers) >= self.get_maximum_number_of_headers():
             raise ValueError('too many headers')
 
         header_type = buf[:1]
-        header_class = VertexParser.get_header_parser(header_type)
-        header, buf = header_class.deserialize(self, buf)
+        header_class = VertexParser.get_header_parser(header_type, HathorSettings())
+        deserializer = Deserializer.build_bytes_deserializer(buf)
+        header = deserialize_header(deserializer, self, header_class)
         self.headers.append(header)
-        return buf
+        return bytes(deserializer.read_all())
 
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
@@ -330,7 +333,12 @@ class BaseTransaction(ABC):
 
     def get_headers_struct(self) -> bytes:
         """Return the serialization of the headers only."""
-        return b''.join(h.serialize() for h in self.headers)
+        from hathorlib.serialization import Serializer
+        from hathorlib.vertex_parser._headers import serialize_header
+        serializer = Serializer.build_bytes_serializer()
+        for header in self.headers:
+            serialize_header(serializer, header)
+        return bytes(serializer.finalize())
 
     def get_struct_without_nonce(self) -> bytes:
         """Return a partial serialization of the transaction, without including the nonce field

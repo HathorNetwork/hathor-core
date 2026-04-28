@@ -26,7 +26,7 @@ from hathorlib.headers import VertexBaseHeader
 from hathorlib.utils import unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathorlib.headers import FeeHeader, NanoHeader
+    from hathorlib.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
@@ -88,6 +88,40 @@ class Transaction(BaseTransaction):
         from hathorlib.headers import FeeHeader
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
+
+    def has_shielded_outputs(self) -> bool:
+        """Return True iff this transaction carries a ShieldedOutputsHeader."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        return True
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        from hathorlib.headers import ShieldedOutputsHeader
+        return self._get_header(ShieldedOutputsHeader)
+
+    def has_unshield_balance_header(self) -> bool:
+        """Return True iff this transaction carries an UnshieldBalanceHeader."""
+        try:
+            self.get_unshield_balance_header()
+        except ValueError:
+            return False
+        return True
+
+    def get_unshield_balance_header(self) -> UnshieldBalanceHeader:
+        """Return the UnshieldBalanceHeader or raise ValueError."""
+        from hathorlib.headers import UnshieldBalanceHeader
+        return self._get_header(UnshieldBalanceHeader)
+
+    def is_shielded(self) -> bool:
+        """Return True iff this transaction carries any shielded-related header.
+
+        Header-only signal — does not walk inputs to detect shielded
+        spends. Verifier code with storage access does that walk separately.
+        """
+        return self.has_shielded_outputs() or self.has_unshield_balance_header()
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
@@ -201,8 +235,9 @@ class Transaction(BaseTransaction):
         for tx_output in self.outputs:
             struct_bytes += bytes(tx_output)
 
+        from hathorlib.vertex_parser._headers import get_sighash_bytes as _header_sighash_bytes
         for header in self.headers:
-            struct_bytes += header.get_sighash_bytes()
+            struct_bytes += _header_sighash_bytes(header)
 
         ret = bytes(struct_bytes)
         return ret

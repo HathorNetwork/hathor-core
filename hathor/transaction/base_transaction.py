@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
+    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 logger = get_logger()
 
@@ -305,6 +306,23 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         the lookup aware of those spaces.
         """
         return self.outputs[index]
+
+    @property
+    def shielded_outputs(self) -> list['ShieldedOutput']:
+        """Default: vertices have no shielded outputs.
+
+        The Transaction subclass overrides this to return the shielded outputs
+        from a ShieldedOutputsHeader when present.
+        """
+        return []
+
+    def is_shielded_output(self, index: int) -> bool:
+        """True iff `index` refers to a shielded output (i.e. past the transparent ones).
+
+        Default: with no shielded outputs, every in-range index is transparent
+        and every out-of-range index is just out-of-range.
+        """
+        return len(self.outputs) <= index < len(self.outputs) + len(self.shielded_outputs)
 
     def get_target(self, override_weight: Optional[float] = None) -> int:
         """Target to be achieved in the mining process"""

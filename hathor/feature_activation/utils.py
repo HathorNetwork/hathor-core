@@ -38,6 +38,7 @@ class Features:
     fee_tokens: bool
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
+    shielded_transactions: bool
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -52,6 +53,7 @@ class Features:
             Feature.FAILED_OPCODES_V2: FeatureSetting.FEATURE_ACTIVATION,
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
+            Feature.SHIELDED_TRANSACTIONS: settings.ENABLE_SHIELDED_TRANSACTIONS,
         }
 
     @staticmethod
@@ -76,6 +78,7 @@ class Features:
             fee_tokens=feature_is_active[Feature.FEE_TOKENS],
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
+            shielded_transactions=feature_is_active[Feature.SHIELDED_TRANSACTIONS],
         )
 
     @staticmethod
@@ -99,6 +102,7 @@ class Features:
             # Permissive features (come from the block state):
             nanocontracts=features.nanocontracts,
             fee_tokens=features.fee_tokens,
+            shielded_transactions=features.shielded_transactions,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
         )
@@ -122,6 +126,7 @@ class Features:
             fee_tokens=True,
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
+            shielded_transactions=True,
         )
 
 

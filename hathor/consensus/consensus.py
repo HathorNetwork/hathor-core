@@ -467,8 +467,10 @@ class ConsensusAlgorithm:
                     | Feature.NOP_FEATURE_1
                     | Feature.NOP_FEATURE_2
                     | Feature.NOP_FEATURE_3
+                    | Feature.SHIELDED_TRANSACTIONS
                 ):
                     # These features do not affect transactions.
+                    # SHIELDED_TRANSACTIONS will gain a reorg rule in the verification PR.
                     pass
                 case _:
                     assert_never(feature)

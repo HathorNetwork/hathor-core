@@ -19,3 +19,7 @@ from enum import Enum, unique
 class VertexHeaderId(Enum):
     NANO_HEADER = b'\x10'
     FEE_HEADER = b'\x11'
+    SHIELDED_OUTPUTS_HEADER = b'\x12'
+    UNSHIELD_BALANCE_HEADER = b'\x13'
+    MINT_HEADER = b'\x14'
+    MELT_HEADER = b'\x15'
