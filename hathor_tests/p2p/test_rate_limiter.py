@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.p2p.rate_limiter import RateLimiter
 from hathor.util import not_none
 from hathor_tests import unittest

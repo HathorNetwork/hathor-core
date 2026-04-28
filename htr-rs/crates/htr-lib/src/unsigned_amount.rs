@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Versioned, unsigned token amount type.
 //!
 //! [`UnsignedAmount`] carries the decimal-places version (V1 or V2) under which the value was

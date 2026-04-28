@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from unittest.mock import Mock
 
 from twisted.internet.task import deferLater

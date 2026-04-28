@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for AsyncAPI 3.0 specification generator."""
 import unittest
 from typing import Literal

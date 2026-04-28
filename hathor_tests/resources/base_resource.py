@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.internet.defer import succeed
 from twisted.web import server
 from twisted.web.test.requesthelper import DummyRequest

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.event.model.event_data import TokenCreatedData
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventRocksDBStorage

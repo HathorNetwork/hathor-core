@@ -1,3 +1,6 @@
+.. SPDX-FileCopyrightText: Hathor Labs
+.. SPDX-License-Identifier: Apache-2.0
+
 Transaction Maleability
 =======================
 The digital signature of the inputs and outputs do not cover the parents and the nonce. On one hand, this is important to let the transactions be recoved in case of a split-brain, but, on the other hand, it makes possible to a malicious node to change the transaction hash, or to generate many conflicts.

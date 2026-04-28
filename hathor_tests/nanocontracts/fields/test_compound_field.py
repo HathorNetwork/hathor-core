@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.fields.container import INIT_NC_TYPE
 from hathor.nanocontracts.nc_types import VarInt32NCType

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.internet.address import IPv4Address
 
 from hathor.p2p.netfilter.context import NetfilterContext

@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """
 This script finds all PRs that have been merged into the `master` branch but not into the `release-candidate` branch in a given GitHub repository.
 

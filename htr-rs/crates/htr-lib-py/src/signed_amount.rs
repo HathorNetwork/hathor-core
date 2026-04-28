@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! SignedAmount Python wrapper.
 
 use crate::unsigned_amount::PyUnsignedAmount;

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 # Define colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'

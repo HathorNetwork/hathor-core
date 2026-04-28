@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Python extension module exposing Hathor's Rust implementations via PyO3.
 
 mod signed_amount;

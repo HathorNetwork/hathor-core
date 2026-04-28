@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.exception import NCFail
 from hathor.transaction import Block, Transaction

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 FROM ubuntu:18.04
 
 ENV HTR_PATH_DATA="/var/lib/hathor" \

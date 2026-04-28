@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder

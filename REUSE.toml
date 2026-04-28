@@ -1,0 +1,37 @@
+version = 1
+
+[[annotations]]
+path = [
+    ".claude/rules/*.md",
+    ".github/CODEOWNERS",
+    "CLAUDE.md",
+    "docs/legacy/images/syncing-example.txt",
+    "docs/legacy/make.bat",
+    "extras/benchmarking/sync_v2/.env",
+    "hathor/_openapi/openapi_base.json",
+    "hathor/_openapi/openapi_components.json",
+    "hathor_tests/peer_id_pool.json",
+    "hathor_tests/resources/nanocontracts/dummy_blueprint.py",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Hathor Labs"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+    "docs/legacy/images/syncing-example.png",
+    "flake.lock",
+    "hathor_tests/nanocontracts/on_chain_blueprints/bomb.zlib",
+    "hathorlib/hathorlib/py.typed",
+    "hathorlib/hathorlib/cert/ca.crt",
+    "hathorlib/hathorlib/cert/ca.key",
+    "LICENSE.txt",
+    "hathorlib/LICENSE.txt",
+    "hathorlib/poetry.lock",
+    "htr-rs/Cargo.lock",
+    "poetry.lock",
+    "uv.lock",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "Apache-2.0"

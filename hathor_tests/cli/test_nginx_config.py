@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 from io import StringIO
 from types import ModuleType, SimpleNamespace
