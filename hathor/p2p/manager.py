@@ -23,7 +23,6 @@ from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFact
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
-from twisted.web.client import Agent
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.netfilter.factory import NetfilterFactory
@@ -203,9 +202,6 @@ class ConnectionsManager:
         self._sync_factories = {}
         self._enabled_sync_versions = set()
 
-        # agent to perform HTTP requests
-        self._http_agent = Agent(self.reactor)
-
     def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
         """Add factory for the given sync version, must use a sync version that does not already exist."""
         # XXX: to allow code in `set_manager` to safely use the the available sync versions, we add this restriction:
@@ -265,13 +261,7 @@ class ConnectionsManager:
         Do a discovery and connect on all discovery strategies.
         """
         for peer_discovery in self.peer_discoveries:
-            # Wrap connect_to_endpoint to register bootstrap peer IDs
-            def connect_with_bootstrap_registration(entrypoint: PeerEndpoint) -> None:
-                if self.peers_whitelist and entrypoint.peer_id is not None:
-                    self.peers_whitelist.add_bootstrap_peer(entrypoint.peer_id)
-                self.connect_to_endpoint(entrypoint)
-
-            coro = peer_discovery.discover_and_connect(connect_with_bootstrap_registration)
+            coro = peer_discovery.discover_and_connect(self.connect_to_endpoint)
             Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
@@ -648,6 +638,13 @@ class ConnectionsManager:
             self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
                            entrypoint=str(entrypoint))
             return
+
+        # Register the endpoint's peer_id (when known) as a bootstrap peer so it
+        # can pass admission during the whitelist grace period. Covers DNS TXT
+        # discovery, /add_peers HTTP resource, and any other caller that reaches
+        # this method; DNS A-records without peer_id are inherently unregisterable.
+        if self.peers_whitelist is not None and entrypoint.peer_id is not None:
+            self.peers_whitelist.add_bootstrap_peer(entrypoint.peer_id)
 
         for connecting_peer in self.connecting_peers.values():
             if connecting_peer.entrypoint.addr == entrypoint.addr:

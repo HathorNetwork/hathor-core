@@ -68,9 +68,12 @@ class PeersWhitelist(ABC):
     def stop(self) -> None:
         if self._pending_retry is not None and self._pending_retry.active():
             self._pending_retry.cancel()
-            self._pending_retry = None
+        self._pending_retry = None
         if self.lc_refresh.running:
             self.lc_refresh.stop()
+        # Reset transient state so the whitelist is usable if restarted.
+        self._is_running = False
+        self._consecutive_failures = 0
 
     def _get_retry_interval(self) -> int:
         """Calculate retry interval with exponential backoff.
@@ -113,9 +116,20 @@ class PeersWhitelist(ABC):
             return d
 
         self._is_running = True
-        d = self._unsafe_update()
-        d.addBoth(lambda _: setattr(self, '_is_running', False))
+        try:
+            d = self._unsafe_update()
+        except Exception:
+            # If _unsafe_update raises synchronously the addBoth below would never
+            # run, leaving _is_running pinned at True forever and deadlocking
+            # every future refresh.
+            self._is_running = False
+            raise
+        d.addBoth(self._clear_running)
         return d
+
+    def _clear_running(self, result: Any) -> Any:
+        self._is_running = False
+        return result
 
     def add_peer(self, peer_id: PeerId) -> None:
         """ Adds a peer to the current whitelist. """
@@ -172,6 +186,12 @@ class PeersWhitelist(ABC):
         self._has_successful_fetch = True
         self._bootstrap_peers.clear()
         self._on_update_success()
+
+        # Under ALLOW_ALL the removed peers are still admitted, so keeping the
+        # connection open matches the new policy; only enforce disconnects when
+        # the active policy would actually reject them.
+        if new_policy == WhitelistPolicy.ALLOW_ALL:
+            return
 
         for peer_id in peers_to_remove:
             if self._on_remove_callback:

@@ -18,10 +18,9 @@ from functools import total_ordering
 
 @total_ordering
 class SyncVersion(Enum):
-    # XXX: These values are used in the protocol to negotiate commonly supported versions, changing it will cause peers
-    #      to no match different values and in turn not select a certain protocol, this can be done intentionally, for
-    #      example, peers using `v2-fake` (which just uses sync-v1) will not connect to peers using `v2-alpha`, and so
-    #      on.
+    # XXX: These values are used in the protocol to negotiate commonly supported versions. Changing a value will cause
+    #      peers to no longer match and not select a certain protocol; this can be done intentionally, for example so
+    #      peers using `v2-alpha` only connect to matching `v2-alpha` peers.
     V2 = 'v2'
 
     def __str__(self):

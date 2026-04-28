@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import os
-from dataclasses import dataclass
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict
 
 from hathor.conf.settings import HathorSettings
 from hathor.p2p.manager import ConnectionsManager
@@ -33,8 +34,7 @@ class WhitelistState(Enum):
     ON = 'on'              # Whitelist configured and being followed
 
 
-@dataclass(frozen=True)
-class WhitelistStatus:
+class WhitelistStatus(BaseModel):
     """Status information for the whitelist.
 
     Attributes:
@@ -43,6 +43,8 @@ class WhitelistStatus:
         peer_count: Number of peers in the whitelist
         source: The source URL or file path (only set when state is not DISABLED)
     """
+    model_config = ConfigDict(frozen=True, use_enum_values=True)
+
     state: WhitelistState
     policy: WhitelistPolicy | None = None
     peer_count: int = 0

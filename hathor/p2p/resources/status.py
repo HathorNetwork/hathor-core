@@ -146,7 +146,7 @@ _openapi_connected_peer = {
          }
     },
     'warning_flags': ['no_entrypoints'],
-    'protocol_version': 'sync-v1.1',
+    'protocol_version': 'sync-v2',
     'peer_best_blockchain': [_openapi_height_info]
 }
 _openapi_connecting_peer = {
