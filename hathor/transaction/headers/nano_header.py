@@ -22,6 +22,7 @@ from typing_extensions import assert_never
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.util import VerboseCallback
 from hathor.types import VertexId
+from hathorlib.nanocontracts.versions import BlueprintVersion
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.context import Context
@@ -223,11 +224,12 @@ class NanoHeader(VertexBaseHeader):
         """Get a list of NCActions from the header actions."""
         return [header_action.to_nc_action(self.tx) for header_action in self.nc_actions]
 
-    def get_context(self) -> Context:
+    def get_context(self, blueprint_version: BlueprintVersion | None = None) -> Context:
         """Return a context to be used in a method call."""
         from hathor.nanocontracts.context import create_context_from_vertex
         from hathor.nanocontracts.types import Address
         return create_context_from_vertex(
+            blueprint_version=blueprint_version,
             caller_id=Address(self.nc_address),
             vertex=self.tx,
             actions=self.get_actions(),
