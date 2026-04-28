@@ -125,7 +125,7 @@ class CreateTxResource(Resource):
         verifiers.vertex.verify_parents(tx)
 
         block_storage = self.manager.get_nc_block_storage(best_block)
-        verifiers.tx.verify_sum(self.manager._settings, tx, tx.get_complete_token_info(block_storage))
+        verifiers.tx.verify_transparent_balance(self.manager._settings, tx, tx.get_complete_token_info(block_storage))
 
 
 CreateTxResource.openapi = {

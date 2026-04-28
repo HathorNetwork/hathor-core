@@ -105,13 +105,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> Self:
         from hathor.conf.get_settings import get_global_settings
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
+        from hathor.transaction.vertex_parser._common import deserialize_graph_fields, make_vertex_deserializer
         from hathor.transaction.vertex_parser._headers import deserialize_headers
         from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
         settings = get_global_settings()
         tx = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserializer = make_vertex_deserializer(struct_bytes, settings)
         deserialize_tx_funds(deserializer, tx, verbose=verbose)
         deserialize_graph_fields(deserializer, tx, verbose=verbose)
         (tx.nonce,) = deserializer.read_struct('!I')
@@ -301,7 +300,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         fee_header = self.get_fee_header()
         fees = fee_header.get_fees()
-        # we store the total fee amount from the header to be used in the verify_sum
+        # we store the total fee amount from the header to be used in verify_transparent_balance
         token_dict.fees_from_fee_header = fee_header.total_fee_amount()
         for fee in fees:
             token_info = token_dict.get(fee.token_uid)
@@ -329,7 +328,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.outputs[tx_input.index]
+            spent_output = spent_tx.resolve_spent_output(tx_input.index)
 
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)

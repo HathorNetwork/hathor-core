@@ -515,7 +515,7 @@ def op_find_p2pkh(context: ScriptContext) -> None:
     spent_tx = context.extras.spent_tx
     txin = context.extras.txin
     tx = context.extras.tx
-    contract_value = spent_tx.outputs[txin.index].value
+    contract_value = spent_tx.resolve_spent_output(txin.index).value
 
     address = context.stack.pop()
     if not isinstance(address, bytes):

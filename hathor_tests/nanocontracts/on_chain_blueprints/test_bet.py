@@ -29,6 +29,7 @@ from hathor.wallet import KeyPair
 from ...utils import DEFAULT_WORDS
 from .. import test_blueprints
 from ..blueprints.unittest import BlueprintTestCase
+from ..utils import TestRunner
 from .utils import get_ocb_private_key
 
 settings = HathorSettings()
@@ -174,7 +175,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
 
         # set expected self objects:
         self.nc_id = ContractId(VertexId(nc_init_tx.hash))
-        self.runner = self.manager.get_nc_runner(block)
+        self.runner = TestRunner.from_runner(self.manager.get_nc_runner(block))
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def test_blueprint_initialization(self) -> None:

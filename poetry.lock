@@ -2800,5 +2800,5 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.11,<4"
-content-hash = "9dadbfb796fb976dbea35d531ef960f8f3be3cd91e05c0731d4b0acd18a62d25"
+python-versions = ">=3.11,<3.14"
+content-hash = "58a786af84bc2fbde8df7f40f4ce980b2dfc3a22afad6be166b31219d258d5f9"

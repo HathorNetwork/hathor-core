@@ -39,8 +39,6 @@ if TYPE_CHECKING:
     from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts import NCStorageFactory
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
-    from hathor.nanocontracts.runner.runner import RunnerFactory
-    from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -88,8 +86,7 @@ class ConsensusAlgorithm:
         *,
         settings: HathorSettings,
         tx_storage: TransactionStorage,
-        runner_factory: RunnerFactory,
-        nc_calls_sorter: NCSorterCallable,
+        block_executor: NCBlockExecutor,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
         nc_exec_fail_trace: bool = False,
@@ -100,19 +97,14 @@ class ConsensusAlgorithm:
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
 
-        # Create NCBlockExecutor (pure) for execution
-        self._block_executor = NCBlockExecutor(
-            settings=settings,
-            runner_factory=runner_factory,
-            nc_storage_factory=nc_storage_factory,
-            nc_calls_sorter=nc_calls_sorter,
-            feature_service=feature_service,
-        )
+        # NCBlockExecutor is a pure executor that yields effects without applying them.
+        # It is created by the builder and injected here.
+        self.block_executor = block_executor
 
         # Create NCConsensusBlockExecutor (with side effects) for consensus
         self._consensus_block_executor = NCConsensusBlockExecutor(
             settings=settings,
-            block_executor=self._block_executor,
+            block_executor=self.block_executor,
             nc_storage_factory=nc_storage_factory,
             nc_log_storage=nc_log_storage,
             nc_exec_fail_trace=nc_exec_fail_trace,
@@ -122,7 +114,6 @@ class ConsensusAlgorithm:
             settings, self._consensus_block_executor, feature_service,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
-        self.nc_calls_sorter = nc_calls_sorter
         self.feature_service = feature_service
 
     def create_context(self) -> ConsensusAlgorithmContext:

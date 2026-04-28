@@ -24,6 +24,7 @@ from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.util import VerboseCallback, int_to_bytes, output_value_to_bytes
 
 if TYPE_CHECKING:
+    from hathor.conf.settings import HathorSettings
     from hathor.transaction.base_transaction import BaseTransaction, TxInput, TxOutput
 
 # Weight (d=double 8 bytes), timestamp (I=uint32 4 bytes), parents_len (B=uint8 1 byte)
@@ -74,6 +75,11 @@ def serialize_tx_output(serializer: Serializer, tx_output: TxOutput) -> None:
 # ---------------------------------------------------------------------------
 # Deserialization
 # ---------------------------------------------------------------------------
+
+
+def make_vertex_deserializer(struct_bytes: bytes, _settings: 'HathorSettings | None' = None) -> Deserializer:
+    """Build a deserializer for a serialized vertex."""
+    return Deserializer.build_bytes_deserializer(struct_bytes)
 
 
 def deserialize_graph_fields(

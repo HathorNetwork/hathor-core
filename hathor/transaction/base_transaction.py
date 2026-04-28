@@ -297,6 +297,15 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
 
+    def resolve_spent_output(self, index: int) -> 'TxOutput':
+        """Return the output at `index` that an input may spend.
+
+        Default implementation indexes `self.outputs` directly. Subclasses with
+        additional output spaces (e.g. shielded outputs) override this to make
+        the lookup aware of those spaces.
+        """
+        return self.outputs[index]
+
     def get_target(self, override_weight: Optional[float] = None) -> int:
         """Target to be achieved in the mining process"""
         if not isfinite(self.weight):
@@ -426,7 +435,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for txin in self.inputs:
             tx2 = self.storage.get_transaction(txin.tx_id)
-            txout = tx2.outputs[txin.index]
+            txout = tx2.resolve_spent_output(txin.index)
             add_address_from_output(txout)
 
         for txout in self.outputs:
@@ -775,7 +784,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for index, tx_in in enumerate(self.inputs):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
-            tx2_out = tx2.outputs[tx_in.index]
+            tx2_out = tx2.resolve_spent_output(tx_in.index)
             output = serialize_output(tx2, tx2_out)
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index

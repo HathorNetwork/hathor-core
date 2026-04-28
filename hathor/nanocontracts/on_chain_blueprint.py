@@ -185,7 +185,6 @@ class OnChainBlueprint(Transaction):
 
         self.code: Code = code if code is not None else Code(CodeKind.PYTHON_ZLIB, b'', self._settings)
         self._ast_cache: Optional[ast.Module] = None
-        self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
 
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
@@ -195,14 +194,13 @@ class OnChainBlueprint(Transaction):
     @override
     def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
                            *, verbose: VerboseCallback = None) -> Self:
-        from hathor.serialization import Deserializer
-        from hathor.transaction.vertex_parser._common import deserialize_graph_fields
+        from hathor.transaction.vertex_parser._common import deserialize_graph_fields, make_vertex_deserializer
         from hathor.transaction.vertex_parser._headers import deserialize_headers
         from hathor.transaction.vertex_parser._on_chain_blueprint import deserialize_ocb_extra_fields
         from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
         settings = get_global_settings()
         tx = cls(storage=storage)
-        deserializer = Deserializer.build_bytes_deserializer(struct_bytes)
+        deserializer = make_vertex_deserializer(struct_bytes, settings)
         deserialize_tx_funds(deserializer, tx, verbose=verbose)
         deserialize_ocb_extra_fields(deserializer, tx, verbose=verbose)
         deserialize_graph_fields(deserializer, tx, verbose=verbose)
@@ -242,12 +240,10 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
         """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
-        if self._blueprint_loaded_env is None:
-            blueprint_class, env = self._load_blueprint_code_exec()
-            assert isinstance(blueprint_class, type)
-            assert issubclass(blueprint_class, Blueprint)
-            self._blueprint_loaded_env = blueprint_class, env
-        return self._blueprint_loaded_env
+        blueprint_class, env = self._load_blueprint_code_exec()
+        assert isinstance(blueprint_class, type)
+        assert issubclass(blueprint_class, Blueprint)
+        return blueprint_class, env
 
     def get_blueprint_object_bypass(self) -> object:
         """Loads the code and returns the object exported with @export"""

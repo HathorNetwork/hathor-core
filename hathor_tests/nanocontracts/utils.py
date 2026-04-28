@@ -31,6 +31,13 @@ class TestRunner:
     MAX_RECURSION_DEPTH = Runner.MAX_RECURSION_DEPTH
     MAX_CALL_COUNTER = Runner.MAX_CALL_COUNTER
 
+    @classmethod
+    def from_runner(cls, runner: Runner) -> 'TestRunner':
+        """Wrap an existing Runner while keeping the legacy auto-commit test behavior."""
+        instance = cls.__new__(cls)
+        instance._runner = runner
+        return instance
+
     def __init__(
         self,
         *,
@@ -59,6 +66,12 @@ class TestRunner:
             seed=seed,
         )
 
+    def _commit_if_needed(self) -> None:
+        # Keep the legacy TestRunner behavior: mutating calls commit immediately.
+        # This must also be safe when the wrapped call already cleaned up after failure.
+        if self._runner.has_pending_changes():
+            self._runner.commit_pending_changes()
+
     def create_contract(
         self,
         contract_id: ContractId,
@@ -67,7 +80,9 @@ class TestRunner:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        return self._runner.create_contract(contract_id, blueprint_id, ctx, *args, **kwargs)
+        ret = self._runner.create_contract(contract_id, blueprint_id, ctx, *args, **kwargs)
+        self._commit_if_needed()
+        return ret
 
     def create_contract_with_nc_args(
         self,
@@ -76,7 +91,9 @@ class TestRunner:
         ctx: Context,
         nc_args: NCArgs,
     ) -> Any:
-        return self._runner.create_contract_with_nc_args(contract_id, blueprint_id, ctx, nc_args)
+        ret = self._runner.create_contract_with_nc_args(contract_id, blueprint_id, ctx, nc_args)
+        self._commit_if_needed()
+        return ret
 
     def call_public_method(
         self,
@@ -86,7 +103,9 @@ class TestRunner:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        return self._runner.call_public_method(contract_id, method_name, ctx, *args, **kwargs)
+        ret = self._runner.call_public_method(contract_id, method_name, ctx, *args, **kwargs)
+        self._commit_if_needed()
+        return ret
 
     def call_public_method_with_nc_args(
         self,
@@ -95,9 +114,17 @@ class TestRunner:
         ctx: Context,
         nc_args: NCArgs,
     ) -> Any:
-        return self._runner.call_public_method_with_nc_args(contract_id, method_name, ctx, nc_args)
+        ret = self._runner.call_public_method_with_nc_args(contract_id, method_name, ctx, nc_args)
+        self._commit_if_needed()
+        return ret
 
-    def call_view_method(self, contract_id: ContractId, method_name: str, *args: Any, **kwargs: Any) -> Any:
+    def call_view_method(
+        self,
+        contract_id: ContractId,
+        method_name: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         return self._runner.call_view_method(contract_id, method_name, *args, **kwargs)
 
     def get_current_balance(self, contract_id: ContractId, token_uid: TokenUid | None) -> Balance:

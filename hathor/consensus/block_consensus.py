@@ -500,11 +500,14 @@ class BlockConsensusAlgorithm:
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None
                 meta.nc_events = None
-                if meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}:
+                if meta.voided_by is not None and NC_EXECUTION_FAIL_ID in meta.voided_by:
+                    assert tx.hash in meta.voided_by
                     assert isinstance(tx, Transaction)
-                    self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
-                    assert meta.voided_by == {NC_EXECUTION_FAIL_ID}
-                    meta.voided_by = None
+                    if not meta.conflict_with:
+                        self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
+                    meta.voided_by.remove(NC_EXECUTION_FAIL_ID)
+                    if not meta.voided_by:
+                        meta.voided_by = None
             meta.first_block = None
             self.context.save(tx)
             bfs.add_neighbors()

@@ -1,4 +1,4 @@
-# Copyright 2023 Hathor Labs
+# Copyright 2025 Hathor Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.transaction import Block, Transaction
-
-
-def timestamp_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
-    """Return the nc_calls sorted by (timestamp, hash).
-
-    DEPRECATED: This is used only to keep compatibility with the alpha nano-testnet.
-    """
-    return sorted(nc_calls, key=lambda tx: (tx.timestamp, tx.hash))
+"""Test fixtures for nano contracts."""

@@ -23,17 +23,18 @@ class NCBlockSorterTestCase(unittest.TestCase):
             sorter.get_node(node)
 
         seed = self.rng.randbytes(32)
-        order = sorter.copy().generate_random_topological_order(seed)
+        order, stuck = sorter.copy().generate_random_topological_order(seed)
         self.assertEqual(len(self.nodes), len(set(order)))
+        self.assertEqual(stuck, set())
 
-        order2 = sorter.copy().generate_random_topological_order(seed)
+        order2, _ = sorter.copy().generate_random_topological_order(seed)
         self.assertEqual(order, order2)
 
         # There are n! permutations.
         # Therefore, the probability of getting the same order is 1/100!, which is around 1e-158.
         for _ in range(100):
             seed2 = self.rng.randbytes(32)
-            order2 = sorter.copy().generate_random_topological_order(seed2)
+            order2, _ = sorter.copy().generate_random_topological_order(seed2)
             self.assertNotEqual(order, order2)
 
     def test_single_one_step_dependencies(self) -> None:
@@ -46,13 +47,14 @@ class NCBlockSorterTestCase(unittest.TestCase):
             sorter.add_edge(self.nc_nodes[i], self.nodes[i + 1])
 
         seed = self.rng.randbytes(32)
-        order = sorter.copy().generate_random_topological_order(seed)
+        order, stuck = sorter.copy().generate_random_topological_order(seed)
         self.assertEqual(set(self.nc_nodes.values()), set(order))
+        self.assertEqual(stuck, set())
 
         # There's only one valid order. So it must return the same order for any seed.
         for _ in range(100):
             seed2 = self.rng.randbytes(32)
-            order2 = sorter.copy().generate_random_topological_order(seed2)
+            order2, _ = sorter.copy().generate_random_topological_order(seed2)
             self.assertEqual(order, order2)
 
     def test_single_long_dependencies(self) -> None:
@@ -68,13 +70,14 @@ class NCBlockSorterTestCase(unittest.TestCase):
                 sorter.add_edge(self.nodes[i], self.nodes[i + 1])
 
         seed = self.rng.randbytes(32)
-        order = sorter.copy().generate_random_topological_order(seed)
+        order, stuck = sorter.copy().generate_random_topological_order(seed)
         self.assertEqual(set(x for i, x in self.nc_nodes.items() if i % 4 == 0), set(order))
+        self.assertEqual(stuck, set())
 
         # There's only one valid order. So it must return the same order for any seed.
         for _ in range(100):
             seed2 = self.rng.randbytes(32)
-            order2 = sorter.copy().generate_random_topological_order(seed2)
+            order2, _ = sorter.copy().generate_random_topological_order(seed2)
             self.assertEqual(order, order2)
 
     def test_linear_multiple_dependencies(self) -> None:
@@ -86,11 +89,12 @@ class NCBlockSorterTestCase(unittest.TestCase):
         sorter.add_edge(self.nodes[4], self.nc_nodes[5])
 
         seed = self.rng.randbytes(32)
-        order = sorter.copy().generate_random_topological_order(seed)
+        order, stuck = sorter.copy().generate_random_topological_order(seed)
         self.assertEqual(order, [
             self.nc_nodes[5],
             self.nc_nodes[0],
         ])
+        self.assertEqual(stuck, set())
 
     def test_grid_multiple_dependencies(self) -> None:
         sorter = NCBlockSorter(set(self.nc_nodes.values()))
@@ -121,22 +125,45 @@ class NCBlockSorterTestCase(unittest.TestCase):
             layers.append(current)
 
         seed = self.rng.randbytes(32)
-        order = sorter.copy().generate_random_topological_order(seed)
+        order, stuck = sorter.copy().generate_random_topological_order(seed)
         self.assertEqual(order, [
             self.nc_nodes[75],
             self.nc_nodes[57],
             self.nc_nodes[1],
         ])
+        self.assertEqual(stuck, set())
 
         # There's only one valid order. So it must return the same order for any seed.
         for _ in range(100):
             seed2 = self.rng.randbytes(32)
-            order2 = sorter.copy().generate_random_topological_order(seed2)
+            order2, _ = sorter.copy().generate_random_topological_order(seed2)
             self.assertEqual(order, order2)
+
+    def test_simple_cycle(self) -> None:
+        # Two nodes forming a direct cycle: NC0 -> NC1 -> NC0.
+        sorter = NCBlockSorter({self.nc_nodes[0], self.nc_nodes[1]})
+        sorter.add_edge(self.nc_nodes[0], self.nc_nodes[1])
+        sorter.add_edge(self.nc_nodes[1], self.nc_nodes[0])
+
+        order, stuck = sorter.generate_random_topological_order(self.rng.randbytes(32))
+        self.assertEqual(order, [])
+        self.assertEqual(stuck, {self.nc_nodes[0], self.nc_nodes[1]})
+
+    def test_cycle_with_dependants(self) -> None:
+        # NC0 -> NC1 -> NC0 is the cycle, NC2 -> NC0 depends on the cycle, NC3 is independent.
+        ids = {self.nc_nodes[i] for i in (0, 1, 2, 3)}
+        sorter = NCBlockSorter(ids)
+        sorter.add_edge(self.nc_nodes[0], self.nc_nodes[1])
+        sorter.add_edge(self.nc_nodes[1], self.nc_nodes[0])
+        sorter.add_edge(self.nc_nodes[2], self.nc_nodes[0])
+        sorter.get_node(self.nc_nodes[3])
+
+        order, stuck = sorter.generate_random_topological_order(self.rng.randbytes(32))
+        self.assertEqual(order, [self.nc_nodes[3]])
+        self.assertEqual(stuck, {self.nc_nodes[0], self.nc_nodes[1], self.nc_nodes[2]})
 
     def test_dag_dependencies(self) -> None:
         builder = self.get_builder()
-        builder.enable_nc_anti_mev()
         manager = self.create_peer_from_builder(builder)
         dag_builder = TestDAGBuilder.from_manager(manager)
 

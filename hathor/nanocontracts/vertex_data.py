@@ -53,7 +53,7 @@ def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
 
     assert len(vertex2.outputs) > txin.index, 'invalid output index'
 
-    txin_output = vertex2.outputs[txin.index]
+    txin_output = vertex2.resolve_spent_output(txin.index)
     return txin_output
 
 

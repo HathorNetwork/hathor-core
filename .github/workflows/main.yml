@@ -54,6 +54,31 @@ jobs:
           echo $matrix
           echo $matrix | jq .
           echo $matrix | json2yaml
+  uv-check:
+    name: uv-check py3.13 (ubuntu-22.04)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Ubuntu dependencies
+        run: |
+          sudo apt-get -qy update
+          sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
+      - name: Install uv
+        run: pipx install uv
+      - name: Install uv dependencies
+        run: uv sync --frozen --dev --python 3.13
+      - name: Run checks
+        run: uv run --frozen make check
+      - name: Run htr-lib smoke test
+        run: uv run --frozen pytest -n0 -p no:warnings hathor_tests/others/test_htr_lib_integration.py
   lint:
     name: lint py${{ matrix.python }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -167,19 +192,21 @@ jobs:
     name: all-checks
     runs-on: ubuntu-latest
     if: always()
-    needs: [lint, test-cli, test-lib, test-other]
+    needs: [lint, test-cli, test-lib, test-other, uv-check]
     steps:
       - name: Check job results
         run: |
           if [[ "${{ needs.lint.result }}" != "success" ||
                 "${{ needs.test-cli.result }}" != "success" ||
                 "${{ needs.test-lib.result }}" != "success" ||
-                "${{ needs.test-other.result }}" != "success" ]]; then
+                "${{ needs.test-other.result }}" != "success" ||
+                "${{ needs.uv-check.result }}" != "success" ]]; then
             echo "One or more jobs failed or were cancelled:"
             echo "  lint: ${{ needs.lint.result }}"
             echo "  test-cli: ${{ needs.test-cli.result }}"
             echo "  test-lib: ${{ needs.test-lib.result }}"
             echo "  test-other: ${{ needs.test-other.result }}"
+            echo "  uv-check: ${{ needs.uv-check.result }}"
             exit 1
           fi
           echo "All checks passed!"

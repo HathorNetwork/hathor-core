@@ -20,10 +20,6 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
-from hathor.nanocontracts.blueprint_service import BlueprintService
-from hathor.transaction.storage.rocksdb_storage import CacheConfig
-from hathor_cli.run_node_args import RunNodeArgs
-from hathor_cli.side_dag import SideDagArgs
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -35,6 +31,8 @@ from hathor.feature_activation.storage.feature_activation_storage import Feature
 from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.blueprint_service import BlueprintService
+from hathor.nanocontracts.execution import NCBlockExecutor
 from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.p2p.manager import ConnectionsManager
@@ -44,14 +42,17 @@ from hathor.p2p.utils import discover_hostname, get_genesis_short_hash
 from hathor.pubsub import PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.stratum import StratumFactory
+from hathor.transaction.json_serializer import VertexJsonSerializer
+from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
-from hathor.transaction.json_serializer import VertexJsonSerializer
 from hathor.wallet import BaseWallet, HDWallet, Wallet
+from hathor_cli.run_node_args import RunNodeArgs
+from hathor_cli.side_dag import SideDagArgs
 
 logger = get_logger()
 
@@ -243,6 +244,14 @@ class CliBuilder:
             blueprint_service=blueprint_service,
         )
 
+        block_executor = NCBlockExecutor(
+            settings=settings,
+            runner_factory=runner_factory,
+            nc_storage_factory=self.nc_storage_factory,
+            nc_calls_sorter=nc_calls_sorter,
+            feature_service=self.feature_service,
+        )
+
         nc_log_storage = NCLogStorage(
             settings=settings,
             path=self.rocksdb_storage.path,
@@ -254,9 +263,8 @@ class CliBuilder:
             self.nc_storage_factory,
             soft_voided_tx_ids,
             settings=settings,
-            runner_factory=runner_factory,
+            block_executor=block_executor,
             nc_log_storage=nc_log_storage,
-            nc_calls_sorter=nc_calls_sorter,
             feature_service=self.feature_service,
             nc_exec_fail_trace=self._args.nc_exec_fail_trace,
             tx_storage=tx_storage,
