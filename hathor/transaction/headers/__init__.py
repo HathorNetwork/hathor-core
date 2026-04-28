@@ -17,9 +17,26 @@ from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.headers.nano_header import NanoHeader
 from hathor.transaction.headers.types import VertexHeaderId
 
+# Shielded-related headers (ShieldedOutputsHeader, UnshieldBalanceHeader,
+# MintHeader, MeltHeader) and their entry types are owned by hathorlib —
+# the wire format lives there once. Re-export for hathor-core consumers
+# so the import path under `hathor.transaction.headers` stays consistent.
+from hathorlib.headers import (  # noqa: F401
+    MeltHeader,
+    MintHeader,
+    MintMeltEntry,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+)
+
 __all__ = [
     'VertexBaseHeader',
     'VertexHeaderId',
     'NanoHeader',
     'FeeHeader',
+    'ShieldedOutputsHeader',
+    'UnshieldBalanceHeader',
+    'MintHeader',
+    'MeltHeader',
+    'MintMeltEntry',
 ]
