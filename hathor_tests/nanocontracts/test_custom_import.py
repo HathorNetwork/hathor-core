@@ -17,10 +17,14 @@ from io import StringIO
 from textwrap import dedent
 from unittest.mock import ANY, Mock, call, patch
 
+import pytest
+
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.nanocontracts import ENABLE_HTR_VM
 
 
+@pytest.mark.skipif(ENABLE_HTR_VM, reason='tests specific CPython implementation, irrelevant to HtrVM')
 class TestCustomImport(BlueprintTestCase):
     def test_custom_import_is_used(self) -> None:
         """Guarantee our custom import function is being called, instead of the builtin one."""

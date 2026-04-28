@@ -123,10 +123,8 @@ class TargetBlueprint(Blueprint):
         return self.counter
 
     @public(allow_deposit=True)
-    def proxy_increment(self, ctx: Context, blueprint_id: BlueprintId, value: int) -> int:
+    def proxy_increment(self, ctx: Context, blueprint_id: BlueprintId, args_bytes: bytes) -> int:
         """Call the increment method of another blueprint using proxy_call_public_method_nc_args."""
-        args_parser = ArgsOnly.from_arg_types((int,))
-        args_bytes = args_parser.serialize_args_bytes((value,))
         nc_args = NCRawArgs(args_bytes)
         # Pay 1 HTR as fee for the proxy call
         fees: list[NCFee] = [NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=1)]
@@ -722,8 +720,11 @@ class NCNanoContractTestCase(BlueprintTestCase):
             [NCDepositAction(token_uid=fee_token_uid, amount=20)],
             self.get_genesis_tx()
         )
+        value = 5
+        args_parser = ArgsOnly.from_arg_types((int,))
+        args_bytes = args_parser.serialize_args_bytes((value,))
         result = self.runner.call_public_method(
-            target_nc_id, 'proxy_increment', ctx_with_deposit, self.proxy_caller_blueprint_id, 5
+            target_nc_id, 'proxy_increment', ctx_with_deposit, self.proxy_caller_blueprint_id, args_bytes
         )
         assert result == 5
 

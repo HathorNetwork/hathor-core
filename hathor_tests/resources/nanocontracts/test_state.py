@@ -1,5 +1,4 @@
 import hashlib
-import math
 from typing import Any, NamedTuple, Optional, TypeAlias
 
 from cryptography.hazmat.primitives import hashes
@@ -7,7 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import decode_address, get_address_b58_from_bytes, get_public_key_bytes_compressed
+from hathor.crypto.util import decode_address, get_public_key_bytes_compressed
 from hathor.nanocontracts import Blueprint, Context, public, view
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.resources import NanoContractStateResource
@@ -108,15 +107,18 @@ class MyBlueprint(Blueprint):
         """A method only for testing that sums amount1 + amount2, in case
         the address is equal to WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN
         """
-        conditional_address = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN'
-        if test_tuple.address and get_address_b58_from_bytes(test_tuple.address) == conditional_address:
+        conditional_address = Address.from_str('WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN')
+        if test_tuple.address and test_tuple.address == conditional_address:
             return test_tuple.amount1 + test_tuple.amount2
 
         return None
 
     @view
     def multiply(self, elements: list[int]) -> int:
-        return math.prod(elements)
+        prod = 1
+        for el in elements:
+            prod *= el
+        return prod
 
     @view
     def conditional_multiply_bytes(self, t: tuple[int, Optional[bytes]]) -> Optional[bytes]:

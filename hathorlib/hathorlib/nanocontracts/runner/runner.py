@@ -24,7 +24,7 @@ from typing_extensions import assert_never
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError, TransactionDoesNotExist
 from hathorlib.nanocontracts.balance_rules import BalanceRules
-from hathorlib.nanocontracts.blueprint import Blueprint
+from hathorlib.nanocontracts.blueprint import NC_FIELDS_ATTR, Blueprint
 from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathorlib.nanocontracts.blueprint_exec import SandboxedExecutor
 from hathorlib.nanocontracts.blueprint_service import BlueprintServiceProtocol
@@ -309,7 +309,7 @@ class Runner:
     def _check_all_field_initialized(self, blueprint: Blueprint) -> None:
         """ Invoked after the initialize method is called to initialize uninitialized containers.
         """
-        field_names = getattr_static(blueprint, '__fields').keys()
+        field_names = getattr_static(blueprint, NC_FIELDS_ATTR).keys()
         uninit_field_names = []
         for field_name in field_names:
             field = getattr_static(blueprint, field_name)

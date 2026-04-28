@@ -218,7 +218,7 @@ class SignedData(InnerTypeMixin[T], Generic[T]):
 
 
 def _set_method_type(fn: Callable, method_type: NCMethodType) -> None:
-    if hasattr(fn, NC_METHOD_TYPE_ATTR):
+    if hasattr(fn, NC_METHOD_TYPE_ATTR) and getattr(fn, NC_METHOD_TYPE_ATTR) is not None:
         raise BlueprintSyntaxError(f'method must be annotated with at most one method type: `{fn.__name__}()`')
     setattr(fn, NC_METHOD_TYPE_ATTR, method_type)
 

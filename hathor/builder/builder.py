@@ -110,6 +110,7 @@ class BuildArtifacts(NamedTuple):
     wallet: Optional[BaseWallet]
     rocksdb_storage: RocksDBStorage
     stratum_factory: Optional[StratumFactory]
+    blueprint_service: BlueprintService
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
@@ -307,6 +308,7 @@ class Builder:
             stratum_factory=stratum_factory,
             feature_service=feature_service,
             bit_signaling_service=bit_signaling_service,
+            blueprint_service=blueprint_service,
         )
 
         return self.artifacts

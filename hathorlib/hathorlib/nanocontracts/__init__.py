@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 from hathorlib.nanocontracts.faux_immutable import (
     ALLOW_DUNDER_ATTR,
     ALLOW_INHERITANCE_ATTR,
@@ -23,6 +25,8 @@ from hathorlib.nanocontracts.faux_immutable import (
 )
 from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
+ENABLE_HTR_VM: bool = bool(os.environ.get('ENABLE_HTR_VM', False))
+
 __all__ = [
     'ALLOW_DUNDER_ATTR',
     'ALLOW_INHERITANCE_ATTR',
@@ -32,4 +36,5 @@ __all__ = [
     'SKIP_VALIDATION_ATTR',
     '__set_faux_immutable__',
     'create_with_shell',
+    'ENABLE_HTR_VM',
 ]

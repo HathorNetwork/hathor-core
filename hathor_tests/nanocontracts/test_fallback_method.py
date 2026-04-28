@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from typing import assert_never
 from unittest.mock import ANY
 
 import pytest
@@ -39,24 +38,24 @@ class MyBlueprint(Blueprint):
     @fallback(allow_deposit=True)
     def fallback(self, ctx: Context, method_name: str, nc_args: NCArgs) -> str:
         assert method_name == 'unknown'
-        match nc_args:
-            case NCRawArgs():
-                # XXX: we might need to provide a better way to describe the expected signature to `try_parse_as`,
-                #      because only looking a a tuple of types might not be enough, currently it is implemented
-                #      without the knowledge of default arguments, what this implies is that considering a signature
-                #      with types (str, int), it is possible for an empty tuple () to be a valid call, as long as the
-                #      function has default values for its two arguments, the parser takes the optimist path and
-                #      accepts parsing an empty tuple, so in this case args_bytes=b'\x00' parses to (), because it is
-                #      possible that that is a valid call
-                result = nc_args.try_parse_as((str, int))
-                if result is None:
-                    raise NCFail(f'unsupported args: {nc_args}')
-                greeting, x = result
-                return self.greet_double(ctx, greeting, x)
-            case NCParsedArgs(args, kwargs):
-                return self.greet_double(ctx, *args, **kwargs)
-            case _:
-                assert_never(nc_args)
+        if isinstance(nc_args, NCRawArgs):
+            # XXX: we might need to provide a better way to describe the expected signature to `try_parse_as`,
+            #      because only looking a a tuple of types might not be enough, currently it is implemented
+            #      without the knowledge of default arguments, what this implies is that considering a signature
+            #      with types (str, int), it is possible for an empty tuple () to be a valid call, as long as the
+            #      function has default values for its two arguments, the parser takes the optimist path and
+            #      accepts parsing an empty tuple, so in this case args_bytes=b'\x00' parses to (), because it is
+            #      possible that that is a valid call
+            result = nc_args.try_parse_as((str, int))
+            if result is None:
+                raise NCFail(f'unsupported args: {nc_args}')
+            greeting, x = result
+            return self.greet_double(ctx, greeting, x)
+
+        if isinstance(nc_args, NCParsedArgs):
+            return self.greet_double(ctx, *nc_args.args, **nc_args.kwargs)
+
+        raise AssertionError('unreachable')
 
     def greet_double(self, ctx: Context, greeting: str, x: int) -> str:
         return f'{greeting} {x + x}'

@@ -29,7 +29,7 @@ FORBIDDEN_NAMES = {
     'log',
 }
 
-NC_FIELDS_ATTR: str = '__fields'
+NC_FIELDS_ATTR: str = '__blueprint_fields'
 
 
 class _BlueprintBase(type):

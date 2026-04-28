@@ -15,11 +15,14 @@
 from collections import deque
 from typing import cast
 
+import pytest
+
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.nanocontracts import ENABLE_HTR_VM
 
 INT_NC_TYPE = VarInt32NCType()
 
@@ -153,6 +156,7 @@ class TestDequeField(unittest.TestCase):
         with self.assertRaises(KeyError):
             b12_storage.get_obj(b'dq:\x04', INT_NC_TYPE)
 
+    @pytest.mark.skipif(ENABLE_HTR_VM, reason='deque is not in allowed imports')
     def test_deque_field_with_deque(self) -> None:
         self._test_deque_field(self.bp_deque)
 

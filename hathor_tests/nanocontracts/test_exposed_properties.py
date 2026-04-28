@@ -3,10 +3,13 @@ from sys import version_info
 from types import MethodType
 from typing import Any
 
+import pytest
+
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
 from hathor.nanocontracts.custom_builtins import EXEC_BUILTINS
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.nanocontracts import ENABLE_HTR_VM
 
 MAX_DEPTH = 20
 NEW_PROP_NAME = 'some_new_attribute'
@@ -273,6 +276,7 @@ class MyBlueprint(Blueprint):
         return mutable_props
 
 
+@pytest.mark.skipif(ENABLE_HTR_VM, reason='tests specific CPython implementation, irrelevant to HtrVM')
 class TestMutableAttributes(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()

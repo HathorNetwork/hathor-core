@@ -303,7 +303,7 @@ class NCConsensusBlockExecutor:
                 if tx.name:
                     kwargs['__name'] = tx.name
                 if self._nc_exec_fail_trace:
-                    kwargs['exc_info'] = True
+                    kwargs['traceback'] = tb
                 self.log.info(
                     'nc execution failed',
                     tx=tx.hash.hex(),

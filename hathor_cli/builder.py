@@ -20,6 +20,7 @@ from typing import Any, Optional
 
 from structlog import get_logger
 
+from hathorlib.nanocontracts import ENABLE_HTR_VM
 from hathor.consensus import ConsensusAlgorithm
 from hathor.daa import DifficultyAdjustmentAlgorithm
 from hathor.event import EventManager
@@ -107,6 +108,10 @@ class CliBuilder:
             peer = PrivatePeer.auto_generated()
         python = f'{platform.python_version()}-{platform.python_implementation()}'
 
+        log_kwargs: dict[str, Any] = {}
+        if ENABLE_HTR_VM:
+            log_kwargs['htr_vm'] = True
+
         self.log.info(
             'hathor-core v{hathor}',
             hathor=hathor.__version__,
@@ -117,6 +122,7 @@ class CliBuilder:
             platform=platform.platform(),
             settings=settings_source,
             reactor_type=type(reactor).__name__,
+            **log_kwargs,
         )
 
         vertex_parser = VertexParser(settings=settings)

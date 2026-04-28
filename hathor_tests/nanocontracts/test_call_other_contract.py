@@ -54,7 +54,7 @@ class MyBlueprint(Blueprint):
             return
 
         actions = []
-        for action in ctx.__all_actions__:
+        for action in ctx.actions_list:
             assert isinstance(action, NCDepositAction)
             amount = 1 + action.amount // 2
             actions.append(NCDepositAction(token_uid=action.token_uid, amount=amount))
@@ -66,7 +66,7 @@ class MyBlueprint(Blueprint):
             return
 
         actions = []
-        for action in ctx.__all_actions__:
+        for action in ctx.actions_list:
             assert isinstance(action, NCWithdrawalAction)
             balance = self.syscall.get_balance_before_current_call(action.token_uid)
             diff = balance - action.amount
