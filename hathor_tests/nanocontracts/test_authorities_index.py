@@ -17,7 +17,7 @@ import pytest
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
 from hathor.nanocontracts.storage.contract_storage import Balance
-from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCActionType, TokenUid, VertexId
+from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCActionType, TokenUid, VertexId, view
 from hathor.nanocontracts.utils import derive_child_token_id
 from hathor.transaction import Block, Transaction, TxOutput
 from hathor.transaction.headers.nano_header import NanoHeaderAction
@@ -52,9 +52,14 @@ class MyBlueprint(Blueprint):
 
     @public
     def acquire_authority(self, ctx: Context, other_id: ContractId) -> None:
-        self.token_uid = derive_child_token_id(other_id, 'TKA')
+        contract = self.syscall.get_contract(other_id, blueprint_id=None)
+        self.token_uid = contract.view().get_token_uid()
         action = NCAcquireAuthorityAction(token_uid=self.token_uid, mint=True, melt=True)
-        self.syscall.get_contract(other_id, blueprint_id=None).public(action).allow_acquire_authority()
+        contract.public(action).allow_acquire_authority()
+
+    @view
+    def get_token_uid(self) -> TokenUid | None:
+        return self.token_uid
 
 
 class TestAuthoritiesIndex(BlueprintTestCase):

@@ -1,9 +1,11 @@
-from hathor.nanocontracts import Blueprint, Context, public
+from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.fields.container import INIT_NC_TYPE
+from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
 from hathorlib.nanocontracts.fields.deque_container import _METADATA_NC_TYPE as METADATA_NC_TYPE
 
 INT_NC_TYPE = VarInt32NCType()
@@ -38,43 +40,52 @@ class BlueprintWithCompoundField(Blueprint):
         assert len(self.dc) == 1
         assert 'bar' in self.dc
         assert 'foo' not in self.dc
-        # XXX: implicit creation fails:
-        try:
-            self.dc['foo']
-        except KeyError as e:
-            assert e.args == ('foo',)
-        else:
-            assert False
+
+    @public
+    def test_implicit_creation_fail(self, ctx: Context) -> None:
+        _ = self.dc['foo']
+
+    @public
+    def assert_len(self, ctx: Context) -> None:
         assert len(self.dc) == 1
-        # remove foo, test will check it was removed from the storage
-        del self.dc['foo']
 
 
 class TestDictField(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.manager = self.create_peer('unittests')
+        self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.ALL)
         self.bp_dict = b'1' * 32
         self.manager.blueprint_service.register_blueprint(self.bp_dict, BlueprintWithCompoundField)
 
     def test_dict_field(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''
-            blockchain genesis b[1..12]
+            blockchain genesis b[1..14]
             b10 < dummy
 
             nc1.nc_id = "{self.bp_dict.hex()}"
             nc1.nc_method = initialize()
 
+            nc2.nc_id = nc1
+            nc2.nc_method = test_implicit_creation_fail()
+
+            nc3.nc_id = nc1
+            nc3.nc_method = assert_len()
+
             nc1 <-- b11
             nc1 <-- b12
+            nc2 <-- b13
+            nc3 <-- b14
         ''')
         artifacts.propagate_with(self.manager)
 
-        b11, b12 = artifacts.get_typed_vertices(['b11', 'b12'], Block)
-        nc1, = artifacts.get_typed_vertices(['nc1'], Transaction)
+        b11, b12, b13, b14 = artifacts.get_typed_vertices(['b11', 'b12', 'b13', 'b14'], Block)
+        nc1, nc2, nc3 = artifacts.get_typed_vertices(['nc1', 'nc2', 'nc3'], Transaction)
 
         assert b11.get_metadata().voided_by is None
+        assert b12.get_metadata().voided_by is None
+        assert b13.get_metadata().voided_by is None
+        assert b14.get_metadata().voided_by is None
         assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().first_block == b11.hash
 
@@ -101,3 +112,15 @@ class TestDictField(unittest.TestCase):
         assert metadata.last_index == 3
         assert metadata.length == 4
         assert not metadata.reversed
+
+        assert nc2.get_metadata().voided_by == {nc2.hash, NC_EXECUTION_FAIL_ID}
+        assert nc2.get_metadata().first_block == b13.hash
+        assert_nc_failure_reason(
+            manager=self.manager,
+            tx_id=nc2.hash,
+            block_id=b13.hash,
+            reason='KeyError: \'foo\'',
+        )
+
+        assert nc3.get_metadata().voided_by is None
+        assert nc3.get_metadata().first_block == b14.hash

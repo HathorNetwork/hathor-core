@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import hashlib
+import json
 
 import pytest
 from cryptography.hazmat.backends import default_backend
@@ -21,7 +22,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from hathor import ContractId
 from hathor.crypto.util import get_public_key_bytes_compressed
-from hathor.nanocontracts import Blueprint, Context, NCFail, public, utils as nc_utils, view
+from hathor.nanocontracts import Blueprint, Context, NCFail, public, view
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
@@ -32,16 +33,19 @@ class MyBlueprint(Blueprint):
 
     @view
     def test_sha3(self, data: bytes) -> bytes:
-        return nc_utils.sha3(data)
+        from hathor import sha3
+        return sha3(data)
 
     @view
     def test_verify_ecdsa(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
-        return nc_utils.verify_ecdsa(public_key, data, signature)
+        from hathor import verify_ecdsa
+        return verify_ecdsa(public_key, data, signature)
 
     @view
     def test_json_dumps(self) -> str:
+        from hathor import json_dumps
         obj = dict(a=[1, 2, 3], b=123, c='abc', d=ContractId(b'\x01' * 32))
-        return nc_utils.json_dumps(obj)
+        return json_dumps(obj)
 
 
 class TestUtilsFunctions(BlueprintTestCase):
@@ -85,6 +89,11 @@ class TestUtilsFunctions(BlueprintTestCase):
     def test_json_dumps(self) -> None:
         result = self.runner.call_view_method(self.contract_id, 'test_json_dumps')
 
-        assert result == (
-            '{"a":[1,2,3],"b":123,"c":"abc","d":"0101010101010101010101010101010101010101010101010101010101010101"}'
+        assert json.loads(result) == (
+            dict(
+                a=[1, 2, 3],
+                b=123,
+                c='abc',
+                d='0101010101010101010101010101010101010101010101010101010101010101',
+            )
         )
