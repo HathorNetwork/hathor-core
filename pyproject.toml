@@ -89,6 +89,8 @@ dev = [
     "types-requests==2.28.11.4",
     "types-pyopenssl==22.1.0.2",
     "types-pyyaml==6.0.12.9",
+    # Test-only: PyO3 bindings for the experimental Rust port, used by the p2p interop tests.
+    "htr_next",
 ]
 
 [tool.poetry]
@@ -111,6 +113,8 @@ yamllint = "~1.35.1"
 types-requests = "=2.28.11.4"
 types-pyopenssl = "=22.1.0.2"
 types-pyyaml = "=6.0.12.9"
+# Test-only: PyO3 bindings for the experimental Rust port, used by the p2p interop tests.
+htr-next = {path = "htr-rs/crates/hathor-next-py", develop = true}
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.14"
@@ -150,11 +154,12 @@ htr-lib = {path = "htr-rs/crates/htr-lib-py", develop = true}
 hathor-ct-crypto = {path = "htr-rs/crates/hathor-ct-crypto", develop = true}
 
 [tool.uv.workspace]
-members = ["htr-rs/crates/htr-lib-py"]
+members = ["htr-rs/crates/htr-lib-py", "htr-rs/crates/hathor-next-py"]
 
 [tool.uv.sources]
 hathorlib = { path = "hathorlib", editable = true }
 htr-lib = { workspace = true }
+htr-next = { workspace = true }
 hathor-ct-crypto = { path = "htr-rs/crates/hathor-ct-crypto", editable = true }
 
 [tool.ruff]

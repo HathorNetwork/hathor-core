@@ -6,6 +6,7 @@ requires-python = ">=3.11, <3.14"
 members = [
     "hathor",
     "htr-lib",
+    "htr-next",
 ]
 
 [[package]]
@@ -474,6 +475,7 @@ sentry = [
 [package.dev-dependencies]
 dev = [
     { name = "flaky" },
+    { name = "htr-next" },
     { name = "mypy", marker = "implementation_name == 'cpython'" },
     { name = "mypy-zope", marker = "implementation_name == 'cpython'" },
     { name = "pytest" },
@@ -528,6 +530,7 @@ provides-extras = ["sentry"]
 [package.metadata.requires-dev]
 dev = [
     { name = "flaky", specifier = ">=3.8.1,<3.9.0" },
+    { name = "htr-next", editable = "htr-rs/crates/hathor-next-py" },
     { name = "mypy", marker = "implementation_name == 'cpython'", specifier = ">=1.19.1,<2.0.0" },
     { name = "mypy-zope", marker = "implementation_name == 'cpython'", specifier = ">=1.0.14,<2.0.0" },
     { name = "pytest", specifier = ">=8.3.2,<8.4.0" },
@@ -574,6 +577,10 @@ provides-extras = ["client"]
 [[package]]
 name = "htr-lib"
 source = { editable = "htr-rs/crates/htr-lib-py" }
+
+[[package]]
+name = "htr-next"
+source = { editable = "htr-rs/crates/hathor-next-py" }
 
 [[package]]
 name = "hyperlink"

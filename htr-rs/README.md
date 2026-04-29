@@ -8,6 +8,8 @@ Crates are organized as described in [Large Rust Workspaces](https://matklad.git
 
 - [`htr-lib`](crates/htr-lib) — core Rust implementations, independent of any language binding.
 - [`htr-lib-py`](crates/htr-lib-py) — Python extension module (via [PyO3](https://pyo3.rs/)) exposing `htr-lib`.
+- [`hathor-ct-crypto`](crates/hathor-ct-crypto) — Python extension module for confidential-transaction crypto.
+- [`hathor-next`](crates/hathor-next) — **experimental** partial Rust port of `hathor-core` focused on p2p and vertex serialization. Covered by the workspace `just all` suite; also has crate-local `cargo dev-*` aliases (see [`crates/hathor-next/.cargo/config.toml`](crates/hathor-next/.cargo/config.toml)) for building against all crypto backends with `target-cpu=native`.
 
 ## Development
 
