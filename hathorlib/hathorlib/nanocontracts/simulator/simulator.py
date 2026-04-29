@@ -445,7 +445,10 @@ class NanoSimulator:
         except NCFail:
             # On failure: don't commit, capture logs for debugging, re-raise
             call_info = runner.get_last_call_info()
-            exec_entry = NCExecEntry.from_call_info(call_info, traceback.format_exc())
+            exec_entry = NCExecEntry(
+                logs=call_info.nc_logger.__entries__,
+                error_traceback=traceback.format_exc()
+            )
             self._event_store.record_tx(
                 tx_hash=tx_hash,
                 block_hash=self._current_block_hash,
@@ -462,7 +465,7 @@ class NanoSimulator:
         # Capture events and logs
         call_info = runner.get_last_call_info()
         events = list(call_info.nc_logger.__events__)
-        exec_entry = NCExecEntry.from_call_info(call_info, None)
+        exec_entry = NCExecEntry(logs=call_info.nc_logger.__entries__)
 
         self._event_store.record_tx(
             tx_hash=tx_hash,
