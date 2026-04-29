@@ -15,7 +15,7 @@
 import unittest
 
 from hathorlib.exceptions import InvalidAddress
-from hathorlib.nanocontracts.types import HATHOR_TOKEN_UID, Address, NCFee, TokenUid
+from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, Address, NCFee, TokenUid
 from hathorlib.utils.address import get_address_b58_from_public_key, get_public_key_from_bytes_compressed
 
 
@@ -56,7 +56,7 @@ class TestNCFee(unittest.TestCase):
     def test_htr_fee_value(self) -> None:
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
-        fee = NCFee(token_uid=TokenUid(HATHOR_TOKEN_UID), amount=100)
+        fee = NCFee(token_uid=NC_HTR_TOKEN_UID, amount=100)
         self.assertEqual(fee.get_htr_value(settings), 100)
 
     def test_custom_token_fee_value(self) -> None:

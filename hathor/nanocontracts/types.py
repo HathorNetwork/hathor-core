@@ -15,7 +15,6 @@
 # Re-export all types from hathorlib for backward compatibility
 from hathorlib.nanocontracts.types import (  # noqa: F401
     BLUEPRINT_EXPORT_NAME,
-    HATHOR_TOKEN_UID,
     NC_ALLOW_REENTRANCY,
     NC_ALLOWED_ACTIONS_ATTR,
     NC_FALLBACK_METHOD,

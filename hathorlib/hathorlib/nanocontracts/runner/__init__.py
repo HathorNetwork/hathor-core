@@ -13,11 +13,12 @@
 #  limitations under the License.
 
 from hathorlib.nanocontracts.runner.call_info import CallInfo, CallRecord, CallType
-from hathorlib.nanocontracts.runner.runner import Runner
+from hathorlib.nanocontracts.runner.runner import Runner, RunnerFactory
 
 __all__ = [
     'CallType',
     'CallRecord',
     'CallInfo',
     'Runner',
+    'RunnerFactory',
 ]
