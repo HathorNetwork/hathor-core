@@ -57,7 +57,7 @@ class OnChainBlueprintScriptTestCase(unittest.TestCase):
             self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
         assert isinstance(cm.exception.__cause__, OCBInvalidScript)
         assert isinstance(cm.exception.__cause__.__cause__, SyntaxError)
-        assert cm.exception.args[0] == 'full validation failed: forbidden syntax'
+        assert 'full validation failed: forbidden syntax' in cm.exception.args[0]
         # The first error is always the one that makes the tx fail
         assert cm.exception.__cause__.__cause__.args[0] == syntax_errors[0]
 

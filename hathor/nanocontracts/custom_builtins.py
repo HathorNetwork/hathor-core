@@ -16,7 +16,6 @@
 from hathorlib.nanocontracts.custom_builtins import (  # noqa: F401
     AST_NAME_BLACKLIST,
     DISABLED_BUILTINS,
-    EXEC_BUILTINS,
     WRAPPER_ASSIGNMENTS,
     WRAPPER_UPDATES,
     ImportFunction,
@@ -25,4 +24,5 @@ from hathorlib.nanocontracts.custom_builtins import (  # noqa: F401
     custom_range,
     enumerate,
     filter,
+    get_exec_builtins,
 )
