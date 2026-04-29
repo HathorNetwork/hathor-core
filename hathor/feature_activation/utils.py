@@ -62,12 +62,6 @@ class Features:
         feature_states = feature_service.get_feature_states(vertex=vertex)
         feature_settings = Features.get_settings(settings)
 
-    @staticmethod
-    def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
-        """Return information about each feature according to the state in the provided vertex."""
-        feature_states = feature_service.get_feature_states(vertex=vertex)
-        feature_settings = Features.get_settings(settings)
-
         feature_is_active: dict[Feature, bool] = {
             feature: _is_feature_active(setting, feature_states.get(feature, FeatureState.DEFINED))
             for feature, setting in feature_settings.items()

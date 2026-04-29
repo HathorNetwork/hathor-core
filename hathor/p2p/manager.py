@@ -275,15 +275,16 @@ class ConnectionsManager:
         """Add a peer discovery method."""
         self.peer_discoveries.append(peer_discovery)
 
+    def connect_to_bootstrap(self, entrypoint: PeerEndpoint) -> None:
+        """Connect to a bootstrap entrypoint discovered via a PeerDiscovery strategy."""
+        self.connect_to_endpoint(entrypoint, discovery_call=True)
+
     def do_discovery(self) -> None:
         """
         Do a discovery and connect on all discovery strategies.
         """
-        def connect_to_bootstrap(entrypoint: PeerEndpoint) -> None:
-            self.connect_to_endpoint(entrypoint, discovery_call=True)
-
         for peer_discovery in self.peer_discoveries:
-            coro = peer_discovery.discover_and_connect(connect_to_bootstrap)
+            coro = peer_discovery.discover_and_connect(self.connect_to_bootstrap)
             Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:

@@ -32,14 +32,12 @@ RemoveFromSlotResult = ConnectionRemoved | ConnectionNotRemoved
 class ConnectionSlots:
     """ Class of a connection pool slot - outgoing, incoming, bootstrap connections. """
     connection_slot: set[HathorProtocol]
-    type: ConnectionType
     max_slot_connections: int
 
     def __init__(self, type: ConnectionType, max_connections: int) -> None:
 
         assert max_connections > 0, 'Slot max number must allow at least one connection'
 
-        self.type = type
         self.connection_slot = set()
         self.max_slot_connections = max_connections
 
@@ -51,23 +49,19 @@ class ConnectionSlots:
             disconnects the protocol. If the type is 'check_entrypoints', the returns peers of it
             may go to a queue."""
 
-        assert self.type == protocol.connection_type
-
         if protocol in self.connection_slot:
             return ConnectionRejected("Protocol already in Slot.")
 
         if self.is_full():
-            return ConnectionRejected(f"Slot {self.type} is full")
+            return ConnectionRejected(f"Slot {protocol.connection_type} is full")
 
         self.connection_slot.add(protocol)
 
-        return ConnectionAllowed(f"Added to slot {self.type}.")
+        return ConnectionAllowed(f"Added to slot {protocol.connection_type}.")
 
     def remove_connection(self, protocol: HathorProtocol) -> ConnectionRemoved:
         """ Removes from given instance the protocol passed. Returns protocol from queue
             when disconnection leads to free space in slot."""
-
-        assert self.type == protocol.connection_type
 
         # Discard does nothing if protocol not in connection_slot.
         self.connection_slot.discard(protocol)
@@ -118,10 +112,18 @@ class SlotsManager:
 
         return status
 
-    def remove_from_slot(self, protocol: HathorProtocol) -> RemoveFromSlotResult:
+    def remove_from_slot(self, protocol: HathorProtocol) -> None:
         """ Removes protocol from slot of same type.
             If OUTGOING, INCOMING or BOOTSTRAP, simply remove from slot and disconnect.
-            Should be called by manager when disconnecting a protocol."""
+            Should be called by manager when disconnecting a protocol.
+            Wraps _remove_from_slot_result and reduces API exposure."""
+
+        self._remove_from_slot_result(protocol)
+
+    def _remove_from_slot_result(self, protocol: HathorProtocol) -> RemoveFromSlotResult:
+        """ Removes protocol from slot of same type.
+            If OUTGOING, INCOMING or BOOTSTRAP, simply remove from slot and disconnect.
+            Returns type for result, used in tests."""
 
         conn_type = protocol.connection_type
         slot: ConnectionSlots
