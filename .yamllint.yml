@@ -5,6 +5,7 @@ extends: default
 
 ignore:
   - .venv/
+  - next/target/
 
 rules:
   document-start: disable
