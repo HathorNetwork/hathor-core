@@ -1,0 +1,101 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "htr-core"
+# XXX: set a version when it's ready for publishing, until then let it default to 0.0.0
+# version = "0.1.0"
+license = "Apache-2.0"
+edition = "2024"
+rust-version = "1.95"
+default-run = "htr-core"
+
+[features]
+# Choose exactly one crypto backend.
+# Default to aws-lc-rs to align with rustls 0.23 guidance.
+default = ["crypto-aws-lc"]
+
+# AWS-LC backend (baseline)
+crypto-aws-lc = [
+    "rustls/aws_lc_rs",
+    "tokio-rustls/aws_lc_rs",
+    "aws-lc-rs",
+    "hickory-resolver/https-aws-lc-rs",
+    "hickory-resolver/webpki-roots",
+]
+
+# Graviola backend (TLS via rustls-graviola; digest/keygen implemented under backend)
+crypto-graviola = ["rustls-graviola", "graviola"]
+
+# OpenSSL backend (TLS via rustls-openssl; digest/keygen implemented under backend)
+crypto-openssl = ["rustls-openssl", "openssl"]
+
+# QUIC transport (currently limited to the AWS-LC provider)
+# The quinn-proto crate uses aws-lc (or ring) directly for QUIC AEAD & retry keys,
+# and rustls's CryptoProvider API does not yet expose those hooks. Until upstream
+# supports other providers, keep this feature locked to the aws-lc stack.
+transport-quic = ["dep:quinn", "dep:pin-project", "quinn/rustls-aws-lc-rs"]
+
+# Tokio console tracing support (enable to capture metrics via console-subscriber)
+tokio-console = ["dep:console-subscriber"]
+
+[dependencies]
+aws-lc-rs = { version = "1.17", optional = true, default-features = false, features = ["alloc"] }
+base64 = "0.22"
+bs58 = { version = "0.5", features = ["smallvec"] }
+bytes = "1.12"
+clap = { version = "4.6", features = ["derive", "cargo"] }
+clap-verbosity-flag = { version = "3", features = ["tracing"] }
+color-eyre = "0.6"
+console-subscriber = { version = "0.5", optional = true }
+const-hex = "1.19"
+
+der = { version = "0.8", default-features = false, features = ["alloc"] }
+derive_more = { version = "2.1", features = ["full"] }
+# XXX: consider directories
+dirs = "6"
+form_urlencoded = "1.2"
+futures = "0.3"
+graviola = { version = "0.4.1", optional = true }
+
+# DNS resolver for bootstrap peer discovery.
+# DoT/DoH are enabled through the crypto-aws-lc feature.
+hickory-resolver = { version = "0.26.1", default-features = false, features = ["tokio", "system-config"] }
+http = "1.4"
+humantime = "2.3"
+indicatif = "0.18"
+openssl = { version = "0.10.81", optional = true }
+pin-project = { version = "1.1", optional = true }
+quinn = { version = "0.11.11", default-features = false, features = ["runtime-tokio"], optional = true }
+rand = "0.10"
+rayon = "1.12"
+rustls = { version = "0.23", default-features = false }
+rustls-graviola = { version = "0.4.0", optional = true }
+rustls-openssl = { version = "0.3.1", optional = true }
+rustls-pki-types = "1.14"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_repr = "0.1"
+smallstr = { version = "0.3", features = ["serde", "union"] }
+smallvec = { version = "1.15", features = ["serde", "union"] }
+spki = { version = "0.8", default-features = false, features = ["alloc", "pem"] }
+thiserror = "2.0"
+time = "0.3"
+tokio = { version = "1.52", features = ["full", "tracing"] }
+tokio-rustls = { version = "0.26", default-features = false }
+tokio-util = { version = "0.7", features = ["codec"] }
+toml = "1.1"
+tracing = "0.1.44"
+tracing-error = "0.2.1"
+tracing-indicatif = "0.3.14"
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter", "valuable"] }
+typed_floats = { version = "1.0.7", features = ["serde"] }
+url = { version = "2.5", features = ["serde"] }
+x509-cert = { version = "0.3.0-rc.4", default-features = false, features = ["pem", "std"] }
+
+[dev-dependencies]
+libc = "0.2"
+serde_test = "1"
+
+[lints]
+workspace = true

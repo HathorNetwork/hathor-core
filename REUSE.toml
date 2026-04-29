@@ -31,6 +31,8 @@ path = [
     "hathorlib/LICENSE.txt",
     "hathorlib/poetry.lock",
     "htr-rs/Cargo.lock",
+    "htr-rs/crates/htr-core/src/ca/ca.cert.der",
+    "htr-rs/crates/htr-core/src/ca/ca.key.der",
     "htr-rs/crates/htr-lib-napi/package-lock.json",
     "poetry.lock",
     "uv.lock",
