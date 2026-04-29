@@ -110,7 +110,7 @@ class ConnectionSlots:
         self.connection_slot = set()
         self.max_slot_connections = max_connections
 
-    def __in__(self, connection: HathorProtocol) -> bool:
+    def __contains__(self, connection: HathorProtocol) -> bool:
         return connection in self.connection_slot
 
     def __len__(self) -> int:
@@ -137,7 +137,7 @@ class ConnectionSlots:
         """ Removes from given instance the protocol passed. Returns protocol from queue
             when disconnection leads to free space in slot."""
 
-        if not self.is_in_slot(protocol):
+        if protocol not in self:
             return ConnectionNotRemoved('Connection not in slot for removal.')
 
         # Discard does nothing if protocol not in connection_slot.
@@ -146,9 +146,6 @@ class ConnectionSlots:
 
     def is_slot_full(self) -> bool:
         return len(self.connection_slot) >= self.max_slot_connections
-
-    def is_in_slot(self, protocol: HathorProtocol) -> bool:
-        return protocol in self
 
 
 class CheckEntrypoints(ConnectionSlots):
@@ -277,7 +274,7 @@ class CheckEntrypoints(ConnectionSlots):
          queue all provided entrypoints by the peer for later analysis. If it is not ready
          due to a timeout, we blacklist the entrypoint."""
 
-        if not self.is_in_slot(protocol):
+        if protocol not in self:
             return ConnectionNotRemoved('Connection not in slot for removal.')
 
         # Check if needs to blacklist protocol.
