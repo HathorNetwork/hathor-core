@@ -443,7 +443,8 @@ class NanoSimulator:
             with self._checksig_context():
                 fn(runner, ctx)
         except NCFail:
-            # On failure: don't commit, capture logs for debugging, re-raise
+            # On failure: discard pending changes, capture logs for debugging, re-raise
+            runner.discard_pending_changes()
             call_info = runner.get_last_call_info()
             exec_entry = NCExecEntry(
                 logs=call_info.nc_logger.__entries__,
@@ -459,7 +460,8 @@ class NanoSimulator:
             self._current_block_data_cache = None
             raise
 
-        # On success: commit runner changes (mirrors consensus_block_executor)
+        # On success: commit pending changes then persist storages (mirrors block_executor + consensus_block_executor)
+        runner.commit_pending_changes()
         runner.commit()
 
         # Capture events and logs
