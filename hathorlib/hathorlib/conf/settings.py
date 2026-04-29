@@ -380,6 +380,21 @@ class HathorSettings(BaseModel):
     # Number max of connections in the p2p network
     PEER_MAX_CONNECTIONS: int = 125
 
+    # Max Number of each connection slot (int):
+    # Note that the sum is 124 < 125.
+    # Reason: We must leave always ONE protocol space for
+    # the rebound slot. Otherwise, if the whole net is flooded
+    # (Incoming, Outgoing, Bootstrap, Check), we'll not be
+    # able to analyze queued entrypoints.
+
+    P2P_PEER_MAX_INCOMING_CONNECTIONS: int = 50
+    P2P_PEER_MAX_OUTGOING_CONNECTIONS: int = 59  # Leave ONE for REBOUND.
+    P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS: int = 10
+    P2P_PEER_MAX_CHECK_PEER_CONNECTIONS: int = 5
+
+    # Maximum number of entrypoints in check_entrypoints queue.
+    P2P_QUEUE_SIZE: int = 100
+
     # Maximum period without receiving any messages from ther peer (in seconds).
     PEER_IDLE_TIMEOUT: int = 60
 
@@ -567,5 +582,25 @@ class HathorSettings(BaseModel):
             raise ValueError(
                 f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
                 f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
+            )
+        return self
+
+    @model_validator(mode='after')
+    def _validate_peer_connection_slots(self) -> Self:
+        slot_total = (
+            self.P2P_PEER_MAX_INCOMING_CONNECTIONS
+            + self.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+            + self.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS
+            + self.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS
+            + 1  # REBOUND SLOT CONNECTION
+        )
+        if self.PEER_MAX_CONNECTIONS != slot_total:
+            raise ValueError(
+                f'PEER_MAX_CONNECTIONS ({self.PEER_MAX_CONNECTIONS}) must equal '
+                f'P2P_PEER_MAX_INCOMING_CONNECTIONS ({self.P2P_PEER_MAX_INCOMING_CONNECTIONS}) + '
+                f'P2P_PEER_MAX_OUTGOING_CONNECTIONS ({self.P2P_PEER_MAX_OUTGOING_CONNECTIONS}) + '
+                f'P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS ({self.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS}) + '
+                f'P2P_PEER_MAX_CHECK_PEER_CONNECTIONS ({self.P2P_PEER_MAX_CHECK_PEER_CONNECTIONS}) + '
+                f'REBOUND SLOT VACANCY (1 extra slot ) = {slot_total}'
             )
         return self
