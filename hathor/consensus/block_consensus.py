@@ -501,13 +501,17 @@ class BlockConsensusAlgorithm:
                 meta.nc_calls = None
                 meta.nc_events = None
                 if meta.voided_by is not None and NC_EXECUTION_FAIL_ID in meta.voided_by:
+                    # NC execution only runs when voided_by is None, so both tx.hash
+                    # and NC_EXECUTION_FAIL_ID here originate from the same
+                    # mark_as_nc_fail_execution call and are safe to roll back
+                    # together — including the funds-DAG propagation of tx.hash.
                     assert tx.hash in meta.voided_by
                     assert isinstance(tx, Transaction)
-                    if not meta.conflict_with:
-                        self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
+                    self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
                     meta.voided_by.remove(NC_EXECUTION_FAIL_ID)
                     if not meta.voided_by:
                         meta.voided_by = None
+                    self.context.transaction_algorithm.assert_valid_consensus(tx)
             meta.first_block = None
             self.context.save(tx)
             bfs.add_neighbors()
