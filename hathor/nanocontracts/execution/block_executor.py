@@ -25,6 +25,7 @@ from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_consensus_method_call
 from hathorlib.nanocontracts.runner.call_info import CallInfo
 from hathorlib.nanocontracts.runner.runner import MAX_SEQNUM_JUMP_SIZE
 from hathorlib.nanocontracts.types import Address, BlueprintId, ContractId, NCRawArgs, VertexId
@@ -296,10 +297,12 @@ class NCBlockExecutor:
                 block_storage.set_address_seqnum(nc_address, nc_header.nc_seqnum)
             return NCTxExecutionSkipped(tx=tx)
 
+        executor = create_sandbox_for_consensus_method_call()
         runner = self._runner_factory.create(
             runtime_version=runtime_version,
             block_storage=block_storage,
             seed=rng_seed,
+            executor=executor,
         )
 
         try:

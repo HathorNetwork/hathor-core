@@ -54,8 +54,6 @@ from hathorlib.nanocontracts.exception import (  # noqa: F401
     OCBBlueprintNotConfirmed,
     OCBInvalidBlueprintVertexType,
     OCBInvalidScript,
-    OCBOutOfFuelDuringLoading,
-    OCBOutOfMemoryDuringLoading,
     OCBPubKeyNotAllowed,
     UnknownFieldType,
 )

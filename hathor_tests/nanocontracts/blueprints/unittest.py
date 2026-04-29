@@ -17,7 +17,8 @@ from hathor.util import not_none
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
-from hathor_tests.nanocontracts.utils import TestRunner
+from hathor_tests.nanocontracts.utils import TestRunner, create_sandbox_for_tests
+from hathorlib.nanocontracts.blueprint_exec import exec_ocb_class_checked
 
 
 class BlueprintTestCase(unittest.TestCase):
@@ -67,7 +68,8 @@ class BlueprintTestCase(unittest.TestCase):
         nc_logger = NCLogger(__reactor__=runner.reactor, __nc_id__=contract_id)
         env = BlueprintEnvironment(runner, nc_logger, contract_storage, disable_cache=True)
         blueprint_id = runner.get_blueprint_id(contract_id)
-        blueprint_class = runner.blueprint_service.get_blueprint_class(blueprint_id)
+        executor = create_sandbox_for_tests()
+        blueprint_class = runner.blueprint_service.get_blueprint_class(executor, blueprint_id)
         contract = blueprint_class(env)
         return contract
 
@@ -114,7 +116,8 @@ class BlueprintTestCase(unittest.TestCase):
             verifier = OnChainBlueprintVerifier(settings=self._settings)
             verifier.verify_code(ocb)
 
-        blueprint_class = ocb.get_blueprint_class()
+        executor = create_sandbox_for_tests()
+        blueprint_class = exec_ocb_class_checked(executor, ocb)
         if inject_in_class is not None:
             for key, value in inject_in_class.items():
                 setattr(blueprint_class, key, value)

@@ -21,7 +21,10 @@ from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
+from hathorlib.nanocontracts.blueprint_exec import SandboxedExecutor, UsageLimits, create_sandbox
 from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
+
+_MAX_USAGE_FOR_TESTS = UsageLimits(compute=0, memory=0)
 
 
 class TestRunner:
@@ -55,6 +58,7 @@ class TestRunner:
         store = RocksDBNodeTrieStore(tx_storage._rocksdb_storage)
         block_trie = PatriciaTrie(store)
         block_storage = NCBlockStorage(block_trie)
+        executor = create_sandbox_for_tests()
         self._runner: Runner = Runner(
             runtime_version=runtime_version,
             tx_storage=tx_storage,
@@ -64,6 +68,7 @@ class TestRunner:
             settings=settings,
             reactor=reactor,
             seed=seed,
+            executor=executor,
         )
 
     def _commit_if_needed(self) -> None:
@@ -196,3 +201,11 @@ def set_nano_header(
 
     sign_pycoin(nano_header, privkey)
     tx.headers.append(nano_header)
+
+
+def create_sandbox_for_tests() -> SandboxedExecutor:
+    """
+    Create a sandboxed environment for Python code execution,
+    with compute and memory limits set for generic tests.
+    """
+    return create_sandbox(_MAX_USAGE_FOR_TESTS)

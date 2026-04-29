@@ -25,11 +25,13 @@ from hathor.transaction import Transaction
 from hathor.transaction.scripts import P2PKH
 from hathor.util import initialize_hd_wallet, not_none
 from hathor.wallet import KeyPair
+from hathorlib.nanocontracts.blueprint_exec import exec_ocb_class_checked
+from hathorlib.nanocontracts.method import Method
 
 from ...utils import DEFAULT_WORDS
 from .. import test_blueprints
 from ..blueprints.unittest import BlueprintTestCase
-from ..utils import TestRunner
+from ..utils import TestRunner, create_sandbox_for_tests
 from .utils import get_ocb_private_key
 
 settings = HathorSettings()
@@ -113,7 +115,9 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         return blueprint
 
     def _gen_nc_initialize_tx(self, blueprint: OnChainBlueprint, nc_args: list[Any]) -> Transaction:
-        method_parser = blueprint.get_method(NC_INITIALIZE_METHOD)
+        executor = create_sandbox_for_tests()
+        blueprint_class = exec_ocb_class_checked(executor, blueprint)
+        method_parser = Method.from_callable(getattr(blueprint_class, NC_INITIALIZE_METHOD))
         timestamp = int(self.manager.reactor.seconds())
         parents = self.manager.get_new_tx_parents()
 
@@ -175,7 +179,8 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
 
         # set expected self objects:
         self.nc_id = ContractId(VertexId(nc_init_tx.hash))
-        self.runner = TestRunner.from_runner(self.manager.get_nc_runner(block))
+        executor = create_sandbox_for_tests()
+        self.runner = TestRunner.from_runner(self.manager.get_nc_runner(executor, block))
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def test_blueprint_initialization(self) -> None:

@@ -47,6 +47,7 @@ from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_verification_exec
 from hathorlib.nanocontracts.verification import verify_action_list
 
 MAX_SEQNUM_DIFF_MEMPOOL = MAX_SEQNUM_JUMP_SIZE + 30
@@ -150,8 +151,9 @@ class NanoHeaderVerifier:
             blueprint_id = contract_storage.get_blueprint_id()
             allow_fallback = True
 
+        executor = create_sandbox_for_verification_exec()
         try:
-            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
+            blueprint_class = self.blueprint_service.get_blueprint_class(executor, blueprint_id)
         except NCFail as e:
             raise NCTxValidationError from e
 

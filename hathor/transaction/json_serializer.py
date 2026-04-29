@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.transaction import BaseTransaction, Transaction
+from hathorlib.nanocontracts.blueprint_exec import create_sandbox_for_json_serializer
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
@@ -136,8 +137,9 @@ class VertexJsonSerializer:
             # Get blueprint_id from NanoHeader
             blueprint_id = nano_header.get_blueprint_id_for_json()
 
+        executor = create_sandbox_for_json_serializer()
         try:
-            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
+            blueprint_class = self.blueprint_service.get_blueprint_class(executor, blueprint_id)
         except NCFail:
             return None
 
