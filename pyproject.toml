@@ -204,6 +204,7 @@ module = [
     'colorama',
     'configargparse',
     'graphviz',
+    'hathor_ct_crypto',
     'prometheus_client',
     'pudb.*',
     'pycoin.*',
