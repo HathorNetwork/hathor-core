@@ -39,6 +39,7 @@ from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
+from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
@@ -188,6 +189,7 @@ class Builder:
         self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._slots_manager: SlotsManager | None = None
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
 
@@ -469,6 +471,7 @@ class Builder:
         enable_ssl = True
         reactor = self._get_reactor()
         my_peer = self._get_peer()
+        slots_manager = self._get_or_create_slots_manager()
 
         self._p2p_manager = ConnectionsManager(
             settings=self._get_or_create_settings(),
@@ -479,6 +482,7 @@ class Builder:
             rng=self._rng,
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
+            slots_manager=slots_manager
         )
         SyncSupportLevel.add_factories(
             self._get_or_create_settings(),
@@ -710,6 +714,28 @@ class Builder:
             )
 
         return self._blueprint_service
+
+    def _get_or_create_slots_manager(self) -> SlotsManager:
+        if self._slots_manager:
+            return self._slots_manager
+
+        # Instances of Connection Slots
+        settings = self._get_or_create_settings()
+
+        max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
+        max_bootstrap: int = settings.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS
+
+        slots_manager_settings = SlotsManagerSettings(
+            max_outgoing=max_outgoing,
+            max_incoming=max_incoming,
+            max_bootstrap=max_bootstrap,
+        )
+
+        # Connection slots manager -> Kickstarts connection slots
+        slots_manager = SlotsManager(slots_manager_settings)
+
+        return slots_manager
 
     def set_rocksdb_path(self, path: str | tempfile.TemporaryDirectory) -> 'Builder':
         if self._tx_storage:
