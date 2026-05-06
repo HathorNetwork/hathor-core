@@ -25,6 +25,7 @@ from hathor.daa.common import (
     _minimum_tx_weight,
 )
 from hathor.daa.daa import DifficultyAdjustmentAlgorithm
+from hathor.feature_activation.feature import Feature
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -103,8 +104,7 @@ class DAAFactory:
     def create_from_parent(self, parent_block: Block) -> DifficultyAdjustmentAlgorithm:
         """Build a DAA with the version that applies to a block whose parent is `parent_block`.
 
-        Shape B semantics: V2 takes effect on the block AFTER the activation block —
-        a block is V2 iff its parent is in REDUCE_DAA_TARGET ACTIVE state.
+        Shape B semantics: V2 takes effect on the block AFTER the activation block.
 
         Production-only: requires ``feature_service`` to be wired, and ``parent_block``
         to carry static metadata. CLI/synthetic-block paths must call ``create_v1``
@@ -122,7 +122,6 @@ class DAAFactory:
         return self.create_from_parent(block.get_block_parent())
 
     def _select_config(self, parent_block: Block) -> DAAConfig:
-        from hathor.feature_activation.feature import Feature
         assert self._feature_service is not None, (
             'create_from_block/create_from_parent require a feature_service; '
             'use create_v1() directly for code paths without one'

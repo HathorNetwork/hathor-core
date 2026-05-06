@@ -52,7 +52,7 @@ FEATURE_ACTIVATION:
       signal_support_by_default: true
 
     # current height: 335_348 at 2026-02-03 17:12:47 GMT
-    FAILED_OPCODES_V2:
+    OPCODES_V2:
       bit: 0
       start_height: 335_520  # expected around 2026-02-03 18:38:47 GMT
       timeout_height: 347_040  # 48 evaluation periods (96 hours)
@@ -61,8 +61,22 @@ FEATURE_ACTIVATION:
       version: 0.69.0
       signal_support_by_default: true
 
+    REDUCE_DAA_TARGET:
+      bit: 1
+      # Right now the best block is 598_681 at Wednesday, 2026-05-06 14:26:40 GMT
+      # Also gates NANO_RUNTIME_V2 because both features are indifferent
+      # to transaction verification.
+      start_height: 598_800  # expected around 2026-05-06 15:26:10 GMT
+      timeout_height: 639_120  # 2 weeks, expected around 2026-05-20 15:26:10 GMT
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.70.0
+      signal_support_by_default: true
+
 ENABLE_NANO_CONTRACTS: feature_activation
 ENABLE_FEE_BASED_TOKENS: feature_activation
+ENABLE_OPCODES_V2: feature_activation
+ENABLE_NANO_RUNTIME_V2: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
   - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY

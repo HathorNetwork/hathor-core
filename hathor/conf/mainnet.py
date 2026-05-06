@@ -232,7 +232,10 @@ SETTINGS = HathorSettings(
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
     ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
-    ENABLE_FEE_BASED_TOKENS=FeatureSetting.DISABLED,
+    ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_OPCODES_V2=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_NANO_RUNTIME_V2=FeatureSetting.FEATURE_ACTIVATION,
+    RESTRICT_DUP_ACTIONS=FeatureSetting.FEATURE_ACTIVATION,
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9',
         'HUbxYhtqW8pdRCC2WngPxN7MB4SUMDPrrh',
@@ -293,6 +296,59 @@ SETTINGS = HathorSettings(
                 minimum_activation_height=6_350_400,
                 lock_in_on_timeout=False,
                 version='0.69.0',
+                signal_support_by_default=True,
+            ),
+            Feature.FEE_TOKENS: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=0,
+                # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
+                start_height=6_552_000,  # expected around 2026-05-13 11:06:38 GMT
+                # If DAA activates after 3 weeks, heights should increase 4x faster after 6_612_480.
+                timeout_height=7_015_680,  # 8 weeks wall-clock, expected around 2026-07-08 11:06:38 GMT
+                # Aligned with DAA/NanoRuntime so all v0.70 features activate together at the earliest.
+                minimum_activation_height=6_612_480,  # 3 weeks wall-clock, expected around 2026-06-03 11:06:38 GMT
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.REDUCE_DAA_TARGET: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=1,
+                # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
+                # Also gates NANO_RUNTIME_V2 because both features are indifferent to transaction verification.
+                start_height=6_552_000,  # expected around 2026-05-13 11:06:38 GMT
+                timeout_height=6_713_280,  # 8 weeks, expected around 2026-07-08 11:06:38 GMT
+                minimum_activation_height=6_612_480,  # 3 weeks, expected around 2026-06-03 11:06:38 GMT
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.OPCODES_V2: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=3,
+                # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
+                # Delayed because bit 3 is occupied until the failed 0.69.0 window ends.
+                start_height=6_612_480,  # expected around 2026-06-03 11:06:38 GMT
+                # If DAA activates at this height, heights should increase 4x faster afterwards.
+                timeout_height=7_257_600,  # 8 weeks wall-clock, expected around 2026-07-29 11:06:38 GMT
+                # No minimum_activation_height: by the time signaling starts, all upgraded nodes
+                # will already enforce this rule.
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.RESTRICT_DUP_ACTIONS: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=2,
+                # Same activation window as OPCODES_V2, but on a separate bit (bit 2 frees up
+                # after the failed FEE_TOKENS 0.69.0 window). No minimum_activation_height: by
+                # the time signaling starts, all upgraded nodes will already enforce this rule.
+                start_height=6_612_480,  # expected around 2026-06-03 11:06:38 GMT
+                timeout_height=7_257_600,  # expected around 2026-07-29 11:06:38 GMT
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
                 signal_support_by_default=True,
             ),
         }
