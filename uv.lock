@@ -1309,8 +1309,8 @@ wheels = [
 
 [[package]]
 name = "rocksdb"
-version = "0.10.0"
-source = { git = "https://github.com/hathornetwork/python-rocksdb.git#f1da1157464db7ed050dff9a66da920394909e7b" }
+version = "0.10.1"
+source = { git = "https://github.com/hathornetwork/python-rocksdb.git#8c20974458995ab7a1a64e046a40311e58450ffd" }
 
 [[package]]
 name = "ruff"
