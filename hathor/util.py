@@ -270,7 +270,7 @@ class Random(PyRandom):
         CDF^{-1}(x) = log(1 - x) / log(1 - p)
         [1] https://en.wikipedia.org/wiki/Inverse_transform_sampling
         """
-        return math.ceil(math.log(self.random()) / math.log(1 - p))
+        return math.ceil(math.log(self.random()) / math.log1p(-p))
 
     def ordered_sample(self, seq: Sequence[T], k: int) -> list[T]:
         """Like self.sample but preserve orginal order.

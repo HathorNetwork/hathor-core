@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import IntFlag
+from enum import IntEnum, IntFlag
 from math import log
 from typing import TYPE_CHECKING, Callable
 
@@ -27,6 +27,11 @@ from hathor.util import iwindows
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import Block, Transaction
+
+
+class DAAVersion(IntEnum):
+    V1 = 1  # Original 30s target
+    V2 = 2  # Reduced target (REDUCE_DAA_TARGET)
 
 
 class TestMode(IntFlag):
@@ -42,17 +47,39 @@ class TestMode(IntFlag):
 class DAAConfig:
     """The values that distinguish one DAA version from another.
 
-    A DAA version is fully described by a `DAAConfig` instance: the target block time.
-    The algorithm itself is shared and parameterized by this object — see
+    A DAA version (V1, V2, ...) is fully described by a `DAAConfig` instance: the target
+    block time, the reward reduction factor, and (for V2) the height where the reduction
+    takes effect. The algorithm itself is shared and parameterized by this object — see
     ``hathor.daa.daa.DifficultyAdjustmentAlgorithm``.
+
+    ``v2_start_height`` — the height of the first V2 block — is required for
+    ``get_mined_tokens`` to split the cumulative sum between V1 and V2 ranges. It is
+    None for V1 configs, and may be None for V2 configs built outside the per-block
+    factory (e.g. tests that only exercise per-block reward methods).
     """
 
     avg_time_between_blocks: float
+    reward_reduction_factor: int
+    v2_start_height: int | None = None
 
     @classmethod
     def for_v1(cls, settings: HathorSettings) -> DAAConfig:
-        """V1: original block target."""
-        return cls(avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS)
+        """V1: original block target, no reward reduction."""
+        return cls(
+            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
+            reward_reduction_factor=1,
+        )
+
+    @classmethod
+    def for_v2(cls, settings: HathorSettings, *, v2_start_height: int | None = None) -> DAAConfig:
+        """V2: shorter block target, reward reduced proportionally to the speed-up."""
+        return cls(
+            avg_time_between_blocks=settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X / 10,
+            reward_reduction_factor=(
+                (settings.AVG_TIME_BETWEEN_BLOCKS * 10) // settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X
+            ),
+            v2_start_height=v2_start_height,
+        )
 
 
 def _calculate_N(settings: HathorSettings, parent_block: Block) -> int:
@@ -195,31 +222,63 @@ def _get_base_tokens_issued_per_block(settings: HathorSettings, height: int) -> 
     return max(amount, settings.MINIMUM_TOKENS_PER_BLOCK)
 
 
-def _get_mined_tokens(settings: HathorSettings, height: int) -> int:
-    """Return the number of tokens mined in total at height.
-
-    The base reward at each halving is ``INITIAL_TOKENS_PER_BLOCK // 2**halving`` (capped at
-    ``MINIMUM_TOKENS_PER_BLOCK``).
+def _sum_block_rewards_in_range(
+    settings: HathorSettings,
+    *,
+    start_height: int,
+    end_height: int,
+    reward_reduction_factor: int,
+) -> int:
+    """Sum per-block rewards for heights ``[start_height, end_height]``, dividing each
+    block's base reward by ``reward_reduction_factor``.
     """
+    if start_height > end_height:
+        return 0
+
     assert settings.BLOCKS_PER_HALVING is not None
-    number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
-    number_of_halvings = max(0, number_of_halvings)
 
-    blocks_in_this_halving = height - number_of_halvings * settings.BLOCKS_PER_HALVING
-
-    tokens_per_block = settings.INITIAL_TOKENS_PER_BLOCK
-    mined_tokens = 0
-
-    # Sum the past halvings
-    for _ in range(number_of_halvings):
-        mined_tokens += settings.BLOCKS_PER_HALVING * tokens_per_block
-        tokens_per_block //= 2
+    total = 0
+    h = start_height
+    while h <= end_height:
+        halving = max(0, (h - 1) // settings.BLOCKS_PER_HALVING)
+        tokens_per_block = settings.INITIAL_TOKENS_PER_BLOCK // (2 ** halving)
         tokens_per_block = max(tokens_per_block, settings.MINIMUM_TOKENS_PER_BLOCK)
 
-    # Sum the blocks in the current halving
-    mined_tokens += blocks_in_this_halving * tokens_per_block
+        next_halving_first_height = (halving + 1) * settings.BLOCKS_PER_HALVING + 1
+        chunk_end = min(end_height, next_halving_first_height - 1)
+        chunk_blocks = chunk_end - h + 1
+        total += chunk_blocks * (tokens_per_block // reward_reduction_factor)
+        h = chunk_end + 1
 
-    return mined_tokens
+    return total
+
+
+def _get_mined_tokens(
+    settings: HathorSettings,
+    height: int,
+    *,
+    reward_reduction_factor: int,
+    v2_start_height: int | None,
+) -> int:
+    """Return the number of tokens mined in total at height.
+
+    Heights below ``v2_start_height`` are treated as V1 (no reduction). Heights at or above
+    ``v2_start_height`` get their per-block reward divided by ``reward_reduction_factor``.
+    When ``v2_start_height`` is ``None`` or beyond ``height``, the entire range is V1.
+    """
+    if v2_start_height is None or v2_start_height > height:
+        return _sum_block_rewards_in_range(
+            settings, start_height=1, end_height=height, reward_reduction_factor=1,
+        )
+    return (
+        _sum_block_rewards_in_range(
+            settings, start_height=1, end_height=v2_start_height - 1, reward_reduction_factor=1,
+        )
+        + _sum_block_rewards_in_range(
+            settings, start_height=v2_start_height, end_height=height,
+            reward_reduction_factor=reward_reduction_factor,
+        )
+    )
 
 
 def _get_block_dependencies(

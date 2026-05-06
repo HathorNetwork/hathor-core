@@ -57,7 +57,7 @@ class MiningInfoResource(Resource):
         parent = block.get_block_parent()
         hashrate = 2**(parent.weight - log(30, 2))
 
-        mined_tokens = self.manager.daa_factory.get_mined_tokens(height)
+        mined_tokens = self.manager.daa_factory.create_from_parent(parent).get_mined_tokens(height)
 
         data = {
             'hashrate': hashrate,

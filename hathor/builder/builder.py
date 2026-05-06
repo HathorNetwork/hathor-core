@@ -647,6 +647,10 @@ class Builder:
                 settings=settings,
                 feature_service=feature_service,
             )
+        elif self._daa_factory._feature_service is None:
+            # A pre-set factory (tests, simulator) may have been built before
+            # feature_service existed; wire it in now so feature-aware DAA selection works.
+            self._daa_factory._feature_service = self._get_or_create_feature_service()
 
         return self._daa_factory
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, assert_never
 
+from hathor.daa import DAAVersion
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
@@ -39,6 +40,7 @@ class Features:
     opcodes_version: OpcodesVersion
     nano_runtime_version: NanoRuntimeVersion
     restrict_dup_actions: bool
+    daa_version: DAAVersion
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -54,6 +56,7 @@ class Features:
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.NANO_RUNTIME_V2: settings.ENABLE_NANO_RUNTIME_V2,
             Feature.RESTRICT_DUP_ACTIONS: settings.RESTRICT_DUP_ACTIONS,
+            Feature.REDUCE_DAA_TARGET: FeatureSetting.FEATURE_ACTIVATION,
         }
 
     @staticmethod
@@ -71,6 +74,9 @@ class Features:
         nano_runtime_version = (
             NanoRuntimeVersion.V2 if feature_is_active[Feature.NANO_RUNTIME_V2] else NanoRuntimeVersion.V1
         )
+        daa_version = (
+            DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
+        )
 
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
@@ -79,6 +85,7 @@ class Features:
             opcodes_version=opcodes_version,
             nano_runtime_version=nano_runtime_version,
             restrict_dup_actions=feature_is_active[Feature.RESTRICT_DUP_ACTIONS],
+            daa_version=daa_version,
         )
 
     @staticmethod
@@ -105,6 +112,7 @@ class Features:
             fee_tokens=features.fee_tokens,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
+            daa_version=features.daa_version,
         )
 
     @staticmethod
@@ -127,6 +135,7 @@ class Features:
             opcodes_version=OpcodesVersion.V2,
             nano_runtime_version=NanoRuntimeVersion.V2,
             restrict_dup_actions=True,
+            daa_version=DAAVersion.V2,
         )
 
 

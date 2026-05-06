@@ -282,11 +282,10 @@ class VertexExporter:
         if 'weight' in node.attrs:
             blk.weight = float(node.attrs['weight'])
         else:
-            # synthetic blocks have no storage, so use get_parent_block (which returns a
-            # fake genesis when the parent is genesis); the factory falls back to V1 when
-            # the parent has no static metadata, which matches the dag_builder's V1-only
-            # mode.
-            daa = self._daa_factory.create_from_parent(self.get_parent_block(blk))
+            # Synthetic dag_builder blocks have no static metadata and the factory has
+            # no feature_service wired, so call create_v1 directly — dag_builder is
+            # V1-only by construction.
+            daa = self._daa_factory.create_v1()
             blk.weight = daa.calculate_block_difficulty(blk, self.get_parent_block)
         if 'signal_bits' in node.attrs:
             blk.signal_bits = int(node.attrs['signal_bits'])
