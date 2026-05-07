@@ -62,6 +62,8 @@ class Features:
     @staticmethod
     def from_vertex(*, settings: HathorSettings, feature_service: FeatureService, vertex: Vertex) -> Features:
         """Return information about each feature according to the state in the provided vertex."""
+        from hathorlib.conf.settings import FeatureSetting
+
         feature_states = feature_service.get_feature_states(vertex=vertex)
         feature_settings = Features.get_settings(settings)
 
@@ -71,8 +73,15 @@ class Features:
         }
 
         opcodes_version = OpcodesVersion.V2 if feature_is_active[Feature.OPCODES_V2] else OpcodesVersion.V1
+        nano_runtime_v2_is_active = (
+            feature_is_active[Feature.NANO_RUNTIME_V2]
+            or (
+                feature_settings[Feature.NANO_RUNTIME_V2] == FeatureSetting.FEATURE_ACTIVATION
+                and feature_is_active[Feature.REDUCE_DAA_TARGET]
+            )
+        )
         nano_runtime_version = (
-            NanoRuntimeVersion.V2 if feature_is_active[Feature.NANO_RUNTIME_V2] else NanoRuntimeVersion.V1
+            NanoRuntimeVersion.V2 if nano_runtime_v2_is_active else NanoRuntimeVersion.V1
         )
         daa_version = (
             DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1

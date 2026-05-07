@@ -391,7 +391,9 @@ class TestDAAFactoryV2StartHeight:
     def test_create_from_parent_v2_passes_correct_feature(self) -> None:
         settings = _get_settings()
         feature_service = Mock(spec=FeatureService)
-        feature_service.is_feature_active.return_value = True
+        feature_service.is_feature_active.side_effect = (
+            lambda *, vertex, feature: feature == Feature.REDUCE_DAA_TARGET
+        )
         feature_service.get_activation_height.return_value = 16
         factory = DAAFactory(settings=settings, feature_service=feature_service)
         parent_block = Mock()
