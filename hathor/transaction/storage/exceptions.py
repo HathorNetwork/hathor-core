@@ -13,10 +13,7 @@
 # limitations under the License.
 
 from hathor.exception import HathorError
-
-
-class TransactionDoesNotExist(HathorError):
-    """You are trying to get a transaction that does not exist"""
+from hathorlib.exceptions import TransactionDoesNotExist
 
 
 class TokenCreationTransactionDoesNotExist(TransactionDoesNotExist):

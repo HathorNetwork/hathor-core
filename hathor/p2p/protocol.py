@@ -25,6 +25,7 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python.failure import Failure
 
 from hathor.conf.settings import HathorSettings
+from hathor.p2p.connect_classes import ConnectionType
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -108,7 +109,7 @@ class HathorProtocol:
         *,
         settings: HathorSettings,
         use_ssl: bool,
-        inbound: bool,
+        connection_type: ConnectionType,
     ) -> None:
         self._settings = settings
         self.my_peer = my_peer
@@ -120,8 +121,9 @@ class HathorProtocol:
         assert self.connections.reactor is not None
         self.reactor = self.connections.reactor
 
-        # Indicate whether it is an inbound connection (true) or an outbound connection (false).
-        self.inbound = inbound
+        # Type of Connection
+        # 0 == Outgoing, 1 == Incoming, 2 == Bootstrap
+        self.connection_type = connection_type
 
         # Maximum period without receiving any messages.
         self.idle_timeout = self._settings.PEER_IDLE_TIMEOUT

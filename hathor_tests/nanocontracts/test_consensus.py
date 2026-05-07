@@ -4,7 +4,6 @@ from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
@@ -81,14 +80,11 @@ class NCConsensusTestCase(SimulatorTestCase):
         super().setUp()
 
         self.myblueprint_id = b'x' * 32
-        self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
-        })
         self.nc_seqnum = 0
 
         self.manager = self.simulator.create_peer()
         self.manager.allow_mining_without_peers()
-        self.manager.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(self.myblueprint_id, MyBlueprint)
 
         self.wallet = self.manager.wallet
 
@@ -154,7 +150,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         if set_timestamp:
             tx.timestamp = int(self.manager.get_timestamp_for_new_vertex())
         tx.parents = self.manager.get_new_tx_parents(tx.timestamp)
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         return tx
 
     def _run_invalid_signature(self, attr, value, cause=NCInvalidSignature):
@@ -167,7 +163,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         nano_header = tx.get_nano_header()
         self.assertNotEqual(getattr(nano_header, attr), value)
         setattr(nano_header, attr, value)
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         self.manager.cpu_mining_service.resolve(tx)
 
         tx.clear_sighash_cache()

@@ -37,7 +37,7 @@ def main() -> None:
     parser.add_argument('--min-tx-weight', type=float, help='The MIN_TX_WEIGHT', required=True)
 
     raw_args = parser.parse_args(sys.argv[1:])
-    args = GenerateGenesisArgs.parse_obj((vars(raw_args)))
+    args = GenerateGenesisArgs.model_validate((vars(raw_args)))
 
     block, tx1, tx2 = generate_new_genesis(
         tokens=args.tokens,

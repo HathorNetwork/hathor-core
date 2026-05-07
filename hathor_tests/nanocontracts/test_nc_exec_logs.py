@@ -30,6 +30,7 @@ from hathor.transaction import Block, Transaction
 from hathor.util import not_none
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.nanocontracts.types import BlueprintId
 
 MY_BLUEPRINT1_ID: bytes = b'\x11' * 32
 MY_BLUEPRINT2_ID: bytes = b'\x22' * 32
@@ -89,28 +90,28 @@ class BaseNCExecLogs(unittest.TestCase):
     def _get_initialize_entries(self, tx: Transaction) -> list[NCCallBeginEntry | NCLogEntry | NCCallEndEntry]:
         assert tx.is_nano_contract()
         nano_header = tx.get_nano_header()
-        assert self.manager.tx_storage.nc_catalog is not None
-        blueprint_class = self.manager.tx_storage.nc_catalog.blueprints[nano_header.nc_id]
+        blueprint_class = self.manager.blueprint_service.nc_catalog.get_blueprint_class(BlueprintId(nano_header.nc_id))
+        assert blueprint_class is not None
         return [
-            NCCallBeginEntry.construct(
-                nc_id=tx.hash,
+            NCCallBeginEntry.model_construct(
+                nc_id=ContractId(tx.hash),
                 call_type=CallType.PUBLIC,
                 method_name='initialize',
                 timestamp=ANY,
                 actions=[],
             ),
-            NCLogEntry.construct(
+            NCLogEntry.model_construct(
                 level=NCLogLevel.INFO,
                 message=f'initialize() called on {blueprint_class.__name__}',
                 timestamp=ANY,
             ),
-            NCCallEndEntry.construct(timestamp=ANY),
+            NCCallEndEntry.model_construct(timestamp=ANY),
         ]
 
     def _prepare(self, nc_log_config: NCLogConfig = NCLogConfig.ALL) -> None:
-        settings = self._settings._replace(
-            REWARD_SPEND_MIN_BLOCKS=1,  # to make tests quicker
-        )
+        settings = self._settings.model_copy(update={
+            'REWARD_SPEND_MIN_BLOCKS': 1,  # to make tests quicker
+        })
         artifacts = self.get_builder() \
             .set_settings(settings) \
             .set_nc_log_config(nc_log_config) \
@@ -118,11 +119,10 @@ class BaseNCExecLogs(unittest.TestCase):
 
         self.nc_log_storage = not_none(artifacts.consensus.block_algorithm_factory.nc_log_storage)
         self.manager = artifacts.manager
-        assert self.manager.tx_storage.nc_catalog is not None
-        self.manager.tx_storage.nc_catalog.blueprints = {
+        self.manager.blueprint_service.register_blueprints({
             MY_BLUEPRINT1_ID: MyBlueprint1,
             MY_BLUEPRINT2_ID: MyBlueprint2,
-        }
+        })
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
 
@@ -279,38 +279,38 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert not_none(self.nc_log_storage.get_logs(nc2.hash)).entries == {
             b2.hash: [NCExecEntry(
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='log_levels',
                         timestamp=ANY,
                         actions=[],
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='log_levels() called',
                         key_values=dict(test1='1'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.INFO,
                         message='log_levels() called',
                         key_values=dict(test2='2'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.WARN,
                         message='log_levels() called',
                         key_values=dict(test3='3'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.ERROR,
                         message='log_levels() called',
                         key_values=dict(test4='4'),
                         timestamp=ANY,
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY),
                 ],
             )],
         }
@@ -319,13 +319,13 @@ class TestNCExecLogs(BaseNCExecLogs):
         assert not_none(self.nc_log_storage.get_logs(nc2.hash, log_level=NCLogLevel.WARN)).entries == {
             b2.hash: [NCExecEntry(
                 logs=[
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.WARN,
                         message='log_levels() called',
                         key_values=dict(test3='3'),
                         timestamp=ANY,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.ERROR,
                         message='log_levels() called',
                         key_values=dict(test4='4'),
@@ -364,17 +364,17 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         result = not_none(self.nc_log_storage.get_logs(nc2.hash))
         assert result.entries == {
-            b2.hash: [NCExecEntry.construct(
+            b2.hash: [NCExecEntry.model_construct(
                 error_traceback=ANY,
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='fail',
                         timestamp=ANY,
                         actions=[],
                     ),
-                    NCLogEntry.construct(level=NCLogLevel.WARN, message='fail() called', timestamp=ANY),
+                    NCLogEntry.model_construct(level=NCLogLevel.WARN, message='fail() called', timestamp=ANY),
                 ],
             )],
         }
@@ -382,7 +382,7 @@ class TestNCExecLogs(BaseNCExecLogs):
         error_tb = result.entries[b2.hash][0].error_traceback
         assert error_tb is not None
         assert error_tb.startswith('Traceback (most recent call last):')
-        assert error_tb.endswith('hathor.nanocontracts.exception.NCFail: some fail\n')
+        assert error_tb.endswith('hathorlib.nanocontracts.exception.NCFail: some fail\n')
 
     def test_value_error(self) -> None:
         self._prepare()
@@ -413,17 +413,17 @@ class TestNCExecLogs(BaseNCExecLogs):
 
         result = not_none(self.nc_log_storage.get_logs(nc2.hash))
         assert result.entries == {
-            b2.hash: [NCExecEntry.construct(
+            b2.hash: [NCExecEntry.model_construct(
                 error_traceback=ANY,
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='value_error',
                         timestamp=ANY,
                         actions=[],
                     ),
-                    NCLogEntry.construct(level=NCLogLevel.WARN, message='value_error() called', timestamp=ANY),
+                    NCLogEntry.model_construct(level=NCLogLevel.WARN, message='value_error() called', timestamp=ANY),
                 ],
             )],
         }
@@ -436,7 +436,7 @@ class TestNCExecLogs(BaseNCExecLogs):
             The above exception was the direct cause of the following exception:\n
             Traceback (most recent call last):
         """) in error_tb
-        assert error_tb.endswith('hathor.nanocontracts.exception.NCFail\n')
+        assert error_tb.endswith('hathorlib.nanocontracts.exception.NCFail\n')
 
     def test_reexecution_on_reorgs(self) -> None:
         self._prepare()
@@ -541,8 +541,8 @@ class TestNCExecLogs(BaseNCExecLogs):
             b2.hash: [NCExecEntry(
                 error_traceback=None,
                 logs=[
-                    NCCallBeginEntry.construct(
-                        nc_id=nc1.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc1.hash),
                         call_type=CallType.PUBLIC,
                         method_name='call_another_public',
                         str_args=str((nc2.hash,)),
@@ -555,14 +555,14 @@ class TestNCExecLogs(BaseNCExecLogs):
                             )
                         ],
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='call_another_public() called on MyBlueprint1',
                         key_values=dict(contract_id=nc2.hash_hex),
                         timestamp=ANY,
                     ),
-                    NCCallBeginEntry.construct(
-                        nc_id=nc2.hash,
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc2.hash),
                         call_type=CallType.PUBLIC,
                         method_name='sum',
                         str_args=str((1, 2)),
@@ -575,33 +575,33 @@ class TestNCExecLogs(BaseNCExecLogs):
                             )
                         ],
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='sum() called on MyBlueprint2',
                         key_values=dict(a='1', b='2'),
                         timestamp=ANY
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
-                    NCCallBeginEntry.construct(
-                        nc_id=nc2.hash,
+                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCCallBeginEntry.model_construct(
+                        nc_id=ContractId(nc2.hash),
                         call_type=CallType.VIEW,
                         method_name='hello_world',
                         timestamp=ANY,
                         actions=None,
                     ),
-                    NCLogEntry.construct(
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='hello_world() called on MyBlueprint2',
                         timestamp=ANY,
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
-                    NCLogEntry.construct(
+                    NCCallEndEntry.model_construct(timestamp=ANY),
+                    NCLogEntry.model_construct(
                         level=NCLogLevel.DEBUG,
                         message='results on MyBlueprint1',
                         key_values=dict(result1='3', result2='hello world'),
                         timestamp=ANY
                     ),
-                    NCCallEndEntry.construct(timestamp=ANY),
+                    NCCallEndEntry.model_construct(timestamp=ANY),
                 ],
             )],
         }

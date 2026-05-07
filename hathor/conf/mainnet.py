@@ -13,10 +13,11 @@
 # limitations under the License.
 
 from hathor.checkpoint import Checkpoint as cp
-from hathor.conf.settings import FeatureSetting, HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
+from hathorlib.conf.settings import FeatureSetting
 
 SETTINGS = HathorSettings(
     P2PKH_VERSION_BYTE=b'\x28',
@@ -25,6 +26,9 @@ SETTINGS = HathorSettings(
     BOOTSTRAP_DNS=['mainnet.hathor.network'],
     ENABLE_PEER_WHITELIST=True,
     WHITELIST_URL='https://hathor-public-files.s3.amazonaws.com/whitelist_peer_ids',
+    # Keep the activation above the historical mainnet outlier at weight 35.0.
+    MAX_TX_WEIGHT_DIFF=1.0,
+    MAX_TX_WEIGHT_DIFF_ACTIVATION=35.0,
     # Genesis stuff
     # output addr: HJB2yxxsHtudGGy3jmVeadwMfRi2zNCKKD
     GENESIS_OUTPUT_SCRIPT=bytes.fromhex('76a9147fd4ae0e4fb2d2854e76d359029d8078bb99649e88ac'),
@@ -86,6 +90,20 @@ SETTINGS = HathorSettings(
         cp(4_800_000, bytes.fromhex('00000000000000000716b8d9e96591ba7cb2d02c3d2d1d98d514f41c240fdff7')),
         cp(4_900_000, bytes.fromhex('0000000000000000079b1c1ebf48d351a7d31dcc55c5b4cf79ade79089a20f5a')),
         cp(5_000_000, bytes.fromhex('000000000000000006c9167db1cc7e93fcf1c3014da6c6221390d03d1640c9b3')),
+        cp(5_100_000, bytes.fromhex('00000000000000000457a197bd275072c94e06375e0a6e68009b96efe19c4312')),
+        cp(5_200_000, bytes.fromhex('0000000000000000129f5df95d0ba289294c2c323476ea9f4109893cd54c424c')),
+        cp(5_300_000, bytes.fromhex('000000000000000007fe11691accc9f60e4f137e574ee1d49b40489383870ac3')),
+        cp(5_400_000, bytes.fromhex('000000000000000005b68b807d93f0ddd59e78256440d3f0f51c04ed7eeab15c')),
+        cp(5_500_000, bytes.fromhex('0000000000000000073630c47eebcef4cd0ed6db285d7e2eae8a54ed0d281830')),
+        cp(5_600_000, bytes.fromhex('00000000000000000607272c96cb626b79c5cbb3374769c68355b66ae6523d1e')),
+        cp(5_700_000, bytes.fromhex('000000000000000009a1be8175e9f5b71dc99d6c410c8f221be9ebcf50464705')),
+        cp(5_800_000, bytes.fromhex('00000000000000000b720f51d2d833493abb6f8a3d03b59e6fa787e19893b0eb')),
+        cp(5_900_000, bytes.fromhex('00000000000000000a4377aacaeae91cb3fb5598f8b304a7b0af1e2c1fdd01dc')),
+        cp(6_000_000, bytes.fromhex('00000000000000000f3df4a77733405a250f702a496f87686c09f455865b66cc')),
+        cp(6_100_000, bytes.fromhex('000000000000000002468a51610f3cd66a42e67411bfd878da02b12297bfa2d1')),
+        cp(6_200_000, bytes.fromhex('00000000000000000a0ffe1c6429cac7b65be5e81cac365e3837771b9795a142')),
+        cp(6_300_000, bytes.fromhex('00000000000000000f9db567260895c9f365200f711508587b7c6d2111bf699b')),
+        cp(6_400_000, bytes.fromhex('000000000000000005cf2f4290c997f9361af252d425706b940f1bd58d835862')),
     ],
     SOFT_VOIDED_TX_IDS=list(map(bytes.fromhex, [
         '0000000012a922a6887497bed9c41e5ed7dc7213cae107db295602168266cd02',
@@ -214,7 +232,10 @@ SETTINGS = HathorSettings(
         '000045ecbab77c9a8d819ff6d26893b9da2774eee5539f17d8fc2394f82b758e',
     ])),
     ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
-    ENABLE_FEE_BASED_TOKENS=FeatureSetting.DISABLED,
+    ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_OPCODES_V2=FeatureSetting.FEATURE_ACTIVATION,
+    ENABLE_NANO_RUNTIME_V2=FeatureSetting.FEATURE_ACTIVATION,
+    RESTRICT_DUP_ACTIONS=FeatureSetting.FEATURE_ACTIVATION,
     NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES=[
         'HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9',
         'HUbxYhtqW8pdRCC2WngPxN7MB4SUMDPrrh',
@@ -257,7 +278,7 @@ SETTINGS = HathorSettings(
                 version='0.67.0',
                 signal_support_by_default=True,
             ),
-            Feature.FEE_TOKENS: Criteria(
+            Feature.FAILED_FEE_TOKENS: Criteria(
                 # XXX: parity with hathor/conf/mainnet.yml
                 bit=2,
                 start_height=6_249_600,
@@ -267,7 +288,7 @@ SETTINGS = HathorSettings(
                 version='0.69.0',
                 signal_support_by_default=True,
             ),
-            Feature.OPCODES_V2: Criteria(
+            Feature.FAILED_OPCODES_V2: Criteria(
                 # XXX: parity with hathor/conf/mainnet.yml
                 bit=3,
                 start_height=6_249_600,
@@ -275,6 +296,59 @@ SETTINGS = HathorSettings(
                 minimum_activation_height=6_350_400,
                 lock_in_on_timeout=False,
                 version='0.69.0',
+                signal_support_by_default=True,
+            ),
+            Feature.FEE_TOKENS: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=0,
+                # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
+                start_height=6_552_000,  # expected around 2026-05-13 11:06:38 GMT
+                # If DAA activates after 3 weeks, heights should increase 4x faster after 6_612_480.
+                timeout_height=7_015_680,  # 8 weeks wall-clock, expected around 2026-07-08 11:06:38 GMT
+                # Aligned with DAA/NanoRuntime so all v0.70 features activate together at the earliest.
+                minimum_activation_height=6_612_480,  # 3 weeks wall-clock, expected around 2026-06-03 11:06:38 GMT
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.REDUCE_DAA_TARGET: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=1,
+                # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
+                # Also gates NANO_RUNTIME_V2 because both features are indifferent to transaction verification.
+                start_height=6_552_000,  # expected around 2026-05-13 11:06:38 GMT
+                timeout_height=6_713_280,  # 8 weeks, expected around 2026-07-08 11:06:38 GMT
+                minimum_activation_height=6_612_480,  # 3 weeks, expected around 2026-06-03 11:06:38 GMT
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.OPCODES_V2: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=3,
+                # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
+                # Delayed because bit 3 is occupied until the failed 0.69.0 window ends.
+                start_height=6_612_480,  # expected around 2026-06-03 11:06:38 GMT
+                # If DAA activates at this height, heights should increase 4x faster afterwards.
+                timeout_height=7_257_600,  # 8 weeks wall-clock, expected around 2026-07-29 11:06:38 GMT
+                # No minimum_activation_height: by the time signaling starts, all upgraded nodes
+                # will already enforce this rule.
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
+                signal_support_by_default=True,
+            ),
+            Feature.RESTRICT_DUP_ACTIONS: Criteria(
+                # XXX: parity with hathor/conf/mainnet.yml
+                bit=2,
+                # Same activation window as OPCODES_V2, but on a separate bit (bit 2 frees up
+                # after the failed FEE_TOKENS 0.69.0 window). No minimum_activation_height: by
+                # the time signaling starts, all upgraded nodes will already enforce this rule.
+                start_height=6_612_480,  # expected around 2026-06-03 11:06:38 GMT
+                timeout_height=7_257_600,  # expected around 2026-07-29 11:06:38 GMT
+                minimum_activation_height=0,
+                lock_in_on_timeout=False,
+                version='0.70.0',
                 signal_support_by_default=True,
             ),
         }

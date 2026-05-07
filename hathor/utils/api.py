@@ -13,9 +13,9 @@
 #  limitations under the License.
 
 from email.message import Message
-from typing import Type, TypeVar, Union
+from typing import Literal, Type, TypeVar, Union
 
-from pydantic import Field, ValidationError
+from pydantic import ValidationError
 from twisted.web.http import Request
 
 from hathor.api_util import get_args
@@ -58,7 +58,7 @@ class QueryParams(BaseModel):
                 args[decoded_key] = decoded_values
 
         try:
-            return cls.parse_obj(args)
+            return cls.model_validate(args)
         except ValidationError as error:
             return ErrorResponse(error=str(error))
 
@@ -68,5 +68,5 @@ class Response(BaseModel):
 
 
 class ErrorResponse(Response):
-    success: bool = Field(default=False, const=True)
+    success: Literal[False] = False
     error: str

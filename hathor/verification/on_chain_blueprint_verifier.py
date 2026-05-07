@@ -233,7 +233,7 @@ class OnChainBlueprintVerifier:
             try:
                 rule(tx)
             except SyntaxError as e:
-                raise OCBInvalidScript('forbidden syntax') from e
+                raise OCBInvalidScript(f'forbidden syntax: {e}') from e
 
     def _verify_python_script(self, tx: OnChainBlueprint) -> None:
         """Verify that the script can be parsed at all."""

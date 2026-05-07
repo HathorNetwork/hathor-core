@@ -21,6 +21,7 @@ from OpenSSL.crypto import X509
 from structlog import get_logger
 from twisted.internet.address import IPv4Address, IPv6Address
 from twisted.internet.testing import StringTransport
+from typing_extensions import assert_never
 
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
@@ -273,7 +274,15 @@ class FakeConnection:
         self._buf2.clear()
 
         self._proto1 = self.manager1.connections.server_factory.buildProtocol(self.addr2)
-        self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+
+        # If in bootstrap mode, now we instantiate the Bootstrap Factory.
+        match self._fake_bootstrap_id:
+            case False:
+                self._proto2 = self.manager2.connections.client_factory.buildProtocol(self.addr1)
+            case None | PeerId():
+                self._proto2 = self.manager2.connections.bootstrap_factory.buildProtocol(self.addr1)
+            case _:
+                assert_never(self._fake_bootstrap_id)
 
         # When _fake_bootstrap_id is set we don't pass the peer because that's how bootstrap calls
         # connect_to_endpoint()

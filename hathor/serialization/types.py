@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TypeAlias
-
-Buffer: TypeAlias = bytes | memoryview
+# Re-export from hathorlib for backward compatibility
+from hathorlib.serialization.types import *  # noqa: F401,F403
+from hathorlib.serialization.types import Buffer  # noqa: F401

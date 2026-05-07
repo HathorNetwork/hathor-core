@@ -52,7 +52,7 @@ class EventRocksDBStorage(EventStorage):
         it.seek(int_to_bytes(key, 8))
 
         for event_bytes in it:
-            yield BaseEvent.parse_raw(event_bytes)
+            yield BaseEvent.model_validate_json(event_bytes)
 
         # XXX: on Python 3.12, not deleting it here can cause EXC_BAD_ACCESS if the db is released before the iterator
         #      in the garbage collector. This race condition might happen between tests.
@@ -66,7 +66,7 @@ class EventRocksDBStorage(EventStorage):
         for i in it:
             last_element = i
             break
-        return None if last_element is None else BaseEvent.parse_raw(last_element)
+        return None if last_element is None else BaseEvent.model_validate_json(last_element)
 
     def _db_get_last_group_id(self) -> Optional[int]:
         last_group_id = self._db.get((self._cf_meta, _KEY_LAST_GROUP_ID))
@@ -81,7 +81,7 @@ class EventRocksDBStorage(EventStorage):
         if (self._last_event is None and event.id != 0) or \
                 (self._last_event is not None and event.id != self._last_event.id + 1):
             raise ValueError('invalid event.id, ids must be sequential and leave no gaps')
-        event_data = json_dumpb(event.dict())
+        event_data = json_dumpb(event.model_dump())
         key = int_to_bytes(event.id, 8)
         database.put((self._cf_event, key), event_data)
         self._last_event = event
@@ -104,7 +104,7 @@ class EventRocksDBStorage(EventStorage):
         event = self._db.get((self._cf_event, int_to_bytes(key, 8)))
         if event is None:
             return None
-        return BaseEvent.parse_raw(event)
+        return BaseEvent.model_validate_json(event)
 
     def get_last_event(self) -> Optional[BaseEvent]:
         return self._last_event

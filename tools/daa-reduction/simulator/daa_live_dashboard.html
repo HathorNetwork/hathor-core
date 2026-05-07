@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAA Transition Simulation Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; }
+
+  .header { background: #16213e; padding: 12px 24px; display: flex; align-items: center; gap: 24px; border-bottom: 1px solid #0f3460; }
+  .header h1 { font-size: 18px; color: #e94560; white-space: nowrap; }
+
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .controls label { font-size: 13px; color: #a0a0a0; }
+  .controls select, .controls input { background: #0f3460; border: 1px solid #1a1a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 13px; }
+  .controls input[type="number"] { width: 90px; }
+  .btn { background: #e94560; color: white; border: none; padding: 6px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn:hover { background: #c73651; }
+  .btn:disabled { background: #555; cursor: not-allowed; }
+  .btn-secondary { background: #0f3460; }
+  .btn-secondary:hover { background: #1a4a7a; }
+  .btn-danger { background: #8b0000; font-size: 11px; padding: 2px 8px; }
+  .btn-danger:hover { background: #a00000; }
+
+  .main { display: flex; height: calc(100vh - 49px - 34px - 34px); }
+
+  .sidebar { width: 280px; min-width: 280px; background: #16213e; border-right: 1px solid #0f3460; overflow-y: auto; display: flex; flex-direction: column; }
+  .sidebar h3 { padding: 12px 16px 8px; font-size: 14px; color: #e94560; border-bottom: 1px solid #0f3460; }
+  .sidebar-content { flex: 1; overflow-y: auto; padding: 8px; }
+
+  .run-item { background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s; }
+  .run-item:hover { border-color: #e94560; }
+  .run-item.active { border-color: #e94560; background: #1e1e3a; }
+  .run-item .run-id { font-size: 12px; font-weight: 600; color: #e0e0e0; }
+  .run-item .run-meta { font-size: 11px; color: #888; margin-top: 4px; }
+  .run-item .run-actions { margin-top: 6px; display: flex; gap: 6px; }
+
+  .charts-area { flex: 1; overflow-y: auto; padding: 16px; }
+
+  .status-bar { background: #0f3460; padding: 8px 24px; display: flex; gap: 24px; align-items: center; font-size: 13px; border-bottom: 1px solid #1a1a4e; }
+  .status-item { display: flex; gap: 6px; align-items: center; }
+  .status-label { color: #888; }
+  .status-value { color: #e0e0e0; font-weight: 600; }
+  .phase-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .phase-warmup { background: #555; }
+  .phase-stable { background: #2e7d32; }
+  .phase-signaling { background: #e65100; }
+  .phase-must_signal { background: #c62828; }
+  .phase-locked_in { background: #1565c0; }
+  .phase-active { background: #6a1b9a; }
+
+  .chart-container { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .chart-container h3 { font-size: 14px; margin-bottom: 12px; color: #a0a0a0; display: flex; justify-content: space-between; align-items: center; }
+  .btn-zoom-reset { background: #0f3460; color: #aaa; border: 1px solid #1a1a4e; padding: 2px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .btn-zoom-reset:hover { background: #1a4a7a; color: #e0e0e0; }
+  .chart-wrapper { position: relative; height: 280px; }
+
+  .summary-panel { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .summary-panel h3 { font-size: 14px; margin-bottom: 12px; color: #e94560; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .summary-stat { background: #1a1a2e; border-radius: 6px; padding: 10px; }
+  .summary-stat .stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+  .summary-stat .stat-value { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-top: 2px; }
+
+  .phase-legend { background: #16213e; padding: 6px 24px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #0f3460; font-size: 12px; }
+  .phase-legend-label { color: #888; font-size: 11px; margin-right: 4px; }
+  .phase-legend-item { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; }
+
+  .empty-state { text-align: center; padding: 60px 24px; color: #555; }
+  .empty-state h2 { color: #888; margin-bottom: 12px; }
+
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #555; border-top-color: #e94560; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>DAA Transition Simulator</h1>
+  <div class="controls">
+    <label>Hashpower:
+      <select id="hashpower">
+        <option value="69905">69.9 KH/s (W~21)</option>
+        <option value="35791394">35.8 MH/s (W~30)</option>
+        <option value="36650787635">36.7 GH/s (W~40)</option>
+        <option value="37529996894754">37.5 TH/s (W~50)</option>
+        <option value="38430716820228232">38.4 PH/s (W~60)</option>
+        <option value="8928412586733189120" selected>8.93 EH/s (W~67.86, mainnet)</option>
+      </select>
+    </label>
+    <label>Seed: <input type="number" id="seed" value="0" min="0"></label>
+    <label>Blocks: <input type="number" id="totalBlocks" value="1600" min="100" step="100"></label>
+    <label>Eval Interval: <input type="number" id="evalInterval" value="100" min="10" step="10"></label>
+    <label>Skip Blocks: <input type="number" id="skipBlocks" value="200" min="0" step="10" onchange="applySkipBlocks()" onkeyup="applySkipBlocks()"></label>
+    <button class="btn" id="runBtn" onclick="startSimulation()">Run Simulation</button>
+    <button class="btn btn-secondary" id="stopBtn" onclick="stopSimulation()" disabled>Stop</button>
+  </div>
+</div>
+
+<div class="status-bar" id="statusBar">
+  <div class="status-item"><span class="status-label">Status:</span> <span class="status-value" id="statusText">Idle</span></div>
+  <div class="status-item"><span class="status-label">Phase:</span> <span id="phaseBadge" class="phase-badge">-</span></div>
+  <div class="status-item"><span class="status-label">Blocks:</span> <span class="status-value" id="blockCount">0</span></div>
+  <div class="status-item"><span class="status-label">Weight:</span> <span class="status-value" id="currentWeight">-</span></div>
+  <div class="status-item"><span class="status-label">Solvetime:</span> <span class="status-value" id="currentSolvetime">-</span></div>
+</div>
+
+<div class="phase-legend" id="phaseLegend">
+  <span class="phase-legend-label">Phases:</span>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <h3>Saved Runs</h3>
+    <div class="sidebar-content" id="savedRuns">
+      <div class="empty-state" style="padding: 20px; font-size: 12px;">Loading...</div>
+    </div>
+  </div>
+
+  <div class="charts-area" id="chartsArea">
+    <div id="summaryPanel" class="summary-panel" style="display: none;">
+      <h3>Summary</h3>
+      <div class="summary-grid" id="summaryGrid"></div>
+    </div>
+
+    <div class="chart-container">
+      <h3><span>Block Weight vs Height</span> <button class="btn-zoom-reset" onclick="weightChart.resetZoom()">Reset Zoom</button></h3>
+      <div class="chart-wrapper"><canvas id="weightChart"></canvas></div>
+    </div>
+    <div class="chart-container">
+      <h3><span>Solvetime vs Height</span> <button class="btn-zoom-reset" onclick="solvetimeChart.resetZoom()">Reset Zoom</button></h3>
+      <div class="chart-wrapper"><canvas id="solvetimeChart"></canvas></div>
+    </div>
+    <div class="chart-container">
+      <h3><span>Cumulative Time vs Height</span> <button class="btn-zoom-reset" onclick="cumTimeChart.resetZoom()">Reset Zoom</button></h3>
+      <div class="chart-wrapper"><canvas id="cumTimeChart"></canvas></div>
+    </div>
+    <div class="chart-container">
+      <h3><span>Miner Hashpower vs Height</span> <button class="btn-zoom-reset" onclick="hashpowerChart.resetZoom()">Reset Zoom</button></h3>
+      <div class="chart-wrapper"><canvas id="hashpowerChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Helpers ----
+function formatHashpower(hp) {
+  hp = Number(hp);
+  const units = [
+    [1e18, 'EH/s'], [1e15, 'PH/s'], [1e12, 'TH/s'],
+    [1e9, 'GH/s'], [1e6, 'MH/s'], [1e3, 'KH/s'], [1, 'H/s']
+  ];
+  for (const [div, unit] of units) {
+    if (hp >= div) {
+      const v = hp / div;
+      return (v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' ' + unit;
+    }
+  }
+  return hp + ' H/s';
+}
+
+// ---- State ----
+let eventSource = null;
+let blocks = [];
+let phases = [];
+let config = null;
+let currentRunId = null;
+
+// ---- Chart Setup ----
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+  scales: {
+    x: { type: 'linear', title: { display: true, text: 'Block Height', color: '#888' },
+         ticks: { color: '#888' }, grid: { color: '#2a2a4a' } },
+    y: { title: { display: true, color: '#888' },
+         ticks: { color: '#888' }, grid: { color: '#2a2a4a' } }
+  },
+  plugins: {
+    legend: { display: true, labels: { color: '#aaa', font: { size: 11 } } },
+    annotation: { annotations: {} },
+    zoom: {
+      zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' },
+      pan: { enabled: true, mode: 'xy' }
+    }
+  }
+};
+
+function makeChart(canvasId, yLabel, datasets) {
+  const opts = JSON.parse(JSON.stringify(chartDefaults));
+  opts.scales.y.title.text = yLabel;
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { datasets: datasets },
+    options: opts
+  });
+}
+
+const weightChart = makeChart('weightChart', 'Weight', [
+  { label: 'Weight', data: [], borderColor: '#4fc3f7', backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 1.5, pointRadius: 0, fill: false }
+]);
+
+const solvetimeChart = makeChart('solvetimeChart', 'Solvetime (s)', [
+  { label: 'Solvetime', data: [], borderColor: '#ff8a65', backgroundColor: 'rgba(255,138,101,0.1)', borderWidth: 1.5, pointRadius: 0, fill: false }
+]);
+
+const cumTimeChart = makeChart('cumTimeChart', 'Cumulative Time (hours)', [
+  { label: 'Cumulative Time', data: [], borderColor: '#81c784', backgroundColor: 'rgba(129,199,132,0.1)', borderWidth: 1.5, pointRadius: 0, fill: false }
+]);
+
+const hashpowerChart = makeChart('hashpowerChart', 'Hashpower', [
+  { label: 'Hashpower', data: [], borderColor: '#ce93d8', backgroundColor: 'rgba(206,147,216,0.1)', borderWidth: 1.5, pointRadius: 0, fill: false }
+]);
+// Use log scale for hashpower (spans many orders of magnitude during ramp)
+hashpowerChart.options.scales.y.type = 'logarithmic';
+hashpowerChart.update('none');
+
+const allCharts = [weightChart, solvetimeChart, cumTimeChart, hashpowerChart];
+
+// ---- Annotation helpers ----
+const phaseColors = {
+  warmup: 'rgba(150,150,150,0.4)',
+  stable: 'rgba(46,125,50,0.4)',
+  signaling: 'rgba(230,81,0,0.4)',
+  must_signal: 'rgba(198,40,40,0.4)',
+  locked_in: 'rgba(21,101,192,0.4)',
+  active: 'rgba(106,27,154,0.4)',
+};
+
+function addPhaseAnnotation(chart, phase) {
+  const key = `phase_${phase.height}`;
+  chart.options.plugins.annotation.annotations[key] = {
+    type: 'line',
+    xMin: phase.height, xMax: phase.height,
+    borderColor: phaseColors[phase.phase] || 'rgba(255,255,255,0.3)',
+    borderWidth: 2, borderDash: [4, 4],
+    label: { display: false }
+  };
+}
+
+function addActivationAnnotation(chart, height) {
+  chart.options.plugins.annotation.annotations['activation'] = {
+    type: 'line',
+    xMin: height, xMax: height,
+    borderColor: '#e94560',
+    borderWidth: 2,
+    label: { display: false }
+  };
+}
+
+function addReferenceLines(activationHeight) {
+  // Target solvetime lines
+  solvetimeChart.options.plugins.annotation.annotations['target30'] = {
+    type: 'line', yMin: 30, yMax: 30,
+    borderColor: 'rgba(150,150,150,0.5)', borderWidth: 1, borderDash: [6, 3],
+    label: { display: true, content: '30s target', position: 'start', backgroundColor: 'rgba(0,0,0,0.5)', color: '#aaa', font: { size: 10 } }
+  };
+  solvetimeChart.options.plugins.annotation.annotations['target7'] = {
+    type: 'line', yMin: 7.5, yMax: 7.5,
+    borderColor: 'rgba(76,175,80,0.5)', borderWidth: 1, borderDash: [6, 3],
+    label: { display: true, content: '7.5s target', position: 'start', backgroundColor: 'rgba(0,0,0,0.5)', color: '#aaa', font: { size: 10 } }
+  };
+
+  // Activation lines on all charts
+  allCharts.forEach(c => addActivationAnnotation(c, activationHeight));
+}
+
+// ---- Skip blocks (hide noisy warmup) ----
+function getSkipBlocks() {
+  return parseInt(document.getElementById('skipBlocks').value) || 0;
+}
+
+function applySkipBlocks() {
+  const skip = getSkipBlocks();
+  allCharts.forEach(c => {
+    c.options.scales.x.min = skip > 0 ? skip : undefined;
+    c.update('none');
+  });
+}
+
+// ---- Data update ----
+let cumTime = 0;
+const UPDATE_INTERVAL = 50; // ms between chart updates
+let pendingBlocks = [];
+let updateTimer = null;
+
+function processBlock(block) {
+  blocks.push(block);
+  pendingBlocks.push(block);
+
+  // Update status bar
+  document.getElementById('blockCount').textContent = blocks.length;
+  document.getElementById('currentWeight').textContent = block.weight.toFixed(2);
+  document.getElementById('currentSolvetime').textContent = block.solvetime + 's';
+
+  if (!updateTimer) {
+    updateTimer = setTimeout(flushChartUpdates, UPDATE_INTERVAL);
+  }
+}
+
+function flushChartUpdates() {
+  updateTimer = null;
+  if (pendingBlocks.length === 0) return;
+
+  for (const b of pendingBlocks) {
+    if (b.height === 0) continue;
+    cumTime += b.solvetime;
+    weightChart.data.datasets[0].data.push({ x: b.height, y: b.weight });
+    solvetimeChart.data.datasets[0].data.push({ x: b.height, y: b.solvetime });
+    cumTimeChart.data.datasets[0].data.push({ x: b.height, y: cumTime / 3600 });
+    if (b.hashpower != null) {
+      hashpowerChart.data.datasets[0].data.push({ x: b.height, y: b.hashpower });
+    }
+  }
+  pendingBlocks = [];
+
+  allCharts.forEach(c => c.update('none'));
+}
+
+const phaseBgColors = {
+  warmup: '#555',
+  stable: '#2e7d32',
+  signaling: '#e65100',
+  must_signal: '#c62828',
+  locked_in: '#1565c0',
+  active: '#6a1b9a',
+};
+
+function processPhase(phase) {
+  phases.push(phase);
+  const badge = document.getElementById('phaseBadge');
+  badge.textContent = phase.label;
+  badge.className = `phase-badge phase-${phase.phase}`;
+  allCharts.forEach(c => addPhaseAnnotation(c, phase));
+
+  // Add legend entry
+  const legend = document.getElementById('phaseLegend');
+  const item = document.createElement('span');
+  item.className = 'phase-legend-item';
+  item.style.backgroundColor = phaseBgColors[phase.phase] || '#555';
+  item.textContent = `${phase.label} (h=${phase.height})`;
+  legend.appendChild(item);
+}
+
+function showSummary(summary) {
+  const panel = document.getElementById('summaryPanel');
+  const grid = document.getElementById('summaryGrid');
+  panel.style.display = 'block';
+
+  const stats = [
+    { label: 'Weight Before', value: summary.steady_weight_before },
+    { label: 'Weight After', value: summary.steady_weight_after },
+    { label: 'Weight Drop', value: summary.weight_drop },
+    { label: 'Avg Solvetime Pre', value: summary.avg_solvetime_before + 's' },
+    { label: 'Avg Solvetime Post', value: summary.avg_solvetime_after + 's' },
+    { label: 'Max Solvetime (transition)', value: summary.max_solvetime_transition + 's' },
+    { label: 'Convergence Blocks', value: summary.convergence_blocks ?? 'N/A' },
+    { label: 'Decay Triggered', value: summary.decay_triggered ? 'YES' : 'No' },
+  ];
+
+  grid.innerHTML = stats.map(s => `
+    <div class="summary-stat">
+      <div class="stat-label">${s.label}</div>
+      <div class="stat-value">${s.value}</div>
+    </div>
+  `).join('');
+}
+
+// ---- Simulation control ----
+function resetCharts() {
+  blocks = [];
+  phases = [];
+  cumTime = 0;
+  pendingBlocks = [];
+  if (updateTimer) { clearTimeout(updateTimer); updateTimer = null; }
+
+  allCharts.forEach(c => {
+    c.data.datasets.forEach(ds => { ds.data = []; });
+    c.options.plugins.annotation.annotations = {};
+    c.update('none');
+  });
+  applySkipBlocks();
+
+  document.getElementById('summaryPanel').style.display = 'none';
+  document.getElementById('blockCount').textContent = '0';
+  document.getElementById('currentWeight').textContent = '-';
+  document.getElementById('currentSolvetime').textContent = '-';
+  document.getElementById('phaseBadge').textContent = '-';
+  document.getElementById('phaseBadge').className = 'phase-badge';
+
+  // Clear phase legend
+  const legend = document.getElementById('phaseLegend');
+  legend.querySelectorAll('.phase-legend-item').forEach(el => el.remove());
+}
+
+function startSimulation() {
+  if (eventSource) stopSimulation();
+  resetCharts();
+
+  const hp = document.getElementById('hashpower').value;
+  const seed = document.getElementById('seed').value;
+  const totalBlocks = document.getElementById('totalBlocks').value;
+  const evalInterval = document.getElementById('evalInterval').value;
+
+  const params = new URLSearchParams({
+    hashpower: hp,
+    seed: seed,
+    total_blocks: totalBlocks,
+    eval_interval: evalInterval,
+  });
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('statusText').innerHTML = '<span class="spinner"></span> Running...';
+
+  eventSource = new EventSource(`/run?${params}`);
+
+  eventSource.onmessage = (e) => {
+    try {
+      const event = JSON.parse(e.data);
+
+      switch (event.type) {
+        case 'config':
+          config = event;
+          addReferenceLines(event.activation_height);
+          break;
+        case 'run_start':
+          currentRunId = event.run_id;
+          break;
+        case 'phase':
+          processPhase(event);
+          break;
+        case 'block':
+          processBlock(event);
+          break;
+        case 'run_end':
+          if (event.summary) showSummary(event.summary);
+          break;
+        case 'simulation_end':
+          finishSimulation();
+          break;
+        case 'error':
+          console.error('Simulation error:', event.message);
+          document.getElementById('statusText').textContent = 'Error (see console)';
+          document.getElementById('statusText').style.color = '#e94560';
+          finishSimulation();
+          break;
+      }
+    } catch (err) {
+      console.error('Parse error:', err, e.data);
+    }
+  };
+
+  eventSource.onerror = () => {
+    finishSimulation();
+  };
+}
+
+function stopSimulation() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  finishSimulation();
+}
+
+function finishSimulation() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  flushChartUpdates();
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = true;
+  document.getElementById('statusText').textContent = `Done (${blocks.length} blocks)`;
+
+  // Reload saved runs
+  loadSavedRuns();
+}
+
+// ---- Saved runs ----
+async function loadSavedRuns() {
+  try {
+    const resp = await fetch('/runs');
+    const runs = await resp.json();
+    const container = document.getElementById('savedRuns');
+
+    if (runs.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding: 20px; font-size: 12px;">No saved runs yet.<br>Run a simulation to get started.</div>';
+      return;
+    }
+
+    container.innerHTML = runs.map(r => `
+      <div class="run-item" data-run-id="${r.run_id}" onclick="loadRun('${r.run_id}')">
+        <div class="run-id">${r.run_id}</div>
+        <div class="run-meta">
+          ${r.meta.hashpower ? formatHashpower(r.meta.hashpower) : '?'} | Seed: ${r.meta.seed ?? '?'}<br>
+          ${r.block_count} blocks${r.meta.duration_seconds ? ' (' + r.meta.duration_seconds.toFixed(1) + 's)' : ''}
+          ${r.meta.started_at ? '<br>' + new Date(r.meta.started_at).toLocaleString() : ''}
+        </div>
+        <div class="run-actions">
+          <button class="btn btn-secondary" style="font-size: 11px; padding: 2px 8px;" onclick="event.stopPropagation(); loadRun('${r.run_id}')">Load</button>
+          <button class="btn btn-danger" onclick="event.stopPropagation(); deleteRun('${r.run_id}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to load runs:', err);
+  }
+}
+
+async function loadRun(runId) {
+  try {
+    const resp = await fetch(`/runs/${runId}`);
+    const data = await resp.json();
+    resetCharts();
+
+    // Mark active
+    document.querySelectorAll('.run-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`[data-run-id="${runId}"]`);
+    if (item) item.classList.add('active');
+
+    // Determine activation height from data
+    let activationHeight = 600; // default
+    if (data.meta && data.meta.summary) {
+      // Try to find from blocks
+    }
+    // Find first active block
+    for (const b of (data.blocks || [])) {
+      if (b.feature_active) {
+        activationHeight = b.height;
+        break;
+      }
+    }
+    addReferenceLines(activationHeight);
+
+    // Process blocks
+    let prevPhase = null;
+    for (const b of (data.blocks || [])) {
+      if (b.phase !== prevPhase) {
+        const phaseLabels = {
+          warmup: 'Warmup: filling DAA window',
+          stable: 'DAA stabilized',
+          signaling: 'Feature signaling started',
+          must_signal: 'Must-signal period',
+          locked_in: 'Feature locked in',
+          active: 'Feature ACTIVE - T changed to 7.5s',
+        };
+        processPhase({ phase: b.phase, label: phaseLabels[b.phase] || b.phase, height: b.height });
+        prevPhase = b.phase;
+      }
+      processBlock(b);
+    }
+    flushChartUpdates();
+
+    // Show summary if available
+    if (data.meta && data.meta.summary) {
+      showSummary(data.meta.summary);
+    }
+
+    let statusMsg = `Loaded: ${runId} (${blocks.length} blocks)`;
+    if (data.meta && data.meta.started_at) {
+      statusMsg += ' | ' + new Date(data.meta.started_at).toLocaleString();
+    }
+    if (data.meta && data.meta.duration_seconds) {
+      statusMsg += ' (' + data.meta.duration_seconds.toFixed(1) + 's)';
+    }
+    document.getElementById('statusText').textContent = statusMsg;
+  } catch (err) {
+    console.error('Failed to load run:', err);
+    document.getElementById('statusText').textContent = 'Failed to load run';
+  }
+}
+
+async function deleteRun(runId) {
+  if (!confirm(`Delete run ${runId}?`)) return;
+  try {
+    await fetch(`/runs/${runId}/delete`, { method: 'POST' });
+    loadSavedRuns();
+  } catch (err) {
+    console.error('Failed to delete run:', err);
+  }
+}
+
+// ---- Overlay saved run on charts ----
+function overlayRun(data, color, label) {
+  const runBlocks = data.blocks || [];
+  if (runBlocks.length === 0) return;
+
+  let cum = 0;
+  const wData = [], sData = [], cData = [], hData = [];
+  for (const b of runBlocks) {
+    if (b.height === 0) continue;
+    cum += b.solvetime;
+    wData.push({ x: b.height, y: b.weight });
+    sData.push({ x: b.height, y: b.solvetime });
+    cData.push({ x: b.height, y: cum / 3600 });
+    if (b.hashpower != null) hData.push({ x: b.height, y: b.hashpower });
+  }
+
+  const opts = { borderWidth: 1, pointRadius: 0, fill: false, borderColor: color };
+  weightChart.data.datasets.push({ label, data: wData, ...opts });
+  solvetimeChart.data.datasets.push({ label, data: sData, ...opts });
+  cumTimeChart.data.datasets.push({ label, data: cData, ...opts });
+  if (hData.length > 0) hashpowerChart.data.datasets.push({ label, data: hData, ...opts });
+
+  allCharts.forEach(c => c.update('none'));
+}
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+  loadSavedRuns();
+
+  // Limit solvetime Y axis to reasonable range
+  solvetimeChart.options.scales.y.max = 120;
+  solvetimeChart.options.scales.y.min = 0;
+  solvetimeChart.update('none');
+});
+</script>
+</body>
+</html>

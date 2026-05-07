@@ -18,7 +18,6 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from pydantic import ValidationError
 
-from hathor.conf.settings import HathorSettings
 from hathor.consensus import poa
 from hathor.consensus.consensus_settings import PoaSettings, PoaSignerSettings
 from hathor.consensus.poa.poa_signer import PoaSigner, PoaSignerFile
@@ -86,7 +85,7 @@ def test_verify_poa() -> None:
         public_key = private_key.public_key()
         public_key_bytes = get_public_key_bytes_compressed(public_key)
         address = get_address_b58_from_public_key(public_key)
-        file = PoaSignerFile.parse_obj(dict(
+        file = PoaSignerFile.model_validate(dict(
             private_key_hex=private_key_bytes.hex(),
             public_key_hex=public_key_bytes.hex(),
             address=address
@@ -94,8 +93,8 @@ def test_verify_poa() -> None:
         return file.get_signer(), public_key_bytes
 
     poa_signer, public_key_bytes = get_signer()
-    settings = Mock(spec_set=HathorSettings)
-    settings.CONSENSUS_ALGORITHM = PoaSettings.construct(signers=())
+    settings = Mock()
+    settings.CONSENSUS_ALGORITHM = PoaSettings.model_construct(signers=())
     settings.AVG_TIME_BETWEEN_BLOCKS = 30
     block_verifier = PoaBlockVerifier(settings=settings)
     storage = Mock()
@@ -132,7 +131,7 @@ def test_verify_poa() -> None:
     block.timestamp = 153
 
     # Test no signers
-    settings.CONSENSUS_ALGORITHM = PoaSettings.construct(signers=())
+    settings.CONSENSUS_ALGORITHM = PoaSettings.model_construct(signers=())
     with pytest.raises(PoaValidationError) as e:
         block_verifier.verify_poa(block)
     assert str(e.value) == 'invalid PoA signature'
@@ -259,7 +258,7 @@ def test_verify_poa() -> None:
     ]
 )
 def test_get_signer_index_distance(n_signers: int, height: int, signer_index: int, expected: int) -> None:
-    settings = PoaSettings.construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
+    settings = PoaSettings.model_construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
 
     result = poa.get_signer_index_distance(settings=settings, signer_index=signer_index, height=height)
     assert result == expected
@@ -291,7 +290,7 @@ def test_get_signer_index_distance(n_signers: int, height: int, signer_index: in
     ]
 )
 def test_calculate_weight(n_signers: int, height: int, signer_index: int, expected: float) -> None:
-    settings = PoaSettings.construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
+    settings = PoaSettings.model_construct(signers=tuple(PoaSignerSettings(public_key=b'') for _ in range(n_signers)))
     block = Mock()
     block.get_height = Mock(return_value=height)
 
@@ -364,8 +363,8 @@ def test_poa_signer_settings() -> None:
     # Test fails
     with pytest.raises(ValidationError) as e:
         _ = PoaSignerSettings(public_key=b'some_key', start_height=10, end_height=10)
-    assert 'end_height (10) must be greater than start_height (10)' in str(e.value)
+    assert 'Value error, end_height (10) must be greater than start_height (10)' in str(e.value)
 
     with pytest.raises(ValidationError) as e:
         _ = PoaSignerSettings(public_key=b'some_key', start_height=10, end_height=5)
-    assert 'end_height (5) must be greater than start_height (10)' in str(e.value)
+    assert 'Value error, end_height (5) must be greater than start_height (10)' in str(e.value)

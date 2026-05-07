@@ -12,11 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import dataclasses
+
 import pytest
 
-from hathor.conf.settings import FeatureSetting
+from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key_hash
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
@@ -29,12 +31,13 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.scripts import P2PKH, Opcode
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.conf.settings import FeatureSetting
 
 
 class MyBluprint(Blueprint):
     a: int
 
-    @public
+    @public(allow_deposit=True)
     def initialize(self, ctx: Context) -> None:
         self.a = 123
 
@@ -43,10 +46,25 @@ class MyBluprint(Blueprint):
         self.a = 456
 
 
-class TestNanoFeatureActivation(unittest.TestCase):
-    def setUp(self) -> None:
-        super().setUp()
+class TestFeatureActivations(unittest.TestCase):
+    def prepare(self, settings: HathorSettings) -> None:
+        daa_factory = DAAFactory(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder = self.get_builder(settings).set_daa_factory(daa_factory)
 
+        self.manager = self.create_peer_from_builder(builder)
+        self.vertex_handler = self.manager.vertex_handler
+        self.feature_service = self.manager.feature_service
+        self.bit_signaling_service = self.manager._bit_signaling_service
+        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+        self.blueprint_id = BlueprintId(self.rng.randbytes(32))
+        self.manager.blueprint_service.register_blueprint(self.blueprint_id, MyBluprint)
+
+        empty_block_storage = self.manager.consensus_algorithm.nc_storage_factory.get_empty_block_storage()
+        empty_block_storage.commit()
+        self.empty_root_id = empty_block_storage.get_root_id()
+
+    async def test_nano_and_fees_and_opcodes(self) -> None:
         feature_settings = FeatureSettings(
             evaluation_interval=4,
             default_threshold=3,
@@ -75,30 +93,15 @@ class TestNanoFeatureActivation(unittest.TestCase):
             }
         )
 
-        settings = self._settings._replace(
+        settings = self._settings.model_copy(update=dict(
             ENABLE_NANO_CONTRACTS=FeatureSetting.FEATURE_ACTIVATION,
             ENABLE_FEE_BASED_TOKENS=FeatureSetting.FEATURE_ACTIVATION,
             ENABLE_OPCODES_V2=FeatureSetting.FEATURE_ACTIVATION,
             FEATURE_ACTIVATION=feature_settings,
-        )
-        daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder = self.get_builder(settings).set_daa(daa)
+        ))
 
-        self.manager = self.create_peer_from_builder(builder)
-        self.vertex_handler = self.manager.vertex_handler
-        self.feature_service = self.manager.feature_service
-        self.bit_signaling_service = self.manager._bit_signaling_service
-        self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+        self.prepare(settings)
 
-        self.blueprint_id = BlueprintId(self.rng.randbytes(32))
-        assert self.manager.tx_storage.nc_catalog is not None
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyBluprint
-
-        empty_block_storage = self.manager.consensus_algorithm.nc_storage_factory.get_empty_block_storage()
-        empty_block_storage.commit()
-        self.empty_root_id = empty_block_storage.get_root_id()
-
-    async def test_activation(self) -> None:
         private_key = unittest.OCB_TEST_PRIVKEY.hex()
         password = unittest.OCB_TEST_PASSWORD.hex()
         artifacts = self.dag_builder.build_from_str(f'''
@@ -347,6 +350,106 @@ class TestNanoFeatureActivation(unittest.TestCase):
         assert a11.get_metadata().nc_block_root_id == self.empty_root_id
         assert a12.get_metadata().nc_block_root_id == self.empty_root_id
         assert a13.get_metadata().nc_block_root_id not in (self.empty_root_id, None)
+
+    async def test_restrict_dup_actions(self) -> None:
+        settings = self._settings.model_copy(update=dict(
+            RESTRICT_DUP_ACTIONS=FeatureSetting.FEATURE_ACTIVATION,
+            FEATURE_ACTIVATION=FeatureSettings(
+                evaluation_interval=4,
+                default_threshold=3,
+                features={
+                    Feature.RESTRICT_DUP_ACTIONS: Criteria(
+                        bit=0,
+                        start_height=4,
+                        timeout_height=12,
+                        signal_support_by_default=True,
+                        version='0.0.0'
+                    ),
+                }
+            ),
+        ))
+
+        self.prepare(settings)
+
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..13]
+            blockchain b10 a[11..11]
+
+            nc1.nc_id = "{self.blueprint_id.hex()}"
+            nc1.nc_method = initialize()
+            nc1.nc_deposit = 100 HTR
+            nc1 <-- b11
+
+            b10 < dummy < nc1 < b11 < b13 < a11
+            a11.weight = 20
+        ''')
+
+        b3, b4, b7, b8, b11, b12, b13, a11 = artifacts.get_typed_vertices(
+            ('b3', 'b4', 'b7', 'b8', 'b11', 'b12', 'b13', 'a11'),
+            Block,
+        )
+        nc1, = artifacts.get_typed_vertices(('nc1',), Transaction)
+
+        nano_header = nc1.get_nano_header()
+        assert len(nano_header.nc_actions) == 1
+        deposit = nano_header.nc_actions[0]
+        deposit = dataclasses.replace(deposit, amount=deposit.amount // 2)
+        nano_header.nc_actions = [deposit, deposit]
+
+        artifacts.propagate_with(self.manager, up_to='b3')
+        assert self.feature_service.get_state(block=b3, feature=Feature.RESTRICT_DUP_ACTIONS) == FeatureState.DEFINED
+
+        artifacts.propagate_with(self.manager, up_to='b4')
+        assert self.feature_service.get_state(block=b4, feature=Feature.RESTRICT_DUP_ACTIONS) == FeatureState.STARTED
+
+        signaling_blocks = ('b5', 'b6', 'b7')
+        for block_name in signaling_blocks:
+            block = artifacts.by_name[block_name].vertex
+            assert isinstance(block, Block)
+            block.storage = self.manager.tx_storage
+            block.signal_bits = self.bit_signaling_service.generate_signal_bits(block=block.get_block_parent())
+            artifacts.propagate_with(self.manager, up_to=block_name)
+
+        assert self.feature_service.get_state(block=b7, feature=Feature.RESTRICT_DUP_ACTIONS) == FeatureState.STARTED
+
+        artifacts.propagate_with(self.manager, up_to='dummy')
+        assert self.feature_service.get_state(block=b8, feature=Feature.RESTRICT_DUP_ACTIONS) == FeatureState.LOCKED_IN
+
+        # At this point the RESTRICT_DUP_ACTIONS feature is not active,
+        # but duplicate actions are already rejected on the mempool
+        msg = 'full validation failed: duplicate actions for token 00'
+        with pytest.raises(InvalidNewTransaction, match=msg):
+            self.vertex_handler.on_new_relayed_vertex(nc1)
+        assert nc1.get_metadata().validation.is_initial()
+        assert nc1.get_metadata().voided_by is None
+
+        # However, duplicate actions would be accepted if relayed inside a block.
+        # We have to manually propagate it.
+        d = self.vertex_handler.on_new_block(b11, deps=[nc1])
+        self.clock.advance(1)
+        assert d.called and d.result is True
+        artifacts._last_propagated = 'b11'
+
+        artifacts.propagate_with(self.manager, up_to='b12')
+        assert self.feature_service.get_state(block=b12, feature=Feature.RESTRICT_DUP_ACTIONS) == FeatureState.ACTIVE
+
+        artifacts.propagate_with(self.manager, up_to='b13')
+
+        # A reorg happens, decreasing the best chain.
+        artifacts.propagate_with(self.manager, up_to='a11')
+        assert a11.get_metadata().validation.is_valid()
+        assert a11.get_metadata().voided_by is None
+        assert b11.get_metadata().validation.is_invalid()
+        assert b12.get_metadata().validation.is_invalid()
+        assert b13.get_metadata().validation.is_invalid()
+        assert nc1.get_metadata().validation.is_invalid()
+
+        # The duplicate actions tx is removed from the mempool.
+        assert not self.manager.tx_storage.transaction_exists(b11.hash)
+        assert not self.manager.tx_storage.transaction_exists(b12.hash)
+        assert not self.manager.tx_storage.transaction_exists(b13.hash)
+        assert not self.manager.tx_storage.transaction_exists(nc1.hash)
+        assert nc1 not in list(self.manager.tx_storage.iter_mempool_tips())
 
     def _reset_vertex(self, vertex: Vertex) -> None:
         assert vertex.storage is not None

@@ -28,7 +28,7 @@ class TestAllFields(unittest.TestCase):
     def test_all_fields_builtin(self) -> None:
         manager = self.create_peer('unittests')
         blueprint_id = BlueprintId(VertexId(b'\x01' * 32))
-        manager.tx_storage.nc_catalog.blueprints[blueprint_id] = AllFieldsBlueprint
+        manager.blueprint_service.register_blueprint(blueprint_id, AllFieldsBlueprint)
 
         dag_builder = TestDAGBuilder.from_manager(manager)
         artifacts = dag_builder.build_from_str(f'''

@@ -121,15 +121,15 @@ def test_conflicting_bits(features: list[dict[str, Any]]) -> None:
         FeatureSettings(**data)  # type: ignore[arg-type]
 
     errors = e.value.errors()
-    assert errors[0]['msg'] == 'At least one pair of Features have the same bit configured for an overlapping ' \
-                               'interval: NOP_FEATURE_1 and NOP_FEATURE_2'
+    assert errors[0]['msg'] == 'Value error, At least one pair of Features have the same bit configured for an ' \
+                               'overlapping interval: NOP_FEATURE_1 and NOP_FEATURE_2'
 
 
 @pytest.mark.parametrize(
     ['evaluation_interval', 'default_threshold', 'error'],
     [
-        (10, 50, 'default_threshold must not be greater than evaluation_interval: 50 > 10'),
-        (100, 101, 'default_threshold must not be greater than evaluation_interval: 101 > 100')
+        (10, 50, 'Value error, default_threshold must not be greater than evaluation_interval: 50 > 10'),
+        (100, 101, 'Value error, default_threshold must not be greater than evaluation_interval: 101 > 100')
     ]
 )
 def test_default_threshold(evaluation_interval: int, default_threshold: int, error: str) -> None:

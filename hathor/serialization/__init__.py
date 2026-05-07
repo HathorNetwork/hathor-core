@@ -12,16 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .deserializer import Deserializer
-from .exceptions import BadDataError, OutOfDataError, SerializationError, TooLongError, UnsupportedTypeError
-from .serializer import Serializer
-
-__all__ = [
-    'Serializer',
-    'Deserializer',
-    'SerializationError',
-    'UnsupportedTypeError',
-    'TooLongError',
-    'OutOfDataError',
-    'BadDataError',
-]
+# Re-export from hathorlib for backward compatibility
+from hathorlib.serialization import *  # noqa: F401,F403
+from hathorlib.serialization import (  # noqa: F401
+    BadDataError,
+    Deserializer,
+    OutOfDataError,
+    SerializationError,
+    Serializer,
+    TooLongError,
+    UnsupportedTypeError,
+)

@@ -1,9 +1,16 @@
-"""
-Copyright (c) Hathor Labs and its affiliates.
-
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
-"""
+# Copyright 2026 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import base64
 import datetime
 import hashlib
@@ -20,8 +27,6 @@ from hathorlib.exceptions import InvalidOutputValue, WeightError
 from hathorlib.scripts import P2PKH, DataScript, MultiSig, parse_address_script
 from hathorlib.utils import int_to_bytes, unpack, unpack_len
 from hathorlib.vertex_parser import VertexParser
-
-settings = HathorSettings()
 
 MAX_NONCE = 2**32
 
@@ -64,13 +69,13 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 
 
 class TxVersion(IntEnum):
-    """Versions are sequential for blocks and transactions"""
-
+    """ Indicate transaction type when serialized. """
     REGULAR_BLOCK = 0
     REGULAR_TRANSACTION = 1
     TOKEN_CREATION_TRANSACTION = 2
     MERGE_MINED_BLOCK = 3
-    NANO_CONTRACT = 4
+    # DEPRECATED_NANO_CONTRACT = 4
+    POA_BLOCK = 5
     ON_CHAIN_BLUEPRINT = 6
 
     @classmethod
@@ -80,25 +85,24 @@ class TxVersion(IntEnum):
 
         raise ValueError(f'Invalid version: {value}')
 
-    def get_cls(self) -> Type['BaseTransaction']:
-        from hathorlib import Block, TokenCreationTransaction, Transaction
-        from hathorlib.nanocontracts.nanocontract import DeprecatedNanoContract
-        from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
-        cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
-            TxVersion.REGULAR_BLOCK: Block,
-            TxVersion.REGULAR_TRANSACTION: Transaction,
-            TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
-            TxVersion.NANO_CONTRACT: DeprecatedNanoContract,
-            TxVersion.ON_CHAIN_BLUEPRINT: OnChainBlueprint,
-        }
+def get_cls_from_tx_version(tx_version: TxVersion) -> Type['BaseTransaction']:
+    from hathorlib import Block, TokenCreationTransaction, Transaction
+    from hathorlib.nanocontracts.on_chain_blueprint import OnChainBlueprint
 
-        cls = cls_map.get(self)
+    cls_map: Dict[TxVersion, Type[BaseTransaction]] = {
+        TxVersion.REGULAR_BLOCK: Block,
+        TxVersion.REGULAR_TRANSACTION: Transaction,
+        TxVersion.TOKEN_CREATION_TRANSACTION: TokenCreationTransaction,
+        TxVersion.ON_CHAIN_BLUEPRINT: OnChainBlueprint,
+    }
 
-        if cls is None:
-            raise ValueError('Invalid version.')
-        else:
-            return cls
+    cls = cls_map.get(tx_version)
+
+    if cls is None:
+        raise ValueError('Invalid version.')
+    else:
+        return cls
 
 
 class BaseTransaction(ABC):
@@ -446,11 +450,26 @@ class BaseTransaction(ABC):
         """Returns True if it's an NFT creation transaction"""
         return False
 
-    def is_standard(self, std_max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE,
-                    only_standard_script_type: bool = True,
-                    max_number_of_data_script_outputs: int = settings.MAX_DATA_SCRIPT_OUTPUTS) -> bool:
+    def is_standard(
+        self,
+        std_max_output_script_size: Optional[int] = None,
+        only_standard_script_type: bool = True,
+        max_number_of_data_script_outputs: Optional[int] = None,
+    ) -> bool:
         """ Return True is the transaction is standard
         """
+        settings = HathorSettings()
+        std_max_output_script_size = (
+            settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+            if std_max_output_script_size is None
+            else std_max_output_script_size
+        )
+        max_number_of_data_script_outputs = (
+            settings.MAX_DATA_SCRIPT_OUTPUTS
+            if max_number_of_data_script_outputs is None
+            else max_number_of_data_script_outputs
+        )
+
         # TODO in the future we should have a way to know which standard validation failed
         # we could have an array of errors from args that we append an error object
         # or a bool parameter "raise_on_non_standard", which will raise an error if it's non standard
@@ -659,8 +678,14 @@ class TxOutput:
             data['decoded'] = self.to_human_readable()
         return data
 
-    def is_script_size_valid(self, max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE) -> bool:
+    def is_script_size_valid(self, max_output_script_size: Optional[int] = None) -> bool:
         """Return True if output script size is valid"""
+        settings = HathorSettings()
+        max_output_script_size = (
+            settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+            if max_output_script_size is None
+            else max_output_script_size
+        )
         if len(self.script) > max_output_script_size:
             return False
 
@@ -670,9 +695,18 @@ class TxOutput:
         """Return True if output script is a DataScript"""
         return DataScript.parse_script(self.script) is not None
 
-    def is_standard_script(self, std_max_output_script_size: int = settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE,
-                           only_standard_script_type: bool = True) -> bool:
+    def is_standard_script(
+        self,
+        std_max_output_script_size: Optional[int] = None,
+        only_standard_script_type: bool = True,
+    ) -> bool:
         """Return True if this output has a standard script."""
+        settings = HathorSettings()
+        std_max_output_script_size = (
+            settings.PUSHTX_MAX_OUTPUT_SCRIPT_SIZE
+            if std_max_output_script_size is None
+            else std_max_output_script_size
+        )
         # First check: script size limit
         if not self.is_script_size_valid(std_max_output_script_size):
             return False
@@ -724,7 +758,7 @@ def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     version = data[1]
     try:
         tx_version = TxVersion(version)
-        cls = tx_version.get_cls()
+        cls = get_cls_from_tx_version(tx_version)
         return cls.create_from_struct(data)
     except ValueError:
         raise StructError('Invalid bytes to create transaction subclass.')

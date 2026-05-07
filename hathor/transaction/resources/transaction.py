@@ -93,7 +93,7 @@ def get_tx_extra_data(
     for index, tx_in in enumerate(tx.inputs):
         if tx.storage:
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
-            tx2_out = tx2.outputs[tx_in.index]
+            tx2_out = tx2.resolve_spent_output(tx_in.index)
             output = tx2_out.to_json(decode_script=True)
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index

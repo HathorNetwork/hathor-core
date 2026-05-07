@@ -10,19 +10,26 @@ ARG PYTHON
 RUN apt-get -qy update
 RUN apt-get -qy install libssl1.1 graphviz librocksdb6.11
 # dev deps for this build start here
-RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev librocksdb-dev cargo git pkg-config
+RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev librocksdb-dev git pkg-config curl
+# Bullseye's apt cargo is too old for htr-rs (edition 2024 / resolver 3 require Rust 1.85+), so install via rustup
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+ENV PATH="/root/.cargo/bin:${PATH}"
 # install all deps in a virtualenv so we can just copy it over to the final image
 RUN pip --no-input --no-cache-dir install --upgrade pip wheel poetry
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 WORKDIR /app/
 COPY pyproject.toml poetry.lock  ./
 COPY hathorlib ./hathorlib
+COPY htr-rs ./htr-rs
 RUN poetry install -n -E sentry --no-root --only=main
 COPY hathor ./hathor
 COPY hathor_cli ./hathor_cli
 COPY README.md ./
 RUN poetry build -f wheel
 RUN poetry run pip install dist/hathor-*.whl
+# poetry installs path deps editably (.pth -> /app/...), which breaks once the venv is copied to stage-1.
+# Reinstall hathorlib and htr-lib non-editably so the venv is portable.
+RUN poetry run pip install --no-deps --force-reinstall ./hathorlib ./htr-rs/crates/htr-lib
 
 # finally: use production .venv from before
 # lean and mean: this image should be about ~50MB, would be about ~470MB if using the whole stage-1

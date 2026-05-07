@@ -22,7 +22,7 @@ from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.dag_builder.builder import FEE_KEY, NC_DEPOSIT_KEY, NC_WITHDRAWAL_KEY, DAGBuilder, DAGNode
 from hathor.dag_builder.types import DAGNodeType, VertexResolverType, WalletFactoryType
 from hathor.dag_builder.utils import get_literal, is_literal
@@ -57,7 +57,7 @@ class VertexExporter:
         *,
         builder: DAGBuilder,
         settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         genesis_wallet: BaseWallet,
         wallet_factory: WalletFactoryType,
         vertex_resolver: VertexResolverType,
@@ -71,7 +71,7 @@ class VertexExporter:
         self._block_height: dict[bytes, int] = {}
 
         self._settings = settings
-        self._daa = daa
+        self._daa_factory = daa_factory
         self._wallet_factory = wallet_factory
         self._vertex_resolver = vertex_resolver
         self._nc_catalog = nc_catalog
@@ -256,7 +256,7 @@ class VertexExporter:
         if 'weight' in node.attrs:
             vertex.weight = float(node.attrs['weight'])
         else:
-            vertex.weight = self._daa.minimum_tx_weight(vertex)
+            vertex.weight = self._daa_factory.minimum_tx_weight(vertex)
         self.update_vertex_hash(vertex)
         return vertex
 
@@ -282,7 +282,13 @@ class VertexExporter:
         if 'weight' in node.attrs:
             blk.weight = float(node.attrs['weight'])
         else:
-            blk.weight = self._daa.calculate_block_difficulty(blk, self.get_parent_block)
+            # Synthetic dag_builder blocks have no static metadata and the factory has
+            # no feature_service wired, so call create_v1 directly — dag_builder is
+            # V1-only by construction.
+            daa = self._daa_factory.create_v1()
+            blk.weight = daa.calculate_block_difficulty(blk, self.get_parent_block)
+        if 'signal_bits' in node.attrs:
+            blk.signal_bits = int(node.attrs['signal_bits'])
         self.update_vertex_hash(blk)
         self._block_height[blk.hash] = height
         return blk
@@ -498,7 +504,7 @@ class VertexExporter:
         if 'weight' in node.attrs:
             ocb.weight = float(node.attrs['weight'])
         else:
-            ocb.weight = self._daa.minimum_tx_weight(ocb)
+            ocb.weight = self._daa_factory.minimum_tx_weight(ocb)
 
         self.update_vertex_hash(ocb)
         return ocb
@@ -517,7 +523,7 @@ class VertexExporter:
         if 'weight' in node.attrs:
             tx.weight = float(node.attrs['weight'])
         else:
-            tx.weight = self._daa.minimum_tx_weight(tx)
+            tx.weight = self._daa_factory.minimum_tx_weight(tx)
         self.update_vertex_hash(tx)
         return tx
 

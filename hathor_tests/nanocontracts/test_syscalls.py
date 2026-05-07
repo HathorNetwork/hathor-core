@@ -148,11 +148,13 @@ class NCNanoContractTestCase(BlueprintTestCase):
         self.proxy_caller_blueprint_id = self.gen_random_blueprint_id()
         self.target_blueprint_id = self.gen_random_blueprint_id()
 
-        self.nc_catalog.blueprints[self.my_blueprint_id] = MyBlueprint
-        self.nc_catalog.blueprints[self.other_blueprint_id] = OtherBlueprint
-        self.nc_catalog.blueprints[self.fee_blueprint_id] = FeeTokenBlueprint
-        self.nc_catalog.blueprints[self.proxy_caller_blueprint_id] = ProxyCallerBlueprint
-        self.nc_catalog.blueprints[self.target_blueprint_id] = TargetBlueprint
+        self.blueprint_service.register_blueprints({
+            self.my_blueprint_id: MyBlueprint,
+            self.other_blueprint_id: OtherBlueprint,
+            self.fee_blueprint_id: FeeTokenBlueprint,
+            self.proxy_caller_blueprint_id: ProxyCallerBlueprint,
+            self.target_blueprint_id: TargetBlueprint,
+        })
 
     def test_basics(self) -> None:
         nc1_id = self.gen_random_contract_id()
@@ -334,8 +336,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
             self.get_genesis_tx()
         )
 
-        token_uid = self.runner.call_public_method(nc_id, 'create_fee_token', ctx_create_token,
-                                                   'FeeToken', 'FBT', 1000000, TokenUid(HATHOR_TOKEN_UID))
+        token_uid = self.runner.call_public_method(
+            nc_id, 'create_fee_token', ctx_create_token, 'FeeToken', 'FBT', 1000000, TokenUid(HATHOR_TOKEN_UID)
+        )
 
         htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
         fbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=token_uid)
@@ -347,8 +350,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
         }
 
         ctx_create_deposit_token = self.create_context()
-        dbt_token_uid = self.runner.call_public_method(nc_id, 'create_deposit_token',
-                                                       ctx_create_deposit_token, 'DepositToken', 'DBT', 100)
+        dbt_token_uid = self.runner.call_public_method(
+            nc_id, 'create_deposit_token', ctx_create_deposit_token, 'DepositToken', 'DBT', 100
+        )
 
         dbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=dbt_token_uid)
 
@@ -359,8 +363,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
             dbt_balance_key: Balance(value=100, can_mint=True, can_melt=True),
         }
 
-        fbt_token2_uid = self.runner.call_public_method(nc_id, 'create_fee_token', self.create_context(),
-                                                        'FeeToken2', 'FB2', 1000000, dbt_token_uid)
+        fbt_token2_uid = self.runner.call_public_method(
+            nc_id, 'create_fee_token', self.create_context(), 'FeeToken2', 'FB2', 1000000, dbt_token_uid
+        )
         fbt2_balance_key = BalanceKey(nc_id=nc_id, token_uid=fbt_token2_uid)
 
         # created fee token paying with deposit token
@@ -434,15 +439,17 @@ class NCNanoContractTestCase(BlueprintTestCase):
             self.get_genesis_tx()
         )
 
-        token_uid = self.runner.call_public_method(nc_id, 'create_fee_token', ctx_create_token,
-                                                   'FeeToken', 'FBT', 1000000, TokenUid(HATHOR_TOKEN_UID))
+        token_uid = self.runner.call_public_method(
+            nc_id, 'create_fee_token', ctx_create_token, 'FeeToken', 'FBT', 1000000, TokenUid(HATHOR_TOKEN_UID)
+        )
 
         htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
         fbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=token_uid)
 
         ctx_create_deposit_token = self.create_context()
-        dbt_token_uid = self.runner.call_public_method(nc_id, 'create_deposit_token',
-                                                       ctx_create_deposit_token, 'DepositToken', 'DBT', 100)
+        dbt_token_uid = self.runner.call_public_method(
+            nc_id, 'create_deposit_token', ctx_create_deposit_token, 'DepositToken', 'DBT', 100
+        )
 
         dbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=dbt_token_uid)
 
@@ -528,12 +535,14 @@ class NCNanoContractTestCase(BlueprintTestCase):
             self.get_genesis_tx()
         )
 
-        token_uid = self.runner.call_public_method(nc_id, 'create_fee_token', ctx_create_token,
-                                                   'FeeToken', 'FBT', 1000000, TokenUid(HATHOR_TOKEN_UID))
+        token_uid = self.runner.call_public_method(
+            nc_id, 'create_fee_token', ctx_create_token, 'FeeToken', 'FBT', 1000000, TokenUid(HATHOR_TOKEN_UID)
+        )
 
         # Create a deposit token to use as fee payment
-        dbt_token_uid = self.runner.call_public_method(nc_id, 'create_deposit_token', self.create_context(),
-                                                       'DepositToken', 'DBT', 500)
+        dbt_token_uid = self.runner.call_public_method(
+            nc_id, 'create_deposit_token', self.create_context(), 'DepositToken', 'DBT', 500
+        )
 
         htr_balance_key = BalanceKey(nc_id=nc_id, token_uid=HATHOR_TOKEN_UID)
         fbt_balance_key = BalanceKey(nc_id=nc_id, token_uid=token_uid)

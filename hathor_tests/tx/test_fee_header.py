@@ -146,3 +146,55 @@ class FeeHeaderTest(unittest.TestCase):
         assert len(deserialized_single.fees) == 1
         assert deserialized_single.fees[0].token_index == 1
         assert deserialized_single.fees[0].amount == 42
+
+    def test_to_json_includes_fees(self) -> None:
+        """Test that Transaction.to_json() includes fee header data when present."""
+        tx = Transaction()
+        token1_uid = TokenUid(b'token1' + b'\x00' * 26)
+        tx.tokens = [token1_uid]
+
+        fee_header = FeeHeader(
+            settings=self._settings,
+            tx=tx,
+            fees=[
+                FeeHeaderEntry(token_index=0, amount=100),
+                FeeHeaderEntry(token_index=1, amount=200),
+            ],
+        )
+        tx.headers = [fee_header]
+
+        json = tx.to_json()
+
+        assert 'fees' in json
+        assert len(json['fees']) == 2
+        assert json['fees'][0] == {
+            'token_uid': tx.get_token_uid(0).hex(),
+            'amount': 100,
+        }
+        assert json['fees'][1] == {
+            'token_uid': token1_uid.hex(),
+            'amount': 200,
+        }
+
+    def test_to_json_without_fees(self) -> None:
+        """Test that Transaction.to_json() does not include fees key when no fee header."""
+        tx = Transaction()
+        json = tx.to_json()
+        assert 'fees' not in json
+
+    def test_to_json_single_htr_fee(self) -> None:
+        """Test to_json with a single HTR fee entry."""
+        tx = Transaction()
+
+        fee_header = FeeHeader(
+            settings=self._settings,
+            tx=tx,
+            fees=[FeeHeaderEntry(token_index=0, amount=50)],
+        )
+        tx.headers = [fee_header]
+
+        json = tx.to_json()
+
+        assert len(json['fees']) == 1
+        assert json['fees'][0]['token_uid'] == self._settings.HATHOR_TOKEN_UID.hex()
+        assert json['fees'][0]['amount'] == 50

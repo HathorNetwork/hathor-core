@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.consensus.context import ConsensusAlgorithmContext
     from hathor.feature_activation.feature_service import FeatureService
-    from hathor.nanocontracts.execution import NCBlockExecutor
+    from hathor.nanocontracts.execution import NCConsensusBlockExecutor
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
 
 logger = get_logger()
@@ -46,7 +46,7 @@ class BlockConsensusAlgorithm:
         self,
         settings: 'HathorSettings',
         context: 'ConsensusAlgorithmContext',
-        block_executor: 'NCBlockExecutor',
+        block_executor: 'NCConsensusBlockExecutor',
         feature_service: 'FeatureService',
     ) -> None:
         self._settings = settings
@@ -500,11 +500,18 @@ class BlockConsensusAlgorithm:
                 meta.nc_execution = NCExecutionState.PENDING
                 meta.nc_calls = None
                 meta.nc_events = None
-                if meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}:
+                if meta.voided_by is not None and NC_EXECUTION_FAIL_ID in meta.voided_by:
+                    # NC execution only runs when voided_by is None, so both tx.hash
+                    # and NC_EXECUTION_FAIL_ID here originate from the same
+                    # mark_as_nc_fail_execution call and are safe to roll back
+                    # together — including the funds-DAG propagation of tx.hash.
+                    assert tx.hash in meta.voided_by
                     assert isinstance(tx, Transaction)
                     self.context.transaction_algorithm.remove_voided_by(tx, tx.hash)
-                    assert meta.voided_by == {NC_EXECUTION_FAIL_ID}
-                    meta.voided_by = None
+                    meta.voided_by.remove(NC_EXECUTION_FAIL_ID)
+                    if not meta.voided_by:
+                        meta.voided_by = None
+                    self.context.transaction_algorithm.assert_valid_consensus(tx)
             meta.first_block = None
             self.context.save(tx)
             bfs.add_neighbors()
@@ -601,7 +608,7 @@ class BlockConsensusAlgorithmFactory:
     def __init__(
         self,
         settings: 'HathorSettings',
-        block_executor: 'NCBlockExecutor',
+        block_executor: 'NCConsensusBlockExecutor',
         feature_service: 'FeatureService',
     ) -> None:
         self.settings = settings

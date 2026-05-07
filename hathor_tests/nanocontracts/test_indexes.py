@@ -4,7 +4,6 @@ from hathor.conf import HathorSettings
 from hathor.dag_builder.artifacts import DAGArtifacts
 from hathor.manager import HathorManager
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, NCFail, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.types import NCActionType
 from hathor.nanocontracts.utils import sign_pycoin
@@ -42,13 +41,10 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         super().setUp()
 
         self.myblueprint_id = b'x' * 32
-        self.catalog = NCBlueprintCatalog({
-            self.myblueprint_id: MyBlueprint
-        })
         self.nc_seqnum = 0
 
         self.manager.allow_mining_without_peers()
-        self.manager.tx_storage.nc_catalog = self.catalog
+        self.manager.blueprint_service.register_blueprint(self.myblueprint_id, MyBlueprint)
 
         self.wallet = self.manager.wallet
 
@@ -96,7 +92,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
     def finish_and_broadcast_tx(self, tx: BaseTransaction, confirmations: int = 1) -> None:
         tx.timestamp = int(self.manager.reactor.seconds())
         tx.parents = self.manager.get_new_tx_parents()
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
 
         # broadcast
         self.manager.cpu_mining_service.resolve(tx)

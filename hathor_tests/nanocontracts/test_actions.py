@@ -21,7 +21,6 @@ import pytest
 from hathor.feature_activation.utils import Features
 from hathor.indexes.tokens_index import TokensIndex
 from hathor.nanocontracts import HATHOR_TOKEN_UID, NC_EXECUTION_FAIL_ID, Blueprint, Context, public
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.nanocontracts.exception import NCInvalidAction
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
@@ -29,14 +28,13 @@ from hathor.nanocontracts.types import NCActionType, TokenUid
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers.nano_header import NanoHeaderAction
-from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
-from hathor.verification.nano_header_verifier import MAX_ACTIONS_LEN
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import HDWallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason, set_nano_header
+from hathorlib.nanocontracts.verification import MAX_ACTIONS_LEN
 
 
 class MyBlueprint(Blueprint):
@@ -82,9 +80,7 @@ class TestActions(unittest.TestCase):
         self.bp_id = b'1' * 32
         self.manager = self.create_peer('unittests', nc_log_config=NCLogConfig.FAILED, wallet_index=True)
 
-        self.manager.tx_storage.nc_catalog = NCBlueprintCatalog({
-            self.bp_id: MyBlueprint
-        })
+        self.manager.blueprint_service.register_blueprint(self.bp_id, MyBlueprint)
         self.tokens_index: TokensIndex = not_none(self.manager.tx_storage.indexes.tokens)
         self.nc_seqnum = 0
 
@@ -119,14 +115,9 @@ class TestActions(unittest.TestCase):
             Transaction,
         )
         best_block = self.manager.tx_storage.get_best_block()
-        self.verification_params = VerificationParams.default_for_mempool(
+        self.verification_params = VerificationParams.for_mempool(
             best_block=best_block,
-            features=Features(
-                count_checkdatasig_op=False,
-                nanocontracts=True,
-                fee_tokens=False,
-                opcodes_version=OpcodesVersion.V1,
-            )
+            features=Features.all_enabled()
         )
 
         # We finish a manual setup of tx1, so it can be used directly in verification methods.
@@ -777,7 +768,7 @@ class TestActions(unittest.TestCase):
         )
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1, self.verification_params)
         assert str(e.value) == f'conflicting actions for token {self.tka.hash_hex}'
 
     def test_acquire_and_grant_same_token_not_allowed(self) -> None:
@@ -797,7 +788,7 @@ class TestActions(unittest.TestCase):
         self._set_nano_header(tx=self.tx1, nc_actions=nc_actions)
 
         with pytest.raises(NCInvalidAction) as e:
-            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+            self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1, self.verification_params)
         assert str(e.value) == 'conflicting actions for token 00'
 
     def test_conflicting_actions(self) -> None:
@@ -866,7 +857,9 @@ class TestActions(unittest.TestCase):
 
         with patch('hathor.transaction.headers.NanoHeader.get_actions', lambda _: fake_actions):
             with pytest.raises(NCInvalidAction) as e:
-                self.manager.verification_service.verifiers.nano_header.verify_actions(self.tx1)
+                self.manager.verification_service.verifiers.nano_header.verify_actions(
+                    self.tx1, self.verification_params
+                )
         assert str(e.value) == f'DEPOSIT action requires token {fake_token_uid.hex()} in tokens list'
 
     def _test_invalid_unknown_authority(self, action_type: NCActionType) -> None:

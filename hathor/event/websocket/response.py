@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import Field, NonNegativeInt
+from pydantic import ConfigDict, NonNegativeInt
 
+from hathor.api.asyncapi.decorators import ws_message
+from hathor.api.asyncapi.generator import MessageDirection
 from hathor.event.model.base_event import BaseEvent
 from hathor.utils.pydantic import BaseModel
 
@@ -24,6 +26,13 @@ class Response(BaseModel):
     pass
 
 
+@ws_message(
+    name='event',
+    direction=MessageDirection.SEND,
+    summary='Event notification',
+    description='An event from the full node.',
+    tags=['events'],
+)
 class EventResponse(Response):
     """Class that represents an event to be sent to the client.
 
@@ -36,7 +45,7 @@ class EventResponse(Response):
         stream_id: The ID of the current stream.
     """
 
-    type: str = Field(default='EVENT', const=True)
+    type: Literal['EVENT'] = 'EVENT'
     peer_id: str
     network: str
     event: BaseEvent
@@ -53,7 +62,14 @@ class InvalidRequestType(Enum):
     ACK_TOO_LARGE = 'ACK_TOO_LARGE'
 
 
-class InvalidRequestResponse(Response, use_enum_values=True):
+@ws_message(
+    name='invalidRequest',
+    direction=MessageDirection.SEND,
+    summary='Invalid request error',
+    description='Sent when the client sends an invalid request.',
+    tags=['error'],
+)
+class InvalidRequestResponse(Response):
     """Class to let the client know that it performed an invalid request.
 
     Args:
@@ -61,6 +77,7 @@ class InvalidRequestResponse(Response, use_enum_values=True):
         invalid_request: The request that was invalid.
         error_message: A message describing why the request was invalid.
     """
+    model_config = ConfigDict(use_enum_values=True)
 
     type: InvalidRequestType
     invalid_request: Optional[str]

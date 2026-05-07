@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING
 
 from hathorlib.headers.base import VertexBaseHeader
 from hathorlib.headers.types import VertexHeaderId
-from hathorlib.utils import decode_unsigned, encode_unsigned, int_to_bytes, unpack, unpack_len
+from hathorlib.utils import int_to_bytes, unpack, unpack_len
+from hathorlib.utils.leb128 import decode_unsigned, encode_unsigned
 
 if TYPE_CHECKING:
     from hathorlib.base_transaction import BaseTransaction
@@ -79,8 +80,6 @@ class NanoHeader(VertexBaseHeader):
 
     @classmethod
     def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[NanoHeader, bytes]:
-        from hathorlib.nanocontracts import DeprecatedNanoContract
-
         header_id, buf = buf[:1], buf[1:]
         assert header_id == VertexHeaderId.NANO_HEADER.value
 
@@ -92,11 +91,10 @@ class NanoHeader(VertexBaseHeader):
         nc_args_bytes, buf = unpack_len(nc_args_bytes_len, buf)
 
         nc_actions: list[NanoHeaderAction] = []
-        if not isinstance(tx, DeprecatedNanoContract):
-            (nc_actions_len,), buf = unpack('!B', buf)
-            for _ in range(nc_actions_len):
-                action, buf = cls._deserialize_action(buf)
-                nc_actions.append(action)
+        (nc_actions_len,), buf = unpack('!B', buf)
+        for _ in range(nc_actions_len):
+            action, buf = cls._deserialize_action(buf)
+            nc_actions.append(action)
 
         nc_address, buf = unpack_len(ADDRESS_LEN_BYTES, buf)
         nc_script_len, buf = decode_unsigned(buf, max_bytes=_NC_SCRIPT_LEN_MAX_BYTES)
@@ -127,8 +125,6 @@ class NanoHeader(VertexBaseHeader):
 
     def _serialize_without_header_id(self, *, skip_signature: bool) -> deque[bytes]:
         """Serialize the header with the option to skip the signature."""
-        from hathorlib.nanocontracts import DeprecatedNanoContract
-
         encoded_method = self.nc_method.encode('ascii')
 
         ret: deque[bytes] = deque()
@@ -139,10 +135,9 @@ class NanoHeader(VertexBaseHeader):
         ret.append(int_to_bytes(len(self.nc_args_bytes), 2))
         ret.append(self.nc_args_bytes)
 
-        if not isinstance(self.tx, DeprecatedNanoContract):
-            ret.append(int_to_bytes(len(self.nc_actions), 1))
-            for action in self.nc_actions:
-                ret.append(self._serialize_action(action))
+        ret.append(int_to_bytes(len(self.nc_actions), 1))
+        for action in self.nc_actions:
+            ret.append(self._serialize_action(action))
 
         ret.append(self.nc_address)
         if not skip_signature:

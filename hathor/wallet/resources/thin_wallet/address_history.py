@@ -71,7 +71,24 @@ class AddressHistoryResource(Resource):
         addresses = post_data['addresses']
         assert isinstance(addresses, list)
 
-        return self.get_address_history(addresses, post_data.get('hash'), post_data.get('tx_version'))
+        # Validate and parse tx_version parameter if provided
+        allowed_tx_versions = None
+        if 'tx_version' in post_data:
+            tx_version_raw = post_data['tx_version']
+            # Handle both list/set and single values
+            if not isinstance(tx_version_raw, (list, set)):
+                tx_version_raw = [tx_version_raw]
+
+            try:
+                allowed_tx_versions = set(int(v) for v in tx_version_raw)
+            except (ValueError, TypeError) as e:
+                request.setResponseCode(400)
+                return json_dumpb({
+                    'success': False,
+                    'message': f'Invalid tx_version parameter: must be integer(s), got {e}'
+                })
+
+        return self.get_address_history(addresses, post_data.get('hash'), allowed_tx_versions)
 
     def render_GET(self, request: Request) -> bytes:
         """ GET request for /thin_wallet/address_history/
@@ -136,11 +153,16 @@ class AddressHistoryResource(Resource):
             ref_hash = raw_args[b'hash'][0].decode('utf-8')
 
         allowed_tx_versions_arg = raw_args.get(b'tx_version[]', None)
-        allowed_tx_versions = (
-            set([int(tx_version.decode('utf-8')) for tx_version in allowed_tx_versions_arg])
-            if allowed_tx_versions_arg is not None
-            else None
-        )
+        allowed_tx_versions = None
+        if allowed_tx_versions_arg is not None:
+            try:
+                allowed_tx_versions = set([int(tx_version.decode('utf-8')) for tx_version in allowed_tx_versions_arg])
+            except ValueError as e:
+                request.setResponseCode(400)
+                return json_dumpb({
+                    'success': False,
+                    'message': f'Invalid tx_version parameter: {e}'
+                })
         return self.get_address_history(
             [address.decode('utf-8') for address in addresses],
             ref_hash,
@@ -383,6 +405,14 @@ AddressHistoryResource.openapi = {
                                     'value': {
                                         'success': False,
                                         'message': 'The address xx is invalid',
+                                    }
+                                },
+                                'error_invalid_tx_version': {
+                                    'summary': 'Invalid tx_version parameter',
+                                    'value': {
+                                        'success': False,
+                                        'message': "Invalid tx_version parameter: invalid literal for int() "
+                                                   "with base 10: 'INVALID'",
                                     }
                                 },
                             }

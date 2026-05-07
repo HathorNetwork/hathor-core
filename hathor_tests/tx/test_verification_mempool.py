@@ -72,8 +72,10 @@ class VertexHeadersTest(unittest.TestCase):
         self.blueprint_id = b'a' * 32
         self.other_blueprint_id = b'b' * 32
         self.manager = self.create_peer('unittests')
-        self.manager.tx_storage.nc_catalog.blueprints[self.blueprint_id] = MyTestBlueprint
-        self.manager.tx_storage.nc_catalog.blueprints[self.other_blueprint_id] = MyOtherTestBlueprint
+        self.manager.blueprint_service.register_blueprints({
+            self.blueprint_id: MyTestBlueprint,
+            self.other_blueprint_id: MyOtherTestBlueprint,
+        })
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_vertex_too_old(self) -> None:
@@ -362,7 +364,8 @@ class VertexHeadersTest(unittest.TestCase):
             blk = artifacts.get_typed_vertex(f'b{height}', Block)
             checkpoints.append(Checkpoint(height=height, hash=blk.hash))
 
-        new_settings = self._settings._replace(CHECKPOINTS=checkpoints)
+        assert self._settings is not None
+        new_settings = self._settings.model_copy(update={'CHECKPOINTS': checkpoints})
         manager2 = self.create_peer('unittests', settings=new_settings)
         assert [(cp.height, cp.hash) for cp in manager2.checkpoints] == [(cp.height, cp.hash) for cp in checkpoints]
         artifacts.propagate_with(manager2, up_to='b30')

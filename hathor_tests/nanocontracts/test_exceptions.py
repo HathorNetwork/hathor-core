@@ -17,10 +17,11 @@ import unittest
 
 class TestExceptions(unittest.TestCase):
     def test_inherit_from_nc_fail(self) -> None:
+        from hathor.exception import HathorError
         from hathor.nanocontracts import exception as nano_exceptions
 
         skip = {
-            nano_exceptions.HathorError,
+            HathorError,
             nano_exceptions.NCFail,
             nano_exceptions.TxValidationError,
         }

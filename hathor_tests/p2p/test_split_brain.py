@@ -43,7 +43,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         wallet._manually_initialize()
 
         manager: HathorManager = super().create_peer(network, wallet=wallet)
-        manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
+        manager.daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         # manager.avg_time_between_blocks = 64  # FIXME: This property is not defined. Fix this test.
 
         # Don't use it anywhere else. It is unsafe to generate mnemonic words like this.

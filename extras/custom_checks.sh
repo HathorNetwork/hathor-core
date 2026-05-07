@@ -51,69 +51,52 @@ function check_version_match() {
     return $EXITCODE
 }
 
-function check_do_not_use_builtin_random_in_tests() {
-	# If the check fails, return 1
-	# If the check passes, return 0
-	exclude=(
-		hathor/merged_mining/debug_api.py
-		hathor/client.py
-		hathor_cli/tx_generator.py
-		hathor_tests/test_utils/test_leb128.py
-	)
-	exclude_params=()
-	for item in "${exclude[@]}"; do
-		exclude_params+=(-not -path "*$item*")
-	done
-	if find "${SOURCE_DIRS[@]}" "${exclude_params[@]}" -type f -print0 | xargs -0 grep -l '\<import .*\<random\>'; then
-		echo '"import random" found in the files above'
-		echo 'use `self.rng` or `hathor.util.Random` instead of `random`'
-		return 1
-	fi
-	return 0
+function check_deprecated_typing() {
+    local args=(
+        check hathor hathor_tests
+        --select TID251
+        --config "lint.flake8-tidy-imports.banned-api = {'typing.List' = {msg = 'use builtin list instead'}, 'typing.Tuple' = {msg = 'use builtin tuple instead'}, 'typing.Dict' = {msg = 'use builtin dict instead'}, 'typing.Set' = {msg = 'use builtin set instead'}, 'typing.FrozenSet' = {msg = 'use builtin frozenset instead'}, 'typing.AbstractSet' = {msg = 'use builtin set or collections.abc.Set as appropriate instead'}, 'typing.DefaultDict' = {msg = 'use collections.defaultdict or builtin dict instead'}, 'typing.OrderedDict' = {msg = 'use collections.OrderedDict or builtin dict instead'}}"
+    )
+    ruff -q "${args[@]}"
 }
 
-function check_deprecated_typing() {
-	if grep -RIn '\<typing .*\<import .*\<\(Tuple\|List\|Dict\|Set\|FrozenSet\|AbstractSet\|DefaultDict\|OrderedDict\)\>' "${SOURCE_DIRS[@]}"; then
-		echo 'do not use typing.List/Tuple/Dict/... for type annotations use builtin list/tuple/dict/... instead'
-		echo 'for more info check the PEP 585 doc: https://peps.python.org/pep-0585/'
-		return 1
-	fi
-	return 0
+function check_do_not_use_builtin_random_in_tests() {
+    local args=(
+        check hathor hathor_tests
+        --select TID251
+        --config "lint.flake8-tidy-imports.banned-api = {'random' = {msg = 'use self.rng or hathor.util.Random instead of random'}}"
+        --config "lint.per-file-ignores = {'hathor/client.py' = ['TID251'], 'hathor/merged_mining/debug_api.py' = ['TID251'], 'hathor/util.py' = ['TID251'], 'hathor_tests/test_utils/test_leb128.py' = ['TID251']}"
+    )
+    ruff -q "${args[@]}"
 }
 
 function check_do_not_import_tests_in_hathor() {
-	if grep -Rn '\<.*import .*hathor_tests.*\>\|\<.*from .*hathor_tests.* import\>' "hathor" | grep -v '# skip-import-tests-custom-check'; then
-		echo 'do not import test definitions in the hathor module'
-		echo 'move them from hathor_tests to hathor instead'
-		echo 'alternatively, comment `# skip-import-tests-custom-check` to exclude a line.'
-		return 1
-	fi
-	return 0
+    local args=(
+        check hathor
+        --select TID251
+        --config "lint.flake8-tidy-imports.banned-api = {'hathor_tests' = {msg = 'do not import test definitions in the hathor module'}}"
+    )
+    ruff -q "${args[@]}"
 }
 
 function check_do_not_import_from_hathor_in_entrypoints() {
-    EXCLUDES=(--exclude=builder.py)
-    PATTERN='^import .*hathor.*\|^from .*hathor.* import'
-
-    if grep -Rn $EXCLUDES "$PATTERN" "hathor_cli" | grep -v 'from hathor_cli.run_node import RunNode' | grep -v '# skip-cli-import-custom-check'; then
-        echo 'do not import from `hathor` in the module-level of a CLI entrypoint.'
-        echo 'instead, import locally inside the function that uses the import.'
-        echo 'alternatively, comment `# skip-cli-import-custom-check` to exclude a line.'
-        return 1
-    fi
-    return 0
+    local args=(
+        check hathor_cli
+        --select TID253
+        --config "lint.flake8-tidy-imports.banned-module-level-imports = ['hathor']"
+        --config "lint.per-file-ignores = {'hathor_cli/builder.py' = ['TID253'], 'hathor_cli/generate_genesis.py' = ['TID253'], 'hathor_cli/run_node_args.py' = ['TID253'], 'hathor_cli/events_simulator/event_forwarding_websocket_factory.py' = ['TID253'], 'hathor_cli/events_simulator/event_forwarding_websocket_protocol.py' = ['TID253']}"
+    )
+    ruff -q "${args[@]}"
 }
 
 function check_do_not_import_twisted_reactor_directly() {
-    EXCLUDES="--exclude=reactor.py --exclude=conftest.py"
-    PATTERN='\<.*from .*twisted.internet import .*reactor\>'
-
-    if grep -Rn $EXCLUDES "$PATTERN" "${SOURCE_DIRS[@]}"; then
-        echo 'do not use `from twisted.internet import reactor` directly.'
-        echo 'instead, use `hathor.reactor.get_global_reactor()`.'
-        return 1
-    fi
-    return 0
+    local args=(
+        check hathor
+        --select TID251
+        --config "lint.flake8-tidy-imports.banned-api = {'twisted.internet.reactor' = {msg = 'use hathor.reactor.get_global_reactor() instead'}}"
+        --config "lint.per-file-ignores = {'hathor/reactor/reactor.py' = ['TID251']}"
+    )
+    ruff -q "${args[@]}"
 }
 
 function check_do_not_compare_enums_with_is() {
@@ -129,27 +112,41 @@ function check_do_not_compare_enums_with_is() {
 # List of functions to be executed
 checks=(
 	check_version_match
-	check_do_not_use_builtin_random_in_tests
 	check_deprecated_typing
+	check_do_not_use_builtin_random_in_tests
 	check_do_not_import_tests_in_hathor
 	check_do_not_import_from_hathor_in_entrypoints
 	check_do_not_import_twisted_reactor_directly
 	check_do_not_compare_enums_with_is
 )
 
+function run_check() {
+    local check_name="$1"
+    shift
+
+    "$@"
+    local result=$?
+    if [ $result -ne 0 ]; then
+        echo -e "${RED}Check ${check_name} FAILED${NC}"
+        any_check_failed=1
+    else
+        echo -e "${GREEN}Check ${check_name} PASSED${NC}"
+    fi
+}
+
+selected_checks=()
+if [ $# -gt 0 ]; then
+    selected_checks=("$@")
+else
+    selected_checks=("${checks[@]}")
+fi
+
 # Initialize a variable to track if any check fails
 any_check_failed=0
 
 # Loop over all checks
-for check in "${checks[@]}"; do
-	$check
-	result=$?
-	if [ $result -ne 0 ]; then
-		echo -e "${RED}Check $check FAILED${NC}"
-		any_check_failed=1
-	else
-		echo -e "${GREEN}Check $check PASSED${NC}"
-	fi
+for check in "${selected_checks[@]}"; do
+	run_check "$check" "$check"
 done
 
 # Exit with code 0 if no check failed, otherwise exit with code 1

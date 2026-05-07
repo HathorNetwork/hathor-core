@@ -16,7 +16,11 @@ from typing import TYPE_CHECKING
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
-from hathor.nanocontracts.exception import BlueprintDoesNotExist, OCBBlueprintNotConfirmed
+from hathor.nanocontracts.exception import (
+    BlueprintDoesNotExist,
+    OCBBlueprintNotConfirmed,
+    OCBInvalidBlueprintVertexType,
+)
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.utils.api import ErrorResponse, QueryParams, Response
 
@@ -50,10 +54,14 @@ class BlueprintSourceCodeResource(Resource):
             error_response = ErrorResponse(success=False, error=f'Invalid id: {params.blueprint_id}')
             return error_response.json_dumpb()
 
-        assert self.manager.tx_storage.nc_catalog is not None
-
         try:
-            blueprint_source = self.manager.tx_storage.get_blueprint_source(blueprint_id)
+            blueprint_source = self.manager.blueprint_service.get_blueprint_source(blueprint_id)
+        except OCBInvalidBlueprintVertexType:
+            request.setResponseCode(400)
+            error_response = ErrorResponse(
+                success=False, error=f'Given id is not a blueprint: {params.blueprint_id}'
+            )
+            return error_response.json_dumpb()
         except OCBBlueprintNotConfirmed:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not confirmed: {params.blueprint_id}')

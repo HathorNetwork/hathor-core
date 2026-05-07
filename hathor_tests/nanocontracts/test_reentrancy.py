@@ -126,8 +126,10 @@ class NCReentrancyTestCase(BlueprintTestCase):
         self.target_blueprint_id = self.gen_random_blueprint_id()
         self.attacker_blueprint_id = self.gen_random_blueprint_id()
 
-        self.nc_catalog.blueprints[self.target_blueprint_id] = MyBlueprint
-        self.nc_catalog.blueprints[self.attacker_blueprint_id] = AttackerBlueprint
+        self.blueprint_service.register_blueprints({
+            self.target_blueprint_id: MyBlueprint,
+            self.attacker_blueprint_id: AttackerBlueprint,
+        })
 
         self.nc_target_id = self.gen_random_contract_id()
         self.nc_attacker_id = self.gen_random_contract_id()

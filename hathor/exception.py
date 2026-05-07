@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-class HathorError(Exception):
-    """Base class for exceptions in Hathor."""
-    pass
+from hathorlib.exceptions import HathorError  # noqa: F401
 
 
 class BuilderError(Exception):

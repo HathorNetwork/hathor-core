@@ -196,7 +196,7 @@ class CacheStorageTest(unittest.TestCase):
         self.clean_pending(required_to_quiesce=False)
 
     def test_topological_sort_dfs(self):
-        self.manager.daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
+        self.manager.daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
         add_new_blocks(self.manager, 11, advance_clock=1)
         tx = add_new_transactions(self.manager, 1, advance_clock=1)[0]
 

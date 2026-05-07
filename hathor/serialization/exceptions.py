@@ -12,26 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import struct
-
-from hathor.exception import HathorError
-
-
-class SerializationError(HathorError):
-    pass
-
-
-class UnsupportedTypeError(SerializationError):
-    pass
-
-
-class TooLongError(SerializationError):
-    pass
-
-
-class OutOfDataError(SerializationError, struct.error):
-    pass
-
-
-class BadDataError(SerializationError):
-    pass
+# Re-export from hathorlib for backward compatibility
+from hathorlib.serialization.exceptions import *  # noqa: F401,F403
+from hathorlib.serialization.exceptions import (  # noqa: F401
+    BadDataError,
+    OutOfDataError,
+    SerializationError,
+    TooLongError,
+    UnsupportedTypeError,
+)

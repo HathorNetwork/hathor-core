@@ -24,7 +24,11 @@ from hathor.api_util import Resource, set_cors
 from hathor.nanocontracts import types as nc_types
 from hathor.nanocontracts.blueprint import NC_FIELDS_ATTR
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import BlueprintDoesNotExist, OCBBlueprintNotConfirmed
+from hathor.nanocontracts.exception import (
+    BlueprintDoesNotExist,
+    OCBBlueprintNotConfirmed,
+    OCBInvalidBlueprintVertexType,
+)
 from hathor.nanocontracts.types import blueprint_id_from_bytes
 from hathor.nanocontracts.utils import is_nc_public_method, is_nc_view_method
 from hathor.utils.api import ErrorResponse, QueryParams, Response
@@ -92,7 +96,13 @@ class BlueprintInfoResource(Resource):
             return error_response.json_dumpb()
 
         try:
-            blueprint_class = self.manager.tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
+        except OCBInvalidBlueprintVertexType:
+            request.setResponseCode(400)
+            error_response = ErrorResponse(
+                success=False, error=f'Given id is not a blueprint: {params.blueprint_id}'
+            )
+            return error_response.json_dumpb()
         except BlueprintDoesNotExist:
             request.setResponseCode(404)
             error_response = ErrorResponse(success=False, error=f'Blueprint not found: {params.blueprint_id}')
@@ -157,7 +167,6 @@ class BlueprintInfoResource(Resource):
             name=blueprint_class.__name__,
             attributes=attributes,
             public_methods=public_methods,
-            private_methods=view_methods,  # DEPRECATED
             view_methods=view_methods,
             docstring=inspect.getdoc(blueprint_class),
         )
@@ -184,7 +193,6 @@ class BlueprintInfoResponse(Response):
     name: str
     attributes: dict[str, str]
     public_methods: dict[str, MethodInfo]
-    private_methods: dict[str, MethodInfo]  # DEPRECATED
     view_methods: dict[str, MethodInfo]
     docstring: str | None
 

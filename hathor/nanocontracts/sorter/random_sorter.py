@@ -22,22 +22,28 @@ from sortedcontainers import SortedSet
 from typing_extensions import Self
 
 from hathor.nanocontracts.rng import NanoRNG
+from hathor.nanocontracts.sorter.types import SortedTransactions
 from hathor.transaction import Block, Transaction
 from hathor.types import Address, VertexId
 
 
-def random_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> list[Transaction]:
+def random_nc_calls_sorter(block: Block, nc_calls: list[Transaction]) -> SortedTransactions:
     sorter = NCBlockSorter.create_from_block(block, nc_calls)
     seed = hashlib.sha256(block.hash).digest()
 
-    order = sorter.generate_random_topological_order(seed)
+    order, stuck = sorter.generate_random_topological_order(seed)
     tx_by_id = dict((tx.hash, tx) for tx in nc_calls)
-    assert set(order) == set(tx_by_id.keys())
+    assert all((tx_id in order or tx_id in stuck) for tx_id in tx_by_id)
+    sorted_calls = tuple(tx_by_id[_id] for _id in order)
 
-    ret: list[Transaction] = []
-    for _id in order:
-        ret.append(tx_by_id[_id])
-    return ret
+    cycle_failed: list[Transaction] = []
+    for id_ in stuck:
+        # `stuck` may also contain dummy seqnum nodes and non-NC funds transactions that got dragged into
+        # the cycle's reachable set; only NC transactions in the current block should be added.
+        if tx := tx_by_id.get(id_):
+            cycle_failed.append(tx)
+
+    return SortedTransactions(sorted=sorted_calls, cyclic=tuple(cycle_failed))
 
 
 @dataclass(slots=True, kw_only=True)
@@ -158,8 +164,18 @@ class NCBlockSorter:
         """Get all vertices with no outgoing edges."""
         return SortedSet(v.id for v in self.db.values() if not v.outgoing_edges)
 
-    def generate_random_topological_order(self, seed: bytes) -> list[VertexId]:
+    def generate_random_topological_order(self, seed: bytes) -> tuple[list[VertexId], set[VertexId]]:
         """Generate a random topological order according to the DAG.
+
+        Returns a tuple `(order, stuck)` where:
+
+        - `order` is the topological sort of NC transactions that can execute — filtered to NC
+          hashes only; non-NC funds txs and dummy seqnum nodes are skipped.
+        - `stuck` is the set of vertex ids that could not be ordered because they participate in,
+          or transitively depend on, a cyclic dependency. It is empty in the normal case. When
+          non-empty, the caller is expected to fail the NC transactions in that set. `stuck`
+          may also include dummy nodes and non-NC funds txs that got pulled into the cycle's
+          reachable set; callers should filter to the subset they care about.
 
         This method can only be called once because it changes the DAG during its execution.
         """
@@ -170,11 +186,15 @@ class NCBlockSorter:
         rng = NanoRNG(seed)
 
         candidates = self.get_vertices_with_no_outgoing_edges()
-        ret = []
-        for i in range(len(self.db)):
-            assert len(candidates) > 0, 'empty candidates, probably caused by circular dependencies in the graph'
+        ret: list[VertexId] = []
+        popped: set[VertexId] = set()
+
+        i = 0
+        while candidates and i < len(self.db):
+            i += 1
             idx = len(candidates) - rng.randbelow(len(candidates)) - 1
             vertex_id = candidates.pop(idx)
+            popped.add(vertex_id)
 
             # Skip all nodes that do not belong to nc_calls, which are either non-nano txs or dummy nodes.
             if vertex_id in self._nc_hashes:
@@ -189,4 +209,10 @@ class NCBlockSorter:
                 if not in_vertex.outgoing_edges:
                     candidates.add(in_vertex_id)
 
-        return ret
+        # Any vertex not popped still has at least one outgoing edge, and that edge points to
+        # another unpopped vertex (since popping removes the edge from every predecessor). So the
+        # remaining vertices form a subgraph where every vertex has out-degree >= 1, which means
+        # it contains a cycle and every remaining vertex reaches that cycle via outgoing edges —
+        # i.e. the cycle members plus their transitive dependants.
+        stuck = set(self.db.keys()) - popped
+        return ret, stuck

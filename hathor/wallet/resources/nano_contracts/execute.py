@@ -98,7 +98,7 @@ class NanoContractExecuteResource(Resource):
 
         tx.parents = self.manager.get_new_tx_parents()
         tx.update_timestamp(int(self.manager.reactor.seconds()))
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         self.manager.cpu_mining_service.resolve(tx)
         success = self.manager.propagate_tx(tx)
 

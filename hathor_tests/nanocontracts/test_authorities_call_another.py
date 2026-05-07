@@ -108,8 +108,10 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         self.callee_blueprint_id = self.gen_random_blueprint_id()
         self.caller_blueprint_id = self.gen_random_blueprint_id()
 
-        self.nc_catalog.blueprints[self.callee_blueprint_id] = CalleeBlueprint
-        self.nc_catalog.blueprints[self.caller_blueprint_id] = CallerBlueprint
+        self.blueprint_service.register_blueprints({
+            self.callee_blueprint_id: CalleeBlueprint,
+            self.caller_blueprint_id: CallerBlueprint,
+        })
 
         self.callee_id = self.gen_random_contract_id()
         self.caller_id = self.gen_random_contract_id()

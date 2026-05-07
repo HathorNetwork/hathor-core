@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from twisted.internet.defer import inlineCallbacks
 
 import hathor
+from hathor.transaction.token_info import TokenVersion
 from hathor.version import BASE_VERSION, DEFAULT_VERSION_SUFFIX, _get_version
 from hathor.version_resource import VersionResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
@@ -26,6 +27,16 @@ class VersionTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("version")
         data = response.json_value()
         self.assertEqual(data['version'], hathor.__version__)
+
+    @inlineCallbacks
+    def test_native_token(self):
+        response = yield self.web.get("version")
+        data = response.json_value()
+
+        native_token = data['native_token']
+        self.assertEqual(native_token['name'], self._settings.NATIVE_TOKEN_NAME)
+        self.assertEqual(native_token['symbol'], self._settings.NATIVE_TOKEN_SYMBOL)
+        self.assertEqual(native_token['version'], int(TokenVersion.NATIVE))
 
     def test_local_version(self):
         """Test that we will return a version with the default prefix when the BUILD_VERSION file
