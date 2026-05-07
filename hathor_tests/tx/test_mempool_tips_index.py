@@ -12,11 +12,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from unittest.mock import patch
+
+from hathor.crypto.util import decode_address
 from hathor.daa import DAAFactory, TestMode
 from hathor.graphviz import GraphvizVisualizer
+from hathor.indexes.rocksdb_mempool_tips_index import SimpleRocksDBMempoolTipsIndex
+from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.utils import add_new_transactions
 
 DEBUG: bool = False
 
@@ -34,6 +40,138 @@ class TestMempoolTipsIndex(unittest.TestCase):
         self.mempool_tips = self.tx_storage.indexes.mempool_tips
 
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
+
+    def test_empty_marker_is_written_and_skips_next_initialization(self) -> None:
+        path = self.mkdtemp()
+        settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})
+        artifacts = self.get_builder(settings).set_rocksdb_path(path).build()
+        manager = artifacts.manager
+        manager.start()
+        self.clock.run()
+        self.clock.advance(5)
+
+        dag_builder = TestDAGBuilder.from_manager(manager)
+        dag_artifacts = dag_builder.build_from_str('''
+            blockchain genesis b[1..1]
+        ''')
+        dag_artifacts.propagate_with(manager, up_to='b1')
+
+        tx_storage = manager.tx_storage
+        mempool_tips = tx_storage.indexes.mempool_tips
+        assert isinstance(mempool_tips, SimpleRocksDBMempoolTipsIndex)
+        assert mempool_tips.get() == set()
+        assert mempool_tips.is_empty_marker_set()
+
+        mempool_tips._clear_empty_marker()
+        assert not mempool_tips.is_empty_marker_set()
+
+        manager.stop()
+        assert artifacts.rocksdb_storage is not None
+        artifacts.rocksdb_storage.close()
+
+        artifacts = self.get_builder(settings).set_rocksdb_path(path).build()
+        tx_storage = artifacts.tx_storage
+        mempool_tips = tx_storage.indexes.mempool_tips
+        assert isinstance(mempool_tips, SimpleRocksDBMempoolTipsIndex)
+
+        with patch.object(mempool_tips, 'init_loop_step', wraps=mempool_tips.init_loop_step) as init_loop_step:
+            tx_storage.indexes._manually_initialize(tx_storage)
+
+        assert init_loop_step.call_count > 0
+        assert mempool_tips.get() == set()
+        assert mempool_tips.is_empty_marker_set()
+
+        assert artifacts.rocksdb_storage is not None
+        artifacts.rocksdb_storage.close()
+
+        artifacts = self.get_builder(settings).set_rocksdb_path(path).build()
+        tx_storage = artifacts.tx_storage
+        mempool_tips = tx_storage.indexes.mempool_tips
+        assert isinstance(mempool_tips, SimpleRocksDBMempoolTipsIndex)
+
+        assert mempool_tips.is_empty_marker_set()
+        with (
+            patch.object(mempool_tips, 'init_loop_step', side_effect=AssertionError('unexpected init loop step')),
+            patch.object(tx_storage, 'get_all_transactions', side_effect=AssertionError('unexpected tx iteration')),
+        ):
+            tx_storage.indexes._manually_initialize(tx_storage)
+
+        assert mempool_tips.get() == set()
+        assert mempool_tips.is_empty_marker_set()
+
+        assert artifacts.rocksdb_storage is not None
+        artifacts.rocksdb_storage.close()
+
+    def test_missing_empty_marker_rebuilds_non_empty_mempool(self) -> None:
+        path = self.mkdtemp()
+        settings = self._settings.model_copy(update={'REWARD_SPEND_MIN_BLOCKS': 1})
+        daa_factory = DAAFactory(settings=settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        wallet = self._create_test_wallet(unlocked=True)
+        wallet.settings = settings
+        artifacts = self.get_builder(settings) \
+            .set_daa_factory(daa_factory) \
+            .set_rocksdb_path(path) \
+            .set_wallet(wallet) \
+            .enable_wallet_index() \
+            .build()
+        manager = artifacts.manager
+        manager.start()
+        self.clock.run()
+        self.clock.advance(5)
+
+        address = decode_address(wallet.get_unused_address())
+        add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1, address=address)
+        self.clock.run()
+        tx, = add_new_transactions(manager, 1)
+
+        mempool_tips = manager.tx_storage.indexes.mempool_tips
+        assert isinstance(mempool_tips, SimpleRocksDBMempoolTipsIndex)
+        assert mempool_tips.get() == {tx.hash}
+        assert not mempool_tips.is_empty_marker_set()
+
+        manager.stop()
+        assert artifacts.rocksdb_storage is not None
+        artifacts.rocksdb_storage.close()
+
+        artifacts = self.get_builder(settings).set_rocksdb_path(path).build()
+        tx_storage = artifacts.tx_storage
+        mempool_tips = tx_storage.indexes.mempool_tips
+        assert isinstance(mempool_tips, SimpleRocksDBMempoolTipsIndex)
+
+        assert not mempool_tips.is_empty_marker_set()
+        with patch.object(mempool_tips, 'init_loop_step', wraps=mempool_tips.init_loop_step) as init_loop_step:
+            tx_storage.indexes._manually_initialize(tx_storage)
+
+        assert init_loop_step.call_count > 0
+        assert mempool_tips.get() == {tx.hash}
+        assert not mempool_tips.is_empty_marker_set()
+
+        assert artifacts.rocksdb_storage is not None
+        artifacts.rocksdb_storage.close()
+
+    def test_empty_marker_runtime_updates(self) -> None:
+        mempool_tips = self.mempool_tips
+        assert isinstance(mempool_tips, SimpleRocksDBMempoolTipsIndex)
+
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..3]
+            b2 < dummy
+            b2 < tx1
+            tx1 <-- b3
+        ''')
+        tx1, = artifacts.get_typed_vertices(['tx1'], Transaction)
+
+        artifacts.propagate_with(self.manager, up_to='b2')
+        assert mempool_tips.get() == set()
+        assert mempool_tips.is_empty_marker_set()
+
+        artifacts.propagate_with(self.manager, up_to='tx1')
+        assert mempool_tips.get() == {tx1.hash}
+        assert not mempool_tips.is_empty_marker_set()
+
+        artifacts.propagate_with(self.manager, up_to='b3')
+        assert mempool_tips.get() == set()
+        assert mempool_tips.is_empty_marker_set()
 
     def test_mempool_tip_spender_became_valid(self) -> None:
         """
