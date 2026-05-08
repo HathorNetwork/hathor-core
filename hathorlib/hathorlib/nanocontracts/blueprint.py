@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, final
+import sys
+from typing import TYPE_CHECKING, Any, cast, final
 
 from hathorlib.nanocontracts.blueprint_env import BlueprintEnvironment
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError
@@ -13,12 +14,32 @@ from hathorlib.nanocontracts.types import NC_FALLBACK_METHOD, NC_INITIALIZE_METH
 if TYPE_CHECKING:
     from hathorlib.nanocontracts.nc_exec_logs import NCLogger
 
+if sys.version_info >= (3, 14):
+    import annotationlib
+else:
+    annotationlib = None
+
 FORBIDDEN_NAMES = {
     'syscall',
     'log',
 }
 
 NC_FIELDS_ATTR: str = '__fields'
+
+
+def _get_class_annotations(attrs: dict[str, Any]) -> dict[str, Any]:
+    annotations = attrs.get('__annotations__')
+    if annotations is not None:
+        return cast(dict[str, Any], annotations)
+
+    if annotationlib is None:
+        return {}
+
+    annotate = annotationlib.get_annotate_from_class_namespace(attrs)
+    if annotate is None:
+        return {}
+
+    return annotationlib.call_annotate_function(annotate, annotationlib.Format.VALUE)
 
 
 class _BlueprintBase(type):
@@ -44,7 +65,7 @@ class _BlueprintBase(type):
 
         cls._validate_initialize_method(attrs)
         cls._validate_fallback_method(attrs)
-        nc_fields = attrs.get('__annotations__', {})
+        nc_fields = _get_class_annotations(attrs)
 
         # Check for forbidden names.
         for field_name in nc_fields:

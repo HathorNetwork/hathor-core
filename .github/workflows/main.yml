@@ -26,7 +26,7 @@ jobs:
           import os
           import json
           full_matrix = {
-            'python': ['3.11', '3.12', '3.13'],
+            'python': ['3.11', '3.12', '3.13', '3.14'],
             # available OS's: https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
             'os': ['ubuntu-22.04', 'macos-15'],
           }
@@ -56,16 +56,16 @@ jobs:
           echo $matrix | jq .
           echo $matrix | json2yaml
   uv-check:
-    name: uv-check py3.13 (ubuntu-22.04)
+    name: uv-check py3.14 (ubuntu-22.04)
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Python 3.13
+      - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.14'
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install Ubuntu dependencies
@@ -77,7 +77,7 @@ jobs:
       - name: Check uv.lock is up to date
         run: uv lock --check
       - name: Install uv dependencies
-        run: uv sync --frozen --dev --python 3.13
+        run: uv sync --frozen --dev --python 3.14
       - name: Run checks
         run: uv run --frozen make check
       - name: Run htr-lib smoke test
