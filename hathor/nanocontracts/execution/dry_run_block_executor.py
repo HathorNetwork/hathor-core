@@ -128,15 +128,22 @@ class NCDryRunBlockExecutor:
                     current_rng_seed = rng_seed
 
                 case NCTxExecutionSuccess(tx=tx, runner=runner):
+                    if runner is None:
+                        current_rng_seed = None
+                        continue
                     tx_result = self._build_success_result(
                         tx, current_rng_seed, runner, include_changes
                     )
                     transactions.append(tx_result)
                     current_rng_seed = None
 
-                case NCTxExecutionFailure(tx=tx, call_info=call_info, exception=exception, traceback=tb):
+                case NCTxExecutionFailure(tx=tx, runner=runner, exception=exception, traceback=tb):
                     # Mark this tx as voided for subsequent transactions
                     voided_in_block.add(tx.hash)
+                    if not tx.is_nano_contract():
+                        current_rng_seed = None
+                        continue
+                    call_info = runner.get_last_call_info() if runner is not None else None
                     tx_result = self._build_failure_result(
                         tx, current_rng_seed, call_info, exception, tb, include_changes
                     )
@@ -146,6 +153,9 @@ class NCDryRunBlockExecutor:
                 case NCTxExecutionSkipped(tx=tx):
                     # Also mark skipped txs as voided (propagate through chain)
                     voided_in_block.add(tx.hash)
+                    if not tx.is_nano_contract():
+                        current_rng_seed = None
+                        continue
                     tx_result = DryRunTxResult(
                         tx_hash=tx.hash,
                         rng_seed=current_rng_seed if current_rng_seed is not None else b'',
