@@ -1,7 +1,7 @@
 from typing import Any, cast
 
 from hathor.conf import HathorSettings
-from hathor.crypto.util import get_address_from_public_key_bytes
+from hathor.crypto.util import get_address_b58_from_bytes, get_address_from_public_key_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
@@ -90,8 +90,17 @@ class AddressBalanceBlueprint(Blueprint):
         self.token_uid = token_uid
 
     @public
+    def nop(self, ctx: Context) -> None:
+        pass
+
+    @public
     def transfer_to_caller(self, ctx: Context, amount: int) -> None:
         self.syscall.transfer_to_address(Address(ctx.caller_id), Amount(amount), self.token_uid)
+
+    @public
+    def transfer_to_caller_and_fail(self, ctx: Context, amount: int) -> None:
+        self.syscall.transfer_to_address(Address(ctx.caller_id), Amount(amount), self.token_uid)
+        raise NCFail('forced failure')
 
 
 class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
@@ -114,9 +123,19 @@ class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
         block_storage = self.manager.get_nc_block_storage(block)
         return block_storage.get_address_balance(Address(address), TokenUid(settings.HATHOR_TOKEN_UID))
 
-    def test_address_balance_execution_with_transfer_from_contract_is_successful(self) -> None:
+    def _assert_tx_success(self, tx: Transaction) -> None:
+        meta = tx.get_metadata()
+        assert meta.nc_execution == NCExecutionState.SUCCESS
+        assert meta.voided_by is None
+
+    def _assert_tx_failure(self, tx: Transaction) -> None:
+        meta = tx.get_metadata()
+        assert meta.nc_execution == NCExecutionState.FAILURE
+        assert meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}
+
+    def test_execution_with_transfer_header_is_successful(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
-            blockchain genesis b[1..32]
+            blockchain genesis b[1..33]
             b10 < dummy
 
             tx_init.nc_id = "{self.blueprint_id.hex()}"
@@ -125,24 +144,39 @@ class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
             tx_init.nc_seqnum = 0
             tx_init.nc_deposit = 20 HTR
 
-            tx_contract.nc_id = tx_init
-            tx_contract.nc_method = transfer_to_caller(7)
-            tx_contract.nc_address = wallet_caller
-            tx_contract.nc_seqnum = 0
+            tx_seed.nc_id = tx_init
+            tx_seed.nc_method = transfer_to_caller(9)
+            tx_seed.nc_address = wallet_sender
+            tx_seed.nc_seqnum = 0
+
+            tx_header.nc_id = tx_init
+            tx_header.nc_method = nop()
+            tx_header.nc_address = wallet_sender
+            tx_header.nc_seqnum = 1
+            tx_header.nc_transfer_input = 4 HTR wallet_sender
+            tx_header.nc_transfer_output = 4 HTR wallet_receiver
 
             tx_init <-- b30
-            tx_contract <-- b31
+            tx_seed <-- b31
+            tx_header <-- b32
         ''')
 
         artifacts.propagate_with(self.manager)
 
-        tx_contract = artifacts.get_typed_vertex('tx_contract', Transaction)
-        assert tx_contract.get_metadata().nc_execution == NCExecutionState.SUCCESS
+        tx_header = artifacts.get_typed_vertex('tx_header', Transaction)
+        b31, b32 = artifacts.get_typed_vertices(['b31', 'b32'], Block)
+        self._assert_tx_success(tx_header)
 
-        caller = tx_contract.get_nano_header().nc_address
-        assert self._get_address_balance(caller) == 7
+        transfer_header = tx_header.get_transfer_header()
+        sender = transfer_header.addresses[0].address
+        receiver = transfer_header.outputs[0].address
 
-    def test_standalone_transfer_header_execution_updates_state(self) -> None:
+        assert self._get_address_balance(sender, block=b31) == 9
+        assert self._get_address_balance(receiver, block=b31) == 0
+        assert self._get_address_balance(sender, block=b32) == 5
+        assert self._get_address_balance(receiver, block=b32) == 4
+
+    def test_standalone_transfer_header_execution_updates_state_and_surfaces(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..33]
             b10 < dummy
@@ -183,6 +217,176 @@ class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
         assert self._get_address_balance(sender, block=b32) == 5
         assert self._get_address_balance(receiver, block=b32) == 4
 
+        tx_json = tx_transfer.to_json_extended()
+        assert tx_json['transfer_header']['addresses'][0]['address'] == get_address_b58_from_bytes(sender)
+        assert tx_json['transfer_header']['outputs'][0]['address'] == get_address_b58_from_bytes(receiver)
+
+        related_addresses = tx_transfer.get_related_addresses()
+        assert get_address_b58_from_bytes(sender) in related_addresses
+        assert get_address_b58_from_bytes(receiver) in related_addresses
+
+    def test_address_balance_execution_with_transfer_from_contract_is_successful(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..32]
+            b10 < dummy
+
+            tx_init.nc_id = "{self.blueprint_id.hex()}"
+            tx_init.nc_method = initialize("00")
+            tx_init.nc_address = wallet_contract
+            tx_init.nc_seqnum = 0
+            tx_init.nc_deposit = 20 HTR
+
+            tx_contract.nc_id = tx_init
+            tx_contract.nc_method = transfer_to_caller(7)
+            tx_contract.nc_address = wallet_caller
+            tx_contract.nc_seqnum = 0
+
+            tx_init <-- b30
+            tx_contract <-- b31
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        tx_contract = artifacts.get_typed_vertex('tx_contract', Transaction)
+        self._assert_tx_success(tx_contract)
+
+        caller = tx_contract.get_nano_header().nc_address
+        assert self._get_address_balance(caller) == 7
+
+    def test_execution_with_both_transfer_header_and_contract_transfer_is_successful(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            b10 < dummy
+
+            tx_init.nc_id = "{self.blueprint_id.hex()}"
+            tx_init.nc_method = initialize("00")
+            tx_init.nc_address = wallet_contract
+            tx_init.nc_seqnum = 0
+            tx_init.nc_deposit = 20 HTR
+
+            tx_seed.nc_id = tx_init
+            tx_seed.nc_method = transfer_to_caller(10)
+            tx_seed.nc_address = wallet_caller
+            tx_seed.nc_seqnum = 0
+
+            tx_combined.nc_id = tx_init
+            tx_combined.nc_method = transfer_to_caller(3)
+            tx_combined.nc_address = wallet_caller
+            tx_combined.nc_seqnum = 1
+            tx_combined.nc_transfer_input = 4 HTR wallet_caller
+            tx_combined.nc_transfer_output = 4 HTR wallet_receiver
+
+            tx_init <-- b30
+            tx_seed <-- b31
+            tx_combined <-- b32
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        tx_combined = artifacts.get_typed_vertex('tx_combined', Transaction)
+        self._assert_tx_success(tx_combined)
+
+        transfer_header = tx_combined.get_transfer_header()
+        sender = transfer_header.addresses[0].address
+        receiver = transfer_header.outputs[0].address
+        caller = tx_combined.get_nano_header().nc_address
+
+        assert sender == caller
+        assert self._get_address_balance(sender) == 9
+        assert self._get_address_balance(receiver) == 4
+        assert self._get_address_balance(caller) == 9
+
+    def test_address_balance_execution_failure_not_due_to_transfer_does_not_persist_transfers(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            b10 < dummy
+
+            tx_init.nc_id = "{self.blueprint_id.hex()}"
+            tx_init.nc_method = initialize("00")
+            tx_init.nc_address = wallet_contract
+            tx_init.nc_seqnum = 0
+            tx_init.nc_deposit = 20 HTR
+
+            tx_seed.nc_id = tx_init
+            tx_seed.nc_method = transfer_to_caller(10)
+            tx_seed.nc_address = wallet_caller
+            tx_seed.nc_seqnum = 0
+
+            tx_fail.nc_id = tx_init
+            tx_fail.nc_method = transfer_to_caller_and_fail(3)
+            tx_fail.nc_address = wallet_caller
+            tx_fail.nc_seqnum = 1
+            tx_fail.nc_transfer_input = 4 HTR wallet_caller
+            tx_fail.nc_transfer_output = 4 HTR wallet_receiver
+
+            tx_init <-- b30
+            tx_seed <-- b31
+            tx_fail <-- b32
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        tx_fail = artifacts.get_typed_vertex('tx_fail', Transaction)
+        b31, b32 = artifacts.get_typed_vertices(['b31', 'b32'], Block)
+        self._assert_tx_failure(tx_fail)
+
+        transfer_header = tx_fail.get_transfer_header()
+        sender = transfer_header.addresses[0].address
+        receiver = transfer_header.outputs[0].address
+        caller = tx_fail.get_nano_header().nc_address
+
+        assert sender == caller
+        assert self._get_address_balance(sender, block=b31) == 10
+        assert self._get_address_balance(receiver, block=b31) == 0
+        assert self._get_address_balance(caller, block=b31) == 10
+
+        assert self._get_address_balance(sender, block=b32) == 10
+        assert self._get_address_balance(receiver, block=b32) == 0
+        assert self._get_address_balance(caller, block=b32) == 10
+
+    def test_address_balance_execution_failure_due_to_transfer_low_balance(self) -> None:
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..33]
+            b10 < dummy
+
+            tx_init.nc_id = "{self.blueprint_id.hex()}"
+            tx_init.nc_method = initialize("00")
+            tx_init.nc_address = wallet_contract
+            tx_init.nc_seqnum = 0
+            tx_init.nc_deposit = 20 HTR
+
+            tx_seed.nc_id = tx_init
+            tx_seed.nc_method = transfer_to_caller(5)
+            tx_seed.nc_address = wallet_sender
+            tx_seed.nc_seqnum = 0
+
+            tx_low.nc_id = tx_init
+            tx_low.nc_method = nop()
+            tx_low.nc_address = wallet_sender
+            tx_low.nc_seqnum = 1
+            tx_low.nc_transfer_input = 6 HTR wallet_sender
+            tx_low.nc_transfer_output = 6 HTR wallet_receiver
+
+            tx_init <-- b30
+            tx_seed <-- b31
+            tx_low <-- b32
+        ''')
+
+        artifacts.propagate_with(self.manager)
+
+        tx_low = artifacts.get_typed_vertex('tx_low', Transaction)
+        b31, b32 = artifacts.get_typed_vertices(['b31', 'b32'], Block)
+        self._assert_tx_failure(tx_low)
+
+        transfer_header = tx_low.get_transfer_header()
+        sender = transfer_header.addresses[0].address
+        receiver = transfer_header.outputs[0].address
+
+        assert self._get_address_balance(sender, block=b31) == 5
+        assert self._get_address_balance(receiver, block=b31) == 0
+        assert self._get_address_balance(sender, block=b32) == 5
+        assert self._get_address_balance(receiver, block=b32) == 0
+
     def test_reorg_discards_losing_chain_transfer_header_state(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..33]
@@ -200,10 +404,13 @@ class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
             tx_seed.nc_address = wallet_sender
             tx_seed.nc_seqnum = 0
 
+            # Losing chain: sender -> receiver_b (4 HTR)
             tx_header_b.transfer_seqnum = 1
             tx_header_b.nc_transfer_input = 4 HTR wallet_sender
             tx_header_b.nc_transfer_output = 4 HTR wallet_receiver_b
 
+            # Winning chain: different transfer over the same (address, token).
+            # Give it a large explicit weight so a-chain reliably wins the reorg.
             tx_header_a.transfer_seqnum = 1
             tx_header_a.nc_transfer_input = 7 HTR wallet_sender
             tx_header_a.nc_transfer_output = 7 HTR wallet_receiver_a
@@ -227,12 +434,18 @@ class NCAddressBalanceConsensusTestCase(SimulatorTestCase):
         receiver_a = tx_header_a.get_transfer_header().outputs[0].address
         receiver_b = tx_header_b.get_transfer_header().outputs[0].address
 
+        # a-chain wins the reorg.
         assert b33.get_metadata().voided_by == {b33.hash}
         assert a34.get_metadata().voided_by is None
+
+        # Losing-chain transfer's balance update is not visible.
         assert self._get_address_balance(receiver_b) == 0
+
+        # Winning chain's transfer applied on top of the common ancestor.
         assert self._get_address_balance(sender) == 3
         assert self._get_address_balance(receiver_a) == 7
 
+        # Seqnum reflects the winning chain only.
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         assert block_storage.get_address_seqnum(Address(sender)) == 1

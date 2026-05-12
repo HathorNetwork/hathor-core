@@ -312,7 +312,7 @@ class NCBlockExecutor:
         """
         if should_skip(tx):
             # Skip transactions based on the caller-provided predicate.
-            if tx.is_nano_contract():
+            if tx.is_nano_contract() and not tx.has_transfer_header():
                 nc_header = tx.get_nano_header()
                 nc_address = Address(nc_header.nc_address)
                 seqnum = block_storage.get_address_seqnum(nc_address)
@@ -337,13 +337,20 @@ class NCBlockExecutor:
                 )
             return NCTxExecutionSuccess(tx=tx, block_storage=block_storage)
 
+        transfer_header_diffs = self._get_transfer_header_diffs(tx)
+        before_current_call_block_storage = self._nc_storage_factory.get_block_storage(block_storage.get_root_id())
         runner = self._runner_factory.create(
             runtime_version=runtime_version,
             block_storage=block_storage,
+            before_current_call_block_storage=before_current_call_block_storage,
             seed=rng_seed,
         )
 
         try:
+            if tx.has_transfer_header():
+                self._verify_transfer_header_balances(block_storage, tx)
+                self._apply_transfer_header_diffs(block_storage, transfer_header_diffs)
+
             nano_header = tx.get_nano_header()
 
             if nano_header.is_creating_a_new_contract():
@@ -384,11 +391,11 @@ class NCBlockExecutor:
             runner.discard_pending_changes()
             return NCTxExecutionFailure(
                 tx=tx,
-                block_storage=block_storage,
+                block_storage=block_storage if not tx.has_transfer_header() else None,
                 runner=runner,
                 exception=e,
                 traceback=traceback.format_exc(),
-                persist_block_storage=True,
+                persist_block_storage=not tx.has_transfer_header(),
             )
 
         # Commit is intentionally outside the NCFail handling path.

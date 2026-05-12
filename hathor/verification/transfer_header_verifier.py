@@ -42,9 +42,6 @@ class TransferHeaderVerifier:
         self._tx_storage = tx_storage
 
     def verify_inputs_and_outputs(self, tx: Transaction) -> None:
-        if tx.is_nano_contract():
-            raise InvalidToken('transfer headers are not yet supported on nano transactions')
-
         transfer_header = tx.get_transfer_header()
         if len(transfer_header.addresses) > MAX_ADDRESSES:
             raise TooManyInputs
@@ -92,6 +89,18 @@ class TransferHeaderVerifier:
 
         if any(usage_count == 0 for usage_count in input_usage_counts):
             raise InvalidToken('every transfer address must be referenced by at least one input')
+
+        if tx.is_nano_contract() and transfer_header.inputs:
+            nano_header = tx.get_nano_header()
+            if len(transfer_header.addresses) != 1:
+                raise InvalidToken('nano transactions may only debit the caller address')
+            input_address = transfer_header.addresses[0]
+            if input_address.address != nano_header.nc_address:
+                raise NCInvalidSignature('transfer header address must match the nano caller')
+            if input_address.seqnum != nano_header.nc_seqnum:
+                raise NCInvalidSeqnum('transfer header seqnum must match the nano header seqnum')
+            if any(txin.address_index != 0 for txin in transfer_header.inputs):
+                raise InvalidToken('nano transactions may only debit address_index 0')
 
     def _verify_regular_address(self, address: bytes) -> None:
         if len(address) != ADDRESS_LEN_BYTES:
