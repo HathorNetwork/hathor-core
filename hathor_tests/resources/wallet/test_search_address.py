@@ -1,6 +1,7 @@
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.crypto.util import decode_address
+from hathor.nanocontracts.types import Address as NCAddress, TokenUid as NCTokenUid
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
@@ -110,6 +111,37 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(0, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['spent'])
         self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
         self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
+
+    @inlineCallbacks
+    def test_address_balance_includes_global_balance_fields(self):
+        other_address_bytes = decode_address(self.manager.wallet.get_unused_address())
+        other_address = NCAddress(other_address_bytes)
+        unrelated_token_uid = b'\xab' * 32
+
+        best_block = self.manager.tx_storage.get_best_block()
+        block_storage = self.manager.get_nc_block_storage(best_block)
+        address = NCAddress(self.address_bytes)
+        block_storage.add_address_balance(address, 7, NCTokenUid(self._settings.HATHOR_TOKEN_UID))
+        block_storage.add_address_balance(address, 11, NCTokenUid(self.token_uid))
+        # A token credited to a different address must not appear in the response for `address`.
+        block_storage.add_address_balance(other_address, 13, NCTokenUid(unrelated_token_uid))
+        block_storage.set_address_seqnum(address, 3)
+        block_storage.commit()
+        best_block.get_metadata().nc_block_root_id = block_storage.get_root_id()
+
+        resource = StubSite(AddressBalanceResource(self.manager))
+        response = yield resource.get('thin_wallet/address_balance', {b'address': self.address.encode()})
+        data = response.json_value()
+
+        self.assertTrue(data['success'])
+        self.assertEqual(3, data['global_seqnum'])
+        self.assertEqual(7, data['global_tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['balance'])
+        self.assertEqual(11, data['global_tokens_data'][self.token_uid.hex()]['balance'])
+        self.assertNotIn(unrelated_token_uid.hex(), data['global_tokens_data'])
+        self.assertEqual(
+            self._settings.HATHOR_TOKEN_NAME,
+            data['global_tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['name'],
+        )
 
     @inlineCallbacks
     def test_zero_count(self):
