@@ -88,6 +88,8 @@ dev = [
     "types-requests==2.28.11.4",
     "types-pyopenssl==22.1.0.2",
     "types-pyyaml==6.0.12.9",
+    "matplotlib>=3.10.9,<4.0.0",
+    "pandas>=3.0.3,<4.0.0",
 ]
 
 [tool.poetry]
