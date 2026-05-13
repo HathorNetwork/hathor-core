@@ -142,14 +142,16 @@ class IndexesManager(ABC):
             if db_last_started_at != index_last_started_at:
                 indexes_to_init.append(index)
 
-        if indexes_to_init:
-            indexes_names = [type(index).__name__ for index in indexes_to_init]
+        initial_indexes_to_init = indexes_to_init.copy()
+
+        if initial_indexes_to_init:
+            indexes_names = [type(index).__name__ for index in initial_indexes_to_init]
             self.log.info('there are indexes that need initialization', indexes_to_init=indexes_names)
         else:
             self.log.info('there are no indexes that need initialization')
 
         # make sure that all the indexes that we're rebuilding are cleared
-        for index in indexes_to_init:
+        for index in initial_indexes_to_init:
             index_db_name = index.get_db_name()
             if index_db_name:
                 tx_storage.set_index_last_started_at(index_db_name, NULL_INDEX_LAST_STARTED_AT)
@@ -165,6 +167,12 @@ class IndexesManager(ABC):
         self.log.debug('indexes pre-init')
         for index in self.iter_all_indexes():
             index.init_start(self)
+
+        indexes_to_init = [index for index in initial_indexes_to_init if index.still_needs_initialization(tx_storage)]
+        skipped_indexes = [index for index in initial_indexes_to_init if index not in indexes_to_init]
+        if skipped_indexes:
+            indexes_names = [type(index).__name__ for index in skipped_indexes]
+            self.log.info('some indexes do not need initialization anymore', indexes=indexes_names)
 
         if indexes_to_init:
             overall_scope: Scope = reduce(operator.__or__, map(lambda i: i.get_scope(), indexes_to_init))
@@ -186,6 +194,9 @@ class IndexesManager(ABC):
             for index in indexes_to_init:
                 if index.get_scope().matches(tx):
                     index.init_loop_step(tx)
+
+        for index in indexes_to_init:
+            index.init_finish(tx_storage)
 
         # Restore cache capacity.
         assert cache_capacity is not None
@@ -420,9 +431,9 @@ class IndexesManager(ABC):
 
 class RocksDBIndexesManager(IndexesManager):
     def __init__(self, rocksdb_storage: 'RocksDBStorage', *, settings: HathorSettings) -> None:
-        from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
         from hathor.indexes.rocksdb_height_index import RocksDBHeightIndex
         from hathor.indexes.rocksdb_info_index import RocksDBInfoIndex
+        from hathor.indexes.rocksdb_mempool_tips_index import SimpleRocksDBMempoolTipsIndex
         from hathor.indexes.rocksdb_timestamp_index import RocksDBTimestampIndex
 
         self.settings = settings
@@ -430,8 +441,7 @@ class RocksDBIndexesManager(IndexesManager):
 
         self.info = RocksDBInfoIndex(self._db, settings=settings)
         self.height = RocksDBHeightIndex(self._db, settings=settings)
-        # XXX: use of RocksDBMempoolTipsIndex is very slow and was suspended
-        self.mempool_tips = MemoryMempoolTipsIndex(settings=self.settings)
+        self.mempool_tips = SimpleRocksDBMempoolTipsIndex(rocksdb_storage, settings=self.settings)
 
         self.sorted_all = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.ALL, settings=settings)
         self.sorted_blocks = RocksDBTimestampIndex(self._db, scope_type=TimestampScopeType.BLOCKS, settings=settings)
