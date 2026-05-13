@@ -527,8 +527,8 @@ class HathorSettings(BaseModel):
     # Used to enable opcodes V2.
     ENABLE_OPCODES_V2: FeatureSetting = FeatureSetting.DISABLED
 
-    # Used to enable Nano Runtime V2.
-    ENABLE_NANO_RUNTIME_V2: FeatureSetting = FeatureSetting.DISABLED
+    # Used to enable DAA V2 and Nano Runtime V2.
+    ENABLE_DAA_V2: FeatureSetting = FeatureSetting.DISABLED
 
     # Used to restrict duplicate actions.
     RESTRICT_DUP_ACTIONS: FeatureSetting = FeatureSetting.DISABLED
