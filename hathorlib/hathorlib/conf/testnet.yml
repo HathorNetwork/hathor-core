@@ -73,10 +73,21 @@ FEATURE_ACTIVATION:
       version: 0.70.0
       signal_support_by_default: true
 
+    RESTRICT_DUP_ACTIONS:
+      bit: 2
+      # Right now the best block is 651_941 at Tuesday, 2026-05-12 00:49:00 GMT
+      start_height: 675_120  # 2 days, expected around 2026-05-14 00:49:10 GMT
+      timeout_height: 836_400  # 2 weeks, expected around 2026-05-26 00:49:10 GMT
+      minimum_activation_height: 0
+      lock_in_on_timeout: false
+      version: 0.70.0
+      signal_support_by_default: true
+
 ENABLE_NANO_CONTRACTS: feature_activation
 ENABLE_FEE_BASED_TOKENS: feature_activation
 ENABLE_OPCODES_V2: feature_activation
 ENABLE_NANO_RUNTIME_V2: feature_activation
+RESTRICT_DUP_ACTIONS: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   - WWFiNeWAFSmgtjm4ht2MydwS5GY3kMJsEK
   - WQFDxic8xWWnMLL4aE5abY2XRKPNvGhtjY
