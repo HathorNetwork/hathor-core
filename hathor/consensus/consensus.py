@@ -452,11 +452,8 @@ class ConsensusAlgorithm:
                 case Feature.RESTRICT_DUP_ACTIONS:
                     if not self._restrict_dup_actions_rule(tx):
                         return False
-                case Feature.NANO_RUNTIME_V2:
-                    # This feature does not affect verification, only the Nano runtime.
-                    pass
                 case Feature.REDUCE_DAA_TARGET:
-                    # This feature does not affect transaction verification, only DAA parameters.
+                    # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
                     pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH

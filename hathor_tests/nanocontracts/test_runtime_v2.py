@@ -59,7 +59,7 @@ class TestRuntimeV2(BlueprintTestCase):
             evaluation_interval=4,
             default_threshold=3,
             features={
-                Feature.NANO_RUNTIME_V2: Criteria(
+                Feature.REDUCE_DAA_TARGET: Criteria(
                     bit=0,
                     start_height=4,
                     timeout_height=12,
@@ -68,7 +68,7 @@ class TestRuntimeV2(BlueprintTestCase):
             }
         )
         settings = self._settings.copy(update=dict(
-            ENABLE_NANO_RUNTIME_V2=FeatureSetting.FEATURE_ACTIVATION,
+            ENABLE_DAA_V2=FeatureSetting.FEATURE_ACTIVATION,
             FEATURE_ACTIVATION=feature_settings,
         ))
 
@@ -100,9 +100,9 @@ class TestRuntimeV2(BlueprintTestCase):
         b5, b6, b7, b11, b12 = artifacts.get_typed_vertices(('b5', 'b6', 'b7', 'b11', 'b12'), Block)
         nc1, nc2 = artifacts.get_typed_vertices(('nc1', 'nc2'), Transaction)
 
-        assert feature_service.get_state(block=b7, feature=Feature.NANO_RUNTIME_V2) == FeatureState.STARTED
-        assert feature_service.get_state(block=b11, feature=Feature.NANO_RUNTIME_V2) == FeatureState.LOCKED_IN
-        assert feature_service.get_state(block=b12, feature=Feature.NANO_RUNTIME_V2) == FeatureState.ACTIVE
+        assert feature_service.get_state(block=b7, feature=Feature.REDUCE_DAA_TARGET) == FeatureState.STARTED
+        assert feature_service.get_state(block=b11, feature=Feature.REDUCE_DAA_TARGET) == FeatureState.LOCKED_IN
+        assert feature_service.get_state(block=b12, feature=Feature.REDUCE_DAA_TARGET) == FeatureState.ACTIVE
 
         assert nc1.get_metadata().voided_by == {NC_EXECUTION_FAIL_ID, nc1.hash}
         assert nc1.get_metadata().nc_execution == NCExecutionState.FAILURE
