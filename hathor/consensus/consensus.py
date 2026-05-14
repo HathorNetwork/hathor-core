@@ -27,6 +27,7 @@ from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.feature import Feature
 from hathor.nanocontracts.exception import NCInvalidSignature
 from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
+from hathor.nanocontracts.execution.consensus_block_executor import assert_final_nc_state
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Block, Transaction
@@ -212,8 +213,12 @@ class ConsensusAlgorithm:
                 )
             ))
 
-        # finally signal an index update for all affected transactions
+        # finally signal an index update for all affected transactions and perform integrity asserts
         for tx_affected in _sorted_affected_txs(context.txs_affected):
+            if isinstance(tx_affected, Transaction):
+                context.transaction_algorithm.assert_valid_consensus(tx_affected)
+                if tx_affected.is_nano_contract():
+                    assert_final_nc_state(tx_affected)
             self.tx_storage.indexes.update_critical_indexes(tx_affected)
             with non_critical_code(self.log):
                 self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
@@ -452,11 +457,8 @@ class ConsensusAlgorithm:
                 case Feature.RESTRICT_DUP_ACTIONS:
                     if not self._restrict_dup_actions_rule(tx):
                         return False
-                case Feature.NANO_RUNTIME_V2:
-                    # This feature does not affect verification, only the Nano runtime.
-                    pass
                 case Feature.REDUCE_DAA_TARGET:
-                    # This feature does not affect transaction verification, only DAA parameters.
+                    # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
                     pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH

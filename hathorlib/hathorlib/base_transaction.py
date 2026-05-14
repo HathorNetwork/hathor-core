@@ -736,7 +736,7 @@ def bytes_to_output_value(buf: bytes) -> Tuple[int, bytes]:
         raise InvalidOutputValue('Invalid byte struct for output') from e
     value = signed_value * value_sign
     assert value >= 0
-    if value < _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
+    if value <= _MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
         raise ValueError('Value fits in 4 bytes but is using 8 bytes')
     return value, buf
 

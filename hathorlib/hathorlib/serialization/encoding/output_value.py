@@ -122,6 +122,6 @@ def decode_output_value(deserializer: Deserializer, *, strict: bool = True) -> i
     assert value >= 0
     if strict and value == 0:
         raise ValueError('Number must be strictly positive')
-    if value < MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
+    if value <= MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
         raise ValueError('Value fits in 4 bytes but is using 8 bytes')
     return value

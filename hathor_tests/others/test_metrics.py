@@ -119,6 +119,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-txs': 0.0,
             b'nc-state': 0.0,
             b'vertex-children': 0.0,
+            b'mempool-tips-index-meta': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -176,6 +177,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-txs': 0.0,
             b'nc-state': 0.0,
             b'vertex-children': 0.0,
+            b'mempool-tips-index-meta': 0.0,
         })
 
         manager.tx_storage.pre_init()

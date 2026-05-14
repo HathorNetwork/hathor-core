@@ -17,16 +17,58 @@ from typing import TYPE_CHECKING, Iterable, Optional
 from structlog import get_logger
 
 from hathor.conf.settings import HathorSettings
+from hathor.indexes.memory_mempool_tips_index import MemoryMempoolTipsIndex
 from hathor.indexes.mempool_tips_index import ByteCollectionMempoolTipsIndex
 from hathor.indexes.rocksdb_utils import RocksDBSimpleSet
+from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
 
+    from hathor.storage import RocksDBStorage
+    from hathor.transaction.storage import TransactionStorage
+
 logger = get_logger()
 
 _CF_NAME_MEMPOOL_TIPS_INDEX = b'mempool-tips-index'
+_CF_NAME_MEMPOOL_TIPS_INDEX_META = b'mempool-tips-index-meta'
 _DB_NAME: str = 'mempool_tips'
+_DB_EMPTY_KEY = b'empty'
+_DB_EMPTY_VALUE = b'1'
+
+
+class SimpleRocksDBMempoolTipsIndex(MemoryMempoolTipsIndex):
+    """Memory-backed mempool tips index with a persistent marker for the known-empty case."""
+
+    def __init__(self, rocksdb_storage: 'RocksDBStorage', *, settings: HathorSettings) -> None:
+        super().__init__(settings=settings)
+        self._db = rocksdb_storage.get_db()
+        self._cf_meta = rocksdb_storage.get_or_create_column_family(_CF_NAME_MEMPOOL_TIPS_INDEX_META)
+
+    def still_needs_initialization(self, tx_storage: 'TransactionStorage') -> bool:
+        return not self.is_empty_marker_set()
+
+    def init_finish(self, tx_storage: 'TransactionStorage') -> None:
+        self._sync_empty_marker()
+
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+        super().update(tx, force_remove=force_remove)
+        self._sync_empty_marker()
+
+    def is_empty_marker_set(self) -> bool:
+        return self._db.get((self._cf_meta, _DB_EMPTY_KEY)) == _DB_EMPTY_VALUE
+
+    def _sync_empty_marker(self) -> None:
+        if self._index:
+            self._clear_empty_marker()
+        else:
+            self._set_empty_marker()
+
+    def _set_empty_marker(self) -> None:
+        self._db.put((self._cf_meta, _DB_EMPTY_KEY), _DB_EMPTY_VALUE)
+
+    def _clear_empty_marker(self) -> None:
+        self._db.delete((self._cf_meta, _DB_EMPTY_KEY))
 
 
 class RocksDBMempoolTipsIndex(ByteCollectionMempoolTipsIndex):
