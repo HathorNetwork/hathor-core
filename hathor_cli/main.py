@@ -58,6 +58,7 @@ class CliManager:
             replay_logs,
             reset_event_queue,
             reset_feature_settings,
+            scan_canonical_header_order,
             run_node,
             shell,
             side_dag,

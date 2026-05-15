@@ -73,6 +73,7 @@ import time
 from argparse import ArgumentParser, FileType
 from typing import TYPE_CHECKING
 
+from hathor.transaction.headers import FeeHeader, NanoHeader, VertexHeaderId
 from hathor_cli.run_node import RunNode
 
 if TYPE_CHECKING:
@@ -80,9 +81,21 @@ if TYPE_CHECKING:
     from hathor.transaction.headers import VertexBaseHeader
 
 
+# Header instances don't carry their own ID byte — the byte lives only in
+# VertexHeaderId, keyed by the parser's match on the class. Mirror that here.
+_HEADER_ID_BY_CLASS: dict[type, bytes] = {
+    NanoHeader: VertexHeaderId.NANO_HEADER.value,
+    FeeHeader: VertexHeaderId.FEE_HEADER.value,
+}
+
+
 def _header_id_int(header: 'VertexBaseHeader') -> int:
-    """Mirror VertexVerifier._get_header_order verbatim."""
-    return int.from_bytes(header.get_header_id(), 'big')
+    """Mirror VertexVerifier._get_header_order: map header → canonical ID int."""
+    try:
+        id_bytes = _HEADER_ID_BY_CLASS[type(header)]
+    except KeyError:
+        raise ValueError(f'unknown header type: {type(header).__name__}')
+    return int.from_bytes(id_bytes, 'big')
 
 
 def _is_canonical(ids: list[int]) -> bool:
