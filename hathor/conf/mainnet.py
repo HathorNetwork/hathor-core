@@ -303,10 +303,10 @@ SETTINGS = HathorSettings(
                 bit=0,
                 # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
                 start_height=6_552_000,  # expected around 2026-05-13 11:06:38 GMT
-                # If DAA activates after 3 weeks, heights should increase 4x faster after 6_612_480.
-                timeout_height=7_015_680,  # 8 weeks wall-clock, expected around 2026-07-08 11:06:38 GMT
-                # Aligned with DAA/NanoRuntime so all v0.70 features activate together at the earliest.
-                minimum_activation_height=6_612_480,  # 3 weeks wall-clock, expected around 2026-06-03 11:06:38 GMT
+                # If DAA activates after 4 weeks, heights should increase 4x faster after 6_632_640.
+                timeout_height=7_015_680,  # 8.75 weeks wall-clock, expected around 2026-07-13 17:06:38 GMT
+                # Aligned with DAA/NanoRuntime so both features activate together at the earliest.
+                minimum_activation_height=6_632_640,  # 4 weeks wall-clock, expected around 2026-06-10 11:06:38 GMT
                 lock_in_on_timeout=False,
                 version='0.70.0',
                 signal_support_by_default=True,
@@ -318,7 +318,7 @@ SETTINGS = HathorSettings(
                 # Also gates NANO_RUNTIME_V2 because both features are indifferent to transaction verification.
                 start_height=6_552_000,  # expected around 2026-05-13 11:06:38 GMT
                 timeout_height=6_713_280,  # 8 weeks, expected around 2026-07-08 11:06:38 GMT
-                minimum_activation_height=6_612_480,  # 3 weeks, expected around 2026-06-03 11:06:38 GMT
+                minimum_activation_height=6_632_640,  # 4 weeks, expected around 2026-06-10 11:06:38 GMT
                 lock_in_on_timeout=False,
                 version='0.70.0',
                 signal_support_by_default=True,
@@ -329,8 +329,9 @@ SETTINGS = HathorSettings(
                 # Right now the best block is 6_532_237 at Wednesday, 2026-05-06 14:25:08 GMT
                 # Delayed because bit 3 is occupied until the failed 0.69.0 window ends.
                 start_height=6_612_480,  # expected around 2026-06-03 11:06:38 GMT
-                # If DAA activates at this height, heights should increase 4x faster afterwards.
-                timeout_height=7_257_600,  # 8 weeks wall-clock, expected around 2026-07-29 11:06:38 GMT
+                # If DAA activates 1 week after this height, heights should increase 4x faster after 6_632_640.
+                # With enough signaling, expected to activate around 2026-06-12 05:06:38 GMT.
+                timeout_height=7_257_600,  # 8.75 weeks wall-clock, expected around 2026-08-03 17:06:38 GMT
                 # No minimum_activation_height: by the time signaling starts, all upgraded nodes
                 # will already enforce this rule.
                 minimum_activation_height=0,
@@ -345,7 +346,9 @@ SETTINGS = HathorSettings(
                 # after the failed FEE_TOKENS 0.69.0 window). No minimum_activation_height: by
                 # the time signaling starts, all upgraded nodes will already enforce this rule.
                 start_height=6_612_480,  # expected around 2026-06-03 11:06:38 GMT
-                timeout_height=7_257_600,  # expected around 2026-07-29 11:06:38 GMT
+                # With enough signaling and DAA activating at 6_632_640, expected to activate around
+                # 2026-06-12 05:06:38 GMT.
+                timeout_height=7_257_600,  # 8.75 weeks wall-clock, expected around 2026-08-03 17:06:38 GMT
                 minimum_activation_height=0,
                 lock_in_on_timeout=False,
                 version='0.70.0',
