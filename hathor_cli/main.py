@@ -59,6 +59,7 @@ class CliManager:
             reset_event_queue,
             reset_feature_settings,
             run_node,
+            scan_canonical_header_order,
             shell,
             side_dag,
             stratum_mining,
@@ -102,6 +103,8 @@ class CliManager:
         self.add_cmd('dev', 'generate_nginx_config', nginx_config, 'Generate nginx config from OpenAPI json')
         self.add_cmd('dev', 'events_simulator', events_simulator, 'Simulate integration events via websocket')
         self.add_cmd('dev', 'x-export', db_export, 'EXPERIMENTAL: Export database to a simple format.')
+        self.add_cmd('dev', 'x-scan-headers', scan_canonical_header_order,
+                     'EXPERIMENTAL: Scan storage for txs that violate canonical header ordering.')
         self.add_cmd('dev', 'x-import', db_import, 'EXPERIMENTAL: Import database from exported format.')
         self.add_cmd('dev', 'x-nc-dump', nc_dump, 'EXPERIMENTAL: Dump the nc storage in a text format.')
         self.add_cmd('dev', 'x-nc-dry-run', nc_dry_run, 'EXPERIMENTAL: Dry-run NC block execution')
