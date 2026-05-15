@@ -208,6 +208,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
+        json['decimal_version'] = self.get_decimal_version().value
 
         if self.is_nano_contract():
             nano_header = self.get_nano_header()
