@@ -48,11 +48,11 @@ class GetMiningInfoTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.get("mined_tokens")
         data = response.json_value()
         self.assertEqual(data['blocks'], 5)
-        self.assertEqual(data['mined_tokens'], 5*self._settings.INITIAL_TOKENS_PER_BLOCK)
+        self.assertEqual(data['mined_tokens'], 5*self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK)
 
         add_new_blocks(self.manager, self._settings.BLOCKS_PER_HALVING + 15, advance_clock=1)
-        mined_tokens = (self._settings.BLOCKS_PER_HALVING * self._settings.INITIAL_TOKENS_PER_BLOCK +
-                        20 * self._settings.INITIAL_TOKENS_PER_BLOCK // 2)
+        mined_tokens = (self._settings.BLOCKS_PER_HALVING * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK +
+                        20 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 2)
 
         response = yield self.web.get("mined_tokens")
         data = response.json_value()

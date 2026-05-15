@@ -98,7 +98,7 @@ def get_token_version(
     Get the token version for a given token uid.
     It searches first in the tx storage and then in the block storage.
     """
-    from hathor.conf.settings import HATHOR_TOKEN_UID
+    from hathorlib.conf.settings import HATHOR_TOKEN_UID
     if token_uid == HATHOR_TOKEN_UID:
         return TokenVersion.NATIVE
     from hathor.transaction.storage.exceptions import TransactionDoesNotExist

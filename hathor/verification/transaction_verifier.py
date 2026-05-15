@@ -338,7 +338,7 @@ class TransactionVerifier:
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
         """Verify whether token can be minted/melted based on its authority."""
-        from hathor.conf.settings import HATHOR_TOKEN_UID
+        from hathorlib.conf.settings import HATHOR_TOKEN_UID
         if token_info.version == TokenVersion.NATIVE:
             assert token_uid == HATHOR_TOKEN_UID
             assert not token_info.can_mint

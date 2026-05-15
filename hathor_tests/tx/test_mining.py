@@ -40,7 +40,7 @@ class MiningTest(unittest.TestCase):
 
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=self._settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
+            reward=self._settings.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=self._settings.GENESIS_BLOCK_TIMESTAMP + 3,
@@ -69,7 +69,7 @@ class MiningTest(unittest.TestCase):
 
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=self._settings.INITIAL_TOKEN_UNITS_PER_BLOCK * 100,
+            reward=self._settings.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * 100,
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=blocks[-1].timestamp + 1,

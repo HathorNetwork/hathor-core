@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import Any, Union
 
 from pydantic import ConfigDict, field_validator, model_validator
@@ -20,13 +21,6 @@ from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathorlib.conf.settings import FeatureSetting, HathorSettings as LibSettings
-
-DECIMAL_PLACES = 2
-
-GENESIS_TOKEN_UNITS = 1 * (10 ** 9)  # 1B
-GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10 ** DECIMAL_PLACES)  # 100B
-
-HATHOR_TOKEN_UID: bytes = b'\x00'
 
 
 class HathorSettings(LibSettings):
@@ -72,8 +66,8 @@ class HathorSettings(LibSettings):
             return self
 
         if (self.BLOCKS_PER_HALVING is not None or
-            self.INITIAL_TOKEN_UNITS_PER_BLOCK != 0 or
-                self.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
+            self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK != 0 or
+                self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK != 0):
             raise ValueError('PoA networks do not support block rewards')
         return self
 

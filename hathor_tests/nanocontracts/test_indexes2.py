@@ -62,7 +62,7 @@ class TestIndexes2(BlueprintTestCase):
         assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
         assert tka_token_info.get_total() == amount
         assert htr_token_info.get_total() == (
-            self._settings.GENESIS_TOKENS
-            + 11 * self._settings.INITIAL_TOKENS_PER_BLOCK
+            self._settings.GENESIS_TOKEN_ATOMIC_UNITS
+            + 11 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
             - get_deposit_token_deposit_amount(self._settings, amount)
         )

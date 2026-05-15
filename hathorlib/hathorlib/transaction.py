@@ -17,10 +17,11 @@ from __future__ import annotations
 import struct
 from collections import namedtuple
 from struct import pack
-from typing import TYPE_CHECKING, List, TypeVar
+from typing import TYPE_CHECKING, List, TypeVar, final
 
 from hathorlib.base_transaction import TX_HASH_SIZE, BaseTransaction, TxInput, TxOutput
 from hathorlib.conf import HathorSettings
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.exceptions import InvalidOutputValue, InvalidToken
 from hathorlib.headers import VertexBaseHeader
 from hathorlib.utils import unpack, unpack_len
@@ -250,3 +251,11 @@ class Transaction(BaseTransaction):
             if output.value <= 0:
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
+
+    @final
+    def get_decimal_version(self) -> VertexDecimalVersion:
+        """
+        Return the decimal-places version under which this transaction's token amounts are interpreted.
+        """
+        # Transactions are always V1. This will be updated in the future.
+        return VertexDecimalVersion.V1

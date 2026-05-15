@@ -536,7 +536,7 @@ class VertexExporter:
             vertex.hash = self._settings.GENESIS_BLOCK_HASH
             vertex.timestamp = self._settings.GENESIS_BLOCK_TIMESTAMP
             txout = TxOutput(
-                value=self._settings.GENESIS_TOKENS,
+                value=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
                 token_data=0,
                 script=self._settings.GENESIS_OUTPUT_SCRIPT
             )
