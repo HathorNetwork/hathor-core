@@ -329,3 +329,20 @@ class HathorCommonsTestCase(unittest.TestCase):
 
         self.assertEqual(block.signal_bits, block2.signal_bits)
         self.assertEqual(block.version, block2.version)
+
+    def test_header_ids(self):
+        """FeeHeader and NanoHeader expose their 1-byte type ID via get_header_id()."""
+        from hathorlib.headers import FeeHeader, NanoHeader, VertexHeaderId
+
+        # Class-level access
+        self.assertEqual(FeeHeader.get_header_id(), b'\x11')
+        self.assertEqual(FeeHeader.get_header_id(), VertexHeaderId.FEE_HEADER.value)
+        self.assertEqual(NanoHeader.get_header_id(), b'\x10')
+        self.assertEqual(NanoHeader.get_header_id(), VertexHeaderId.NANO_HEADER.value)
+
+        # Instance-level access (Python forwards to the classmethod)
+        tx = Transaction()
+        fee = FeeHeader(tx=tx, fees=[])
+        nano = NanoHeader.__new__(NanoHeader)  # bypass __init__; we only need the type
+        self.assertEqual(fee.get_header_id(), b'\x11')
+        self.assertEqual(nano.get_header_id(), b'\x10')

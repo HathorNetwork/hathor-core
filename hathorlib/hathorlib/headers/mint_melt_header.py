@@ -147,6 +147,10 @@ class _MintMeltHeaderBase(VertexBaseHeader):
     entries: list[MintMeltEntry] = field(default_factory=list)
 
     @classmethod
+    def get_header_id(cls) -> bytes:
+        return cls._HEADER_ID
+
+    @classmethod
     def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[_MintMeltHeaderBase, bytes]:
         from hathorlib.transaction import Transaction
 
