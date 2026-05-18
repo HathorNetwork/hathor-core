@@ -167,8 +167,6 @@ class NCConsensusBlockExecutor:
         This wraps execute_block() and applies each effect, maintaining backward
         compatibility with the original behavior.
         """
-        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
-
         assert self._settings.ENABLE_NANO_CONTRACTS
 
         if block.is_genesis:
@@ -201,22 +199,13 @@ class NCConsensusBlockExecutor:
         for tx in nc_sorted_calls:
             tx_meta = tx.get_metadata()
             assert tx_meta.nc_execution is not None
-            self.log.info('nano tx execution status',
-                          blk=block.hash.hex(),
-                          tx=tx.hash.hex(),
-                          execution=tx_meta.nc_execution.value)
-            match tx_meta.nc_execution:
-                case NCExecutionState.PENDING:  # pragma: no cover
-                    assert False, 'unexpected pending state'  # should never happen
-                case NCExecutionState.SUCCESS:
-                    assert tx_meta.voided_by is None
-                case NCExecutionState.FAILURE:
-                    assert tx_meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}
-                case NCExecutionState.SKIPPED:
-                    assert tx_meta.voided_by
-                    assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
-                case _:  # pragma: no cover
-                    assert_never(tx_meta.nc_execution)
+            self.log.info(
+                'nano tx execution status',
+                blk=block.hash.hex(),
+                tx=tx.hash.hex(),
+                execution=tx_meta.nc_execution.value,
+            )
+            assert_final_nc_state(tx)
 
     def _apply_effect(
         self,
@@ -337,3 +326,29 @@ class NCConsensusBlockExecutor:
 
             case _:
                 assert_never(effect)
+
+
+def assert_final_nc_state(tx: Transaction) -> None:
+    """Check whether the final state of a nano transaction is valid."""
+    from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+    assert tx.is_nano_contract()
+    meta = tx.get_metadata()
+
+    if meta.first_block is None:
+        assert meta.nc_execution in (None, NCExecutionState.PENDING), meta.nc_execution
+        assert not meta.voided_by or NC_EXECUTION_FAIL_ID not in meta.voided_by, meta.voided_by
+        return
+
+    assert meta.nc_execution is not None
+    match meta.nc_execution:
+        case NCExecutionState.PENDING:  # pragma: no cover
+            assert False, 'unexpected pending state'  # should never happen
+        case NCExecutionState.SUCCESS:
+            assert meta.voided_by is None, meta.voided_by
+        case NCExecutionState.FAILURE:
+            assert meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}, meta.voided_by
+        case NCExecutionState.SKIPPED:
+            assert meta.voided_by
+            assert NC_EXECUTION_FAIL_ID not in meta.voided_by, meta.voided_by
+        case _:  # pragma: no cover
+            assert_never(meta.nc_execution)
