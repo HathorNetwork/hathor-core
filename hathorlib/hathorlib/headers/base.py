@@ -24,6 +24,12 @@ if TYPE_CHECKING:
 class VertexBaseHeader(ABC):
     @classmethod
     @abstractmethod
+    def get_header_id(cls) -> bytes:
+        """Return the 1-byte header ID for this header type."""
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
     def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[VertexBaseHeader, bytes]:
         """Deserialize header from `buf` which starts with header id."""
         raise NotImplementedError
