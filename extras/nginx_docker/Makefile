@@ -9,6 +9,7 @@ DEFAULT_NO_RATE_LIMIT_TAG = no-rate-limit-latest
 
 # GCP / Hathor Testnet
 HATHOR_TESTNET_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank
+HATHOR_TESTNET_TRUSTED_PROXIES = --trusted-proxy-ip 34.117.203.223 --trusted-proxy-ip 2600:1901:0:982d::
 
 HATHOR_TESTNET_INDIA_TAG_LATEST = india-latest
 HATHOR_TESTNET_INDIA_TAG_NO_RATE_LIMIT = india-no-rate-limit-latest
@@ -18,114 +19,87 @@ hathor-testnet: hathor-testnet-default hathor-testnet-no-rate-limit hathor-testn
 	@echo "All Hathor Testnet images built and pushed successfully!"
 
 .PHONY: hathor-testnet-default
-hathor-testnet-default: clean nginx.conf set_real_ip_from_cloudfront
+hathor-testnet-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for Hathor Testnet..."
+	$(call generate_nginx_conf,$(HATHOR_TESTNET_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: hathor-testnet-no-rate-limit
-hathor-testnet-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+hathor-testnet-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for Hathor Testnet..."
-	mv nginx_no_rate_limit.conf nginx.conf
+	$(call generate_nginx_conf,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 .PHONY: hathor-testnet-india-default
-hathor-testnet-india-default: clean nginx_india.conf set_real_ip_from_cloudfront
+hathor-testnet-india-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing india image for Hathor Testnet..."
-	mv nginx_india.conf nginx.conf
+	$(call generate_nginx_conf,--override hathor-testnet-india $(HATHOR_TESTNET_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(HATHOR_TESTNET_INDIA_TAG_LATEST) .
 
 .PHONY: hathor-testnet-india-no-rate-limit
-hathor-testnet-india-no-rate-limit: clean nginx_india_no_rate_limit.conf set_real_ip_from_cloudfront
+hathor-testnet-india-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit india image for Hathor Testnet..."
-	mv nginx_india_no_rate_limit.conf nginx.conf
+	$(call generate_nginx_conf,--override hathor-testnet-india --disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(HATHOR_TESTNET_INDIA_TAG_NO_RATE_LIMIT) .
-
-# GCP / Nano Testnet
-NANO_TESTNET_REGISTRY = us-central1-docker.pkg.dev/nano-testnet/fullnodes/webtank
-
-NANO_TESTNET_BRAVO_TAG_LATEST = bravo-latest
-NANO_TESTNET_BRAVO_TAG_NO_RATE_LIMIT = bravo-no-rate-limit-latest
-
-.PHONY: nano-testnet
-nano-testnet: nano-testnet-default nano-testnet-no-rate-limit nano-testnet-bravo-default nano-testnet-bravo-no-rate-limit
-	@echo "All Nano Testnet images built and pushed successfully!"
-
-.PHONY: nano-testnet-default
-nano-testnet-default: clean nginx.conf set_real_ip_from_cloudfront
-	@echo "Building and pushing latest image for Nano Testnet..."
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(DEFAULT_LATEST_TAG) .
-
-.PHONY: nano-testnet-no-rate-limit
-nano-testnet-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
-	@echo "Building and pushing no-rate-limit image for Nano Testnet..."
-	mv nginx_no_rate_limit.conf nginx.conf
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
-
-.PHONY: nano-testnet-bravo-default
-nano-testnet-bravo-default: clean nginx_bravo.conf set_real_ip_from_cloudfront
-	@echo "Building and pushing bravo image for Nano Testnet..."
-	mv nginx_bravo.conf nginx.conf
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(NANO_TESTNET_BRAVO_TAG_LATEST) .
-
-.PHONY: nano-testnet-bravo-no-rate-limit
-nano-testnet-bravo-no-rate-limit: clean nginx_bravo_no_rate_limit.conf set_real_ip_from_cloudfront
-	@echo "Building and pushing no-rate-limit bravo image for Nano Testnet..."
-	mv nginx_bravo_no_rate_limit.conf nginx.conf
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(NANO_TESTNET_REGISTRY):$(NANO_TESTNET_BRAVO_TAG_NO_RATE_LIMIT) .
 
 # GCP / Standalone Fullnodes
 STANDALONE_FULLNODES_REGISTRY = us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank
+STANDALONE_FULLNODES_TRUSTED_PROXIES = --trusted-proxy-ip 34.54.38.76 --trusted-proxy-ip 2600:1901:0:75ca::
 
 .PHONY: standalone-fullnodes
 standalone-fullnodes: standalone-fullnodes-default standalone-fullnodes-no-rate-limit
 	@echo "All Standalone Fullnodes images built and pushed successfully!"
 
 .PHONY: standalone-fullnodes-default
-standalone-fullnodes-default: clean nginx.conf set_real_ip_from_cloudfront
+standalone-fullnodes-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for Standalone Fullnodes..."
+	$(call generate_nginx_conf,$(STANDALONE_FULLNODES_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(STANDALONE_FULLNODES_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: standalone-fullnodes-no-rate-limit
-standalone-fullnodes-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+standalone-fullnodes-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for Standalone Fullnodes..."
-	mv nginx_no_rate_limit.conf nginx.conf
+	$(call generate_nginx_conf,--disable-rate-limits $(STANDALONE_FULLNODES_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(STANDALONE_FULLNODES_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # GCP / Ekvilibro
 EKVILIBRO_REGISTRY = us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank
+EKVILIBRO_TRUSTED_PROXIES = --trusted-proxy-ip 34.54.235.41 --trusted-proxy-ip 2600:1901:0:ef2::
 
 .PHONY: ekvilibro
 ekvilibro: ekvilibro-default ekvilibro-no-rate-limit
 	@echo "All Ekvilibro images built and pushed successfully!"
 
 .PHONY: ekvilibro-default
-ekvilibro-default: clean nginx.conf set_real_ip_from_cloudfront
+ekvilibro-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for Ekvilibro..."
+	$(call generate_nginx_conf,$(EKVILIBRO_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: ekvilibro-no-rate-limit
-ekvilibro-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+ekvilibro-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for Ekvilibro..."
-	mv nginx_no_rate_limit.conf nginx.conf
+	$(call generate_nginx_conf,--disable-rate-limits $(EKVILIBRO_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # GCP / Hathor Testnet Playground
 HATHOR_TESTNET_PLAYGROUND_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank
+HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES = --trusted-proxy-ip 136.110.240.80 --trusted-proxy-ip 2600:1901:0:c75a::
 
 .PHONY: hathor-testnet-playground
 hathor-testnet-playground: hathor-testnet-playground-default hathor-testnet-playground-no-rate-limit
 	@echo "All Hathor Testnet Playground images built and pushed successfully!"
 
 .PHONY: hathor-testnet-playground-default
-hathor-testnet-playground-default: clean nginx_playground.conf set_real_ip_from_cloudfront
+hathor-testnet-playground-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for Hathor Testnet Playground..."
-	mv nginx_playground.conf nginx.conf
+	$(call generate_nginx_conf,--override hathor-testnet-playground $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: hathor-testnet-playground-no-rate-limit
-hathor-testnet-playground-no-rate-limit: clean nginx_playground_no_rate_limit.conf set_real_ip_from_cloudfront
+hathor-testnet-playground-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for Hathor Testnet Playground..."
-	mv nginx_playground_no_rate_limit.conf nginx.conf
+	$(call generate_nginx_conf,--override hathor-testnet-playground --disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # AWS / Main Account
@@ -136,19 +110,20 @@ aws-main: aws-main-default aws-main-no-rate-limit
 	@echo "All AWS Main images built and pushed successfully!"
 
 .PHONY: aws-main-default
-aws-main-default: clean nginx.conf set_real_ip_from_cloudfront
+aws-main-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for AWS Main..."
+	$(call generate_nginx_conf,)
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: aws-main-no-rate-limit
-aws-main-no-rate-limit: clean nginx_no_rate_limit.conf set_real_ip_from_cloudfront
+aws-main-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for AWS Main..."
-	mv nginx_no_rate_limit.conf nginx.conf
+	$(call generate_nginx_conf,--disable-rate-limits)
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # Build All (convenience command)
 .PHONY: build-all
-build-all: hathor-testnet nano-testnet standalone-fullnodes ekvilibro hathor-testnet-playground aws-main
+build-all: hathor-testnet standalone-fullnodes ekvilibro hathor-testnet-playground aws-main
 	@echo "All images built and pushed successfully!"
 
 # Legacy commands for backward compatibility
@@ -164,45 +139,19 @@ docker-no-rate-limit: aws-main-no-rate-limit
 # Configuration Generation
 # ========================
 
-nginx.conf: export PYTHONPATH := ../..
-nginx.conf:
+export PYTHONPATH := ../..
+define generate_nginx_conf
 	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config - > $@
+	python -m hathor generate_nginx_config $(1) - > nginx.conf
+endef
 
-nginx_no_rate_limit.conf: export PYTHONPATH := ../..
-nginx_no_rate_limit.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --disable-rate-limits - > $@
-
-nginx_bravo.conf: export PYTHONPATH := ../..
-nginx_bravo.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --override nano-testnet-bravo - > $@
-
-nginx_bravo_no_rate_limit.conf: export PYTHONPATH := ../..
-nginx_bravo_no_rate_limit.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --override nano-testnet-bravo --disable-rate-limits - > $@
-
-nginx_india.conf: export PYTHONPATH := ../..
-nginx_india.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --override hathor-testnet-india - > $@
-
-nginx_india_no_rate_limit.conf: export PYTHONPATH := ../..
-nginx_india_no_rate_limit.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --override hathor-testnet-india --disable-rate-limits - > $@
-
-nginx_playground.conf: export PYTHONPATH := ../..
-nginx_playground.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --override hathor-testnet-playground - > $@
-
-nginx_playground_no_rate_limit.conf: export PYTHONPATH := ../..
-nginx_playground_no_rate_limit.conf:
-	@python -c "import os; import hathor; print('Using hathor-core from:', os.path.dirname(hathor.__file__))"
-	python -m hathor generate_nginx_config --override hathor-testnet-playground --disable-rate-limits - > $@
+# Generate nginx.conf only (for testing or manual use).
+# Usage:
+#   make nginx.conf
+#   make nginx.conf NGINX_ARGS="--trusted-proxy-ip 34.54.38.76 --trusted-proxy-ip 2600:1901:0:75ca::"
+.PHONY: nginx.conf
+nginx.conf: set_real_ip_from_cloudfront
+	$(call generate_nginx_conf,$(NGINX_ARGS))
 
 set_real_ip_from_cloudfront:
 	curl https://ip-ranges.amazonaws.com/ip-ranges.json -s \
@@ -216,7 +165,7 @@ set_real_ip_from_cloudfront:
 
 .PHONY: clean
 clean:
-	rm -f nginx.conf nginx_no_rate_limit.conf nginx_bravo.conf nginx_bravo_no_rate_limit.conf nginx_india.conf nginx_india_no_rate_limit.conf set_real_ip_from_cloudfront
+	rm -f nginx.conf set_real_ip_from_cloudfront
 
 .PHONY: help
 help:
@@ -228,11 +177,6 @@ help:
 	@echo "  hathor-testnet-no-rate-limit		- Build and push no-rate-limit image for GCP Project Hathor Testnet"
 	@echo "  hathor-testnet-india-default		- Build and push india image for GCP Project Hathor Testnet"
 	@echo "  hathor-testnet-india-no-rate-limit - Build and push no-rate-limit india image for GCP Project Hathor Testnet"
-	@echo "  nano-testnet              			- Build and push all images for GCP Project Nano Testnet"
-	@echo "  nano-testnet-default      			- Build and push default image for GCP Project Nano Testnet"
-	@echo "  nano-testnet-no-rate-limit 		- Build and push no-rate-limit image for GCP Project Nano Testnet"
-	@echo "  nano-testnet-bravo-default 		- Build and push bravo image for GCP Project Nano Testnet"
-	@echo "  nano-testnet-bravo-no-rate-limit 	- Build and push no-rate-limit bravo image for GCP Project Nano Testnet"
 	@echo "  standalone-fullnodes	   			- Build and push all images for GCP Project Standalone Fullnodes"
 	@echo "  standalone-fullnodes-default 		- Build and push default image for GCP Project Standalone Fullnodes"
 	@echo "  standalone-fullnodes-no-rate-limit - Build and push no-rate-limit image for GCP Project Standalone Fullnodes"
@@ -247,6 +191,7 @@ help:
 	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
 	@echo ""
 	@echo "Utility Commands:"
+	@echo "  nginx.conf                - Generate nginx.conf only (use NGINX_ARGS for extra options)"
 	@echo "  build-all                 - Build and push all active project images"
 	@echo "  clean                     - Remove generated files"
 	@echo "  help                      - Show this help message"
@@ -258,7 +203,6 @@ help:
 	@echo ""
 	@echo "Supported Projects/Accounts:"
 	@echo "  - Hathor Testnet: $(HATHOR_TESTNET_REGISTRY)"
-	@echo "  - Nano Testnet: $(NANO_TESTNET_REGISTRY)"
 	@echo "  - Standalone Fullnodes: $(STANDALONE_FULLNODES_REGISTRY)"
 	@echo "  - Ekvilibro: $(EKVILIBRO_REGISTRY)"
 	@echo "  - Hathor Testnet Playground: $(HATHOR_TESTNET_PLAYGROUND_REGISTRY)"

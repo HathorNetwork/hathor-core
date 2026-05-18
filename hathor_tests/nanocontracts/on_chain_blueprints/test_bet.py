@@ -29,6 +29,7 @@ from hathor.wallet import KeyPair
 from ...utils import DEFAULT_WORDS
 from .. import test_blueprints
 from ..blueprints.unittest import BlueprintTestCase
+from ..utils import TestRunner
 from .utils import get_ocb_private_key
 
 settings = HathorSettings()
@@ -105,7 +106,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
             timestamp=timestamp,
             code=code,
         )
-        blueprint.weight = self.manager.daa.minimum_tx_weight(blueprint)
+        blueprint.weight = self.manager.daa_factory.minimum_tx_weight(blueprint)
         blueprint.sign(get_ocb_private_key())
         self.manager.cpu_mining_service.resolve(blueprint)
         self.manager.reactor.advance(2)
@@ -142,7 +143,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         sign_pycoin(nano_header, private_key)
 
         # mine
-        nc.weight = self.manager.daa.minimum_tx_weight(nc)
+        nc.weight = self.manager.daa_factory.minimum_tx_weight(nc)
         self.manager.cpu_mining_service.resolve(nc)
 
         # advance
@@ -174,7 +175,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
 
         # set expected self objects:
         self.nc_id = ContractId(VertexId(nc_init_tx.hash))
-        self.runner = self.manager.get_nc_runner(block)
+        self.runner = TestRunner.from_runner(self.manager.get_nc_runner(block))
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def test_blueprint_initialization(self) -> None:

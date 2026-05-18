@@ -12,68 +12,135 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-"""NCBlockExecutor - Executes nano contract transactions in a block."""
+"""NCBlockExecutor - Pure execution of nano contract transactions in a block."""
 
 from __future__ import annotations
 
 import hashlib
 import traceback
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable, Iterator, Mapping, TypeAlias, cast
 
-from structlog import get_logger
-from typing_extensions import assert_never
-
-from hathor.execution_manager import non_critical_code
+from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCFail
+from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
-from hathor.transaction.exceptions import TokenNotFound
-from hathor.transaction.nc_execution_state import NCExecutionState
-from hathor.transaction.types import MetaNCCallRecord
+from hathorlib.nanocontracts.runner.call_info import CallInfo
+from hathorlib.nanocontracts.runner.runner import MAX_SEQNUM_JUMP_SIZE
+from hathorlib.nanocontracts.types import Address, BlueprintId, ContractId, NCRawArgs, VertexId
+
+# Type alias for the skip predicate
+ShouldSkipPredicate = Callable[[Transaction], bool]
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
-    from hathor.consensus.context import ConsensusAlgorithmContext
-    from hathor.nanocontracts.nc_exec_logs import NCLogStorage
+    from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts.runner import Runner
     from hathor.nanocontracts.runner.runner import RunnerFactory
     from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.nanocontracts.storage import NCBlockStorage, NCStorageFactory
+    from hathor.nanocontracts.types import TokenUid
+    from hathor.transaction.token_info import TokenDescription
 
 
+# Transaction execution result types (also used as block execution effects)
 @dataclass(slots=True, frozen=True)
-class NCExecutionSuccess:
+class NCTxExecutionSuccess:
     """Result type for successful NC execution."""
+    tx: Transaction
     runner: 'Runner'
 
 
 @dataclass(slots=True, frozen=True)
-class NCExecutionFailure:
-    """Result type for failed NC execution."""
-    runner: 'Runner'
-    exception: 'NCFail'
+class NCTxExecutionFailure:
+    """Result type for failed NC execution.
+
+    `call_info` is None for cyclic-dependency failures, which never run a Runner.
+    """
+    tx: Transaction
+    call_info: CallInfo | None
+    exception: NCFail
     traceback: str
 
 
 @dataclass(slots=True, frozen=True)
-class NCExecutionSkipped:
+class NCTxExecutionSkipped:
     """Result type for skipped NC execution (voided transactions)."""
-    seqnum_update: tuple[bytes, int] | None  # (nc_address, new_seqnum) or None
+    tx: Transaction
 
 
-NCExecutionResult = NCExecutionSuccess | NCExecutionFailure | NCExecutionSkipped
+NCTxExecutionResult: TypeAlias = NCTxExecutionSuccess | NCTxExecutionFailure | NCTxExecutionSkipped
 
-logger = get_logger()
 
-_base_transaction_log = logger.new()
+# Block execution lifecycle effect types for generator-based execution
+@dataclass(slots=True, frozen=True)
+class NCBeginBlock:
+    """Effect yielded at the start of block execution."""
+    block: Block
+    parent_root_id: bytes
+    block_storage: 'NCBlockStorage'
+    nc_sorted_calls: tuple[Transaction, ...]
+    nc_cyclic_fails: tuple[Transaction, ...]
+
+
+@dataclass(slots=True, frozen=True)
+class NCBeginTransaction:
+    """Effect yielded at the start of transaction execution."""
+    tx: Transaction
+    rng_seed: bytes
+
+
+@dataclass(slots=True, frozen=True)
+class NCEndTransaction:
+    """Effect yielded at the end of transaction processing."""
+    tx: Transaction
+
+
+@dataclass(slots=True, frozen=True)
+class NCEndBlock:
+    """Effect yielded at the end of block execution."""
+    block: Block
+    block_storage: 'NCBlockStorage'
+    final_root_id: bytes
+
+
+NCBlockEffect: TypeAlias = (
+    NCBeginBlock | NCBeginTransaction | NCTxExecutionResult |
+    NCEndTransaction | NCEndBlock
+)
+
+
+class _UncommittedRestrictedBlockProxy:
+    """Read-only token overlay for pre-commit validation."""
+
+    def __init__(
+        self,
+        block_storage: 'NCBlockStorage',
+        *,
+        created_tokens: Mapping['TokenUid', 'TokenDescription'],
+    ) -> None:
+        self._block_storage = block_storage
+        self._created_tokens = created_tokens
+
+    def has_token(self, token_id: 'TokenUid') -> bool:
+        if token_id in self._created_tokens:
+            return True
+        return self._block_storage.has_token(token_id)
+
+    def get_token_description(self, token_id: 'TokenUid') -> 'TokenDescription':
+        token_description = self._created_tokens.get(token_id)
+        if token_description is not None:
+            return token_description
+        return self._block_storage.get_token_description(token_id)
 
 
 class NCBlockExecutor:
     """
-    Executes all nano contract transactions in a block.
+    Pure execution of nano contract transactions in a block.
 
-    This class contains the core NC execution logic, extracted from
-    BlockConsensusAlgorithm to allow reuse by debugging tools.
+    This class contains the core NC execution logic without any side effects.
+    It yields execution events that can be processed by a caller to apply
+    state changes.
     """
 
     def __init__(
@@ -82,9 +149,8 @@ class NCBlockExecutor:
         settings: 'HathorSettings',
         runner_factory: 'RunnerFactory',
         nc_storage_factory: 'NCStorageFactory',
-        nc_log_storage: 'NCLogStorage',
         nc_calls_sorter: 'NCSorterCallable',
-        nc_exec_fail_trace: bool = False,
+        feature_service: FeatureService,
     ) -> None:
         """
         Initialize the block executor.
@@ -93,134 +159,80 @@ class NCBlockExecutor:
             settings: Hathor settings.
             runner_factory: Factory to create Runner instances.
             nc_storage_factory: Factory to create NC storage instances.
-            nc_log_storage: Storage for NC execution logs.
             nc_calls_sorter: Function to sort NC transactions for deterministic execution order.
-            nc_exec_fail_trace: Whether to include stack traces in failure logs.
         """
         self._settings = settings
         self._runner_factory = runner_factory
         self._nc_storage_factory = nc_storage_factory
-        self._nc_log_storage = nc_log_storage
         self._nc_calls_sorter = nc_calls_sorter
-        self._nc_exec_fail_trace = nc_exec_fail_trace
-
-    @property
-    def log(self) -> Any:
-        return _base_transaction_log
-
-    def initialize_empty(self, block: Block, context: 'ConsensusAlgorithmContext') -> None:
-        """Initialize a block with an empty contract trie."""
-        meta = block.get_metadata()
-        block_storage = self._nc_storage_factory.get_empty_block_storage()
-        block_storage.commit()
-        if meta.nc_block_root_id is not None:
-            assert meta.nc_block_root_id == block_storage.get_root_id()
-        else:
-            meta.nc_block_root_id = block_storage.get_root_id()
-            context.save(block)
-
-    def execute_chain(
-        self,
-        block: Block,
-        context: 'ConsensusAlgorithmContext',
-        *,
-        on_failure: Callable[[Transaction], None],
-    ) -> None:
-        """Execute NC transactions for a block and any pending parent blocks, handling reorgs.
-
-        This method determines which blocks need execution (handling reorgs) and
-        executes them in order from oldest to newest."""
-        # If we reach this point, Nano Contracts must be enabled.
-        assert self._settings.ENABLE_NANO_CONTRACTS
-        assert not block.is_genesis
-
-        meta = block.get_metadata()
-        if meta.voided_by:
-            # If the block is voided, skip execution.
-            return
-
-        assert meta.nc_block_root_id is None
-
-        to_be_executed: list[Block] = []
-        is_reorg: bool = False
-        if context.reorg_info:
-            # handle reorgs
-            is_reorg = True
-            cur = block
-            # XXX We could stop when `cur_meta.nc_block_root_id is not None` but
-            #     first we need to refactor meta.first_block and meta.voided_by to
-            #     have different values per block.
-            while cur != context.reorg_info.common_block:
-                cur_meta = cur.get_metadata()
-                if cur_meta.nc_block_root_id is not None:
-                    # Reset nc_block_root_id to force re-execution.
-                    cur_meta.nc_block_root_id = None
-                to_be_executed.append(cur)
-                cur = cur.get_block_parent()
-        else:
-            # No reorg occurred, so we execute all unexecuted blocks.
-            # Normally it's just the current block, but it's possible to have
-            # voided and therefore unexecuted blocks connected to the best chain,
-            # for example when a block is voided by a transaction.
-            cur = block
-            while True:
-                cur_meta = cur.get_metadata()
-                if cur_meta.nc_block_root_id is not None:
-                    break
-                to_be_executed.append(cur)
-                if cur.is_genesis:
-                    break
-                cur = cur.get_block_parent()
-
-        for current in to_be_executed[::-1]:
-            self.execute_block(current, context, is_reorg=is_reorg, on_failure=on_failure)
+        self._feature_service = feature_service
 
     def execute_block(
         self,
         block: Block,
-        context: 'ConsensusAlgorithmContext',
         *,
-        is_reorg: bool,
-        on_failure: Callable[[Transaction], None],
-    ) -> None:
-        """Execute all NC transactions in a single block."""
-        from hathor.nanocontracts import NC_EXECUTION_FAIL_ID
+        should_skip: ShouldSkipPredicate,
+    ) -> Iterator[NCBlockEffect]:
+        """Execute block as generator, yielding effects without applying them.
 
+        This is the pure execution method that yields lifecycle events as it processes
+        each transaction. The caller decides whether to apply the side effects.
+
+        Args:
+            block: The block to execute.
+            should_skip: A predicate function that determines if a transaction should be skipped.
+                This allows the caller to provide context-specific voided state tracking.
+
+        Yields:
+            NCBlockEffect instances representing each step of execution.
+        """
         assert self._settings.ENABLE_NANO_CONTRACTS
-
-        if block.is_genesis:
-            # XXX We can remove this call after the full node initialization is refactored and
-            #     the genesis block goes through the consensus protocol.
-            self.initialize_empty(block, context)
-            return
+        assert not block.is_genesis, "Genesis blocks should be handled separately"
 
         meta = block.get_metadata()
         assert not meta.voided_by
-        assert meta.nc_block_root_id is None
 
         parent = block.get_block_parent()
         parent_meta = parent.get_metadata()
-        block_root_id = parent_meta.nc_block_root_id
-        assert block_root_id is not None
+        parent_root_id = parent_meta.nc_block_root_id
+        assert parent_root_id is not None
 
         nc_calls: list[Transaction] = []
         for tx in block.iter_transactions_in_this_block():
             if not tx.is_nano_contract():
-                # Skip other type of transactions.
                 continue
-            tx_meta = tx.get_metadata()
-            assert tx_meta.nc_execution in {None, NCExecutionState.PENDING}
-            if tx_meta.voided_by:
-                assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
             nc_calls.append(tx)
 
-        if not nc_calls:
-            meta.nc_block_root_id = block_root_id
-            context.save(block)
-            return
+        sorted_txs = self._nc_calls_sorter(block, nc_calls) if nc_calls else None
+        nc_sorted_calls = sorted_txs.sorted if sorted_txs else tuple()
+        nc_cyclic_txs = sorted_txs.cyclic if sorted_txs else tuple()
+        block_storage = self._nc_storage_factory.get_block_storage(parent_root_id)
+        assert block_storage.get_root_id() == parent_root_id
+        features = Features.from_vertex(settings=self._settings, feature_service=self._feature_service, vertex=block)
 
-        nc_sorted_calls = self._nc_calls_sorter(block, nc_calls)
-        block_storage = self._nc_storage_factory.get_block_storage(block_root_id)
+        yield NCBeginBlock(
+            block=block,
+            parent_root_id=parent_root_id,
+            block_storage=block_storage,
+            nc_sorted_calls=nc_sorted_calls,
+            nc_cyclic_fails=nc_cyclic_txs,
+        )
+
+        for tx in nc_cyclic_txs:
+            yield NCBeginTransaction(tx=tx, rng_seed=b'')
+            try:
+                # Dummy raise just to create an exception context and convert
+                # into the failure effect, analogous to seqnum failures.
+                raise NCFail('cyclic failure detected')
+            except NCFail as e:
+                yield NCTxExecutionFailure(
+                    tx=tx,
+                    call_info=None,
+                    exception=e,
+                    traceback=traceback.format_exc(),
+                )
+            yield NCEndTransaction(tx=tx)
+
         seed_hasher = hashlib.sha256(block.hash)
 
         for tx in nc_sorted_calls:
@@ -229,180 +241,146 @@ class NCBlockExecutor:
             seed_hasher.update(block_storage.get_root_id())
             rng_seed = seed_hasher.digest()
 
+            yield NCBeginTransaction(tx=tx, rng_seed=rng_seed)
+
+            # Execute transaction and yield the result directly
             result = self.execute_transaction(
+                runtime_version=features.nano_runtime_version,
                 tx=tx,
                 block_storage=block_storage,
                 rng_seed=rng_seed,
+                should_skip=should_skip,
             )
+            yield result
 
-            # Handle the execution result
-            tx_meta = tx.get_metadata()
-            match result:
-                case NCExecutionSuccess(runner=runner):
-                    from hathor.nanocontracts.runner.call_info import CallType
+            yield NCEndTransaction(tx=tx)
 
-                    tx_meta.nc_execution = NCExecutionState.SUCCESS
-                    context.save(tx)
-
-                    # Commit the runner changes
-                    # TODO Avoid calling multiple commits for the same contract. The best would be
-                    #      to call the commit method once per contract per block, just like we do
-                    #      for the block_storage. This ensures we will have a clean database with
-                    #      no orphan nodes.
-                    runner.commit()
-
-                    # Derive call_info, nc_calls, and events from runner
-                    call_info = runner.get_last_call_info()
-                    assert call_info.calls is not None
-                    nc_calls_records = [
-                        MetaNCCallRecord.from_call_record(call)
-                        for call in call_info.calls if call.type == CallType.PUBLIC
-                    ]
-                    events_list = call_info.nc_logger.__events__
-
-                    # Update metadata with call records
-                    assert tx_meta.nc_calls is None
-                    tx_meta.nc_calls = nc_calls_records
-                    context.save(tx)
-
-                    # Update indexes. This must be after metadata is updated.
-                    assert tx.storage is not None
-                    with non_critical_code(self.log):
-                        tx.storage.indexes.non_critical_handle_contract_execution(tx)
-
-                    # Pubsub event to indicate execution success
-                    context.nc_exec_success.append(tx)
-
-                    # Store events for pubsub
-                    assert context.nc_events is not None
-                    context.nc_events.append((tx, events_list))
-
-                    # Store events in transaction metadata
-                    if events_list:
-                        tx_meta.nc_events = [(event.nc_id, event.data) for event in events_list]
-                        context.save(tx)
-
-                    # Save logs
-                    self._nc_log_storage.save_logs(tx, call_info, None)
-
-                case NCExecutionFailure(runner=runner, exception=exception, traceback=tb):
-                    # Log the failure
-                    kwargs: dict[str, Any] = {}
-                    if tx.name:
-                        kwargs['__name'] = tx.name
-                    if self._nc_exec_fail_trace:
-                        kwargs['exc_info'] = True
-                    self.log.info(
-                        'nc execution failed',
-                        tx=tx.hash.hex(),
-                        error=repr(exception),
-                        cause=repr(exception.__cause__),
-                        **kwargs,
-                    )
-
-                    on_failure(tx)
-
-                    # Save logs with exception info
-                    call_info = runner.get_last_call_info()
-                    self._nc_log_storage.save_logs(tx, call_info, (exception, tb))
-
-                case NCExecutionSkipped(seqnum_update=seqnum_update):
-                    from hathor.nanocontracts.types import Address
-
-                    tx_meta.nc_execution = NCExecutionState.SKIPPED
-                    context.save(tx)
-
-                    # Update seqnum if needed
-                    if seqnum_update is not None:
-                        nc_address, new_seqnum = seqnum_update
-                        block_storage.set_address_seqnum(Address(nc_address), new_seqnum)
-
-                case _:
-                    assert_never(result)
-
-        # Save block state root id. If nothing happens, it should be the same as its block parent.
-        block_storage.commit()
-        assert block_storage.get_root_id() is not None
-        meta.nc_block_root_id = block_storage.get_root_id()
-        context.save(block)
-
-        # Log and verify execution states for all transactions
-        for tx in nc_calls:
-            tx_meta = tx.get_metadata()
-            assert tx_meta.nc_execution is not None
-            self.log.info('nano tx execution status',
-                          blk=block.hash.hex(),
-                          tx=tx.hash.hex(),
-                          execution=tx_meta.nc_execution.value)
-            match tx_meta.nc_execution:
-                case NCExecutionState.PENDING:  # pragma: no cover
-                    assert False, 'unexpected pending state'  # should never happen
-                case NCExecutionState.SUCCESS:
-                    assert tx_meta.voided_by is None
-                case NCExecutionState.FAILURE:
-                    assert tx_meta.voided_by == {tx.hash, NC_EXECUTION_FAIL_ID}
-                case NCExecutionState.SKIPPED:
-                    assert tx_meta.voided_by
-                    assert NC_EXECUTION_FAIL_ID not in tx_meta.voided_by
-                case _:  # pragma: no cover
-                    assert_never(tx_meta.nc_execution)
+        # Compute final root ID without committing
+        final_root_id = block_storage.get_root_id()
+        if not nc_sorted_calls:
+            assert final_root_id == parent_root_id
+        yield NCEndBlock(
+            block=block,
+            block_storage=block_storage,
+            final_root_id=final_root_id,
+        )
 
     def execute_transaction(
         self,
         *,
+        runtime_version: NanoRuntimeVersion,
         tx: Transaction,
         block_storage: 'NCBlockStorage',
         rng_seed: bytes,
-    ) -> NCExecutionResult:
+        should_skip: ShouldSkipPredicate,
+    ) -> NCTxExecutionResult:
         """Execute a single NC transaction.
 
-        This method is pure and side-effect free. It does not persist anything,
-        does not call callbacks, and returns all information needed by the caller
-        to handle success/failure cases."""
-        from hathor.nanocontracts.types import Address
+        On success, changes are committed to block_storage before returning.
+        Does not call callbacks. Returns all information needed by the caller
+        to handle success/failure cases.
 
-        tx_meta = tx.get_metadata()
-        if tx_meta.voided_by:
-            # Skip voided transactions. This might happen if a previous tx in nc_calls fails and
-            # mark this tx as voided.
+        Args:
+            tx: The transaction to execute.
+            block_storage: The block storage for this execution context.
+            rng_seed: The RNG seed for this transaction.
+            should_skip: Predicate to determine if transaction should be skipped.
+        """
+        if should_skip(tx):
+            # Skip transactions based on the caller-provided predicate.
             # Check if seqnum needs to be updated.
             nc_header = tx.get_nano_header()
-            seqnum = block_storage.get_address_seqnum(Address(nc_header.nc_address))
-            seqnum_update: tuple[bytes, int] | None = None
+            nc_address = Address(nc_header.nc_address)
+            seqnum = block_storage.get_address_seqnum(nc_address)
             if nc_header.nc_seqnum > seqnum:
-                seqnum_update = (nc_header.nc_address, nc_header.nc_seqnum)
-            return NCExecutionSkipped(seqnum_update=seqnum_update)
+                block_storage.set_address_seqnum(nc_address, nc_header.nc_seqnum)
+            return NCTxExecutionSkipped(tx=tx)
 
         runner = self._runner_factory.create(
+            runtime_version=runtime_version,
             block_storage=block_storage,
             seed=rng_seed,
         )
 
         try:
-            runner.execute_from_tx(tx)
+            assert isinstance(tx, Transaction)
 
-            # after the execution we have the latest state in the storage
-            # and at this point no tokens pending creation
-            self._verify_sum_after_execution(tx, block_storage)
+            # Check seqnum.
+            nano_header = tx.get_nano_header()
 
+            if nano_header.is_creating_a_new_contract():
+                contract_id = ContractId(VertexId(tx.hash))
+            else:
+                contract_id = ContractId(VertexId(nano_header.nc_id))
+
+            assert nano_header.nc_seqnum >= 0
+            current_seqnum = runner.block_storage.get_address_seqnum(
+                Address(nano_header.nc_address)
+            )
+            diff = nano_header.nc_seqnum - current_seqnum
+            if diff <= 0 or diff > MAX_SEQNUM_JUMP_SIZE:
+                # Fail execution if seqnum is invalid.
+                runner._last_call_info = runner._build_call_info(contract_id)
+                # TODO: Set the seqnum in this case?
+                raise NCFail(f'invalid seqnum (diff={diff})')
+            runner.block_storage.set_address_seqnum(
+                Address(nano_header.nc_address), nano_header.nc_seqnum
+            )
+
+            vertex_metadata = tx.get_metadata()
+            assert vertex_metadata.first_block is not None, (
+                "execute must only be called after first_block is updated"
+            )
+
+            context = nano_header.get_context()
+            assert context.block.hash == vertex_metadata.first_block
+
+            nc_args = NCRawArgs(nano_header.nc_args_bytes)
+            if nano_header.is_creating_a_new_contract():
+                blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
+                runner.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)
+            else:
+                runner.call_public_method_with_nc_args(
+                    contract_id, nano_header.nc_method, context, nc_args
+                )
+
+            # after the execution we have the latest state in the storage + changes tracker
+            # and at this point no tokens pending creation, so we can validate the balances
+            self._verify_transparent_balance_after_execution(tx, block_storage, runner)
         except NCFail as e:
-            return NCExecutionFailure(
-                runner=runner,
+            runner.discard_pending_changes()
+            return NCTxExecutionFailure(
+                tx=tx,
+                call_info=runner.get_last_call_info(),
                 exception=e,
                 traceback=traceback.format_exc(),
             )
 
-        return NCExecutionSuccess(runner=runner)
+        # Commit is intentionally outside the NCFail handling path.
+        # A failure here indicates critical state corruption and must propagate.
+        runner.commit_pending_changes()
 
-    def _verify_sum_after_execution(self, tx: Transaction, block_storage: 'NCBlockStorage') -> None:
-        """Verify token sums after execution for dynamically created tokens."""
+        return NCTxExecutionSuccess(tx=tx, runner=runner)
+
+    def _verify_transparent_balance_after_execution(
+        self,
+        tx: Transaction,
+        block_storage: 'NCBlockStorage',
+        runner: 'Runner',
+    ) -> None:
+        """Run strict verify_sum after execution using uncommitted token overlay visibility."""
+        from hathor.transaction.exceptions import TokenNotFound
         from hathor.verification.transaction_verifier import TransactionVerifier
+
+        created_tokens = runner.collect_created_tokens_from_uncommitted_changes()
+        block_proxy = _UncommittedRestrictedBlockProxy(block_storage, created_tokens=created_tokens)
+        block_proxy_as_storage = cast('NCBlockStorage', block_proxy)
+
         try:
-            token_dict = tx.get_complete_token_info(block_storage)
-            TransactionVerifier.verify_sum(self._settings, tx, token_dict)
+            token_dict = tx.get_complete_token_info(block_proxy_as_storage)
+            TransactionVerifier.verify_transparent_balance(self._settings, tx, token_dict)
         except TokenNotFound as e:
-            # At this point, any nonexistent token would have made a prior validation fail. For example, if there
-            # was a withdrawal of a nonexistent token, it would have failed in the balance validation before.
+            # Missing tokens should have failed in earlier validation paths.
             raise AssertionError from e
         except Exception as e:
             raise NCFail from e

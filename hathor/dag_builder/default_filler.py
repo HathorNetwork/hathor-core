@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
@@ -33,10 +33,10 @@ class DefaultFiller:
     for each transaction that needs that custom token.
     """
 
-    def __init__(self, builder: DAGBuilder, settings: HathorSettings, daa: DifficultyAdjustmentAlgorithm) -> None:
+    def __init__(self, builder: DAGBuilder, settings: HathorSettings, daa_factory: DAAFactory) -> None:
         self._builder = builder
         self._settings = settings
-        self._daa = daa
+        self._daa_factory = daa_factory
 
         # create the dummy and genesis nodes before builder.build() is called
         genesis_block = self._get_or_create_node('genesis_block', default_type=DAGNodeType.Genesis)
@@ -210,7 +210,8 @@ class DefaultFiller:
                     assert set(balance.keys()).issubset({'HTR'})
                     diff = balance.get('HTR', 0)
 
-                    target = self._daa.get_tokens_issued_per_block(1)  # TODO Use the actual height.
+                    # TODO Use the actual height. DAG construction has no chain context, so V1.
+                    target = self._daa_factory.create_v1().get_tokens_issued_per_block(1)
                     assert diff >= 0
                     assert diff <= target
 

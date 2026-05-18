@@ -17,9 +17,10 @@ from hathor.builder import BuildArtifacts, Builder
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.event import EventManager
 from hathor.event.storage import EventStorage
+from hathor.feature_activation.utils import Features
 from hathor.manager import HathorManager
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
 from hathor.p2p.peer import PrivatePeer
@@ -210,7 +211,7 @@ class TestCase(unittest.TestCase):
         settings: HathorSettings | None = None,
     ):  # TODO: Add -> HathorManager here. It breaks the lint in a lot of places.
 
-        settings = (settings or self._settings)._replace(NETWORK_NAME=network)
+        settings = (settings or self._settings).model_copy(update={'NETWORK_NAME': network})
         builder = self.get_builder() \
             .set_settings(settings)
 
@@ -258,8 +259,8 @@ class TestCase(unittest.TestCase):
         if disable_ipv4:
             builder.disable_ipv4()
 
-        daa = DifficultyAdjustmentAlgorithm(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
-        builder.set_daa(daa)
+        daa_factory = DAAFactory(settings=self._settings, test_mode=TestMode.TEST_ALL_WEIGHT)
+        builder.set_daa_factory(daa_factory)
 
         if nc_indexes:
             builder.enable_nc_indexes()
@@ -531,4 +532,4 @@ class TestCase(unittest.TestCase):
     @staticmethod
     def get_verification_params(manager: HathorManager | None = None) -> VerificationParams:
         best_block = manager.tx_storage.get_best_block() if manager else None
-        return VerificationParams.default_for_mempool(best_block=best_block or Mock())
+        return VerificationParams.for_mempool(best_block=best_block or Mock(), features=Features.all_enabled())

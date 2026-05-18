@@ -14,7 +14,7 @@
 
 import tempfile
 from enum import IntEnum
-from typing import Any, Callable, NamedTuple, Optional, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple, Optional, TypeAlias
 
 from structlog import get_logger
 
@@ -22,7 +22,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings as HathorSettingsType
 from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer, PoaSigner
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.event import EventManager
 from hathor.event.storage import EventRocksDBStorage, EventStorage
 from hathor.event.websocket import EventWebsocketFactory
@@ -35,10 +35,11 @@ from hathor.indexes import IndexesManager, RocksDBIndexesManager
 from hathor.manager import HathorManager
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.nanocontracts import NCRocksDBStorageFactory, NCStorageFactory
-from hathor.nanocontracts.catalog import NCBlueprintCatalog
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig, NCLogStorage
 from hathor.nanocontracts.runner.runner import RunnerFactory
 from hathor.nanocontracts.sorter.types import NCSorterCallable
+from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
 from hathor.pubsub import PubSubManager
@@ -55,6 +56,9 @@ from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
+
+if TYPE_CHECKING:
+    from hathor.nanocontracts.execution import NCBlockExecutor
 
 logger = get_logger()
 
@@ -110,7 +114,7 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [Reactor, HathorSettingsType, DifficultyAdjustmentAlgorithm, FeatureService, TransactionStorage],
+    [Reactor, HathorSettingsType, DAAFactory, FeatureService, TransactionStorage, BlueprintService],
     VertexVerifiers
 ]
 
@@ -144,7 +148,7 @@ class Builder:
         self._feature_service: Optional[FeatureService] = None
         self._bit_signaling_service: Optional[BitSignalingService] = None
 
-        self._daa: Optional[DifficultyAdjustmentAlgorithm] = None
+        self._daa_factory: Optional[DAAFactory] = None
         self._cpu_mining_service: Optional[CpuMiningService] = None
 
         self._vertex_verifiers: Optional[VertexVerifiers] = None
@@ -185,13 +189,12 @@ class Builder:
         self._vertex_parser: VertexParser | None = None
         self._consensus: ConsensusAlgorithm | None = None
         self._p2p_manager: ConnectionsManager | None = None
+        self._slots_manager: SlotsManager | None = None
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
 
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
-
-        self._nc_anti_mev: bool = True
 
         self._nc_storage_factory: NCStorageFactory | None = None
         self._nc_log_storage: NCLogStorage | None = None
@@ -199,6 +202,7 @@ class Builder:
         self._nc_log_config: NCLogConfig = NCLogConfig.NONE
 
         self._vertex_json_serializer: VertexJsonSerializer | None = None
+        self._blueprint_service: BlueprintService | None = None
 
     def build(self) -> BuildArtifacts:
         if self.artifacts is not None:
@@ -226,16 +230,14 @@ class Builder:
         feature_service = self._get_or_create_feature_service()
         bit_signaling_service = self._get_or_create_bit_signaling_service()
         verification_service = self._get_or_create_verification_service()
-        daa = self._get_or_create_daa()
+        daa_factory = self._get_or_create_daa_factory()
         cpu_mining_service = self._get_or_create_cpu_mining_service()
         vertex_handler = self._get_or_create_vertex_handler()
         vertex_parser = self._get_or_create_vertex_parser()
         poa_block_producer = self._get_or_create_poa_block_producer()
         runner_factory = self._get_or_create_runner_factory()
         vertex_json_serializer = self._get_or_create_vertex_json_serializer()
-
-        if settings.ENABLE_NANO_CONTRACTS:
-            tx_storage.nc_catalog = self._get_nc_catalog()
+        blueprint_service = self._get_or_create_blueprint_service()
 
         if self._enable_address_index:
             indexes.enable_address_index(pubsub)
@@ -259,7 +261,7 @@ class Builder:
             settings=settings,
             pubsub=pubsub,
             consensus_algorithm=consensus_algorithm,
-            daa=daa,
+            daa_factory=daa_factory,
             peer=peer,
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
@@ -279,6 +281,7 @@ class Builder:
             runner_factory=runner_factory,
             feature_service=feature_service,
             vertex_json_serializer=vertex_json_serializer,
+            blueprint_service=blueprint_service,
             **kwargs
         )
 
@@ -389,12 +392,8 @@ class Builder:
         return self._nc_storage_factory
 
     def _get_nc_calls_sorter(self) -> NCSorterCallable:
-        if self._nc_anti_mev:
-            from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
-            return random_nc_calls_sorter
-        else:
-            from hathor.nanocontracts.sorter.timestamp_sorter import timestamp_nc_calls_sorter
-            return timestamp_nc_calls_sorter
+        from hathor.nanocontracts.sorter.random_sorter import random_nc_calls_sorter
+        return random_nc_calls_sorter
 
     def _get_or_create_nc_log_storage(self) -> NCLogStorage:
         if self._nc_log_storage is not None:
@@ -408,28 +407,32 @@ class Builder:
         )
         return self._nc_log_storage
 
+    def _get_or_create_block_executor(self) -> 'NCBlockExecutor':
+        from hathor.nanocontracts.execution import NCBlockExecutor
+        nc_storage_factory = self._get_or_create_nc_storage_factory()
+        return NCBlockExecutor(
+            settings=self._get_or_create_settings(),
+            runner_factory=self._get_or_create_runner_factory(),
+            nc_storage_factory=nc_storage_factory,
+            nc_calls_sorter=self._get_nc_calls_sorter(),
+            feature_service=self._get_or_create_feature_service(),
+        )
+
     def _get_or_create_consensus(self) -> ConsensusAlgorithm:
         if self._consensus is None:
             soft_voided_tx_ids = self._get_soft_voided_tx_ids()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
-            nc_calls_sorter = self._get_nc_calls_sorter()
             self._consensus = ConsensusAlgorithm(
                 nc_storage_factory=nc_storage_factory,
                 soft_voided_tx_ids=soft_voided_tx_ids,
                 settings=self._get_or_create_settings(),
-                runner_factory=self._get_or_create_runner_factory(),
+                block_executor=self._get_or_create_block_executor(),
                 nc_log_storage=self._get_or_create_nc_log_storage(),
-                nc_calls_sorter=nc_calls_sorter,
                 feature_service=self._get_or_create_feature_service(),
                 tx_storage=self._get_or_create_tx_storage(),
             )
 
         return self._consensus
-
-    def _get_nc_catalog(self) -> NCBlueprintCatalog:
-        from hathor.nanocontracts.catalog import generate_catalog_from_settings
-        settings = self._get_or_create_settings()
-        return generate_catalog_from_settings(settings)
 
     def _get_or_create_runner_factory(self) -> RunnerFactory:
         if self._runner_factory is None:
@@ -438,6 +441,7 @@ class Builder:
                 settings=self._get_or_create_settings(),
                 tx_storage=self._get_or_create_tx_storage(),
                 nc_storage_factory=self._get_or_create_nc_storage_factory(),
+                blueprint_service=self._get_or_create_blueprint_service(),
             )
         return self._runner_factory
 
@@ -467,6 +471,7 @@ class Builder:
         enable_ssl = True
         reactor = self._get_reactor()
         my_peer = self._get_peer()
+        slots_manager = self._get_or_create_slots_manager()
 
         self._p2p_manager = ConnectionsManager(
             settings=self._get_or_create_settings(),
@@ -474,10 +479,10 @@ class Builder:
             my_peer=my_peer,
             pubsub=self._get_or_create_pubsub(),
             ssl=enable_ssl,
-            whitelist_only=False,
             rng=self._rng,
             enable_ipv6=self._enable_ipv6,
             disable_ipv4=self._disable_ipv4,
+            slots_manager=slots_manager
         )
         SyncSupportLevel.add_factories(
             self._get_or_create_settings(),
@@ -609,34 +614,45 @@ class Builder:
             reactor = self._get_reactor()
             settings = self._get_or_create_settings()
             feature_service = self._get_or_create_feature_service()
-            daa = self._get_or_create_daa()
+            daa_factory = self._get_or_create_daa_factory()
             tx_storage = self._get_or_create_tx_storage()
+            blueprint_service = self._get_or_create_blueprint_service()
 
             if self._vertex_verifiers_builder:
                 self._vertex_verifiers = self._vertex_verifiers_builder(
                     reactor,
                     settings,
-                    daa,
+                    daa_factory,
                     feature_service,
-                    tx_storage
+                    tx_storage,
+                    blueprint_service,
                 )
             else:
                 self._vertex_verifiers = VertexVerifiers.create_defaults(
                     reactor=reactor,
                     settings=settings,
-                    daa=daa,
+                    daa_factory=daa_factory,
                     feature_service=feature_service,
                     tx_storage=tx_storage,
+                    blueprint_service=blueprint_service,
                 )
 
         return self._vertex_verifiers
 
-    def _get_or_create_daa(self) -> DifficultyAdjustmentAlgorithm:
-        if self._daa is None:
+    def _get_or_create_daa_factory(self) -> DAAFactory:
+        if self._daa_factory is None:
             settings = self._get_or_create_settings()
-            self._daa = DifficultyAdjustmentAlgorithm(settings=settings)
+            feature_service = self._get_or_create_feature_service()
+            self._daa_factory = DAAFactory(
+                settings=settings,
+                feature_service=feature_service,
+            )
+        elif self._daa_factory._feature_service is None:
+            # A pre-set factory (tests, simulator) may have been built before
+            # feature_service existed; wire it in now so feature-aware DAA selection works.
+            self._daa_factory._feature_service = self._get_or_create_feature_service()
 
-        return self._daa
+        return self._daa_factory
 
     def _get_or_create_cpu_mining_service(self) -> CpuMiningService:
         if self._cpu_mining_service is None:
@@ -684,12 +700,46 @@ class Builder:
         if self._vertex_json_serializer is None:
             tx_storage = self._get_or_create_tx_storage()
             nc_log_storage = self._get_or_create_nc_log_storage()
+            blueprint_service = self._get_or_create_blueprint_service()
             self._vertex_json_serializer = VertexJsonSerializer(
                 storage=tx_storage,
                 nc_log_storage=nc_log_storage,
+                blueprint_service=blueprint_service,
             )
 
         return self._vertex_json_serializer
+
+    def _get_or_create_blueprint_service(self) -> BlueprintService:
+        if self._blueprint_service is None:
+            self._blueprint_service = BlueprintService(
+                settings=self._get_or_create_settings(),
+                tx_storage=self._get_or_create_tx_storage(),
+                feature_service=self._get_or_create_feature_service(),
+            )
+
+        return self._blueprint_service
+
+    def _get_or_create_slots_manager(self) -> SlotsManager:
+        if self._slots_manager:
+            return self._slots_manager
+
+        # Instances of Connection Slots
+        settings = self._get_or_create_settings()
+
+        max_outgoing: int = settings.P2P_PEER_MAX_OUTGOING_CONNECTIONS
+        max_incoming: int = settings.P2P_PEER_MAX_INCOMING_CONNECTIONS
+        max_bootstrap: int = settings.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS
+
+        slots_manager_settings = SlotsManagerSettings(
+            max_outgoing=max_outgoing,
+            max_incoming=max_incoming,
+            max_bootstrap=max_bootstrap,
+        )
+
+        # Connection slots manager -> Kickstarts connection slots
+        slots_manager = SlotsManager(slots_manager_settings)
+
+        return slots_manager
 
     def set_rocksdb_path(self, path: str | tempfile.TemporaryDirectory) -> 'Builder':
         if self._tx_storage:
@@ -806,9 +856,9 @@ class Builder:
         self._vertex_verifiers_builder = builder
         return self
 
-    def set_daa(self, daa: DifficultyAdjustmentAlgorithm) -> 'Builder':
+    def set_daa_factory(self, daa_factory: DAAFactory) -> 'Builder':
         self.check_if_can_modify()
-        self._daa = daa
+        self._daa_factory = daa_factory
         return self
 
     def set_cpu_mining_service(self, cpu_mining_service: CpuMiningService) -> 'Builder':
@@ -849,16 +899,6 @@ class Builder:
     def disable_ipv4(self) -> 'Builder':
         self.check_if_can_modify()
         self._disable_ipv4 = True
-        return self
-
-    def enable_nc_anti_mev(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._nc_anti_mev = True
-        return self
-
-    def disable_nc_anti_mev(self) -> 'Builder':
-        self.check_if_can_modify()
-        self._nc_anti_mev = False
         return self
 
     def set_soft_voided_tx_ids(self, soft_voided_tx_ids: set[bytes]) -> 'Builder':

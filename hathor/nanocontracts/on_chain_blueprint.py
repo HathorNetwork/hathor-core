@@ -31,6 +31,7 @@ from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.exception import OCBOutOfFuelDuringLoading, OCBOutOfMemoryDuringLoading
 from hathor.nanocontracts.method import Method
 from hathor.nanocontracts.types import BLUEPRINT_EXPORT_NAME, BlueprintId, blueprint_id_from_bytes
+from hathor.serialization import Serializer
 from hathor.transaction import Transaction, TxInput, TxOutput, TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes, unpack, unpack_len
 
@@ -184,11 +185,41 @@ class OnChainBlueprint(Transaction):
 
         self.code: Code = code if code is not None else Code(CodeKind.PYTHON_ZLIB, b'', self._settings)
         self._ast_cache: Optional[ast.Module] = None
-        self._blueprint_loaded_env: Optional[tuple[type[Blueprint], dict[str, object]]] = None
 
     def blueprint_id(self) -> BlueprintId:
         """The blueprint's contract-id is it's own tx-id, this helper method just converts to the right type."""
         return blueprint_id_from_bytes(self.hash)
+
+    @classmethod
+    @override
+    def create_from_struct(cls, struct_bytes: bytes, storage: Optional['TransactionStorage'] = None,
+                           *, verbose: VerboseCallback = None) -> Self:
+        from hathor.transaction.vertex_parser._common import deserialize_graph_fields, make_vertex_deserializer
+        from hathor.transaction.vertex_parser._headers import deserialize_headers
+        from hathor.transaction.vertex_parser._on_chain_blueprint import deserialize_ocb_extra_fields
+        from hathor.transaction.vertex_parser._transaction import deserialize_tx_funds
+        settings = get_global_settings()
+        tx = cls(storage=storage)
+        deserializer = make_vertex_deserializer(struct_bytes, settings)
+        deserialize_tx_funds(deserializer, tx, verbose=verbose)
+        deserialize_ocb_extra_fields(deserializer, tx, verbose=verbose)
+        deserialize_graph_fields(deserializer, tx, verbose=verbose)
+        (tx.nonce,) = deserializer.read_struct('!I')
+        if verbose:
+            verbose('nonce', tx.nonce)
+        deserialize_headers(deserializer, tx, settings)
+        deserializer.finalize()
+        tx.update_hash()
+        return tx
+
+    @override
+    def get_funds_struct(self) -> bytes:
+        from hathor.transaction.vertex_parser._on_chain_blueprint import serialize_ocb_extra_fields
+        from hathor.transaction.vertex_parser._transaction import serialize_tx_funds
+        serializer = Serializer.build_bytes_serializer()
+        serialize_tx_funds(serializer, self)
+        serialize_ocb_extra_fields(serializer, self, skip_signature=False)
+        return bytes(serializer.finalize())
 
     def _load_blueprint_code_exec(self) -> tuple[object, dict[str, object]]:
         """XXX: DO NOT CALL THIS METHOD UNLESS YOU REALLY KNOW WHAT IT DOES."""
@@ -209,12 +240,10 @@ class OnChainBlueprint(Transaction):
 
     def _load_blueprint_code(self) -> tuple[type[Blueprint], dict[str, object]]:
         """This method loads the on-chain code (if not loaded) and returns the blueprint class and env."""
-        if self._blueprint_loaded_env is None:
-            blueprint_class, env = self._load_blueprint_code_exec()
-            assert isinstance(blueprint_class, type)
-            assert issubclass(blueprint_class, Blueprint)
-            self._blueprint_loaded_env = blueprint_class, env
-        return self._blueprint_loaded_env
+        blueprint_class, env = self._load_blueprint_code_exec()
+        assert isinstance(blueprint_class, type)
+        assert issubclass(blueprint_class, Blueprint)
+        return blueprint_class, env
 
     def get_blueprint_object_bypass(self) -> object:
         """Loads the code and returns the object exported with @export"""
@@ -257,55 +286,6 @@ class OnChainBlueprint(Transaction):
             verbose('serialized_code', serialized_code)
         code = Code.from_bytes(serialized_code, settings)
         return code, buf
-
-    def _serialize_ocb(self, *, skip_signature: bool = False) -> bytes:
-        buf = bytearray()
-        buf += self.serialize_code()
-        buf += int_to_bytes(len(self.nc_pubkey), 1)
-        buf += self.nc_pubkey
-        if not skip_signature:
-            buf += int_to_bytes(len(self.nc_signature), 1)
-            buf += self.nc_signature
-        else:
-            buf += int_to_bytes(0, 1)
-        return bytes(buf)
-
-    @override
-    def get_funds_struct(self) -> bytes:
-        struct_bytes = super().get_funds_struct()
-        struct_bytes += self._serialize_ocb()
-        return struct_bytes
-
-    @override
-    def get_sighash_all(self, *, skip_cache: bool = False) -> bytes:
-        if not skip_cache and self._sighash_cache:
-            return self._sighash_cache
-        struct_bytes = super().get_sighash_all(skip_cache=True)
-        struct_bytes += self._serialize_ocb(skip_signature=True)
-        self._sighash_cache = struct_bytes
-        return struct_bytes
-
-    @override
-    def get_funds_fields_from_struct(self, buf: bytes, *, verbose: VerboseCallback = None) -> bytes:
-        buf = super().get_funds_fields_from_struct(buf, verbose=verbose)
-
-        code, buf = OnChainBlueprint.deserialize_code(buf, verbose=verbose)
-        self.code = code
-
-        (nc_pubkey_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('nc_pubkey_len', nc_pubkey_len)
-        self.nc_pubkey, buf = unpack_len(nc_pubkey_len, buf)
-        if verbose:
-            verbose('nc_pubkey', self.nc_pubkey)
-        (nc_signature_len,), buf = unpack('!B', buf)
-        if verbose:
-            verbose('nc_signature_len', nc_signature_len)
-        self.nc_signature, buf = unpack_len(nc_signature_len, buf)
-        if verbose:
-            verbose('nc_signature', self.nc_signature)
-
-        return buf
 
     @override
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:

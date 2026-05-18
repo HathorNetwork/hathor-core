@@ -148,8 +148,8 @@ class NanoContractHistoryResource(Resource):
 
 class NCHistoryParams(QueryParams):
     id: str
-    after: Optional[str]
-    before: Optional[str]
+    after: Optional[str] = None
+    before: Optional[str] = None
     count: int = Field(default=100, lt=500)
     order: SortOrder = SortOrder.DESC
     include_nc_logs: bool = Field(default=False)

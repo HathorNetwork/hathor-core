@@ -30,7 +30,7 @@ class EmitEventWithDictBlueprint(Blueprint):
 class EmitEventPayloadTestCase(BlueprintTestCase):
     def build_manager(self) -> HathorManager:
         # Lower reward spend requirement to avoid reward-lock interference in this focused test.
-        settings = self._settings._replace(REWARD_SPEND_MIN_BLOCKS=1)
+        settings = self._settings.model_copy(update={"REWARD_SPEND_MIN_BLOCKS": 1})
         return self.create_peer(
             'unittests',
             nc_indexes=True,

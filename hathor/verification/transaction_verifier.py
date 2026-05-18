@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
 from hathor.reward_lock import get_spent_reward_locked_info
@@ -49,6 +49,7 @@ from hathor.transaction.exceptions import (
     UnusedTokensError,
     WeightError,
 )
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -65,17 +66,17 @@ MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa', '_feature_service')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service')
 
     def __init__(
         self,
         *,
         settings: HathorSettings,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         feature_service: FeatureService,
     ) -> None:
         self._settings = settings
-        self._daa = daa
+        self._daa_factory = daa_factory
         self._feature_service = feature_service
 
     def verify_parents_basic(self, tx: Transaction) -> None:
@@ -93,12 +94,12 @@ class TransactionVerifier:
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
-        min_tx_weight = self._daa.minimum_tx_weight(tx)
+        min_tx_weight = self._daa_factory.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'smaller than the minimum weight ({min_tx_weight})')
-        elif min_tx_weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
+        elif tx.weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
 
@@ -122,7 +123,7 @@ class TransactionVerifier:
             if tx_input.index >= len(spent_tx.outputs):
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.outputs[tx_input.index].script)
+            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.resolve_spent_output(tx_input.index).script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
@@ -130,14 +131,14 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, params: VerificationParams, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        self._verify_inputs(self._settings, tx, params, skip_script=skip_script)
+        self._verify_inputs(self._settings, tx, params.features.opcodes_version, skip_script=skip_script)
 
     @classmethod
     def _verify_inputs(
         cls,
         settings: HathorSettings,
         tx: Transaction,
-        params: VerificationParams,
+        opcodes_version: OpcodesVersion,
         *,
         skip_script: bool,
     ) -> None:
@@ -160,7 +161,7 @@ class TransactionVerifier:
                 ))
 
             if not skip_script:
-                cls.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx, params=params)
+                cls.verify_script(tx=tx, input_tx=input_tx, spent_tx=spent_tx, opcodes_version=opcodes_version)
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
@@ -175,7 +176,7 @@ class TransactionVerifier:
         tx: Transaction,
         input_tx: TxInput,
         spent_tx: BaseTransaction,
-        params: VerificationParams,
+        opcodes_version: OpcodesVersion,
     ) -> None:
         """
         :type tx: Transaction
@@ -184,7 +185,7 @@ class TransactionVerifier:
         """
         from hathor.transaction.scripts import script_eval
         try:
-            script_eval(tx, input_tx, spent_tx, params.features.opcodes_version)
+            script_eval(tx, input_tx, spent_tx, opcodes_version)
         except ScriptError as e:
             raise InvalidInputData(e) from e
 
@@ -255,7 +256,7 @@ class TransactionVerifier:
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     @classmethod
-    def verify_sum(
+    def verify_transparent_balance(
         cls,
         settings: HathorSettings,
         tx: Transaction,

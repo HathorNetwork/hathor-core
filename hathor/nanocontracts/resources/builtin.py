@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterator
+from typing import Iterator, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 from sortedcontainers import SortedKeyList
 from twisted.web.http import Request
 
@@ -50,8 +50,7 @@ class BlueprintBuiltinResource(Resource):
               success=False, error='Parameters after and before can\'t be used together.')
             return error_response.json_dumpb()
 
-        assert self.manager.tx_storage.nc_catalog is not None
-        builtin_bps = list(self.manager.tx_storage.nc_catalog.blueprints.items())
+        builtin_bps = list(self.manager.blueprint_service.nc_catalog.get_all().items())
 
         filtered_bps = builtin_bps
         if params.search:
@@ -100,9 +99,11 @@ class BlueprintBuiltinResource(Resource):
         return response.json_dumpb()
 
 
-class BuiltinBlueprintsParams(QueryParams, use_enum_values=True):
-    before: str | None
-    after: str | None
+class BuiltinBlueprintsParams(QueryParams):
+    model_config = ConfigDict(use_enum_values=True)
+
+    before: str | None = None
+    after: str | None = None
     count: int = Field(default=10, gt=0, le=100)
     search: str | None = None
 
@@ -113,7 +114,7 @@ class BuiltinBlueprintItem(Response):
 
 
 class BuiltinBlueprintsResponse(Response):
-    success: bool = Field(default=True, const=True)
+    success: Literal[True] = True
     blueprints: list[BuiltinBlueprintItem]
     before: str | None
     after: str | None

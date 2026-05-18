@@ -47,7 +47,7 @@ class DAGBuilderTestCase(unittest.TestCase):
             .set_cpu_mining_service(cpu_mining_service)
 
         self.manager = self.create_peer_from_builder(builder)
-        self.nc_catalog = self.manager.tx_storage.nc_catalog
+        self.blueprint_service = self.manager.blueprint_service
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
     def test_one_tx(self) -> None:
@@ -249,7 +249,7 @@ class DAGBuilderTestCase(unittest.TestCase):
 
     def test_nc_transactions(self) -> None:
         blueprint_id = b'x' * 32
-        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        self.blueprint_service.register_blueprint(blueprint_id, MyBlueprint)
 
         artifacts = self.dag_builder.build_from_str(f"""
             blockchain genesis a[0..40]
@@ -409,17 +409,17 @@ if foo:
 
         assert ocb1.get_blueprint_class().__name__ == 'Bet'
         assert nc1.get_nano_header().nc_id == ocb1.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb1.hash)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(ocb1.hash)
         assert blueprint_class.__name__ == 'Bet'
 
         assert ocb2.get_blueprint_class().__name__ == 'TestBlueprint1'
         assert nc2.get_nano_header().nc_id == ocb2.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb2.hash)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(ocb2.hash)
         assert blueprint_class.__name__ == 'TestBlueprint1'
 
         assert ocb3.get_blueprint_class().__name__ == 'MyBlueprint'
         assert nc3.get_nano_header().nc_id == ocb3.hash
-        blueprint_class = self.manager.tx_storage.get_blueprint_class(ocb3.hash)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(ocb3.hash)
         assert blueprint_class.__name__ == 'MyBlueprint'
 
     def test_fee_based_token(self) -> None:
@@ -483,7 +483,7 @@ if foo:
 
     def test_fee_and_nano_headers(self) -> None:
         blueprint_id = b'x' * 32
-        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        self.blueprint_service.register_blueprint(blueprint_id, MyBlueprint)
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy
@@ -526,7 +526,7 @@ if foo:
     def test_token_id(self) -> None:
         token_id = b'y' * 32
         blueprint_id = b'x' * 32
-        self.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        self.blueprint_service.register_blueprint(blueprint_id, MyBlueprint)
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy

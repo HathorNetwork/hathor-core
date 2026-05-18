@@ -14,10 +14,8 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Sequence
-
 from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
     NCFail,
@@ -38,9 +36,7 @@ from hathor.nanocontracts.types import (
     BaseAuthorityAction,
     BlueprintId,
     ContractId,
-    NCAction,
     NCActionType,
-    TokenUid,
 )
 from hathor.nanocontracts.utils import is_nc_public_method
 from hathor.transaction import BaseTransaction, Transaction
@@ -48,40 +44,37 @@ from hathor.transaction.exceptions import ScriptError, TooManySigOps
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts import SigopCounter, create_output_script
 from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.nanocontracts.verification import verify_action_list
 
 MAX_SEQNUM_DIFF_MEMPOOL = MAX_SEQNUM_JUMP_SIZE + 30
 
 MAX_NC_SCRIPT_SIZE: int = 1024
 MAX_NC_SCRIPT_SIGOPS_COUNT: int = 20
-MAX_ACTIONS_LEN: int = 16
-ALLOWED_ACTION_SETS: frozenset[frozenset[NCActionType]] = frozenset([
-    frozenset(),
-    frozenset([NCActionType.DEPOSIT]),
-    frozenset([NCActionType.WITHDRAWAL]),
-    frozenset([NCActionType.GRANT_AUTHORITY]),
-    frozenset([NCActionType.ACQUIRE_AUTHORITY]),
-    frozenset([NCActionType.DEPOSIT, NCActionType.GRANT_AUTHORITY]),
-    frozenset([NCActionType.DEPOSIT, NCActionType.ACQUIRE_AUTHORITY]),
-    frozenset([NCActionType.WITHDRAWAL, NCActionType.GRANT_AUTHORITY]),
-    frozenset([NCActionType.WITHDRAWAL, NCActionType.ACQUIRE_AUTHORITY]),
-])
 
 
 class NanoHeaderVerifier:
-    __slots__ = ('_settings', '_tx_storage')
+    __slots__ = ('_settings', '_tx_storage', 'blueprint_service')
 
-    def __init__(self, *, settings: HathorSettings, tx_storage: TransactionStorage) -> None:
+    def __init__(
+        self,
+        *,
+        settings: HathorSettings,
+        tx_storage: TransactionStorage,
+        blueprint_service: BlueprintService,
+    ) -> None:
         self._settings = settings
         self._tx_storage = tx_storage
+        self.blueprint_service = blueprint_service
 
     def verify_nc_signature(self, tx: BaseTransaction, params: VerificationParams) -> None:
         """Verify if the caller's signature is valid."""
-        self._verify_nc_signature(self._settings, tx, params)
+        self._verify_nc_signature(self._settings, tx, params.features.opcodes_version)
 
     @staticmethod
-    def _verify_nc_signature(settings: HathorSettings, tx: BaseTransaction, params: VerificationParams) -> None:
+    def _verify_nc_signature(settings: HathorSettings, tx: BaseTransaction, opcodes_version: OpcodesVersion) -> None:
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
 
@@ -107,13 +100,13 @@ class NanoHeaderVerifier:
             raw_script_eval(
                 input_data=nano_header.nc_script,
                 output_script=output_script,
-                extras=ScriptExtras(tx=tx, version=params.features.opcodes_version)
+                extras=ScriptExtras(tx=tx, version=opcodes_version)
             )
         except ScriptError as e:
             raise NCInvalidSignature from e
 
     @staticmethod
-    def verify_actions(tx: BaseTransaction) -> None:
+    def verify_actions(tx: BaseTransaction, params: VerificationParams) -> None:
         """Verify nc_actions."""
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
@@ -121,7 +114,7 @@ class NanoHeaderVerifier:
         tx_tokens_set = set(tx.tokens)
         nano_header = tx.get_nano_header()
         actions = nano_header.get_actions()
-        NanoHeaderVerifier.verify_action_list(actions)
+        verify_action_list(actions, restrict_dup_actions=params.features.restrict_dup_actions)
 
         for action in actions:
             if isinstance(action, BaseAuthorityAction):
@@ -132,21 +125,6 @@ class NanoHeaderVerifier:
                 raise NCInvalidAction(
                     f'{action.name} action requires token {action.token_uid.hex()} in tokens list'
                 )
-
-    @staticmethod
-    def verify_action_list(actions: Sequence[NCAction]) -> None:
-        """Perform NCAction verifications that do not depend on the tx."""
-        if len(actions) > MAX_ACTIONS_LEN:
-            raise NCInvalidAction(f'more actions than the max allowed: {len(actions)} > {MAX_ACTIONS_LEN}')
-
-        actions_map: defaultdict[TokenUid, list[NCAction]] = defaultdict(list)
-        for action in actions:
-            actions_map[action.token_uid].append(action)
-
-        for token_uid, actions_per_token in actions_map.items():
-            action_types = {action.type for action in actions_per_token}
-            if action_types not in ALLOWED_ACTION_SETS:
-                raise NCInvalidAction(f'conflicting actions for token {token_uid.hex()}')
 
     def verify_method_call(self, tx: BaseTransaction, params: VerificationParams) -> None:
         if not params.harden_nano_restrictions:
@@ -173,7 +151,7 @@ class NanoHeaderVerifier:
             allow_fallback = True
 
         try:
-            blueprint_class = self._tx_storage.get_blueprint_class(blueprint_id)
+            blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
         except NCFail as e:
             raise NCTxValidationError from e
 

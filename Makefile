@@ -47,9 +47,9 @@ tests-quick:
 
 .PHONY: tests-genesis
 tests-genesis:
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/mainnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/testnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
-	HATHOR_TEST_CONFIG_YAML='./hathor/conf/nano_testnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathorlib/hathorlib/conf/mainnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathorlib/hathorlib/conf/testnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
+	HATHOR_TEST_CONFIG_YAML='./hathorlib/hathorlib/conf/nano_testnet.yml' pytest -n0 hathor_tests/tx/test_genesis.py
 
 .PHONY: tests-ci
 tests-ci:
@@ -76,13 +76,16 @@ mypy:
 dmypy:
 	dmypy run --timeout 86400 -- -p hathor -p hathor_tests -p extras.custom_tests
 
+.PHONY: ruff
+ruff:
+	ruff check $(py_sources)
+
 .PHONY: flake8
-flake8:
-	flake8 $(py_sources)
+flake8: ruff
 
 .PHONY: isort-check
 isort-check:
-	isort --ac --check-only $(py_sources)
+	ruff check $(py_sources) --select I
 
 .PHONY: yamllint
 yamllint:
@@ -92,20 +95,28 @@ yamllint:
 check-custom:
 	bash ./extras/custom_checks.sh
 
+.PHONY: check-version
+check-version:
+	bash ./extras/custom_checks.sh check_version_match
+
 .PHONY: check
-check: check-custom yamllint flake8 isort-check mypy
+check: check-custom yamllint ruff mypy
 
 .PHONY: dcheck
-dcheck: check-custom yamllint flake8 isort-check dmypy
+dcheck: check-custom yamllint ruff dmypy
 
 # formatting:
 
 .PHONY: fmt
 fmt: isort
 
+.PHONY: ruff-fmt
+ruff-fmt:
+	ruff format hathor/ hathor_tests/ extras/custom_tests/ hathor_cli/
+
 .PHONY: isort
 isort:
-	isort --ac $(py_sources)
+	ruff check $(py_sources) --select I --fix
 
 # generation:
 

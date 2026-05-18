@@ -25,6 +25,7 @@ from hathor.transaction.base_transaction import BaseTransaction
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.conf.settings import HathorSettings
     from hathor.indexes.manager import IndexesManager
+    from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
 
@@ -44,6 +45,18 @@ class BaseIndex(ABC):
 
         It comes with a no-op implementation by default because usually indexes will not need this.
         """
+        pass
+
+    def still_needs_initialization(self, tx_storage: 'TransactionStorage') -> bool:
+        """Return whether this index still needs to receive transactions during initialization.
+
+        This is called after ``init_start`` and after the index has been cleared, so indexes can use persisted
+        metadata to skip a known unnecessary rebuild.
+        """
+        return True
+
+    def init_finish(self, tx_storage: 'TransactionStorage') -> None:
+        """Called after initialization finishes for indexes selected at the beginning of initialization."""
         pass
 
     @abstractmethod

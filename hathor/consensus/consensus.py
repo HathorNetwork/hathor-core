@@ -26,21 +26,21 @@ from hathor.consensus.transaction_consensus import TransactionConsensusAlgorithm
 from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.feature import Feature
 from hathor.nanocontracts.exception import NCInvalidSignature
-from hathor.nanocontracts.execution import NCBlockExecutor
+from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
+from hathor.nanocontracts.execution.consensus_block_executor import assert_final_nc_state
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooManySigOps
+from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
-from hathor.verification.verification_params import VerificationParams
+from hathorlib.nanocontracts.exception import NCInvalidAction
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.feature_activation.feature_service import FeatureService
     from hathor.nanocontracts import NCStorageFactory
     from hathor.nanocontracts.nc_exec_logs import NCLogStorage
-    from hathor.nanocontracts.runner.runner import RunnerFactory
-    from hathor.nanocontracts.sorter.types import NCSorterCallable
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
@@ -88,8 +88,7 @@ class ConsensusAlgorithm:
         *,
         settings: HathorSettings,
         tx_storage: TransactionStorage,
-        runner_factory: RunnerFactory,
-        nc_calls_sorter: NCSorterCallable,
+        block_executor: NCBlockExecutor,
         nc_log_storage: NCLogStorage,
         feature_service: FeatureService,
         nc_exec_fail_trace: bool = False,
@@ -100,21 +99,23 @@ class ConsensusAlgorithm:
         self.nc_storage_factory = nc_storage_factory
         self.soft_voided_tx_ids = frozenset(soft_voided_tx_ids)
 
-        # Create NCBlockExecutor with all NC-related dependencies
-        self._block_executor = NCBlockExecutor(
+        # NCBlockExecutor is a pure executor that yields effects without applying them.
+        # It is created by the builder and injected here.
+        self.block_executor = block_executor
+
+        # Create NCConsensusBlockExecutor (with side effects) for consensus
+        self._consensus_block_executor = NCConsensusBlockExecutor(
             settings=settings,
-            runner_factory=runner_factory,
+            block_executor=self.block_executor,
             nc_storage_factory=nc_storage_factory,
             nc_log_storage=nc_log_storage,
-            nc_calls_sorter=nc_calls_sorter,
             nc_exec_fail_trace=nc_exec_fail_trace,
         )
 
         self.block_algorithm_factory = BlockConsensusAlgorithmFactory(
-            settings, self._block_executor, feature_service,
+            settings, self._consensus_block_executor, feature_service,
         )
         self.transaction_algorithm_factory = TransactionConsensusAlgorithmFactory()
-        self.nc_calls_sorter = nc_calls_sorter
         self.feature_service = feature_service
 
     def create_context(self) -> ConsensusAlgorithmContext:
@@ -212,8 +213,12 @@ class ConsensusAlgorithm:
                 )
             ))
 
-        # finally signal an index update for all affected transactions
+        # finally signal an index update for all affected transactions and perform integrity asserts
         for tx_affected in _sorted_affected_txs(context.txs_affected):
+            if isinstance(tx_affected, Transaction):
+                context.transaction_algorithm.assert_valid_consensus(tx_affected)
+                if tx_affected.is_nano_contract():
+                    assert_final_nc_state(tx_affected)
             self.tx_storage.indexes.update_critical_indexes(tx_affected)
             with non_critical_code(self.log):
                 self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
@@ -447,10 +452,18 @@ class ConsensusAlgorithm:
                     if not self._checkdatasig_count_rule(tx):
                         return False
                 case Feature.OPCODES_V2:
-                    if not self._opcodes_v2_activation_rule(tx, new_best_block):
+                    if not self._opcodes_v2_activation_rule(tx):
                         return False
+                case Feature.RESTRICT_DUP_ACTIONS:
+                    if not self._restrict_dup_actions_rule(tx):
+                        return False
+                case Feature.REDUCE_DAA_TARGET:
+                    # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
+                    pass
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
+                    | Feature.FAILED_FEE_TOKENS
+                    | Feature.FAILED_OPCODES_V2
                     | Feature.NOP_FEATURE_1
                     | Feature.NOP_FEATURE_2
                     | Feature.NOP_FEATURE_3
@@ -515,7 +528,7 @@ class ConsensusAlgorithm:
             return False
         return True
 
-    def _opcodes_v2_activation_rule(self, tx: Transaction, new_best_block: Block) -> bool:
+    def _opcodes_v2_activation_rule(self, tx: Transaction) -> bool:
         """Check whether a tx became invalid because of the opcodes V2 feature."""
         from hathor.verification.nano_header_verifier import NanoHeaderVerifier
         from hathor.verification.transaction_verifier import TransactionVerifier
@@ -523,12 +536,12 @@ class ConsensusAlgorithm:
         # We check all txs regardless of the feature state, because this rule
         # already prohibited mempool txs before the block feature activation.
 
-        params = VerificationParams.default_for_mempool(best_block=new_best_block)
+        opcodes_version = OpcodesVersion.V2
 
         # Any exception in the inputs verification will be considered
         # a fail and the tx will be removed from the mempool.
         try:
-            TransactionVerifier._verify_inputs(self._settings, tx, params, skip_script=False)
+            TransactionVerifier._verify_inputs(self._settings, tx, opcodes_version, skip_script=False)
         except Exception as e:
             if not isinstance(e, InvalidInputData):
                 self.log.exception('unexpected exception in mempool-reverification')
@@ -538,12 +551,31 @@ class ConsensusAlgorithm:
         # a fail and the tx will be removed from the mempool.
         if tx.is_nano_contract():
             try:
-                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, params)
+                NanoHeaderVerifier._verify_nc_signature(self._settings, tx, opcodes_version)
             except Exception as e:
                 if not isinstance(e, NCInvalidSignature):
                     self.log.exception('unexpected exception in mempool-reverification')
                 return False
 
+        return True
+
+    def _restrict_dup_actions_rule(self, tx: Transaction) -> bool:
+        from hathorlib.nanocontracts.verification import verify_action_list
+        if not tx.is_nano_contract():
+            return True
+
+        nano_header = tx.get_nano_header()
+
+        # We check all nano txs regardless of the feature state, because this rule
+        # already prohibited mempool txs before the block feature activation.
+        # Any exception in the verification will be considered a fail and
+        # the tx will be removed from the mempool.
+        try:
+            verify_action_list(nano_header.get_actions(), restrict_dup_actions=True)
+        except Exception as e:
+            if not isinstance(e, NCInvalidAction):
+                self.log.exception('unexpected exception in mempool-reverification')
+            return False
         return True
 
 

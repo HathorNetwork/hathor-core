@@ -193,7 +193,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_propagate(self):
-        self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
+        self.manager.daa_factory.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         src_tx = self.unspent_tx
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         resp = (yield self.web.post('create_tx', {
@@ -231,7 +231,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_tx_propagate_multiple_inputs(self):
-        self.manager.daa.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
+        self.manager.daa_factory.TEST_MODE = TestMode.DISABLED  # disable test_mode so the weight is not 1
         output_address = 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A'
         resp = (yield self.web.post('create_tx', {
             'inputs': [

@@ -49,7 +49,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         self.web = StubSite(NCCreationResource(self.manager))
         self.genesis_private_key = get_genesis_key()
         self.builtin_bet_blueprint_id = BlueprintId(self.manager.rng.randbytes(32))
-        self.manager.tx_storage.nc_catalog.blueprints[self.builtin_bet_blueprint_id] = Bet
+        self.manager.blueprint_service.register_blueprint(self.builtin_bet_blueprint_id, Bet)
 
     def prepare_ncs(self) -> tuple[Transaction, Transaction, Transaction, Transaction, Transaction]:
         bet_code = load_builtin_blueprint_for_ocb('bet.py', 'Bet', test_blueprints)
@@ -107,11 +107,10 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
         return nc1, nc2, nc3, nc4, nc5
 
     def nc_to_response_item(self, nc: Transaction) -> dict[str, Any]:
-        assert nc.storage is not None
         assert nc.is_nano_contract()
         nano_header = nc.get_nano_header()
         blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
-        blueprint_class = nc.storage.get_blueprint_class(blueprint_id)
+        blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
         return dict(
             nano_contract_id=nc.hash_hex,
             blueprint_id=blueprint_id.hex(),
@@ -583,7 +582,7 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
 
     async def test_contract_create_contract(self) -> None:
         blueprint_id = BlueprintId(self.rng.randbytes(32))
-        self.manager.tx_storage.nc_catalog.blueprints[blueprint_id] = MyBlueprint
+        self.manager.blueprint_service.register_blueprint(blueprint_id, MyBlueprint)
 
         dag_builder = TestDAGBuilder.from_manager(self.manager)
         artifacts = dag_builder.build_from_str(f'''

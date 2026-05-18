@@ -15,10 +15,10 @@
 """
 Module for abstractions around generating mining templates.
 """
-
 from typing import Iterable, NamedTuple, Optional, TypeVar, cast
 
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.util import Random
@@ -42,7 +42,7 @@ class BlockTemplate(NamedTuple):
     def generate_minimally_valid_block(self) -> BaseTransaction:
         """ Generates a block, without any extra information that is valid for this template. No random choices."""
         from hathor.transaction import TxOutput, TxVersion
-        return TxVersion(min(self.versions)).get_cls()(
+        return get_cls_from_tx_version(TxVersion(min(self.versions)))(
             timestamp=self.timestamp_min,
             parents=self.parents[:] + sorted(self.parents_any)[:(3 - len(self.parents))],
             outputs=[TxOutput(self.reward, b'')],

@@ -54,7 +54,7 @@ from typing_extensions import Self
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.p2p.utils import discover_dns, generate_certificate
@@ -152,7 +152,7 @@ class PeerInfo:
                 if protocol.entrypoint.addr == entrypoint:
                     return True
                 # TODO: don't use `daa.TEST_MODE` for this
-                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+                test_mode = not_none(DAAFactory.singleton).TEST_MODE
                 result = await discover_dns(entrypoint.host, test_mode)
                 if protocol.entrypoint.addr in [endpoint.addr for endpoint in result]:
                     return True
@@ -168,7 +168,7 @@ class PeerInfo:
                 # So we must consider that the entrypoint could be in name format and we just validate the host
                 if connection_host == entrypoint.host:
                     return True
-                test_mode = not_none(DifficultyAdjustmentAlgorithm.singleton).TEST_MODE
+                test_mode = not_none(DAAFactory.singleton).TEST_MODE
                 result = await discover_dns(entrypoint.host, test_mode)
                 if connection_host in [entrypoint.addr.host for entrypoint in result]:
                     return True

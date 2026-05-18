@@ -29,7 +29,7 @@ from hathor.checkpoint import Checkpoint
 from hathor.conf.settings import HathorSettings
 from hathor.consensus import ConsensusAlgorithm
 from hathor.consensus.poa import PoaBlockProducer
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.event.event_manager import EventManager
 from hathor.exception import (
     BlockTemplateTimestampError,
@@ -43,14 +43,15 @@ from hathor.exception import (
 from hathor.execution_manager import ExecutionManager
 from hathor.feature_activation.bit_signaling_service import BitSignalingService
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.mining import BlockTemplate, BlockTemplates
 from hathor.mining.cpu_mining_service import CpuMiningService
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.runner.runner import RunnerFactory
-from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage
+from hathor.nanocontracts.storage import NCBlockStorage, NCContractStorage, get_block_storage_from_block
 from hathor.p2p.manager import ConnectionsManager
 from hathor.p2p.peer import PrivatePeer
-from hathor.p2p.peer_id import PeerId
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.reward_lock import is_spent_reward_locked
@@ -102,7 +103,7 @@ class HathorManager:
         settings: HathorSettings,
         pubsub: PubSubManager,
         consensus_algorithm: ConsensusAlgorithm,
-        daa: DifficultyAdjustmentAlgorithm,
+        daa_factory: DAAFactory,
         peer: PrivatePeer,
         tx_storage: TransactionStorage,
         p2p_manager: ConnectionsManager,
@@ -116,6 +117,7 @@ class HathorManager:
         runner_factory: RunnerFactory,
         feature_service: FeatureService,
         vertex_json_serializer: VertexJsonSerializer,
+        blueprint_service: BlueprintService,
         hostname: Optional[str] = None,
         wallet: Optional[BaseWallet] = None,
         capabilities: Optional[list[str]] = None,
@@ -144,7 +146,7 @@ class HathorManager:
 
         self._execution_manager = execution_manager
         self._settings = settings
-        self.daa = daa
+        self.daa_factory = daa_factory
         self._cmd_path: Optional[str] = None
 
         self.log = logger.new()
@@ -206,6 +208,7 @@ class HathorManager:
         self.runner_factory = runner_factory
         self.feature_service = feature_service
         self.vertex_json_serializer = vertex_json_serializer
+        self.blueprint_service = blueprint_service
 
         self.websocket_factory = websocket_factory
 
@@ -233,9 +236,6 @@ class HathorManager:
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
-        # List of whitelisted peers
-        self.peers_whitelist: list[PeerId] = []
-
         # List of capabilities of the peer
         if capabilities is not None:
             self.capabilities = capabilities
@@ -251,6 +251,10 @@ class HathorManager:
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
         self.lc_check_sync_state.clock = self.reactor
         self.lc_check_sync_state_interval = self.CHECK_SYNC_STATE_INTERVAL
+
+        # Temporary check to make sure the htr_lib integration works in production.
+        import htr_lib
+        assert htr_lib.sum_as_string(1, 2) == '3'
 
     def _subscribe_wallet(self, wallet: BaseWallet) -> None:
         """Register a wallet on pubsub."""
@@ -409,8 +413,10 @@ class HathorManager:
     def get_nc_runner(self, block: Block) -> Runner:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
-        block_storage = nc_storage_factory.get_block_storage_from_block(block)
+        block_storage = get_block_storage_from_block(nc_storage_factory, block)
+        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=block)
         return self.runner_factory.create(
+            runtime_version=features.nano_runtime_version,
             block_storage=block_storage,
         )
 
@@ -421,7 +427,7 @@ class HathorManager:
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return the nano block storage for a given block."""
-        return self.consensus_algorithm.nc_storage_factory.get_block_storage_from_block(block)
+        return get_block_storage_from_block(self.consensus_algorithm.nc_storage_factory, block)
 
     def get_nc_storage(self, block: Block, nc_id: VertexId) -> NCContractStorage:
         """Return a contract storage with the contract state at a given block."""
@@ -735,8 +741,9 @@ class HathorManager:
             parent_block_metadata.score,
             2 * self._settings.WEIGHT_TOL
         )
+        daa = self.daa_factory.create_from_parent(parent_block)
         weight = max(
-            self.daa.calculate_next_weight(parent_block, timestamp, self.tx_storage.get_parent_block),
+            daa.calculate_next_weight(parent_block, timestamp, self.tx_storage.get_parent_block),
             min_significant_weight
         )
         height = parent_block.get_height() + 1
@@ -754,7 +761,7 @@ class HathorManager:
         self.rng.shuffle(parents_any)  # shuffle parents_any to get rid of biases if clients don't shuffle themselves
         return BlockTemplate(
             versions={TxVersion.REGULAR_BLOCK.value, TxVersion.MERGE_MINED_BLOCK.value},
-            reward=self.daa.get_tokens_issued_per_block(height),
+            reward=daa.get_reward_for_next_block(parent_block),
             weight=weight,
             timestamp_now=current_timestamp,
             timestamp_min=timestamp_min,
@@ -791,7 +798,8 @@ class HathorManager:
 
     def get_tokens_issued_per_block(self, height: int) -> int:
         """Return the number of tokens issued (aka reward) per block of a given height."""
-        return self.daa.get_tokens_issued_per_block(height)
+        best_block = self.tx_storage.get_best_block()
+        return self.daa_factory.create_from_parent(best_block).get_tokens_issued_per_block(height)
 
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
@@ -886,24 +894,6 @@ class HathorManager:
 
     def has_sync_version_capability(self) -> bool:
         return self._settings.CAPABILITY_SYNC_VERSION in self.capabilities
-
-    def add_peer_to_whitelist(self, peer_id: PeerId) -> None:
-        if not self._settings.ENABLE_PEER_WHITELIST:
-            return
-
-        if peer_id in self.peers_whitelist:
-            self.log.info('peer already in whitelist', peer_id=peer_id)
-        else:
-            self.peers_whitelist.append(peer_id)
-
-    def remove_peer_from_whitelist_and_disconnect(self, peer_id: PeerId) -> None:
-        if not self._settings.ENABLE_PEER_WHITELIST:
-            return
-
-        if peer_id in self.peers_whitelist:
-            self.peers_whitelist.remove(peer_id)
-            # disconnect from node
-            self.connections.drop_connection_by_peer_id(peer_id)
 
     def has_recent_activity(self) -> bool:
         current_timestamp = time.time()

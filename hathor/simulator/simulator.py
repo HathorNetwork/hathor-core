@@ -23,9 +23,10 @@ from structlog import get_logger
 from hathor.builder import BuildArtifacts, Builder
 from hathor.conf.get_settings import get_global_settings
 from hathor.conf.settings import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm
+from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
+from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.p2p.peer import PrivatePeer
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.simulator.clock import HeapClock, MemoryReactorHeapClock
@@ -56,7 +57,9 @@ class Simulator:
             seed = secrets.randbits(64)
         self.seed = seed
         self.rng = Random(self.seed)
-        self.settings = get_global_settings()._replace(AVG_TIME_BETWEEN_BLOCKS=SIMULATOR_AVG_TIME_BETWEEN_BLOCKS)
+        self.settings = get_global_settings().model_copy(
+            update={"AVG_TIME_BETWEEN_BLOCKS": SIMULATOR_AVG_TIME_BETWEEN_BLOCKS}
+        )
         self._clock = MemoryReactorHeapClock()
         self._peers: OrderedDict[str, HathorManager] = OrderedDict()
         self._connections: list['FakeConnection'] = []
@@ -106,14 +109,14 @@ class Simulator:
         wallet._manually_initialize()
 
         cpu_mining_service = SimulatorCpuMiningService()
-        daa = DifficultyAdjustmentAlgorithm(settings=self.settings)
+        daa_factory = DAAFactory(settings=self.settings)
 
         artifacts = builder \
             .set_reactor(self._clock) \
             .set_rng(Random(self.rng.getrandbits(64))) \
             .set_wallet(wallet) \
             .set_vertex_verifiers_builder(_build_vertex_verifiers) \
-            .set_daa(daa) \
+            .set_daa_factory(daa_factory) \
             .set_cpu_mining_service(cpu_mining_service) \
             .build()
 
@@ -243,9 +246,10 @@ class Simulator:
 def _build_vertex_verifiers(
     reactor: Reactor,
     settings: HathorSettings,
-    daa: DifficultyAdjustmentAlgorithm,
+    daa_factory: DAAFactory,
     feature_service: FeatureService,
     tx_storage: TransactionStorage,
+    blueprint_service: BlueprintService,
 ) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
@@ -254,7 +258,8 @@ def _build_vertex_verifiers(
         reactor=reactor,
         settings=settings,
         vertex_verifier=SimulatorVertexVerifier(reactor=reactor, settings=settings, feature_service=feature_service),
-        daa=daa,
+        daa_factory=daa_factory,
         feature_service=feature_service,
         tx_storage=tx_storage,
+        blueprint_service=blueprint_service,
     )

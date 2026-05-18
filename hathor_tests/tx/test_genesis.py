@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
-from hathor.daa import DifficultyAdjustmentAlgorithm, TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifier import VertexVerifier
@@ -33,14 +33,15 @@ def get_genesis_output():
 class GenesisTest(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-        self._daa = DifficultyAdjustmentAlgorithm(settings=self._settings)
+        self._daa_factory = DAAFactory(settings=self._settings)
         self.storage = self.create_tx_storage()
         verifiers = VertexVerifiers.create_defaults(
             reactor=self.reactor,
             settings=self._settings,
-            daa=self._daa,
+            daa_factory=self._daa_factory,
             feature_service=Mock(),
             tx_storage=self.storage,
+            blueprint_service=Mock(),
         )
         self._verification_service = VerificationService(settings=self._settings, verifiers=verifiers)
 
@@ -82,10 +83,12 @@ class GenesisTest(unittest.TestCase):
 
         # Validate the block and tx weight
         # in test mode weight is always 1
-        self._daa.TEST_MODE = TestMode.TEST_ALL_WEIGHT
-        self.assertEqual(self._daa.calculate_block_difficulty(genesis_block, Mock()), 1)
-        self.assertEqual(self._daa.minimum_tx_weight(genesis_tx), 1)
+        self._daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
+        daa = self._daa_factory.create_v1()
+        self.assertEqual(daa.calculate_block_difficulty(genesis_block, Mock()), 1)
+        self.assertEqual(self._daa_factory.minimum_tx_weight(genesis_tx), 1)
 
-        self._daa.TEST_MODE = TestMode.DISABLED
-        self.assertEqual(self._daa.calculate_block_difficulty(genesis_block, Mock()), genesis_block.weight)
-        self.assertEqual(self._daa.minimum_tx_weight(genesis_tx), genesis_tx.weight)
+        self._daa_factory.TEST_MODE = TestMode.DISABLED
+        daa = self._daa_factory.create_v1()
+        self.assertEqual(daa.calculate_block_difficulty(genesis_block, Mock()), genesis_block.weight)
+        self.assertEqual(self._daa_factory.minimum_tx_weight(genesis_tx), genesis_tx.weight)

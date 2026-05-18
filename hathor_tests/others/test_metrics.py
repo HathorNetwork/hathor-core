@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from hathor.indexes import RocksDBIndexesManager
 from hathor.manager import HathorManager
+from hathor.p2p.connect_classes import ConnectionType
 from hathor.p2p.manager import PeerConnectionsMetrics
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.peer_endpoint import PeerEndpoint
@@ -118,6 +119,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-txs': 0.0,
             b'nc-state': 0.0,
             b'vertex-children': 0.0,
+            b'mempool-tips-index-meta': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -175,6 +177,7 @@ class MetricsTest(unittest.TestCase):
             b'timestamp-sorted-txs': 0.0,
             b'nc-state': 0.0,
             b'vertex-children': 0.0,
+            b'mempool-tips-index-meta': 0.0,
         })
 
         manager.tx_storage.pre_init()
@@ -209,7 +212,7 @@ class MetricsTest(unittest.TestCase):
                 my_peer=my_peer,
                 p2p_manager=manager.connections,
                 use_ssl=False,
-                inbound=False,
+                connection_type=ConnectionType.OUTGOING,
                 settings=self._settings
             )
             protocol._peer = PrivatePeer.auto_generated().to_public_peer()

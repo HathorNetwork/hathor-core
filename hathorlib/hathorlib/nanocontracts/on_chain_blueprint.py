@@ -19,10 +19,11 @@ from hathorlib.conf import HathorSettings
 from hathorlib.transaction import Transaction
 from hathorlib.utils import int_to_bytes, unpack, unpack_len
 
-settings = HathorSettings()
-
 # used to allow new versions of the serialization format in the future
 ON_CHAIN_BLUEPRINT_VERSION: int = 1
+
+# The Python version used for compiling OCB code
+PYTHON_CODE_COMPAT_VERSION: tuple[int, int] = (3, 11)
 
 
 @unique
@@ -96,6 +97,7 @@ class OnChainBlueprint(Transaction):
     @classmethod
     def deserialize_code(_cls, buf: bytes) -> tuple[Code, bytes]:
         """Parses the self.code field, returns the parse result and the remaining bytes."""
+        settings = HathorSettings()
         (ocb_version,), buf = unpack('!B', buf)
         if ocb_version != ON_CHAIN_BLUEPRINT_VERSION:
             raise ValueError(f'unknown on-chain blueprint version: {ocb_version}')

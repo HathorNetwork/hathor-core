@@ -15,6 +15,7 @@
 from hathor.nanocontracts.resources.blueprint import BlueprintInfoResource
 from hathor.nanocontracts.resources.blueprint_source_code import BlueprintSourceCodeResource
 from hathor.nanocontracts.resources.builtin import BlueprintBuiltinResource
+from hathor.nanocontracts.resources.dry_run import NCDryRunResource
 from hathor.nanocontracts.resources.history import NanoContractHistoryResource
 from hathor.nanocontracts.resources.nc_creation import NCCreationResource
 from hathor.nanocontracts.resources.nc_exec_logs import NCExecLogsResource
@@ -29,5 +30,6 @@ __all__ = [
     'NanoContractStateResource',
     'NanoContractHistoryResource',
     'NCCreationResource',
+    'NCDryRunResource',
     'NCExecLogsResource',
 ]

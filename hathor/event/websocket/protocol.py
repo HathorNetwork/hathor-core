@@ -186,7 +186,7 @@ class EventWebsocketProtocol(WebSocketServerProtocol):
 
     def _send_response(self, response: Response) -> None:
         """Actually sends a response to this connection."""
-        payload = json_dumpb(response.dict())
+        payload = json_dumpb(response.model_dump())
 
         try:
             self.sendMessage(payload)

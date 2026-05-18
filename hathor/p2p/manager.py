@@ -23,9 +23,11 @@ from twisted.internet.interfaces import IListeningPort, IProtocol, IProtocolFact
 from twisted.internet.task import LoopingCall
 from twisted.protocols.tls import TLSMemoryBIOFactory, TLSMemoryBIOProtocol
 from twisted.python.failure import Failure
-from twisted.web.client import Agent
+from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
+from hathor.p2p.connect_classes import ConnectionAllowed, ConnectionRejected
+from hathor.p2p.connection_slot import SlotsManager
 from hathor.p2p.netfilter.factory import NetfilterFactory
 from hathor.p2p.peer import PrivatePeer, PublicPeer, UnverifiedPeer
 from hathor.p2p.peer_discovery import PeerDiscovery
@@ -37,7 +39,7 @@ from hathor.p2p.rate_limiter import RateLimiter
 from hathor.p2p.states.ready import ReadyState
 from hathor.p2p.sync_factory import SyncAgentFactory
 from hathor.p2p.sync_version import SyncVersion
-from hathor.p2p.utils import parse_whitelist
+from hathor.p2p.whitelist_manager import WhitelistManager
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction import BaseTransaction
@@ -47,9 +49,6 @@ if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
-
-# The timeout in seconds for the whitelist GET request
-WHITELIST_REQUEST_TIMEOUT = 45
 
 
 class _SyncRotateInfo(NamedTuple):
@@ -85,7 +84,7 @@ class ConnectionsManager:
     new_connection_from_queue: deque[PeerId]
     connecting_peers: dict[IStreamClientEndpoint, _ConnectingPeer]
     handshaking_peers: set[HathorProtocol]
-    whitelist_only: bool
+    whitelist: WhitelistManager
     verified_peer_storage: VerifiedPeerStorage
     _sync_factories: dict[SyncVersion, SyncAgentFactory]
     _enabled_sync_versions: set[SyncVersion]
@@ -100,9 +99,9 @@ class ConnectionsManager:
         pubsub: PubSubManager,
         ssl: bool,
         rng: Random,
-        whitelist_only: bool,
         enable_ipv6: bool,
         disable_ipv4: bool,
+        slots_manager: SlotsManager
     ) -> None:
         self.log = logger.new()
         self._settings = settings
@@ -115,7 +114,6 @@ class ConnectionsManager:
 
         self.reactor = reactor
         self.my_peer = my_peer
-
         # List of address descriptions to listen for new connections (eg: [tcp:8000])
         self.listen_address_descriptions: list[str] = []
 
@@ -129,12 +127,15 @@ class ConnectionsManager:
         self.localhost_only = False
 
         # Factories.
-        from hathor.p2p.factory import HathorClientFactory, HathorServerFactory
+        from hathor.p2p.factory import HathorBootstrapFactory, HathorClientFactory, HathorServerFactory
         self.use_ssl = ssl
         self.server_factory = HathorServerFactory(
             self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
         )
         self.client_factory = HathorClientFactory(
+            self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
+        )
+        self.bootstrap_factory = HathorBootstrapFactory(
             self.my_peer, p2p_manager=self, use_ssl=self.use_ssl, settings=self._settings
         )
 
@@ -156,6 +157,8 @@ class ConnectionsManager:
 
         # List of peers connected and ready to communicate.
         self.connected_peers = {}
+
+        self.slots_manager = slots_manager
 
         # Queue of ready peer-id's used by connect_to_peer_from_connection_queue to choose the next peer to pull a
         # random new connection from
@@ -187,16 +190,15 @@ class ConnectionsManager:
         self.lc_connect.clock = self.reactor
         self.lc_connect_interval = 0.2  # seconds
 
-        # A timer to try to reconnect to the disconnect known peers.
-        if self._settings.ENABLE_PEER_WHITELIST:
-            self.wl_reconnect = LoopingCall(self.update_whitelist)
-            self.wl_reconnect.clock = self.reactor
-
         # Pubsub object to publish events
         self.pubsub = pubsub
 
-        # Parameter to explicitly enable whitelist-only mode, when False it will still check the whitelist for sync-v1
-        self.whitelist_only = whitelist_only
+        # Whitelist manager: owns enabled flag, active policy, peer list, refresh loop and gating decision.
+        self.whitelist = WhitelistManager(
+            settings=self._settings,
+            reactor=self.reactor,
+            drop_connection=self.drop_connection_by_peer_id,
+        )
 
         # Parameter to enable IPv6 connections
         self.enable_ipv6 = enable_ipv6
@@ -210,9 +212,6 @@ class ConnectionsManager:
         # sync-manager factories
         self._sync_factories = {}
         self._enabled_sync_versions = set()
-
-        # agent to perform HTTP requests
-        self._http_agent = Agent(self.reactor)
 
     def add_sync_factory(self, sync_version: SyncVersion, sync_factory: SyncAgentFactory) -> None:
         """Add factory for the given sync version, must use a sync version that does not already exist."""
@@ -268,12 +267,16 @@ class ConnectionsManager:
         """Add a peer discovery method."""
         self.peer_discoveries.append(peer_discovery)
 
+    def connect_to_bootstrap(self, entrypoint: PeerEndpoint) -> None:
+        """Connect to a bootstrap entrypoint discovered via a PeerDiscovery strategy."""
+        self.connect_to_endpoint(entrypoint, discovery_call=True)
+
     def do_discovery(self) -> None:
         """
         Do a discovery and connect on all discovery strategies.
         """
         for peer_discovery in self.peer_discoveries:
-            coro = peer_discovery.discover_and_connect(self.connect_to_endpoint)
+            coro = peer_discovery.discover_and_connect(self.connect_to_bootstrap)
             Deferred.fromCoroutine(coro)
 
     def disable_rate_limiter(self) -> None:
@@ -298,28 +301,12 @@ class ConnectionsManager:
         self.lc_reconnect.start(5, now=False)
         self.lc_sync_update.start(self.lc_sync_update_interval, now=False)
 
-        if self._settings.ENABLE_PEER_WHITELIST:
-            self._start_whitelist_reconnect()
+        self.whitelist.start()
 
         for description in self.listen_address_descriptions:
             self.listen(description)
 
         self.do_discovery()
-
-    def _start_whitelist_reconnect(self) -> None:
-        # The deferred returned by the LoopingCall start method
-        # executes when the looping call stops running
-        # https://docs.twistedmatrix.com/en/stable/api/twisted.internet.task.LoopingCall.html
-        d = self.wl_reconnect.start(30)
-        d.addErrback(self._handle_whitelist_reconnect_err)
-
-    def _handle_whitelist_reconnect_err(self, *args: Any, **kwargs: Any) -> None:
-        """ This method will be called when an exception happens inside the whitelist update
-            and ends up stopping the looping call.
-            We log the error and start the looping call again.
-        """
-        self.log.error('whitelist reconnect had an exception. Start looping call again.', args=args, kwargs=kwargs)
-        self.reactor.callLater(30, self._start_whitelist_reconnect)
 
     def _start_peer_connect_loop(self) -> None:
         # The deferred returned by the LoopingCall start method
@@ -356,7 +343,7 @@ class ConnectionsManager:
             len(self.connecting_peers),
             len(self.handshaking_peers),
             len(self.connected_peers),
-            len(self.verified_peer_storage)
+            len(self.verified_peer_storage),
         )
 
     def get_sync_factory(self, sync_version: SyncVersion) -> SyncAgentFactory:
@@ -412,10 +399,26 @@ class ConnectionsManager:
 
     def on_peer_connect(self, protocol: HathorProtocol) -> None:
         """Called when a new connection is established."""
+
+        # Checks whether connections in the network are at limit.
         if len(self.connections) >= self.max_connections:
             self.log.warn('reached maximum number of connections', max_connections=self.max_connections)
             protocol.disconnect(force=True)
             return
+
+        connection_status = self.slots_manager.add_to_slot(protocol)
+
+        match connection_status:
+            case ConnectionRejected():
+                self.log.warn('Connection Rejected')
+                protocol.disconnect(force=True)
+                return
+            case ConnectionAllowed():
+                pass
+            case _:
+                assert_never(connection_status)
+
+
         self.connections.add(protocol)
         self.handshaking_peers.add(protocol)
 
@@ -429,8 +432,8 @@ class ConnectionsManager:
         """Called when a peer is ready."""
         assert protocol.peer is not None
         self.verified_peer_storage.add_or_replace(protocol.peer)
-
         self.handshaking_peers.remove(protocol)
+
         for conn in self.iter_all_connections():
             conn.unverified_peer_storage.remove(protocol.peer)
 
@@ -480,9 +483,16 @@ class ConnectionsManager:
 
     def on_peer_disconnect(self, protocol: HathorProtocol) -> None:
         """Called when a peer disconnect."""
+
+        # Discard handles case when not in connections.
         self.connections.discard(protocol)
+
+        # Each conn is from a slot - discard from it as well.
+        self.slots_manager.remove_from_slot(protocol)
+
         if protocol in self.handshaking_peers:
             self.handshaking_peers.remove(protocol)
+
         if protocol._peer is not None:
             peer_id = protocol.peer.id
             existing_protocol = self.connected_peers.pop(peer_id, None)
@@ -499,6 +509,7 @@ class ConnectionsManager:
             elif peer_id in self.new_connection_from_queue:
                 # now we're sure it can be removed from new_connection_from_queue
                 self.new_connection_from_queue.remove(peer_id)
+
         self.pubsub.publish(
             HathorEvents.NETWORK_PEER_DISCONNECTED,
             protocol=protocol,
@@ -507,13 +518,11 @@ class ConnectionsManager:
 
     def iter_all_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over all connections."""
-        for conn in self.connections:
-            yield conn
+        yield from self.connections
 
     def iter_ready_connections(self) -> Iterable[HathorProtocol]:
         """Iterate over ready connections."""
-        for conn in self.connected_peers.values():
-            yield conn
+        yield from self.connected_peers.values()
 
     def iter_not_ready_endpoints(self) -> Iterable[PeerEndpoint]:
         """Iterate over not-ready connections."""
@@ -597,47 +606,6 @@ class ConnectionsManager:
         for peer in list(self.verified_peer_storage.values()):
             self.connect_to_peer(peer, int(now))
 
-    def update_whitelist(self) -> Deferred[None]:
-        from twisted.web.client import readBody
-        from twisted.web.http_headers import Headers
-        assert self._settings.WHITELIST_URL is not None
-        self.log.info('update whitelist')
-        d = self._http_agent.request(
-            b'GET',
-            self._settings.WHITELIST_URL.encode(),
-            Headers({'User-Agent': ['hathor-core']}),
-            None)
-        d.addCallback(readBody)
-        d.addTimeout(WHITELIST_REQUEST_TIMEOUT, self.reactor)
-        d.addCallback(self._update_whitelist_cb)
-        d.addErrback(self._update_whitelist_err)
-
-        return d
-
-    def _update_whitelist_err(self, *args: Any, **kwargs: Any) -> None:
-        self.log.error('update whitelist failed', args=args, kwargs=kwargs)
-
-    def _update_whitelist_cb(self, body: bytes) -> None:
-        assert self.manager is not None
-        self.log.info('update whitelist got response')
-        try:
-            text = body.decode()
-            new_whitelist = parse_whitelist(text)
-        except Exception:
-            self.log.exception('failed to parse whitelist')
-            return
-        current_whitelist = set(self.manager.peers_whitelist)
-        peers_to_add = new_whitelist - current_whitelist
-        if peers_to_add:
-            self.log.info('add new peers to whitelist', peers=peers_to_add)
-        peers_to_remove = current_whitelist - new_whitelist
-        if peers_to_remove:
-            self.log.info('remove peers peers from whitelist', peers=peers_to_remove)
-        for peer_id in peers_to_add:
-            self.manager.add_peer_to_whitelist(peer_id)
-        for peer_id in peers_to_remove:
-            self.manager.remove_peer_from_whitelist_and_disconnect(peer_id)
-
     def connect_to_peer(self, peer: UnverifiedPeer | PublicPeer, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
@@ -690,6 +658,7 @@ class ConnectionsManager:
         entrypoint: PeerEndpoint,
         peer: UnverifiedPeer | PublicPeer | None = None,
         use_ssl: bool | None = None,
+        discovery_call: bool = False
     ) -> None:
         """ Attempt to connect directly to an endpoint, prefer calling `connect_to_peer` when possible.
 
@@ -699,6 +668,7 @@ class ConnectionsManager:
 
         If `use_ssl` is True, then the connection will be wraped by a TLS.
         """
+
         if entrypoint.peer_id is not None and peer is not None and entrypoint.peer_id != peer.id:
             self.log.debug('skipping because the entrypoint peer_id does not match the actual peer_id',
                            entrypoint=str(entrypoint))
@@ -729,11 +699,10 @@ class ConnectionsManager:
 
         endpoint = entrypoint.addr.to_client_endpoint(self.reactor)
 
-        factory: IProtocolFactory
+        factory: IProtocolFactory = self.bootstrap_factory if discovery_call else self.client_factory
+
         if use_ssl:
-            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, self.client_factory)
-        else:
-            factory = self.client_factory
+            factory = TLSMemoryBIOFactory(self.my_peer.certificate_options, True, factory)
 
         if peer is not None:
             now = int(self.reactor.seconds())
@@ -819,9 +788,10 @@ class ConnectionsManager:
         assert protocol.peer.id is not None
         assert protocol.my_peer.id is not None
         other_connection = self.connected_peers[protocol.peer.id]
+        is_outbound = protocol.connection_type.is_outbound()
         if bytes(protocol.my_peer.id) > bytes(protocol.peer.id):
             # connection started by me is kept
-            if not protocol.inbound:
+            if is_outbound:
                 # other connection is dropped
                 return other_connection
             else:
@@ -829,7 +799,7 @@ class ConnectionsManager:
                 return protocol
         else:
             # connection started by peer is kept
-            if not protocol.inbound:
+            if is_outbound:
                 return protocol
             else:
                 return other_connection

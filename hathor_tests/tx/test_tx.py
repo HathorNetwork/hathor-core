@@ -6,12 +6,14 @@ from unittest.mock import Mock, patch
 import pytest
 
 from hathor.crypto.util import decode_address, get_address_from_public_key, get_private_key_from_bytes
-from hathor.daa import TestMode
+from hathor.daa import DAAFactory, TestMode
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
+from hathor.feature_activation.utils import Features
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import MAX_OUTPUT_VALUE, Block, Transaction, TxInput, TxOutput, Vertex
+from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.exceptions import (
     BlockWithInputs,
     ConflictingInputs,
@@ -25,6 +27,7 @@ from hathor.transaction.exceptions import (
     InvalidOutputValue,
     ParentDoesNotExist,
     PowError,
+    SerializedSizeError,
     TimestampError,
     TooFewInputs,
     TooManyInputs,
@@ -68,7 +71,7 @@ class TransactionTest(unittest.TestCase):
         blocks = add_blocks_unlock_reward(self.manager)
         self.last_block = blocks[-1]
 
-        self.verification_params = VerificationParams.default_for_mempool(best_block=Mock())
+        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
 
     def test_input_output_match_less_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -89,7 +92,9 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_transparent_balance(
+                self._settings, tx, tx.get_complete_token_info(block_storage)
+            )
 
     def test_input_output_match_more_htr(self):
         genesis_block = self.genesis_blocks[0]
@@ -110,7 +115,9 @@ class TransactionTest(unittest.TestCase):
         best_block = self.manager.tx_storage.get_best_block()
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
-            self._verifiers.tx.verify_sum(self._settings, tx, tx.get_complete_token_info(block_storage))
+            self._verifiers.tx.verify_transparent_balance(
+                self._settings, tx, tx.get_complete_token_info(block_storage)
+            )
 
     def test_validation(self):
         # add 100 blocks and check that walking through get_next_block_best_chain yields the same blocks
@@ -608,11 +615,88 @@ class TransactionTest(unittest.TestCase):
         inputs = [TxInput(b'', 0, b'')]
         tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
-        tx.weight = self.manager.daa.minimum_tx_weight(tx)
+        tx.weight = self.manager.daa_factory.minimum_tx_weight(tx)
         tx.weight += self._settings.MAX_TX_WEIGHT_DIFF + 0.1
         tx.update_hash()
         with self.assertRaises(WeightError):
             self._verifiers.tx.verify_weight(tx)
+
+    def test_tx_weight_activation_uses_tx_weight(self):
+        settings = self._settings.model_copy(update={
+            'MAX_TX_WEIGHT_DIFF': 4.0,
+            'MAX_TX_WEIGHT_DIFF_ACTIVATION': 32.0,
+        })
+        verifier = self._verifiers.tx.__class__(
+            settings=settings,
+            daa_factory=DAAFactory(settings=settings),
+            feature_service=FeatureService(settings=settings, tx_storage=self.tx_storage),
+        )
+
+        tx = Transaction(
+            weight=33.0,
+            inputs=[TxInput(b'', 0, b'')],
+            outputs=[TxOutput(1, b'')],
+            parents=[tx.hash for tx in self.genesis_txs],
+        )
+
+        with self.assertRaises(WeightError):
+            verifier.verify_weight(tx)
+
+    def test_tx_weight_at_activation_does_not_trigger_cap(self):
+        settings = self._settings.model_copy(update={
+            'MAX_TX_WEIGHT_DIFF': 4.0,
+            'MAX_TX_WEIGHT_DIFF_ACTIVATION': 32.0,
+        })
+        verifier = self._verifiers.tx.__class__(
+            settings=settings,
+            daa_factory=DAAFactory(settings=settings),
+            feature_service=FeatureService(settings=settings, tx_storage=self.tx_storage),
+        )
+
+        tx = Transaction(
+            weight=32.0,
+            inputs=[TxInput(b'', 0, b'')],
+            outputs=[TxOutput(1, b'')],
+            parents=[tx.hash for tx in self.genesis_txs],
+        )
+
+        verifier.verify_weight(tx)
+
+    def test_tx_serialized_size_too_high(self):
+        tx = Transaction(
+            weight=1.0,
+            inputs=[TxInput(b'', 0, b'')],
+            outputs=[TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
+            parents=[tx.hash for tx in self.genesis_txs],
+        )
+        while len(tx.get_struct()) <= self._settings.MAX_SERIALIZED_VERTEX_SIZE:
+            tx.outputs.append(TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
+
+        tx.update_hash()
+        tx_bytes = tx.get_struct()
+        self.assertGreater(len(tx_bytes), self._settings.MAX_SERIALIZED_VERTEX_SIZE)
+        with self.assertRaises(SerializedSizeError):
+            Transaction.create_from_struct(tx_bytes)
+
+    def test_block_serialized_size_too_high(self):
+        block = Block(
+            weight=1.0,
+            outputs=[TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
+            parents=[
+                self._settings.GENESIS_BLOCK_HASH,
+                self._settings.GENESIS_TX1_HASH,
+                self._settings.GENESIS_TX2_HASH,
+            ],
+            data=b'',
+        )
+        while len(block.get_struct()) <= self._settings.MAX_SERIALIZED_VERTEX_SIZE:
+            block.outputs.append(TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
+
+        block.update_hash()
+        block_bytes = block.get_struct()
+        self.assertGreater(len(block_bytes), self._settings.MAX_SERIALIZED_VERTEX_SIZE)
+        with self.assertRaises(SerializedSizeError):
+            Block.create_from_struct(block_bytes)
 
     def test_weight_nan(self):
         # this should succeed
@@ -709,7 +793,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_propagation_error(self):
         manager = self.create_peer('testnet', unlock_wallet=True)
-        manager.daa.TEST_MODE = TestMode.DISABLED
+        manager.daa_factory.TEST_MODE = TestMode.DISABLED
 
         # 1. propagate genesis
         genesis_block = self.genesis_blocks[0]
@@ -824,7 +908,8 @@ class TransactionTest(unittest.TestCase):
 
     def test_output_serialization(self):
         from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
-        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE, bytes_to_output_value, output_value_to_bytes
+        from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE
+        from hathor.transaction.util import bytes_to_output_value, output_value_to_bytes
         max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
         self.assertEqual(len(max_32), 4)
         value, buf = bytes_to_output_value(max_32)
@@ -841,7 +926,7 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
-        from hathor.transaction.base_transaction import bytes_to_output_value
+        from hathor.transaction.util import bytes_to_output_value
 
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
@@ -923,9 +1008,9 @@ class TransactionTest(unittest.TestCase):
 
         # test get the correct class
         version = TxVersion(0x00)
-        self.assertEqual(version.get_cls(), Block)
+        self.assertEqual(get_cls_from_tx_version(version), Block)
         version = TxVersion(0x01)
-        self.assertEqual(version.get_cls(), Transaction)
+        self.assertEqual(get_cls_from_tx_version(version), Transaction)
 
         # test Block.__init__() fails
         with self.assertRaises(AssertionError) as cm:
@@ -942,7 +1027,7 @@ class TransactionTest(unittest.TestCase):
         genesis_block = self.genesis_blocks[0]
         block = Block(
             signal_bits=0xF0,
-            version=0x0F,
+            version=TxVersion.REGULAR_BLOCK,
             nonce=100,
             weight=1,
             parents=[genesis_block.hash]
@@ -1089,12 +1174,15 @@ class TransactionTest(unittest.TestCase):
     def test_sighash_cache(self):
         from unittest import mock
 
+        from hathor.transaction.vertex_parser import _transaction
+
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(5, script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
-        with mock.patch('hathor.transaction.transaction.bytearray') as mocked:
+        original = _transaction.serialize_tx_sighash
+        with mock.patch.object(_transaction, 'serialize_tx_sighash', wraps=original) as mocked:
             for _ in range(10):
                 tx.get_sighash_all()
 
@@ -1108,7 +1196,8 @@ class TransactionTest(unittest.TestCase):
         output = TxOutput(5, script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
-        with mock.patch('hathor.transaction.transaction.hashlib') as mocked:
+        with mock.patch('hathor.transaction.vertex_parser.vertex_serializer.hashlib') as mocked:
+            mocked.sha256.return_value.digest.return_value = b'\x00' * 32
             for _ in range(10):
                 tx.get_sighash_all_data()
 

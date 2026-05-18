@@ -117,7 +117,7 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, versi
     """
     raw_script_eval(
         input_data=txin.data,
-        output_script=spent_tx.outputs[txin.index].script,
+        output_script=spent_tx.resolve_spent_output(txin.index).script,
         extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=version),
     )
 

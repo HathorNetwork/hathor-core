@@ -14,6 +14,7 @@
 
 import re
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any, Optional
 
 import requests
@@ -24,6 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.x509 import Certificate
 from cryptography.x509.oid import NameOID
+from structlog import get_logger
 from twisted.internet.interfaces import IAddress
 
 from hathor.conf.get_settings import get_global_settings
@@ -33,6 +35,10 @@ from hathor.p2p.peer_discovery import DNSPeerDiscovery
 from hathor.p2p.peer_endpoint import PeerEndpoint
 from hathor.p2p.peer_id import PeerId
 from hathor.transaction.genesis import get_representation_for_all_genesis
+
+logger = get_logger()
+
+WHITELIST_HEADER = 'hathor-whitelist'
 
 
 def discover_hostname(timeout: float | None = None) -> Optional[str]:
@@ -130,39 +136,91 @@ def generate_certificate(private_key: RSAPrivateKey, ca_file: str, ca_pkey_file:
     return certificate
 
 
+class WhitelistPolicy(StrEnum):
+    """Policy types declared in the whitelist content.
+
+    Values are case-insensitive when parsed from the file.
+    """
+    ALLOW_ALL = 'allow-all'
+    ONLY_WHITELISTED_PEERS = 'only-whitelisted-peers'
+
+
+def _pop_header(text: str, expected: str) -> list[str]:
+    """Validate the file header and return the remaining lines."""
+    lines = text.splitlines()
+    if not lines or lines.pop(0) != expected:
+        raise ValueError('invalid header')
+    return lines
+
+
 def parse_file(text: str, *, header: Optional[str] = None) -> list[str]:
     """Parses a list of strings."""
     if header is None:
-        header = 'hathor-whitelist'
-    lines = text.splitlines()
-    _header = lines.pop(0)
-    if _header != header:
-        raise ValueError('invalid header')
+        header = WHITELIST_HEADER
+    lines = _pop_header(text, header)
     stripped_lines = (line.strip() for line in lines)
     nonblank_lines = filter(lambda line: line and not line.startswith('#'), stripped_lines)
     return list(nonblank_lines)
 
 
-def parse_whitelist(text: str, *, header: Optional[str] = None) -> set[PeerId]:
-    """ Parses the list of whitelist peer ids
+def parse_whitelist(text: str) -> tuple[set[PeerId], WhitelistPolicy]:
+    """Parses the whitelist content and returns peers and active policy.
 
-    Example:
+    The optional ``# policy: <value>`` directive MUST appear before any
+    peer-ID line. It is written as a commented line so older parsers (which
+    strip ``#`` lines) remain compatible. If absent, the policy defaults to
+    ``ONLY_WHITELISTED_PEERS``. ``ALLOW_ALL`` requires an empty peer list.
 
-    parse_whitelist('''hathor-whitelist
-# node1
- 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+    Malformed peer IDs are logged and skipped so a single bad line does not
+    abort the whitelist refresh.
 
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
+    >>> peers, policy = parse_whitelist(
+    ...     'hathor-whitelist\\n'
+    ...     '# node1\\n'
+    ...     ' 2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367\\n'
+    ... )
+    >>> [str(p) for p in peers]
+    ['2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367']
+    >>> policy == WhitelistPolicy.ONLY_WHITELISTED_PEERS
+    True
 
-# node3
-G2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367
-''')
-    {'2ffdfbbfd6d869a0742cff2b054af1cf364ae4298660c0e42fa8b00a66a30367'}
-
+    >>> parse_whitelist('hathor-whitelist\\n# policy: allow-all\\n')
+    (set(), <WhitelistPolicy.ALLOW_ALL: 'allow-all'>)
     """
-    lines = parse_file(text, header=header)
-    return {PeerId(line.split()[0]) for line in lines}
+    lines = _pop_header(text, WHITELIST_HEADER)
+
+    policy = WhitelistPolicy.ONLY_WHITELISTED_PEERS
+    policy_seen = False
+    peers: set[PeerId] = set()
+
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith('#'):
+            comment = line[1:].strip()
+            if comment.lower().startswith('policy:'):
+                if peers:
+                    raise ValueError('policy directive must appear before any peer ID')
+                if policy_seen:
+                    raise ValueError('duplicate policy directive')
+                value = comment.split(':', 1)[1].strip().lower()
+                try:
+                    policy = WhitelistPolicy(value)
+                except ValueError:
+                    raise ValueError(f'invalid whitelist policy: {value}')
+                policy_seen = True
+            continue
+        token = line.split()[0]
+        try:
+            peers.add(PeerId(token))
+        except (ValueError, TypeError) as exc:
+            logger.warn('skipping malformed peer ID in whitelist', peer=token, error=str(exc))
+
+    if policy == WhitelistPolicy.ALLOW_ALL and peers:
+        raise ValueError('peer list must be empty when policy is allow-all')
+
+    return peers, policy
 
 
 def format_address(addr: IAddress) -> str:

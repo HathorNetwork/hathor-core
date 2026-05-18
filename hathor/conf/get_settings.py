@@ -14,11 +14,12 @@
 
 from __future__ import annotations
 
-import importlib
 import os
 from typing import TYPE_CHECKING, NamedTuple, Optional
 
 from structlog import get_logger
+
+from hathorlib.conf.utils import load_module_settings, load_yaml_settings
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings as Settings
@@ -29,17 +30,17 @@ logger = get_logger()
 class _SettingsMetadata(NamedTuple):
     source: str
     is_yaml: bool
-    settings: Settings
+    settings: 'Settings'
 
 
 _settings_singleton: Optional[_SettingsMetadata] = None
 
 
-def get_global_settings() -> Settings:
+def get_global_settings() -> 'Settings':
     return HathorSettings()
 
 
-def HathorSettings() -> Settings:
+def HathorSettings() -> 'Settings':
     """
     Returns the configuration named tuple.
 
@@ -53,7 +54,7 @@ def HathorSettings() -> Settings:
     if settings_module_filepath is not None:
         return _load_settings_singleton(settings_module_filepath, is_yaml=False)
 
-    from hathor import conf
+    from hathorlib import conf
     settings_yaml_filepath = os.environ.get('HATHOR_CONFIG_YAML', conf.MAINNET_SETTINGS_FILEPATH)
     return _load_settings_singleton(settings_yaml_filepath, is_yaml=True)
 
@@ -68,7 +69,7 @@ def get_settings_source() -> str:
     return _settings_singleton.source
 
 
-def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:
+def _load_settings_singleton(source: str, *, is_yaml: bool) -> 'Settings':
     global _settings_singleton
 
     if _settings_singleton is not None:
@@ -79,29 +80,19 @@ def _load_settings_singleton(source: str, *, is_yaml: bool) -> Settings:
 
         return _settings_singleton.settings
 
-    settings_loader = _load_yaml_settings if is_yaml else _load_module_settings
+    if not is_yaml:
+        log = logger.new()
+        log.warn(
+            "Setting a config module via the 'HATHOR_CONFIG_FILE' env var will be deprecated soon. "
+            "Use the '--config-yaml' CLI option or the 'HATHOR_CONFIG_YAML' env var to set a yaml filepath instead."
+        )
+    from hathor.conf.settings import HathorSettings as Settings
+
+    settings_loader = load_yaml_settings if is_yaml else load_module_settings
     _settings_singleton = _SettingsMetadata(
         source=source,
         is_yaml=is_yaml,
-        settings=settings_loader(source)
+        settings=settings_loader(Settings, source)
     )
 
     return _settings_singleton.settings
-
-
-def _load_module_settings(module_path: str) -> Settings:
-    log = logger.new()
-    log.warn(
-        "Setting a config module via the 'HATHOR_CONFIG_FILE' env var will be deprecated soon. "
-        "Use the '--config-yaml' CLI option or the 'HATHOR_CONFIG_YAML' env var to set a yaml filepath instead."
-    )
-    settings_module = importlib.import_module(module_path)
-    settings = getattr(settings_module, 'SETTINGS')
-    from hathor.conf.settings import HathorSettings as Settings
-    assert isinstance(settings, Settings)
-    return settings
-
-
-def _load_yaml_settings(filepath: str) -> Settings:
-    from hathor.conf.settings import HathorSettings as Settings
-    return Settings.from_yaml(filepath=filepath)
