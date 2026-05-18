@@ -40,6 +40,10 @@ class FeeEntry:
 
 @dataclass(frozen=True)
 class FeeHeader(VertexBaseHeader):
+    @classmethod
+    def get_header_id(cls) -> bytes:
+        return VertexHeaderId.FEE_HEADER.value
+
     tx: Transaction
     fees: list[FeeHeaderEntry]
 

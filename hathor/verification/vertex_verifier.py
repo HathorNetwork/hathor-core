@@ -217,6 +217,11 @@ class VertexVerifier:
                 assert_never(vertex.version)
         return allowed_headers
 
+    @staticmethod
+    def _get_header_order(header: VertexBaseHeader) -> int:
+        """Return the sort key for canonical header ordering."""
+        return int.from_bytes(header.get_header_id(), 'big')
+
     def verify_headers(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify the headers."""
         if len(vertex.headers) > vertex.get_maximum_number_of_headers():
@@ -234,6 +239,15 @@ class VertexVerifier:
                     f'Header `{type(header).__name__}` not supported by `{type(vertex).__name__}`'
                 )
             seen_header_types.add(type(header))
+
+        # Verify headers are in canonical order (ascending VertexHeaderId)
+        if len(vertex.headers) > 1:
+            ids = [self._get_header_order(h) for h in vertex.headers]
+            for i in range(1, len(ids)):
+                if ids[i] <= ids[i - 1]:
+                    raise HeaderNotSupported(
+                        'Headers must be in canonical order (ascending VertexHeaderId)'
+                    )
 
     def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify that the timestamp is not too old. Mempool only."""

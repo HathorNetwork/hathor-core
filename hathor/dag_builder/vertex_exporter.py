@@ -336,6 +336,12 @@ class VertexExporter:
         """Add the configured headers."""
         self.add_nano_header_if_needed(node, vertex)
         self.add_fee_header_if_needed(node, vertex)
+        # Future-proofing against header-ordering footguns: sort the headers by
+        # their canonical ID byte so any new add_*_if_needed call added later
+        # cannot accidentally produce a non-canonical order that would then be
+        # rejected by VertexVerifier.verify_headers. The current add order
+        # (nano 0x10, fee 0x11) is already canonical, so this is a no-op today.
+        vertex.headers.sort(key=lambda h: h.get_header_id())
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
