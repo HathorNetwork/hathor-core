@@ -25,14 +25,6 @@ class MyTestBlueprint(Blueprint):
 
 class FakeHeader(VertexBaseHeader):
     @classmethod
-    def get_header_id(cls) -> bytes:
-        # 0xff is a deliberately fake byte: it isn't a real on-chain header ID
-        # (real IDs are 0x10 NanoHeader, 0x11 FeeHeader). Using a sentinel out
-        # of the valid range keeps this fixture from colliding with any real
-        # header type in tests that exercise the canonical-order rule.
-        return b'\xff'
-
-    @classmethod
     def deserialize(
         cls,
         tx: BaseTransaction,
