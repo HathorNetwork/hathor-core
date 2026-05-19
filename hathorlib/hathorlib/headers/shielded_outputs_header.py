@@ -36,10 +36,6 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ShieldedOutputsHeader(VertexBaseHeader):
-    @classmethod
-    def get_header_id(cls) -> bytes:
-        return VertexHeaderId.SHIELDED_OUTPUTS_HEADER.value
-
     tx: Transaction
     shielded_outputs: list[ShieldedOutput] = field(default_factory=list)
 

@@ -45,10 +45,6 @@ class UnshieldBalanceHeader(VertexBaseHeader):
     factors is revealed; individual input amounts remain confidential.
     """
 
-    @classmethod
-    def get_header_id(cls) -> bytes:
-        return VertexHeaderId.UNSHIELD_BALANCE_HEADER.value
-
     tx: Transaction
     excess_blinding_factor: bytes
 
