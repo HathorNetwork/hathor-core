@@ -123,20 +123,28 @@ hathor-testnet-shielded-outputs-no-rate-limit: clean set_real_ip_from_cloudfront
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # AWS / Main Account
-AWS_MAIN_REGISTRY = 769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank
+AWS_MAIN_ECR_REGISTRY = 769498303037.dkr.ecr.us-east-1.amazonaws.com
+AWS_MAIN_REGISTRY = $(AWS_MAIN_ECR_REGISTRY)/webtank
+AWS_MAIN_REGION ?= us-east-1
+AWS_MAIN_PROFILE ?= hathor-network
 
 .PHONY: aws-main
 aws-main: aws-main-default aws-main-no-rate-limit
 	@echo "All AWS Main images built and pushed successfully!"
 
+.PHONY: aws-main-login
+aws-main-login:
+	@echo "Logging in to AWS Main ECR..."
+	aws ecr get-login-password --region $(AWS_MAIN_REGION) --profile $(AWS_MAIN_PROFILE) | docker login --username AWS --password-stdin $(AWS_MAIN_ECR_REGISTRY)
+
 .PHONY: aws-main-default
-aws-main-default: clean set_real_ip_from_cloudfront
+aws-main-default: clean set_real_ip_from_cloudfront aws-main-login
 	@echo "Building and pushing latest image for AWS Main..."
 	$(call generate_nginx_conf,)
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: aws-main-no-rate-limit
-aws-main-no-rate-limit: clean set_real_ip_from_cloudfront
+aws-main-no-rate-limit: clean set_real_ip_from_cloudfront aws-main-login
 	@echo "Building and pushing no-rate-limit image for AWS Main..."
 	$(call generate_nginx_conf,--disable-rate-limits)
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
@@ -210,6 +218,7 @@ help:
 	@echo "  hathor-testnet-shielded-outputs-default           - Build and push default image for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  hathor-testnet-shielded-outputs-no-rate-limit     - Build and push no-rate-limit image for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  aws-main                  			- Build and push all images for AWS Main Account"
+	@echo "  aws-main-login            			- Log in to AWS Main ECR before pushing images"
 	@echo "  aws-main-default          			- Build and push default image for AWS Main Account"
 	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
 	@echo ""
@@ -231,4 +240,8 @@ help:
 	@echo "  - Hathor Testnet Playground: $(HATHOR_TESTNET_PLAYGROUND_REGISTRY)"
 	@echo "  - Hathor Testnet Shielded Outputs: $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY)"
 	@echo "  - AWS Main Account: $(AWS_MAIN_REGISTRY)"
+	@echo ""
+	@echo "AWS login variables (overridable):"
+	@echo "  - AWS_MAIN_REGION=$(AWS_MAIN_REGION)"
+	@echo "  - AWS_MAIN_PROFILE=$(AWS_MAIN_PROFILE)"
 	@echo ""
