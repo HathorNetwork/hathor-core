@@ -66,6 +66,7 @@ class TransactionStreamingClient:
                 nano_runtime_version=NanoRuntimeVersion.V1,
                 restrict_dup_actions=False,
                 daa_version=DAAVersion.V1,
+                shielded_transactions=False,
             )
         )
 

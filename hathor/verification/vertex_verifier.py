@@ -35,7 +35,13 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    FeeHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexBaseHeader,
+)
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -208,11 +214,19 @@ class VertexVerifier:
                 pass
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
-            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+            case TxVersion.REGULAR_TRANSACTION:
+                if params.features.nanocontracts:
+                    allowed_headers.add(NanoHeader)
+                if params.features.fee_tokens:
+                    allowed_headers.add(FeeHeader)
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
