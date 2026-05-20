@@ -9,6 +9,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.validation_state import ValidationState
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions, create_fee_tokens
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -182,6 +183,11 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         # First block data
         self.assertEqual(data['meta']['first_block'], None)
         self.assertEqual(data['meta']['first_block_height'], None)
+
+        # Decimal version
+        decimal_version = VertexDecimalVersion.V1
+        assert tx.get_decimal_version() == decimal_version
+        assert data['tx']['decimal_version'] == decimal_version
 
     @inlineCallbacks
     def test_get_one_known_tx_with_authority(self):
