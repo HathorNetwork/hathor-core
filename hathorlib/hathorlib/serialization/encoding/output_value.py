@@ -26,51 +26,51 @@ Examples:
 
 >>> se = Serializer.build_bytes_serializer()
 >>> try:
-...     encode_output_value(se, 0)
+...     encode_output_value_v1(se, 0)
 ... except ValueError as e:
 ...     print(*e.args)
 Number must be strictly positive
 
 >>> try:
-...     encode_output_value(se, -1)
+...     encode_output_value_v1(se, -1)
 ... except ValueError as e:
 ...     print(*e.args)
 Number must not be negative
 
 >>> se = Serializer.build_bytes_serializer()
->>> encode_output_value(se, 0, strict=False)  # writes 00000000
->>> encode_output_value(se, 100)  # writes 00000064
->>> encode_output_value(se, 2 ** 31 - 1)  # writes 7fffffff
->>> encode_output_value(se, 2 ** 31)  # writes ffffffff80000000
->>> encode_output_value(se, 2 ** 63)  # writes 8000000000000000
+>>> encode_output_value_v1(se, 0, strict=False)  # writes 00000000
+>>> encode_output_value_v1(se, 100)  # writes 00000064
+>>> encode_output_value_v1(se, 2 ** 31 - 1)  # writes 7fffffff
+>>> encode_output_value_v1(se, 2 ** 31)  # writes ffffffff80000000
+>>> encode_output_value_v1(se, 2 ** 63)  # writes 8000000000000000
 >>> bytes(se.finalize()).hex()
 '00000000000000647fffffffffffffff800000008000000000000000'
 
 >>> se = Serializer.build_bytes_serializer()
 >>> try:
-...     encode_output_value(se, 2 ** 63 + 1)
+...     encode_output_value_v1(se, 2 ** 63 + 1)
 ... except ValueError as e:
 ...     print(*e.args)
 Number is too big; max possible value is 2**63, got: 9223372036854775809
 
 >>> de = Deserializer.build_bytes_deserializer(b'\x00\x00\x00\x00')
 >>> try:
-...     decode_output_value(de)
+...     decode_output_value_v1(de)
 ... except ValueError as e:
 ...     print(*e.args)
 Number must be strictly positive
 
 >>> data = bytes.fromhex('00000000000000647fffffffffffffff800000008000000000000000') + b'test'
 >>> de = Deserializer.build_bytes_deserializer(data)
->>> decode_output_value(de, strict=False)  # reads 00000000
+>>> decode_output_value_v1(de, strict=False)  # reads 00000000
 0
->>> decode_output_value(de)  # reads 00000064
+>>> decode_output_value_v1(de)  # reads 00000064
 100
->>> decode_output_value(de)  # reads 7fffffff
+>>> decode_output_value_v1(de)  # reads 7fffffff
 2147483647
->>> decode_output_value(de)  # reads ffffffff80000000
+>>> decode_output_value_v1(de)  # reads ffffffff80000000
 2147483648
->>> decode_output_value(de)  # reads 8000000000000000
+>>> decode_output_value_v1(de)  # reads 8000000000000000
 9223372036854775808
 >>> bytes(de.read_all())
 b'test'
@@ -79,6 +79,9 @@ b'test'
 
 import struct
 
+from typing_extensions import assert_never
+
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.exceptions import BadDataError
 
@@ -86,7 +89,17 @@ MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
 
 
-def encode_output_value(serializer: Serializer, number: int, *, strict: bool = True) -> None:
+def encode_output_value(serializer: Serializer, value: int, *, decimal_version: VertexDecimalVersion) -> None:
+    match decimal_version:
+        case VertexDecimalVersion.V1:
+            encode_output_value_v1(serializer, value)
+        case VertexDecimalVersion.V2:
+            raise NotImplementedError
+        case _:
+            assert_never(decimal_version)
+
+
+def encode_output_value_v1(serializer: Serializer, number: int, *, strict: bool = True) -> None:
     """ Encodes either 4 or 8 bytes using our output-value format.
 
     This modules's docstring has more details and examples.
@@ -105,7 +118,17 @@ def encode_output_value(serializer: Serializer, number: int, *, strict: bool = T
         serializer.write_bytes(number.to_bytes(4, byteorder='big', signed=True))
 
 
-def decode_output_value(deserializer: Deserializer, *, strict: bool = True) -> int:
+def decode_output_value(deserializer: Deserializer, *, decimal_version: VertexDecimalVersion) -> int:
+    match decimal_version:
+        case VertexDecimalVersion.V1:
+            return decode_output_value_v1(deserializer)
+        case VertexDecimalVersion.V2:
+            raise NotImplementedError
+        case _:
+            assert_never(decimal_version)
+
+
+def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -> int:
     """ Decodes either 4 or 8 bytes using our output-value format.
 
     This modules's docstring has more details and examples.

@@ -896,14 +896,6 @@ class TxInput:
         return vertex_serializer.serialize_tx_input_sighash(self)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
-        """ Creates a TxInput from a serialized input. Returns the input
-        and remaining bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_input(buf, verbose=verbose)
-
-    @classmethod
     def create_from_dict(cls, data: dict) -> 'TxInput':
         """ Creates a TxInput from a human readable dict."""
         return cls(
@@ -970,22 +962,6 @@ class TxOutput:
             return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
         else:
             return f'{cls_name}(value={value_str}, script={self.script.hex()})'
-
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the output
-
-        :rtype: bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.serialize_tx_output_bytes(self)
-
-    @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
-        """ Creates a TxOutput from a serialized output. Returns the output
-        and remaining bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_output(buf, verbose=verbose)
 
     def get_token_index(self) -> int:
         """The token uid index in the list"""
