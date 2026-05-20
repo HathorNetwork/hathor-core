@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar
 
-from typing_extensions import Self, override
+from typing_extensions import Self, final, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
@@ -31,6 +31,7 @@ from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
+from hathorlib.decimal_places import VertexDecimalVersion
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
@@ -411,3 +412,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
         static_metadata = TransactionStaticMetadata.create_from_storage(self, settings, storage)
         self.set_static_metadata(static_metadata)
+
+    @final
+    def get_decimal_version(self) -> VertexDecimalVersion:
+        """
+        Return the decimal-places version under which this transaction's token amounts are interpreted.
+        """
+        # Transactions are always V1. This will be updated in the future.
+        return VertexDecimalVersion.V1

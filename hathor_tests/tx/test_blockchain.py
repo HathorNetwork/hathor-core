@@ -349,8 +349,8 @@ class BlockchainTestCase(unittest.TestCase):
     def test_tokens_issued_per_block(self):
         manager = self.create_peer('testnet', tx_storage=self.tx_storage)
         # this test is pretty dumb in that it test every possible height until halving has long stopped
-        initial_reward = self._settings.INITIAL_TOKENS_PER_BLOCK
-        final_reward = self._settings.MINIMUM_TOKENS_PER_BLOCK
+        initial_reward = self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        final_reward = self._settings.MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK
         expected_reward = initial_reward
         height = 1
         # check that there are BLOCKS_PER_HALVING with each reward, starting at the first rewardable block (height=1)

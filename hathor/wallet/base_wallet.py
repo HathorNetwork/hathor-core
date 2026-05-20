@@ -25,7 +25,6 @@ from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
@@ -36,6 +35,7 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import int_to_bytes
 from hathor.types import AddressB58, Amount, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
+from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 
 logger = get_logger()
 

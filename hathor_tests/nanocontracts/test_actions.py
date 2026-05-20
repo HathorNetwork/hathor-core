@@ -129,7 +129,9 @@ class TestActions(unittest.TestCase):
         self.tka_balance_key = BalanceKey(nc_id=self.tx0.hash, token_uid=self.tka.hash)
 
         # Initial state sanity check. 30 HTR are used to mint 3000 TKA.
-        self.initial_htr_total = self._settings.GENESIS_TOKENS + 10 * self._settings.INITIAL_TOKENS_PER_BLOCK - 30
+        self.initial_htr_total = (
+            self._settings.GENESIS_TOKEN_ATOMIC_UNITS + 10 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 30
+        )
         self.initial_tka_total = 3000
         self._assert_token_index(htr_total=self.initial_htr_total, tka_total=self.initial_tka_total)
 
@@ -239,7 +241,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + self._settings.INITIAL_TOKENS_PER_BLOCK,
+            htr_total=self.initial_htr_total + self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK,
             tka_total=self.initial_tka_total,
         )
 
@@ -264,7 +266,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + self._settings.INITIAL_TOKENS_PER_BLOCK,
+            htr_total=self.initial_htr_total + self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK,
             tka_total=self.initial_tka_total,
         )
 
@@ -508,7 +510,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK - 200,
+            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 200,
             tka_total=self.initial_tka_total + 20000,
         )
 
@@ -574,7 +576,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK - 200,
+            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 200,
             tka_total=self.initial_tka_total + 20000,
         )
 
@@ -615,7 +617,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK - 200,
+            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 200,
             tka_total=self.initial_tka_total + 20000,
         )
 
@@ -663,7 +665,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK + 5,
+            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK + 5,
             tka_total=self.initial_tka_total - 500,
         )
 
@@ -704,7 +706,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK + 5,
+            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK + 5,
             tka_total=self.initial_tka_total - 500,
         )
 
@@ -745,7 +747,7 @@ class TestActions(unittest.TestCase):
 
         # Check the token index.
         self._assert_token_index(
-            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKENS_PER_BLOCK + 5,
+            htr_total=self.initial_htr_total + 2 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK + 5,
             tka_total=self.initial_tka_total - 500,
         )
 

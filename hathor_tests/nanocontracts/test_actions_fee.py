@@ -1,6 +1,5 @@
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidFee, NCInvalidFeePaymentToken
@@ -11,6 +10,7 @@ from hathor.transaction import Transaction
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.test_reentrancy import HTR_TOKEN_UID
+from hathorlib.conf.settings import HATHOR_TOKEN_UID
 
 
 class MyBlueprint(Blueprint):
@@ -470,8 +470,8 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         # Total HTR fees: 12 + 1 + 1 = 14 HTR
         htr_token_info = tokens_index.get_token_info(HATHOR_TOKEN_UID)
         expected_htr_total = (
-            self._settings.GENESIS_TOKENS
-            + 15 * self._settings.INITIAL_TOKENS_PER_BLOCK
+            self._settings.GENESIS_TOKEN_ATOMIC_UNITS
+            + 15 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
             - 12  # 12 HTR fee for initialize (1 FBT + 1 FTT + 10 DBT)
             - 1   # 1 HTR fee for tx3 (move_tokens_to_nc)
             - 1   # 1 HTR fee for tx5 (move_tokens_to_nc_paying_with_htr_and_dbt)

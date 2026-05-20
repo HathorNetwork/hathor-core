@@ -17,10 +17,11 @@ from enum import StrEnum, auto, unique
 from math import log
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, computed_field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator, model_validator
 from typing_extensions import Self
 
 from hathorlib.conf.utils import parse_hex_str
+from hathorlib.decimal_places import VertexDecimalVersion
 
 HATHOR_TOKEN_UID: bytes = b'\x00'
 
@@ -81,8 +82,14 @@ class HathorSettings(BaseModel):
     NATIVE_TOKEN_NAME: str = 'Hathor'
     NATIVE_TOKEN_SYMBOL: str = 'HTR'
 
-    # Number of decimal places for the Hathor token
-    DECIMAL_PLACES: int = 2
+    # Number of decimal places to be displayed for all tokens; it is simply cosmetic.
+    DISPLAY_DECIMAL_PLACES: int = 2
+
+    # Number of decimal places for each supported vertex decimal version.
+    # A version absent from this mapping is not supported on this network.
+    VERTEX_DECIMAL_PLACES: dict[VertexDecimalVersion, int] = {
+        VertexDecimalVersion.V1: 2,
+    }
 
     # Minimum weight of a tx
     MIN_TX_WEIGHT: int = 14
@@ -111,15 +118,19 @@ class HathorSettings(BaseModel):
     # enable peer whitelist
     ENABLE_PEER_WHITELIST: bool = False
 
-    # Genesis pre-mined tokens
-    GENESIS_TOKEN_UNITS: int = 1 * (10 ** 9)  # 1B
+    # Genesis pre-mined tokens in main units, that is, whole tokens without decimal places.
+    GENESIS_TOKEN_MAIN_UNITS: int = 1 * (10 ** 9)  # 1B
 
-    GENESIS_TOKENS: int = 1 * (10 ** 9) * (10 ** 2)  # 100B = GENESIS_TOKEN_UNITS * (10 ** DECIMAL_PLACES)
+    @property
+    def GENESIS_TOKEN_ATOMIC_UNITS(self) -> int:
+        """Genesis pre-mined tokens in atomic units, that is, the on-chain integer amount."""
+        # Blocks are always V1.
+        decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
+        return int(self.GENESIS_TOKEN_MAIN_UNITS * (10 ** decimal_places))
 
     # Fee rate settings
     FEE_PER_OUTPUT: int = 1
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def FEE_DIVISOR(self) -> int:
         """Divisor used for evaluating fee amounts"""
@@ -127,22 +138,24 @@ class HathorSettings(BaseModel):
         assert result.is_integer()
         return int(result)
 
-    # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to
-    # MINIMUM_TOKEN_UNITS_PER_BLOCK.
+    # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+    # is equal to MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK.
     BLOCKS_PER_HALVING: Optional[int] = 2 * 60 * 24 * 365  # 1051200, every 365 days
 
-    INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
-    MINIMUM_TOKEN_UNITS_PER_BLOCK: int = 8
+    INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK: int = 64
+    MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK: int = 8
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
-    def INITIAL_TOKENS_PER_BLOCK(self) -> int:
-        return int(self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES))
+    def INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK(self) -> int:
+        # Blocks are always V1.
+        decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
+        return int(self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** decimal_places))
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
-    def MINIMUM_TOKENS_PER_BLOCK(self) -> int:
-        return int(self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES))
+    def MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK(self) -> int:
+        # Blocks are always V1.
+        decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
+        return int(self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** decimal_places))
 
     # Assume that: amount < minimum
     # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
@@ -152,10 +165,9 @@ class HathorSettings(BaseModel):
     # Applying log to both sides:
     #   n > log2(initial / minimum)
     #   n > log2(initial) - log2(minimum)
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def MAXIMUM_NUMBER_OF_HALVINGS(self) -> int:
-        return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
+        return int(log(self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK, 2))
 
     # Average time between blocks.
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
@@ -180,13 +192,11 @@ class HathorSettings(BaseModel):
     # Timestamp used for the genesis block
     GENESIS_BLOCK_TIMESTAMP: int = 1572636343
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def GENESIS_TX1_TIMESTAMP(self) -> int:
         """Timestamp used for the first genesis transaction."""
         return self.GENESIS_BLOCK_TIMESTAMP + 1
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def GENESIS_TX2_TIMESTAMP(self) -> int:
         """Timestamp used for the second genesis transaction."""
@@ -561,20 +571,6 @@ class HathorSettings(BaseModel):
     NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
 
     @model_validator(mode='after')
-    def _validate_genesis_tokens(self) -> Self:
-        """Validate genesis tokens."""
-        genesis_tokens = self.GENESIS_TOKENS
-        genesis_token_units = self.GENESIS_TOKEN_UNITS
-        decimal_places = self.DECIMAL_PLACES
-
-        if genesis_tokens != genesis_token_units * (10 ** decimal_places):
-            raise ValueError(
-                f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
-                f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
-            )
-        return self
-
-    @model_validator(mode='after')
     def _validate_peer_connection_slots(self) -> Self:
         slot_total = (
             self.P2P_PEER_MAX_INCOMING_CONNECTIONS
@@ -589,4 +585,11 @@ class HathorSettings(BaseModel):
                 f'P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS '
                 f'({self.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS}) = {slot_total}'
             )
+        return self
+
+    @model_validator(mode='after')
+    def _validate_vertex_decimal_places(self) -> Self:
+        """Validate that V1 is mapped."""
+        if VertexDecimalVersion.V1 not in self.VERTEX_DECIMAL_PLACES:
+            raise ValueError('VERTEX_DECIMAL_PLACES must define V1.')
         return self

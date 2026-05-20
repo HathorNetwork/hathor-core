@@ -130,7 +130,7 @@ class VersionResource(Resource):
             reward_spend_min_blocks=self._settings.REWARD_SPEND_MIN_BLOCKS,
             max_number_inputs=self._settings.MAX_NUM_INPUTS,
             max_number_outputs=self._settings.MAX_NUM_OUTPUTS,
-            decimal_places=self._settings.DECIMAL_PLACES,
+            decimal_places=self._settings.DISPLAY_DECIMAL_PLACES,
             genesis_block_hash=self._settings.GENESIS_BLOCK_HASH,
             genesis_tx1_hash=self._settings.GENESIS_TX1_HASH,
             genesis_tx2_hash=self._settings.GENESIS_TX2_HASH,
