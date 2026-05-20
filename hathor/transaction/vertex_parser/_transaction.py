@@ -104,6 +104,8 @@ def deserialize_tx_funds(
     from hathor.transaction.base_transaction import TxInput, TxOutput
 
     (signal_bits, version, tokens_len, inputs_len, outputs_len) = deserializer.read_struct('!BBBBB')
+    tx.signal_bits = signal_bits
+    tx.version = version
     if verbose:
         verbose('signal_bits', signal_bits)
         verbose('version', version)
@@ -132,8 +134,6 @@ def deserialize_tx_funds(
         )
         outputs.append(txout)
 
-    tx.signal_bits = signal_bits
-    tx.version = version
     tx.tokens = tokens
     tx.inputs = inputs
     tx.outputs = outputs

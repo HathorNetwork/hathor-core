@@ -33,6 +33,7 @@ from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.types import VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -66,6 +67,7 @@ class TransactionStreamingClient:
                 nano_runtime_version=NanoRuntimeVersion.V1,
                 restrict_dup_actions=False,
                 daa_version=DAAVersion.V1,
+                latest_decimal_version=VertexDecimalVersion.V1,
             )
         )
 

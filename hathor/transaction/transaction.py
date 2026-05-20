@@ -419,5 +419,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """
         Return the decimal-places version under which this transaction's token amounts are interpreted.
         """
-        # Transactions are always V1. This will be updated in the future.
-        return VertexDecimalVersion.V1
+        # Decimal version is interpreted from the least significant bit of the tx's signal bits.
+        raw_version = self.signal_bits & 1
+        return VertexDecimalVersion(raw_version + 1)  # versions are 1-indexed.

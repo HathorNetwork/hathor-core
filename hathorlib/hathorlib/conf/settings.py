@@ -543,6 +543,8 @@ class HathorSettings(BaseModel):
     # Used to restrict duplicate actions.
     RESTRICT_DUP_ACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
+    ENABLE_VERTEX_DECIMAL_VERSION_V2: FeatureSetting = FeatureSetting.DISABLED
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}
 

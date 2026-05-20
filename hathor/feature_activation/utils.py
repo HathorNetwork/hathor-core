@@ -22,6 +22,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -41,6 +42,7 @@ class Features:
     nano_runtime_version: NanoRuntimeVersion
     restrict_dup_actions: bool
     daa_version: DAAVersion
+    latest_decimal_version: VertexDecimalVersion
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -56,6 +58,7 @@ class Features:
             Feature.OPCODES_V2: settings.ENABLE_OPCODES_V2,
             Feature.RESTRICT_DUP_ACTIONS: settings.RESTRICT_DUP_ACTIONS,
             Feature.REDUCE_DAA_TARGET: settings.ENABLE_DAA_V2,
+            Feature.VERTEX_DECIMAL_VERSION_V2: settings.ENABLE_VERTEX_DECIMAL_VERSION_V2,
         }
 
     @staticmethod
@@ -77,6 +80,9 @@ class Features:
             DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
         )
 
+        is_decimal_version_v2_active = feature_is_active[Feature.VERTEX_DECIMAL_VERSION_V2]
+        latest_decimal_version = VertexDecimalVersion.V2 if is_decimal_version_v2_active else VertexDecimalVersion.V1
+
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
             nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
@@ -85,6 +91,7 @@ class Features:
             nano_runtime_version=nano_runtime_version,
             restrict_dup_actions=feature_is_active[Feature.RESTRICT_DUP_ACTIONS],
             daa_version=daa_version,
+            latest_decimal_version=latest_decimal_version,
         )
 
     @staticmethod
@@ -109,6 +116,7 @@ class Features:
             # Permissive features (come from the block state):
             nanocontracts=features.nanocontracts,
             fee_tokens=features.fee_tokens,
+            latest_decimal_version=features.latest_decimal_version,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
             daa_version=features.daa_version,
@@ -135,6 +143,7 @@ class Features:
             nano_runtime_version=NanoRuntimeVersion.V2,
             restrict_dup_actions=True,
             daa_version=DAAVersion.V2,
+            latest_decimal_version=VertexDecimalVersion.V2,
         )
 
 
