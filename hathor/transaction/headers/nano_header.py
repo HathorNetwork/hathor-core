@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import assert_never
 
 from hathor.types import VertexId
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.context import Context
@@ -108,10 +109,16 @@ class NanoHeader:
     nc_address: bytes
     nc_script: bytes
 
+    decimal_version: VertexDecimalVersion
+
     @classmethod
     def create_from_data(cls, tx: Transaction, data: NanoHeaderData) -> NanoHeader:
         """Create a NanoHeader from a NanoHeaderData instance."""
-        return cls(tx=tx, **{f.name: getattr(data, f.name) for f in fields(data)})
+        return cls(
+            tx=tx,
+            decimal_version=tx.get_decimal_version(),
+            **{f.name: getattr(data, f.name) for f in fields(data)},
+        )
 
     def is_creating_a_new_contract(self) -> bool:
         """Return true if this transaction is creating a new contract."""

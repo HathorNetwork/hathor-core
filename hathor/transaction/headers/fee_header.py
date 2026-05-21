@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from hathor.transaction.util import get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -44,11 +45,7 @@ class FeeHeader:
     # list of tokens and amounts that will be used to pay fees in the transaction
     fees: list[FeeHeaderEntry]
     settings: HathorSettings
-
-    def __init__(self, settings: HathorSettings, tx: 'Transaction', fees: list[FeeHeaderEntry]):
-        self.tx = tx
-        self.fees = fees
-        self.settings = settings
+    decimal_version: VertexDecimalVersion
 
     def get_fees(self) -> list[FeeEntry]:
         return [

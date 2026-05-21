@@ -56,8 +56,9 @@ def deserialize_headers(
                 from hathor.transaction.headers import FeeHeader
                 from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header
                 assert isinstance(vertex, Transaction)
-                fees = deserialize_fee_header(deserializer, decimal_version=vertex.get_decimal_version())
-                header = FeeHeader(settings=settings, tx=vertex, fees=fees)
+                decimal_version = vertex.get_decimal_version()
+                fees = deserialize_fee_header(deserializer, decimal_version=decimal_version)
+                header = FeeHeader(settings=settings, tx=vertex, fees=fees, decimal_version=decimal_version)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
