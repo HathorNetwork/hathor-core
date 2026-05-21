@@ -39,6 +39,7 @@ from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 from hathorlib.base_transaction import TxVersion  # noqa: F401
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -917,6 +918,7 @@ class TxInput:
 
 
 class TxOutput:
+    __slots__ = ('_value', '_decimal_version', 'script', 'token_data')
 
     # first bit in the index byte indicates whether it's an authority output
     TOKEN_INDEX_MASK = 0b01111111
@@ -929,7 +931,13 @@ class TxOutput:
 
     ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
-    def __init__(self, value: int, script: TxOutputScript, token_data: int = 0) -> None:
+    def __init__(
+        self,
+        value: int,
+        script: TxOutputScript,
+        decimal_version: VertexDecimalVersion,
+        token_data: int = 0,
+    ) -> None:
         """
             value: amount spent (4 bytes)
             script: script in bytes
@@ -941,13 +949,14 @@ class TxOutput:
         if value <= 0 or value > MAX_OUTPUT_VALUE:
             raise InvalidOutputValue
 
-        self.value = value  # int
+        self._value = value  # int
+        self._decimal_version = decimal_version
         self.script = script  # bytes
         self.token_data = token_data  # int
 
     def __eq__(self, other):
         return (
-            self.value == other.value and
+            self._value == other._value and
             self.script == other.script and
             self.token_data == other.token_data
         )
@@ -957,7 +966,7 @@ class TxOutput:
 
     def __str__(self) -> str:
         cls_name = type(self).__name__
-        value_str = hex(self.value) if self.is_token_authority() else str(self.value)
+        value_str = hex(self._value) if self.is_token_authority() else str(self._value)
         if self.token_data:
             return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
         else:
@@ -981,11 +990,11 @@ class TxOutput:
 
     def can_mint_token(self) -> bool:
         """Whether this utxo can mint tokens"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_MINT_MASK) > 0)
+        return self.is_token_authority() and ((self._value & self.TOKEN_MINT_MASK) > 0)
 
     def can_melt_token(self) -> bool:
         """Whether this utxo can melt tokens"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
+        return self.is_token_authority() and ((self._value & self.TOKEN_MELT_MASK) > 0)
 
     def to_human_readable(self) -> dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
@@ -995,7 +1004,7 @@ class TxOutput:
         script_type = parse_address_script(self.script)
         if script_type:
             ret = script_type.to_human_readable()
-            ret['value'] = self.value
+            ret['value'] = self._value
             ret['token_data'] = self.token_data
             return ret
 
@@ -1007,7 +1016,7 @@ class TxOutput:
 
     def to_json(self, *, decode_script: bool = False) -> dict[str, Any]:
         data: dict[str, Any] = {}
-        data['value'] = self.value
+        data['value'] = self._value
         data['token_data'] = self.token_data
         data['script'] = base64.b64encode(self.script).decode('utf-8')
         if decode_script:
