@@ -14,6 +14,7 @@
 
 import json
 import os
+from collections.abc import Iterator
 from enum import Enum
 from json import dumps as json_dumps
 from typing import Any, NamedTuple, Optional, TextIO
@@ -115,7 +116,7 @@ _HTTP_METHODS = ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'tr
 _OPENAPI_EXTENSIONS = ('x-visibility', 'x-visibility-override', 'x-rate-limit', 'x-path-params-regex', 'x-proxy-buffers')
 
 
-def _iter_operation_params(params: dict[str, Any]):
+def _iter_operation_params(params: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
     """Yield `(method, operation)` pairs for HTTP methods present in a path item."""
     for method in _HTTP_METHODS:
         method_params = params.get(method)
