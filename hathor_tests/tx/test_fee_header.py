@@ -1,9 +1,31 @@
 from typing import Any
 
+from hathor.serialization import Deserializer, Serializer
 from hathor.transaction import Transaction
 from hathor.transaction.headers.fee_header import FeeEntry, FeeHeader, FeeHeaderEntry
+from hathor.transaction.util import VerboseCallback
+from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header, serialize_fee_header
+from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
 from hathor.types import TokenUid
 from hathor_tests import unittest
+
+
+def _serialize_fee_header(header: FeeHeader) -> bytes:
+    serializer = Serializer.build_bytes_serializer()
+    serialize_fee_header(serializer, header, decimal_version=header.tx.get_decimal_version())
+    return bytes(serializer.finalize())
+
+
+def _deserialize_fee_header(
+    tx: Transaction,
+    buf: bytes,
+    *,
+    verbose: VerboseCallback = None,
+) -> tuple[FeeHeader, bytes]:
+    deserializer = Deserializer.build_bytes_deserializer(buf)
+    fees = deserialize_fee_header(deserializer, decimal_version=tx.get_decimal_version(), verbose=verbose)
+    header = FeeHeader(settings=tx._settings, tx=tx, fees=fees)
+    return header, bytes(deserializer.read_all())
 
 
 class FeeHeaderTest(unittest.TestCase):
@@ -22,8 +44,8 @@ class FeeHeaderTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=1, amount=200),  # Custom token paying
             ],
         )
-        serialized = header_round_trip.serialize()
-        deserialized, remaining = FeeHeader.deserialize(tx, serialized)
+        serialized = _serialize_fee_header(header_round_trip)
+        deserialized, remaining = _deserialize_fee_header(tx, serialized)
         assert len(remaining) == 0
         assert deserialized.fees == header_round_trip.fees
 
@@ -38,8 +60,8 @@ class FeeHeaderTest(unittest.TestCase):
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=300)],  # HTR paying
         )
-        serialized_verbose = header_verbose.serialize()
-        deserialized_verbose, remaining = FeeHeader.deserialize(tx, serialized_verbose, verbose=verbose_callback)
+        serialized_verbose = _serialize_fee_header(header_verbose)
+        deserialized_verbose, remaining = _deserialize_fee_header(tx, serialized_verbose, verbose=verbose_callback)
 
         # Check that verbose callback was called for all expected values
         assert len(verbose_calls) == 2  # header_id, fees_len
@@ -56,10 +78,10 @@ class FeeHeaderTest(unittest.TestCase):
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=500)],  # HTR paying
         )
-        sighash_bytes = header_sighash.get_sighash_bytes()
-        serialized_bytes = header_sighash.serialize()
+        sighash_bytes = get_header_sighash_bytes(header_sighash, decimal_version=tx.get_decimal_version())
+        serialized_bytes = _serialize_fee_header(header_sighash)
 
-        # get_sighash_bytes should return the same as serialize()
+        # The fee header sighash bytes are identical to its full serialization.
         assert sighash_bytes == serialized_bytes
 
     def test_fee_header_get_fees(self) -> None:
@@ -111,8 +133,8 @@ class FeeHeaderTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=4, amount=25),  # token4
             ],
         )
-        serialized_complex = header_complex.serialize()
-        deserialized_complex, remaining = FeeHeader.deserialize(tx, serialized_complex)
+        serialized_complex = _serialize_fee_header(header_complex)
+        deserialized_complex, remaining = _deserialize_fee_header(tx, serialized_complex)
 
         assert len(remaining) == 0
         assert len(deserialized_complex.fees) == 3
@@ -129,8 +151,8 @@ class FeeHeaderTest(unittest.TestCase):
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=2 ** 63 - 1)],  # Max amount
         )
-        serialized_max = header_max.serialize()
-        deserialized_max, remaining = FeeHeader.deserialize(tx, serialized_max)
+        serialized_max = _serialize_fee_header(header_max)
+        deserialized_max, remaining = _deserialize_fee_header(tx, serialized_max)
         assert len(remaining) == 0
         assert deserialized_max.fees[0].amount == 2 ** 63 - 1
 
@@ -140,8 +162,8 @@ class FeeHeaderTest(unittest.TestCase):
             tx=tx,
             fees=[FeeHeaderEntry(token_index=1, amount=42)],  # Single custom token fee
         )
-        serialized_single = header_single.serialize()
-        deserialized_single, remaining = FeeHeader.deserialize(tx, serialized_single)
+        serialized_single = _serialize_fee_header(header_single)
+        deserialized_single, remaining = _deserialize_fee_header(tx, serialized_single)
         assert len(remaining) == 0
         assert len(deserialized_single.fees) == 1
         assert deserialized_single.fees[0].token_index == 1

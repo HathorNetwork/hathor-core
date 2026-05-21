@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.transaction.headers.base import VertexBaseHeader
+from typing import TypeAlias
+
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.headers.nano_header import NanoHeader
 from hathor.transaction.headers.types import VertexHeaderId
 
+VertexHeader: TypeAlias = NanoHeader | FeeHeader
+
 __all__ = [
-    'VertexBaseHeader',
+    'VertexHeader',
     'VertexHeaderId',
     'NanoHeader',
     'FeeHeader',

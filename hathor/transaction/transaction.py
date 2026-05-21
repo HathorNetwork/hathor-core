@@ -25,7 +25,7 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader, VertexHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
@@ -33,7 +33,7 @@ from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
 from hathorlib.decimal_places import VertexDecimalVersion
 
-T = TypeVar('T', bound=VertexBaseHeader)
+T = TypeVar('T', bound=VertexHeader)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
