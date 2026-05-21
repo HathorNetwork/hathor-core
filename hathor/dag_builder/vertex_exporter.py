@@ -45,6 +45,7 @@ from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+from hathorlib.decimal_places import VertexDecimalVersion
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
@@ -408,6 +409,9 @@ class VertexExporter:
         append_actions(NCActionType.DEPOSIT, NC_DEPOSIT_KEY)
         append_actions(NCActionType.WITHDRAWAL, NC_WITHDRAWAL_KEY)
 
+        # Blocks are always V1.
+        decimal_version = vertex.get_decimal_version() if isinstance(vertex, Transaction) else VertexDecimalVersion.V1
+
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
             # Even though we know the NanoHeader only supports Transactions, we force the typing here so we can test
@@ -420,6 +424,7 @@ class VertexExporter:
             nc_actions=nc_actions,
             nc_address=b'\x00' * ADDRESS_LEN_BYTES,
             nc_script=b'',
+            decimal_version=decimal_version,
         )
         vertex.headers.append(nano_header)
 
@@ -455,10 +460,13 @@ class VertexExporter:
             entry = FeeHeaderEntry(token_index=token_index, amount=fee_amount)
             entries.append(entry)
 
+        # Blocks are always V1.
+        decimal_version = vertex.get_decimal_version() if isinstance(vertex, Transaction) else VertexDecimalVersion.V1
         fee_header = FeeHeader(
             settings=vertex._settings,
             tx=vertex,
             fees=entries,
+            decimal_version=decimal_version,
         )
         vertex.headers.append(fee_header)
 
