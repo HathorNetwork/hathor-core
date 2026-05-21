@@ -17,9 +17,9 @@ class TestGenerateNginxConfig:
         def get_global_settings() -> SimpleNamespace:
             return SimpleNamespace(API_VERSION_PREFIX='v1a')
 
-        get_settings_module.get_global_settings = get_global_settings
-        hathor_module.conf = conf_module
-        conf_module.get_settings = get_settings_module
+        setattr(get_settings_module, 'get_global_settings', get_global_settings)
+        setattr(hathor_module, 'conf', conf_module)
+        setattr(conf_module, 'get_settings', get_settings_module)
 
         monkeypatch.setitem(sys.modules, 'hathor', hathor_module)
         monkeypatch.setitem(sys.modules, 'hathor.conf', conf_module)
