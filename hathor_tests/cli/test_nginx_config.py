@@ -9,7 +9,7 @@ from hathor_cli.nginx_config import generate_nginx_config
 
 class TestGenerateNginxConfig:
     @staticmethod
-    def _stub_settings_modules() -> None:
+    def _stub_settings_modules(monkeypatch: pytest.MonkeyPatch) -> None:
         hathor_module = ModuleType('hathor')
         conf_module = ModuleType('hathor.conf')
         get_settings_module = ModuleType('hathor.conf.get_settings')
@@ -21,12 +21,12 @@ class TestGenerateNginxConfig:
         hathor_module.conf = conf_module
         conf_module.get_settings = get_settings_module
 
-        sys.modules['hathor'] = hathor_module
-        sys.modules['hathor.conf'] = conf_module
-        sys.modules['hathor.conf.get_settings'] = get_settings_module
+        monkeypatch.setitem(sys.modules, 'hathor', hathor_module)
+        monkeypatch.setitem(sys.modules, 'hathor.conf', conf_module)
+        monkeypatch.setitem(sys.modules, 'hathor.conf.get_settings', get_settings_module)
 
-    def test_mixed_visibility_excludes_private_method_from_limit_except(self) -> None:
-        self._stub_settings_modules()
+    def test_mixed_visibility_excludes_private_method_from_limit_except(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._stub_settings_modules(monkeypatch)
         openapi = {
             'paths': {
                 '/example': {
@@ -54,8 +54,8 @@ class TestGenerateNginxConfig:
         assert 'limit_except OPTIONS POST { deny all; }' in config
         assert 'limit_except OPTIONS GET POST { deny all; }' not in config
 
-    def test_conflicting_public_rate_limits_raise_error(self) -> None:
-        self._stub_settings_modules()
+    def test_conflicting_public_rate_limits_raise_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._stub_settings_modules(monkeypatch)
         openapi = {
             'paths': {
                 '/example': {
@@ -78,8 +78,12 @@ class TestGenerateNginxConfig:
         with pytest.raises(ValueError, match='conflicting x-rate-limit'):
             generate_nginx_config(openapi, out_file=StringIO())
 
-    def test_private_operation_visibility_does_not_warn_as_fallback(self, capsys: pytest.CaptureFixture[str]) -> None:
-        self._stub_settings_modules()
+    def test_private_operation_visibility_does_not_warn_as_fallback(
+        self,
+        capsys: pytest.CaptureFixture[str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._stub_settings_modules(monkeypatch)
         openapi = {
             'paths': {
                 '/example': {
@@ -98,8 +102,8 @@ class TestGenerateNginxConfig:
         captured = capsys.readouterr()
         assert 'Visibility not set for path `/example`' not in captured.err
 
-    def test_conflicting_public_path_params_regex_raise_error(self) -> None:
-        self._stub_settings_modules()
+    def test_conflicting_public_path_params_regex_raise_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._stub_settings_modules(monkeypatch)
         openapi = {
             'paths': {
                 '/example/{value}': {
@@ -124,8 +128,8 @@ class TestGenerateNginxConfig:
         with pytest.raises(ValueError, match='conflicting x-path-params-regex'):
             generate_nginx_config(openapi, out_file=StringIO())
 
-    def test_conflicting_public_proxy_buffers_raise_error(self) -> None:
-        self._stub_settings_modules()
+    def test_conflicting_public_proxy_buffers_raise_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._stub_settings_modules(monkeypatch)
         openapi = {
             'paths': {
                 '/example': {

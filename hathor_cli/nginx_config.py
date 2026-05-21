@@ -271,7 +271,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
             allowed_methods.add(method.upper())
         location_params['allowed_methods'] = sorted(allowed_methods)
 
-        if not allowed_methods:
+        if not public_methods:
             warn(f'Path `{path}` has no public methods but is public')
             continue
 

@@ -128,23 +128,25 @@ AWS_MAIN_REGISTRY = $(AWS_MAIN_ECR_REGISTRY)/webtank
 AWS_MAIN_REGION ?= us-east-1
 AWS_MAIN_PROFILE ?= hathor-network
 
+.INTERMEDIATE: .aws-main-login.stamp
+
 .PHONY: aws-main
 aws-main: aws-main-default aws-main-no-rate-limit
 	@echo "All AWS Main images built and pushed successfully!"
 
-.PHONY: aws-main-login
-aws-main-login:
+.aws-main-login.stamp:
 	@echo "Logging in to AWS Main ECR..."
 	aws ecr get-login-password --region $(AWS_MAIN_REGION) --profile $(AWS_MAIN_PROFILE) | docker login --username AWS --password-stdin $(AWS_MAIN_ECR_REGISTRY)
+	@touch $@
 
 .PHONY: aws-main-default
-aws-main-default: clean set_real_ip_from_cloudfront aws-main-login
+aws-main-default: clean set_real_ip_from_cloudfront .aws-main-login.stamp
 	@echo "Building and pushing latest image for AWS Main..."
 	$(call generate_nginx_conf,)
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: aws-main-no-rate-limit
-aws-main-no-rate-limit: clean set_real_ip_from_cloudfront aws-main-login
+aws-main-no-rate-limit: clean set_real_ip_from_cloudfront .aws-main-login.stamp
 	@echo "Building and pushing no-rate-limit image for AWS Main..."
 	$(call generate_nginx_conf,--disable-rate-limits)
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
@@ -218,7 +220,6 @@ help:
 	@echo "  hathor-testnet-shielded-outputs-default           - Build and push default image for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  hathor-testnet-shielded-outputs-no-rate-limit     - Build and push no-rate-limit image for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  aws-main                  			- Build and push all images for AWS Main Account"
-	@echo "  aws-main-login            			- Log in to AWS Main ECR before pushing images"
 	@echo "  aws-main-default          			- Build and push default image for AWS Main Account"
 	@echo "  aws-main-no-rate-limit	  			- Build and push no-rate-limit image for AWS Main Account"
 	@echo ""
