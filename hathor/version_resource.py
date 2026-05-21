@@ -26,6 +26,7 @@ from hathor.manager import HathorManager
 from hathor.transaction.token_info import TokenVersion
 from hathor.types import BlockId, TransactionId
 from hathor.utils.pydantic import BaseModel, Hex
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 class NativeTokenInfo(BaseModel):
@@ -48,7 +49,13 @@ class VersionResponse(ResponseModel):
     reward_spend_min_blocks: int = Field(description="Minimum blocks before reward can be spent")
     max_number_inputs: int = Field(description="Maximum number of inputs per transaction")
     max_number_outputs: int = Field(description="Maximum number of outputs per transaction")
-    decimal_places: int = Field(description="Number of decimal places for token amounts")
+    decimal_places: int = Field(description="Number of decimal places for token amounts. DEPRECATED")
+    display_decimal_places: int = Field(
+        description="Number of decimal places to be displayed for all tokens; it is simply cosmetic"
+    )
+    decimal_places_by_version: dict[VertexDecimalVersion, int] = Field(
+        description="Number of decimal places for each supported vertex decimal version"
+    )
     genesis_block_hash: Hex[BlockId] = Field(description="Genesis block hash in hex")
     genesis_tx1_hash: Hex[TransactionId] = Field(description="Genesis transaction 1 hash in hex")
     genesis_tx2_hash: Hex[TransactionId] = Field(description="Genesis transaction 2 hash in hex")
@@ -71,6 +78,8 @@ VersionResponse.openapi_examples = {
             max_number_inputs=256,
             max_number_outputs=256,
             decimal_places=2,
+            display_decimal_places=2,
+            decimal_places_by_version={VertexDecimalVersion.V1: 2},
             genesis_block_hash=BlockId(b'\x00' * 32),
             genesis_tx1_hash=TransactionId(b'\x00' * 31 + b'\x01'),
             genesis_tx2_hash=TransactionId(b'\x00' * 31 + b'\x02'),
@@ -130,7 +139,9 @@ class VersionResource(Resource):
             reward_spend_min_blocks=self._settings.REWARD_SPEND_MIN_BLOCKS,
             max_number_inputs=self._settings.MAX_NUM_INPUTS,
             max_number_outputs=self._settings.MAX_NUM_OUTPUTS,
-            decimal_places=self._settings.DECIMAL_PLACES,
+            decimal_places=self._settings.DISPLAY_DECIMAL_PLACES,  # TODO: This field is deprecated and will be removed
+            display_decimal_places=self._settings.DISPLAY_DECIMAL_PLACES,
+            decimal_places_by_version=self._settings.VERTEX_DECIMAL_PLACES,
             genesis_block_hash=self._settings.GENESIS_BLOCK_HASH,
             genesis_tx1_hash=self._settings.GENESIS_TX1_HASH,
             genesis_tx2_hash=self._settings.GENESIS_TX2_HASH,

@@ -29,6 +29,7 @@ from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback
 from hathor.utils.int import get_bit_list
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -202,6 +203,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
+        json['decimal_version'] = VertexDecimalVersion.V1.value  # Blocks are always V1.
         return json
 
     def to_json_extended(self) -> dict[str, Any]:

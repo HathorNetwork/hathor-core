@@ -41,7 +41,7 @@ class DefaultFiller:
         # create the dummy and genesis nodes before builder.build() is called
         genesis_block = self._get_or_create_node('genesis_block', default_type=DAGNodeType.Genesis)
         if len(genesis_block.outputs) == 0:
-            genesis_block.outputs.append(DAGOutput(self._settings.GENESIS_TOKENS, 'HTR', {}))
+            genesis_block.outputs.append(DAGOutput(self._settings.GENESIS_TOKEN_ATOMIC_UNITS, 'HTR', {}))
         self._get_or_create_node('genesis_1', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('genesis_2', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('dummy', default_type=DAGNodeType.Transaction)

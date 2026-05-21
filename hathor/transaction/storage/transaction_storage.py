@@ -950,7 +950,7 @@ class TransactionStorage(ABC):
             timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
             weight=self._settings.MIN_BLOCK_WEIGHT,
             outputs=[
-                TxOutput(self._settings.GENESIS_TOKENS, self._settings.GENESIS_OUTPUT_SCRIPT),
+                TxOutput(self._settings.GENESIS_TOKEN_ATOMIC_UNITS, self._settings.GENESIS_OUTPUT_SCRIPT),
             ],
         )
         block.update_hash()

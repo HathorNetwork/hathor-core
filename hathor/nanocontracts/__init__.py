@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.conf import settings
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail
@@ -20,6 +19,7 @@ from hathor.nanocontracts.on_chain_blueprint import OnChainBlueprint
 from hathor.nanocontracts.runner import Runner
 from hathor.nanocontracts.storage import NCRocksDBStorageFactory, NCStorageFactory
 from hathor.nanocontracts.types import TokenUid, VertexId, export, fallback, public, view
+from hathorlib.conf import settings
 
 # Identifier used in metadata's voided_by when a Nano Contract method fails.
 NC_EXECUTION_FAIL_ID: bytes = b'nc-fail'

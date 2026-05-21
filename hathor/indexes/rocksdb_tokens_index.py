@@ -335,7 +335,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             name=self._settings.HATHOR_TOKEN_NAME,
             symbol=self._settings.HATHOR_TOKEN_SYMBOL,
             version=TokenVersion.NATIVE,
-            total=self._settings.GENESIS_TOKENS,
+            total=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
         )
 
     def _get_value_info(self, token_uid: bytes, *, create_default: bool = True) -> _InfoDict:

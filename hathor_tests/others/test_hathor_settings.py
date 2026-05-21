@@ -11,6 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch
@@ -20,9 +21,10 @@ from pydantic import ValidationError
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.mainnet import SETTINGS as MAINNET_SETTINGS
-from hathor.conf.settings import DECIMAL_PLACES, GENESIS_TOKEN_UNITS, GENESIS_TOKENS, HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathorlib.conf import MAINNET_SETTINGS_FILEPATH
 from hathorlib.conf.utils import load_yaml_settings
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 @pytest.mark.parametrize('filepath', ['fixtures/valid_hathor_settings_fixture.yml'])
@@ -101,57 +103,6 @@ def test_missing_hathor_settings_from_yaml(filepath):
     assert "validation error for HathorSettings\nNETWORK_NAME" in str(e.value)
 
 
-def test_tokens() -> None:
-    yaml_mock = Mock()
-    required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
-
-    def mock_settings(mock: Mock, settings_: dict[str, Any]) -> None:
-        mock.return_value = required_settings | settings_
-
-    with patch('hathorlib.utils.yaml.dict_from_extended_yaml', yaml_mock):
-        # Test default values passes
-        mock_settings(yaml_mock, dict(
-            GENESIS_TOKENS=GENESIS_TOKENS,
-            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
-            DECIMAL_PLACES=DECIMAL_PLACES,
-        ))
-        load_yaml_settings(HathorSettings, filepath='some_path')
-
-        # Test failures
-        mock_settings(yaml_mock, dict(
-            GENESIS_TOKENS=GENESIS_TOKENS + 1,
-            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
-            DECIMAL_PLACES=DECIMAL_PLACES,
-        ))
-        with pytest.raises(ValidationError) as e:
-            load_yaml_settings(HathorSettings, filepath='some_path')
-        assert (
-            'invalid tokens: GENESIS_TOKENS=100000000001, GENESIS_TOKEN_UNITS=1000000000, DECIMAL_PLACES=2'
-        ) in str(e.value)
-
-        mock_settings(yaml_mock, dict(
-            GENESIS_TOKENS=GENESIS_TOKENS,
-            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS + 1,
-            DECIMAL_PLACES=DECIMAL_PLACES,
-        ))
-        with pytest.raises(ValidationError) as e:
-            load_yaml_settings(HathorSettings, filepath='some_path')
-        assert (
-            'invalid tokens: GENESIS_TOKENS=100000000000, GENESIS_TOKEN_UNITS=1000000001, DECIMAL_PLACES=2'
-        ) in str(e.value)
-
-        mock_settings(yaml_mock, dict(
-            GENESIS_TOKENS=GENESIS_TOKENS,
-            GENESIS_TOKEN_UNITS=GENESIS_TOKEN_UNITS,
-            DECIMAL_PLACES=DECIMAL_PLACES + 1,
-        ))
-        with pytest.raises(ValidationError) as e:
-            load_yaml_settings(HathorSettings, filepath='some_path')
-        assert (
-            'invalid tokens: GENESIS_TOKENS=100000000000, GENESIS_TOKEN_UNITS=1000000000, DECIMAL_PLACES=3'
-        ) in str(e.value)
-
-
 def test_token_deposit_percentage() -> None:
     yaml_mock = Mock()
     required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
@@ -206,8 +157,8 @@ def test_consensus_algorithm() -> None:
         # Test passes when PoA is enabled without block rewards
         mock_settings(yaml_mock, dict(
             BLOCKS_PER_HALVING=None,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         load_yaml_settings(HathorSettings, filepath='some_path')
@@ -215,8 +166,8 @@ def test_consensus_algorithm() -> None:
         # Test fails when no signer is provided
         mock_settings(yaml_mock, dict(
             BLOCKS_PER_HALVING=None,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=()),
         ))
         with pytest.raises(ValidationError) as e:
@@ -226,35 +177,70 @@ def test_consensus_algorithm() -> None:
         # Test fails when PoA is enabled with BLOCKS_PER_HALVING
         mock_settings(yaml_mock, dict(
             BLOCKS_PER_HALVING=123,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
 
-        # Test fails when PoA is enabled with INITIAL_TOKEN_UNITS_PER_BLOCK
+        # Test fails when PoA is enabled with INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK
         mock_settings(yaml_mock, dict(
             BLOCKS_PER_HALVING=None,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=123,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=123,
+            MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=0,
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
 
-        # Test fails when PoA is enabled with MINIMUM_TOKEN_UNITS_PER_BLOCK
+        # Test fails when PoA is enabled with MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK
         mock_settings(yaml_mock, dict(
             BLOCKS_PER_HALVING=None,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=123,
+            INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=123,
             CONSENSUS_ALGORITHM=dict(type='PROOF_OF_AUTHORITY', signers=(dict(public_key=b'some_signer'),)),
         ))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
         assert 'PoA networks do not support block rewards' in str(e.value)
+
+
+def test_get_decimal_places_unsupported_version_raises() -> None:
+    from types import SimpleNamespace
+    settings = SimpleNamespace(VERTEX_DECIMAL_PLACES={})
+    with pytest.raises(ValueError) as e:
+        VertexDecimalVersion.V1.get_decimal_places(settings)  # type: ignore[arg-type]
+    assert str(e.value) == 'unsupported decimal places version V1'
+
+
+def test_vertex_decimal_places() -> None:
+    yaml_mock = Mock()
+    required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
+
+    def mock_settings(mock: Mock, settings_: dict[str, Any]) -> None:
+        mock.return_value = required_settings | settings_
+
+    with patch('hathorlib.utils.yaml.dict_from_extended_yaml', yaml_mock):
+        # Default mapping (V1 -> 2) loads and drives the genesis atomic amount.
+        mock_settings(yaml_mock, dict(VERTEX_DECIMAL_PLACES={VertexDecimalVersion.V1: 2}))
+        settings = load_yaml_settings(HathorSettings, filepath='some_path')
+        assert VertexDecimalVersion.V1.get_decimal_places(settings) == 2
+        assert settings.GENESIS_TOKEN_ATOMIC_UNITS == settings.GENESIS_TOKEN_MAIN_UNITS * (10 ** 2)
+
+        # Custom decimal places propagate to the computed genesis amount.
+        mock_settings(yaml_mock, dict(VERTEX_DECIMAL_PLACES={VertexDecimalVersion.V1: 5}))
+        settings = load_yaml_settings(HathorSettings, filepath='some_path')
+        assert VertexDecimalVersion.V1.get_decimal_places(settings) == 5
+        assert settings.GENESIS_TOKEN_ATOMIC_UNITS == settings.GENESIS_TOKEN_MAIN_UNITS * (10 ** 5)
+
+        # A mapping without V1 is rejected
+        mock_settings(yaml_mock, dict(VERTEX_DECIMAL_PLACES={}))
+        with pytest.raises(ValidationError) as e:
+            load_yaml_settings(HathorSettings, filepath='some_path')
+        assert 'VERTEX_DECIMAL_PLACES must define V1.' in str(e.value)
 
 
 # TODO: Tests below are temporary while settings via python coexist with settings via yaml, just to make sure

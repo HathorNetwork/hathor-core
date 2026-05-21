@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts.blueprint_service import BlueprintService
 from hathor.nanocontracts.exception import (
     NanoContractDoesNotExist,
@@ -47,6 +47,7 @@ from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.conf.settings import HATHOR_TOKEN_UID
 from hathorlib.nanocontracts.verification import verify_action_list
 
 MAX_SEQNUM_DIFF_MEMPOOL = MAX_SEQNUM_JUMP_SIZE + 30

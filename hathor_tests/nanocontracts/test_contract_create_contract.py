@@ -285,7 +285,11 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # -2 from the TKA mint in nc1.out[0]
         # -5 from the mint in nc5.nc_method
         # +1 from the melt in nc6.nc_method
-        assert htr_total == self._settings.GENESIS_TOKENS + 34 * self._settings.INITIAL_TOKENS_PER_BLOCK - 2 - 5 + 1
+        assert htr_total == (
+            self._settings.GENESIS_TOKEN_ATOMIC_UNITS
+            + 34 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+            - 2 - 5 + 1
+        )
         # 200 from nc1.out[0]
         # +456 from nc5.nc_method
         # -123 from nc6.nc_method
@@ -334,7 +338,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert self.manager.tx_storage.get_height_best_block() == 50
         # TODO: Is there a bug in the token index? It should be 50, not 52 blocks
         # genesis + 50 blocks - 2 from the TKA mint in nc1.out[0]
-        assert htr_total == self._settings.GENESIS_TOKENS + 52 * self._settings.INITIAL_TOKENS_PER_BLOCK - 2
+        assert htr_total == (
+            self._settings.GENESIS_TOKEN_ATOMIC_UNITS + 52 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 2
+        )
         # 200 from nc1.out[0]
         assert tka_total == 200
 
