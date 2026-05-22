@@ -46,6 +46,7 @@ from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT,
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
+from hathorlib.decimal_places import VertexDecimalVersion
 
 STR_NC_TYPE = make_nc_type(str)
 INT_NC_TYPE = make_nc_type(int)
@@ -120,6 +121,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nano_header = NanoHeader(
             tx=nc,
+            decimal_version=nc.get_decimal_version(),
             nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,
@@ -410,9 +412,9 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         # Incomplete transaction. It will be used as input of nc2.
         outputs = [
-            TxOutput(100, b'', 0),  # HTR
-            TxOutput(200, b'', 1),  # TOKEN A
-            TxOutput(300, b'', 2),  # TOKEN B
+            TxOutput(100, b'', VertexDecimalVersion.V1, 0),  # HTR
+            TxOutput(200, b'', VertexDecimalVersion.V1, 1),  # TOKEN A
+            TxOutput(300, b'', VertexDecimalVersion.V1, 2),  # TOKEN B
         ]
         tokens = [b'token-a', b'token-b']
         tx = Transaction(outputs=outputs, tokens=tokens)
@@ -429,9 +431,9 @@ class NCNanoContractTestCase(unittest.TestCase):
             TxInput(tx.hash, 2, b''),
         ]
         outputs = [
-            TxOutput(10, b'', 0),   # HTR
-            TxOutput(250, b'', 1),  # TOKEN A
-            TxOutput(300, b'', 2),  # TOKEN B
+            TxOutput(10, b'', VertexDecimalVersion.V1, 0),   # HTR
+            TxOutput(250, b'', VertexDecimalVersion.V1, 1),  # TOKEN A
+            TxOutput(300, b'', VertexDecimalVersion.V1, 2),  # TOKEN B
         ]
         nc2 = Transaction(
             weight=1,
@@ -442,6 +444,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         )
         nc2.headers.append(NanoHeader(
             tx=nc2,
+            decimal_version=nc2.get_decimal_version(),
             nc_seqnum=0,
             nc_id=b'',
             nc_method='',

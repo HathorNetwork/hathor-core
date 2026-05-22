@@ -12,6 +12,7 @@ from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.utils import add_blocks_unlock_reward, get_genesis_key
+from hathorlib.decimal_places import VertexDecimalVersion
 
 DEBUG: bool = False
 
@@ -50,7 +51,7 @@ class TransactionTest(unittest.TestCase):
         address = manager.wallet.get_unused_address_bytes()
         script = P2PKH.create_output_script(address)
         input_ = TxInput(reward_block.hash, 0, b'')
-        output = TxOutput(value, script)
+        output = TxOutput(value, script, VertexDecimalVersion.V1)
         tx = Transaction(
             weight=1,
             timestamp=int(manager.reactor.seconds()) + 1,

@@ -130,6 +130,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
             tx=nc,
+            decimal_version=nc.get_decimal_version(),
             nc_seqnum=1,
             nc_id=nc_id,
             nc_method=nc_method,

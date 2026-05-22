@@ -48,6 +48,7 @@ from hathor_tests.utils import (
     create_script_with_sigops,
     get_genesis_key,
 )
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.serialization import BadDataError, Deserializer, Serializer
 from hathorlib.serialization.encoding.output_value import decode_output_value_v1, encode_output_value_v1
 
@@ -971,8 +972,8 @@ class TransactionTest(unittest.TestCase):
         value = 1
         address = decode_address('WUDtnw3GYjvUnZmiHAmus6hhs9GoSUSJMG')
         script = P2PKH.create_output_script(address)
-        output = TxOutput(value, script)
-        output.value = -1
+        output = TxOutput(value, script, VertexDecimalVersion.V1)
+        output._value = -1
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
         _input = TxInput(random_bytes, 0, random_bytes)
         tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
@@ -1062,7 +1063,7 @@ class TransactionTest(unittest.TestCase):
 
         value = genesis_block.outputs[0].value
         script = b'*' * (self._settings.MAX_OUTPUT_SCRIPT_SIZE + offset)
-        _output = TxOutput(value, script)
+        _output = TxOutput(value, script, VertexDecimalVersion.V1)
 
         tx = Transaction(inputs=[_input], outputs=[_output], storage=self.tx_storage)
         self._verifiers.vertex.verify_outputs(tx)
@@ -1218,7 +1219,7 @@ class TransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT + 1)
-        output1 = TxOutput(value, hscript)
+        output1 = TxOutput(value, hscript, VertexDecimalVersion.V1)
         tx = Transaction(inputs=[_input], outputs=[output1], storage=self.tx_storage)
         tx.update_hash()
         # This calls verify to ensure that verify_sigops_output is being called on verify
@@ -1232,7 +1233,7 @@ class TransactionTest(unittest.TestCase):
         num_outputs = 5
 
         hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_OUTPUT + num_outputs) // num_outputs)
-        output2 = TxOutput(value, hscript)
+        output2 = TxOutput(value, hscript, VertexDecimalVersion.V1)
         tx = Transaction(inputs=[_input], outputs=[output2]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
         with self.assertRaises(TooManySigOps):
@@ -1244,7 +1245,7 @@ class TransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT - 1)
-        output3 = TxOutput(value, hscript)
+        output3 = TxOutput(value, hscript, VertexDecimalVersion.V1)
         tx = Transaction(inputs=[_input], outputs=[output3], storage=self.tx_storage)
         tx.update_hash()
         self._verifiers.vertex.verify_sigops_output(tx)
@@ -1256,7 +1257,7 @@ class TransactionTest(unittest.TestCase):
         num_outputs = 5
 
         hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_OUTPUT - 1) // num_outputs)
-        output4 = TxOutput(value, hscript)
+        output4 = TxOutput(value, hscript, VertexDecimalVersion.V1)
         tx = Transaction(inputs=[_input], outputs=[output4]*num_outputs, storage=self.tx_storage)
         tx.update_hash()
         self._verifiers.vertex.verify_sigops_output(tx)
@@ -1266,7 +1267,7 @@ class TransactionTest(unittest.TestCase):
         value = genesis_block.outputs[0].value - 1
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        _output = TxOutput(value, script)
+        _output = TxOutput(value, script, VertexDecimalVersion.V1)
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_INPUT + 1)
         input1 = TxInput(genesis_block.hash, 0, hscript)
@@ -1280,7 +1281,7 @@ class TransactionTest(unittest.TestCase):
         value = genesis_block.outputs[0].value - 1
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        _output = TxOutput(value, script)
+        _output = TxOutput(value, script, VertexDecimalVersion.V1)
         num_inputs = 5
 
         hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_INPUT + num_inputs) // num_inputs)
@@ -1295,7 +1296,7 @@ class TransactionTest(unittest.TestCase):
         value = genesis_block.outputs[0].value - 1
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        _output = TxOutput(value, script)
+        _output = TxOutput(value, script, VertexDecimalVersion.V1)
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_INPUT - 1)
         input3 = TxInput(genesis_block.hash, 0, hscript)
@@ -1308,7 +1309,7 @@ class TransactionTest(unittest.TestCase):
         value = genesis_block.outputs[0].value - 1
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        _output = TxOutput(value, script)
+        _output = TxOutput(value, script, VertexDecimalVersion.V1)
         num_inputs = 5
 
         hscript = create_script_with_sigops((self._settings.MAX_TX_SIGOPS_INPUT - 1) // num_inputs)

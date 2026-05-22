@@ -34,6 +34,7 @@ from hathor.wallet import HDWallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason, set_nano_header
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.nanocontracts.verification import MAX_ACTIONS_LEN
 
 
@@ -176,14 +177,14 @@ class TestActions(unittest.TestCase):
             assert tx.get_token_uid(out.get_token_index()) == HATHOR_TOKEN_UID, (
                 'expected HTR in output index 0'
             )
-            out.value += update_htr_output
+            out._value += update_htr_output
 
         if update_tka_output is not None:
             out = tx.outputs[1]
             assert tx.get_token_uid(out.get_token_index()) == self.tka.hash, (
                 'expected TKA in output index 1'
             )
-            out.value += update_tka_output
+            out._value += update_tka_output
 
         if add_inputs:
             tx.inputs.extend(add_inputs)
@@ -347,7 +348,12 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(
             tx=self.tx2,
             add_outputs=[
-                TxOutput(value=authority, script=b'', token_data=TxOutput.TOKEN_AUTHORITY_MASK | token_index)
+                TxOutput(
+                    value=authority,
+                    script=b'',
+                    decimal_version=VertexDecimalVersion.V1,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | token_index,
+                )
             ]
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
@@ -929,7 +935,12 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(
             tx=self.tx1,
             add_outputs=[
-                TxOutput(value=TxOutput.TOKEN_MINT_MASK, script=b'', token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1)
+                TxOutput(
+                    value=TxOutput.TOKEN_MINT_MASK,
+                    script=b'',
+                    decimal_version=VertexDecimalVersion.V1,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                )
             ]
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[
@@ -946,7 +957,12 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(
             tx=self.tx1,
             add_outputs=[
-                TxOutput(value=TxOutput.TOKEN_MELT_MASK, script=b'', token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1)
+                TxOutput(
+                    value=TxOutput.TOKEN_MELT_MASK,
+                    script=b'',
+                    decimal_version=VertexDecimalVersion.V1,
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                )
             ]
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[

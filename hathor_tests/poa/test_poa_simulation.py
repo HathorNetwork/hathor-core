@@ -552,9 +552,9 @@ class PoaSimulationTest(SimulatorTestCase):
             parents=[self.simulator.settings.GENESIS_TX1_HASH, self.simulator.settings.GENESIS_TX2_HASH],
             inputs=[TxInput(self.simulator.settings.GENESIS_BLOCK_HASH, 0, b'')],
             outputs=[
-                TxOutput(1_000_000_000_000, script, 0b00000001),
-                TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
-                TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+                TxOutput(1_000_000_000_000, script, VertexDecimalVersion.V1, 0b00000001),
+                TxOutput(TxOutput.TOKEN_MINT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
+                TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
             ],
             token_name='custom-token',
             token_symbol='CTK',

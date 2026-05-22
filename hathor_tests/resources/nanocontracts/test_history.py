@@ -105,6 +105,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
 
         nano_header = NanoHeader(
             tx=nc,
+            decimal_version=nc.get_decimal_version(),
             nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,

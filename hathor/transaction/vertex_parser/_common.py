@@ -167,4 +167,4 @@ def _deserialize_tx_output(
     if verbose:
         verbose('txout_script', script.hex())
 
-    return TxOutput(value, script, token_data)
+    return TxOutput(value, script, decimal_version, token_data)

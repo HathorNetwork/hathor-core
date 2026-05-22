@@ -28,6 +28,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
@@ -471,7 +472,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None
         deposit_input = [TxInput(genesis_hash, 0, b'')]
-        change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0)
+        change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, VertexDecimalVersion.V1, 0)
         parents = [tx.hash for tx in genesis_txs]
         timestamp = int(manager.reactor.seconds())
     else:
@@ -483,7 +484,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
             total_reward += block.outputs[0].value
 
         if total_reward > deposit_amount:
-            change_output = TxOutput(total_reward - deposit_amount, script, 0)
+            change_output = TxOutput(total_reward - deposit_amount, script, VertexDecimalVersion.V1, 0)
         else:
             change_output = None
 
@@ -495,14 +496,14 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     outputs = []
     if nft_data:
         script_data = DataScript.create_output_script(nft_data)
-        output_data = TxOutput(1, script_data, 0)
+        output_data = TxOutput(1, script_data, VertexDecimalVersion.V1, 0)
         outputs.append(output_data)
     # mint output
     if mint_amount > 0:
-        outputs.append(TxOutput(mint_amount, script, 0b00000001))
+        outputs.append(TxOutput(mint_amount, script, VertexDecimalVersion.V1, 0b00000001))
     # authority outputs
-    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
-    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, VertexDecimalVersion.V1, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001))
     # deposit output
     if change_output:
         outputs.append(change_output)
@@ -589,19 +590,26 @@ def create_fee_tokens(
 
     outputs = []
     # mint output
-    outputs.append(TxOutput(mint_amount, script, 0b00000001))
+    outputs.append(TxOutput(mint_amount, script, VertexDecimalVersion.V1, 0b00000001))
 
     # authority outputs
-    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
-    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, VertexDecimalVersion.V1, 0b10000001))
+    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001))
 
     # fee
     fee = settings.FEE_PER_OUTPUT
 
     # fee output
-    outputs.append(TxOutput(genesis_block.outputs[0].value - fee - (genesis_output_amount or 0), script, 0))
+    outputs.append(
+        TxOutput(
+            genesis_block.outputs[0].value - fee - (genesis_output_amount or 0),
+            script,
+            VertexDecimalVersion.V1,
+            0,
+        )
+    )
     if genesis_output_amount:
-        outputs.append(TxOutput(genesis_output_amount, script, 0))
+        outputs.append(TxOutput(genesis_output_amount, script, VertexDecimalVersion.V1, 0))
 
     tx = TokenCreationTransaction(
         weight=1,
@@ -618,7 +626,8 @@ def create_fee_tokens(
     tx.headers.append(FeeHeader(
         settings=manager._settings,
         tx=tx,
-        fees=[FeeHeaderEntry(token_index=0, amount=fee)])
+        fees=[FeeHeaderEntry(token_index=0, amount=fee)],
+        decimal_version=tx.get_decimal_version())
     )
     data_to_sign = tx.get_sighash_all()
 
@@ -697,7 +706,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     # Create the change output, if needed
     change_output: Optional[TxOutput]
     if total_reward > burn_amount:
-        change_output = TxOutput(total_reward - burn_amount, script, 0)
+        change_output = TxOutput(total_reward - burn_amount, script, VertexDecimalVersion.V1, 0)
     else:
         change_output = None
 
@@ -712,7 +721,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     outputs = []
     for d in data:
         script_data = DataScript.create_output_script(d)
-        output_data = TxOutput(1, script_data, 0)
+        output_data = TxOutput(1, script_data, VertexDecimalVersion.V1, 0)
         outputs.append(output_data)
 
     # Add change output to array

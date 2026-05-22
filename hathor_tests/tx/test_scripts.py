@@ -54,6 +54,7 @@ from hathor.transaction.scripts.script_context import ScriptContext
 from hathor.wallet import HDWallet
 from hathor_tests import unittest
 from hathor_tests.utils import BURN_ADDRESS, get_genesis_key
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 class TestScripts(unittest.TestCase):
@@ -205,7 +206,7 @@ class TestScripts(unittest.TestCase):
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
-        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'', decimal_version=VertexDecimalVersion.V1)
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         import hashlib
@@ -249,7 +250,7 @@ class TestScripts(unittest.TestCase):
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
-        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'', decimal_version=VertexDecimalVersion.V1)
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         import hashlib
@@ -274,7 +275,7 @@ class TestScripts(unittest.TestCase):
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
-        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'', decimal_version=VertexDecimalVersion.V1)
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         import hashlib
@@ -307,7 +308,7 @@ class TestScripts(unittest.TestCase):
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
-        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'', decimal_version=VertexDecimalVersion.V1)
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         import hashlib
@@ -507,33 +508,47 @@ class TestScripts(unittest.TestCase):
         out_genesis = P2PKH.create_output_script(genesis_address)
 
         from hathor.transaction import Transaction, TxInput, TxOutput
-        spent_tx = Transaction(outputs=[TxOutput(1, b'nano_contract_code')])
+        spent_tx = Transaction(outputs=[TxOutput(1, b'nano_contract_code', VertexDecimalVersion.V1)])
         txin = TxInput(b'dont_care', 0, b'data')
 
         # try with just 1 output
         stack: Stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out_genesis)])
+        tx = Transaction(outputs=[TxOutput(1, out_genesis, VertexDecimalVersion.V1)])
         extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=OpcodesVersion.V2)
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs and correct output among them
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out_genesis), TxOutput(1, out3)])
+        tx = Transaction(outputs=[
+            TxOutput(1, out1, VertexDecimalVersion.V1),
+            TxOutput(1, out2, VertexDecimalVersion.V1),
+            TxOutput(1, out_genesis, VertexDecimalVersion.V1),
+            TxOutput(1, out3, VertexDecimalVersion.V1),
+        ])
         extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=OpcodesVersion.V2)
         op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
         self.assertEqual(stack.pop(), 1)
 
         # several outputs without correct amount output
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(2, out_genesis), TxOutput(1, out3)])
+        tx = Transaction(outputs=[
+            TxOutput(1, out1, VertexDecimalVersion.V1),
+            TxOutput(1, out2, VertexDecimalVersion.V1),
+            TxOutput(2, out_genesis, VertexDecimalVersion.V1),
+            TxOutput(1, out3, VertexDecimalVersion.V1),
+        ])
         extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=OpcodesVersion.V2)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
 
         # several outputs without correct address output
         stack = [genesis_address]
-        tx = Transaction(outputs=[TxOutput(1, out1), TxOutput(1, out2), TxOutput(1, out3)])
+        tx = Transaction(outputs=[
+            TxOutput(1, out1, VertexDecimalVersion.V1),
+            TxOutput(1, out2, VertexDecimalVersion.V1),
+            TxOutput(1, out3, VertexDecimalVersion.V1),
+        ])
         extras = UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=OpcodesVersion.V2)
         with self.assertRaises(VerifyFailed):
             op_find_p2pkh(ScriptContext(stack=stack, logs=[], extras=extras))
@@ -570,7 +585,7 @@ class TestScripts(unittest.TestCase):
 
         from hathor.transaction import Transaction, TxInput, TxOutput
         txin = TxInput(tx_id=block.hash, index=0, data=b'')
-        txout = TxOutput(value=block.outputs[0].value, script=b'')
+        txout = TxOutput(value=block.outputs[0].value, script=b'', decimal_version=VertexDecimalVersion.V1)
         tx = Transaction(inputs=[txin], outputs=[txout])
 
         data_to_sign = tx.get_sighash_all()

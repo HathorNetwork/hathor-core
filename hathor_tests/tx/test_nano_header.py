@@ -12,6 +12,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header, serialize_nano_header
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 def _serialize_nano_header(header: NanoHeader) -> bytes:
@@ -31,6 +32,7 @@ def _make_nano_header() -> NanoHeader:
     """Build a minimal nano header to append to a vertex when checking that headers affect its hash."""
     return NanoHeader(
         tx=Transaction(),
+        decimal_version=VertexDecimalVersion.V1,
         nc_seqnum=0,
         nc_id=b'1' * 32,
         nc_method='nop',
@@ -213,6 +215,7 @@ class VertexHeadersTest(unittest.TestCase):
         tx = Transaction()
         header1 = NanoHeader(
             tx=tx,
+            decimal_version=tx.get_decimal_version(),
             nc_id=b'1' * 32,
             nc_seqnum=0,
             nc_method='some_method',

@@ -185,6 +185,7 @@ def set_nano_header(
 
     nano_header = NanoHeader(
         tx=tx,
+        decimal_version=tx.get_decimal_version(),
         nc_seqnum=seqnum,
         nc_id=nc_id,
         nc_method=nc_method if nc_method is not None else 'nop',

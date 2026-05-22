@@ -39,6 +39,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         return FeeHeader(
             settings=self._settings,
             tx=tx,
+            decimal_version=tx.get_decimal_version(),
             fees=fees
         )
 

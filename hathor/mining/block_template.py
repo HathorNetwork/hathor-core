@@ -22,6 +22,7 @@ from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.util import Random
+from hathorlib.decimal_places import VertexDecimalVersion
 
 T = TypeVar('T', bound=Block)
 
@@ -45,7 +46,7 @@ class BlockTemplate(NamedTuple):
         return get_cls_from_tx_version(TxVersion(min(self.versions)))(
             timestamp=self.timestamp_min,
             parents=self.parents[:] + sorted(self.parents_any)[:(3 - len(self.parents))],
-            outputs=[TxOutput(self.reward, b'')],
+            outputs=[TxOutput(self.reward, b'', VertexDecimalVersion.V1)],  # Blocks are always V1.
             weight=self.weight,
             signal_bits=self.signal_bits,
         )
@@ -74,7 +75,7 @@ class BlockTemplate(NamedTuple):
         tx_outputs = []
         if self.reward:
             output_script = create_output_script(address) if address is not None else b''
-            tx_outputs = [TxOutput(self.reward, output_script)]
+            tx_outputs = [TxOutput(self.reward, output_script, VertexDecimalVersion.V1)]  # Blocks are always V1.
         if cls is None:
             cls = cast(type[T], Block)
         block = cls(outputs=tx_outputs, parents=parents, timestamp=block_timestamp,

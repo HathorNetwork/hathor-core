@@ -24,6 +24,7 @@ from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import create_output_script
 from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 def from_raw_output(raw_output: dict, tokens: list[bytes]) -> TxOutput:
@@ -41,7 +42,7 @@ def from_raw_output(raw_output: dict, tokens: list[bytes]) -> TxOutput:
     else:
         address = decode_address(raw_output['address'])
         script = create_output_script(address)
-    return TxOutput(value, script, token_data)
+    return TxOutput(value, script, VertexDecimalVersion.V1, token_data)
 
 
 @register_resource

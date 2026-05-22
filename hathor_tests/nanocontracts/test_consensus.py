@@ -23,6 +23,7 @@ from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.simulation.base import SimulatorTestCase
 from hathor_tests.utils import add_blocks_unlock_reward, add_custom_tx, create_tokens, gen_custom_base_tx
+from hathorlib.decimal_places import VertexDecimalVersion
 
 settings = HathorSettings()
 
@@ -129,6 +130,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nano_header = NanoHeader(
             tx=nc,
+            decimal_version=nc.get_decimal_version(),
             nc_seqnum=self.nc_seqnum,
             nc_id=nc_id,
             nc_method=nc_method,
@@ -288,7 +290,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             _output_token_index = 1
 
         tx2 = Transaction(
-            outputs=[TxOutput(1, b'', _output_token_index)],
+            outputs=[TxOutput(1, b'', VertexDecimalVersion.V1, _output_token_index)],
             timestamp=int(self.manager.reactor.seconds()),
         )
         tx2.tokens = _tokens
@@ -318,7 +320,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         # Make a withdrawal of the remainder.
 
         tx3 = Transaction(
-            outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)],
+            outputs=[TxOutput(deposit_amount - 2, b'', VertexDecimalVersion.V1, _output_token_index)],
             timestamp=int(self.manager.reactor.seconds()),
         )
         tx3.tokens = _tokens
@@ -351,7 +353,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             _output_token_index = 1
 
         tx4 = Transaction(
-            outputs=[TxOutput(2, b'', _output_token_index)],
+            outputs=[TxOutput(2, b'', VertexDecimalVersion.V1, _output_token_index)],
             timestamp=int(self.manager.reactor.seconds()),
         )
         tx4.tokens = _tokens
@@ -585,7 +587,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.reactor.advance(10)
 
         withdrawal_amount_1 = deposit_amount_1 - 100
-        tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
+        tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', VertexDecimalVersion.V1, 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
             NanoHeaderAction(
                 type=NCActionType.WITHDRAWAL,
@@ -706,7 +708,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.reactor.advance(10)
 
         withdrawal_amount_1 = deposit_amount_2 - 100
-        tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
+        tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', VertexDecimalVersion.V1, 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
             NanoHeaderAction(
                 type=NCActionType.WITHDRAWAL,
@@ -808,7 +810,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         # tx1 is a NanoContract transaction and will fail execution.
         tx1 = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
         self.assertEqual(len(tx1.outputs), 1)
-        tx1.outputs[0].value = 3
+        tx1.outputs[0]._value = 3
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1, nc_actions=[
             NanoHeaderAction(
                 type=NCActionType.DEPOSIT,

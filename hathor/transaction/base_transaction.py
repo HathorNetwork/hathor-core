@@ -954,6 +954,11 @@ class TxOutput:
         self.script = script  # bytes
         self.token_data = token_data  # int
 
+    @property
+    def value(self) -> int:
+        """The amount this output holds, in the token's smallest unit."""
+        return self._value
+
     def __eq__(self, other):
         return (
             self._value == other._value and

@@ -29,6 +29,7 @@ from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.utils import add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key
 from hathorlib.conf.settings import FeatureSetting
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 class FeeTokenTest(unittest.TestCase):
@@ -79,13 +80,13 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
-            TxOutput(htr_amount - 4, script, 0)
+            TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
+            TxOutput(htr_amount - 4, script, VertexDecimalVersion.V1, 0)
         ]
 
         tx2 = Transaction(
@@ -101,7 +102,8 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=0, amount=4)]
+            fees=[FeeHeaderEntry(token_index=0, amount=4)],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
 
@@ -135,10 +137,10 @@ class FeeTokenTest(unittest.TestCase):
         ]
 
         outputs = [
-            TxOutput(100, script, 2),
-            TxOutput(100, script, 2),
-            TxOutput(100, script, 2),
-            TxOutput(96-5, script, 0)
+            TxOutput(100, script, VertexDecimalVersion.V1, 2),
+            TxOutput(100, script, VertexDecimalVersion.V1, 2),
+            TxOutput(100, script, VertexDecimalVersion.V1, 2),
+            TxOutput(96-5, script, VertexDecimalVersion.V1, 0)
         ]
 
         tx3 = Transaction(
@@ -154,6 +156,7 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx3,
             fees=[FeeHeaderEntry(token_index=0, amount=5)],
+            decimal_version=tx3.get_decimal_version(),
         )
         tx3.headers.append(fee_header)
 
@@ -188,8 +191,8 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount - 500 - 100 = 400
-            TxOutput(new_token_amount, script, 1),
-            TxOutput(4, script, 0)
+            TxOutput(new_token_amount, script, VertexDecimalVersion.V1, 1),
+            TxOutput(4, script, VertexDecimalVersion.V1, 0)
         ]
 
         tx2 = Transaction(
@@ -206,6 +209,7 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx2,
             fees=[FeeHeaderEntry(token_index=0, amount=1)],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
 
@@ -242,7 +246,7 @@ class FeeTokenTest(unittest.TestCase):
         ]
 
         outputs = [
-            TxOutput(4, script, 0)
+            TxOutput(4, script, VertexDecimalVersion.V1, 0)
         ]
 
         tx2 = Transaction(
@@ -259,6 +263,7 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx2,
             fees=[FeeHeaderEntry(token_index=0, amount=1)],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
 
@@ -298,11 +303,11 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(new_token_amount, script, 1),
+            TxOutput(new_token_amount, script, VertexDecimalVersion.V1, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
             # change value: 500 from initial mint amount - 100 fee
-            TxOutput(400, script, 2)
+            TxOutput(400, script, VertexDecimalVersion.V1, 2)
         ]
 
         tx2 = Transaction(
@@ -319,6 +324,7 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx2,
             fees=[FeeHeaderEntry(token_index=2, amount=100)],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
 
@@ -375,13 +381,13 @@ class FeeTokenTest(unittest.TestCase):
         self.assertEqual(htr_change_value, 2)
         outputs = [
             # New token amount
-            TxOutput(new_token_amount, script, 1),
+            TxOutput(new_token_amount, script, VertexDecimalVersion.V1, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
             # HTR change output
-            TxOutput(htr_change_value, script, 0),
+            TxOutput(htr_change_value, script, VertexDecimalVersion.V1, 0),
             # deposit token change output: 500 - 100(fee in the header) - 200(melt) = 200
-            TxOutput(200, script, 2)
+            TxOutput(200, script, VertexDecimalVersion.V1, 2)
         ]
 
         tx2 = Transaction(
@@ -398,6 +404,7 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx2,
             fees=[FeeHeaderEntry(token_index=2, amount=100)],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
 
@@ -451,14 +458,14 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
+            TxOutput(100, script, VertexDecimalVersion.V1, 1),
             # Deposit token change
-            TxOutput(300, script, 2),  # 500 - 200
-            TxOutput(2, script)  # 5 - 3
+            TxOutput(300, script, VertexDecimalVersion.V1, 2),  # 500 - 200
+            TxOutput(2, script, VertexDecimalVersion.V1)  # 5 - 3
         ]
 
         tx2 = Transaction(
@@ -478,6 +485,7 @@ class FeeTokenTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=0, amount=3),
                 FeeHeaderEntry(token_index=2, amount=200)
             ],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
@@ -514,11 +522,11 @@ class FeeTokenTest(unittest.TestCase):
         ]
         outputs = [
             # Token minted output
-            TxOutput(mint_amount, script, 1),
+            TxOutput(mint_amount, script, VertexDecimalVersion.V1, 1),
             # Token mint authority
-            TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
+            TxOutput(TxOutput.TOKEN_MINT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
             # change amount
-            TxOutput(4, script, 0)
+            TxOutput(4, script, VertexDecimalVersion.V1, 0)
         ]
 
         tx2 = Transaction(
@@ -534,6 +542,7 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx2,
             fees=[FeeHeaderEntry(token_index=0, amount=1)],
+            decimal_version=tx2.get_decimal_version(),
         )
         tx2.headers.append(fee_header)
         # pick the last tip tx output in HTR then subtracts the fee
@@ -573,9 +582,9 @@ class FeeTokenTest(unittest.TestCase):
         ]
         outputs = [
             # Token output
-            TxOutput(250, script, 1),
+            TxOutput(250, script, VertexDecimalVersion.V1, 1),
             # Token output
-            TxOutput(250, script, 1),
+            TxOutput(250, script, VertexDecimalVersion.V1, 1),
         ]
 
         tx2 = Transaction(
@@ -656,12 +665,12 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # mint output
-            TxOutput(500, script, 0b00000001),
+            TxOutput(500, script, VertexDecimalVersion.V1, 0b00000001),
             # authority outputs
-            TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            TxOutput(TxOutput.TOKEN_MINT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
+            TxOutput(TxOutput.TOKEN_MELT_MASK, script, VertexDecimalVersion.V1, 0b10000001),
             # deposit output
-            TxOutput(self.genesis_blocks[0].outputs[0].value, script, 0)
+            TxOutput(self.genesis_blocks[0].outputs[0].value, script, VertexDecimalVersion.V1, 0)
         ]
 
         # Invalid token_version

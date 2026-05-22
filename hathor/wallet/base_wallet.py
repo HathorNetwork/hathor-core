@@ -36,6 +36,7 @@ from hathor.transaction.util import int_to_bytes
 from hathor.types import AddressB58, Amount, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathorlib.decimal_places import VertexDecimalVersion
 
 logger = get_logger()
 
@@ -244,7 +245,14 @@ class BaseWallet:
                 token_dict[token_uid] = token_index
 
             timelock = int_to_bytes(txout.timelock, 4) if txout.timelock else None
-            tx_outputs.append(TxOutput(txout.value, create_output_script(txout.address, timelock), token_index))
+            tx_outputs.append(
+                TxOutput(
+                    txout.value,
+                    create_output_script(txout.address, timelock),
+                    VertexDecimalVersion.V1,
+                    token_index,
+                )
+            )
 
         tx_inputs = []
         private_keys = []

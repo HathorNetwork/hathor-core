@@ -163,7 +163,9 @@ class VertexExporter:
                     index = len(tokens)
 
             script = self.get_next_p2pkh_script()
-            outputs.append(TxOutput(value=amount, token_data=index, script=script))
+            outputs.append(
+                TxOutput(value=amount, token_data=index, script=script, decimal_version=VertexDecimalVersion.V1)
+            )
 
         if token_creation:
             # Create mint and melt authorities to be used by future transactions
@@ -172,11 +174,13 @@ class VertexExporter:
                     value=TxOutput.TOKEN_MINT_MASK,
                     token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
                     script=self.get_next_p2pkh_script(),
+                    decimal_version=VertexDecimalVersion.V1,
                 ),
                 TxOutput(
                     value=TxOutput.TOKEN_MELT_MASK,
                     token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
                     script=self.get_next_p2pkh_script(),
+                    decimal_version=VertexDecimalVersion.V1,
                 ),
             ])
 
@@ -546,7 +550,8 @@ class VertexExporter:
             txout = TxOutput(
                 value=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
                 token_data=0,
-                script=self._settings.GENESIS_OUTPUT_SCRIPT
+                script=self._settings.GENESIS_OUTPUT_SCRIPT,
+                decimal_version=VertexDecimalVersion.V1,  # Blocks are always V1.
             )
             vertex.outputs.append(txout)
 

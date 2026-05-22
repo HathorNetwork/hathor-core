@@ -31,6 +31,7 @@ from hathor.transaction.scripts import Opcode
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 class MyBlueprint(Blueprint):
@@ -90,7 +91,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=10 ** 9, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(fbt_output)
 
         fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
@@ -152,7 +153,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=10 ** 9, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(fbt_output)
 
         fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
@@ -202,7 +203,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx2.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=100, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(dbt_output)
 
         dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
@@ -254,7 +255,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx2.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=100, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(dbt_output)
 
         dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
@@ -322,7 +323,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         removed_htr_output = tx2.outputs.pop()
         assert removed_htr_output.token_data == 0
         assert removed_htr_output.value == 1000
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=10 ** 9, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(fbt_output)
 
         fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
@@ -370,8 +371,8 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
-        extra_htr_output = TxOutput(value=1000, script=b'')
+        fbt_output = TxOutput(value=10 ** 9, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
+        extra_htr_output = TxOutput(value=1000, script=b'', decimal_version=VertexDecimalVersion.V1)
         tx2.outputs.append(fbt_output)
         tx2.outputs.append(extra_htr_output)
 
@@ -416,7 +417,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9 - 100, script=b'', token_data=1)
+        fbt_output = TxOutput(value=10 ** 9 - 100, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(fbt_output)
 
         fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
@@ -424,7 +425,12 @@ class FeeTokensTestCase(BlueprintTestCase):
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
         fee_entry = FeeHeaderEntry(token_index=1, amount=100)
-        fee_header = FeeHeader(self._settings, tx2, [fee_entry])
+        fee_header = FeeHeader(
+            settings=self._settings,
+            tx=tx2,
+            fees=[fee_entry],
+            decimal_version=tx2.get_decimal_version(),
+        )
         tx2.headers.append(fee_header)
 
         artifacts.propagate_with(self.manager, up_to='b11')
@@ -471,7 +477,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         tx2.tokens.append(fbt_id)
         tx3.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=10 ** 9, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(fbt_output)
         tx3.outputs.append(fbt_output)
 
@@ -534,7 +540,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         tx2.tokens.append(fbt_id)
         tx3.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=10 ** 9, script=b'', decimal_version=VertexDecimalVersion.V1, token_data=1)
         tx2.outputs.append(fbt_output)
         tx3.outputs.append(fbt_output)
 

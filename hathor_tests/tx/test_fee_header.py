@@ -8,6 +8,7 @@ from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header,
 from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
 from hathor.types import TokenUid
 from hathor_tests import unittest
+from hathorlib.decimal_places import VertexDecimalVersion
 
 
 def _serialize_fee_header(header: FeeHeader) -> bytes:
@@ -24,7 +25,7 @@ def _deserialize_fee_header(
 ) -> tuple[FeeHeader, bytes]:
     deserializer = Deserializer.build_bytes_deserializer(buf)
     fees = deserialize_fee_header(deserializer, decimal_version=tx.get_decimal_version(), verbose=verbose)
-    header = FeeHeader(settings=tx._settings, tx=tx, fees=fees)
+    header = FeeHeader(settings=tx._settings, tx=tx, fees=fees, decimal_version=tx.get_decimal_version())
     return header, bytes(deserializer.read_all())
 
 
@@ -43,6 +44,7 @@ class FeeHeaderTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=0, amount=100),  # HTR paying
                 FeeHeaderEntry(token_index=1, amount=200),  # Custom token paying
             ],
+            decimal_version=tx.get_decimal_version(),
         )
         serialized = _serialize_fee_header(header_round_trip)
         deserialized, remaining = _deserialize_fee_header(tx, serialized)
@@ -59,6 +61,7 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=300)],  # HTR paying
+            decimal_version=tx.get_decimal_version(),
         )
         serialized_verbose = _serialize_fee_header(header_verbose)
         deserialized_verbose, remaining = _deserialize_fee_header(tx, serialized_verbose, verbose=verbose_callback)
@@ -77,6 +80,7 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=500)],  # HTR paying
+            decimal_version=tx.get_decimal_version(),
         )
         sighash_bytes = get_header_sighash_bytes(header_sighash, decimal_version=tx.get_decimal_version())
         serialized_bytes = _serialize_fee_header(header_sighash)
@@ -98,6 +102,7 @@ class FeeHeaderTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=0, amount=100),  # HTR
                 FeeHeaderEntry(token_index=1, amount=200),  # token1 (must be multiple of 100)
             ],
+            decimal_version=tx.get_decimal_version(),
         )
         fees = header.get_fees()
 
@@ -110,6 +115,7 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=300)],  # HTR only
+            decimal_version=tx.get_decimal_version(),
         )
         fees_single = header_single.get_fees()
         assert len(fees_single) == 1
@@ -132,6 +138,7 @@ class FeeHeaderTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=2, amount=50),  # token2
                 FeeHeaderEntry(token_index=4, amount=25),  # token4
             ],
+            decimal_version=tx.get_decimal_version(),
         )
         serialized_complex = _serialize_fee_header(header_complex)
         deserialized_complex, remaining = _deserialize_fee_header(tx, serialized_complex)
@@ -150,6 +157,7 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=2 ** 63 - 1)],  # Max amount
+            decimal_version=tx.get_decimal_version(),
         )
         serialized_max = _serialize_fee_header(header_max)
         deserialized_max, remaining = _deserialize_fee_header(tx, serialized_max)
@@ -161,6 +169,7 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[FeeHeaderEntry(token_index=1, amount=42)],  # Single custom token fee
+            decimal_version=tx.get_decimal_version(),
         )
         serialized_single = _serialize_fee_header(header_single)
         deserialized_single, remaining = _deserialize_fee_header(tx, serialized_single)
@@ -182,6 +191,7 @@ class FeeHeaderTest(unittest.TestCase):
                 FeeHeaderEntry(token_index=0, amount=100),
                 FeeHeaderEntry(token_index=1, amount=200),
             ],
+            decimal_version=tx.get_decimal_version(),
         )
         tx.headers = [fee_header]
 
@@ -212,6 +222,7 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=50)],
+            decimal_version=tx.get_decimal_version(),
         )
         tx.headers = [fee_header]
 
