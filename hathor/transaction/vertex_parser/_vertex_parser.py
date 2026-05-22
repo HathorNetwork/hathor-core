@@ -27,7 +27,6 @@ from hathor.transaction.headers import (
     VertexBaseHeader,
     VertexHeaderId,
 )
-from hathorlib.conf.settings import FeatureSetting
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -49,7 +48,7 @@ class VertexParser:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
         if settings.ENABLE_FEE_BASED_TOKENS:
             supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
-        if settings.ENABLE_SHIELDED_TRANSACTIONS != FeatureSetting.DISABLED:
+        if settings.ENABLE_SHIELDED_TRANSACTIONS:
             supported_headers[VertexHeaderId.SHIELDED_OUTPUTS_HEADER] = ShieldedOutputsHeader
             supported_headers[VertexHeaderId.UNSHIELD_BALANCE_HEADER] = UnshieldBalanceHeader
         return supported_headers

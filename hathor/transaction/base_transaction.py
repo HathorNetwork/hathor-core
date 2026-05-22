@@ -45,9 +45,9 @@ if TYPE_CHECKING:
 
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import Transaction
-    from hathor.transaction.shielded_tx_output import ShieldedOutput
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
+    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 logger = get_logger()
 
@@ -81,7 +81,7 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 
 def _shielded_output_to_json(output: 'ShieldedOutput', *, decode_script: bool = False) -> dict[str, Any]:
     """Serialize a shielded output to a JSON-compatible dict."""
-    from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+    from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
     data: dict[str, Any] = {
         'type': 'shielded',

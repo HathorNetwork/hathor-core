@@ -20,14 +20,14 @@ from typing import TYPE_CHECKING
 
 from hathor.transaction.headers.base import VertexBaseHeader
 from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.shielded_tx_output import (
+from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.transaction.shielded_tx_output import (
     MAX_SHIELDED_OUTPUTS,
     ShieldedOutput,
     deserialize_shielded_output,
     get_sighash_bytes as output_sighash_bytes,
     serialize_shielded_output,
 )
-from hathor.transaction.util import VerboseCallback, int_to_bytes
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import BaseTransaction

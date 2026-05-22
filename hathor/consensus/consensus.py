@@ -461,11 +461,10 @@ class ConsensusAlgorithm:
                     # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
                     pass
                 case Feature.SHIELDED_TRANSACTIONS:
-                    # Verification semantics for shielded transactions — including the
-                    # reorg activation rule — are deferred to a later PR (PR 5). The
-                    # feature ships gated OFF, so no shielded tx can be accepted yet and
-                    # there is nothing to revalidate on reorg here.
-                    pass
+                    # Shielded verification — including the reorg activation rule — lands
+                    # in PR 5. The feature ships gated OFF, so this case is unreachable
+                    # today; raise loudly if it is ever hit before PR 5 wires the real rule.
+                    raise NotImplementedError('shielded transaction activation rule not implemented yet')
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.FAILED_FEE_TOKENS

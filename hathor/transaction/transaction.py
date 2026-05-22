@@ -32,12 +32,12 @@ from hathor.transaction.headers import (
     VertexBaseHeader,
 )
 from hathor.transaction.headers.fee_header import FeeHeader
-from hathor.transaction.shielded_tx_output import ShieldedOutput
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
 from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
