@@ -44,7 +44,6 @@ class TransactionMetadata:
     conflict_with: Optional[list[bytes]]
     voided_by: Optional[set[bytes]]
     received_by: list[int]
-    twins: list[bytes]
     accumulated_weight: int
     score: int
     first_block: Optional[bytes]
@@ -109,10 +108,6 @@ class TransactionMetadata:
         # List of peers which have sent this transaction.
         # Store only the peers' id.
         self.received_by = []
-
-        # Hash of the transactions that are twin to this transaction.
-        # Twin transactions have the same inputs and outputs
-        self.twins = []
 
         # Accumulated weight
         self.accumulated_weight = accumulated_weight
@@ -189,7 +184,7 @@ class TransactionMetadata:
         if not isinstance(other, TransactionMetadata):
             return False
         for field in ['hash', 'conflict_with', 'voided_by', 'received_by',
-                      'accumulated_weight', 'twins', 'score', 'first_block', 'validation',
+                      'accumulated_weight', 'score', 'first_block', 'validation',
                       'feature_states', 'nc_block_root_id', 'nc_calls', 'nc_execution', 'nc_events']:
             if (getattr(self, field) or None) != (getattr(other, field) or None):
                 return False
@@ -219,7 +214,6 @@ class TransactionMetadata:
         data['received_by'] = list(self.received_by)
         data['conflict_with'] = [x.hex() for x in set(self.conflict_with)] if self.conflict_with else []
         data['voided_by'] = [x.hex() for x in self.voided_by] if self.voided_by else []
-        data['twins'] = [x.hex() for x in self.twins]
         data['accumulated_weight_raw'] = str(self.accumulated_weight)
         data['score_raw'] = str(self.score)
 
@@ -294,11 +288,6 @@ class TransactionMetadata:
             meta.voided_by = set(bytes.fromhex(h) for h in data['voided_by']) if data['voided_by'] else None
         else:
             meta.voided_by = None
-
-        if 'twins' in data:
-            meta.twins = [bytes.fromhex(h) for h in data['twins']]
-        else:
-            meta.twins = []
 
         meta.accumulated_weight = int(data['accumulated_weight_raw'])
         meta.score = int(data.get('score_raw', 0))

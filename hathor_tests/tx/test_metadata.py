@@ -42,7 +42,6 @@ class TestMetadata(unittest.TestCase):
         meta.conflict_with = [b'1', b'2']
         meta.voided_by = {b'1', b'2'}
         meta.received_by = [1, 2, 3]
-        meta.twins = [b'1', b'2']
         meta.accumulated_weight = 123
         meta.score = 456
         meta.first_block = b'123'
@@ -100,7 +99,6 @@ class TestMetadata(unittest.TestCase):
         )
         assert meta.voided_by == meta2.voided_by and meta.voided_by == meta3.voided_by
         assert meta.received_by == meta2.received_by and meta.received_by == meta3.received_by
-        assert meta.twins == meta2.twins and meta.twins == meta3.twins
         assert (
             meta.accumulated_weight == meta2.accumulated_weight and meta.accumulated_weight == meta3.accumulated_weight
         )
