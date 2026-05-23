@@ -33,6 +33,8 @@ class Scenario(Enum):
     CUSTOM_SCRIPT = 'CUSTOM_SCRIPT'
     NC_EVENTS = 'NC_EVENTS'
     NC_EVENTS_REORG = 'NC_EVENTS_REORG'
+    TOKEN_CREATED = 'TOKEN_CREATED'
+    TOKEN_CREATED_HYBRID_WITH_REORG = 'TOKEN_CREATED_HYBRID_WITH_REORG'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
@@ -46,6 +48,8 @@ class Scenario(Enum):
             Scenario.CUSTOM_SCRIPT: simulate_custom_script,
             Scenario.NC_EVENTS: simulate_nc_events,
             Scenario.NC_EVENTS_REORG: simulate_nc_events_reorg,
+            Scenario.TOKEN_CREATED: simulate_token_created,
+            Scenario.TOKEN_CREATED_HYBRID_WITH_REORG: simulate_token_created_hybrid_with_reorg,
         }
 
         simulate_fn = simulate_fns[self]
@@ -54,7 +58,13 @@ class Scenario(Enum):
 
     def get_reward_spend_min_blocks(self) -> int:
         """Get the REWARD_SPEND_MIN_BLOCKS settings required for this scenario."""
-        return 1 if self in (Scenario.NC_EVENTS, Scenario.NC_EVENTS_REORG) else 10
+        nc_scenarios = (
+            Scenario.NC_EVENTS,
+            Scenario.NC_EVENTS_REORG,
+            Scenario.TOKEN_CREATED,
+            Scenario.TOKEN_CREATED_HYBRID_WITH_REORG,
+        )
+        return 1 if self in nc_scenarios else 10
 
 
 def simulate_only_load(simulator: 'Simulator', _manager: 'HathorManager') -> Optional['DAGArtifacts']:
@@ -381,6 +391,136 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
             nc1 <-- a2
     ''')
 
+    artifacts.propagate_with(manager)
+    simulator.run(1)
+
+    return artifacts
+
+
+def simulate_token_created(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    from hathor.nanocontracts import Blueprint, public
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.context import Context
+
+    # Define the NC blueprint for token creation
+    class TokenFactoryBlueprint(Blueprint):
+        @public(allow_deposit=True)
+        def initialize(self, ctx: Context) -> None:
+            pass
+
+        @public(allow_deposit=True)
+        def create_nc_token(self, ctx: Context) -> None:
+            self.syscall.create_deposit_token(
+                token_name='NC Token',
+                token_symbol='NCT',
+                amount=500,
+            )
+
+    blueprint_id = b'\xaa' * 32
+    manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint_id: TokenFactoryBlueprint})
+
+    # Use DAG builder to create BOTH tokens in the same blockchain
+    dag_builder = _create_dag_builder(manager)
+    artifacts = dag_builder.build_from_str(f'''
+        blockchain genesis b[1..10]
+        b1 < dummy
+
+        # First, create a regular TokenCreationTransaction (traditional way)
+        dummy < RGT < b2
+
+        # Set token metadata for the regular token
+        # Create a transaction that uses the RGT token
+        tx_regular.out[0] = 300 RGT
+        RGT < tx_regular < b3
+
+        # Then create a token via nano contract
+        # Create a nano contract with deposit
+        nc1.nc_id = "{blueprint_id.hex()}"
+        nc1.nc_method = initialize()
+        nc1.nc_deposit = 100 HTR
+        b5 < nc1
+
+        # Call create_nc_token method with deposit
+        nc2.nc_id = nc1
+        nc2.nc_method = create_nc_token()
+        nc2.nc_deposit = 5 HTR
+
+        # Set up dependencies - nc2 needs to be confirmed by a block
+        nc1 < nc2 < b6
+        nc1 <-- b6
+        nc2 <-- b7
+    ''')
+
+    # Propagate everything and give the simulator time to process
+    artifacts.propagate_with(manager)
+    simulator.run(60)
+
+    return artifacts
+
+
+def simulate_token_created_hybrid_with_reorg(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    """
+    Simulates a HYBRID TokenCreationTransaction that:
+    1. Creates a token via traditional TokenCreationTransaction
+    2. Also has nano contract headers that create another token via syscall
+    3. Gets confirmed and both tokens are created (2 TOKEN_CREATED events)
+    4. A reorg happens, making the transaction go back to mempool
+    5. NC execution goes from SUCCESS → PENDING
+    6. NC-created token should be deleted, traditional token remains
+    """
+    from hathor.nanocontracts import Blueprint, public
+    from hathor.nanocontracts.catalog import NCBlueprintCatalog
+    from hathor.nanocontracts.context import Context
+
+    # Define the NC blueprint for token creation
+    class HybridTokenFactoryBlueprint(Blueprint):
+        @public(allow_deposit=True)
+        def initialize(self, ctx: Context) -> None:
+            pass
+
+        @public(allow_deposit=True)
+        def create_extra_token(self, ctx: Context) -> None:
+            """Creates an additional token via NC syscall"""
+            self.syscall.create_deposit_token(
+                token_name='NC Extra Token',
+                token_symbol='NCX',
+                amount=777,
+            )
+
+    blueprint_id = b'\xbb' * 32
+    manager.tx_storage.nc_catalog = NCBlueprintCatalog({blueprint_id: HybridTokenFactoryBlueprint})
+
+    # Create a reorg scenario with a hybrid transaction
+    dag_builder = _create_dag_builder(manager)
+    artifacts = dag_builder.build_from_str(f'''
+        blockchain genesis b[1..5]
+        blockchain b2 a[3..4]
+        b1 < dummy
+        b3 < a3 < a4 < b4 < b5
+
+        # Initialize the nano contract first - confirmed in b2
+        nc_init.nc_id = "{blueprint_id.hex()}"
+        nc_init.nc_method = initialize()
+        nc_init.nc_deposit = 50 HTR
+        dummy < nc_init
+        nc_init <-- b2
+
+        # Create a HYBRID transaction (hybrid_tx) that:
+        # 1. Is a TokenCreationTransaction (creates HYB token traditionally)
+        # 2. Also has NC headers that call create_extra_token() to create NCX via syscall
+        dummy < hybrid_tx
+        hybrid_tx.out[0] = 500 HYB
+        hybrid_tx.nc_id = nc_init
+        hybrid_tx.nc_method = create_extra_token()
+        hybrid_tx.nc_deposit = 100 HTR
+
+        # hybrid_tx gets confirmed in branch a3 (after nc_init is initialized in b2)
+        # When b4 (which doesn't include hybrid_tx) becomes the main chain, hybrid_tx goes to mempool
+        nc_init < hybrid_tx
+        hybrid_tx <-- a3
+    ''')
+
+    # Propagate in steps to see the events clearly
     artifacts.propagate_with(manager)
     simulator.run(1)
 
