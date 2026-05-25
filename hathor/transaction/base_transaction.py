@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
-    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
+    from hathorlib.transaction.shielded_tx_output import OutputMode, ShieldedOutput
 
 logger = get_logger()
 
@@ -326,6 +326,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def sum_outputs(self) -> int:
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
+
+    @property
+    def shielded_outputs(self) -> list['ShieldedOutput']:
+        """Return the list of shielded outputs. Empty for non-Transaction vertices."""
+        return []
 
     def resolve_spent_output(self, index: int) -> 'TxOutput':
         """Return the output at `index` that an input may spend.
@@ -1020,6 +1025,12 @@ class TxOutput:
     def get_token_index(self) -> int:
         """The token uid index in the list"""
         return self.token_data & self.TOKEN_INDEX_MASK
+
+    @staticmethod
+    def mode() -> OutputMode:
+        """Return the output mode (TRANSPARENT for standard TxOutput)."""
+        from hathorlib.transaction.shielded_tx_output import OutputMode as _OutputMode
+        return _OutputMode.TRANSPARENT
 
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
