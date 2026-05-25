@@ -36,11 +36,11 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
 )
 from hathor.transaction.headers import (
+    AnyVertexHeader,
     FeeHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
-    VertexBaseHeader,
 )
 from hathor.verification.verification_params import VerificationParams
 
@@ -202,9 +202,9 @@ class VertexVerifier:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
 
-    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[VertexBaseHeader]]:
+    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[AnyVertexHeader]]:
         """Return a set of allowed headers for the vertex."""
-        allowed_headers: set[type[VertexBaseHeader]] = set()
+        allowed_headers: set[type[AnyVertexHeader]] = set()
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 pass

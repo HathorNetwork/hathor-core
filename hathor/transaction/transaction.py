@@ -26,10 +26,10 @@ from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import (
+    AnyVertexHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
-    VertexBaseHeader,
 )
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
@@ -39,7 +39,7 @@ from hathor.types import TokenUid, VertexId
 from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
-T = TypeVar('T', bound=VertexBaseHeader)
+T = TypeVar('T', bound=AnyVertexHeader)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings

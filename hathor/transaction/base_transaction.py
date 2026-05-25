@@ -30,7 +30,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
-from hathor.transaction.headers import VertexBaseHeader
+from hathor.transaction.headers import AnyVertexHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback
@@ -198,7 +198,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
-        self.headers: list[VertexBaseHeader] = []
+        self.headers: list[AnyVertexHeader] = []
 
         # A name solely for debugging purposes.
         self.name: str | None = None
