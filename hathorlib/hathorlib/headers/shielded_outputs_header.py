@@ -31,12 +31,10 @@ from hathorlib.utils import int_to_bytes
 
 if TYPE_CHECKING:
     from hathorlib.base_transaction import BaseTransaction
-    from hathorlib.transaction import Transaction
 
 
 @dataclass(frozen=True)
 class ShieldedOutputsHeader(VertexBaseHeader):
-    tx: Transaction
     shielded_outputs: list[ShieldedOutput] = field(default_factory=list)
 
     @classmethod
@@ -75,10 +73,7 @@ class ShieldedOutputsHeader(VertexBaseHeader):
 
         # Whatever follows this header (subsequent headers) is the unconsumed leftover.
         remaining = bytes(deserializer.read_all())
-        return cls(
-            tx=tx,
-            shielded_outputs=shielded_outputs,
-        ), remaining
+        return cls(shielded_outputs=shielded_outputs), remaining
 
     def serialize(self) -> bytes:
         """Serialize: header_id(1) | num_outputs(1) | outputs..."""

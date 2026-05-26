@@ -22,7 +22,6 @@ from hathorlib.headers.types import VertexHeaderId
 
 if TYPE_CHECKING:
     from hathorlib.base_transaction import BaseTransaction
-    from hathorlib.transaction import Transaction
 
 
 EXCESS_BLINDING_FACTOR_SIZE = 32
@@ -45,7 +44,6 @@ class UnshieldBalanceHeader(VertexBaseHeader):
     factors is revealed; individual input amounts remain confidential.
     """
 
-    tx: Transaction
     excess_blinding_factor: bytes
 
     def __post_init__(self) -> None:
@@ -80,7 +78,7 @@ class UnshieldBalanceHeader(VertexBaseHeader):
 
         excess_bf = bytes(buf[1:1 + EXCESS_BLINDING_FACTOR_SIZE])
         leftover = bytes(buf[header_size:])
-        return cls(tx=tx, excess_blinding_factor=excess_bf), leftover
+        return cls(excess_blinding_factor=excess_bf), leftover
 
     def serialize(self) -> bytes:
         return VertexHeaderId.UNSHIELD_BALANCE_HEADER.value + self.excess_blinding_factor

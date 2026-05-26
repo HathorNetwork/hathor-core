@@ -68,9 +68,7 @@ def deserialize_headers(
                 # not the header class's (outdated) deserialize classmethod. It consumes exactly
                 # the header's bytes from the deserializer, like the Nano/Fee cases above.
                 shielded_outputs = deserialize_shielded_outputs_header(deserializer)
-                # hathorlib's header types `tx` as a hathorlib Transaction; we store the
-                # hathor-core vertex (cross-lib by design — the header never uses `self.tx`).
-                header = ShieldedOutputsHeader(tx=vertex, shielded_outputs=shielded_outputs)  # type: ignore[arg-type]
+                header = ShieldedOutputsHeader(shielded_outputs=shielded_outputs)
             case VertexHeaderId.UNSHIELD_BALANCE_HEADER:
                 from hathor.transaction import Transaction
                 from hathor.transaction.headers import UnshieldBalanceHeader
@@ -79,8 +77,7 @@ def deserialize_headers(
                 )
                 assert isinstance(vertex, Transaction)
                 excess_bf = deserialize_unshield_balance_header(deserializer)
-                # See note above: cross-lib `tx` ref, unused by the hathorlib header.
-                header = UnshieldBalanceHeader(tx=vertex, excess_blinding_factor=excess_bf)  # type: ignore[arg-type]
+                header = UnshieldBalanceHeader(excess_blinding_factor=excess_bf)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)

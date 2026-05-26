@@ -47,7 +47,7 @@ class AmountShieldedOutput:
     range_proof: bytes      # ~3213B Borromean (40-bit)
     script: bytes           # Locking script
     token_data: int         # Token index (like TxOutput.token_data)
-    ephemeral_pubkey: bytes = b''  # 33B compressed secp256k1 pubkey for ECDH recovery
+    ephemeral_pubkey: bytes | None = None  # 33B compressed secp256k1 pubkey for ECDH recovery
 
     @staticmethod
     def mode() -> OutputMode:
@@ -62,7 +62,7 @@ class FullShieldedOutput:
     script: bytes               # Locking script
     asset_commitment: bytes     # 33B blinded asset tag (A = H_token + r_asset*G)
     surjection_proof: bytes     # Variable, asset surjection proof
-    ephemeral_pubkey: bytes = b''  # 33B compressed secp256k1 pubkey for ECDH recovery
+    ephemeral_pubkey: bytes | None = None  # 33B compressed secp256k1 pubkey for ECDH recovery
 
     @staticmethod
     def mode() -> OutputMode:
@@ -110,10 +110,10 @@ def serialize_shielded_output(serializer: Serializer, output: ShieldedOutput) ->
     serializer.write_bytes(output.ephemeral_pubkey if output.ephemeral_pubkey else b'\x00' * EPHEMERAL_PUBKEY_SIZE)
 
 
-def _deserialize_ephemeral_pubkey(deserializer: Deserializer) -> bytes:
+def _deserialize_ephemeral_pubkey(deserializer: Deserializer) -> bytes | None:
     """Read the always-present 33B ephemeral pubkey field (all-zeros means 'not present')."""
     raw_ephemeral = bytes(deserializer.read_bytes(EPHEMERAL_PUBKEY_SIZE))
-    return b'' if raw_ephemeral == b'\x00' * EPHEMERAL_PUBKEY_SIZE else raw_ephemeral
+    return None if raw_ephemeral == b'\x00' * EPHEMERAL_PUBKEY_SIZE else raw_ephemeral
 
 
 def deserialize_shielded_output(deserializer: Deserializer) -> ShieldedOutput:
