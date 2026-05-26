@@ -220,6 +220,14 @@ class BaseTransaction(ABC):
         """Return the maximum number of headers for this vertex."""
         return 3
 
+    def has_shielded_outputs(self) -> bool:
+        """Whether this vertex carries a shielded outputs header.
+
+        Always False on the base; overridden by `Transaction`. Defined here so callers
+        (e.g. `is_standard`) can check it directly without `hasattr`.
+        """
+        return False
+
     @classmethod
     @abstractmethod
     def create_from_struct(cls, struct_bytes: bytes) -> 'BaseTransaction':
@@ -501,7 +509,7 @@ class BaseTransaction(ABC):
                 return False
 
         # Check shielded output scripts (same rules as transparent)
-        if hasattr(self, 'has_shielded_outputs') and self.has_shielded_outputs():
+        if self.has_shielded_outputs():
             for shielded_output in self.get_shielded_outputs_header().shielded_outputs:  # type: ignore[attr-defined]
                 script = shielded_output.script
                 # Same logic as TxOutput.is_standard_script

@@ -74,7 +74,3 @@ class BytesDeserializer(Deserializer):
         b = self._view
         self._view = _EMPTY_VIEW
         return b
-
-    def replace_remaining(self, data: Buffer) -> None:
-        """Replace the remaining bytes in the deserializer with new data."""
-        self._view = memoryview(data) if data else _EMPTY_VIEW

@@ -17,6 +17,12 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 from enum import IntEnum
+from typing import TYPE_CHECKING
+
+from hathorlib.utils import int_to_bytes
+
+if TYPE_CHECKING:
+    from hathorlib.serialization import Deserializer, Serializer
 
 COMMITMENT_SIZE = 33
 ASSET_COMMITMENT_SIZE = 33
@@ -77,134 +83,76 @@ class ShieldedOutputSecrets:
 ShieldedOutput = AmountShieldedOutput | FullShieldedOutput
 
 
-def serialize_shielded_output(output: ShieldedOutput) -> bytes:
-    """Serialize a shielded output to bytes.
+def serialize_shielded_output(serializer: Serializer, output: ShieldedOutput) -> None:
+    """Serialize a shielded output into the serializer.
 
     Format:
         mode(1) | commitment(33) | rp_len(2) | range_proof(var) | script_len(2) | script(var) |
         [if AMOUNT_ONLY]:  token_data(1)
         [if FULLY_SHIELDED]: asset_commitment(33) | sp_len(2) | surjection_proof(var)
+        ephemeral_pubkey(33)  # all-zeros means 'not present'
     """
-    parts: list[bytes] = []
-    parts.append(struct.pack('!B', output.mode()))
-    parts.append(output.commitment)
-    parts.append(struct.pack('!H', len(output.range_proof)))
-    parts.append(output.range_proof)
-    parts.append(struct.pack('!H', len(output.script)))
-    parts.append(output.script)
+    serializer.write_bytes(int_to_bytes(int(output.mode()), 1))
+    serializer.write_bytes(output.commitment)
+    serializer.write_bytes(int_to_bytes(len(output.range_proof), 2))
+    serializer.write_bytes(output.range_proof)
+    serializer.write_bytes(int_to_bytes(len(output.script), 2))
+    serializer.write_bytes(output.script)
 
     if isinstance(output, AmountShieldedOutput):
-        parts.append(struct.pack('!B', output.token_data))
+        serializer.write_bytes(int_to_bytes(output.token_data, 1))
     elif isinstance(output, FullShieldedOutput):
-        parts.append(output.asset_commitment)
-        parts.append(struct.pack('!H', len(output.surjection_proof)))
-        parts.append(output.surjection_proof)
+        serializer.write_bytes(output.asset_commitment)
+        serializer.write_bytes(int_to_bytes(len(output.surjection_proof), 2))
+        serializer.write_bytes(output.surjection_proof)
 
     # Ephemeral pubkey for ECDH-based recovery (always 33B; zeros = not present)
-    parts.append(output.ephemeral_pubkey if output.ephemeral_pubkey else b'\x00' * EPHEMERAL_PUBKEY_SIZE)
-
-    return b''.join(parts)
+    serializer.write_bytes(output.ephemeral_pubkey if output.ephemeral_pubkey else b'\x00' * EPHEMERAL_PUBKEY_SIZE)
 
 
-def deserialize_shielded_output(buf: bytes | memoryview) -> tuple[ShieldedOutput, bytes]:
-    """Deserialize a shielded output from bytes.
+def _deserialize_ephemeral_pubkey(deserializer: Deserializer) -> bytes:
+    """Read the always-present 33B ephemeral pubkey field (all-zeros means 'not present')."""
+    raw_ephemeral = bytes(deserializer.read_bytes(EPHEMERAL_PUBKEY_SIZE))
+    return b'' if raw_ephemeral == b'\x00' * EPHEMERAL_PUBKEY_SIZE else raw_ephemeral
 
-    Returns (output, remaining_bytes).
+
+def deserialize_shielded_output(deserializer: Deserializer) -> ShieldedOutput:
+    """Deserialize a single shielded output from the deserializer.
+
+    Consumes exactly this output's bytes, leaving the deserializer positioned at the next one.
     """
-    view = memoryview(buf) if not isinstance(buf, memoryview) else buf
-    offset = 0
+    mode = OutputMode(deserializer.read_byte())
+    commitment = bytes(deserializer.read_bytes(COMMITMENT_SIZE))
 
-    mode_byte = view[offset]
-    offset += 1
-    mode = OutputMode(mode_byte)
-
-    commitment = bytes(view[offset:offset + COMMITMENT_SIZE])
-    offset += COMMITMENT_SIZE
-    if len(commitment) != COMMITMENT_SIZE:
-        raise ValueError(
-            f'truncated commitment: expected {COMMITMENT_SIZE} bytes, got {len(commitment)}'
-        )
-
-    (rp_len,) = struct.unpack_from('!H', view, offset)
-    offset += 2
+    (rp_len,) = deserializer.read_struct('!H')
     if rp_len > MAX_RANGE_PROOF_SIZE:
-        raise ValueError(
-            f'range proof size {rp_len} exceeds maximum {MAX_RANGE_PROOF_SIZE}'
-        )
-    range_proof = bytes(view[offset:offset + rp_len])
-    offset += rp_len
-    if len(range_proof) != rp_len:
-        raise ValueError(
-            f'truncated range proof: expected {rp_len} bytes, got {len(range_proof)}'
-        )
+        raise ValueError(f'range proof size {rp_len} exceeds maximum {MAX_RANGE_PROOF_SIZE}')
+    range_proof = bytes(deserializer.read_bytes(rp_len))
 
-    (script_len,) = struct.unpack_from('!H', view, offset)
-    offset += 2
+    (script_len,) = deserializer.read_struct('!H')
     if script_len > MAX_SHIELDED_OUTPUT_SCRIPT_SIZE:
-        raise ValueError(
-            f'script size {script_len} exceeds maximum {MAX_SHIELDED_OUTPUT_SCRIPT_SIZE}'
-        )
-    script = bytes(view[offset:offset + script_len])
-    offset += script_len
-    if len(script) != script_len:
-        raise ValueError(
-            f'truncated script: expected {script_len} bytes, got {len(script)}'
-        )
+        raise ValueError(f'script size {script_len} exceeds maximum {MAX_SHIELDED_OUTPUT_SCRIPT_SIZE}')
+    script = bytes(deserializer.read_bytes(script_len))
 
     if mode == OutputMode.AMOUNT_ONLY:
-        token_data = view[offset]
-        offset += 1
-
-        # Read ephemeral pubkey (always 33B; zeros = not present)
-        raw_ephemeral = bytes(view[offset:offset + EPHEMERAL_PUBKEY_SIZE])
-        offset += EPHEMERAL_PUBKEY_SIZE
-        if len(raw_ephemeral) != EPHEMERAL_PUBKEY_SIZE:
-            raise ValueError(
-                f'truncated ephemeral_pubkey: expected {EPHEMERAL_PUBKEY_SIZE} bytes, '
-                f'got {len(raw_ephemeral)}'
-            )
-        ephemeral_pubkey = b'' if raw_ephemeral == b'\x00' * EPHEMERAL_PUBKEY_SIZE else raw_ephemeral
-
-        output: ShieldedOutput = AmountShieldedOutput(
+        token_data = deserializer.read_byte()
+        ephemeral_pubkey = _deserialize_ephemeral_pubkey(deserializer)
+        return AmountShieldedOutput(
             commitment=commitment,
             range_proof=range_proof,
             script=script,
             token_data=token_data,
             ephemeral_pubkey=ephemeral_pubkey,
         )
-    elif mode == OutputMode.FULLY_SHIELDED:
-        asset_commitment = bytes(view[offset:offset + ASSET_COMMITMENT_SIZE])
-        offset += ASSET_COMMITMENT_SIZE
-        if len(asset_commitment) != ASSET_COMMITMENT_SIZE:
-            raise ValueError(
-                f'truncated asset_commitment: expected {ASSET_COMMITMENT_SIZE} bytes, '
-                f'got {len(asset_commitment)}'
-            )
 
-        (sp_len,) = struct.unpack_from('!H', view, offset)
-        offset += 2
+    if mode == OutputMode.FULLY_SHIELDED:
+        asset_commitment = bytes(deserializer.read_bytes(ASSET_COMMITMENT_SIZE))
+        (sp_len,) = deserializer.read_struct('!H')
         if sp_len > MAX_SURJECTION_PROOF_SIZE:
-            raise ValueError(
-                f'surjection proof size {sp_len} exceeds maximum {MAX_SURJECTION_PROOF_SIZE}'
-            )
-        surjection_proof = bytes(view[offset:offset + sp_len])
-        offset += sp_len
-        if len(surjection_proof) != sp_len:
-            raise ValueError(
-                f'truncated surjection proof: expected {sp_len} bytes, got {len(surjection_proof)}'
-            )
-
-        # Read ephemeral pubkey (always 33B; zeros = not present)
-        raw_ephemeral = bytes(view[offset:offset + EPHEMERAL_PUBKEY_SIZE])
-        offset += EPHEMERAL_PUBKEY_SIZE
-        if len(raw_ephemeral) != EPHEMERAL_PUBKEY_SIZE:
-            raise ValueError(
-                f'truncated ephemeral_pubkey: expected {EPHEMERAL_PUBKEY_SIZE} bytes, '
-                f'got {len(raw_ephemeral)}'
-            )
-        ephemeral_pubkey = b'' if raw_ephemeral == b'\x00' * EPHEMERAL_PUBKEY_SIZE else raw_ephemeral
-
-        output = FullShieldedOutput(
+            raise ValueError(f'surjection proof size {sp_len} exceeds maximum {MAX_SURJECTION_PROOF_SIZE}')
+        surjection_proof = bytes(deserializer.read_bytes(sp_len))
+        ephemeral_pubkey = _deserialize_ephemeral_pubkey(deserializer)
+        return FullShieldedOutput(
             commitment=commitment,
             range_proof=range_proof,
             script=script,
@@ -212,10 +160,8 @@ def deserialize_shielded_output(buf: bytes | memoryview) -> tuple[ShieldedOutput
             surjection_proof=surjection_proof,
             ephemeral_pubkey=ephemeral_pubkey,
         )
-    else:
-        raise ValueError(f'Unknown shielded output mode: {mode_byte}')
 
-    return output, bytes(view[offset:])
+    raise ValueError(f'Unknown shielded output mode: {int(mode)}')
 
 
 def get_sighash_bytes(output: ShieldedOutput) -> bytes:

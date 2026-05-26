@@ -42,6 +42,7 @@ class ShieldedOutputsHeader(VertexBaseHeader):
     @classmethod
     def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[ShieldedOutputsHeader, bytes]:
         """Deserialize: header_id(1) | num_outputs(1) | outputs..."""
+        from hathorlib.serialization import Deserializer
         from hathorlib.transaction import Transaction
 
         if not isinstance(tx, Transaction):
@@ -49,15 +50,12 @@ class ShieldedOutputsHeader(VertexBaseHeader):
                 f'shielded outputs header requires a Transaction, got {type(tx).__name__}'
             )
 
+        deserializer = Deserializer.build_bytes_deserializer(buf)
         try:
-            offset = 0
-            header_id = buf[offset:offset + 1]
-            offset += 1
+            header_id = bytes(deserializer.read_bytes(1))
             assert header_id == VertexHeaderId.SHIELDED_OUTPUTS_HEADER.value
 
-            num_outputs = buf[offset]
-            offset += 1
-
+            num_outputs = deserializer.read_byte()
             if num_outputs < 1:
                 raise ValueError('shielded outputs header must contain at least 1 output')
             if num_outputs > MAX_SHIELDED_OUTPUTS:
@@ -65,17 +63,18 @@ class ShieldedOutputsHeader(VertexBaseHeader):
                     f'too many shielded outputs: {num_outputs} exceeds maximum {MAX_SHIELDED_OUTPUTS}'
                 )
 
-            shielded_outputs: list[ShieldedOutput] = []
-            remaining = buf[offset:]
-            for _ in range(num_outputs):
-                output, remaining = deserialize_shielded_output(remaining)
-                shielded_outputs.append(output)
+            shielded_outputs: list[ShieldedOutput] = [
+                deserialize_shielded_output(deserializer) for _ in range(num_outputs)
+            ]
 
         except (ValueError, AssertionError):
             raise
         except (IndexError, struct.error) as e:
+            # OutOfDataError (truncation) is a struct.error subclass, caught here.
             raise ValueError(f'malformed shielded outputs header: {e}') from e
 
+        # Whatever follows this header (subsequent headers) is the unconsumed leftover.
+        remaining = bytes(deserializer.read_all())
         return cls(
             tx=tx,
             shielded_outputs=shielded_outputs,
@@ -83,14 +82,14 @@ class ShieldedOutputsHeader(VertexBaseHeader):
 
     def serialize(self) -> bytes:
         """Serialize: header_id(1) | num_outputs(1) | outputs..."""
-        parts: list[bytes] = []
-        parts.append(VertexHeaderId.SHIELDED_OUTPUTS_HEADER.value)
-        parts.append(int_to_bytes(len(self.shielded_outputs), 1))
+        from hathorlib.serialization import Serializer
 
+        serializer = Serializer.build_bytes_serializer()
+        serializer.write_bytes(VertexHeaderId.SHIELDED_OUTPUTS_HEADER.value)
+        serializer.write_bytes(int_to_bytes(len(self.shielded_outputs), 1))
         for output in self.shielded_outputs:
-            parts.append(serialize_shielded_output(output))
-
-        return b''.join(parts)
+            serialize_shielded_output(serializer, output)
+        return bytes(serializer.finalize())
 
     def get_sighash_bytes(self) -> bytes:
         """Include in sighash: header_id + count + per-output sighash bytes."""
