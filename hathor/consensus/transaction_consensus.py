@@ -133,7 +133,7 @@ class TransactionConsensusAlgorithm:
 
         # Sorting inputs and outputs for easier validation
         sorted_inputs = sorted(tx.inputs, key=lambda x: (x.tx_id, x.index, x.data))
-        sorted_outputs = sorted(tx.outputs, key=lambda x: (x.script, x.value))
+        sorted_outputs = sorted(tx.outputs, key=lambda x: (x.script, x.value))  # TODO
 
         for candidate in transactions:
 
@@ -159,6 +159,7 @@ class TransactionConsensusAlgorithm:
 
             # Verify if all the outputs are the same
             if equal:
+                # TODO?
                 for index, tx_output in enumerate(sorted(candidate.outputs, key=lambda x: (x.script, x.value))):
                     if (tx_output.value != sorted_outputs[index].value
                             or tx_output.script != sorted_outputs[index].script):

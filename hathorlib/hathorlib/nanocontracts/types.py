@@ -467,7 +467,7 @@ class BaseTokenAction(BaseAction):
         json_dict = super(BaseTokenAction, self).to_json()
         return dict(
             **json_dict,
-            amount=self.amount,
+            amount=self.amount,  # TODO
         )
 
 
@@ -564,6 +564,6 @@ class NCFee:
         Get the amount converted to HTR
         """
         if self.token_uid == HATHOR_TOKEN_UID:
-            return self.amount
+            return self.amount  # TODO
         else:
-            return get_deposit_token_withdraw_amount(settings, self.amount)
+            return get_deposit_token_withdraw_amount(settings, self.amount)  # TODO

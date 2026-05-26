@@ -84,7 +84,7 @@ class UtxoIndexItem:
             tx_id=tx.hash,
             index=index,
             address=address_script.address,
-            amount=tx_output.value,
+            amount=tx_output.value,  # TODO
             timelock=timelock,
             heightlock=heightlock,
         )
@@ -219,7 +219,7 @@ class UtxoIndex(BaseIndex):
             iter_nolock,
             iter_timelock,
             iter_heightlock,
-            key=lambda item: (item.amount, item.tx_id, item.index),
+            key=lambda item: (item.amount, item.tx_id, item.index),  # TODO
             reverse=True,
         )
 
@@ -229,10 +229,10 @@ class UtxoIndex(BaseIndex):
         # we may have up to 3 items with amount higher than target_amount, skip until we get one lower, then yield it
         # and start counting the amount_sum
         for utxo_item in iter_utxos:
-            if utxo_item.amount >= target_amount:
+            if utxo_item.amount >= target_amount:  # TODO
                 next_higher = utxo_item
             else:
-                amount_sum += utxo_item.amount
+                amount_sum += utxo_item.amount  # TODO
                 count_utxos += 1
                 if next_higher is not None:
                     yield next_higher
@@ -251,7 +251,7 @@ class UtxoIndex(BaseIndex):
             # will just have to use the larger than target_amount UTXO (if there is any), or consolidate UTXOs first
             if count_utxos >= settings.MAX_NUM_INPUTS:
                 break
-            amount_sum += utxo_item.amount
+            amount_sum += utxo_item.amount  # TODO
             count_utxos += 1
             yield utxo_item
 

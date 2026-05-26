@@ -112,13 +112,13 @@ class AddressBalanceResource(Resource):
                     if self.has_address(tx2_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx2.get_token_uid(tx2_output.get_token_index())
-                        tokens_data[token_uid].spent += tx2_output.value
+                        tokens_data[token_uid].spent += tx2_output.value  # TODO
 
                 for tx_output in tx.outputs:
                     if self.has_address(tx_output, requested_address):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
-                        tokens_data[token_uid].received += tx_output.value
+                        tokens_data[token_uid].received += tx_output.value # TODO
 
         return_tokens_data: dict[str, dict[str, Any]] = {}
         for token_uid in tokens_data.keys():

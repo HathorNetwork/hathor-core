@@ -119,7 +119,7 @@ class NanoHeader(VertexBaseHeader):
         ret = [
             action.type.to_bytes(),
             int_to_bytes(action.token_index, 1),
-            output_value_to_bytes(action.amount),
+            output_value_to_bytes(action.amount),  # TODO
         ]
         return b''.join(ret)
 

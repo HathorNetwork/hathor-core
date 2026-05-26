@@ -70,7 +70,7 @@ def create_txoutput_data_from_txout(txout: TxOutput) -> TxOutputData:
     """Create a TxOutputData from a TxOutput."""
     parsed = parse_address_script(txout.script)
     return TxOutputData(
-        value=txout.value,
+        value=txout.value,  # TODO
         raw_script=txout.script,
         parsed_script=create_script_info_from_script(parsed) if parsed is not None else None,
         token_data=txout.token_data,

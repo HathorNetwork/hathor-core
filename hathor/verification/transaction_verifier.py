@@ -295,9 +295,9 @@ class TransactionVerifier:
 
                 case TokenVersion.DEPOSIT:
                     if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)  # TODO
                     if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)  # TODO
 
                 case TokenVersion.FEE:
                     continue
@@ -308,7 +308,7 @@ class TransactionVerifier:
         # check whether the deposit/withdraw amount is correct
         htr_expected_amount = withdraw - deposit
         htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount > htr_expected_amount:
+        if htr_info.amount > htr_expected_amount:  # TODO
             raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
@@ -327,13 +327,13 @@ class TransactionVerifier:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
-        if htr_info.amount < htr_expected_amount:
+        if htr_info.amount < htr_expected_amount:  # TODO
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
 
-        assert htr_info.amount == htr_expected_amount
+        assert htr_info.amount == htr_expected_amount  # TODO
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
@@ -346,9 +346,9 @@ class TransactionVerifier:
             return
         assert token_uid != HATHOR_TOKEN_UID
         if token_info.has_been_melted() and not token_info.can_melt:
-            raise ForbiddenMelt.from_token(token_info.amount, token_uid)
+            raise ForbiddenMelt.from_token(token_info.amount, token_uid)  # TODO
         if token_info.has_been_minted() and not token_info.can_mint:
-            raise ForbiddenMint(token_info.amount, token_uid)
+            raise ForbiddenMint(token_info.amount, token_uid)  # TODO
 
     def verify_version(self, tx: Transaction, params: VerificationParams) -> None:
         """Verify that the vertex version is valid."""

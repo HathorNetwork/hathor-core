@@ -220,7 +220,7 @@ class NCChangesTracker(NCContractStorage):
         balance_diff = self._balance_diff.get(internal_key, 0)
         authorities_diff = self._authorities_diff.get(internal_key, _NCAuthorityDiff())
 
-        balance.value += balance_diff
+        balance.value += balance_diff  # TODO
         balance.grant_authorities(
             grant_mint=authorities_diff.grant_mint(),
             grant_melt=authorities_diff.grant_melt(),

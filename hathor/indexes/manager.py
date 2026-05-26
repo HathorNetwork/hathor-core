@@ -267,14 +267,14 @@ class IndexesManager(ABC):
                             name=record.token_name,
                             symbol=record.token_symbol,
                             version=record.token_version,
-                            total=record.amount,
+                            total=record.amount,  # TODO
                         )
 
                 case UpdateTokenBalanceRecord():
                     # Minted/melted tokens are added/removed to/from the tokens index,
                     # and the respective destroyed/created HTR too.
                     if self.tokens:
-                        self.tokens.add_to_total(record.token_uid, record.amount)
+                        self.tokens.add_to_total(record.token_uid, record.amount)  # TODO
 
                 case UpdateAuthoritiesRecord():
                     if self.tokens:
@@ -340,7 +340,7 @@ class IndexesManager(ABC):
 
                 case UpdateTokenBalanceRecord():
                     if self.tokens:
-                        self.tokens.add_to_total(record.token_uid, -record.amount)
+                        self.tokens.add_to_total(record.token_uid, -record.amount)  # TODO
 
                 case UpdateAuthoritiesRecord():
                     if self.tokens:

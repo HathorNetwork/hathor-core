@@ -173,7 +173,7 @@ class NanoContractStateResource(Resource):
 
             balance = nc_storage.get_balance(token_uid)
             balances[token_uid_hex] = NCBalanceSuccessResponse(
-                value=str(balance.value),
+                value=str(balance.value),  # TODO
                 can_mint=balance.can_mint,
                 can_melt=balance.can_melt,
             )

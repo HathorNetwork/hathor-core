@@ -104,7 +104,7 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
         token_info = token_dict[self.action.token_uid]
-        token_info.amount = token_info.amount + self.action.amount
+        token_info.amount = token_info.amount + self.action.amount  # TODO
         token_dict[self.action.token_uid] = token_info
 
         if token_info.version == TokenVersion.FEE:
@@ -112,11 +112,11 @@ class _DepositRules(BalanceRules[NCDepositAction]):
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
-        callee_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        callee_changes_tracker.add_balance(self.action.token_uid, self.action.amount)  # TODO
 
     @override
     def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
-        caller_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        caller_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)  # TODO
 
 
 class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
@@ -131,7 +131,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
         token_info = token_dict[self.action.token_uid]
-        token_info.amount = token_info.amount - self.action.amount
+        token_info.amount = token_info.amount - self.action.amount  # TODO
         token_dict[self.action.token_uid] = token_info
 
         if token_info.version == TokenVersion.FEE:
@@ -139,11 +139,11 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
-        callee_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        callee_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)  # TODO
 
     @override
     def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
-        caller_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        caller_changes_tracker.add_balance(self.action.token_uid, self.action.amount)  # TODO
 
 
 class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):

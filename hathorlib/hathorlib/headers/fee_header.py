@@ -77,7 +77,7 @@ class FeeHeader(VertexBaseHeader):
 
         for fee in self.fees:
             ret.append(int_to_bytes(fee.token_index, 1))
-            ret.append(output_value_to_bytes(fee.amount))
+            ret.append(output_value_to_bytes(fee.amount))  # TODO
 
         return b''.join(ret)
 
@@ -88,7 +88,7 @@ class FeeHeader(VertexBaseHeader):
         return [
             FeeEntry(
                 token_uid=self.tx.get_token_uid(fee.token_index),
-                amount=fee.amount
+                amount=fee.amount  # TODO
             )
             for fee in self.fees
         ]

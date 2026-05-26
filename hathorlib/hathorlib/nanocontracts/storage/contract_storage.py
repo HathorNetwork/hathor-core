@@ -352,7 +352,7 @@ class NCContractStorage:
         balance_key = BalanceKey(self.nc_id, TokenUid(token_uid))
         balance = self._trie_get_obj(balance_key, _BALANCE_NC_TYPE, default=MutableBalance.get_default())
         assert isinstance(balance, MutableBalance)
-        balance.value += amount
+        balance.value += amount  # TODO
         assert balance.value >= 0, f'balance cannot be negative: {balance.value}'
         self._trie_update(balance_key, _BALANCE_NC_TYPE, balance)
 

@@ -622,7 +622,7 @@ class TxOutput:
         :rtype: bytes
         """
         ret = b''
-        ret += output_value_to_bytes(self.value)
+        ret += output_value_to_bytes(self.value)  # TODO
         ret += int_to_bytes(self.token_data, 1)
         ret += int_to_bytes(len(self.script), 2)    # script length
         ret += self.script

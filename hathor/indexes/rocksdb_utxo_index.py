@@ -99,7 +99,7 @@ class _SeekKeyNoLock(_SeekKeyBase):
 
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
-        array.extend(struct.pack('>Q', self.amount))
+        array.extend(struct.pack('>Q', self.amount))  # TODO
         assert len(array) == 1 + 32 + 25 + 8
 
 
@@ -125,7 +125,7 @@ class _KeyNoLock(_SeekKeyNoLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=self.amount,
+            amount=self.amount,  # TODO
             timelock=None,
             heightlock=None,
         )
@@ -145,7 +145,7 @@ class _SeekKeyTimeLock(_SeekKeyBase):
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
         array.extend(struct.pack('>I', self.timelock))
-        array.extend(struct.pack('>Q', self.amount))
+        array.extend(struct.pack('>Q', self.amount))  # TODO
         assert len(array) == 1 + 32 + 25 + 4 + 8
 
 
@@ -171,7 +171,7 @@ class _KeyTimeLock(_SeekKeyTimeLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=self.amount,
+            amount=self.amount,  # TODO
             timelock=self.timelock,
             heightlock=None,
         )
@@ -192,7 +192,7 @@ class _SeekKeyHeightLock(_SeekKeyBase):
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
         array.extend(struct.pack('>I', self.heightlock))
-        array.extend(struct.pack('>Q', self.amount))
+        array.extend(struct.pack('>Q', self.amount))  # TODO
         assert len(array) == 1 + 32 + 25 + 4 + 8
 
 
@@ -218,7 +218,7 @@ class _KeyHeightLock(_SeekKeyHeightLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=self.amount,
+            amount=self.amount,  # TODO
             timelock=None,
             heightlock=self.heightlock,
         )
@@ -272,7 +272,7 @@ def _key_from_index_item(item: UtxoIndexItem) -> _KeyBase:
             token_uid_internal=to_internal_token_uid(item.token_uid),
             address=decode_address(item.address),
             timelock=item.timelock,
-            amount=item.amount,
+            amount=item.amount,  # TODO
             tx_id=item.tx_id,
             index=item.index,
         )
@@ -281,7 +281,7 @@ def _key_from_index_item(item: UtxoIndexItem) -> _KeyBase:
             token_uid_internal=to_internal_token_uid(item.token_uid),
             address=decode_address(item.address),
             heightlock=item.heightlock,
-            amount=item.amount,
+            amount=item.amount,  # TODO
             tx_id=item.tx_id,
             index=item.index,
         )
@@ -289,7 +289,7 @@ def _key_from_index_item(item: UtxoIndexItem) -> _KeyBase:
         return _KeyNoLock(
             token_uid_internal=to_internal_token_uid(item.token_uid),
             address=decode_address(item.address),
-            amount=item.amount,
+            amount=item.amount,  # TODO
             tx_id=item.tx_id,
             index=item.index,
         )

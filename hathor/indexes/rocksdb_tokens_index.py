@@ -373,6 +373,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 # add to melt index
                 self._add_authority_utxo(token_uid, tx.hash, index, is_mint=False)
         else:
+            # TODO
             self.add_to_total(token_uid, tx_output.value)
 
     def _remove_utxo(self, tx: BaseTransaction, index: int) -> None:
@@ -390,6 +391,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 # remove from melt index
                 self._remove_authority_utxo(token_uid, tx.hash, index, is_mint=False)
         else:
+            # TODO
             self.add_to_total(token_uid, -tx_output.value)
 
     def add_tx(self, tx: BaseTransaction) -> None:
@@ -434,9 +436,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             for action in ctx.__all_actions__:
                 match action:
                     case NCDepositAction():
-                        self.add_to_total(action.token_uid, action.amount)
+                        self.add_to_total(action.token_uid, action.amount)  # TODO
                     case NCWithdrawalAction():
-                        self.add_to_total(action.token_uid, -action.amount)
+                        self.add_to_total(action.token_uid, -action.amount)  # TODO
                     case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                         # These actions don't affect the token balance but do affect the counters
                         # of contracts holding token authorities. They are handled directly by
@@ -471,9 +473,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             for action in ctx.__all_actions__:
                 match action:
                     case NCDepositAction():
-                        self.add_to_total(action.token_uid, -action.amount)
+                        self.add_to_total(action.token_uid, -action.amount)  # TODO
                     case NCWithdrawalAction():
-                        self.add_to_total(action.token_uid, action.amount)
+                        self.add_to_total(action.token_uid, action.amount)  # TODO
                     case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                         # These actions don't affect the nc token balance,
                         # so no need for any special handling on the index.

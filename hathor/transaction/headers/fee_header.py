@@ -64,7 +64,7 @@ class FeeHeader:
         total_fee = 0
         for fee in self.get_fees():
             if fee.token_uid == self.settings.HATHOR_TOKEN_UID:
-                total_fee += fee.amount
+                total_fee += fee.amount  # TODO
             else:
-                total_fee += get_deposit_token_withdraw_amount(self.settings, fee.amount)
+                total_fee += get_deposit_token_withdraw_amount(self.settings, fee.amount)  # TODO
         return total_fee

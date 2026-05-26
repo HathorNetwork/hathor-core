@@ -459,7 +459,7 @@ class Runner:
         # Validate fees
         for fee in fees:
             try:
-                validate_fee_amount(self._settings, fee.token_uid, fee.amount)
+                validate_fee_amount(self._settings, fee.token_uid, fee.amount)  # TODO
             except InvalidFeeAmount as e:
                 raise NCInvalidFee(str(e)) from e
 
@@ -481,9 +481,9 @@ class Runner:
         for fee in fees:
             assert fee.amount > 0
             self._update_tokens_amount(
-                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount),
+                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount),  # TODO
             )
-            self._register_paid_fee(fee.token_uid, fee.amount)
+            self._register_paid_fee(fee.token_uid, fee.amount)  # TODO
 
         ctx_actions = Context.__group_actions__(actions)
         # Call the other contract method.
@@ -555,7 +555,7 @@ class Runner:
                         # Nothing to do here.
                         pass
                     case CreateTokenRecord() | UpdateTokenBalanceRecord():
-                        calculated_tokens_totals[record.token_uid] += record.amount
+                        calculated_tokens_totals[record.token_uid] += record.amount  # TODO
                     case _:  # pragma: no cover
                         assert_never(record)
 
@@ -571,10 +571,10 @@ class Runner:
         for action in ctx.__all_actions__:
             match action:
                 case NCDepositAction():
-                    total_diffs[action.token_uid] -= action.amount
+                    total_diffs[action.token_uid] -= action.amount  # TODO
 
                 case NCWithdrawalAction():
-                    total_diffs[action.token_uid] += action.amount
+                    total_diffs[action.token_uid] += action.amount  # TODO
 
                 case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                     # These actions don't affect the tx balance,
@@ -1386,8 +1386,8 @@ class Runner:
         for record in (operation, fee):
             if record is None:
                 continue
-            changes_tracker.add_balance(record.token_uid, record.amount)
-            self._updated_tokens_totals[record.token_uid] += record.amount
+            changes_tracker.add_balance(record.token_uid, record.amount)  # TODO
+            self._updated_tokens_totals[record.token_uid] += record.amount  # TODO
             call_record.index_updates.append(record)
 
     def _register_paid_fee(self, token_uid: TokenUid, amount: int) -> None:

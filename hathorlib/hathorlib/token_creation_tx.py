@@ -221,6 +221,7 @@ class TokenCreationTransaction(Transaction):
             # First output is not a DataScript output
             return False
 
+        # TODO
         if first_output.value != 1 or first_output.token_data != 0:
             # NFT creation DataScript output must have value 1 and must be of HTR
             return False
