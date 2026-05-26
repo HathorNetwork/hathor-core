@@ -25,6 +25,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.fee_header_verifier import FeeHeaderVerifier
+from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.verification_params import VerificationParams
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -111,6 +112,14 @@ class VerificationService:
         self.verifiers.vertex.verify_version_basic(vertex)
         self.verifiers.vertex.verify_old_timestamp(vertex, params)
 
+        # Feature gate: reject shielded outputs early, before any verification touches shielded data.
+        if vertex.has_shielded_outputs():
+            if not params.features.shielded_transactions:
+                from hathor.transaction.exceptions import InvalidShieldedOutputError
+                raise InvalidShieldedOutputError('shielded transactions are not enabled')
+        # NOTE (mint/melt — postponed): the mint/melt extension adds a parallel feature-gate +
+        # _verify_basic_mint_melt_header hook here, keyed on has_mint_header()/has_melt_header().
+
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
@@ -138,6 +147,22 @@ class VerificationService:
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
             # nothing to do
+
+        if vertex.has_shielded_outputs():
+            # Feature gate already checked above (before match-case dispatch).
+            assert isinstance(vertex, Transaction)
+            self._verify_basic_shielded_header(vertex)
+
+    def _verify_basic_shielded_header(self, tx: Transaction) -> None:
+        """Shielded verifications that don't need storage."""
+        from hathor.transaction.exceptions import InvalidShieldedOutputError, TxValidationError
+        try:
+            self.verifiers.tx.verify_shielded_outputs(tx)
+        except TxValidationError:
+            self.verifiers.tx.log.debug('shielded basic verification failed', tx=tx.hash_hex)
+            raise
+        except RuntimeError as e:
+            raise InvalidShieldedOutputError(f'shielded crypto library error: {e}') from e
 
     def _verify_basic_block(self, block: Block, params: VerificationParams) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
@@ -206,6 +231,22 @@ class VerificationService:
             self.verifiers.nano_header.verify_method_call(vertex, params)
             self.verifiers.nano_header.verify_seqnum(vertex, params)
 
+        if vertex.has_shielded_outputs():
+            # Feature gate is already enforced in verify_basic, which is always called first.
+            assert isinstance(vertex, Transaction)
+            self._verify_shielded_header(vertex, params)
+
+    def _verify_shielded_header(self, tx: Transaction, params: VerificationParams) -> None:
+        """Shielded verifications that need storage (balance, surjection)."""
+        from hathor.transaction.exceptions import InvalidShieldedOutputError, TxValidationError
+        try:
+            self.verifiers.tx.verify_shielded_outputs_with_storage(tx)
+        except TxValidationError:
+            self.verifiers.tx.log.debug('shielded full verification failed', tx=tx.hash_hex)
+            raise
+        except RuntimeError as e:
+            raise InvalidShieldedOutputError(f'shielded crypto library error: {e}') from e
+
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block, params: VerificationParams) -> None:
         """
@@ -264,14 +305,24 @@ class VerificationService:
         self.verifiers.tx.verify_inputs(tx, params)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
+        # Balance verification: exactly one check runs per tx, dispatched by is_shielded().
         block_storage = self._get_block_storage(params)
-        self.verifiers.tx.verify_transparent_balance(
-            self._settings,
-            tx,
-            token_dict or tx.get_complete_token_info(block_storage),
-            # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
-            allow_nonexistent_tokens=tx.is_nano_contract()
-        )
+        _token_dict = token_dict or tx.get_complete_token_info(block_storage)
+        if isinstance(tx, Transaction) and tx.is_shielded():
+            shielded_fee = TransactionVerifier.calculate_shielded_fee(self._settings, tx)
+            # NOTE (mint/melt — postponed): the mint/melt extension restores verify_no_undeclared_mint_melt
+            # (replacing verify_no_mint_melt) + verify_mint_melt_authority_inputs in this branch.
+            self.verifiers.tx.verify_no_mint_melt(_token_dict)
+            self.verifiers.tx.verify_token_rules(self._settings, _token_dict, shielded_fee=shielded_fee)
+            self.verifiers.tx.verify_shielded_balance(tx)
+        else:
+            self.verifiers.tx.verify_transparent_balance(
+                self._settings,
+                tx,
+                _token_dict,
+                # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
+                allow_nonexistent_tokens=tx.is_nano_contract()
+            )
         self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:

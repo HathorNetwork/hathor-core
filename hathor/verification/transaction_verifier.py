@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
+from structlog import get_logger
+
 from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
@@ -67,13 +69,15 @@ if TYPE_CHECKING:
 
 cpu = get_cpu_profiler()
 
+logger = get_logger()
+
 MAX_TOKENS_LENGTH: int = 16
 MAX_WITHIN_CONFLICTS: int = 8
 MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa_factory', '_feature_service')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', 'log')
 
     def __init__(
         self,
@@ -85,6 +89,7 @@ class TransactionVerifier:
         self._settings = settings
         self._daa_factory = daa_factory
         self._feature_service = feature_service
+        self.log = logger.new()
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -435,6 +440,8 @@ class TransactionVerifier:
             # In shielded txs, transparent deficit/surplus is expected — balance is
             # verified cryptographically. Authority-based mint/melt is separately
             # blocked by verify_no_mint_melt.
+            # NOTE (mint/melt — postponed): the extension swaps this backstop to
+            # verify_no_undeclared_mint_melt when MintHeader/MeltHeader land.
             return
         if token_info.has_been_melted() and not token_info.can_melt:
             raise ForbiddenMelt.from_token(token_info.amount, token_uid)
@@ -720,6 +727,9 @@ class TransactionVerifier:
                         ) from e
                     domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
 
+        # NOTE (mint/melt — postponed): the mint/melt extension extends the surjection-proof
+        # domain with one generator per MintHeader entry (so a FullShieldedOutput may claim a
+        # freshly-minted asset). Dropped here — MintHeader (0x14) is post-plan.
         has_full_shielded = any(isinstance(o, FullShieldedOutput) for o in tx.shielded_outputs)
         if has_full_shielded and not domain_generators:
             raise InvalidSurjectionProofError(
@@ -771,6 +781,8 @@ class TransactionVerifier:
 
     def verify_no_mint_melt(self, token_dict: TokenInfoDict) -> None:
         """Reject mint/melt operations in transactions with shielded outputs."""
+        # NOTE (mint/melt — postponed): the mint/melt extension REPLACES this forbid-all rule with
+        # verify_no_undeclared_mint_melt (which allows *declared* mint/melt via MintHeader/MeltHeader).
         for token_uid, token_info in token_dict.items():
             if token_info.version == TokenVersion.NATIVE:
                 continue
@@ -845,6 +857,9 @@ class TransactionVerifier:
                 token_uid = self._normalize_token_uid(fee_entry.token_uid)
                 transparent_outputs.append((fee_entry.amount, token_uid))
 
+        # NOTE (mint/melt — postponed): the mint/melt extension folds MintHeader/MeltHeader entries
+        # into an augmented balance equation (RFC Rule M4) via _fold_mint_melt_entry + nc_block_storage.
+        # Dropped here — mint/melt (0x14/0x15) is post-plan.
         # Mutual-exclusion invariants on the excess blinding factor:
         #   1) excess and shielded outputs cannot coexist.
         #   2) a tx with shielded inputs and no shielded outputs must carry excess
