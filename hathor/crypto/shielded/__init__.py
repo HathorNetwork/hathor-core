@@ -1,8 +1,9 @@
 """Shielded transaction cryptographic primitives.
 
-This package wraps the native Rust hathor-ct-crypto library,
-providing Pedersen commitments, Bulletproof range proofs,
-surjection proofs, and homomorphic balance verification.
+The cryptographic primitives themselves (Pedersen commitments, range proofs,
+surjection proofs, homomorphic balance) live in the native ``hathor_ct_crypto``
+Rust module and are imported directly from there. Only the helpers that carry
+Python-side logic remain in this package.
 """
 
 from __future__ import annotations
@@ -13,29 +14,9 @@ from hathor.crypto.shielded._bindings import AVAILABLE as SHIELDED_CRYPTO_AVAILA
 
 if TYPE_CHECKING:
     from hathor.conf.settings import FeatureSetting
-from hathor.crypto.shielded.asset_tag import (
-    create_asset_commitment,
-    derive_asset_tag,
-    derive_tag,
-    htr_asset_tag,
-    normalize_token_uid,
-)
-from hathor.crypto.shielded.balance import compute_balancing_blinding_factor, verify_balance
-from hathor.crypto.shielded.commitment import (
-    create_commitment,
-    create_trivial_commitment,
-    validate_commitment,
-    validate_generator,
-    verify_commitments_sum,
-)
-from hathor.crypto.shielded.ecdh import (
-    derive_ecdh_shared_secret,
-    derive_rewind_nonce,
-    extract_key_bytes,
-    generate_ephemeral_keypair,
-)
-from hathor.crypto.shielded.range_proof import create_range_proof, rewind_range_proof, verify_range_proof
-from hathor.crypto.shielded.surjection import create_surjection_proof, verify_surjection_proof
+
+from hathor.crypto.shielded.asset_tag import normalize_token_uid
+from hathor.crypto.shielded.balance import verify_balance
 
 
 def validate_shielded_crypto_available(feature_setting: FeatureSetting) -> None:
@@ -56,25 +37,6 @@ def validate_shielded_crypto_available(feature_setting: FeatureSetting) -> None:
 __all__ = [
     'SHIELDED_CRYPTO_AVAILABLE',
     'validate_shielded_crypto_available',
-    'create_asset_commitment',
-    'create_commitment',
-    'create_range_proof',
-    'create_surjection_proof',
-    'rewind_range_proof',
-    'create_trivial_commitment',
-    'compute_balancing_blinding_factor',
-    'derive_asset_tag',
-    'derive_ecdh_shared_secret',
-    'derive_rewind_nonce',
-    'derive_tag',
-    'extract_key_bytes',
-    'generate_ephemeral_keypair',
-    'htr_asset_tag',
     'normalize_token_uid',
-    'validate_commitment',
-    'validate_generator',
     'verify_balance',
-    'verify_commitments_sum',
-    'verify_range_proof',
-    'verify_surjection_proof',
 ]

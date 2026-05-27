@@ -1,9 +1,9 @@
-"""Type stubs for hathor_ct_crypto native module."""
+"""Type stubs for the hathor_ct_crypto native module.
 
-from typing import Any
-
-_lib: Any
-AVAILABLE: bool
+The implementations land in a later PR; until then the compiled module is
+empty and any access fails at call time. These stubs describe the eventual
+native API so that call sites type-check against it today.
+"""
 
 COMMITMENT_SIZE: int
 GENERATOR_SIZE: int
@@ -16,6 +16,8 @@ def create_asset_commitment(tag_bytes: bytes, r_asset: bytes) -> bytes: ...
 def create_commitment(amount: int, blinding: bytes, generator: bytes) -> bytes: ...
 def create_trivial_commitment(amount: int, generator: bytes) -> bytes: ...
 def verify_commitments_sum(positive: list[bytes], negative: list[bytes]) -> bool: ...
+def validate_commitment(data: bytes) -> bool: ...
+def validate_generator(data: bytes) -> bool: ...
 def create_range_proof(
     amount: int,
     blinding: bytes,
@@ -42,6 +44,7 @@ def verify_balance(
     shielded_inputs: list[bytes],
     transparent_outputs: list[tuple[int, bytes]],
     shielded_outputs: list[bytes],
+    excess_blinding_factor: bytes | None = None,
 ) -> bool: ...
 def compute_balancing_blinding_factor(
     value: int,
@@ -49,3 +52,6 @@ def compute_balancing_blinding_factor(
     inputs: list[tuple[int, bytes, bytes]],
     other_outputs: list[tuple[int, bytes, bytes]],
 ) -> bytes: ...
+def generate_ephemeral_keypair() -> tuple[bytes, bytes]: ...
+def derive_ecdh_shared_secret(private_key_bytes: bytes, peer_pubkey_bytes: bytes) -> bytes: ...
+def derive_rewind_nonce(shared_secret: bytes) -> bytes: ...

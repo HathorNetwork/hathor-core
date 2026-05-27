@@ -589,7 +589,7 @@ class TransactionVerifier:
 
     def verify_commitments_valid(self, tx: Transaction) -> None:
         """Validate all commitments are exactly 33 bytes, valid curve points, and count is within limits."""
-        from hathor.crypto.shielded import validate_commitment, validate_generator
+        from hathor_ct_crypto import validate_commitment, validate_generator
         from hathor.crypto.util import get_public_key_from_bytes_compressed
         from hathorlib.transaction.shielded_tx_output import (
             ASSET_COMMITMENT_SIZE,
@@ -639,7 +639,7 @@ class TransactionVerifier:
 
     def verify_range_proofs(self, tx: Transaction) -> None:
         """Every shielded output must have valid Bulletproof range proof."""
-        from hathor.crypto.shielded import verify_range_proof
+        from hathor_ct_crypto import verify_range_proof
         from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
         asset_tag_cache: dict[bytes, bytes] = {}
@@ -672,7 +672,7 @@ class TransactionVerifier:
         asset_tag_cache: dict[bytes, bytes] | None,
     ) -> bytes:
         """Derive an asset tag, using the cache if available."""
-        from hathor.crypto.shielded import derive_asset_tag
+        from hathor_ct_crypto import derive_asset_tag
         normalized = self._normalize_token_uid(token_uid)
         if asset_tag_cache is not None:
             if normalized not in asset_tag_cache:
@@ -693,7 +693,7 @@ class TransactionVerifier:
         transparent and shielded inputs; each FullShieldedOutput must prove its
         asset is one of them.
         """
-        from hathor.crypto.shielded import verify_surjection_proof
+        from hathor_ct_crypto import verify_surjection_proof
         from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
         assert tx.storage is not None
