@@ -16,11 +16,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from typing_extensions import assert_never
+
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DAAFactory
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
+from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.utils import ceil_div
 
 
 class DefaultFiller:
@@ -31,6 +35,9 @@ class DefaultFiller:
 
     For custom tokens, it creates an output on the TokenCreationTransaction of the token
     for each transaction that needs that custom token.
+
+    All amounts manipulated here are V2-normalized to match the rest of the verifier
+    pipeline; the per-node decimal version drives the conversion at the boundary.
     """
 
     def __init__(self, builder: DAGBuilder, settings: HathorSettings, daa_factory: DAAFactory) -> None:
@@ -41,10 +48,16 @@ class DefaultFiller:
         # create the dummy and genesis nodes before builder.build() is called
         genesis_block = self._get_or_create_node('genesis_block', default_type=DAGNodeType.Genesis)
         if len(genesis_block.outputs) == 0:
-            genesis_block.outputs.append(DAGOutput(self._settings.GENESIS_TOKEN_ATOMIC_UNITS, 'HTR', {}))
+            genesis_block.outputs.append(
+                DAGOutput(self._to_v2(genesis_block, self._settings.GENESIS_TOKEN_ATOMIC_UNITS), 'HTR', {})
+            )
         self._get_or_create_node('genesis_1', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('genesis_2', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('dummy', default_type=DAGNodeType.Transaction)
+
+    def _to_v2(self, node: DAGNode, value: int) -> int:
+        """Normalize `value` from the node's native atomic units to the V2-internal representation."""
+        return node.get_decimal_version().normalize_token_value(settings=self._settings, value=value)
 
     def _get_node(self, name: str) -> DAGNode:
         """Get a node."""
@@ -153,18 +166,19 @@ class DefaultFiller:
                 continue
             if node.name == 'dummy':
                 continue
+            one_htr = self._to_v2(node, 1)
             if not node.inputs and not node.outputs:
                 if node.type == DAGNodeType.Block:
                     continue
-                node.outputs.append(DAGOutput(1, 'HTR', {'_origin': 'f4'}))
+                node.outputs.append(DAGOutput(one_htr, 'HTR', {'_origin': 'f4'}))
             for i in range(len(node.outputs)):
                 txout = node.outputs[i]
                 if txout is None:
-                    node.outputs[i] = DAGOutput(1, 'HTR', {'_origin': 'f5'})
+                    node.outputs[i] = DAGOutput(one_htr, 'HTR', {'_origin': 'f5'})
                 elif txout.amount == 0:
                     assert not txout.token
                     assert not txout.attrs
-                    node.outputs[i] = DAGOutput(1, 'HTR', {'_origin': 'f6'})
+                    node.outputs[i] = DAGOutput(one_htr, 'HTR', {'_origin': 'f6'})
 
         tokens = []
         for node in list(self._builder.topological_sorting()):
@@ -211,7 +225,7 @@ class DefaultFiller:
                     diff = balance.get('HTR', 0)
 
                     # TODO Use the actual height. DAG construction has no chain context, so V1.
-                    target = self._daa_factory.create_v1().get_tokens_issued_per_block(1)
+                    target = self._to_v2(node, self._daa_factory.create_v1().get_tokens_issued_per_block(1))
                     assert diff >= 0
                     assert diff <= target
 
