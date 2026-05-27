@@ -284,15 +284,16 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         assert self.storage is not None
         from hathor.nanocontracts.balance_rules import BalanceRules
         nano_header = self.get_nano_header()
+        decimal_version = self.get_decimal_version()
 
         for action in nano_header.get_actions():
-            rules = BalanceRules.get_rules(self._settings, action)
+            rules = BalanceRules.get_rules(settings=self._settings, action=action)
             if action.token_uid not in token_dict:
                 # we try to load this token version from storage in case it's not in the inputs
                 token_dict[action.token_uid] = TokenInfo(
                     version=get_token_version(self.storage, nc_block_storage, action.token_uid)
                 )
-            rules.verification_rule(token_dict)
+            rules.verification_rule(token_dict, decimal_version=decimal_version)
 
     def _update_token_info_from_fees(self, *, token_dict: TokenInfoDict) -> None:
         """Update token_dict with fees from fee header"""
@@ -302,8 +303,13 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         fee_header = self.get_fee_header()
         fees = fee_header.get_fees()
+        decimal_version = self.get_decimal_version()
         # we store the total fee amount from the header to be used in verify_transparent_balance
-        token_dict.fees_from_fee_header = fee_header.total_fee_amount()
+        normalized_fee_total = decimal_version.normalize_token_value(
+            settings=self._settings,
+            value=fee_header.total_fee_amount(),
+        )
+        token_dict.fees_from_fee_header = normalized_fee_total
         for fee in fees:
             token_info = token_dict.get(fee.token_uid)
             if token_info is None:
@@ -314,7 +320,8 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 raise InvalidToken('token {} cannot be used to pay fees'.format(fee.token_uid.hex()))
 
             # act as a regular output subtracting from the total amount (which is done with sum in this context)
-            token_info.amount += fee.amount
+            normalized_amount = decimal_version.normalize_token_value(settings=self._settings, value=fee.amount)
+            token_info.amount += normalized_amount
             token_dict[fee.token_uid] = token_info
 
     def _get_token_info_from_inputs(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
@@ -341,7 +348,19 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()
                 token_info.can_melt = token_info.can_melt or spent_output.can_melt_token()
             else:
-                token_info.amount -= spent_output.value
+                from hathor.transaction import Block
+                match spent_tx:
+                    case Transaction():
+                        decimal_version = spent_tx.get_decimal_version()
+                    case Block():
+                        decimal_version = VertexDecimalVersion.V1  # Blocks are always V1.
+                    case _:
+                        raise AssertionError('unreachable')
+                normalized_value = decimal_version.normalize_token_value(
+                    settings=self._settings,
+                    value=spent_output.value,
+                )
+                token_info.amount -= normalized_value
 
                 if token_version == TokenVersion.FEE:
                     token_info.chargeable_inputs += 1
@@ -357,6 +376,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         :raises InvalidToken: when there's an error in token operations
         """
         # iterate over outputs and add values to token_dict
+        decimal_version = self.get_decimal_version()
         for index, tx_output in enumerate(self.outputs):
             token_uid = self.get_token_uid(tx_output.get_token_index())
             token_info = token_dict.get(token_uid)
@@ -375,7 +395,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                     raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
             else:
                 # for regular outputs subtract from the total amount
-                token_info.amount += tx_output.value
+                normalized_value = decimal_version.normalize_token_value(
+                    settings=self._settings,
+                    value=tx_output.value,
+                )
+                token_info.amount += normalized_value
 
                 if token_info.version == TokenVersion.FEE:
                     token_info.chargeable_outputs += 1

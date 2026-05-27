@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 from typing_extensions import assert_never, override
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.nanocontracts.exception import NCInvalidAction
 from hathorlib.nanocontracts.storage import NCChangesTracker
 from hathorlib.nanocontracts.types import (
@@ -53,7 +54,7 @@ class BalanceRules(ABC, Generic[T]):
         self.action = action
 
     @abstractmethod
-    def verification_rule(self, token_dict: TokenInfoDict) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict, *, decimal_version: VertexDecimalVersion) -> None:
         """
         Define how the respective action interacts with the transaction's
         token_dict during the verification phase, updating it.
@@ -102,9 +103,10 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: TokenInfoDict) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict, *, decimal_version: VertexDecimalVersion) -> None:
         token_info = token_dict[self.action.token_uid]
-        token_info.amount = token_info.amount + self.action.amount
+        normalized_amount = decimal_version.normalize_token_value(settings=self.settings, value=self.action.amount)
+        token_info.amount = token_info.amount + normalized_amount
         token_dict[self.action.token_uid] = token_info
 
         if token_info.version == TokenVersion.FEE:
@@ -129,9 +131,10 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: TokenInfoDict) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict, *, decimal_version: VertexDecimalVersion) -> None:
         token_info = token_dict[self.action.token_uid]
-        token_info.amount = token_info.amount - self.action.amount
+        normalized_amount = decimal_version.normalize_token_value(settings=self.settings, value=self.action.amount)
+        token_info.amount = token_info.amount - normalized_amount
         token_dict[self.action.token_uid] = token_info
 
         if token_info.version == TokenVersion.FEE:
@@ -156,7 +159,7 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: TokenInfoDict) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict, *, decimal_version: VertexDecimalVersion) -> None:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         token_info = token_dict[self.action.token_uid]
         if self.action.mint and not token_info.can_mint:
@@ -208,7 +211,7 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     """
 
     @override
-    def verification_rule(self, token_dict: TokenInfoDict) -> None:
+    def verification_rule(self, token_dict: TokenInfoDict, *, decimal_version: VertexDecimalVersion) -> None:
         assert self.action.token_uid != HATHOR_TOKEN_UID
         token_info = token_dict[self.action.token_uid]
         token_info.can_mint = token_info.can_mint or self.action.mint

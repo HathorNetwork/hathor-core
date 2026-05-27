@@ -89,6 +89,7 @@ class HathorSettings(BaseModel):
     # A version absent from this mapping is not supported on this network.
     VERTEX_DECIMAL_PLACES: dict[VertexDecimalVersion, int] = {
         VertexDecimalVersion.V1: 2,
+        VertexDecimalVersion.V2: 18,
     }
 
     # Minimum weight of a tx
