@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
-    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
+    from hathorlib.transaction.shielded_tx_output import OutputMode, ShieldedOutput
 
 logger = get_logger()
 
@@ -326,6 +326,15 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     def sum_outputs(self) -> int:
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
+
+    @property
+    def shielded_outputs(self) -> list['ShieldedOutput']:
+        """Return the list of shielded outputs. Empty for non-Transaction vertices."""
+        return []
+
+    def is_shielded_output(self, index: int) -> bool:
+        """Return True if `index` refers to a shielded output (i.e. index >= len(self.outputs))."""
+        return index >= len(self.outputs) and index < len(self.outputs) + len(self.shielded_outputs)
 
     def resolve_spent_output(self, index: int) -> 'TxOutput':
         """Return the output at `index` that an input may spend.
@@ -926,6 +935,14 @@ class TxInput:
         return vertex_serializer.serialize_tx_input_sighash(self)
 
     @classmethod
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
+        """ Creates a TxInput from a serialized input. Returns the input
+        and remaining bytes
+        """
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.deserialize_tx_input(buf, verbose=verbose)
+
+    @classmethod
     def create_from_dict(cls, data: dict) -> 'TxInput':
         """ Creates a TxInput from a human readable dict."""
         return cls(
@@ -993,9 +1010,31 @@ class TxOutput:
         else:
             return f'{cls_name}(value={value_str}, script={self.script.hex()})'
 
+    def __bytes__(self) -> bytes:
+        """Returns a byte representation of the output
+
+        :rtype: bytes
+        """
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.serialize_tx_output_bytes(self)
+
+    @classmethod
+    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
+        """ Creates a TxOutput from a serialized output. Returns the output
+        and remaining bytes
+        """
+        from hathor.transaction.vertex_parser import vertex_serializer
+        return vertex_serializer.deserialize_tx_output(buf, verbose=verbose)
+
     def get_token_index(self) -> int:
         """The token uid index in the list"""
         return self.token_data & self.TOKEN_INDEX_MASK
+
+    @staticmethod
+    def mode() -> OutputMode:
+        """Return the output mode (TRANSPARENT for standard TxOutput)."""
+        from hathorlib.transaction.shielded_tx_output import OutputMode as _OutputMode
+        return _OutputMode.TRANSPARENT
 
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
