@@ -56,6 +56,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     from hathorlib.conf import UNITTESTS_SETTINGS_FILEPATH
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
     from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
+    from hathor_cli.events_simulator.external_scenario import ExternalScenario
     from hathor_cli.events_simulator.scenario import Scenario
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator import Simulator
@@ -63,8 +64,8 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     if args.function != 'simulate' and args.file is None:
         raise ValueError('--function can only be used together with --file')
 
+    scenario: Scenario | ExternalScenario
     if args.file is not None:
-        from hathor_cli.events_simulator.external_scenario import ExternalScenario
         scenario = ExternalScenario(args.file, args.function)
     else:
         try:

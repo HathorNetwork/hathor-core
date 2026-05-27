@@ -55,7 +55,7 @@ class ExternalScenario:
         if spec.loader is None:
             raise ValueError(f'No loader available for: {file_path}')
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        spec.loader.exec_module(module)
         return module
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> 'Optional[DAGArtifacts]':
