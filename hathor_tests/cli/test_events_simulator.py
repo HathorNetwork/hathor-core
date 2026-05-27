@@ -12,8 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import pytest
+from pathlib import Path
 from unittest.mock import Mock
+
+import pytest
 
 from hathor.conf.get_settings import get_global_settings
 from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
@@ -41,7 +43,7 @@ def test_events_simulator() -> None:
     assert protocol is not None
 
 
-def test_execute_with_external_file(tmp_path) -> None:
+def test_execute_with_external_file(tmp_path: 'Path') -> None:
     """execute() works end-to-end when --file is used instead of --scenario."""
     scenario_code = 'def simulate(simulator, manager):\n    simulator.run(60)\n'
     scenario_path = tmp_path / 'my_scenario.py'
@@ -65,7 +67,7 @@ def test_execute_with_external_file(tmp_path) -> None:
     assert protocol is not None
 
 
-def test_execute_with_external_file_and_custom_function(tmp_path) -> None:
+def test_execute_with_external_file_and_custom_function(tmp_path: 'Path') -> None:
     """execute() uses the function named by --function when --file is provided."""
     scenario_code = 'def my_fn(simulator, manager):\n    simulator.run(60)\n'
     scenario_path = tmp_path / 'my_scenario.py'

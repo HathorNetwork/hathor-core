@@ -15,6 +15,7 @@
 from typing import Optional, cast
 
 from hathor.crypto.util import decode_address
+from hathor.dag_builder import DAGBuilder
 from hathor.manager import HathorManager
 from hathor.transaction import Block, Transaction
 from hathor.types import Address, VertexId
@@ -177,3 +178,27 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
 
     manager.cpu_mining_service.resolve(tx2)
     return tx2
+
+
+def create_dag_builder(manager: 'HathorManager') -> 'DAGBuilder':
+    from mnemonic import Mnemonic
+
+    from hathor.wallet import HDWallet
+
+    seed = (
+        "coral light army gather adapt blossom school alcohol coral light army gather "
+        "adapt blossom school alcohol coral light army gather adapt blossom school awesome"
+    )
+
+    def create_random_hd_wallet():
+        m = Mnemonic('english')
+        words = m.to_mnemonic(manager.rng.randbytes(32))
+        hd = HDWallet(words=words)
+        hd._manually_initialize()
+        return hd
+
+    return DAGBuilder.from_manager(
+        manager=manager,
+        genesis_words=seed,
+        wallet_factory=create_random_hd_wallet,
+    )

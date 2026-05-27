@@ -49,6 +49,7 @@ def scenario_file(tmp_path):
 
 def test_loads_default_function_and_reward_spend(scenario_file):
     from unittest.mock import Mock
+
     from hathor_cli.events_simulator.external_scenario import ExternalScenario
     scenario = ExternalScenario(str(scenario_file))
     assert scenario.get_reward_spend_min_blocks() == 10
@@ -66,6 +67,7 @@ def test_custom_reward_spend_min_blocks(tmp_path):
 
 def test_custom_function_name(tmp_path):
     from unittest.mock import Mock
+
     from hathor_cli.events_simulator.external_scenario import ExternalScenario
     f = tmp_path / 'scenario.py'
     f.write_text(_CUSTOM_FUNCTION)
