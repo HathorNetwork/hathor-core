@@ -241,6 +241,153 @@ class HathorCommonsTestCase(unittest.TestCase):
         # Verify the nano header has expected method
         self.assertEqual(nano_header.nc_method, 'noop')
 
+    def test_tx_with_unshield_balance_header(self):
+        """Test Transaction with UnshieldBalanceHeader: serialization round-trip,
+        parser dispatch, length validation, and accessors."""
+        from hathorlib.headers import UnshieldBalanceHeader, VertexHeaderId
+        from hathorlib.vertex_parser import VertexParser
+
+        tx = Transaction()
+        excess = bytes(range(32))
+        header = UnshieldBalanceHeader(excess_blinding_factor=excess)
+
+        # Wire format: header_id(1) | excess_blinding_factor(32)
+        wire = header.serialize()
+        self.assertEqual(len(wire), 33)
+        self.assertEqual(wire[:1], VertexHeaderId.UNSHIELD_BALANCE_HEADER.value)
+        self.assertEqual(wire[:1], b'\x13')
+        self.assertEqual(wire[1:], excess)
+
+        # Parser registry dispatches the correct class by header id.
+        parser_cls = VertexParser.get_header_parser(b'\x13')
+        self.assertIs(parser_cls, UnshieldBalanceHeader)
+
+        # Deserialization recovers the header with no leftover bytes.
+        parsed, leftover = parser_cls.deserialize(tx, wire)
+        self.assertEqual(leftover, b'')
+        self.assertEqual(parsed.excess_blinding_factor, excess)
+
+        # Extra bytes after the header are returned as leftover.
+        trailing = b'\xde\xad\xbe\xef'
+        parsed2, leftover2 = parser_cls.deserialize(tx, wire + trailing)
+        self.assertEqual(leftover2, trailing)
+        self.assertEqual(parsed2.excess_blinding_factor, excess)
+
+        # sighash bytes equal the full serialization (signature-bound).
+        self.assertEqual(header.get_sighash_bytes(), wire)
+
+        # Wrong scalar length is rejected at construction time.
+        with self.assertRaises(ValueError):
+            UnshieldBalanceHeader(excess_blinding_factor=b'\x00' * 31)
+
+        # Truncated buffer is rejected at deserialization time.
+        with self.assertRaises(ValueError):
+            parser_cls.deserialize(tx, wire[:20])
+
+        # Wrong header id byte is rejected.
+        with self.assertRaises(ValueError):
+            parser_cls.deserialize(tx, b'\x99' + excess)
+
+        # Transaction accessor finds the header once attached.
+        self.assertFalse(tx.has_unshield_balance())
+        tx.headers.append(header)
+        self.assertTrue(tx.has_unshield_balance())
+        self.assertIs(tx.get_unshield_balance_header(), header)
+
+    def test_shielded_output_serialization_roundtrip(self):
+        """serialize/deserialize round-trip for both output modes, incl. ephemeral present/absent.
+
+        Pure bytes — no crypto library needed."""
+        from hathorlib.serialization import Deserializer, Serializer
+        from hathorlib.transaction.shielded_tx_output import (
+            EPHEMERAL_PUBKEY_SIZE,
+            AmountShieldedOutput,
+            FullShieldedOutput,
+            deserialize_shielded_output,
+            serialize_shielded_output,
+        )
+
+        def roundtrip(out):
+            serializer = Serializer.build_bytes_serializer()
+            serialize_shielded_output(serializer, out)
+            data = bytes(serializer.finalize())
+            deserializer = Deserializer.build_bytes_deserializer(data)
+            parsed = deserialize_shielded_output(deserializer)
+            deserializer.finalize()  # asserts every byte consumed — guards over/under-read
+            return data, parsed
+
+        # AmountShielded, ephemeral absent: default is None and the wire writes 33 zero bytes.
+        amount_absent = AmountShieldedOutput(
+            commitment=b'\x11' * 33, range_proof=b'\x22' * 64, script=b'\x33' * 25, token_data=5,
+        )
+        self.assertIsNone(amount_absent.ephemeral_pubkey)
+        data, parsed = roundtrip(amount_absent)
+        self.assertEqual(data[-EPHEMERAL_PUBKEY_SIZE:], b'\x00' * EPHEMERAL_PUBKEY_SIZE)
+        self.assertIsNone(parsed.ephemeral_pubkey)
+        self.assertEqual(parsed, amount_absent)
+
+        # AmountShielded, ephemeral present: preserved verbatim.
+        eph = b'\x02' + b'\x44' * 32
+        amount_present = AmountShieldedOutput(
+            commitment=b'\x11' * 33, range_proof=b'\x22' * 64, script=b'\x33' * 25,
+            token_data=5, ephemeral_pubkey=eph,
+        )
+        data2, parsed2 = roundtrip(amount_present)
+        self.assertEqual(data2[-EPHEMERAL_PUBKEY_SIZE:], eph)
+        self.assertEqual(parsed2.ephemeral_pubkey, eph)
+        self.assertEqual(parsed2, amount_present)
+
+        # FullShielded round-trip (asset_commitment + surjection_proof).
+        full = FullShieldedOutput(
+            commitment=b'\x55' * 33, range_proof=b'\x66' * 100, script=b'\x77' * 10,
+            asset_commitment=b'\x88' * 33, surjection_proof=b'\x99' * 200,
+        )
+        _, parsed_full = roundtrip(full)
+        self.assertEqual(parsed_full, full)
+        self.assertIsNone(parsed_full.ephemeral_pubkey)
+
+    def test_shielded_outputs_header_serialization_roundtrip(self):
+        """ShieldedOutputsHeader round-trip + parser dispatch + leftover handling.
+
+        Locks in the framework-based (de)serialization and the tx-less header construction."""
+        from hathorlib.headers import ShieldedOutputsHeader, VertexHeaderId
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+        from hathorlib.vertex_parser import VertexParser
+
+        tx = Transaction()
+        outputs = [
+            AmountShieldedOutput(commitment=b'\x11' * 33, range_proof=b'\x22' * 64,
+                                 script=b'\x33' * 25, token_data=5),
+            FullShieldedOutput(commitment=b'\x55' * 33, range_proof=b'\x66' * 100, script=b'\x77' * 10,
+                               asset_commitment=b'\x88' * 33, surjection_proof=b'\x99' * 200),
+        ]
+        header = ShieldedOutputsHeader(shielded_outputs=outputs)  # no tx field
+
+        wire = header.serialize()
+        self.assertEqual(wire[:1], VertexHeaderId.SHIELDED_OUTPUTS_HEADER.value)
+        self.assertEqual(wire[:1], b'\x12')
+        self.assertEqual(wire[1], len(outputs))  # count byte
+
+        parser_cls = VertexParser.get_header_parser(b'\x12')
+        self.assertIs(parser_cls, ShieldedOutputsHeader)
+
+        # Deserialization recovers the outputs with no leftover.
+        parsed, leftover = parser_cls.deserialize(tx, wire)
+        self.assertEqual(leftover, b'')
+        self.assertEqual(parsed.shielded_outputs, outputs)
+
+        # Consumes exactly the header's bytes — trailing bytes are returned as leftover.
+        trailing = b'\xde\xad\xbe\xef'
+        parsed2, leftover2 = parser_cls.deserialize(tx, wire + trailing)
+        self.assertEqual(leftover2, trailing)
+        self.assertEqual(parsed2.shielded_outputs, outputs)
+
+        # Transaction accessor finds the header once attached.
+        self.assertFalse(tx.has_shielded_outputs())
+        tx.headers.append(header)
+        self.assertTrue(tx.has_shielded_outputs())
+        self.assertIs(tx.get_shielded_outputs_header(), header)
+
     def test_tx_version_and_signal_bits(self):
         from hathorlib.base_transaction import TxVersion
 

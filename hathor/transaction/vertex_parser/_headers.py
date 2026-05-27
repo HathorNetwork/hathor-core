@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.serialization import Deserializer
     from hathor.transaction import BaseTransaction
-    from hathor.transaction.headers import VertexBaseHeader
+    from hathor.transaction.headers import AnyVertexHeader
 
 
 def deserialize_headers(
@@ -41,7 +41,7 @@ def deserialize_headers(
         header_id = VertexHeaderId(header_type)
         if header_id not in supported:
             raise ValueError(f'Header type not supported: {header_type!r}')
-        header: VertexBaseHeader
+        header: AnyVertexHeader
         match header_id:
             case VertexHeaderId.NANO_HEADER:
                 from hathor.transaction import Transaction
@@ -57,14 +57,40 @@ def deserialize_headers(
                 assert isinstance(vertex, Transaction)
                 fees = deserialize_fee_header(deserializer)
                 header = FeeHeader(settings=settings, tx=vertex, fees=fees)
+            case VertexHeaderId.SHIELDED_OUTPUTS_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import ShieldedOutputsHeader
+                from hathor.transaction.vertex_parser._shielded_outputs_header import (
+                    deserialize_shielded_outputs_header,
+                )
+                assert isinstance(vertex, Transaction)
+                # Deserialization goes through the standalone free function (framework-based),
+                # not the header class's (outdated) deserialize classmethod. It consumes exactly
+                # the header's bytes from the deserializer, like the Nano/Fee cases above.
+                shielded_outputs = deserialize_shielded_outputs_header(deserializer)
+                header = ShieldedOutputsHeader(shielded_outputs=shielded_outputs)
+            case VertexHeaderId.UNSHIELD_BALANCE_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import UnshieldBalanceHeader
+                from hathor.transaction.vertex_parser._unshield_balance_header import (
+                    deserialize_unshield_balance_header,
+                )
+                assert isinstance(vertex, Transaction)
+                excess_bf = deserialize_unshield_balance_header(deserializer)
+                header = UnshieldBalanceHeader(excess_blinding_factor=excess_bf)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
 
 
-def serialize_header(serializer: Serializer, header: VertexBaseHeader) -> None:
+def serialize_header(serializer: Serializer, header: AnyVertexHeader) -> None:
     """Serialize a single header into the serializer."""
-    from hathor.transaction.headers import FeeHeader, NanoHeader
+    from hathor.transaction.headers import (
+        FeeHeader,
+        NanoHeader,
+        ShieldedOutputsHeader,
+        UnshieldBalanceHeader,
+    )
 
     match header:
         case NanoHeader():
@@ -73,11 +99,21 @@ def serialize_header(serializer: Serializer, header: VertexBaseHeader) -> None:
         case FeeHeader():
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
             serialize_fee_header(serializer, header)
+        case ShieldedOutputsHeader():
+            from hathor.transaction.vertex_parser._shielded_outputs_header import (
+                serialize_shielded_outputs_header,
+            )
+            serialize_shielded_outputs_header(serializer, header)
+        case UnshieldBalanceHeader():
+            from hathor.transaction.vertex_parser._unshield_balance_header import (
+                serialize_unshield_balance_header,
+            )
+            serialize_unshield_balance_header(serializer, header)
         case _:
             serializer.write_bytes(header.serialize())
 
 
-def get_header_sighash_bytes(header: VertexBaseHeader) -> bytes:
+def get_header_sighash_bytes(header: AnyVertexHeader) -> bytes:
     """Get sighash bytes for a header."""
     from hathor.transaction.headers import FeeHeader, NanoHeader
 

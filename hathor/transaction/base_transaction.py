@@ -30,7 +30,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
-from hathor.transaction.headers import VertexBaseHeader
+from hathor.transaction.headers import AnyVertexHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback
@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
+    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 logger = get_logger()
 
@@ -76,6 +77,31 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
         # We could use float('-inf'), but it is not serializable.
         return a
     return a + log(1 + 2**(b - a) * multiplier, 2)
+
+
+def _shielded_output_to_json(output: 'ShieldedOutput', *, decode_script: bool = False) -> dict[str, Any]:
+    """Serialize a shielded output to a JSON-compatible dict."""
+    from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+    data: dict[str, Any] = {
+        'type': 'shielded',
+        'commitment': output.commitment.hex(),
+        'range_proof': base64.b64encode(output.range_proof).decode('utf-8'),
+        'script': base64.b64encode(output.script).decode('utf-8'),
+    }
+    if output.ephemeral_pubkey:
+        data['ephemeral_pubkey'] = output.ephemeral_pubkey.hex()
+    if isinstance(output, AmountShieldedOutput):
+        data['token_data'] = output.token_data
+    elif isinstance(output, FullShieldedOutput):
+        data['asset_commitment'] = output.asset_commitment.hex()
+        data['surjection_proof'] = base64.b64encode(output.surjection_proof).decode('utf-8')
+    if decode_script:
+        from hathor.transaction.scripts import parse_address_script
+        script_type = parse_address_script(output.script)
+        if script_type:
+            data['decoded'] = {'address': script_type.address}
+    return data
 
 
 def get_cls_from_tx_version(tx_version: TxVersion) -> type['BaseTransaction']:
@@ -172,7 +198,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
-        self.headers: list[VertexBaseHeader] = []
+        self.headers: list[AnyVertexHeader] = []
 
         # A name solely for debugging purposes.
         self.name: str | None = None
@@ -235,9 +261,13 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return whether this transaction has a fee header."""
         return False
 
+    def has_shielded_outputs(self) -> bool:
+        """Return whether this vertex has shielded outputs."""
+        return False
+
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
-        return 2
+        return 3
 
     @classmethod
     @abstractmethod
