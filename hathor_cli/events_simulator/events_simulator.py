@@ -36,7 +36,16 @@ def create_parser() -> ArgumentParser:
     parser = create_parser()
     possible_scenarios = [scenario.name for scenario in Scenario]
 
-    parser.add_argument('--scenario', help=f'One of {possible_scenarios}', type=str, required=True)
+    scenario_group = parser.add_mutually_exclusive_group(required=True)
+    scenario_group.add_argument('--scenario', help=f'One of {possible_scenarios}', type=str)
+    scenario_group.add_argument('--file', help='external scenario file, e.g. "./my_scenario.py"', type=str)
+
+    parser.add_argument(
+        '--function',
+        help='function name to call in the external scenario file (default: simulate)',
+        type=str,
+        default='simulate',
+    )
     parser.add_argument('--port', help='Port to run the WebSocket server', type=int, default=DEFAULT_PORT)
     parser.add_argument('--seed', help='The seed used to create simulated events', type=int)
 
@@ -51,11 +60,18 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator import Simulator
 
-    try:
-        scenario = Scenario[args.scenario]
-    except KeyError as e:
-        possible_scenarios = [scenario.name for scenario in Scenario]
-        raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
+    if args.function != 'simulate' and args.file is None:
+        raise ValueError('--function can only be used together with --file')
+
+    if args.file is not None:
+        from hathor_cli.events_simulator.external_scenario import ExternalScenario
+        scenario = ExternalScenario(args.file, args.function)
+    else:
+        try:
+            scenario = Scenario[args.scenario]
+        except KeyError as e:
+            possible_scenarios = [s.name for s in Scenario]
+            raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
     settings = get_global_settings().model_copy(
         update={"REWARD_SPEND_MIN_BLOCKS": scenario.get_reward_spend_min_blocks()}
@@ -87,7 +103,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     api.putChild(b'event_ws', WebSocketResource(forwarding_ws_factory))
     site = Site(root)
 
-    log.info('Started simulating events', scenario=args.scenario, seed=simulator.seed)
+    log.info('Started simulating events', scenario=args.file if args.file is not None else args.scenario, seed=simulator.seed)
 
     forwarding_ws_factory.start(stream_id='simulator_stream_id')
     scenario.simulate(simulator, manager)
