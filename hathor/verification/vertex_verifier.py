@@ -35,7 +35,13 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    AnyVertexHeader,
+    FeeHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+)
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -196,9 +202,9 @@ class VertexVerifier:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
 
-    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[VertexBaseHeader]]:
+    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[AnyVertexHeader]]:
         """Return a set of allowed headers for the vertex."""
-        allowed_headers: set[type[VertexBaseHeader]] = set()
+        allowed_headers: set[type[AnyVertexHeader]] = set()
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 pass
@@ -208,11 +214,19 @@ class VertexVerifier:
                 pass
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
-            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+            case TxVersion.REGULAR_TRANSACTION:
+                if params.features.nanocontracts:
+                    allowed_headers.add(NanoHeader)
+                if params.features.fee_tokens:
+                    allowed_headers.add(FeeHeader)
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
