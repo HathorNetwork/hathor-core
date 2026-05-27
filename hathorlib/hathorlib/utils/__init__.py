@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import re
 import struct
-from math import ceil, floor
 from typing import TYPE_CHECKING, Any, Optional, Tuple, TypeVar
 
 if TYPE_CHECKING:
@@ -81,8 +81,14 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
 
 
 def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: int) -> int:
-    return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
+    return ceil_div(settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(mint_amount), 10**9)
 
 
 def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: int) -> int:
-    return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
+    return settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(melt_amount) // 10**9
+
+
+def ceil_div(a: int, b: int) -> int:
+    """Calculate ceil division using integer math for non-negative operands."""
+    assert a >= 0 and b >= 0
+    return (a + b - 1) // b
