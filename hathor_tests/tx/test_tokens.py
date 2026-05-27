@@ -136,7 +136,7 @@ class TokenTest(unittest.TestCase):
 
         # mint tokens and transfer mint authority
         mint_amount = 10000000
-        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount)
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount, v2_normalized=False)
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(mint_amount, script, 1)
@@ -196,7 +196,7 @@ class TokenTest(unittest.TestCase):
 
         # try to mint and deposit less tokens than necessary
         mint_amount = 10000000
-        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount) - 1
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount, v2_normalized=False) - 1
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(mint_amount, script, 1)
@@ -242,7 +242,7 @@ class TokenTest(unittest.TestCase):
         # melt tokens and transfer melt authority
         melt_amount = 100
         new_amount = tx.outputs[0].value - melt_amount
-        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount)
+        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount, v2_normalized=False)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(new_amount, script, 1)
@@ -280,7 +280,7 @@ class TokenTest(unittest.TestCase):
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
-        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount)
+        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount, v2_normalized=False)
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
@@ -373,7 +373,7 @@ class TokenTest(unittest.TestCase):
 
         # new tx minting tokens
         mint_amount = 300
-        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount)
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount, v2_normalized=False)
         script = P2PKH.create_output_script(self.address)
         # inputs
         mint_input = TxInput(tx.hash, 1, b'')

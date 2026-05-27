@@ -252,7 +252,7 @@ class EventManagerTest(unittest.TestCase):
             self.manager,
             token_name='Created Token',
             token_symbol='CTK',
-            mint_amount=123,
+            mint_amount=100,
             propagate=True,
             use_genesis=False,
         )

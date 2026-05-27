@@ -358,7 +358,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         token_name = 'MyTestToken'
         token_symbol = 'MTT'
         token_info_version = TokenVersion.DEPOSIT
-        amount = 150
+        amount = 100
         tx = create_tokens(
             self.manager,
             mint_amount=amount,
