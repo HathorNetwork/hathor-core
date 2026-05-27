@@ -44,6 +44,7 @@ from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
+from hathorlib.decimal_places import VertexDecimalVersion
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
@@ -85,6 +86,20 @@ class VertexExporter:
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
         return self._builder._get_node(name)
+
+    def _denormalize_token_value(self, node: DAGNode, value: int) -> int:
+        """Denormalize a V2-internal `value` to the node's native atomic units."""
+        decimal_version = node.get_decimal_version()
+        match decimal_version:
+            case VertexDecimalVersion.V1:
+                # V1 outputs store whole cents; the value must be cent-aligned.
+                assert value % 10**16 == 0, f'{value} is not a multiple of 10**16'
+                return value // 10**16
+            case VertexDecimalVersion.V2:
+                # V2 native atomic == V2 internal atomic; no scaling needed.
+                return value
+            case _:
+                assert_never(decimal_version)
 
     def get_wallet(self, name: str) -> BaseWallet:
         if name not in self._wallets:
@@ -162,7 +177,7 @@ class VertexExporter:
                     index = len(tokens)
 
             script = self.get_next_p2pkh_script()
-            outputs.append(TxOutput(value=amount, token_data=index, script=script))
+            outputs.append(TxOutput(value=self._denormalize_token_value(node, amount), token_data=index, script=script))
 
         if token_creation:
             # Create mint and melt authorities to be used by future transactions
@@ -402,7 +417,7 @@ class VertexExporter:
                 nc_actions.append(NanoHeaderAction(
                     type=action,
                     token_index=token_index,
-                    amount=value,
+                    amount=self._denormalize_token_value(node, value),
                 ))
 
         append_actions(NCActionType.DEPOSIT, NC_DEPOSIT_KEY)
@@ -452,7 +467,7 @@ class VertexExporter:
                     vertex.tokens.append(token_id)
                 token_index = 1 + vertex.tokens.index(token_id)
 
-            entry = FeeHeaderEntry(token_index=token_index, amount=fee_amount)
+            entry = FeeHeaderEntry(token_index=token_index, amount=self._denormalize_token_value(node, fee_amount))
             entries.append(entry)
 
         fee_header = FeeHeader(

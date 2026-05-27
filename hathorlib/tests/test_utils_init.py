@@ -89,16 +89,48 @@ class TestNotNone(unittest.TestCase):
 
 
 class TestDepositFunctions(unittest.TestCase):
-    def test_deposit_amount(self) -> None:
-        from hathorlib.conf import HathorSettings
-        settings = HathorSettings()
-        result = get_deposit_token_deposit_amount(settings, 100)
-        self.assertIsInstance(result, int)
-        self.assertGreater(result, 0)
+    # Both helpers consume and produce V2-normalized amounts. Inputs below are V2 atomic
+    # units (10**16 = 1 HTR cent, 10**18 = 1 HTR). Above the 1-cent floor, results pass
+    # through with full V2-atomic precision (fractional cents are valid in V2 space).
 
-    def test_withdraw_amount(self) -> None:
+    def test_deposit_amount_one_htr_mint(self) -> None:
+        # 1% of 1 HTR = 0.01 HTR = exactly 1 cent.
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
-        result = get_deposit_token_withdraw_amount(settings, 100)
-        self.assertIsInstance(result, int)
-        self.assertGreater(result, 0)
+        result = get_deposit_token_deposit_amount(settings, 10**18)
+        self.assertEqual(result, 10**16)
+
+    def test_deposit_amount_passes_fractional_cent_through(self) -> None:
+        # 1% of 1.01 HTR = 0.0101 HTR; returned exactly (1.01 cents in V2-atomic units).
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        result = get_deposit_token_deposit_amount(settings, 101 * 10**16)
+        self.assertEqual(result, 101 * 10**14)
+
+    def test_deposit_amount_enforces_minimum(self) -> None:
+        # Sub-cent mints still require the 1-cent minimum deposit.
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        result = get_deposit_token_deposit_amount(settings, 1)
+        self.assertEqual(result, 10**16)
+
+    def test_withdraw_amount_one_htr_melt(self) -> None:
+        # 1% of 1 HTR = 0.01 HTR = exactly 1 cent.
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        result = get_deposit_token_withdraw_amount(settings, 10**18)
+        self.assertEqual(result, 10**16)
+
+    def test_withdraw_amount_passes_fractional_cent_through(self) -> None:
+        # 1% of 1.99 HTR = 0.0199 HTR; returned exactly (1.99 cents in V2-atomic units).
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        result = get_deposit_token_withdraw_amount(settings, 199 * 10**16)
+        self.assertEqual(result, 199 * 10**14)
+
+    def test_withdraw_amount_below_one_cent_returns_zero(self) -> None:
+        # Sub-cent withdrawals are kept by the system.
+        from hathorlib.conf import HathorSettings
+        settings = HathorSettings()
+        result = get_deposit_token_withdraw_amount(settings, 1)
+        self.assertEqual(result, 0)

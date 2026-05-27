@@ -24,6 +24,7 @@ from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.wallet import BaseWallet
+from hathorlib.decimal_places import VertexDecimalVersion
 
 AttributeType: TypeAlias = dict[str, str | int]
 VertexResolverType: TypeAlias = Callable[[BaseTransaction], Any]
@@ -88,6 +89,16 @@ class DAGNode:
         """Return the token version for this node."""
         from hathor.dag_builder.builder import TOKEN_VERSION_KEY
         return TokenVersion[self.attrs.get(TOKEN_VERSION_KEY, TokenVersion.DEPOSIT.name).upper()]
+
+    def get_decimal_version(self) -> VertexDecimalVersion:
+        """Return the decimal-places version under which this node's amounts are interpreted.
+
+        All amounts the dag_builder holds internally are V2-normalized; this is the version
+        from which user-provided amounts are normalized into V2 and into which the V2 internals
+        are denormalized when the actual vertex is created.
+        """
+        # Hardcoded V1 until the DSL grows a `decimal_version` attribute.
+        return VertexDecimalVersion.V1
 
     def get_required_literal(self, attr: str) -> str:
         """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""

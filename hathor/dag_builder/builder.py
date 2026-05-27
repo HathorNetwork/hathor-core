@@ -66,6 +66,7 @@ class DAGBuilder:
 
         self.log = logger.new()
 
+        self._settings = settings
         self._nodes: dict[str, DAGNode] = {}
         self._tokenize = tokenize
         self._filler = DefaultFiller(self, settings, daa_factory)
@@ -157,9 +158,15 @@ class DAGBuilder:
         =0 means sum(txouts) = sum(txins)
         >0 means sum(txouts) > sum(txins), e.g., withdrawal
         <0 means sum(txouts) < sum(txins), e.g., deposit
+
+        `value` is in the node's native decimal-version atomic units (matching what the user
+        wrote in the DSL); it is normalized to V2 for storage.
         """
         node = self._get_or_create_node(name)
-        node.balances[token] = node.balances.get(token, 0) + value
+        normalized_value = node.get_decimal_version().normalize_token_value(
+            settings=self._settings, value=value
+        )
+        node.balances[token] = node.balances.get(token, 0) + normalized_value
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             self.add_deps(name, token)
@@ -194,11 +201,18 @@ class DAGBuilder:
         return self
 
     def set_output(self, name: str, index: int, amount: int, token: str, attrs: AttributeType) -> Self:
-        """Set information about an output."""
+        """Set information about an output.
+
+        `amount` is in the node's native decimal-version atomic units (matching what the user
+        wrote in the DSL); it is normalized to V2 for storage in DAGOutput.amount.
+        """
         node = self._get_or_create_node(name)
         if len(node.outputs) <= index:
             node.outputs.extend([None] * (index - len(node.outputs) + 1))
-        node.outputs[index] = DAGOutput(amount, token, attrs)
+        normalized_amount = node.get_decimal_version().normalize_token_value(
+            settings=self._settings, value=amount
+        )
+        node.outputs[index] = DAGOutput(normalized_amount, token, attrs)
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             node.deps.add(token)
@@ -235,8 +249,11 @@ class DAGBuilder:
                 raise SyntaxError(f'unexpected negative action in `{value}`')
             multiplier = 1 if key == NC_WITHDRAWAL_KEY else -1
             self.update_balance(name, token, amount * multiplier)
+            normalized_amount = node.get_decimal_version().normalize_token_value(
+                settings=self._settings, value=amount
+            )
             actions = node.get_attr_list(key, default=[])
-            actions.append((token, amount))
+            actions.append((token, normalized_amount))
             node.attrs[key] = actions
 
         else:
@@ -273,7 +290,10 @@ class DAGBuilder:
         if amount < 0:
             raise SyntaxError(f'unexpected negative fee in `{value}`')
         self.update_balance(name, token, -amount)
-        fees.append((token, amount))
+        normalized_amount = node.get_decimal_version().normalize_token_value(
+            settings=self._settings, value=amount
+        )
+        fees.append((token, normalized_amount))
         node.attrs[key] = fees
 
     def add_attribute(self, name: str, key: str, value: str) -> Self:
