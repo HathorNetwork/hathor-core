@@ -271,7 +271,7 @@ class DefaultFiller:
                     # 101-cent mint at 1%). V2 outputs carry that precision; V1 outputs store
                     # whole cents, so we ceil to the next cent and pay a sub-cent extra.
                     decimal_version = node.get_decimal_version()
-                    raw_deposit = get_deposit_token_deposit_amount(self._settings, balance[token])
+                    raw_deposit = get_deposit_token_deposit_amount(self._settings, balance[token], v2_normalized=True)
                     match decimal_version:
                         case VertexDecimalVersion.V1:
                             htr_deposit = ceil_div(raw_deposit, 10**16) * 10**16

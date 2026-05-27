@@ -33,7 +33,7 @@ def calculate_mint_fee(
             raise AssertionError
         case TokenVersion.DEPOSIT:
             _validate_deposit_based_payment_token(fee_payment_token)
-            return -get_deposit_token_deposit_amount(settings, amount)
+            return -get_deposit_token_deposit_amount(settings, amount, v2_normalized=False)  # TODO
         case TokenVersion.FEE:
             _validate_fee_based_payment_token(fee_payment_token)
             return -_calculate_unit_fee_token_fee(settings, fee_payment_token)
@@ -54,7 +54,7 @@ def calculate_melt_fee(
             raise AssertionError
         case TokenVersion.DEPOSIT:
             _validate_deposit_based_payment_token(fee_payment_token)
-            return +get_deposit_token_withdraw_amount(settings, amount)
+            return +get_deposit_token_withdraw_amount(settings, amount, v2_normalized=False)  # TODO
         case TokenVersion.FEE:
             _validate_fee_based_payment_token(fee_payment_token)
             return -_calculate_unit_fee_token_fee(settings, fee_payment_token)

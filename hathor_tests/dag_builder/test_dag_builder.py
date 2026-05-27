@@ -433,6 +433,8 @@ if foo:
             FBT2.token_version = fee
             FBT2.fee = 1 HTR
 
+            FBT1 < FBT2
+
             tx1.out[0] = 111 FBT1
             tx1.out[1] = 222 FBT2
             tx1.fee = 1 HTR

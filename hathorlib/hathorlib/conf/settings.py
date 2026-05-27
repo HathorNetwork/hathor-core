@@ -129,7 +129,7 @@ class HathorSettings(BaseModel):
         decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
         return int(self.GENESIS_TOKEN_MAIN_UNITS * (10 ** decimal_places))
 
-    # Fee rate settings
+    # Fee rate settings in V1 decimals (that is, 0.01 HTR)
     FEE_PER_OUTPUT: int = 1
 
     @property

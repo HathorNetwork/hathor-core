@@ -566,4 +566,4 @@ class NCFee:
         if self.token_uid == HATHOR_TOKEN_UID:
             return self.amount
         else:
-            return get_deposit_token_withdraw_amount(settings, self.amount)
+            return get_deposit_token_withdraw_amount(settings, self.amount, v2_normalized=False)  # TODO

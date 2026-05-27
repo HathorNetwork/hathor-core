@@ -454,7 +454,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     address = decode_address(address_b58)
     script = P2PKH.create_output_script(address)
 
-    deposit_amount = get_deposit_token_deposit_amount(manager._settings, mint_amount)
+    deposit_amount = get_deposit_token_deposit_amount(manager._settings, mint_amount, v2_normalized=False)
     if nft_data:
         # NFT creation needs 0.01 HTR of fee
         deposit_amount += 1

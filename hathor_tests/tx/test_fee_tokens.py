@@ -370,7 +370,9 @@ class FeeTokenTest(unittest.TestCase):
             TxInput(dbt_tx.hash, 0, b'')
         ]
         dbt_melt_amount = 200
-        htr_change_value = get_deposit_token_withdraw_amount(self.manager._settings, dbt_melt_amount)
+        htr_change_value = get_deposit_token_withdraw_amount(
+            self.manager._settings, dbt_melt_amount, v2_normalized=False
+        )
         # 200 dbt -> 2 htr
         self.assertEqual(htr_change_value, 2)
         outputs = [

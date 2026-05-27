@@ -80,14 +80,28 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
     return optional
 
 
-def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: int) -> int:
+def get_deposit_token_deposit_amount(
+    settings: 'HathorSettings',
+    mint_amount: int,
+    *,
+    v2_normalized: bool,
+) -> int:
     result = ceil_div(settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(mint_amount), 10**9)
-    return max(result, 10**16)  # minimum deposit of 0.01 HTR
+    if v2_normalized:
+        return max(result, 10**16)  # minimum deposit of 0.01 HTR
+    return result
 
 
-def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: int) -> int:
+def get_deposit_token_withdraw_amount(
+    settings: 'HathorSettings',
+    melt_amount: int,
+    *,
+    v2_normalized: bool,
+) -> int:
     result = settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(melt_amount) // 10**9
-    return result if result >= 10**16 else 0  # minimum withdraw of 0.01 HTR
+    if v2_normalized:
+        return result if result >= 10**16 else 0  # minimum withdraw of 0.01 HTR
+    return result
 
 
 def ceil_div(a: int, b: int) -> int:

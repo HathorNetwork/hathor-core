@@ -44,8 +44,8 @@ from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathorlib.decimal_places import VertexDecimalVersion
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+from hathorlib.decimal_places import VertexDecimalVersion
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
@@ -177,7 +177,9 @@ class VertexExporter:
                     index = len(tokens)
 
             script = self.get_next_p2pkh_script()
-            outputs.append(TxOutput(value=self._denormalize_token_value(node, amount), token_data=index, script=script))
+            outputs.append(
+                TxOutput(value=self._denormalize_token_value(node, amount), token_data=index, script=script)
+            )
 
         if token_creation:
             # Create mint and melt authorities to be used by future transactions

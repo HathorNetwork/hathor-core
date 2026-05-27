@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from enum import IntEnum, unique
 from typing import TYPE_CHECKING
+
 from typing_extensions import assert_never
 
 if TYPE_CHECKING:
@@ -48,8 +49,8 @@ class VertexDecimalVersion(IntEnum):
         Currently, it has hardcoded support for V1 with 2 decimal places and V2 with 18 decimal places.
         V2 values are returned as-is, and V1 values are scaled up with a factor of 10**16.
         """
-        v1_decimal_places =  VertexDecimalVersion.V1.get_decimal_places(settings)
-        v2_decimal_places =  VertexDecimalVersion.V2.get_decimal_places(settings)
+        v1_decimal_places = VertexDecimalVersion.V1.get_decimal_places(settings)
+        v2_decimal_places = VertexDecimalVersion.V2.get_decimal_places(settings)
 
         # Hardcoding these here as this is most likely a one-time update, and we need to
         # be very deliberate about how to normalize values if we ever change it again.

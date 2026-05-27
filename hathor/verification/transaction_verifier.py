@@ -295,9 +295,9 @@ class TransactionVerifier:
 
                 case TokenVersion.DEPOSIT:
                     if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount, v2_normalized=True)
                     if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount, v2_normalized=True)
 
                 case TokenVersion.FEE:
                     continue
@@ -322,10 +322,15 @@ class TransactionVerifier:
             assert tx.is_nano_contract()
             return
 
-        expected_fee = token_dict.calculate_fee(settings)
-        if expected_fee != token_dict.fees_from_fee_header:
-            raise InputOutputMismatch(f"Fee amount is different than expected. "
-                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
+        normalized_expected_fee = tx.get_decimal_version().normalize_token_value(
+            settings=settings,
+            value=token_dict.calculate_fee(settings),
+        )
+        if normalized_expected_fee != token_dict.fees_from_fee_header:
+            raise InputOutputMismatch(
+                f"Fee amount is different than expected. "
+                f"(amount={token_dict.fees_from_fee_header}, expected={normalized_expected_fee})"
+            )
 
         if htr_info.amount < htr_expected_amount:
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(

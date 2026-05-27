@@ -64,5 +64,5 @@ class TestIndexes2(BlueprintTestCase):
         assert htr_token_info.get_total() == (
             self._settings.GENESIS_TOKEN_ATOMIC_UNITS
             + 11 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
-            - get_deposit_token_deposit_amount(self._settings, amount)
+            - get_deposit_token_deposit_amount(self._settings, amount, v2_normalized=False)
         )
