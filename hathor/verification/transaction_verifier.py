@@ -590,6 +590,7 @@ class TransactionVerifier:
     def verify_commitments_valid(self, tx: Transaction) -> None:
         """Validate all commitments are exactly 33 bytes, valid curve points, and count is within limits."""
         from hathor_ct_crypto import validate_commitment, validate_generator
+
         from hathor.crypto.util import get_public_key_from_bytes_compressed
         from hathorlib.transaction.shielded_tx_output import (
             ASSET_COMMITMENT_SIZE,
@@ -640,6 +641,7 @@ class TransactionVerifier:
     def verify_range_proofs(self, tx: Transaction) -> None:
         """Every shielded output must have valid Bulletproof range proof."""
         from hathor_ct_crypto import verify_range_proof
+
         from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
         asset_tag_cache: dict[bytes, bytes] = {}
@@ -694,6 +696,7 @@ class TransactionVerifier:
         asset is one of them.
         """
         from hathor_ct_crypto import verify_surjection_proof
+
         from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
         assert tx.storage is not None
