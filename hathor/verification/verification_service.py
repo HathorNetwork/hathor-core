@@ -25,7 +25,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfoDict
 from hathor.transaction.validation_state import ValidationState
 from hathor.verification.fee_header_verifier import FeeHeaderVerifier
-from hathor.verification.transaction_verifier import TransactionVerifier
+from hathor.verification.shielded_header_verifier import ShieldedHeaderVerifier
 from hathor.verification.verification_params import VerificationParams
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
@@ -157,7 +157,7 @@ class VerificationService:
         """Shielded verifications that don't need storage."""
         from hathor.transaction.exceptions import TxValidationError
         try:
-            self.verifiers.tx.verify_shielded_outputs(tx)
+            self.verifiers.shielded_header.verify_shielded_outputs(tx)
         except TxValidationError:
             self.verifiers.tx.log.debug('shielded basic verification failed', tx=tx.hash_hex)
             raise
@@ -238,7 +238,7 @@ class VerificationService:
         """Shielded verifications that need storage (balance, surjection)."""
         from hathor.transaction.exceptions import TxValidationError
         try:
-            self.verifiers.tx.verify_shielded_outputs_with_storage(tx)
+            self.verifiers.shielded_header.verify_shielded_outputs_with_storage(tx)
         except TxValidationError:
             self.verifiers.tx.log.debug('shielded full verification failed', tx=tx.hash_hex)
             raise
@@ -305,12 +305,12 @@ class VerificationService:
         block_storage = self._get_block_storage(params)
         _token_dict = token_dict or tx.get_complete_token_info(block_storage)
         if isinstance(tx, Transaction) and tx.is_shielded():
-            shielded_fee = TransactionVerifier.calculate_shielded_fee(self._settings, tx)
+            shielded_fee = ShieldedHeaderVerifier.calculate_shielded_fee(self._settings, tx)
             # NOTE (mint/melt — postponed): the mint/melt extension restores verify_no_undeclared_mint_melt
             # (replacing verify_no_mint_melt) + verify_mint_melt_authority_inputs in this branch.
-            self.verifiers.tx.verify_no_mint_melt(_token_dict)
+            self.verifiers.shielded_header.verify_no_mint_melt(_token_dict)
             self.verifiers.tx.verify_token_rules(self._settings, _token_dict, shielded_fee=shielded_fee)
-            self.verifiers.tx.verify_shielded_balance(tx)
+            self.verifiers.shielded_header.verify_shielded_balance(tx)
         else:
             self.verifiers.tx.verify_transparent_balance(
                 self._settings,
