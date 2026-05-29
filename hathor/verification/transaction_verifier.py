@@ -820,7 +820,7 @@ class TransactionVerifier:
         ShieldedOutputsHeader or an UnshieldBalanceHeader, not both and not
         neither.
         """
-        from hathor.crypto.shielded import verify_balance
+        from hathor.crypto.shielded._bindings import _lib
 
         assert tx.storage is not None
         transparent_inputs: list[tuple[int, bytes]] = []
@@ -891,7 +891,7 @@ class TransactionVerifier:
             )
 
         try:
-            if not verify_balance(
+            if not _lib.verify_balance(
                 transparent_inputs,
                 shielded_inputs,
                 transparent_outputs,

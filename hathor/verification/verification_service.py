@@ -155,14 +155,12 @@ class VerificationService:
 
     def _verify_basic_shielded_header(self, tx: Transaction) -> None:
         """Shielded verifications that don't need storage."""
-        from hathor.transaction.exceptions import InvalidShieldedOutputError, TxValidationError
+        from hathor.transaction.exceptions import TxValidationError
         try:
             self.verifiers.tx.verify_shielded_outputs(tx)
         except TxValidationError:
             self.verifiers.tx.log.debug('shielded basic verification failed', tx=tx.hash_hex)
             raise
-        except RuntimeError as e:
-            raise InvalidShieldedOutputError(f'shielded crypto library error: {e}') from e
 
     def _verify_basic_block(self, block: Block, params: VerificationParams) -> None:
         """Partially run validations, the ones that need parents/inputs are skipped."""
@@ -232,20 +230,18 @@ class VerificationService:
             self.verifiers.nano_header.verify_seqnum(vertex, params)
 
         if vertex.has_shielded_outputs():
-            # Feature gate is already enforced in verify_basic, which is always called first.
+            assert params.features.shielded_transactions
             assert isinstance(vertex, Transaction)
             self._verify_shielded_header(vertex, params)
 
     def _verify_shielded_header(self, tx: Transaction, params: VerificationParams) -> None:
         """Shielded verifications that need storage (balance, surjection)."""
-        from hathor.transaction.exceptions import InvalidShieldedOutputError, TxValidationError
+        from hathor.transaction.exceptions import TxValidationError
         try:
             self.verifiers.tx.verify_shielded_outputs_with_storage(tx)
         except TxValidationError:
             self.verifiers.tx.log.debug('shielded full verification failed', tx=tx.hash_hex)
             raise
-        except RuntimeError as e:
-            raise InvalidShieldedOutputError(f'shielded crypto library error: {e}') from e
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block, params: VerificationParams) -> None:

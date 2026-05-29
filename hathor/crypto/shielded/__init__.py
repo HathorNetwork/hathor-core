@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from hathor.conf.settings import FeatureSetting
 
 from hathor.crypto.shielded.asset_tag import normalize_token_uid
-from hathor.crypto.shielded.balance import verify_balance
 
 
 def validate_shielded_crypto_available(feature_setting: FeatureSetting) -> None:
@@ -38,5 +37,4 @@ __all__ = [
     'SHIELDED_CRYPTO_AVAILABLE',
     'validate_shielded_crypto_available',
     'normalize_token_uid',
-    'verify_balance',
 ]
