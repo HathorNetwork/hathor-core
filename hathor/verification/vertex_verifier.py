@@ -19,7 +19,7 @@ from typing_extensions import assert_never
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.reactor import ReactorProtocol as Reactor
-from hathor.transaction import BaseTransaction, TxVersion
+from hathor.transaction import BaseTransaction, Transaction, TxVersion
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     HeaderNotSupported,
@@ -163,7 +163,7 @@ class VertexVerifier:
                     len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
-        if hasattr(vertex, 'shielded_outputs'):
+        if isinstance(vertex, Transaction):
             for shielded_output in vertex.shielded_outputs:
                 if len(shielded_output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
                     raise InvalidOutputScriptSize('shielded output script size: {} and max-size: {}'.format(

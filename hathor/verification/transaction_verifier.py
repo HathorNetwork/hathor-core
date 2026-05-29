@@ -639,7 +639,7 @@ class TransactionVerifier:
                     )
 
     def verify_range_proofs(self, tx: Transaction) -> None:
-        """Every shielded output must have valid Bulletproof range proof."""
+        """Every shielded output must have valid Borromean range proof."""
         from hathor_ct_crypto import verify_range_proof
 
         from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
