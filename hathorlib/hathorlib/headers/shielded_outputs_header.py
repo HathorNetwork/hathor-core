@@ -21,7 +21,6 @@ from hathorlib.transaction.shielded_tx_output import (
 )
 
 
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ShieldedOutputsHeader:
     shielded_outputs: list[ShieldedOutput] = field(default_factory=list)

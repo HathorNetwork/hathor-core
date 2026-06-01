@@ -20,7 +20,7 @@ from dataclasses import dataclass
 EXCESS_BLINDING_FACTOR_SIZE = 32
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UnshieldBalanceHeader:
     """Carries the excess blinding factor for a full-unshield tx.
 
