@@ -230,7 +230,7 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
-                # NOTE (mint/melt — postponed): the mint/melt extension admits ShieldedOutputsHeader +
+                # TODO (mint/melt — postponed): the mint/melt extension admits ShieldedOutputsHeader +
                 # MintHeader/MeltHeader for TCT here (shielded-TCT requires MintHeader, RFC §4.4).
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
@@ -240,7 +240,7 @@ class VertexVerifier:
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
-                    # NOTE (mint/melt — postponed): the mint/melt extension also admits
+                    # TODO (mint/melt — postponed): the mint/melt extension also admits
                     # MintHeader/MeltHeader (0x14/0x15) here.
             case _:  # pragma: no cover
                 assert_never(vertex.version)

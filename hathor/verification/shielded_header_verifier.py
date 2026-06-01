@@ -248,7 +248,7 @@ class ShieldedHeaderVerifier:
                         ) from e
                     domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
 
-        # NOTE (mint/melt — postponed): the mint/melt extension extends the surjection-proof
+        # TODO (mint/melt — postponed): the mint/melt extension extends the surjection-proof
         # domain with one generator per MintHeader entry (so a FullShieldedOutput may claim a
         # freshly-minted asset). Dropped here — MintHeader (0x14) is post-plan.
         has_full_shielded = any(isinstance(o, FullShieldedOutput) for o in tx.shielded_outputs)
@@ -302,7 +302,7 @@ class ShieldedHeaderVerifier:
 
     def verify_no_mint_melt(self, token_dict: TokenInfoDict) -> None:
         """Reject mint/melt operations in transactions with shielded outputs."""
-        # NOTE (mint/melt — postponed): the mint/melt extension REPLACES this forbid-all rule with
+        # TODO (mint/melt — postponed): the mint/melt extension REPLACES this forbid-all rule with
         # verify_no_undeclared_mint_melt (which allows *declared* mint/melt via MintHeader/MeltHeader).
         for token_uid, token_info in token_dict.items():
             if token_info.version == TokenVersion.NATIVE:
@@ -378,7 +378,7 @@ class ShieldedHeaderVerifier:
                 token_uid = self._normalize_token_uid(fee_entry.token_uid)
                 transparent_outputs.append((fee_entry.amount, token_uid))
 
-        # NOTE (mint/melt — postponed): the mint/melt extension folds MintHeader/MeltHeader entries
+        # TODO (mint/melt — postponed): the mint/melt extension folds MintHeader/MeltHeader entries
         # into an augmented balance equation (RFC Rule M4) via _fold_mint_melt_entry + nc_block_storage.
         # Dropped here — mint/melt (0x14/0x15) is post-plan.
         # Mutual-exclusion invariants on the excess blinding factor:

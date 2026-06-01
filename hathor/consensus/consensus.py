@@ -524,7 +524,7 @@ class ConsensusAlgorithm:
         if is_active:
             return True
 
-        # NOTE (mint/melt — postponed): the post-plan mint/melt extension must also gate
+        # TODO (mint/melt — postponed): the post-plan mint/melt extension must also gate
         # `or tx.has_mint_header()` / `or tx.has_melt_header()` in the check below. They are
         # dropped here because those accessors don't exist until MintHeader/MeltHeader (0x14/0x15) land.
         if (

@@ -435,7 +435,7 @@ class TransactionVerifier:
             # In shielded txs, transparent deficit/surplus is expected — balance is
             # verified cryptographically. Authority-based mint/melt is separately
             # blocked by verify_no_mint_melt.
-            # NOTE (mint/melt — postponed): the extension swaps this backstop to
+            # TODO (mint/melt — postponed): the extension swaps this backstop to
             # verify_no_undeclared_mint_melt when MintHeader/MeltHeader land.
             return
         if token_info.has_been_melted() and not token_info.can_melt:

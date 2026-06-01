@@ -117,7 +117,7 @@ class VerificationService:
             if not params.features.shielded_transactions:
                 from hathor.transaction.exceptions import InvalidShieldedOutputError
                 raise InvalidShieldedOutputError('shielded transactions are not enabled')
-        # NOTE (mint/melt — postponed): the mint/melt extension adds a parallel feature-gate +
+        # TODO (mint/melt — postponed): the mint/melt extension adds a parallel feature-gate +
         # _verify_basic_mint_melt_header hook here, keyed on has_mint_header()/has_melt_header().
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
@@ -306,7 +306,7 @@ class VerificationService:
         _token_dict = token_dict or tx.get_complete_token_info(block_storage)
         if isinstance(tx, Transaction) and tx.is_shielded():
             shielded_fee = ShieldedHeaderVerifier.calculate_shielded_fee(self._settings, tx)
-            # NOTE (mint/melt — postponed): the mint/melt extension restores verify_no_undeclared_mint_melt
+            # TODO (mint/melt — postponed): the mint/melt extension restores verify_no_undeclared_mint_melt
             # (replacing verify_no_mint_melt) + verify_mint_melt_authority_inputs in this branch.
             self.verifiers.shielded_header.verify_no_mint_melt(_token_dict)
             self.verifiers.tx.verify_token_rules(self._settings, _token_dict, shielded_fee=shielded_fee)
