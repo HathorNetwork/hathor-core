@@ -18,7 +18,7 @@ from typing import Sequence
 
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import FeeHeaderTokenNotFound, InvalidFeeHeader
-from hathor.transaction.headers import FeeHeader
+from hathorlib.headers import FeeHeader
 
 MAX_FEES_LEN: int = 16
 
@@ -26,7 +26,7 @@ MAX_FEES_LEN: int = 16
 class FeeHeaderVerifier:
 
     @staticmethod
-    def verify_fee_list(fee_header: 'FeeHeader', tx: Transaction) -> None:
+    def verify_fee_list(fee_header: FeeHeader, tx: Transaction) -> None:
         """Perform FeeHeader verifications that do not depend on the tx storage."""
         fees = fee_header.fees
         FeeHeaderVerifier._verify_fee_list_size('fees', len(fees))

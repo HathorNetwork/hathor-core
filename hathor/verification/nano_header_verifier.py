@@ -41,13 +41,13 @@ from hathor.nanocontracts.types import (
 from hathor.nanocontracts.utils import is_nc_public_method
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.exceptions import ScriptError, TooManySigOps
-from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts import SigopCounter, create_output_script
 from hathor.transaction.scripts.execute import ScriptExtras, raw_script_eval
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.verification_params import VerificationParams
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
+from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES
 from hathorlib.nanocontracts.verification import verify_action_list
 
 MAX_SEQNUM_DIFF_MEMPOOL = MAX_SEQNUM_JUMP_SIZE + 30

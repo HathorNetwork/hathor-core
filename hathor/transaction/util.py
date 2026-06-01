@@ -24,7 +24,7 @@ from hathorlib.utils import get_deposit_token_deposit_amount, get_deposit_token_
 
 if TYPE_CHECKING:
     from hathor import TokenUid
-    from hathor.conf.settings import HathorSettings
+    from hathorlib.conf.settings import HathorSettings
 
 VerboseCallback = Optional[Callable[[str, Any], None]]
 

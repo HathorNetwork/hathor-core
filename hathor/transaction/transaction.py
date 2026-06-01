@@ -25,21 +25,15 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import (
-    AnyVertexHeader,
-    NanoHeader,
-    ShieldedOutputsHeader,
-    UnshieldBalanceHeader,
-)
-from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
 from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader, VertexHeader
 from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
-T = TypeVar('T', bound=AnyVertexHeader)
+T = TypeVar('T', bound=VertexHeader)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings

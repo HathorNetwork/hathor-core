@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from hathor.transaction.scripts import P2PKH, MultiSig, parse_address_script
 from hathor.utils.weight import weight_to_work
+from hathorlib.headers import NanoHeader
 from hathorlib.nanocontracts.types import VertexId
 
 # Re-export from hathorlib for backward compatibility
@@ -36,7 +37,6 @@ from hathorlib.nanocontracts.vertex_data import (  # noqa: F401
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Block, TxInput, TxOutput
-    from hathor.transaction.headers.nano_header import NanoHeader
 
 
 def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
@@ -109,7 +109,6 @@ def create_block_data_from_block(block: Block) -> BlockData:
 def create_vertex_data_from_vertex(vertex: BaseTransaction) -> VertexData:
     """Create a VertexData from a transaction vertex."""
     from hathor.transaction import Transaction
-    from hathor.transaction.headers.nano_header import NanoHeader
 
     inputs = tuple(
         create_txinput_data_from_txin(txin, _get_txin_output(vertex, txin))

@@ -22,8 +22,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from pycoin.key.Key import Key as PycoinKey
 
 from hathor.crypto.util import decode_address, get_address_from_public_key_bytes, get_public_key_bytes_compressed
-from hathor.transaction.headers import NanoHeader
 from hathor.util import not_none
+from hathorlib.headers import NanoHeader
 from hathorlib.nanocontracts.utils import (  # noqa: F401
     CHILD_CONTRACT_ID_PREFIX,
     CHILD_TOKEN_ID_PREFIX,

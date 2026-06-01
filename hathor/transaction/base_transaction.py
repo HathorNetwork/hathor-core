@@ -30,7 +30,6 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
-from hathor.transaction.headers import AnyVertexHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback
@@ -39,6 +38,7 @@ from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 from hathorlib.base_transaction import TxVersion  # noqa: F401
+from hathorlib.headers import VertexHeader
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -198,7 +198,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
-        self.headers: list[AnyVertexHeader] = []
+        self.headers: list[VertexHeader] = []
 
         # A name solely for debugging purposes.
         self.name: str | None = None

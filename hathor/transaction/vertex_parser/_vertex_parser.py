@@ -19,12 +19,12 @@ from typing import TYPE_CHECKING, Type
 
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.base_transaction import get_cls_from_tx_version
-from hathor.transaction.headers import (
-    AnyVertexHeader,
+from hathorlib.headers import (
     FeeHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
+    VertexHeader,
     VertexHeaderId,
 )
 
@@ -41,9 +41,9 @@ class VertexParser:
         self._settings = settings
 
     @staticmethod
-    def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[AnyVertexHeader]]:
+    def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[VertexHeader]]:
         """Return a dict of supported headers."""
-        supported_headers: dict[VertexHeaderId, Type[AnyVertexHeader]] = {}
+        supported_headers: dict[VertexHeaderId, Type[VertexHeader]] = {}
         if settings.ENABLE_NANO_CONTRACTS:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
         if settings.ENABLE_FEE_BASED_TOKENS:
@@ -54,7 +54,7 @@ class VertexParser:
         return supported_headers
 
     @staticmethod
-    def get_header_parser(header_id_bytes: bytes, settings: HathorSettings) -> Type[AnyVertexHeader]:
+    def get_header_parser(header_id_bytes: bytes, settings: HathorSettings) -> Type[VertexHeader]:
         """Get the parser for a given header type."""
         header_id = VertexHeaderId(header_id_bytes)
         supported_headers = VertexParser.get_supported_headers(settings)

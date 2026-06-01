@@ -40,11 +40,11 @@ from hathor.nanocontracts.types import (
 from hathor.nanocontracts.utils import derive_child_contract_id, load_builtin_blueprint_for_ocb, sign_pycoin
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.base_transaction import TxInput, TxOutput
-from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
-from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+from hathorlib.headers import FeeHeader, FeeHeaderEntry, NanoHeader
+from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES, NanoHeaderAction
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
@@ -380,7 +380,6 @@ class VertexExporter:
         assert isinstance(wallet, HDWallet)
         privkey = wallet.get_key_at_index(0)
 
-        from hathor.transaction.headers.nano_header import NanoHeaderAction
         nc_actions = []
 
         def append_actions(action: NCActionType, key: str) -> None:
@@ -408,7 +407,6 @@ class VertexExporter:
         append_actions(NCActionType.DEPOSIT, NC_DEPOSIT_KEY)
         append_actions(NCActionType.WITHDRAWAL, NC_WITHDRAWAL_KEY)
 
-        from hathor.transaction.headers import NanoHeader
         nano_header = NanoHeader(
             # Even though we know the NanoHeader only supports Transactions, we force the typing here so we can test
             # that other types of vertices such as blocks would fail verification by using an unsupported header.

@@ -22,9 +22,9 @@ from typing_extensions import Self
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.pubsub import EventArguments
 from hathor.transaction import Transaction
-from hathor.transaction.headers import VertexHeaderId
 from hathor.transaction.token_info import TokenVersion
 from hathor.utils.pydantic import BaseModel
+from hathorlib.headers import VertexHeaderId
 
 
 class DecodedTxOutput(BaseModel):
