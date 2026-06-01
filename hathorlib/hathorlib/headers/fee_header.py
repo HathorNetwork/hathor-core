@@ -26,63 +26,30 @@ if TYPE_CHECKING:
     from hathorlib.transaction import Transaction
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, kw_only=True, frozen=True)
 class FeeHeaderEntry:
     token_index: int
     amount: int
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, kw_only=True, frozen=True)
 class FeeEntry:
-    token_uid: bytes
+    token_uid: TokenUid
     amount: int
 
 
-@dataclass(frozen=True)
-class FeeHeader(VertexBaseHeader):
-    tx: Transaction
+@dataclass(slots=True, kw_only=True)
+class FeeHeader:
+    # transaction that contains the fee header
+    tx: 'Transaction'
+    # list of tokens and amounts that will be used to pay fees in the transaction
     fees: list[FeeHeaderEntry]
+    settings: HathorSettings
 
-    @classmethod
-    def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[FeeHeader, bytes]:
-        from hathorlib.base_transaction import bytes_to_output_value
-
-        header_id, buf = buf[:1], buf[1:]
-        assert header_id == VertexHeaderId.FEE_HEADER.value
-
-        fees: list[FeeHeaderEntry] = []
-        (fees_len,), buf = unpack('!B', buf)
-
-        for _ in range(fees_len):
-            (token_index,), buf = unpack('!B', buf)
-            amount, buf = bytes_to_output_value(buf)
-            fees.append(FeeHeaderEntry(
-                token_index=token_index,
-                amount=amount,
-            ))
-        from hathorlib.transaction import Transaction
-        assert isinstance(tx, Transaction)
-        return cls(
-            tx=tx,
-            fees=fees,
-        ), bytes(buf)
-
-    def serialize(self) -> bytes:
-        from hathorlib.base_transaction import output_value_to_bytes
-
-        ret = [
-            VertexHeaderId.FEE_HEADER.value,
-            int_to_bytes(len(self.fees), 1)
-        ]
-
-        for fee in self.fees:
-            ret.append(int_to_bytes(fee.token_index, 1))
-            ret.append(output_value_to_bytes(fee.amount))
-
-        return b''.join(ret)
-
-    def get_sighash_bytes(self) -> bytes:
-        return self.serialize()
+    def __init__(self, settings: HathorSettings, tx: 'Transaction', fees: list[FeeHeaderEntry]):
+        self.tx = tx
+        self.fees = fees
+        self.settings = settings
 
     def get_fees(self) -> list[FeeEntry]:
         return [
@@ -92,3 +59,13 @@ class FeeHeader(VertexBaseHeader):
             )
             for fee in self.fees
         ]
+
+    def total_fee_amount(self) -> int:
+        """Sum fees amounts in this header and return as HTR"""
+        total_fee = 0
+        for fee in self.get_fees():
+            if fee.token_uid == self.settings.HATHOR_TOKEN_UID:
+                total_fee += fee.amount
+            else:
+                total_fee += get_deposit_token_withdraw_amount(self.settings, fee.amount)
+        return total_fee
