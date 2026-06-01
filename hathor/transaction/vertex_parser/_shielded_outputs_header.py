@@ -78,9 +78,14 @@ def deserialize_shielded_outputs_header(
     return shielded_outputs
 
 
-def serialize_shielded_outputs_header(serializer: Serializer, header: ShieldedOutputsHeader) -> None:
+def serialize_shielded_outputs_header(
+    serializer: Serializer,
+    header: ShieldedOutputsHeader,
+    *,
+    skip_proofs: bool = False,
+) -> None:
     """Serialize a ShieldedOutputsHeader into the serializer."""
     serializer.write_bytes(VertexHeaderId.SHIELDED_OUTPUTS_HEADER.value)
     serializer.write_bytes(int_to_bytes(len(header.shielded_outputs), 1))
     for output in header.shielded_outputs:
-        serialize_shielded_output(serializer, output)
+        serialize_shielded_output(serializer, output, skip_proofs=skip_proofs)

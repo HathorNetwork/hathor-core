@@ -104,16 +104,20 @@ def serialize_header(serializer: Serializer, header: VertexHeader) -> None:
 
 def get_header_sighash_bytes(header: VertexHeader) -> bytes:
     """Get sighash bytes for a header."""
+    serializer = Serializer.build_bytes_serializer()
     match header:
         case NanoHeader():
             from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
-            serializer = Serializer.build_bytes_serializer()
             serialize_nano_header(serializer, header, skip_signature=True)
-            return bytes(serializer.finalize())
         case FeeHeader():
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
-            serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header)
-            return bytes(serializer.finalize())
+        case ShieldedOutputsHeader():
+            from hathor.transaction.vertex_parser._shielded_outputs_header import serialize_shielded_outputs_header
+            serialize_shielded_outputs_header(serializer, header, skip_proofs=True)
+        case UnshieldBalanceHeader():
+            from hathor.transaction.vertex_parser._unshield_balance_header import serialize_unshield_balance_header
+            serialize_unshield_balance_header(serializer, header)
         case _:
             raise AssertionError('unreachable')
+    return bytes(serializer.finalize())

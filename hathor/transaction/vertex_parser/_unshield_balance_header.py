@@ -24,13 +24,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathor.serialization.exceptions import SerializationError
-from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback
-from hathorlib.headers.unshield_balance_header import EXCESS_BLINDING_FACTOR_SIZE
+from hathorlib.headers import VertexHeaderId
+from hathorlib.headers.unshield_balance_header import EXCESS_BLINDING_FACTOR_SIZE, UnshieldBalanceHeader
 
 if TYPE_CHECKING:
     from hathor.serialization import Deserializer, Serializer
-    from hathor.transaction.headers import UnshieldBalanceHeader
 
 
 def deserialize_unshield_balance_header(
