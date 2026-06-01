@@ -23,13 +23,12 @@ from hathorlib.base_transaction import TX_HASH_SIZE, BaseTransaction, TxInput, T
 from hathorlib.conf import HathorSettings
 from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.exceptions import InvalidOutputValue, InvalidToken
-from hathorlib.headers import VertexBaseHeader
 from hathorlib.utils import unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathorlib.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader
+    from hathorlib.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader, VertexHeader
 
-T = TypeVar('T', bound=VertexBaseHeader)
+T = TypeVar('T', bound=VertexHeader)
 
 # Signal bits (B), version (B), token uids len (B) and inputs len (B), outputs len (B).
 _FUNDS_FORMAT_STRING = '!BBBBB'

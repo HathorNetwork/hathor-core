@@ -17,14 +17,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from hathorlib.headers import VertexBaseHeader, VertexHeaderId
+    from hathorlib.headers import VertexHeader, VertexHeaderId
 
 
 class VertexParser:
     __slots__ = ()
 
     @staticmethod
-    def get_supported_headers() -> dict[VertexHeaderId, type[VertexBaseHeader]]:
+    def get_supported_headers() -> dict[VertexHeaderId, type[VertexHeader]]:
         """Return a dict of supported headers."""
         # NOTE: MintHeader/MeltHeader (0x14/0x15) imports and dict entries are
         # deferred — see hathorlib/headers/__init__.py for the full explanation.
@@ -43,7 +43,7 @@ class VertexParser:
         }
 
     @staticmethod
-    def get_header_parser(header_id_bytes: bytes) -> type[VertexBaseHeader]:
+    def get_header_parser(header_id_bytes: bytes) -> type[VertexHeader]:
         """Get the parser for a given header type."""
         from hathorlib.headers import VertexHeaderId
         header_id = VertexHeaderId(header_id_bytes)

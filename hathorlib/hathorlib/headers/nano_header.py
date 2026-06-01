@@ -19,14 +19,15 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import assert_never
 
-from hathor.types import VertexId
+from hathorlib.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
+from hathorlib.types import VertexId
 
 if TYPE_CHECKING:
-    from hathor.nanocontracts.context import Context
-    from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
-    from hathor.transaction import Transaction
-    from hathor.transaction.block import Block
-    from hathor.transaction.vertex_parser._nano_header import NanoHeaderData
+    from hathor.nanocontracts.context import Context  # type: ignore[import-not-found]
+    from hathor.transaction import Transaction  # type: ignore[import-not-found]
+    from hathor.transaction.block import Block  # type: ignore[import-not-found]
+    from hathor.transaction.vertex_parser._nano_header import NanoHeaderData  # type: ignore[import-not-found]
+
 
 ADDRESS_LEN_BYTES: int = 25
 ADDRESS_SEQNUM_SIZE: int = 8  # bytes

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 EXCESS_BLINDING_FACTOR_SIZE = 32
 
 

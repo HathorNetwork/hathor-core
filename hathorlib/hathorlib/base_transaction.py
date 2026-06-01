@@ -24,6 +24,7 @@ from _hashlib import HASH
 
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidOutputValue, WeightError
+from hathorlib.headers import VertexHeader
 from hathorlib.scripts import P2PKH, DataScript, MultiSig, parse_address_script
 from hathorlib.utils import int_to_bytes, unpack, unpack_len
 from hathorlib.vertex_parser import VertexParser
@@ -125,7 +126,6 @@ class BaseTransaction(ABC):
     signal_bits: int
 
     def __init__(self) -> None:
-        from hathorlib.headers import VertexBaseHeader
         self.nonce: int = 0
         self.timestamp: int = 0
         self.signal_bits: int = 0
@@ -135,7 +135,7 @@ class BaseTransaction(ABC):
         self.outputs: List['TxOutput'] = []
         self.parents: List[bytes] = []
         self.hash: bytes = b''
-        self.headers: list[VertexBaseHeader] = []
+        self.headers: list[VertexHeader] = []
 
     @property
     @abstractmethod

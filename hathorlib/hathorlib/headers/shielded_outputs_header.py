@@ -16,9 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from hathorlib.transaction.shielded_tx_output import (
-    ShieldedOutput,
-)
+from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 
 @dataclass(frozen=True, slots=True)

@@ -17,12 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from hathor.types import TokenUid
+
 from hathorlib.conf.settings import HathorSettings
+from hathorlib.nanocontracts.types import TokenUid
 from hathorlib.utils import get_deposit_token_withdraw_amount
 
 if TYPE_CHECKING:
-    from hathorlib.transaction import Transaction
+    from hathor.transaction import Transaction  # type: ignore[import-not-found]
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
