@@ -93,8 +93,7 @@ def extract_key_bytes(key: object) -> tuple[bytes, bytes]:
         )
         return privkey_bytes, pubkey_bytes
 
-    # pycoin Key — has .secret_exponent() and .sec()
-    if hasattr(key, 'secret_exponent') and hasattr(key, 'sec'):
+    if isinstance(key, Key):
         secret_exp = key.secret_exponent()
         privkey_bytes = secret_exp.to_bytes(32, 'big')
         pubkey_bytes = key.sec(is_compressed=True)

@@ -69,12 +69,13 @@ def recover_shielded_secrets(
     shared_secret = derive_ecdh_shared_secret(private_key_bytes, output.ephemeral_pubkey)
     nonce = derive_rewind_nonce(shared_secret)
 
+    token_uid: bytes
     if isinstance(output, AmountShieldedOutput):
         token_uid = get_token_uid(output.token_data & 0x7F)
         generator = derive_asset_tag(token_uid)
     elif isinstance(output, FullShieldedOutput):
         generator = output.asset_commitment
-        token_uid = b''  # Will be recovered from message
+        # token_uid is bound below from the rewound message bytes.
     else:
         raise ValueError(f'unknown shielded output type: {type(output).__name__}')
 
