@@ -67,7 +67,7 @@ def serialize_tx_input_sighash(serializer: Serializer, tx_input: TxInput) -> Non
 
 def serialize_tx_output(serializer: Serializer, tx_output: TxOutput) -> None:
     """Serialize a TxOutput. Matches bytes(TxOutput)."""
-    serializer.write_bytes(output_value_to_bytes(tx_output.value))
+    encode_output_value(serializer, tx_output.value)
     serializer.write_bytes(int_to_bytes(tx_output.token_data, 1))
     serializer.write_bytes(int_to_bytes(len(tx_output.script), 2))
     serializer.write_bytes(tx_output.script)
