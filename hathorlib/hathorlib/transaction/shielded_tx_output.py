@@ -83,7 +83,7 @@ class ShieldedOutputSecrets:
 ShieldedOutput = AmountShieldedOutput | FullShieldedOutput
 
 
-def serialize_shielded_output(serializer: Serializer, output: ShieldedOutput) -> None:
+def serialize_shielded_output(serializer: Serializer, output: ShieldedOutput, *, skip_proofs: bool = False) -> None:
     """Serialize a shielded output into the serializer.
 
     Format:
@@ -94,8 +94,9 @@ def serialize_shielded_output(serializer: Serializer, output: ShieldedOutput) ->
     """
     serializer.write_bytes(int_to_bytes(int(output.mode()), 1))
     serializer.write_bytes(output.commitment)
-    serializer.write_bytes(int_to_bytes(len(output.range_proof), 2))
-    serializer.write_bytes(output.range_proof)
+    if not skip_proofs:
+        serializer.write_bytes(int_to_bytes(len(output.range_proof), 2))
+        serializer.write_bytes(output.range_proof)
     serializer.write_bytes(int_to_bytes(len(output.script), 2))
     serializer.write_bytes(output.script)
 
@@ -103,8 +104,9 @@ def serialize_shielded_output(serializer: Serializer, output: ShieldedOutput) ->
         serializer.write_bytes(int_to_bytes(output.token_data, 1))
     elif isinstance(output, FullShieldedOutput):
         serializer.write_bytes(output.asset_commitment)
-        serializer.write_bytes(int_to_bytes(len(output.surjection_proof), 2))
-        serializer.write_bytes(output.surjection_proof)
+        if not skip_proofs:
+            serializer.write_bytes(int_to_bytes(len(output.surjection_proof), 2))
+            serializer.write_bytes(output.surjection_proof)
 
     # Ephemeral pubkey for ECDH-based recovery (always 33B; zeros = not present)
     serializer.write_bytes(output.ephemeral_pubkey if output.ephemeral_pubkey else b'\x00' * EPHEMERAL_PUBKEY_SIZE)
@@ -162,27 +164,3 @@ def deserialize_shielded_output(deserializer: Deserializer) -> ShieldedOutput:
         )
 
     raise ValueError(f'Unknown shielded output mode: {int(mode)}')
-
-
-def get_sighash_bytes(output: ShieldedOutput) -> bytes:
-    """Return sighash bytes for a shielded output.
-
-    Includes commitment + mode + token_data/asset_commitment + script.
-    Does NOT include proofs (range_proof, surjection_proof).
-    """
-    parts: list[bytes] = []
-    parts.append(struct.pack('!B', output.mode()))
-    parts.append(output.commitment)
-
-    if isinstance(output, AmountShieldedOutput):
-        parts.append(struct.pack('!B', output.token_data))
-    elif isinstance(output, FullShieldedOutput):
-        parts.append(output.asset_commitment)
-
-    parts.append(output.script)
-
-    # Always include ephemeral pubkey in sighash to prevent malleability
-    # where someone strips the ephemeral pubkey. Use zero bytes if not present.
-    parts.append(output.ephemeral_pubkey if output.ephemeral_pubkey else b'\x00' * EPHEMERAL_PUBKEY_SIZE)
-
-    return b''.join(parts)

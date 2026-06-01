@@ -15,20 +15,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-from hathorlib.headers.base import VertexBaseHeader
-from hathorlib.headers.types import VertexHeaderId
-
-if TYPE_CHECKING:
-    from hathorlib.base_transaction import BaseTransaction
 
 
 EXCESS_BLINDING_FACTOR_SIZE = 32
 
 
 @dataclass(frozen=True)
-class UnshieldBalanceHeader(VertexBaseHeader):
+class UnshieldBalanceHeader:
     """Carries the excess blinding factor for a full-unshield tx.
 
     A tx that spends shielded inputs into transparent-only outputs needs to
@@ -52,38 +45,3 @@ class UnshieldBalanceHeader(VertexBaseHeader):
                 f'excess_blinding_factor must be {EXCESS_BLINDING_FACTOR_SIZE} bytes, '
                 f'got {len(self.excess_blinding_factor)}'
             )
-
-    @classmethod
-    def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[UnshieldBalanceHeader, bytes]:
-        """Deserialize: header_id(1) | excess_blinding_factor(32)."""
-        from hathorlib.transaction import Transaction
-
-        if not isinstance(tx, Transaction):
-            raise ValueError(
-                f'unshield balance header requires a Transaction, got {type(tx).__name__}'
-            )
-
-        header_size = 1 + EXCESS_BLINDING_FACTOR_SIZE
-        if len(buf) < header_size:
-            raise ValueError(
-                f'unshield balance header requires {header_size} bytes, got {len(buf)}'
-            )
-
-        header_id = buf[0:1]
-        if header_id != VertexHeaderId.UNSHIELD_BALANCE_HEADER.value:
-            raise ValueError(
-                f'unexpected header id: expected '
-                f'{VertexHeaderId.UNSHIELD_BALANCE_HEADER.value!r}, got {header_id!r}'
-            )
-
-        excess_bf = bytes(buf[1:1 + EXCESS_BLINDING_FACTOR_SIZE])
-        leftover = bytes(buf[header_size:])
-        return cls(excess_blinding_factor=excess_bf), leftover
-
-    def serialize(self) -> bytes:
-        return VertexHeaderId.UNSHIELD_BALANCE_HEADER.value + self.excess_blinding_factor
-
-    def get_sighash_bytes(self) -> bytes:
-        # The full serialization is bound to the signature, so any mutation of
-        # the scalar invalidates signatures over the tx.
-        return self.serialize()
