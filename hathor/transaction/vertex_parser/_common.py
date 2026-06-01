@@ -19,10 +19,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import SerializedSizeError
 from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.serialization.encoding.output_value import decode_output_value, encode_output_value
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
