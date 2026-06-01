@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
-from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
+from hathor.serialization.encoding.output_value import decode_output_value_v1
 from hathor.transaction.headers.nano_header import (
     _NC_SCRIPT_LEN_MAX_BYTES,
     ADDRESS_LEN_BYTES,
@@ -30,6 +30,7 @@ from hathor.transaction.headers.nano_header import (
 )
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.serialization.encoding.output_value import encode_output_value_v1
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -124,7 +125,7 @@ def _deserialize_nano_action(deserializer: Deserializer) -> NanoHeaderAction:
     type_bytes = bytes(deserializer.read_bytes(1))
     action_type = NCActionType.from_bytes(type_bytes)
     token_index = deserializer.read_byte()
-    amount = decode_output_value(deserializer)
+    amount = decode_output_value_v1(deserializer)
     return NanoHeaderAction(
         type=action_type,
         token_index=token_index,
@@ -171,4 +172,4 @@ def _serialize_nano_action(serializer: Serializer, action: NanoHeaderAction) -> 
     """Serialize a single NanoHeaderAction into the serializer."""
     serializer.write_bytes(action.type.to_bytes())
     serializer.write_bytes(int_to_bytes(action.token_index, 1))
-    encode_output_value(serializer, action.amount)
+    encode_output_value_v1(serializer, action.amount)

@@ -58,7 +58,7 @@ def serialize_tx_funds(
     for tx_input in tx.inputs:
         serialize_tx_input(serializer, tx_input)
     for tx_output in tx.outputs:
-        serialize_tx_output(serializer, tx_output)
+        serialize_tx_output(serializer, tx_output, decimal_version=tx.get_decimal_version())
 
 
 def serialize_tx_sighash(
@@ -81,7 +81,7 @@ def serialize_tx_sighash(
     for tx_input in tx.inputs:
         serialize_tx_input_sighash(serializer, tx_input)
     for tx_output in tx.outputs:
-        serialize_tx_output(serializer, tx_output)
+        serialize_tx_output(serializer, tx_output, decimal_version=tx.get_decimal_version())
     for header_bytes in headers_sighash:
         serializer.write_bytes(header_bytes)
 
@@ -125,7 +125,11 @@ def deserialize_tx_funds(
 
     outputs: list[TxOutput] = []
     for _ in range(outputs_len):
-        txout = _deserialize_tx_output(deserializer, verbose=verbose)
+        txout = _deserialize_tx_output(
+            deserializer,
+            decimal_version=tx.get_decimal_version(),
+            verbose=verbose,
+        )
         outputs.append(txout)
 
     tx.signal_bits = signal_bits

@@ -17,10 +17,11 @@
 from __future__ import annotations
 
 from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
+from hathor.serialization.encoding.output_value import decode_output_value_v1
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.serialization.encoding.output_value import encode_output_value_v1
 
 # ---------------------------------------------------------------------------
 # Deserialization
@@ -44,7 +45,7 @@ def deserialize_fee_header(
         verbose('fees_len', fees_len)
     for _ in range(fees_len):
         token_index = deserializer.read_byte()
-        amount = decode_output_value(deserializer)
+        amount = decode_output_value_v1(deserializer)
         fees.append(FeeHeaderEntry(
             token_index=token_index,
             amount=amount,
@@ -65,4 +66,4 @@ def serialize_fee_header(serializer: Serializer, header: FeeHeader) -> None:
 
     for fee in header.fees:
         serializer.write_bytes(int_to_bytes(fee.token_index, 1))
-        encode_output_value(serializer, fee.amount)
+        encode_output_value_v1(serializer, fee.amount)

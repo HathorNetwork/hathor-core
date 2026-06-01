@@ -31,6 +31,7 @@ class VertexDecimalVersion(IntEnum):
     """
 
     V1 = 1
+    V2 = 2
 
     def get_decimal_places(self, settings: HathorSettings) -> int:
         """Return the number of decimal places this version maps to, according to settings."""
