@@ -18,8 +18,14 @@ from typing import TYPE_CHECKING
 
 from hathor.serialization import Serializer
 from hathor.transaction.vertex_parser._vertex_parser import VertexParser
-from hathorlib.headers import VertexHeaderId, VertexHeader, NanoHeader, FeeHeader, ShieldedOutputsHeader, \
-    UnshieldBalanceHeader
+from hathorlib.headers import (
+    FeeHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexHeader,
+    VertexHeaderId,
+)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings

@@ -19,8 +19,7 @@ from __future__ import annotations
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.headers import FeeHeaderEntry, VertexHeaderId, FeeHeader
-
+from hathorlib.headers import FeeHeader, FeeHeaderEntry, VertexHeaderId
 
 # ---------------------------------------------------------------------------
 # Deserialization

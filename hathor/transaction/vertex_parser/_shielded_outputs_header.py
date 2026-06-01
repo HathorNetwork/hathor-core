@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.headers import VertexHeaderId, ShieldedOutputsHeader
+from hathorlib.headers import ShieldedOutputsHeader, VertexHeaderId
 from hathorlib.transaction.shielded_tx_output import (
     MAX_SHIELDED_OUTPUTS,
     ShieldedOutput,
