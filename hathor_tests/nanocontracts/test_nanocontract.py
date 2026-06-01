@@ -158,8 +158,13 @@ class NCNanoContractTestCase(unittest.TestCase):
     def test_serialization_skip_signature(self) -> None:
         nc = self._get_nc()
         nano_header = nc.get_nano_header()
-        sighash_bytes = nano_header.get_sighash_bytes()
-        deserialized, buf = NanoHeader.deserialize(Transaction(), sighash_bytes)
+        sighash_bytes = get_header_sighash_bytes(nano_header, decimal_version=nano_header.tx.get_decimal_version())
+
+        tx = Transaction()
+        deserializer = Deserializer.build_bytes_deserializer(sighash_bytes)
+        data = deserialize_nano_header(deserializer, decimal_version=tx.get_decimal_version())
+        deserialized = NanoHeader.create_from_data(tx, data)
+        buf = bytes(deserializer.read_all())
 
         assert len(buf) == 0
         assert deserialized.nc_seqnum == nano_header.nc_seqnum

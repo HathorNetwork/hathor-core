@@ -909,25 +909,31 @@ class TransactionTest(unittest.TestCase):
     def test_output_serialization(self):
         from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
         from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE
-        from hathor.transaction.util import bytes_to_output_value, output_value_to_bytes
-        max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
+        serializer = Serializer.build_bytes_serializer()
+        encode_output_value(serializer, MAX_OUTPUT_VALUE_32)
+        max_32 = serializer.finalize()
         self.assertEqual(len(max_32), 4)
-        value, buf = bytes_to_output_value(max_32)
+        deserializer = Deserializer.build_bytes_deserializer(max_32)
+        value = decode_output_value(deserializer)
         self.assertEqual(value, MAX_OUTPUT_VALUE_32)
 
-        over_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32 + 1)
+        serializer = Serializer.build_bytes_serializer()
+        encode_output_value(serializer, MAX_OUTPUT_VALUE_32 + 1)
+        over_32 = serializer.finalize()
         self.assertEqual(len(over_32), 8)
-        value, buf = bytes_to_output_value(over_32)
+        deserializer = Deserializer.build_bytes_deserializer(over_32)
+        value = decode_output_value(deserializer)
         self.assertEqual(value, MAX_OUTPUT_VALUE_32 + 1)
 
-        max_64 = output_value_to_bytes(MAX_OUTPUT_VALUE)
+        serializer = Serializer.build_bytes_serializer()
+        encode_output_value(serializer, MAX_OUTPUT_VALUE)
+        max_64 = serializer.finalize()
         self.assertEqual(len(max_64), 8)
-        value, buf = bytes_to_output_value(max_64)
+        deserializer = Deserializer.build_bytes_deserializer(max_64)
+        value = decode_output_value(deserializer)
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
-        from hathor.transaction.util import bytes_to_output_value
-
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
         outputs = [TxOutput(1, b'')]
