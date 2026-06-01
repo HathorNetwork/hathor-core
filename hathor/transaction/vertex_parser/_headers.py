@@ -110,7 +110,7 @@ def serialize_header(serializer: Serializer, header: AnyVertexHeader) -> None:
             )
             serialize_unshield_balance_header(serializer, header)
         case _:
-            serializer.write_bytes(header.serialize())
+            raise AssertionError('unreachable')
 
 
 def get_header_sighash_bytes(header: AnyVertexHeader) -> bytes:
@@ -129,4 +129,4 @@ def get_header_sighash_bytes(header: AnyVertexHeader) -> bytes:
             serialize_fee_header(serializer, header)
             return bytes(serializer.finalize())
         case _:
-            return header.get_sighash_bytes()
+            raise AssertionError('unreachable')
