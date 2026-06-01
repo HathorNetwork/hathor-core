@@ -71,6 +71,38 @@ class WalletBalanceUpdate(NamedTuple):
     timelock: int
 
 
+def extract_key_bytes(key: object) -> tuple[bytes, bytes]:
+    """Extract (private_key_bytes, compressed_pubkey_bytes) from a wallet key.
+
+    Handles both key types used in the wallet:
+    - `cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
+      (from Wallet.get_private_key())
+    - pycoin `Key` (from HDWallet.get_private_key())
+
+    Returns:
+        (private_key_bytes: 32B, compressed_pubkey_bytes: 33B)
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    if isinstance(key, ec.EllipticCurvePrivateKey):
+        privkey_bytes = key.private_numbers().private_value.to_bytes(32, 'big')  # type: ignore[attr-defined]
+        pubkey_bytes = key.public_key().public_bytes(
+            encoding=Encoding.X962,
+            format=PublicFormat.CompressedPoint,
+        )
+        return privkey_bytes, pubkey_bytes
+
+    # pycoin Key — has .secret_exponent() and .sec()
+    if hasattr(key, 'secret_exponent') and hasattr(key, 'sec'):
+        secret_exp = key.secret_exponent()
+        privkey_bytes = secret_exp.to_bytes(32, 'big')
+        pubkey_bytes = key.sec(is_compressed=True)
+        return privkey_bytes, pubkey_bytes
+
+    raise TypeError(f'unsupported key type: {type(key).__name__}')
+
+
 class BaseWallet:
     reactor: Reactor
     keys: dict[str, Any]
@@ -670,7 +702,7 @@ class BaseWallet:
 
         Raises ValueError if the token UID is inconsistent.
         """
-        from hathor.crypto.shielded.asset_tag import create_asset_commitment, derive_tag
+        from hathor_ct_crypto import create_asset_commitment, derive_tag
         expected_tag = derive_tag(token_id)
         expected_commitment = create_asset_commitment(expected_tag, asset_bf)
         if expected_commitment != asset_commitment:
@@ -685,7 +717,6 @@ class BaseWallet:
         Returns True if any shielded output was recovered.
         """
         from hathor.crypto.shielded import SHIELDED_CRYPTO_AVAILABLE
-        from hathor.crypto.shielded.ecdh import extract_key_bytes
         from hathor.crypto.shielded.recovery import recover_shielded_secrets
         from hathorlib.transaction.shielded_tx_output import FullShieldedOutput
 

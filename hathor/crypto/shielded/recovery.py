@@ -56,8 +56,12 @@ def recover_shielded_secrets(
     Raises:
         ValueError: If ECDH recovery fails or the output has no ephemeral pubkey.
     """
-    from hathor.crypto.shielded import derive_asset_tag, rewind_range_proof
-    from hathor.crypto.shielded.ecdh import derive_ecdh_shared_secret, derive_rewind_nonce
+    from hathor_ct_crypto import (
+        derive_asset_tag,
+        derive_ecdh_shared_secret,
+        derive_rewind_nonce,
+        rewind_range_proof,
+    )
 
     if not output.ephemeral_pubkey:
         raise ValueError('output has no ephemeral_pubkey for ECDH recovery')
