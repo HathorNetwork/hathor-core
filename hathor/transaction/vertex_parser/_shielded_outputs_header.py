@@ -24,8 +24,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathor.serialization.exceptions import SerializationError
-from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.headers import VertexHeaderId, ShieldedOutputsHeader
 from hathorlib.transaction.shielded_tx_output import (
     MAX_SHIELDED_OUTPUTS,
     ShieldedOutput,
@@ -35,7 +35,6 @@ from hathorlib.transaction.shielded_tx_output import (
 
 if TYPE_CHECKING:
     from hathor.serialization import Deserializer, Serializer
-    from hathor.transaction.headers import ShieldedOutputsHeader
 
 
 def deserialize_shielded_outputs_header(

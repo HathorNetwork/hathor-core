@@ -17,12 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from hathorlib.headers.base import VertexBaseHeader
-from hathorlib.headers.types import VertexHeaderId
-from hathorlib.utils import int_to_bytes, unpack
+from hathor.types import TokenUid
+from hathorlib.conf.settings import HathorSettings
+from hathorlib.utils import get_deposit_token_withdraw_amount
 
 if TYPE_CHECKING:
-    from hathorlib.base_transaction import BaseTransaction
     from hathorlib.transaction import Transaction
 
 
