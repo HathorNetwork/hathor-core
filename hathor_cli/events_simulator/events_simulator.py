@@ -14,6 +14,7 @@
 
 import os
 from argparse import ArgumentParser, Namespace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from autobahn.twisted.resource import WebSocketResource
@@ -38,7 +39,7 @@ def create_parser() -> ArgumentParser:
 
     scenario_group = parser.add_mutually_exclusive_group(required=True)
     scenario_group.add_argument('--scenario', help=f'One of {possible_scenarios}', type=str)
-    scenario_group.add_argument('--file', help='external scenario file, e.g. "./my_scenario.py"', type=str)
+    scenario_group.add_argument('--file', help='external scenario file, e.g. "./my_scenario.py"', type=Path)
 
     parser.add_argument(
         '--function',

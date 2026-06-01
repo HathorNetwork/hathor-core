@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from pathlib import Path
+
 import pytest
 
 _VALID_SIMULATE = '''\
@@ -51,7 +53,7 @@ def test_loads_default_function_and_reward_spend(scenario_file):
     from unittest.mock import Mock
 
     from hathor_cli.events_simulator.external_scenario import ExternalScenario
-    scenario = ExternalScenario(str(scenario_file))
+    scenario = ExternalScenario(scenario_file)
     assert scenario.get_reward_spend_min_blocks() == 10
     # Verify function was actually loaded and is callable
     scenario.simulate(Mock(), Mock())
@@ -61,7 +63,7 @@ def test_custom_reward_spend_min_blocks(tmp_path):
     from hathor_cli.events_simulator.external_scenario import ExternalScenario
     f = tmp_path / 'scenario.py'
     f.write_text(_VALID_SIMULATE_WITH_SETTINGS)
-    scenario = ExternalScenario(str(f))
+    scenario = ExternalScenario(f)
     assert scenario.get_reward_spend_min_blocks() == 1
 
 
@@ -74,7 +76,7 @@ def test_custom_function_name(tmp_path):
     # _CUSTOM_FUNCTION only defines my_fn (no simulate), so ExternalScenario with
     # default function_name would raise ValueError — this also implicitly tests that
     # the constructor correctly uses the provided function_name instead of falling back
-    scenario = ExternalScenario(str(f), function_name='my_fn')
+    scenario = ExternalScenario(f, function_name='my_fn')
     assert scenario.get_reward_spend_min_blocks() == 10
     scenario.simulate(Mock(), Mock())
 
@@ -82,13 +84,13 @@ def test_custom_function_name(tmp_path):
 def test_file_not_found():
     from hathor_cli.events_simulator.external_scenario import ExternalScenario
     with pytest.raises(ValueError, match='External scenario file not found: /nonexistent/path.py'):
-        ExternalScenario('/nonexistent/path.py')
+        ExternalScenario(Path('/nonexistent/path.py'))
 
 
 def test_function_not_found(scenario_file):
     from hathor_cli.events_simulator.external_scenario import ExternalScenario
     with pytest.raises(ValueError, match="Function 'missing_fn' not found in"):
-        ExternalScenario(str(scenario_file), function_name='missing_fn')
+        ExternalScenario(scenario_file, function_name='missing_fn')
 
 
 def test_invalid_reward_spend_min_blocks_type(tmp_path):
@@ -96,4 +98,4 @@ def test_invalid_reward_spend_min_blocks_type(tmp_path):
     f = tmp_path / 'scenario.py'
     f.write_text(_WRONG_SETTINGS_TYPE)
     with pytest.raises(ValueError, match='REWARD_SPEND_MIN_BLOCKS must be an int, got str'):
-        ExternalScenario(str(f))
+        ExternalScenario(f)

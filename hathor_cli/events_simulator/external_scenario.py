@@ -14,7 +14,7 @@
 
 import hashlib
 import importlib.util
-import os
+from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -29,7 +29,7 @@ _DEFAULT_REWARD_SPEND_MIN_BLOCKS = 10
 class ExternalScenario:
     """Loads an external Python scenario file and exposes the same interface as the Scenario enum."""
 
-    def __init__(self, file_path: str, function_name: str = 'simulate') -> None:
+    def __init__(self, file_path: Path, function_name: str = 'simulate') -> None:
         module = self._load_module(file_path)
 
         if not hasattr(module, function_name):
@@ -45,10 +45,10 @@ class ExternalScenario:
                 )
             self._reward_spend_min_blocks = value
 
-    def _load_module(self, file_path: str) -> ModuleType:
-        if not os.path.isfile(file_path):
+    def _load_module(self, file_path: Path) -> ModuleType:
+        if not file_path.is_file():
             raise ValueError(f'External scenario file not found: {file_path}')
-        module_name = '_hathor_external_' + hashlib.md5(file_path.encode()).hexdigest()[:8]
+        module_name = '_hathor_external_' + hashlib.md5(str(file_path).encode()).hexdigest()[:8]
         spec = importlib.util.spec_from_file_location(module_name, file_path)
         if spec is None:
             raise ValueError(f'Could not load module spec from: {file_path}')
