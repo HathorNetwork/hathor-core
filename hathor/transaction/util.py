@@ -19,7 +19,7 @@ import struct
 from struct import error as StructError
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from hathor.transaction.exceptions import InvalidFeeAmount, InvalidOutputValue, TransactionDataError
+from hathor.transaction.exceptions import InvalidFeeAmount, TransactionDataError
 from hathorlib.utils import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount  # noqa: F401
 
 if TYPE_CHECKING:
@@ -71,29 +71,6 @@ def decode_string_utf8(encoded: bytes, key: str) -> str:
         return decoded
     except UnicodeDecodeError:
         raise StructError('{} must be a valid utf-8 string.'.format(key))
-
-
-def bytes_to_output_value(data: bytes) -> tuple[int, bytes]:
-    from hathor.serialization import BadDataError, Deserializer
-    from hathor.serialization.encoding.output_value import decode_output_value
-    deserializer = Deserializer.build_bytes_deserializer(data)
-    try:
-        output_value = decode_output_value(deserializer)
-    except BadDataError as e:
-        raise InvalidOutputValue(*e.args)
-    remaining_data = deserializer.read_all()
-    return (output_value, remaining_data)
-
-
-def output_value_to_bytes(number: int) -> bytes:
-    from hathor.serialization import Serializer
-    from hathor.serialization.encoding.output_value import encode_output_value
-    serializer = Serializer.build_bytes_serializer()
-    try:
-        encode_output_value(serializer, number)
-    except ValueError as e:
-        raise InvalidOutputValue(*e.args)
-    return bytes(serializer.finalize())
 
 
 def validate_token_name_and_symbol(settings: HathorSettings,
