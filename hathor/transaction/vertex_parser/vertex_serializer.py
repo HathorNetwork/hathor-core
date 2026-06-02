@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 from hathor.serialization import Serializer
 from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.decimal_places import VertexDecimalVersion
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import BaseTransaction, TxInput, TxOutput
@@ -194,11 +195,11 @@ def serialize_tx_input_sighash(txin: TxInput) -> bytes:
     return bytes(serializer.finalize())
 
 
-def serialize_tx_output_bytes(txout: TxOutput) -> bytes:
+def serialize_tx_output_bytes(txout: TxOutput, *, decimal_version: VertexDecimalVersion) -> bytes:
     """Serialize a TxOutput. Replaces bytes(txout)."""
     from hathor.transaction.vertex_parser._common import serialize_tx_output as _ser
     serializer = Serializer.build_bytes_serializer()
-    _ser(serializer, txout)
+    _ser(serializer, txout, decimal_version=decimal_version)
     return bytes(serializer.finalize())
 
 
@@ -226,13 +227,18 @@ def deserialize_tx_input(buf: bytes, *, verbose: VerboseCallback = None) -> tupl
     return txin, remaining
 
 
-def deserialize_tx_output(buf: bytes, *, verbose: VerboseCallback = None) -> tuple[TxOutput, bytes]:
+def deserialize_tx_output(
+    buf: bytes,
+    *,
+    decimal_version: VertexDecimalVersion,
+    verbose: VerboseCallback = None,
+) -> tuple[TxOutput, bytes]:
     """Deserialize a TxOutput from bytes. Replaces TxOutput.create_from_bytes()."""
     from hathor.serialization import Deserializer
     from hathor.transaction.vertex_parser._common import _deserialize_tx_output
 
     deserializer = Deserializer.build_bytes_deserializer(buf)
-    txout = _deserialize_tx_output(deserializer, verbose=verbose)
+    txout = _deserialize_tx_output(deserializer, decimal_version=decimal_version, verbose=verbose)
     remaining = bytes(deserializer.read_all())
     return txout, remaining
 

@@ -48,6 +48,8 @@ from hathor_tests.utils import (
     create_script_with_sigops,
     get_genesis_key,
 )
+from hathorlib.serialization import BadDataError, Deserializer, Serializer
+from hathorlib.serialization.encoding.output_value import decode_output_value_v1, encode_output_value_v1
 
 
 class TransactionTest(unittest.TestCase):
@@ -909,25 +911,31 @@ class TransactionTest(unittest.TestCase):
     def test_output_serialization(self):
         from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
         from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE
-        from hathor.transaction.util import bytes_to_output_value, output_value_to_bytes
-        max_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32)
+        serializer = Serializer.build_bytes_serializer()
+        encode_output_value_v1(serializer, MAX_OUTPUT_VALUE_32)
+        max_32 = serializer.finalize()
         self.assertEqual(len(max_32), 4)
-        value, buf = bytes_to_output_value(max_32)
+        deserializer = Deserializer.build_bytes_deserializer(max_32)
+        value = decode_output_value_v1(deserializer)
         self.assertEqual(value, MAX_OUTPUT_VALUE_32)
 
-        over_32 = output_value_to_bytes(MAX_OUTPUT_VALUE_32 + 1)
+        serializer = Serializer.build_bytes_serializer()
+        encode_output_value_v1(serializer, MAX_OUTPUT_VALUE_32 + 1)
+        over_32 = serializer.finalize()
         self.assertEqual(len(over_32), 8)
-        value, buf = bytes_to_output_value(over_32)
+        deserializer = Deserializer.build_bytes_deserializer(over_32)
+        value = decode_output_value_v1(deserializer)
         self.assertEqual(value, MAX_OUTPUT_VALUE_32 + 1)
 
-        max_64 = output_value_to_bytes(MAX_OUTPUT_VALUE)
+        serializer = Serializer.build_bytes_serializer()
+        encode_output_value_v1(serializer, MAX_OUTPUT_VALUE)
+        max_64 = serializer.finalize()
         self.assertEqual(len(max_64), 8)
-        value, buf = bytes_to_output_value(max_64)
+        deserializer = Deserializer.build_bytes_deserializer(max_64)
+        value = decode_output_value_v1(deserializer)
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
-        from hathor.transaction.util import bytes_to_output_value
-
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
         outputs = [TxOutput(1, b'')]
@@ -968,7 +976,7 @@ class TransactionTest(unittest.TestCase):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
         _input = TxInput(random_bytes, 0, random_bytes)
         tx = Transaction(inputs=[_input], outputs=[output], parents=parents, storage=self.tx_storage)
-        with self.assertRaises(InvalidOutputValue):
+        with self.assertRaises(ValueError):
             self.manager.cpu_mining_service.resolve(tx)
 
         # 'Manually resolving', to validate verify method
@@ -978,8 +986,9 @@ class TransactionTest(unittest.TestCase):
 
         # Invalid output value
         invalid_output = bytes.fromhex('ffffffff')
-        with self.assertRaises(InvalidOutputValue):
-            bytes_to_output_value(invalid_output)
+        deserializer = Deserializer.build_bytes_deserializer(invalid_output)
+        with self.assertRaises(BadDataError):
+            decode_output_value_v1(deserializer)
 
         # Can't instantiate an output with negative value
         with self.assertRaises(InvalidOutputValue):
