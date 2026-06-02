@@ -1,0 +1,1573 @@
+Grid sweep: bindings=['rust-pure', 'node-napi', 'wasm']  N=[150, 200, 250, 300, 350, 400, 450, 500]  M=[1, 2, 3, 4]  k=63  runs=1
+  8×4 grid × 3 binding(s) = 96 cells
+  CSV -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+
+=== [1/96] rust-pure N=150 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=150 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  1.964s [range= 0.908 surj= 0.010 bal= 0.024 ecdh= 0.009 rewind= 1.002 recheck=0.0104 update=0.0004]
+
+  AVERAGE over 1 run(s): total 1.964s  (13.096 ms/tx)
+    range          0.908s     6.051 ms/proof  (150 proofs)
+    surjection     0.010s     0.065 ms/proof  (150 proofs)
+    balance        0.024s     0.161 ms/tx     (150 txs)
+    ecdh+nonce     0.009s     0.061 ms/output (150 outputs)
+    rewind         1.002s     6.682 ms/output (150 outputs)
+    recover-chk    0.010s     0.069 ms/output (150 outputs)
+    update        0.0004s
+
+  wrote header + 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[1/96] rust-pure N=150 M=1: ok (3.4s)
+
+=== [2/96] rust-pure N=150 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=150 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  4.002s [range= 1.839 surj= 0.031 bal= 0.048 ecdh= 0.023 rewind= 2.038 recheck=0.0211 update=0.0002]
+
+  AVERAGE over 1 run(s): total 4.002s  (26.679 ms/tx)
+    range          1.839s     6.131 ms/proof  (300 proofs)
+    surjection     0.031s     0.104 ms/proof  (300 proofs)
+    balance        0.048s     0.321 ms/tx     (150 txs)
+    ecdh+nonce     0.023s     0.077 ms/output (300 outputs)
+    rewind         2.038s     6.792 ms/output (300 outputs)
+    recover-chk    0.021s     0.070 ms/output (300 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[2/96] rust-pure N=150 M=2: ok (6.6s)
+
+=== [3/96] rust-pure N=150 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=150 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=  5.313s [range= 2.392 surj= 0.065 bal= 0.066 ecdh= 0.025 rewind= 2.734 recheck=0.0306 update=0.0003]
+
+  AVERAGE over 1 run(s): total 5.313s  (35.419 ms/tx)
+    range          2.392s     5.315 ms/proof  (450 proofs)
+    surjection     0.065s     0.144 ms/proof  (450 proofs)
+    balance        0.066s     0.437 ms/tx     (150 txs)
+    ecdh+nonce     0.025s     0.055 ms/output (450 outputs)
+    rewind         2.734s     6.076 ms/output (450 outputs)
+    recover-chk    0.031s     0.068 ms/output (450 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[3/96] rust-pure N=150 M=3: ok (9.3s)
+
+=== [4/96] rust-pure N=150 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=150 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=  7.408s [range= 3.343 surj= 0.088 bal= 0.090 ecdh= 0.035 rewind= 3.808 recheck=0.0417 update=0.0002]
+
+  AVERAGE over 1 run(s): total 7.408s  (49.388 ms/tx)
+    range          3.343s     5.571 ms/proof  (600 proofs)
+    surjection     0.088s     0.147 ms/proof  (600 proofs)
+    balance        0.090s     0.603 ms/tx     (150 txs)
+    ecdh+nonce     0.035s     0.059 ms/output (600 outputs)
+    rewind         3.808s     6.347 ms/output (600 outputs)
+    recover-chk    0.042s     0.070 ms/output (600 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[4/96] rust-pure N=150 M=4: ok (12.6s)
+
+=== [5/96] rust-pure N=200 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=200 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  2.337s [range= 1.061 surj= 0.012 bal= 0.028 ecdh= 0.011 rewind= 1.213 recheck=0.0120 update=0.0001]
+
+  AVERAGE over 1 run(s): total 2.337s  (11.685 ms/tx)
+    range          1.061s     5.304 ms/proof  (200 proofs)
+    surjection     0.012s     0.058 ms/proof  (200 proofs)
+    balance        0.028s     0.139 ms/tx     (200 txs)
+    ecdh+nonce     0.011s     0.054 ms/output (200 outputs)
+    rewind         1.213s     6.066 ms/output (200 outputs)
+    recover-chk    0.012s     0.060 ms/output (200 outputs)
+    update        0.0001s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[5/96] rust-pure N=200 M=1: ok (3.9s)
+
+=== [6/96] rust-pure N=200 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=200 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  4.501s [range= 2.057 surj= 0.038 bal= 0.055 ecdh= 0.022 rewind= 2.304 recheck=0.0256 update=0.0002]
+
+  AVERAGE over 1 run(s): total 4.501s  (22.506 ms/tx)
+    range          2.057s     5.142 ms/proof  (400 proofs)
+    surjection     0.038s     0.094 ms/proof  (400 proofs)
+    balance        0.055s     0.274 ms/tx     (200 txs)
+    ecdh+nonce     0.022s     0.054 ms/output (400 outputs)
+    rewind         2.304s     5.760 ms/output (400 outputs)
+    recover-chk    0.026s     0.064 ms/output (400 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[6/96] rust-pure N=200 M=2: ok (7.6s)
+
+=== [7/96] rust-pure N=200 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=200 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=  6.330s [range= 2.863 surj= 0.077 bal= 0.077 ecdh= 0.029 rewind= 3.248 recheck=0.0346 update=0.0002]
+
+  AVERAGE over 1 run(s): total 6.330s  (31.649 ms/tx)
+    range          2.863s     4.772 ms/proof  (600 proofs)
+    surjection     0.077s     0.128 ms/proof  (600 proofs)
+    balance        0.077s     0.385 ms/tx     (200 txs)
+    ecdh+nonce     0.029s     0.048 ms/output (600 outputs)
+    rewind         3.248s     5.413 ms/output (600 outputs)
+    recover-chk    0.035s     0.058 ms/output (600 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[7/96] rust-pure N=200 M=3: ok (10.7s)
+
+=== [8/96] rust-pure N=200 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=200 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=  8.214s [range= 3.716 surj= 0.096 bal= 0.098 ecdh= 0.037 rewind= 4.220 recheck=0.0456 update=0.0002]
+
+  AVERAGE over 1 run(s): total 8.214s  (41.072 ms/tx)
+    range          3.716s     4.645 ms/proof  (800 proofs)
+    surjection     0.096s     0.120 ms/proof  (800 proofs)
+    balance        0.098s     0.490 ms/tx     (200 txs)
+    ecdh+nonce     0.037s     0.046 ms/output (800 outputs)
+    rewind         4.220s     5.276 ms/output (800 outputs)
+    recover-chk    0.046s     0.057 ms/output (800 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[8/96] rust-pure N=200 M=4: ok (13.8s)
+
+=== [9/96] rust-pure N=250 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=250 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  2.607s [range= 1.195 surj= 0.012 bal= 0.031 ecdh= 0.012 rewind= 1.341 recheck=0.0138 update=0.0001]
+
+  AVERAGE over 1 run(s): total 2.607s  (10.426 ms/tx)
+    range          1.195s     4.779 ms/proof  (250 proofs)
+    surjection     0.012s     0.050 ms/proof  (250 proofs)
+    balance        0.031s     0.126 ms/tx     (250 txs)
+    ecdh+nonce     0.012s     0.049 ms/output (250 outputs)
+    rewind         1.341s     5.365 ms/output (250 outputs)
+    recover-chk    0.014s     0.055 ms/output (250 outputs)
+    update        0.0001s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[9/96] rust-pure N=250 M=1: ok (4.4s)
+
+=== [10/96] rust-pure N=250 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=250 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  5.815s [range= 2.656 surj= 0.048 bal= 0.070 ecdh= 0.027 rewind= 2.975 recheck=0.0367 update=0.0003]
+
+  AVERAGE over 1 run(s): total 5.815s  (23.258 ms/tx)
+    range          2.656s     5.313 ms/proof  (500 proofs)
+    surjection     0.048s     0.096 ms/proof  (500 proofs)
+    balance        0.070s     0.279 ms/tx     (250 txs)
+    ecdh+nonce     0.027s     0.054 ms/output (500 outputs)
+    rewind         2.975s     5.950 ms/output (500 outputs)
+    recover-chk    0.037s     0.073 ms/output (500 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[10/96] rust-pure N=250 M=2: ok (9.4s)
+
+=== [11/96] rust-pure N=250 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=250 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=  7.981s [range= 3.619 surj= 0.097 bal= 0.096 ecdh= 0.037 rewind= 4.087 recheck=0.0439 update=0.0002]
+
+  AVERAGE over 1 run(s): total 7.981s  (31.924 ms/tx)
+    range          3.619s     4.826 ms/proof  (750 proofs)
+    surjection     0.097s     0.129 ms/proof  (750 proofs)
+    balance        0.096s     0.384 ms/tx     (250 txs)
+    ecdh+nonce     0.037s     0.050 ms/output (750 outputs)
+    rewind         4.087s     5.449 ms/output (750 outputs)
+    recover-chk    0.044s     0.059 ms/output (750 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[11/96] rust-pure N=250 M=3: ok (13.4s)
+
+=== [12/96] rust-pure N=250 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=250 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total= 10.592s [range= 4.805 surj= 0.125 bal= 0.124 ecdh= 0.048 rewind= 5.430 recheck=0.0583 update=0.0003]
+
+  AVERAGE over 1 run(s): total 10.592s  (42.368 ms/tx)
+    range          4.805s     4.805 ms/proof  (1000 proofs)
+    surjection     0.125s     0.125 ms/proof  (1000 proofs)
+    balance        0.124s     0.498 ms/tx     (250 txs)
+    ecdh+nonce     0.048s     0.048 ms/output (1000 outputs)
+    rewind         5.430s     5.430 ms/output (1000 outputs)
+    recover-chk    0.058s     0.058 ms/output (1000 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[12/96] rust-pure N=250 M=4: ok (17.7s)
+
+=== [13/96] rust-pure N=300 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=300 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  3.194s [range= 1.469 surj= 0.016 bal= 0.040 ecdh= 0.015 rewind= 1.637 recheck=0.0170 update=0.0003]
+
+  AVERAGE over 1 run(s): total 3.194s  (10.647 ms/tx)
+    range          1.469s     4.897 ms/proof  (300 proofs)
+    surjection     0.016s     0.053 ms/proof  (300 proofs)
+    balance        0.040s     0.133 ms/tx     (300 txs)
+    ecdh+nonce     0.015s     0.050 ms/output (300 outputs)
+    rewind         1.637s     5.455 ms/output (300 outputs)
+    recover-chk    0.017s     0.057 ms/output (300 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[13/96] rust-pure N=300 M=1: ok (5.5s)
+
+=== [14/96] rust-pure N=300 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=300 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  6.270s [range= 2.858 surj= 0.052 bal= 0.076 ecdh= 0.029 rewind= 3.219 recheck=0.0337 update=0.0002]
+
+  AVERAGE over 1 run(s): total 6.270s  (20.899 ms/tx)
+    range          2.858s     4.764 ms/proof  (600 proofs)
+    surjection     0.052s     0.087 ms/proof  (600 proofs)
+    balance        0.076s     0.253 ms/tx     (300 txs)
+    ecdh+nonce     0.029s     0.048 ms/output (600 outputs)
+    rewind         3.219s     5.366 ms/output (600 outputs)
+    recover-chk    0.034s     0.056 ms/output (600 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[14/96] rust-pure N=300 M=2: ok (10.5s)
+
+=== [15/96] rust-pure N=300 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=300 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=  9.250s [range= 4.192 surj= 0.109 bal= 0.111 ecdh= 0.042 rewind= 4.744 recheck=0.0510 update=0.0003]
+
+  AVERAGE over 1 run(s): total 9.250s  (30.835 ms/tx)
+    range          4.192s     4.658 ms/proof  (900 proofs)
+    surjection     0.109s     0.121 ms/proof  (900 proofs)
+    balance        0.111s     0.370 ms/tx     (300 txs)
+    ecdh+nonce     0.042s     0.047 ms/output (900 outputs)
+    rewind         4.744s     5.271 ms/output (900 outputs)
+    recover-chk    0.051s     0.057 ms/output (900 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[15/96] rust-pure N=300 M=3: ok (15.6s)
+
+=== [16/96] rust-pure N=300 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=300 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total= 12.065s [range= 5.437 surj= 0.148 bal= 0.147 ecdh= 0.054 rewind= 6.211 recheck=0.0668 update=0.0004]
+
+  AVERAGE over 1 run(s): total 12.065s  (40.218 ms/tx)
+    range          5.437s     4.531 ms/proof  (1200 proofs)
+    surjection     0.148s     0.123 ms/proof  (1200 proofs)
+    balance        0.147s     0.489 ms/tx     (300 txs)
+    ecdh+nonce     0.054s     0.045 ms/output (1200 outputs)
+    rewind         6.211s     5.176 ms/output (1200 outputs)
+    recover-chk    0.067s     0.056 ms/output (1200 outputs)
+    update        0.0004s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[16/96] rust-pure N=300 M=4: ok (20.1s)
+
+=== [17/96] rust-pure N=350 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=350 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  3.607s [range= 1.659 surj= 0.018 bal= 0.044 ecdh= 0.016 rewind= 1.850 recheck=0.0195 update=0.0002]
+
+  AVERAGE over 1 run(s): total 3.607s  (10.305 ms/tx)
+    range          1.659s     4.740 ms/proof  (350 proofs)
+    surjection     0.018s     0.050 ms/proof  (350 proofs)
+    balance        0.044s     0.125 ms/tx     (350 txs)
+    ecdh+nonce     0.016s     0.046 ms/output (350 outputs)
+    rewind         1.850s     5.287 ms/output (350 outputs)
+    recover-chk    0.019s     0.056 ms/output (350 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[17/96] rust-pure N=350 M=1: ok (6.2s)
+
+=== [18/96] rust-pure N=350 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=350 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  7.114s [range= 3.196 surj= 0.058 bal= 0.085 ecdh= 0.032 rewind= 3.703 recheck=0.0385 update=0.0002]
+
+  AVERAGE over 1 run(s): total 7.114s  (20.325 ms/tx)
+    range          3.196s     4.566 ms/proof  (700 proofs)
+    surjection     0.058s     0.083 ms/proof  (700 proofs)
+    balance        0.085s     0.242 ms/tx     (350 txs)
+    ecdh+nonce     0.032s     0.046 ms/output (700 outputs)
+    rewind         3.703s     5.290 ms/output (700 outputs)
+    recover-chk    0.039s     0.055 ms/output (700 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[18/96] rust-pure N=350 M=2: ok (11.9s)
+
+=== [19/96] rust-pure N=350 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=350 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total= 10.570s [range= 4.790 surj= 0.130 bal= 0.128 ecdh= 0.047 rewind= 5.416 recheck=0.0577 update=0.0003]
+
+  AVERAGE over 1 run(s): total 10.570s  (30.200 ms/tx)
+    range          4.790s     4.561 ms/proof  (1050 proofs)
+    surjection     0.130s     0.124 ms/proof  (1050 proofs)
+    balance        0.128s     0.365 ms/tx     (350 txs)
+    ecdh+nonce     0.047s     0.045 ms/output (1050 outputs)
+    rewind         5.416s     5.159 ms/output (1050 outputs)
+    recover-chk    0.058s     0.055 ms/output (1050 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[19/96] rust-pure N=350 M=3: ok (17.8s)
+
+=== [20/96] rust-pure N=350 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=350 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total= 14.045s [range= 6.356 surj= 0.167 bal= 0.171 ecdh= 0.063 rewind= 7.209 recheck=0.0781 update=0.0004]
+
+  AVERAGE over 1 run(s): total 14.045s  (40.130 ms/tx)
+    range          6.356s     4.540 ms/proof  (1400 proofs)
+    surjection     0.167s     0.119 ms/proof  (1400 proofs)
+    balance        0.171s     0.487 ms/tx     (350 txs)
+    ecdh+nonce     0.063s     0.045 ms/output (1400 outputs)
+    rewind         7.209s     5.150 ms/output (1400 outputs)
+    recover-chk    0.078s     0.056 ms/output (1400 outputs)
+    update        0.0004s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[20/96] rust-pure N=350 M=4: ok (24.2s)
+
+=== [21/96] rust-pure N=400 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=400 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  4.089s [range= 1.882 surj= 0.020 bal= 0.049 ecdh= 0.018 rewind= 2.097 recheck=0.0222 update=0.0002]
+
+  AVERAGE over 1 run(s): total 4.089s  (10.222 ms/tx)
+    range          1.882s     4.704 ms/proof  (400 proofs)
+    surjection     0.020s     0.049 ms/proof  (400 proofs)
+    balance        0.049s     0.123 ms/tx     (400 txs)
+    ecdh+nonce     0.018s     0.045 ms/output (400 outputs)
+    rewind         2.097s     5.244 ms/output (400 outputs)
+    recover-chk    0.022s     0.055 ms/output (400 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[21/96] rust-pure N=400 M=1: ok (6.9s)
+
+=== [22/96] rust-pure N=400 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=400 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  8.220s [range= 3.759 surj= 0.067 bal= 0.099 ecdh= 0.038 rewind= 4.212 recheck=0.0447 update=0.0003]
+
+  AVERAGE over 1 run(s): total 8.220s  (20.551 ms/tx)
+    range          3.759s     4.699 ms/proof  (800 proofs)
+    surjection     0.067s     0.084 ms/proof  (800 proofs)
+    balance        0.099s     0.248 ms/tx     (400 txs)
+    ecdh+nonce     0.038s     0.047 ms/output (800 outputs)
+    rewind         4.212s     5.265 ms/output (800 outputs)
+    recover-chk    0.045s     0.056 ms/output (800 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[22/96] rust-pure N=400 M=2: ok (13.9s)
+
+=== [23/96] rust-pure N=400 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=400 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total= 11.986s [range= 5.436 surj= 0.143 bal= 0.145 ecdh= 0.055 rewind= 6.140 recheck=0.0655 update=0.0004]
+
+  AVERAGE over 1 run(s): total 11.986s  (29.964 ms/tx)
+    range          5.436s     4.530 ms/proof  (1200 proofs)
+    surjection     0.143s     0.119 ms/proof  (1200 proofs)
+    balance        0.145s     0.363 ms/tx     (400 txs)
+    ecdh+nonce     0.055s     0.045 ms/output (1200 outputs)
+    rewind         6.140s     5.117 ms/output (1200 outputs)
+    recover-chk    0.065s     0.055 ms/output (1200 outputs)
+    update        0.0004s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[23/96] rust-pure N=400 M=3: ok (20.0s)
+
+=== [24/96] rust-pure N=400 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=400 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total= 15.938s [range= 7.251 surj= 0.186 bal= 0.192 ecdh= 0.072 rewind= 8.146 recheck=0.0884 update=0.0004]
+
+  AVERAGE over 1 run(s): total 15.938s  (39.844 ms/tx)
+    range          7.251s     4.532 ms/proof  (1600 proofs)
+    surjection     0.186s     0.117 ms/proof  (1600 proofs)
+    balance        0.192s     0.479 ms/tx     (400 txs)
+    ecdh+nonce     0.072s     0.045 ms/output (1600 outputs)
+    rewind         8.146s     5.091 ms/output (1600 outputs)
+    recover-chk    0.088s     0.055 ms/output (1600 outputs)
+    update        0.0004s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[24/96] rust-pure N=400 M=4: ok (26.4s)
+
+=== [25/96] rust-pure N=450 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=450 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  4.556s [range= 2.088 surj= 0.022 bal= 0.055 ecdh= 0.020 rewind= 2.344 recheck=0.0255 update=0.0002]
+
+  AVERAGE over 1 run(s): total 4.556s  (10.124 ms/tx)
+    range          2.088s     4.639 ms/proof  (450 proofs)
+    surjection     0.022s     0.048 ms/proof  (450 proofs)
+    balance        0.055s     0.122 ms/tx     (450 txs)
+    ecdh+nonce     0.020s     0.045 ms/output (450 outputs)
+    rewind         2.344s     5.210 ms/output (450 outputs)
+    recover-chk    0.026s     0.057 ms/output (450 outputs)
+    update        0.0002s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[25/96] rust-pure N=450 M=1: ok (7.7s)
+
+=== [26/96] rust-pure N=450 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=450 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=  8.955s [range= 4.087 surj= 0.074 bal= 0.110 ecdh= 0.040 rewind= 4.594 recheck=0.0492 update=0.0003]
+
+  AVERAGE over 1 run(s): total 8.955s  (19.900 ms/tx)
+    range          4.087s     4.541 ms/proof  (900 proofs)
+    surjection     0.074s     0.082 ms/proof  (900 proofs)
+    balance        0.110s     0.244 ms/tx     (450 txs)
+    ecdh+nonce     0.040s     0.045 ms/output (900 outputs)
+    rewind         4.594s     5.105 ms/output (900 outputs)
+    recover-chk    0.049s     0.055 ms/output (900 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[26/96] rust-pure N=450 M=2: ok (15.1s)
+
+=== [27/96] rust-pure N=450 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=450 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total= 13.417s [range= 6.073 surj= 0.156 bal= 0.162 ecdh= 0.060 rewind= 6.891 recheck=0.0734 update=0.0004]
+
+  AVERAGE over 1 run(s): total 13.417s  (29.816 ms/tx)
+    range          6.073s     4.499 ms/proof  (1350 proofs)
+    surjection     0.156s     0.116 ms/proof  (1350 proofs)
+    balance        0.162s     0.360 ms/tx     (450 txs)
+    ecdh+nonce     0.060s     0.044 ms/output (1350 outputs)
+    rewind         6.891s     5.104 ms/output (1350 outputs)
+    recover-chk    0.073s     0.054 ms/output (1350 outputs)
+    update        0.0004s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[27/96] rust-pure N=450 M=3: ok (22.5s)
+
+=== [28/96] rust-pure N=450 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=450 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total= 18.497s [range= 8.334 surj= 0.217 bal= 0.223 ecdh= 0.086 rewind= 9.530 recheck=0.1039 update=0.0006]
+
+  AVERAGE over 1 run(s): total 18.497s  (41.104 ms/tx)
+    range          8.334s     4.630 ms/proof  (1800 proofs)
+    surjection     0.217s     0.120 ms/proof  (1800 proofs)
+    balance        0.223s     0.496 ms/tx     (450 txs)
+    ecdh+nonce     0.086s     0.048 ms/output (1800 outputs)
+    rewind         9.530s     5.294 ms/output (1800 outputs)
+    recover-chk    0.104s     0.058 ms/output (1800 outputs)
+    update        0.0006s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[28/96] rust-pure N=450 M=4: ok (30.3s)
+
+=== [29/96] rust-pure N=500 M=1 ===
+Wallet-scan benchmark (rust-pure) | N=500 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=  5.268s [range= 2.413 surj= 0.026 bal= 0.063 ecdh= 0.024 rewind= 2.712 recheck=0.0281 update=0.0003]
+
+  AVERAGE over 1 run(s): total 5.268s  (10.536 ms/tx)
+    range          2.413s     4.826 ms/proof  (500 proofs)
+    surjection     0.026s     0.052 ms/proof  (500 proofs)
+    balance        0.063s     0.126 ms/tx     (500 txs)
+    ecdh+nonce     0.024s     0.048 ms/output (500 outputs)
+    rewind         2.712s     5.425 ms/output (500 outputs)
+    recover-chk    0.028s     0.056 ms/output (500 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[29/96] rust-pure N=500 M=1: ok (9.0s)
+
+=== [30/96] rust-pure N=500 M=2 ===
+Wallet-scan benchmark (rust-pure) | N=500 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total= 10.114s [range= 4.620 surj= 0.083 bal= 0.123 ecdh= 0.045 rewind= 5.185 recheck=0.0557 update=0.0003]
+
+  AVERAGE over 1 run(s): total 10.114s  (20.228 ms/tx)
+    range          4.620s     4.620 ms/proof  (1000 proofs)
+    surjection     0.083s     0.083 ms/proof  (1000 proofs)
+    balance        0.123s     0.247 ms/tx     (500 txs)
+    ecdh+nonce     0.045s     0.045 ms/output (1000 outputs)
+    rewind         5.185s     5.185 ms/output (1000 outputs)
+    recover-chk    0.056s     0.056 ms/output (1000 outputs)
+    update        0.0003s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[30/96] rust-pure N=500 M=2: ok (16.8s)
+
+=== [31/96] rust-pure N=500 M=3 ===
+Wallet-scan benchmark (rust-pure) | N=500 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total= 15.103s [range= 6.861 surj= 0.177 bal= 0.181 ecdh= 0.068 rewind= 7.732 recheck=0.0833 update=0.0004]
+
+  AVERAGE over 1 run(s): total 15.103s  (30.206 ms/tx)
+    range          6.861s     4.574 ms/proof  (1500 proofs)
+    surjection     0.177s     0.118 ms/proof  (1500 proofs)
+    balance        0.181s     0.362 ms/tx     (500 txs)
+    ecdh+nonce     0.068s     0.045 ms/output (1500 outputs)
+    rewind         7.732s     5.155 ms/output (1500 outputs)
+    recover-chk    0.083s     0.056 ms/output (1500 outputs)
+    update        0.0004s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[31/96] rust-pure N=500 M=3: ok (25.0s)
+
+=== [32/96] rust-pure N=500 M=4 ===
+Wallet-scan benchmark (rust-pure) | N=500 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=rust-pure
+  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total= 20.106s [range= 8.988 surj= 0.236 bal= 0.242 ecdh= 0.090 rewind=10.436 recheck=0.1104 update=0.0005]
+
+  AVERAGE over 1 run(s): total 20.106s  (40.212 ms/tx)
+    range          8.988s     4.494 ms/proof  (2000 proofs)
+    surjection     0.236s     0.118 ms/proof  (2000 proofs)
+    balance        0.242s     0.485 ms/tx     (500 txs)
+    ecdh+nonce     0.090s     0.045 ms/output (2000 outputs)
+    rewind        10.436s     5.218 ms/output (2000 outputs)
+    recover-chk    0.110s     0.055 ms/output (2000 outputs)
+    update        0.0005s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[32/96] rust-pure N=500 M=4: ok (33.2s)
+
+=== [33/96] node-napi N=150 M=1 ===
+Wallet-scan benchmark (Node) | N=150 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=1.573s [range=0.716 surj=0.009 bal=0.019 ecdh=0.009 rewind=0.806 recheck=0.0109 update=0.0020]
+
+  AVERAGE over 1 run(s): total 1.573s  (10.487 ms/tx)
+    range       0.716s  4.770 ms/proof  (150 proofs)
+    surjection  0.009s  0.057 ms/proof  (150 proofs)
+    balance     0.019s  0.130 ms/tx     (150 txs)
+    ecdh+nonce  0.009s  0.057 ms/output (150 outputs)
+    rewind      0.806s  5.371 ms/output (150 outputs)
+    recover-chk 0.011s  0.073 ms/output (150 outputs)
+    update      0.0020s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[33/96] node-napi N=150 M=1: ok (2.7s)
+
+=== [34/96] node-napi N=150 M=2 ===
+Wallet-scan benchmark (Node) | N=150 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=3.110s [range=1.404 surj=0.029 bal=0.038 ecdh=0.017 rewind=1.594 recheck=0.0221 update=0.0022]
+
+  AVERAGE over 1 run(s): total 3.110s  (20.731 ms/tx)
+    range       1.404s  4.680 ms/proof  (300 proofs)
+    surjection  0.029s  0.098 ms/proof  (300 proofs)
+    balance     0.038s  0.257 ms/tx     (150 txs)
+    ecdh+nonce  0.017s  0.056 ms/output (300 outputs)
+    rewind      1.594s  5.312 ms/output (300 outputs)
+    recover-chk 0.022s  0.074 ms/output (300 outputs)
+    update      0.0022s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[34/96] node-napi N=150 M=2: ok (5.2s)
+
+=== [35/96] node-napi N=150 M=3 ===
+Wallet-scan benchmark (Node) | N=150 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=4.620s [range=2.065 surj=0.061 bal=0.056 ecdh=0.025 rewind=2.376 recheck=0.0308 update=0.0029]
+
+  AVERAGE over 1 run(s): total 4.620s  (30.802 ms/tx)
+    range       2.065s  4.589 ms/proof  (450 proofs)
+    surjection  0.061s  0.135 ms/proof  (450 proofs)
+    balance     0.056s  0.376 ms/tx     (150 txs)
+    ecdh+nonce  0.025s  0.056 ms/output (450 outputs)
+    rewind      2.376s  5.279 ms/output (450 outputs)
+    recover-chk 0.031s  0.068 ms/output (450 outputs)
+    update      0.0029s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[35/96] node-napi N=150 M=3: ok (7.8s)
+
+=== [36/96] node-napi N=150 M=4 ===
+Wallet-scan benchmark (Node) | N=150 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=6.273s [range=2.816 surj=0.083 bal=0.076 ecdh=0.034 rewind=3.212 recheck=0.0440 update=0.0036]
+
+  AVERAGE over 1 run(s): total 6.273s  (41.823 ms/tx)
+    range       2.816s  4.693 ms/proof  (600 proofs)
+    surjection  0.083s  0.139 ms/proof  (600 proofs)
+    balance     0.076s  0.505 ms/tx     (150 txs)
+    ecdh+nonce  0.034s  0.056 ms/output (600 outputs)
+    rewind      3.212s  5.353 ms/output (600 outputs)
+    recover-chk 0.044s  0.073 ms/output (600 outputs)
+    update      0.0036s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[36/96] node-napi N=150 M=4: ok (10.4s)
+
+=== [37/96] node-napi N=200 M=1 ===
+Wallet-scan benchmark (Node) | N=200 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=2.116s [range=0.959 surj=0.012 bal=0.026 ecdh=0.012 rewind=1.087 recheck=0.0145 update=0.0021]
+
+  AVERAGE over 1 run(s): total 2.116s  (10.579 ms/tx)
+    range       0.959s  4.793 ms/proof  (200 proofs)
+    surjection  0.012s  0.060 ms/proof  (200 proofs)
+    balance     0.026s  0.131 ms/tx     (200 txs)
+    ecdh+nonce  0.012s  0.058 ms/output (200 outputs)
+    rewind      1.087s  5.437 ms/output (200 outputs)
+    recover-chk 0.014s  0.072 ms/output (200 outputs)
+    update      0.0021s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[37/96] node-napi N=200 M=1: ok (3.5s)
+
+=== [38/96] node-napi N=200 M=2 ===
+Wallet-scan benchmark (Node) | N=200 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=4.579s [range=2.056 surj=0.043 bal=0.056 ecdh=0.025 rewind=2.354 recheck=0.0333 update=0.0037]
+
+  AVERAGE over 1 run(s): total 4.579s  (22.893 ms/tx)
+    range       2.056s  5.140 ms/proof  (400 proofs)
+    surjection  0.043s  0.106 ms/proof  (400 proofs)
+    balance     0.056s  0.279 ms/tx     (200 txs)
+    ecdh+nonce  0.025s  0.063 ms/output (400 outputs)
+    rewind      2.354s  5.886 ms/output (400 outputs)
+    recover-chk 0.033s  0.083 ms/output (400 outputs)
+    update      0.0037s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[38/96] node-napi N=200 M=2: ok (7.5s)
+
+=== [39/96] node-napi N=200 M=3 ===
+Wallet-scan benchmark (Node) | N=200 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=7.089s [range=3.187 surj=0.090 bal=0.081 ecdh=0.038 rewind=3.613 recheck=0.0679 update=0.0047]
+
+  AVERAGE over 1 run(s): total 7.089s  (35.444 ms/tx)
+    range       3.187s  5.312 ms/proof  (600 proofs)
+    surjection  0.090s  0.150 ms/proof  (600 proofs)
+    balance     0.081s  0.407 ms/tx     (200 txs)
+    ecdh+nonce  0.038s  0.063 ms/output (600 outputs)
+    rewind      3.613s  6.022 ms/output (600 outputs)
+    recover-chk 0.068s  0.113 ms/output (600 outputs)
+    update      0.0047s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[39/96] node-napi N=200 M=3: ok (11.5s)
+
+=== [40/96] node-napi N=200 M=4 ===
+Wallet-scan benchmark (Node) | N=200 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=8.255s [range=3.684 surj=0.110 bal=0.101 ecdh=0.043 rewind=4.245 recheck=0.0587 update=0.0048]
+
+  AVERAGE over 1 run(s): total 8.255s  (41.273 ms/tx)
+    range       3.684s  4.605 ms/proof  (800 proofs)
+    surjection  0.110s  0.138 ms/proof  (800 proofs)
+    balance     0.101s  0.505 ms/tx     (200 txs)
+    ecdh+nonce  0.043s  0.054 ms/output (800 outputs)
+    rewind      4.245s  5.307 ms/output (800 outputs)
+    recover-chk 0.059s  0.073 ms/output (800 outputs)
+    update      0.0048s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[40/96] node-napi N=200 M=4: ok (13.8s)
+
+=== [41/96] node-napi N=250 M=1 ===
+Wallet-scan benchmark (Node) | N=250 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=2.742s [range=1.246 surj=0.016 bal=0.035 ecdh=0.016 rewind=1.403 recheck=0.0196 update=0.0032]
+
+  AVERAGE over 1 run(s): total 2.742s  (10.968 ms/tx)
+    range       1.246s  4.982 ms/proof  (250 proofs)
+    surjection  0.016s  0.065 ms/proof  (250 proofs)
+    balance     0.035s  0.141 ms/tx     (250 txs)
+    ecdh+nonce  0.016s  0.064 ms/output (250 outputs)
+    rewind      1.403s  5.611 ms/output (250 outputs)
+    recover-chk 0.020s  0.078 ms/output (250 outputs)
+    update      0.0032s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[41/96] node-napi N=250 M=1: ok (4.6s)
+
+=== [42/96] node-napi N=250 M=2 ===
+Wallet-scan benchmark (Node) | N=250 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=5.299s [range=2.372 surj=0.049 bal=0.066 ecdh=0.029 rewind=2.735 recheck=0.0365 update=0.0055]
+
+  AVERAGE over 1 run(s): total 5.299s  (21.194 ms/tx)
+    range       2.372s  4.745 ms/proof  (500 proofs)
+    surjection  0.049s  0.098 ms/proof  (500 proofs)
+    balance     0.066s  0.264 ms/tx     (250 txs)
+    ecdh+nonce  0.029s  0.059 ms/output (500 outputs)
+    rewind      2.735s  5.470 ms/output (500 outputs)
+    recover-chk 0.036s  0.073 ms/output (500 outputs)
+    update      0.0055s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[42/96] node-napi N=250 M=2: ok (9.5s)
+
+=== [43/96] node-napi N=250 M=3 ===
+Wallet-scan benchmark (Node) | N=250 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=8.126s [range=3.649 surj=0.105 bal=0.099 ecdh=0.049 rewind=4.152 recheck=0.0572 update=0.0058]
+
+  AVERAGE over 1 run(s): total 8.126s  (32.504 ms/tx)
+    range       3.649s  4.865 ms/proof  (750 proofs)
+    surjection  0.105s  0.140 ms/proof  (750 proofs)
+    balance     0.099s  0.396 ms/tx     (250 txs)
+    ecdh+nonce  0.049s  0.065 ms/output (750 outputs)
+    rewind      4.152s  5.536 ms/output (750 outputs)
+    recover-chk 0.057s  0.076 ms/output (750 outputs)
+    update      0.0058s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[43/96] node-napi N=250 M=3: ok (13.6s)
+
+=== [44/96] node-napi N=250 M=4 ===
+Wallet-scan benchmark (Node) | N=250 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=10.585s [range=4.715 surj=0.143 bal=0.128 ecdh=0.059 rewind=5.449 recheck=0.0754 update=0.0072]
+
+  AVERAGE over 1 run(s): total 10.585s  (42.342 ms/tx)
+    range       4.715s  4.715 ms/proof  (1000 proofs)
+    surjection  0.143s  0.143 ms/proof  (1000 proofs)
+    balance     0.128s  0.511 ms/tx     (250 txs)
+    ecdh+nonce  0.059s  0.059 ms/output (1000 outputs)
+    rewind      5.449s  5.449 ms/output (1000 outputs)
+    recover-chk 0.075s  0.075 ms/output (1000 outputs)
+    update      0.0072s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[44/96] node-napi N=250 M=4: ok (18.3s)
+
+=== [45/96] node-napi N=300 M=1 ===
+Wallet-scan benchmark (Node) | N=300 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=3.194s [range=1.448 surj=0.018 bal=0.041 ecdh=0.018 rewind=1.639 recheck=0.0221 update=0.0033]
+
+  AVERAGE over 1 run(s): total 3.194s  (10.646 ms/tx)
+    range       1.448s  4.826 ms/proof  (300 proofs)
+    surjection  0.018s  0.062 ms/proof  (300 proofs)
+    balance     0.041s  0.136 ms/tx     (300 txs)
+    ecdh+nonce  0.018s  0.059 ms/output (300 outputs)
+    rewind      1.639s  5.465 ms/output (300 outputs)
+    recover-chk 0.022s  0.074 ms/output (300 outputs)
+    update      0.0033s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[45/96] node-napi N=300 M=1: ok (5.4s)
+
+=== [46/96] node-napi N=300 M=2 ===
+Wallet-scan benchmark (Node) | N=300 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=6.380s [range=2.859 surj=0.061 bal=0.080 ecdh=0.037 rewind=3.286 recheck=0.0448 update=0.0047]
+
+  AVERAGE over 1 run(s): total 6.380s  (21.266 ms/tx)
+    range       2.859s  4.766 ms/proof  (600 proofs)
+    surjection  0.061s  0.101 ms/proof  (600 proofs)
+    balance     0.080s  0.265 ms/tx     (300 txs)
+    ecdh+nonce  0.037s  0.061 ms/output (600 outputs)
+    rewind      3.286s  5.476 ms/output (600 outputs)
+    recover-chk 0.045s  0.075 ms/output (600 outputs)
+    update      0.0047s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[46/96] node-napi N=300 M=2: ok (10.8s)
+
+=== [47/96] node-napi N=300 M=3 ===
+Wallet-scan benchmark (Node) | N=300 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=10.229s [range=4.605 surj=0.133 bal=0.125 ecdh=0.058 rewind=5.214 recheck=0.0747 update=0.0075]
+
+  AVERAGE over 1 run(s): total 10.229s  (34.097 ms/tx)
+    range       4.605s  5.116 ms/proof  (900 proofs)
+    surjection  0.133s  0.148 ms/proof  (900 proofs)
+    balance     0.125s  0.415 ms/tx     (300 txs)
+    ecdh+nonce  0.058s  0.065 ms/output (900 outputs)
+    rewind      5.214s  5.794 ms/output (900 outputs)
+    recover-chk 0.075s  0.083 ms/output (900 outputs)
+    update      0.0075s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[47/96] node-napi N=300 M=3: ok (17.0s)
+
+=== [48/96] node-napi N=300 M=4 ===
+Wallet-scan benchmark (Node) | N=300 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=12.383s [range=5.543 surj=0.166 bal=0.149 ecdh=0.067 rewind=6.353 recheck=0.0864 update=0.0076]
+
+  AVERAGE over 1 run(s): total 12.383s  (41.276 ms/tx)
+    range       5.543s  4.619 ms/proof  (1200 proofs)
+    surjection  0.166s  0.138 ms/proof  (1200 proofs)
+    balance     0.149s  0.497 ms/tx     (300 txs)
+    ecdh+nonce  0.067s  0.056 ms/output (1200 outputs)
+    rewind      6.353s  5.294 ms/output (1200 outputs)
+    recover-chk 0.086s  0.072 ms/output (1200 outputs)
+    update      0.0076s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[48/96] node-napi N=300 M=4: ok (20.8s)
+
+=== [49/96] node-napi N=350 M=1 ===
+Wallet-scan benchmark (Node) | N=350 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=3.671s [range=1.680 surj=0.021 bal=0.046 ecdh=0.020 rewind=1.872 recheck=0.0249 update=0.0033]
+
+  AVERAGE over 1 run(s): total 3.671s  (10.489 ms/tx)
+    range       1.680s  4.799 ms/proof  (350 proofs)
+    surjection  0.021s  0.059 ms/proof  (350 proofs)
+    balance     0.046s  0.133 ms/tx     (350 txs)
+    ecdh+nonce  0.020s  0.058 ms/output (350 outputs)
+    rewind      1.872s  5.350 ms/output (350 outputs)
+    recover-chk 0.025s  0.071 ms/output (350 outputs)
+    update      0.0033s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[49/96] node-napi N=350 M=1: ok (6.2s)
+
+=== [50/96] node-napi N=350 M=2 ===
+Wallet-scan benchmark (Node) | N=350 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=7.329s [range=3.306 surj=0.070 bal=0.092 ecdh=0.041 rewind=3.761 recheck=0.0491 update=0.0049]
+
+  AVERAGE over 1 run(s): total 7.329s  (20.941 ms/tx)
+    range       3.306s  4.722 ms/proof  (700 proofs)
+    surjection  0.070s  0.100 ms/proof  (700 proofs)
+    balance     0.092s  0.262 ms/tx     (350 txs)
+    ecdh+nonce  0.041s  0.059 ms/output (700 outputs)
+    rewind      3.761s  5.373 ms/output (700 outputs)
+    recover-chk 0.049s  0.070 ms/output (700 outputs)
+    update      0.0049s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[50/96] node-napi N=350 M=2: ok (12.2s)
+
+=== [51/96] node-napi N=350 M=3 ===
+Wallet-scan benchmark (Node) | N=350 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=10.794s [range=4.837 surj=0.144 bal=0.133 ecdh=0.059 rewind=5.531 recheck=0.0743 update=0.0075]
+
+  AVERAGE over 1 run(s): total 10.794s  (30.840 ms/tx)
+    range       4.837s  4.606 ms/proof  (1050 proofs)
+    surjection  0.144s  0.137 ms/proof  (1050 proofs)
+    balance     0.133s  0.380 ms/tx     (350 txs)
+    ecdh+nonce  0.059s  0.056 ms/output (1050 outputs)
+    rewind      5.531s  5.268 ms/output (1050 outputs)
+    recover-chk 0.074s  0.071 ms/output (1050 outputs)
+    update      0.0075s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[51/96] node-napi N=350 M=3: ok (18.0s)
+
+=== [52/96] node-napi N=350 M=4 ===
+Wallet-scan benchmark (Node) | N=350 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=14.363s [range=6.450 surj=0.195 bal=0.176 ecdh=0.079 rewind=7.347 recheck=0.0988 update=0.0078]
+
+  AVERAGE over 1 run(s): total 14.363s  (41.038 ms/tx)
+    range       6.450s  4.607 ms/proof  (1400 proofs)
+    surjection  0.195s  0.139 ms/proof  (1400 proofs)
+    balance     0.176s  0.501 ms/tx     (350 txs)
+    ecdh+nonce  0.079s  0.056 ms/output (1400 outputs)
+    rewind      7.347s  5.248 ms/output (1400 outputs)
+    recover-chk 0.099s  0.071 ms/output (1400 outputs)
+    update      0.0078s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[52/96] node-napi N=350 M=4: ok (24.3s)
+
+=== [53/96] node-napi N=400 M=1 ===
+Wallet-scan benchmark (Node) | N=400 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=4.203s [range=1.913 surj=0.024 bal=0.053 ecdh=0.024 rewind=2.152 recheck=0.0283 update=0.0039]
+
+  AVERAGE over 1 run(s): total 4.203s  (10.508 ms/tx)
+    range       1.913s  4.783 ms/proof  (400 proofs)
+    surjection  0.024s  0.061 ms/proof  (400 proofs)
+    balance     0.053s  0.133 ms/tx     (400 txs)
+    ecdh+nonce  0.024s  0.059 ms/output (400 outputs)
+    rewind      2.152s  5.380 ms/output (400 outputs)
+    recover-chk 0.028s  0.071 ms/output (400 outputs)
+    update      0.0039s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[53/96] node-napi N=400 M=1: ok (7.0s)
+
+=== [54/96] node-napi N=400 M=2 ===
+Wallet-scan benchmark (Node) | N=400 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=8.343s [range=3.768 surj=0.077 bal=0.103 ecdh=0.044 rewind=4.281 recheck=0.0569 update=0.0071]
+
+  AVERAGE over 1 run(s): total 8.343s  (20.857 ms/tx)
+    range       3.768s  4.710 ms/proof  (800 proofs)
+    surjection  0.077s  0.096 ms/proof  (800 proofs)
+    balance     0.103s  0.257 ms/tx     (400 txs)
+    ecdh+nonce  0.044s  0.055 ms/output (800 outputs)
+    rewind      4.281s  5.351 ms/output (800 outputs)
+    recover-chk 0.057s  0.071 ms/output (800 outputs)
+    update      0.0071s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[54/96] node-napi N=400 M=2: ok (14.0s)
+
+=== [55/96] node-napi N=400 M=3 ===
+Wallet-scan benchmark (Node) | N=400 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=12.528s [range=5.630 surj=0.162 bal=0.152 ecdh=0.071 rewind=6.407 recheck=0.0867 update=0.0081]
+
+  AVERAGE over 1 run(s): total 12.528s  (31.320 ms/tx)
+    range       5.630s  4.692 ms/proof  (1200 proofs)
+    surjection  0.162s  0.135 ms/proof  (1200 proofs)
+    balance     0.152s  0.381 ms/tx     (400 txs)
+    ecdh+nonce  0.071s  0.059 ms/output (1200 outputs)
+    rewind      6.407s  5.339 ms/output (1200 outputs)
+    recover-chk 0.087s  0.072 ms/output (1200 outputs)
+    update      0.0081s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[55/96] node-napi N=400 M=3: ok (20.8s)
+
+=== [56/96] node-napi N=400 M=4 ===
+Wallet-scan benchmark (Node) | N=400 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=17.096s [range=7.616 surj=0.230 bal=0.212 ecdh=0.104 rewind=8.792 recheck=0.1179 update=0.0095]
+
+  AVERAGE over 1 run(s): total 17.096s  (42.739 ms/tx)
+    range       7.616s  4.760 ms/proof  (1600 proofs)
+    surjection  0.230s  0.144 ms/proof  (1600 proofs)
+    balance     0.212s  0.529 ms/tx     (400 txs)
+    ecdh+nonce  0.104s  0.065 ms/output (1600 outputs)
+    rewind      8.792s  5.495 ms/output (1600 outputs)
+    recover-chk 0.118s  0.074 ms/output (1600 outputs)
+    update      0.0095s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[56/96] node-napi N=400 M=4: ok (28.1s)
+
+=== [57/96] node-napi N=450 M=1 ===
+Wallet-scan benchmark (Node) | N=450 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=4.782s [range=2.163 surj=0.027 bal=0.060 ecdh=0.027 rewind=2.462 recheck=0.0337 update=0.0045]
+
+  AVERAGE over 1 run(s): total 4.782s  (10.626 ms/tx)
+    range       2.163s  4.807 ms/proof  (450 proofs)
+    surjection  0.027s  0.060 ms/proof  (450 proofs)
+    balance     0.060s  0.133 ms/tx     (450 txs)
+    ecdh+nonce  0.027s  0.059 ms/output (450 outputs)
+    rewind      2.462s  5.471 ms/output (450 outputs)
+    recover-chk 0.034s  0.075 ms/output (450 outputs)
+    update      0.0045s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[57/96] node-napi N=450 M=1: ok (8.0s)
+
+=== [58/96] node-napi N=450 M=2 ===
+Wallet-scan benchmark (Node) | N=450 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=9.448s [range=4.262 surj=0.090 bal=0.117 ecdh=0.052 rewind=4.848 recheck=0.0649 update=0.0065]
+
+  AVERAGE over 1 run(s): total 9.448s  (20.996 ms/tx)
+    range       4.262s  4.736 ms/proof  (900 proofs)
+    surjection  0.090s  0.100 ms/proof  (900 proofs)
+    balance     0.117s  0.259 ms/tx     (450 txs)
+    ecdh+nonce  0.052s  0.058 ms/output (900 outputs)
+    rewind      4.848s  5.386 ms/output (900 outputs)
+    recover-chk 0.065s  0.072 ms/output (900 outputs)
+    update      0.0065s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[58/96] node-napi N=450 M=2: ok (15.7s)
+
+=== [59/96] node-napi N=450 M=3 ===
+Wallet-scan benchmark (Node) | N=450 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=14.093s [range=6.316 surj=0.186 bal=0.174 ecdh=0.076 rewind=7.223 recheck=0.0971 update=0.0088]
+
+  AVERAGE over 1 run(s): total 14.093s  (31.319 ms/tx)
+    range       6.316s  4.679 ms/proof  (1350 proofs)
+    surjection  0.186s  0.138 ms/proof  (1350 proofs)
+    balance     0.174s  0.387 ms/tx     (450 txs)
+    ecdh+nonce  0.076s  0.056 ms/output (1350 outputs)
+    rewind      7.223s  5.350 ms/output (1350 outputs)
+    recover-chk 0.097s  0.072 ms/output (1350 outputs)
+    update      0.0088s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[59/96] node-napi N=450 M=3: ok (23.5s)
+
+=== [60/96] node-napi N=450 M=4 ===
+Wallet-scan benchmark (Node) | N=450 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=18.730s [range=8.384 surj=0.257 bal=0.233 ecdh=0.101 rewind=9.600 recheck=0.1308 update=0.0105]
+
+  AVERAGE over 1 run(s): total 18.730s  (41.622 ms/tx)
+    range       8.384s  4.658 ms/proof  (1800 proofs)
+    surjection  0.257s  0.143 ms/proof  (1800 proofs)
+    balance     0.233s  0.517 ms/tx     (450 txs)
+    ecdh+nonce  0.101s  0.056 ms/output (1800 outputs)
+    rewind      9.600s  5.333 ms/output (1800 outputs)
+    recover-chk 0.131s  0.073 ms/output (1800 outputs)
+    update      0.0105s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[60/96] node-napi N=450 M=4: ok (31.1s)
+
+=== [61/96] node-napi N=500 M=1 ===
+Wallet-scan benchmark (Node) | N=500 M=1 M'=1 Q=0 Q'=1 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 1 transparent inputs -> 1 shielded + 0 transparent outputs
+  run 1/1: total=5.227s [range=2.375 surj=0.030 bal=0.067 ecdh=0.029 rewind=2.678 recheck=0.0384 update=0.0048]
+
+  AVERAGE over 1 run(s): total 5.227s  (10.453 ms/tx)
+    range       2.375s  4.750 ms/proof  (500 proofs)
+    surjection  0.030s  0.059 ms/proof  (500 proofs)
+    balance     0.067s  0.133 ms/tx     (500 txs)
+    ecdh+nonce  0.029s  0.058 ms/output (500 outputs)
+    rewind      2.678s  5.356 ms/output (500 outputs)
+    recover-chk 0.038s  0.077 ms/output (500 outputs)
+    update      0.0048s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[61/96] node-napi N=500 M=1: ok (8.8s)
+
+=== [62/96] node-napi N=500 M=2 ===
+Wallet-scan benchmark (Node) | N=500 M=2 M'=2 Q=0 Q'=2 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 2 transparent inputs -> 2 shielded + 0 transparent outputs
+  run 1/1: total=10.672s [range=4.813 surj=0.099 bal=0.133 ecdh=0.067 rewind=5.471 recheck=0.0716 update=0.0073]
+
+  AVERAGE over 1 run(s): total 10.672s  (21.344 ms/tx)
+    range       4.813s  4.813 ms/proof  (1000 proofs)
+    surjection  0.099s  0.099 ms/proof  (1000 proofs)
+    balance     0.133s  0.265 ms/tx     (500 txs)
+    ecdh+nonce  0.067s  0.067 ms/output (1000 outputs)
+    rewind      5.471s  5.471 ms/output (1000 outputs)
+    recover-chk 0.072s  0.072 ms/output (1000 outputs)
+    update      0.0073s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[62/96] node-napi N=500 M=2: ok (17.7s)
+
+=== [63/96] node-napi N=500 M=3 ===
+Wallet-scan benchmark (Node) | N=500 M=3 M'=3 Q=0 Q'=3 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 3 transparent inputs -> 3 shielded + 0 transparent outputs
+  run 1/1: total=15.656s [range=7.009 surj=0.203 bal=0.190 ecdh=0.086 rewind=8.037 recheck=0.1081 update=0.0097]
+
+  AVERAGE over 1 run(s): total 15.656s  (31.312 ms/tx)
+    range       7.009s  4.673 ms/proof  (1500 proofs)
+    surjection  0.203s  0.135 ms/proof  (1500 proofs)
+    balance     0.190s  0.381 ms/tx     (500 txs)
+    ecdh+nonce  0.086s  0.058 ms/output (1500 outputs)
+    rewind      8.037s  5.358 ms/output (1500 outputs)
+    recover-chk 0.108s  0.072 ms/output (1500 outputs)
+    update      0.0097s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[63/96] node-napi N=500 M=3: ok (26.2s)
+
+=== [64/96] node-napi N=500 M=4 ===
+Wallet-scan benchmark (Node) | N=500 M=4 M'=4 Q=0 Q'=4 k=63 runs=1 binding=node-napi
+  node=20.19.4  tx shape: 0 shielded + 4 transparent inputs -> 4 shielded + 0 transparent outputs
+  run 1/1: total=20.958s [range=9.425 surj=0.285 bal=0.256 ecdh=0.112 rewind=10.710 recheck=0.1425 update=0.0122]
+
+  AVERAGE over 1 run(s): total 20.958s  (41.916 ms/tx)
+    range       9.425s  4.713 ms/proof  (2000 proofs)
+    surjection  0.285s  0.142 ms/proof  (2000 proofs)
+    balance     0.256s  0.511 ms/tx     (500 txs)
+    ecdh+nonce  0.112s  0.056 ms/output (2000 outputs)
+    rewind      10.710s  5.355 ms/output (2000 outputs)
+    recover-chk 0.142s  0.071 ms/output (2000 outputs)
+    update      0.0122s
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[64/96] node-napi N=500 M=4: ok (35.4s)
+
+=== [65/96] wasm N=150 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=150 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 150 FullShielded outputs recovered
+  run 1/1: total=4.926s [rewind=4.915 update=0.0010]
+
+  AVERAGE over 1 run(s): total 4.926s  (32.842 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     4.915s  32.769 ms/output (150 outputs)
+    update           0.0010s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[65/96] wasm N=150 M=1: ok (6.1s)
+
+=== [66/96] wasm N=150 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=150 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 300 FullShielded outputs recovered
+  run 1/1: total=9.360s [rewind=9.343 update=0.0010]
+
+  AVERAGE over 1 run(s): total 9.360s  (62.397 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     9.343s  31.145 ms/output (300 outputs)
+    update           0.0010s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[66/96] wasm N=150 M=2: ok (11.5s)
+
+=== [67/96] wasm N=150 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=150 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 450 FullShielded outputs recovered
+  run 1/1: total=13.807s [rewind=13.784 update=0.0011]
+
+  AVERAGE over 1 run(s): total 13.807s  (92.045 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     13.784s  30.632 ms/output (450 outputs)
+    update           0.0011s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[67/96] wasm N=150 M=3: ok (17.0s)
+
+=== [68/96] wasm N=150 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=150 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 600 FullShielded outputs recovered
+  run 1/1: total=18.577s [rewind=18.548 update=0.0012]
+
+  AVERAGE over 1 run(s): total 18.577s  (123.848 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     18.548s  30.913 ms/output (600 outputs)
+    update           0.0012s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[68/96] wasm N=150 M=4: ok (22.7s)
+
+=== [69/96] wasm N=200 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=200 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 200 FullShielded outputs recovered
+  run 1/1: total=6.118s [rewind=6.106 update=0.0011]
+
+  AVERAGE over 1 run(s): total 6.118s  (30.589 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     6.106s  30.531 ms/output (200 outputs)
+    update           0.0011s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[69/96] wasm N=200 M=1: ok (7.6s)
+
+=== [70/96] wasm N=200 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=200 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 400 FullShielded outputs recovered
+  run 1/1: total=12.248s [rewind=12.228 update=0.0012]
+
+  AVERAGE over 1 run(s): total 12.248s  (61.239 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     12.228s  30.570 ms/output (400 outputs)
+    update           0.0012s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[70/96] wasm N=200 M=2: ok (15.0s)
+
+=== [71/96] wasm N=200 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=200 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 600 FullShielded outputs recovered
+  run 1/1: total=18.329s [rewind=18.299 update=0.0014]
+
+  AVERAGE over 1 run(s): total 18.329s  (91.647 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     18.299s  30.499 ms/output (600 outputs)
+    update           0.0014s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[71/96] wasm N=200 M=3: ok (22.5s)
+
+=== [72/96] wasm N=200 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=200 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 800 FullShielded outputs recovered
+  run 1/1: total=24.744s [rewind=24.708 update=0.0014]
+
+  AVERAGE over 1 run(s): total 24.744s  (123.719 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     24.708s  30.885 ms/output (800 outputs)
+    update           0.0014s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[72/96] wasm N=200 M=4: ok (30.4s)
+
+=== [73/96] wasm N=250 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=250 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 250 FullShielded outputs recovered
+  run 1/1: total=7.625s [rewind=7.610 update=0.0015]
+
+  AVERAGE over 1 run(s): total 7.625s  (30.501 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     7.610s  30.442 ms/output (250 outputs)
+    update           0.0015s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[73/96] wasm N=250 M=1: ok (9.4s)
+
+=== [74/96] wasm N=250 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=250 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 500 FullShielded outputs recovered
+  run 1/1: total=15.542s [rewind=15.516 update=0.0020]
+
+  AVERAGE over 1 run(s): total 15.542s  (62.169 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     15.516s  31.032 ms/output (500 outputs)
+    update           0.0020s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[74/96] wasm N=250 M=2: ok (19.0s)
+
+=== [75/96] wasm N=250 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=250 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 750 FullShielded outputs recovered
+  run 1/1: total=23.805s [rewind=23.771 update=0.0016]
+
+  AVERAGE over 1 run(s): total 23.805s  (95.221 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     23.771s  31.695 ms/output (750 outputs)
+    update           0.0016s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[75/96] wasm N=250 M=3: ok (29.0s)
+
+=== [76/96] wasm N=250 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=250 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1000 FullShielded outputs recovered
+  run 1/1: total=32.003s [rewind=31.954 update=0.0021]
+
+  AVERAGE over 1 run(s): total 32.003s  (128.012 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     31.954s  31.954 ms/output (1000 outputs)
+    update           0.0021s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[76/96] wasm N=250 M=4: ok (38.9s)
+
+=== [77/96] wasm N=300 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=300 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 300 FullShielded outputs recovered
+  run 1/1: total=9.821s [rewind=9.796 update=0.0016]
+
+  AVERAGE over 1 run(s): total 9.821s  (32.738 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     9.796s  32.652 ms/output (300 outputs)
+    update           0.0016s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[77/96] wasm N=300 M=1: ok (11.9s)
+
+=== [78/96] wasm N=300 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=300 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 600 FullShielded outputs recovered
+  run 1/1: total=18.434s [rewind=18.405 update=0.0018]
+
+  AVERAGE over 1 run(s): total 18.434s  (61.447 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     18.405s  30.675 ms/output (600 outputs)
+    update           0.0018s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[78/96] wasm N=300 M=2: ok (22.7s)
+
+=== [79/96] wasm N=300 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=300 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 900 FullShielded outputs recovered
+  run 1/1: total=27.768s [rewind=27.727 update=0.0019]
+
+  AVERAGE over 1 run(s): total 27.768s  (92.561 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     27.727s  30.808 ms/output (900 outputs)
+    update           0.0019s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[79/96] wasm N=300 M=3: ok (34.0s)
+
+=== [80/96] wasm N=300 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=300 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1200 FullShielded outputs recovered
+  run 1/1: total=36.472s [rewind=36.418 update=0.0022]
+
+  AVERAGE over 1 run(s): total 36.472s  (121.573 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     36.418s  30.348 ms/output (1200 outputs)
+    update           0.0022s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[80/96] wasm N=300 M=4: ok (44.7s)
+
+=== [81/96] wasm N=350 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=350 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 350 FullShielded outputs recovered
+  run 1/1: total=11.409s [rewind=11.388 update=0.0021]
+
+  AVERAGE over 1 run(s): total 11.409s  (32.596 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     11.388s  32.538 ms/output (350 outputs)
+    update           0.0021s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[81/96] wasm N=350 M=1: ok (13.9s)
+
+=== [82/96] wasm N=350 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=350 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 700 FullShielded outputs recovered
+  run 1/1: total=21.460s [rewind=21.428 update=0.0021]
+
+  AVERAGE over 1 run(s): total 21.460s  (61.315 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     21.428s  30.612 ms/output (700 outputs)
+    update           0.0021s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[82/96] wasm N=350 M=2: ok (26.3s)
+
+=== [83/96] wasm N=350 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=350 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1050 FullShielded outputs recovered
+  run 1/1: total=33.987s [rewind=33.934 update=0.0030]
+
+  AVERAGE over 1 run(s): total 33.987s  (97.106 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     33.934s  32.319 ms/output (1050 outputs)
+    update           0.0030s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[83/96] wasm N=350 M=3: ok (41.3s)
+
+=== [84/96] wasm N=350 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=350 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1400 FullShielded outputs recovered
+  run 1/1: total=44.295s [rewind=44.228 update=0.0027]
+
+  AVERAGE over 1 run(s): total 44.295s  (126.558 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     44.228s  31.591 ms/output (1400 outputs)
+    update           0.0027s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[84/96] wasm N=350 M=4: ok (53.9s)
+
+=== [85/96] wasm N=400 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=400 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 400 FullShielded outputs recovered
+  run 1/1: total=13.549s [rewind=13.525 update=0.0024]
+
+  AVERAGE over 1 run(s): total 13.549s  (33.873 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     13.525s  33.813 ms/output (400 outputs)
+    update           0.0024s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[85/96] wasm N=400 M=1: ok (17.1s)
+
+=== [86/96] wasm N=400 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=400 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 800 FullShielded outputs recovered
+  run 1/1: total=24.802s [rewind=24.762 update=0.0025]
+
+  AVERAGE over 1 run(s): total 24.802s  (62.004 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     24.762s  30.953 ms/output (800 outputs)
+    update           0.0025s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[86/96] wasm N=400 M=2: ok (30.3s)
+
+=== [87/96] wasm N=400 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=400 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1200 FullShielded outputs recovered
+  run 1/1: total=37.062s [rewind=37.001 update=0.0032]
+
+  AVERAGE over 1 run(s): total 37.062s  (92.656 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     37.001s  30.835 ms/output (1200 outputs)
+    update           0.0032s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[87/96] wasm N=400 M=3: ok (45.4s)
+
+=== [88/96] wasm N=400 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=400 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1600 FullShielded outputs recovered
+  run 1/1: total=48.649s [rewind=48.578 update=0.0043]
+
+  AVERAGE over 1 run(s): total 48.649s  (121.623 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     48.578s  30.361 ms/output (1600 outputs)
+    update           0.0043s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[88/96] wasm N=400 M=4: ok (59.7s)
+
+=== [89/96] wasm N=450 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=450 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 450 FullShielded outputs recovered
+  run 1/1: total=14.255s [rewind=14.229 update=0.0027]
+
+  AVERAGE over 1 run(s): total 14.255s  (31.679 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     14.229s  31.620 ms/output (450 outputs)
+    update           0.0027s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[89/96] wasm N=450 M=1: ok (17.3s)
+
+=== [90/96] wasm N=450 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=450 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 900 FullShielded outputs recovered
+  run 1/1: total=27.942s [rewind=27.898 update=0.0027]
+
+  AVERAGE over 1 run(s): total 27.942s  (62.094 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     27.898s  30.998 ms/output (900 outputs)
+    update           0.0027s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[90/96] wasm N=450 M=2: ok (34.1s)
+
+=== [91/96] wasm N=450 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=450 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1350 FullShielded outputs recovered
+  run 1/1: total=41.121s [rewind=41.058 update=0.0038]
+
+  AVERAGE over 1 run(s): total 41.121s  (91.381 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     41.058s  30.413 ms/output (1350 outputs)
+    update           0.0038s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[91/96] wasm N=450 M=3: ok (50.4s)
+
+=== [92/96] wasm N=450 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=450 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1800 FullShielded outputs recovered
+  run 1/1: total=57.009s [rewind=56.917 update=0.0101]
+
+  AVERAGE over 1 run(s): total 57.009s  (126.686 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     56.917s  31.621 ms/output (1800 outputs)
+    update           0.0101s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[92/96] wasm N=450 M=4: ok (69.4s)
+
+=== [93/96] wasm N=500 M=1 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=500 M=1 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 500 FullShielded outputs recovered
+  run 1/1: total=16.461s [rewind=16.427 update=0.0049]
+
+  AVERAGE over 1 run(s): total 16.461s  (32.922 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     16.427s  32.855 ms/output (500 outputs)
+    update           0.0049s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[93/96] wasm N=500 M=1: ok (20.1s)
+
+=== [94/96] wasm N=500 M=2 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=500 M=2 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1000 FullShielded outputs recovered
+  run 1/1: total=31.456s [rewind=31.404 update=0.0045]
+
+  AVERAGE over 1 run(s): total 31.456s  (62.912 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     31.404s  31.404 ms/output (1000 outputs)
+    update           0.0045s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[94/96] wasm N=500 M=2: ok (38.4s)
+
+=== [95/96] wasm N=500 M=3 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=500 M=3 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 1500 FullShielded outputs recovered
+  run 1/1: total=46.966s [rewind=46.892 update=0.0041]
+
+  AVERAGE over 1 run(s): total 46.966s  (93.932 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     46.892s  31.261 ms/output (1500 outputs)
+    update           0.0041s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[95/96] wasm N=500 M=3: ok (57.4s)
+
+=== [96/96] wasm N=500 M=4 ===
+using deprecated parameters for the initialization function; pass a single object instead
+Wallet-scan benchmark (WASM) | N=500 M=4 k=63 runs=1 binding=wasm
+  node=20.19.4  recovery-only (wasm has no verify/create-proof surface); 2000 FullShielded outputs recovered
+  run 1/1: total=62.274s [rewind=62.171 update=0.0043]
+
+  AVERAGE over 1 run(s): total 62.274s  (124.548 ms/tx)
+    rewind (bundled: ECDH + rewind + internal AUDIT-C015 recheck)
+                     62.171s  31.085 ms/output (2000 outputs)
+    update           0.0043s
+    (range/surjection/balance verify + a separate ecdh/recover-check phase: not applicable to the wasm build — left blank in CSV)
+
+  appended 1 row -> /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv
+[96/96] wasm N=500 M=4: ok (76.0s)
+
+Sweep finished in 1904.4s. CSV: /home/lyzah/hathor-projects/reviews/1603-shielded-outputs/hathor-core/poc-stream-benchmark/results_sweep/wallet_scan.csv

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.4,<2"]
+build-backend = "maturin"
+
+[project]
+name = "hathor-grin-bp"
+version = "0.1.0"
+description = "PyO3 bindings around grin_secp256k1zkp for Hathor shielded-output Bulletproofs benchmarks"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "hathor_grin_bp"

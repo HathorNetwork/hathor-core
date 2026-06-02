@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@hathor/ct-crypto-node": "^0.4.0",
+    "@hathor/ct-crypto-wasm": "^0.2.0"
+  }
+}

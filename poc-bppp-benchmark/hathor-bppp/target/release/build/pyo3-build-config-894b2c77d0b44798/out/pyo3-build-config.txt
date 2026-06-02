@@ -1,0 +1,10 @@
+implementation=CPython
+version=3.11
+shared=true
+abi3=false
+lib_name=python3.11
+lib_dir=/usr/lib/x86_64-linux-gnu
+executable=/home/lyzah/.cache/pypoetry/virtualenvs/hathor--BiNsX2S-py3.11/bin/python
+pointer_width=64
+build_flags=
+suppress_build_script_link_lines=false
