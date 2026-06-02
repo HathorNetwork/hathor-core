@@ -134,9 +134,8 @@ class HathorSettings(BaseModel):
     @property
     def FEE_DIVISOR(self) -> int:
         """Divisor used for evaluating fee amounts"""
-        result = 1 / self.TOKEN_DEPOSIT_PERCENTAGE
-        assert result.is_integer()
-        return int(result)
+        assert 10**9 % self.TOKEN_DEPOSIT_PERCENTAGE_PPB == 0
+        return 10**9 // self.TOKEN_DEPOSIT_PERCENTAGE_PPB
 
     # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
     # is equal to MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK.
@@ -350,22 +349,23 @@ class HathorSettings(BaseModel):
     # Whether miners are assumed to mine txs by default
     STRATUM_MINE_TXS_DEFAULT: bool = True
 
-    # Percentage used to calculate the number of HTR that must be deposited when minting new tokens
-    # The same percentage is used to calculate the number of HTR that must be withdraw when melting tokens
+    # Percentage used to calculate the amount of HTR that must be deposited when minting new tokens,
+    # expressed in ppb (parts per billion), where 10**7 ppb = 0.01 = 1%.
+    # The same percentage is used to calculate the number of HTR that must be withdrawn when melting tokens
     # See for further information, see [rfc 0011-token-deposit].
-    TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
+    TOKEN_DEPOSIT_PERCENTAGE_PPB: int = 10 ** 7
 
-    @field_validator('TOKEN_DEPOSIT_PERCENTAGE', mode='after')
+    @field_validator('TOKEN_DEPOSIT_PERCENTAGE_PPB', mode='after')
     @classmethod
-    def _validate_token_deposit_percentage(cls, token_deposit_percentage: float) -> float:
-        """Validate that TOKEN_DEPOSIT_PERCENTAGE results in an integer FEE_DIVISOR."""
-        result = 1 / token_deposit_percentage
-        if not result.is_integer():
+    def _validate_token_deposit_percentage_ppb(cls, token_deposit_percentage_ppb: int) -> int:
+        """Validate that TOKEN_DEPOSIT_PERCENTAGE_PPB results in an integer FEE_DIVISOR."""
+        if 10**9 % token_deposit_percentage_ppb != 0:
             raise ValueError(
-                f'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR. '
-                f'Got TOKEN_DEPOSIT_PERCENTAGE={token_deposit_percentage}, FEE_DIVISOR={result}'
+                f'TOKEN_DEPOSIT_PERCENTAGE_PPB must result in an integer FEE_DIVISOR. '
+                f'Got TOKEN_DEPOSIT_PERCENTAGE_PPB={token_deposit_percentage_ppb}, '
+                f'FEE_DIVISOR={10**9 / token_deposit_percentage_ppb}'
             )
-        return token_deposit_percentage
+        return token_deposit_percentage_ppb
 
     # Array with the settings parameters that are used when calculating the settings hash
     P2P_SETTINGS_HASH_FIELDS: list[str] = [

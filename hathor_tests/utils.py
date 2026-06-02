@@ -637,26 +637,6 @@ def create_fee_tokens(
     return tx
 
 
-def get_deposit_token_amount_from_htr(htr_amount: int) -> int:
-    """
-    Calculate how many tokens correspond to a given HTR amount based on the
-    configured TOKEN_DEPOSIT_PERCENTAGE.
-
-    Returns
-    -------
-    int
-        The smallest integer number of tokens that covers the given HTR amount.
-    Raises
-    ------
-    AssertionError
-        If the computed token amount is not an integer (this should not occur
-        when TOKEN_DEPOSIT_PERCENTAGE is a positive divisor).
-    """
-    token_amount = abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE)
-    assert token_amount.is_integer()
-    return int(token_amount)
-
-
 def create_script_with_sigops(nops: int) -> bytes:
     """ Generate a script with multiple OP_CHECKMULTISIG that amounts to `nops` sigops
     """
