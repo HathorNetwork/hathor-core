@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
-from hathor.serialization.encoding.output_value import decode_output_value_v1
+from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.headers.nano_header import (
     _NC_SCRIPT_LEN_MAX_BYTES,
     ADDRESS_LEN_BYTES,
@@ -30,7 +30,8 @@ from hathor.transaction.headers.nano_header import (
 )
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.serialization.encoding.output_value import encode_output_value_v1
+from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.serialization.encoding.output_value import encode_output_value
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -53,6 +54,7 @@ class NanoHeaderData:
 def deserialize_nano_header(
     deserializer: Deserializer,
     *,
+    decimal_version: VertexDecimalVersion,
     verbose: VerboseCallback = None,
 ) -> NanoHeaderData:
     """Deserialize nano header data from the deserializer."""
@@ -90,7 +92,7 @@ def deserialize_nano_header(
     if verbose:
         verbose('nc_actions_len', nc_actions_len)
     for _ in range(nc_actions_len):
-        action = _deserialize_nano_action(deserializer)
+        action = _deserialize_nano_action(deserializer, decimal_version=decimal_version)
         nc_actions.append(action)
 
     nc_address = bytes(deserializer.read_bytes(ADDRESS_LEN_BYTES))
@@ -118,14 +120,14 @@ def deserialize_nano_header(
     )
 
 
-def _deserialize_nano_action(deserializer: Deserializer) -> NanoHeaderAction:
+def _deserialize_nano_action(deserializer: Deserializer, *, decimal_version: VertexDecimalVersion) -> NanoHeaderAction:
     """Deserialize a single NanoHeaderAction from the deserializer."""
     from hathor.nanocontracts.types import NCActionType
 
     type_bytes = bytes(deserializer.read_bytes(1))
     action_type = NCActionType.from_bytes(type_bytes)
     token_index = deserializer.read_byte()
-    amount = decode_output_value_v1(deserializer)
+    amount = decode_output_value(deserializer, decimal_version=decimal_version)
     return NanoHeaderAction(
         type=action_type,
         token_index=token_index,
@@ -138,7 +140,13 @@ def _deserialize_nano_action(deserializer: Deserializer) -> NanoHeaderAction:
 # ---------------------------------------------------------------------------
 
 
-def serialize_nano_header(serializer: Serializer, header: NanoHeader, *, skip_signature: bool = False) -> None:
+def serialize_nano_header(
+    serializer: Serializer,
+    header: NanoHeader,
+    *,
+    decimal_version: VertexDecimalVersion,
+    skip_signature: bool = False,
+) -> None:
     """Serialize a NanoHeader into the serializer."""
     encoded_method = header.nc_method.encode('ascii')
 
@@ -152,7 +160,7 @@ def serialize_nano_header(serializer: Serializer, header: NanoHeader, *, skip_si
 
     serializer.write_bytes(int_to_bytes(len(header.nc_actions), 1))
     for action in header.nc_actions:
-        _serialize_nano_action(serializer, action)
+        _serialize_nano_action(serializer, action, decimal_version=decimal_version)
 
     serializer.write_bytes(header.nc_address)
     if not skip_signature:
@@ -168,8 +176,13 @@ def serialize_nano_header(serializer: Serializer, header: NanoHeader, *, skip_si
         )
 
 
-def _serialize_nano_action(serializer: Serializer, action: NanoHeaderAction) -> None:
+def _serialize_nano_action(
+    serializer: Serializer,
+    action: NanoHeaderAction,
+    *,
+    decimal_version: VertexDecimalVersion,
+) -> None:
     """Serialize a single NanoHeaderAction into the serializer."""
     serializer.write_bytes(action.type.to_bytes())
     serializer.write_bytes(int_to_bytes(action.token_index, 1))
-    encode_output_value_v1(serializer, action.amount)
+    encode_output_value(serializer, action.amount, decimal_version=decimal_version)

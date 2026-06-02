@@ -17,13 +17,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from hathor.transaction.headers.base import VertexBaseHeader
-from hathor.transaction.util import VerboseCallback, get_deposit_token_withdraw_amount
+from hathor.transaction.util import get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
-    from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.transaction import Transaction
 
 
@@ -40,7 +38,7 @@ class FeeEntry:
 
 
 @dataclass(slots=True, kw_only=True)
-class FeeHeader(VertexBaseHeader):
+class FeeHeader:
     # transaction that contains the fee header
     tx: 'Transaction'
     # list of tokens and amounts that will be used to pay fees in the transaction
@@ -51,33 +49,6 @@ class FeeHeader(VertexBaseHeader):
         self.tx = tx
         self.fees = fees
         self.settings = settings
-
-    @classmethod
-    def deserialize(
-        cls,
-        tx: BaseTransaction,
-        buf: bytes,
-        *,
-        verbose: VerboseCallback = None
-    ) -> tuple[FeeHeader, bytes]:
-        from hathor.serialization import Deserializer
-        from hathor.transaction import Transaction
-        from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header
-        deserializer = Deserializer.build_bytes_deserializer(buf)
-        fees = deserialize_fee_header(deserializer, verbose=verbose)
-        assert isinstance(tx, Transaction)
-        header = cls(settings=tx._settings, tx=tx, fees=fees)
-        return header, bytes(deserializer.read_all())
-
-    def serialize(self) -> bytes:
-        from hathor.serialization import Serializer
-        from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
-        serializer = Serializer.build_bytes_serializer()
-        serialize_fee_header(serializer, self)
-        return bytes(serializer.finalize())
-
-    def get_sighash_bytes(self) -> bytes:
-        return self.serialize()
 
     def get_fees(self) -> list[FeeEntry]:
         return [

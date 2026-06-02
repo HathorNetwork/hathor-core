@@ -114,9 +114,17 @@ def serialize_nonce(serializer: Serializer, vertex: BaseTransaction) -> None:
 
 def serialize_headers(serializer: Serializer, vertex: BaseTransaction) -> None:
     """Serialize the headers of a vertex into the given Serializer."""
+    from hathor.transaction import Block, Transaction
     from hathor.transaction.vertex_parser._headers import serialize_header
+    match vertex:
+        case Transaction():
+            decimal_version = vertex.get_decimal_version()
+        case Block():
+            decimal_version = VertexDecimalVersion.V1  # Blocks are always V1.
+        case _:
+            raise AssertionError('unreachable')
     for h in vertex.headers:
-        serialize_header(serializer, h)
+        serialize_header(serializer, h, decimal_version=decimal_version)
 
 
 def serialize_without_nonce(serializer: Serializer, vertex: BaseTransaction) -> None:
@@ -142,7 +150,7 @@ def serialize_sighash(tx: Transaction, *, skip_cache: bool = False) -> bytes:
         return tx._sighash_cache
 
     from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
-    headers_sighash = [get_header_sighash_bytes(h) for h in tx.headers]
+    headers_sighash = [get_header_sighash_bytes(h, decimal_version=tx.get_decimal_version()) for h in tx.headers]
 
     serializer = Serializer.build_bytes_serializer()
 

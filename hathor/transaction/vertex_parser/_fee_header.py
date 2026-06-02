@@ -17,11 +17,12 @@
 from __future__ import annotations
 
 from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.encoding.output_value import decode_output_value_v1
+from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.serialization.encoding.output_value import encode_output_value_v1
+from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.serialization.encoding.output_value import encode_output_value
 
 # ---------------------------------------------------------------------------
 # Deserialization
@@ -31,6 +32,7 @@ from hathorlib.serialization.encoding.output_value import encode_output_value_v1
 def deserialize_fee_header(
     deserializer: Deserializer,
     *,
+    decimal_version: VertexDecimalVersion,
     verbose: VerboseCallback = None,
 ) -> list[FeeHeaderEntry]:
     """Deserialize fee header data from the deserializer."""
@@ -45,7 +47,7 @@ def deserialize_fee_header(
         verbose('fees_len', fees_len)
     for _ in range(fees_len):
         token_index = deserializer.read_byte()
-        amount = decode_output_value_v1(deserializer)
+        amount = decode_output_value(deserializer, decimal_version=decimal_version)
         fees.append(FeeHeaderEntry(
             token_index=token_index,
             amount=amount,
@@ -59,11 +61,11 @@ def deserialize_fee_header(
 # ---------------------------------------------------------------------------
 
 
-def serialize_fee_header(serializer: Serializer, header: FeeHeader) -> None:
+def serialize_fee_header(serializer: Serializer, header: FeeHeader, *, decimal_version: VertexDecimalVersion) -> None:
     """Serialize a FeeHeader into the serializer."""
     serializer.write_bytes(VertexHeaderId.FEE_HEADER.value)
     serializer.write_bytes(int_to_bytes(len(header.fees), 1))
 
     for fee in header.fees:
         serializer.write_bytes(int_to_bytes(fee.token_index, 1))
-        encode_output_value_v1(serializer, fee.amount)
+        encode_output_value(serializer, fee.amount, decimal_version=decimal_version)
