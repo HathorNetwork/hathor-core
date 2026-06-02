@@ -152,9 +152,9 @@ def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool =
     """
     Encode an output value for decimal version V2, using length-prefix encoding.
 
-    >>> def encode(value):
+    >>> def encode(value, *, strict=True):
     ...     se = Serializer.build_bytes_serializer()
-    ...     encode_output_value_v2(se, value)
+    ...     encode_output_value_v2(se, value, strict=strict)
     ...     return bytes(se.finalize()).hex()
     >>> encode(-1)
     Traceback (most recent call last):
