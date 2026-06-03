@@ -48,6 +48,7 @@ from hathor.transaction.storage.migrations import (
     migrate_vertex_children,
     nc_storage_compat2,
     reset_feature_state_cache,
+    token_amount_v2,
 )
 from hathor.transaction.storage.tx_allow_scope import TxAllowScope, tx_allow_context
 from hathor.transaction.transaction import Transaction
@@ -118,6 +119,7 @@ class TransactionStorage(ABC):
         nc_storage_compat2.Migration,
         migrate_vertex_children.Migration,
         reset_feature_state_cache.Migration,
+        token_amount_v2.Migration,
     ]
 
     _migrations: list[BaseMigration]
