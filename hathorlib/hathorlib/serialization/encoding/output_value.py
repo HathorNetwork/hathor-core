@@ -117,7 +117,6 @@ MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
 
 MAX_OUTPUT_VALUE_V2: int = MAX_OUTPUT_VALUE_64 * 10**16
-MAX_OUTPUT_VALUE_V2_LENGTH: int = (MAX_OUTPUT_VALUE_V2.bit_length() + 7) // 8
 
 
 def encode_output_value(serializer: Serializer, value: int, *, token_amount_version: TokenAmountVersion) -> None:
@@ -190,6 +189,16 @@ def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool =
     >>> encode(0xc0ffee)
     '03c0ffee'
     """
+    encode_length_prefix_varint(serializer, value, strict=strict, max_value=MAX_OUTPUT_VALUE_V2)
+
+
+def encode_length_prefix_varint(
+    serializer: Serializer,
+    value: int,
+    *,
+    strict: bool,
+    max_value: int | None = None,
+) -> int:
     if value < 0:
         raise ValueError('value must be not be negative')
 
@@ -197,20 +206,21 @@ def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool =
         if strict:
             raise ValueError('value must not be zero')
         serializer.write_byte(0)
-        return
+        return 0
 
-    if value > MAX_OUTPUT_VALUE_V2:
-        raise ValueError(f'value is too big; max is {MAX_OUTPUT_VALUE_V2}, got: {value}')
+    if max_value is not None and value > max_value:
+        raise ValueError(f'value is too big; max is {max_value}, got: {value}')
 
     length = (value.bit_length() + 7) // 8
     payload = value.to_bytes(length, byteorder='big')
 
     assert len(payload) == length
-    assert length <= MAX_OUTPUT_VALUE_V2_LENGTH
     assert payload[0] != 0
 
     serializer.write_byte(length)
     serializer.write_bytes(payload)
+
+    return length
 
 
 def decode_output_value(deserializer: Deserializer, *, token_amount_version: TokenAmountVersion) -> TokenAmount:
@@ -303,21 +313,27 @@ def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -
     >>> decode_output_value_v2(build('03 c0ffee')) == 0xc0ffee
     True
     """
+    return decode_length_prefix_varint(deserializer, strict=strict, max_value=MAX_OUTPUT_VALUE_V2)
+
+
+def decode_length_prefix_varint(deserializer: Deserializer, *, strict: bool, max_value: int | None = None) -> int:
     length = deserializer.read_byte()
     if length == 0:
         if strict:
             raise ValueError('value must not be zero')
         return 0
 
-    if length > MAX_OUTPUT_VALUE_V2_LENGTH:
-        raise ValueError(f'length is too big; max is {MAX_OUTPUT_VALUE_V2_LENGTH}, got: {length}')
+    if max_value is not None:
+        max_length = (max_value.bit_length() + 7) // 8
+        if length > max_length:
+            raise ValueError(f'length is too big; max is {max_length}, got: {length}')
 
     payload = deserializer.read_bytes(length)
     if payload[0] == 0:
         raise ValueError(f'non-canonical encoding, leading zero byte: {payload.hex()}')
 
     value = int.from_bytes(payload, byteorder='big')
-    if value > MAX_OUTPUT_VALUE_V2:
-        raise ValueError(f'value is too big; max is {MAX_OUTPUT_VALUE_V2}, got: {value}')
+    if max_value is not None and value > max_value:
+        raise ValueError(f'value is too big; max is {max_value}, got: {value}')
 
     return value
