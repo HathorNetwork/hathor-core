@@ -1,6 +1,7 @@
 import sys
 
 import pytest
+from htr_lib import SignedAmount
 
 from hathor.nanocontracts import Blueprint, Context, NCFail, public, view
 from hathor.nanocontracts.exception import (
@@ -25,6 +26,7 @@ from hathor.nanocontracts.types import (
 )
 from hathor.transaction.token_info import TokenVersion
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount import UnsignedAmount
 
 COUNTER_NC_TYPE = make_nc_type(int)
 CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type(ContractId | None)  # type: ignore[arg-type]
@@ -267,13 +269,19 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.create_token(token3_uid, 'tk3', 'tk3', TokenVersion.DEPOSIT)
 
         self.assertEqual(
-            Balance(value=11, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(11).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token2_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(12).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=13, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token3_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(13).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token3_uid)
         )
 
         actions = [
@@ -284,13 +292,19 @@ class NCBlueprintTestCase(BlueprintTestCase):
         ctx = self.create_context(actions, self.tx, MOCK_ADDRESS)
         self.runner.create_contract(self.nc2_id, self.blueprint_id, ctx, 0)
         self.assertEqual(
-            Balance(value=21, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(21).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=22, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token2_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(22).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=23, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token3_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(23).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token3_uid)
         )
 
         actions = [
@@ -301,13 +315,19 @@ class NCBlueprintTestCase(BlueprintTestCase):
         ctx = self.create_context(actions, self.tx, MOCK_ADDRESS)
         self.runner.create_contract(self.nc3_id, self.blueprint_id, ctx, 0)
         self.assertEqual(
-            Balance(value=31, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(31).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=32, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token2_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(32).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=33, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token3_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(33).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token3_uid)
         )
 
         ctx = self.create_context()
@@ -323,33 +343,51 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.runner.call_public_method(self.nc1_id, 'get_tokens_from_another_contract', ctx)
 
         self.assertEqual(
-            Balance(value=4, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(4).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token2_uid)
+            Balance(
+               value=SignedAmount(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token3_uid)
-        )
-
-        self.assertEqual(
-            Balance(value=21, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token1_uid)
-        )
-        self.assertEqual(
-            Balance(value=16, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token2_uid)
-        )
-        self.assertEqual(
-            Balance(value=0, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token3_uid)
+            Balance(
+               value=SignedAmount(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token3_uid)
         )
 
         self.assertEqual(
-            Balance(value=31, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(21).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=32, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token2_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(16).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=4, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token3_uid)
+            Balance(
+               value=SignedAmount(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token3_uid)
+        )
+
+        self.assertEqual(
+            Balance(
+               value=UnsignedAmount.from_v1(31).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(
+               value=UnsignedAmount.from_v1(32).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(
+               value=UnsignedAmount.from_v1(4).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token3_uid)
         )
 
         ctx = self.create_context(
@@ -392,33 +430,51 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.runner.call_public_method(self.nc1_id, 'split_balance', ctx)
 
         self.assertEqual(
-            Balance(value=49, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(49).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=24, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token2_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(24).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc1_id, token3_uid)
-        )
-
-        self.assertEqual(
-            Balance(value=25, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token1_uid)
-        )
-        self.assertEqual(
-            Balance(value=12, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token2_uid)
-        )
-        self.assertEqual(
-            Balance(value=6, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc2_id, token3_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(12).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc1_id, token3_uid)
         )
 
         self.assertEqual(
-            Balance(value=26, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token1_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(25).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token1_uid)
         )
         self.assertEqual(
-            Balance(value=14, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token2_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(12).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token2_uid)
         )
         self.assertEqual(
-            Balance(value=7, can_mint=False, can_melt=False), self.runner.get_current_balance(self.nc3_id, token3_uid)
+            Balance(
+               value=UnsignedAmount.from_v1(6).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc2_id, token3_uid)
+        )
+
+        self.assertEqual(
+            Balance(
+               value=UnsignedAmount.from_v1(26).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token1_uid)
+        )
+        self.assertEqual(
+            Balance(
+               value=UnsignedAmount.from_v1(14).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token2_uid)
+        )
+        self.assertEqual(
+            Balance(
+               value=UnsignedAmount.from_v1(7).to_signed(), can_mint=False, can_melt=False
+           ), self.runner.get_current_balance(self.nc3_id, token3_uid)
         )
 
     def test_loop(self) -> None:

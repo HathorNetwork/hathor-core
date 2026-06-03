@@ -6,6 +6,7 @@ from hathor.transaction.headers.fee_header import FeeHeader, FeeHeaderEntry
 from hathor.types import TokenUid
 from hathor.verification.fee_header_verifier import MAX_FEES_LEN, FeeHeaderVerifier
 from hathor_tests import unittest
+from hathorlib.token_amount import UnsignedAmount
 
 
 class TestFeeHeaderVerifier(unittest.TestCase):
@@ -46,7 +47,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         """Test valid scenarios for verify_without_storage."""
         # Single fee entry
         tx = self._create_transaction_with_tokens(1)  # Custom token at index 1
-        fees = [FeeHeaderEntry(token_index=0, amount=100)]  # HTR fee
+        fees = [FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(100))]  # HTR fee
         header = self._create_fee_header(tx, fees)
 
         FeeHeaderVerifier.verify_fee_list(header, tx)  # +1 for HTR
@@ -54,8 +55,8 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         # Multiple fee entries with different tokens
         tx = self._create_transaction_with_tokens(2)  # Custom tokens at indices 1,2
         fees = [
-            FeeHeaderEntry(token_index=0, amount=3),  # HTR
-            FeeHeaderEntry(token_index=1, amount=200),  # Custom token 1
+            FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(3)),  # HTR
+            FeeHeaderEntry(token_index=1, amount=UnsignedAmount.from_v1(200)),  # Custom token 1
         ]
         header = self._create_fee_header(tx, fees)
 
@@ -67,21 +68,20 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         tx = self._create_transaction_with_tokens(1)  # Custom token at index 1
 
         # Invalid zero amount
-        with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got 0"):
-            fees = [FeeHeaderEntry(token_index=0, amount=0)]  # HTR fee
+        with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got V2 { normalized: 0 }"):
+            fees = [FeeHeaderEntry(token_index=0, amount=UnsignedAmount.zero())]  # HTR fee
             header = self._create_fee_header(tx, fees)
             FeeHeaderVerifier.verify_fee_list(header, tx)
 
-        # Invalid negative amount
-        with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got -50"):
-            fees = [FeeHeaderEntry(token_index=0, amount=-50)]  # HTR fee
-            header = self._create_fee_header(tx, fees)
-            FeeHeaderVerifier.verify_fee_list(header, tx)
-
-        # Invalid non-multiple of 100
-        with pytest.raises(InvalidFeeAmount,
-                           match="fees using deposit custom tokens should be a multiple of 100, got 150"):
-            fees = [FeeHeaderEntry(token_index=1, amount=150)]
+        # Invalid non-multiple of the divisor for a deposit custom token.
+        with pytest.raises(
+            InvalidFeeAmount,
+            match=(
+                f"fees using deposit custom tokens should be a multiple of {self._settings.FEE_DIVISOR * 10**16}, "
+                f"got {150 * 10**16}"
+            ),
+        ):
+            fees = [FeeHeaderEntry(token_index=1, amount=UnsignedAmount.from_v1(150))]
             header = self._create_fee_header(tx, fees)
             FeeHeaderVerifier.verify_fee_list(header, tx)
 
@@ -97,7 +97,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         """Test that fees list exceeding MAX_FEES_LEN raises InvalidFeeHeader."""
         tx = self._create_transaction_with_tokens(MAX_FEES_LEN + 1)
         # Create MAX_FEES_LEN + 1 fees to exceed the limit
-        fees = [FeeHeaderEntry(token_index=i, amount=100) for i in range(MAX_FEES_LEN + 1)]
+        fees = [FeeHeaderEntry(token_index=i, amount=UnsignedAmount.from_v1(100)) for i in range(MAX_FEES_LEN + 1)]
         header = self._create_fee_header(tx, fees)
 
         expected_msg = f"more fees than the max allowed: {MAX_FEES_LEN + 1} > {MAX_FEES_LEN}"
@@ -108,7 +108,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         """Test that fees list exactly at MAX_FEES_LEN is valid."""
         tx = self._create_transaction_with_tokens(MAX_FEES_LEN)
         # Create exactly MAX_FEES_LEN fees
-        fees = [FeeHeaderEntry(token_index=i, amount=100) for i in range(MAX_FEES_LEN)]
+        fees = [FeeHeaderEntry(token_index=i, amount=UnsignedAmount.from_v1(100)) for i in range(MAX_FEES_LEN)]
         header = self._create_fee_header(tx, fees)
 
         # Should not raise any exception
@@ -118,8 +118,8 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         """Test that duplicate token indices in fees raise InvalidFeeHeader."""
         tx = self._create_transaction_with_tokens(1)
         fees = [
-            FeeHeaderEntry(token_index=0, amount=100),
-            FeeHeaderEntry(token_index=0, amount=200),  # Duplicate HTR fee
+            FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(100)),
+            FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(200)),  # Duplicate HTR fee
         ]
         header = self._create_fee_header(tx, fees)
 
@@ -129,7 +129,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
     def test_invalid_token_indexes_out_of_bounds(self) -> None:
         """Test that token indices out of bounds raise FeeHeaderTokenNotFound."""
         tx = self._create_transaction_with_tokens(1)  # Only custom token at index 1
-        fees = [FeeHeaderEntry(token_index=5, amount=100)]  # Index 5 doesn't exist
+        fees = [FeeHeaderEntry(token_index=5, amount=UnsignedAmount.from_v1(100))]  # Index 5 doesn't exist
         header = self._create_fee_header(tx, fees)
 
         with pytest.raises(FeeHeaderTokenNotFound,
@@ -139,7 +139,7 @@ class TestFeeHeaderVerifier(unittest.TestCase):
     def test_invalid_token_index_greater_than_tx_tokens_len(self) -> None:
         """Test that token index greater than tx_tokens_len raises FeeHeaderTokenNotFound."""
         tx = self._create_transaction_with_tokens(1)  # tx_tokens_len = 2 (HTR + 1 custom)
-        fees = [FeeHeaderEntry(token_index=2, amount=100)]  # Index 2 > tx_tokens_len (1)
+        fees = [FeeHeaderEntry(token_index=2, amount=UnsignedAmount.from_v1(100))]  # Index 2 > tx_tokens_len (1)
         header = self._create_fee_header(tx, fees)
 
         with pytest.raises(FeeHeaderTokenNotFound,

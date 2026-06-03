@@ -82,16 +82,21 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
     return optional
 
 
+# TODO: Abstract 10**16
 def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: UnsignedAmount) -> UnsignedAmount:
-    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(mint_amount)
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * mint_amount.normalized()
     denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
-    return ceil_div(numerator, denominator)
+    rounded_up_to_1 = ceil_div(numerator, denominator)
+    rounded_up_to_cent = ceil_div(rounded_up_to_1, 10**16) * 10**16
+    return UnsignedAmount.from_v2(rounded_up_to_cent)
 
 
 def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: UnsignedAmount) -> UnsignedAmount:
-    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(melt_amount)
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * melt_amount.normalized()
     denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
-    return numerator // denominator
+    rounded_down_to_0 = numerator // denominator
+    rounded_down_to_cent = (rounded_down_to_0 // 10**16) * 10**16
+    return UnsignedAmount.from_v2(rounded_down_to_cent)
 
 
 def ceil_div(a: int, b: int) -> int:

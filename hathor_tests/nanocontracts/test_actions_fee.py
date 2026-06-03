@@ -1,4 +1,7 @@
+import re
+
 import pytest
+from htr_lib import SignedAmount
 
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
@@ -11,6 +14,7 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.test_reentrancy import HTR_TOKEN_UID
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
+from hathorlib.token_amount import UnsignedAmount
 
 
 class MyBlueprint(Blueprint):
@@ -185,9 +189,11 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         # fee token creation charging 1 HTR
         # 100 - 10 - 1 = 89
         assert self.nc1_storage.get_all_balances() == {
-            nc1_htr_balance_key: Balance(value=89, can_mint=False, can_melt=False),
-            nc1_dbt_balance_key: Balance(value=1000, can_mint=True, can_melt=True),
-            nc1_fbt_balance_key: Balance(value=10000, can_mint=True, can_melt=True),
+            nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(89).to_signed(), can_mint=False, can_melt=False),
+            nc1_dbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True),
+            nc1_fbt_balance_key: Balance(
+                value=UnsignedAmount.from_v1(10000).to_signed(), can_mint=True, can_melt=True
+            ),
         }
 
         # move tokens from nc1 to nc2
@@ -204,14 +210,16 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         )
 
         assert self.nc1_storage.get_all_balances() == {
-            nc1_htr_balance_key: Balance(value=88, can_mint=False, can_melt=False),
-            nc1_dbt_balance_key: Balance(value=1000, can_mint=True, can_melt=True),
-            nc1_fbt_balance_key: Balance(value=9000, can_mint=True, can_melt=True),
+            nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(88).to_signed(), can_mint=False, can_melt=False),
+            nc1_dbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True),
+            nc1_fbt_balance_key: Balance(value=UnsignedAmount.from_v1(9000).to_signed(), can_mint=True, can_melt=True),
         }
 
         nc2_fbt_balance_key = BalanceKey(nc_id=self.nc2_id, token_uid=fbt_token_uid)
         assert self.nc2_storage.get_all_balances() == {
-            nc2_fbt_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
+            nc2_fbt_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
         }
 
         # move tokens from nc1 to nc2 paying with deposit tokens
@@ -228,14 +236,16 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         )
 
         assert self.nc1_storage.get_all_balances() == {
-            nc1_htr_balance_key: Balance(value=88, can_mint=False, can_melt=False),
-            nc1_dbt_balance_key: Balance(value=900, can_mint=True, can_melt=True),
-            nc1_fbt_balance_key: Balance(value=8000, can_mint=True, can_melt=True),
+            nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(88).to_signed(), can_mint=False, can_melt=False),
+            nc1_dbt_balance_key: Balance(value=UnsignedAmount.from_v1(900).to_signed(), can_mint=True, can_melt=True),
+            nc1_fbt_balance_key: Balance(value=UnsignedAmount.from_v1(8000).to_signed(), can_mint=True, can_melt=True),
         }
 
         nc2_fbt_balance_key = BalanceKey(nc_id=self.nc2_id, token_uid=fbt_token_uid)
         assert self.nc2_storage.get_all_balances() == {
-            nc2_fbt_balance_key: Balance(value=2000, can_mint=False, can_melt=False),
+            nc2_fbt_balance_key: Balance(
+                value=UnsignedAmount.from_v1(2000).to_signed(), can_mint=False, can_melt=False
+            ),
         }
 
         # get tokens from nc2 to nc1 paying with htr
@@ -251,14 +261,16 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         )
 
         assert self.nc1_storage.get_all_balances() == {
-            nc1_htr_balance_key: Balance(value=87, can_mint=False, can_melt=False),
-            nc1_dbt_balance_key: Balance(value=900, can_mint=True, can_melt=True),
-            nc1_fbt_balance_key: Balance(value=9000, can_mint=True, can_melt=True),
+            nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(87).to_signed(), can_mint=False, can_melt=False),
+            nc1_dbt_balance_key: Balance(value=UnsignedAmount.from_v1(900).to_signed(), can_mint=True, can_melt=True),
+            nc1_fbt_balance_key: Balance(value=UnsignedAmount.from_v1(9000).to_signed(), can_mint=True, can_melt=True),
         }
 
         nc2_fbt_balance_key = BalanceKey(nc_id=self.nc2_id, token_uid=fbt_token_uid)
         assert self.nc2_storage.get_all_balances() == {
-            nc2_fbt_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
+            nc2_fbt_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
         }
 
         # get tokens from nc2 to nc1 paying with deposit token
@@ -274,14 +286,16 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         )
 
         assert self.nc1_storage.get_all_balances() == {
-            nc1_htr_balance_key: Balance(value=87, can_mint=False, can_melt=False),
-            nc1_dbt_balance_key: Balance(value=800, can_mint=True, can_melt=True),
-            nc1_fbt_balance_key: Balance(value=10_000, can_mint=True, can_melt=True),
+            nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(87).to_signed(), can_mint=False, can_melt=False),
+            nc1_dbt_balance_key: Balance(value=UnsignedAmount.from_v1(800).to_signed(), can_mint=True, can_melt=True),
+            nc1_fbt_balance_key: Balance(
+                value=UnsignedAmount.from_v1(10_000).to_signed(), can_mint=True, can_melt=True
+            ),
         }
 
         nc2_fbt_balance_key = BalanceKey(nc_id=self.nc2_id, token_uid=fbt_token_uid)
         assert self.nc2_storage.get_all_balances() == {
-            nc2_fbt_balance_key: Balance(value=0, can_mint=False, can_melt=False),
+            nc2_fbt_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
         }
 
         # paying attempt with negative value is forbidden
@@ -325,7 +339,7 @@ class NCActionsFeeTestCase(BlueprintTestCase):
                 fee_amount=0
             )
 
-        msg = 'fees using deposit custom tokens should be a multiple of 100, got 101'
+        msg = 'fees using deposit custom tokens should be a multiple of 1000000000000000000, got 1010000000000000000'
         with pytest.raises(NCInvalidFee, match=msg):
             self.runner.call_public_method(
                 self.nc1_id,
@@ -339,8 +353,11 @@ class NCActionsFeeTestCase(BlueprintTestCase):
             )
 
         # paying attempt with a valid value but incorrect amount
-        msg = r'Fee payment balance is different than expected\. \(amount=2, expected=1\)'
-        with pytest.raises(NCInvalidFee, match=msg):
+        msg = (
+            'Fee payment balance is different than expected. '
+            '(amount=V2 { normalized: 20000000000000000 }, expected=V2 { normalized: 10000000000000000 })'
+        )
+        with pytest.raises(NCInvalidFee, match=re.escape(msg)):
             self.runner.call_public_method(
                 self.nc1_id,
                 'move_tokens_to_nc',
@@ -367,14 +384,16 @@ class NCActionsFeeTestCase(BlueprintTestCase):
             )
 
         assert self.nc1_storage.get_all_balances() == {
-            nc1_htr_balance_key: Balance(value=87, can_mint=False, can_melt=False),
-            nc1_dbt_balance_key: Balance(value=800, can_mint=True, can_melt=True),
-            nc1_fbt_balance_key: Balance(value=10_000, can_mint=True, can_melt=True),
+            nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(87).to_signed(), can_mint=False, can_melt=False),
+            nc1_dbt_balance_key: Balance(value=UnsignedAmount.from_v1(800).to_signed(), can_mint=True, can_melt=True),
+            nc1_fbt_balance_key: Balance(
+                value=UnsignedAmount.from_v1(10_000).to_signed(), can_mint=True, can_melt=True
+            ),
         }
 
         nc2_fbt_balance_key = BalanceKey(nc_id=self.nc2_id, token_uid=fbt_token_uid)
         assert self.nc2_storage.get_all_balances() == {
-            nc2_fbt_balance_key: Balance(value=0, can_mint=False, can_melt=False),
+            nc2_fbt_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
         }
 
     def test_create_and_actions(self) -> None:
@@ -400,10 +419,10 @@ class NCActionsFeeTestCase(BlueprintTestCase):
 
         storage = self.runner.get_storage(self.nc3_id)
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=900_000, can_mint=True, can_melt=True),
-            ftt_balance_key: Balance(value=500_000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=1000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(900_000).to_signed(), can_mint=True, can_melt=True),
+            ftt_balance_key: Balance(value=UnsignedAmount.from_v1(500_000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True),
         }
 
     def test_token_index_updates(self) -> None:
@@ -454,13 +473,13 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
 
         fbt_token_info = tokens_index.get_token_info(fbt_id)
-        assert fbt_token_info.get_total() == 1_000_000
+        assert fbt_token_info.get_total() == UnsignedAmount.from_v1(1_000_000)
 
         ftt_token_info = tokens_index.get_token_info(ftt_id)
-        assert ftt_token_info.get_total() == 500_000
+        assert ftt_token_info.get_total() == UnsignedAmount.from_v1(500_000)
 
         dbt_token_info = tokens_index.get_token_info(dbt_id)
-        assert dbt_token_info.get_total() == 800
+        assert dbt_token_info.get_total() == UnsignedAmount.from_v1(800)
 
         # Verify HTR total (genesis + mined blocks - fees paid)
         # Fees during initialize (tx1): 1 HTR (FBT) + 1 HTR (FTT) + 10 HTR (DBT, 1% of 1000) = 12 HTR
@@ -476,7 +495,7 @@ class NCActionsFeeTestCase(BlueprintTestCase):
             - 1   # 1 HTR fee for tx3 (move_tokens_to_nc)
             - 1   # 1 HTR fee for tx5 (move_tokens_to_nc_paying_with_htr_and_dbt)
         )
-        assert htr_token_info.get_total() == expected_htr_total
+        assert htr_token_info.get_total() == UnsignedAmount.from_v1(expected_htr_total)
 
         # Verify contract balances after all operations
         nc1_storage = self.manager.get_best_block_nc_storage(tx1.hash)
@@ -487,15 +506,29 @@ class NCActionsFeeTestCase(BlueprintTestCase):
         # - FBT: 1_000_000 - 1000 (tx3) - 1000 (tx4) - 1000 (tx5) = 997_000 FBT
         # - FTT: 500_000 - 1000 (tx5) = 499_000 FTT
         # - DBT: 1000 - 100 (tx4) - 100 (tx5) = 800 DBT
-        assert nc1_storage.get_balance(HATHOR_TOKEN_UID) == Balance(value=86, can_mint=False, can_melt=False)
-        assert nc1_storage.get_balance(fbt_id) == Balance(value=997_000, can_mint=True, can_melt=True)
-        assert nc1_storage.get_balance(ftt_id) == Balance(value=499_000, can_mint=True, can_melt=True)
-        assert nc1_storage.get_balance(dbt_id) == Balance(value=800, can_mint=True, can_melt=True)
+        assert nc1_storage.get_balance(HATHOR_TOKEN_UID) == Balance(
+            value=UnsignedAmount.from_v1(86).to_signed(), can_mint=False, can_melt=False
+        )
+        assert nc1_storage.get_balance(fbt_id) == Balance(
+            value=UnsignedAmount.from_v1(997_000).to_signed(), can_mint=True, can_melt=True
+        )
+        assert nc1_storage.get_balance(ftt_id) == Balance(
+            value=UnsignedAmount.from_v1(499_000).to_signed(), can_mint=True, can_melt=True
+        )
+        assert nc1_storage.get_balance(dbt_id) == Balance(
+            value=UnsignedAmount.from_v1(800).to_signed(), can_mint=True, can_melt=True
+        )
 
         # nc2 should have:
         # - HTR: 0
         # - FBT: 1000 (tx3) + 1000 (tx4) + 1000 (tx5) = 3000 FBT
         # - FTT: 1000 (tx5) = 1000 FTT
-        assert nc2_storage.get_balance(HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
-        assert nc2_storage.get_balance(fbt_id) == Balance(value=3000, can_mint=False, can_melt=False)
-        assert nc2_storage.get_balance(ftt_id) == Balance(value=1000, can_mint=False, can_melt=False)
+        assert nc2_storage.get_balance(HATHOR_TOKEN_UID) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
+        assert nc2_storage.get_balance(fbt_id) == Balance(
+            value=UnsignedAmount.from_v1(3000).to_signed(), can_mint=False, can_melt=False
+        )
+        assert nc2_storage.get_balance(ftt_id) == Balance(
+            value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+        )

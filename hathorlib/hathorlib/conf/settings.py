@@ -21,6 +21,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator, mo
 from typing_extensions import Self
 
 from hathorlib.conf.utils import parse_hex_str
+from hathorlib.token_amount import UnsignedAmount
 
 HATHOR_TOKEN_UID: bytes = b'\x00'
 
@@ -127,6 +128,10 @@ class HathorSettings(BaseModel):
 
     # Fee rate settings in V1 decimals (that is, 0.01 HTR)
     FEE_PER_OUTPUT_V1: int = 1
+
+    @property
+    def FEE_TOKEN_AMOUNT_PER_OUTPUT(self) -> UnsignedAmount:
+        return UnsignedAmount.from_v1(self.FEE_PER_OUTPUT_V1)
 
     @property
     def FEE_DIVISOR(self) -> int:

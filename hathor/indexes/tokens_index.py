@@ -144,7 +144,7 @@ class TokensIndex(BaseIndex):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: UnsignedAmount = 0,
+        total: UnsignedAmount = UnsignedAmount.zero(),
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
     ) -> None:

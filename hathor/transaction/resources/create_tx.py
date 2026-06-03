@@ -26,8 +26,8 @@ from hathor.util import api_catch_exceptions, json_dumpb, json_loadb
 from hathor.verification.verification_params import VerificationParams
 
 
-def from_raw_output(raw_output: dict, tokens: list[bytes]) -> TxOutput:
-    value = raw_output['value']
+def from_raw_output(api_version: APIVersion, raw_output: dict, tokens: list[bytes]) -> TxOutput:
+    value = api_version.unsigned_amount_from_request(raw_output['value'])
     token_uid = raw_output.get('token_uid')
     if token_uid is not None:
         if token_uid not in tokens:
@@ -74,7 +74,7 @@ class CreateTxResource(Resource):
 
         inputs = [TxInput.create_from_dict(i) for i in raw_inputs]
         tokens = []
-        outputs = [from_raw_output(i, tokens) for i in raw_outputs]
+        outputs = [from_raw_output(self.api_version, i, tokens) for i in raw_outputs]
 
         timestamp = int(max(self.manager.tx_storage.latest_timestamp, self.manager.reactor.seconds()))
         parents = self.manager.get_new_tx_parents(timestamp)
@@ -86,6 +86,10 @@ class CreateTxResource(Resource):
             parents=parents,
             storage=self.manager.tx_storage,
         )
+        # Outputs are parsed in the request's API version; encode each value in the transaction's
+        # token amount version before the transaction is serialized.
+        for tx_output in tx.outputs:
+            tx_output.value = tx_output.value.to_version(tx.get_token_amount_version())
         fake_signed_tx = tx.clone()
         for tx_input in fake_signed_tx.inputs:
             # conservative estimate of the input data size to estimate a valid weight
@@ -133,9 +137,15 @@ CreateTxResource.openapi = {
         'x-visibility': 'public',
         'x-api-versions': ['v1a', 'v2'],
         'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
+            'v2': [
+                {
+                    'path': [
+                        'post', 'requestBody', 'content', 'application/json', 'examples', 'tx', 'value', 'outputs', 0,
+                        'value',
+                    ],
+                    'value': '1.000000000000000000',
+                },
+            ],
         },
         'x-rate-limit': {
             'global': [

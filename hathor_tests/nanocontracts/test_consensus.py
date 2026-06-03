@@ -1,6 +1,7 @@
 from typing import Any, cast
 
 import pytest
+from htr_lib import SignedAmount
 
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_from_public_key_bytes
@@ -23,6 +24,7 @@ from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.simulation.base import SimulatorTestCase
 from hathor_tests.utils import add_blocks_unlock_reward, add_custom_tx, create_tokens, gen_custom_base_tx
+from hathorlib.token_amount import UnsignedAmount
 
 settings = HathorSettings()
 
@@ -94,7 +96,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.miner.start()
 
         self.token_uid = TokenUid(b'\0')
-        trigger = StopAfterMinimumBalance(self.wallet, self.token_uid, 1)
+        trigger = StopAfterMinimumBalance(self.wallet, self.token_uid, UnsignedAmount.from_v1(1))
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
 
     def assertNoBlocksVoided(self):
@@ -251,8 +253,9 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         add_blocks_unlock_reward(self.manager)
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
-            1, self.manager.tx_storage, token_uid=self.token_uid
+            UnsignedAmount.from_v1(1), self.manager.tx_storage, token_uid=self.token_uid
         )
+        deposit_amount = deposit_amount.to_v1()
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [], timestamp=int(self.manager.reactor.seconds()))
         tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx, is_custom_token=is_custom_token, nc_actions=[
             NanoHeaderAction(
@@ -275,7 +278,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount, can_mint=False, can_melt=False),
+            Balance(value=deposit_amount.to_signed(), can_mint=False, can_melt=False),
             nc_storage.get_balance(self.token_uid)
         )
 
@@ -288,7 +291,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             _output_token_index = 1
 
         tx2 = Transaction(
-            outputs=[TxOutput(1, b'', _output_token_index)],
+            outputs=[TxOutput(UnsignedAmount.from_v1(1), b'', _output_token_index)],
             timestamp=int(self.manager.reactor.seconds()),
         )
         tx2.tokens = _tokens
@@ -296,7 +299,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             NanoHeaderAction(
                 type=NCActionType.WITHDRAWAL,
                 token_index=1 if is_custom_token else 0,
-                amount=1,
+                amount=UnsignedAmount.from_v1(1),
             )
         ])
         self.manager.cpu_mining_service.resolve(tx2)
@@ -311,14 +314,15 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount - 1, can_mint=False, can_melt=False),
+            Balance(value=(deposit_amount - UnsignedAmount.from_v1(1)).to_signed(), can_mint=False, can_melt=False),
             nc_storage.get_balance(self.token_uid)
         )
 
         # Make a withdrawal of the remainder.
 
+        remainder = UnsignedAmount.from_v1(deposit_amount.raw() - 2)
         tx3 = Transaction(
-            outputs=[TxOutput(deposit_amount - 2, b'', _output_token_index)],
+            outputs=[TxOutput(remainder, b'', _output_token_index)],
             timestamp=int(self.manager.reactor.seconds()),
         )
         tx3.tokens = _tokens
@@ -326,7 +330,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             NanoHeaderAction(
                 type=NCActionType.WITHDRAWAL,
                 token_index=1 if is_custom_token else 0,
-                amount=deposit_amount - 2,
+                amount=remainder,
             )
         ])
         self.manager.cpu_mining_service.resolve(tx3)
@@ -340,7 +344,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertIsNone(meta3.voided_by)
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(Balance(value=1, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(1).to_signed(), can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid),
+        )
 
         # Try to withdraw more than available, so it fails.
 
@@ -351,7 +358,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             _output_token_index = 1
 
         tx4 = Transaction(
-            outputs=[TxOutput(2, b'', _output_token_index)],
+            outputs=[TxOutput(UnsignedAmount.from_v1(2), b'', _output_token_index)],
             timestamp=int(self.manager.reactor.seconds()),
         )
         tx4.tokens = _tokens
@@ -359,7 +366,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             NanoHeaderAction(
                 type=NCActionType.WITHDRAWAL,
                 token_index=1 if is_custom_token else 0,
-                amount=2,
+                amount=UnsignedAmount.from_v1(2),
             )
         ])
         self.manager.cpu_mining_service.resolve(tx4)
@@ -373,18 +380,24 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertEqual(meta4.voided_by, {tx4.hash, NC_EXECUTION_FAIL_ID})
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
-        self.assertEqual(Balance(value=1, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(1).to_signed(), can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid),
+        )
 
         self.assertNoBlocksVoided()
 
         # Check balance at different blocks
 
         nc_storage = self.manager.get_nc_storage(block_initialize, nc_id)
-        self.assertEqual(Balance(value=0, can_mint=False, can_melt=False), nc_storage.get_balance(self.token_uid))
+        self.assertEqual(
+            Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            nc_storage.get_balance(self.token_uid),
+        )
 
         nc_storage = self.manager.get_nc_storage(block_deposit, nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount, can_mint=False, can_melt=False),
+            Balance(value=deposit_amount.to_signed(), can_mint=False, can_melt=False),
             nc_storage.get_balance(self.token_uid)
         )
 
@@ -400,8 +413,8 @@ class NCConsensusTestCase(SimulatorTestCase):
         # tx1 is a NanoContract transaction and will fail execution.
         address = self.wallet.get_unused_address_bytes()
         _outputs = [
-            WalletOutputInfo(address, 1, None),
-            WalletOutputInfo(address, 1, None),
+            WalletOutputInfo(address, UnsignedAmount.from_v1(1), None),
+            WalletOutputInfo(address, UnsignedAmount.from_v1(1), None),
         ]
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
@@ -417,7 +430,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         # add tx22 with tx1 as parent in mempool before tx1 has been executed
         address = self.wallet.get_unused_address_bytes()
         _outputs = [
-            WalletOutputInfo(address, 1, None),
+            WalletOutputInfo(address, UnsignedAmount.from_v1(1), None),
         ]
         tx22 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         self._finish_preparing_tx(tx22)
@@ -481,8 +494,8 @@ class NCConsensusTestCase(SimulatorTestCase):
         # tx1 is a NanoContract transaction and will fail execution.
         address = self.wallet.get_unused_address_bytes()
         _outputs = [
-            WalletOutputInfo(address, 1, None),
-            WalletOutputInfo(address, 1, None),
+            WalletOutputInfo(address, UnsignedAmount.from_v1(1), None),
+            WalletOutputInfo(address, UnsignedAmount.from_v1(1), None),
         ]
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
@@ -571,7 +584,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertNotEqual(address1, address2)
 
         # Prepare three sibling transactions.
-        _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(6500, self.manager.tx_storage)
+        _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(
+            UnsignedAmount.from_v1(6500), self.manager.tx_storage
+        )
+        deposit_amount_1 = deposit_amount_1.to_v1()
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -584,7 +600,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.manager.reactor.advance(10)
 
-        withdrawal_amount_1 = deposit_amount_1 - 100
+        withdrawal_amount_1 = UnsignedAmount.from_v1(deposit_amount_1.raw() - 100)
         tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -598,7 +614,10 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.manager.reactor.advance(10)
 
-        _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(3, self.manager.tx_storage)
+        _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(
+            UnsignedAmount.from_v1(3), self.manager.tx_storage
+        )
+        deposit_amount_2 = deposit_amount_2.to_v1()
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
             NanoHeaderAction(
@@ -640,7 +659,11 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount_1 - withdrawal_amount_1, can_mint=False, can_melt=False),
+            Balance(
+                value=(deposit_amount_1 - withdrawal_amount_1).to_signed(),
+                can_mint=False,
+                can_melt=False,
+            ),
             nc_storage.get_balance(self.token_uid)
         )
 
@@ -671,7 +694,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount_2, can_mint=False, can_melt=False),
+            Balance(value=deposit_amount_2.to_signed(), can_mint=False, can_melt=False),
             nc_storage.get_balance(self.token_uid)
         )
 
@@ -692,7 +715,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertNotEqual(address1, address2)
 
         # Prepare three sibling transactions.
-        _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(6500, self.manager.tx_storage)
+        _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(
+            UnsignedAmount.from_v1(6500), self.manager.tx_storage
+        )
+        deposit_amount_2 = deposit_amount_2.to_v1()
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
             NanoHeaderAction(
@@ -705,7 +731,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.manager.reactor.advance(10)
 
-        withdrawal_amount_1 = deposit_amount_2 - 100
+        withdrawal_amount_1 = UnsignedAmount.from_v1(deposit_amount_2.raw() - 100)
         tx11 = Transaction(outputs=[TxOutput(withdrawal_amount_1, b'', 0)])
         tx11 = self._gen_nc_tx(nc_id, 'withdraw', [], nc=tx11, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -719,7 +745,10 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         self.manager.reactor.advance(10)
 
-        _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
+        _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(
+            UnsignedAmount.from_v1(1), self.manager.tx_storage
+        )
+        deposit_amount_1 = deposit_amount_1.to_v1()
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -756,7 +785,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount_1, can_mint=False, can_melt=False),
+            Balance(value=deposit_amount_1.to_signed(), can_mint=False, can_melt=False),
             nc_storage.get_balance(self.token_uid)
         )
 
@@ -782,7 +811,11 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(nc_id)
         self.assertEqual(
-            Balance(value=deposit_amount_2 - withdrawal_amount_1, can_mint=False, can_melt=False),
+            Balance(
+                value=(deposit_amount_2 - withdrawal_amount_1).to_signed(),
+                can_mint=False,
+                can_melt=False,
+            ),
             nc_storage.get_balance(self.token_uid)
         )
 
@@ -798,7 +831,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         # tx0 is a regular transaction with one output
         address = self.wallet.get_unused_address_bytes()
         _outputs = [
-            WalletOutputInfo(address, 10, None),
+            WalletOutputInfo(address, UnsignedAmount.from_v1(10), None),
         ]
         tx0 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         self._finish_preparing_tx(tx0)
@@ -808,12 +841,12 @@ class NCConsensusTestCase(SimulatorTestCase):
         # tx1 is a NanoContract transaction and will fail execution.
         tx1 = gen_custom_base_tx(self.manager, tx_inputs=[(tx0, 0)])
         self.assertEqual(len(tx1.outputs), 1)
-        tx1.outputs[0].value = 3
+        tx1.outputs[0].value = UnsignedAmount.from_v1(3)
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1, nc_actions=[
             NanoHeaderAction(
                 type=NCActionType.DEPOSIT,
                 token_index=0,
-                amount=tx0.outputs[0].value - 3,
+                amount=UnsignedAmount.from_v1(tx0.outputs[0].value.raw() - 3),
             )
         ])
         self.manager.cpu_mining_service.resolve(tx1)

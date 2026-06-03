@@ -15,6 +15,7 @@ from hathor.transaction.validation_state import ValidationState
 from hathor_tests import unittest
 from hathor_tests.unittest import TestBuilder
 from hathor_tests.utils import BURN_ADDRESS, add_blocks_unlock_reward, add_new_transactions, create_tokens
+from hathorlib.token_amount import UnsignedAmount
 
 
 class BaseTransactionStorageTest(unittest.TestCase):
@@ -50,7 +51,7 @@ class BaseTransactionStorageTest(unittest.TestCase):
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
         block_parents = [tx.hash for tx in chain(self.genesis_blocks, self.genesis_txs)]
-        output = TxOutput(200, P2PKH.create_output_script(BURN_ADDRESS))
+        output = TxOutput(UnsignedAmount.from_v1(200), P2PKH.create_output_script(BURN_ADDRESS))
         previous_timestamp = artifacts.settings.GENESIS_TX2_TIMESTAMP
         self.block = Block(timestamp=previous_timestamp + 1, weight=12, outputs=[output], parents=block_parents,
                            nonce=100781, storage=self.tx_storage)

@@ -32,6 +32,7 @@ from hathor.transaction.scripts import P2PKH, Opcode
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathorlib.conf.settings import FeatureSetting
+from hathorlib.token_amount import UnsignedAmount
 
 
 class MyBluprint(Blueprint):
@@ -393,7 +394,7 @@ class TestFeatureActivations(unittest.TestCase):
         nano_header = nc1.get_nano_header()
         assert len(nano_header.nc_actions) == 1
         deposit = nano_header.nc_actions[0]
-        deposit = dataclasses.replace(deposit, amount=deposit.amount // 2)
+        deposit = dataclasses.replace(deposit, amount=UnsignedAmount.from_v1(deposit.amount.raw() // 2))
         nano_header.nc_actions = [deposit, deposit]
 
         artifacts.propagate_with(self.manager, up_to='b3')

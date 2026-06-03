@@ -22,7 +22,6 @@ from hathor.api_util import (
     get_args,
     get_missing_params_msg,
     parse_args,
-    parse_int,
     set_cors,
 )
 from hathor.conf.get_settings import get_global_settings
@@ -94,7 +93,7 @@ class UtxoSearchResource(Resource):
 
         # target amount parameter must be an integer
         try:
-            target_amount = parse_int(args['target_amount'])
+            target_amount = self.api_version.unsigned_amount_from_request(args['target_amount'])
         except ValueError as e:
             return json_dumpb({
                 'success': False,
@@ -126,7 +125,7 @@ class UtxoSearchResource(Resource):
         utxo_list = [{
             'txid': utxo.tx_id.hex(),
             'index': utxo.index,
-            'amount': utxo.amount,
+            'amount': self.api_version.unsigned_amount_to_response(utxo.amount),
             'timelock': utxo.timelock,
             'heightlock': utxo.heightlock,
         } for utxo in iter_utxos]
@@ -140,9 +139,19 @@ UtxoSearchResource.openapi = {
         'x-visibility': 'public',
         'x-api-versions': ['v1a', 'v2'],
         'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
+            'v2': [
+                {
+                    'path': ['get', 'parameters', 1, 'description'],
+                    'value': 'The target amount that the UTXOs should sum-up to, with 18 decimals',
+                },
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'utxos', 0, 'amount',
+                    ],
+                    'value': '1.000000000000000000',
+                },
+            ],
         },
         'x-rate-limit': {
             'global': [
@@ -182,7 +191,7 @@ UtxoSearchResource.openapi = {
                 {
                     'name': 'target_amount',
                     'in': 'query',
-                    'description': 'The target amount that the UTXOs should sum-up to, 1 means 0.01 HTR',
+                    'description': 'The target amount that the UTXOs should sum-up to, with 2 decimals',
                     'required': True,
                     'schema': {
                         'type': 'int'

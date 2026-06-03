@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pytest
+from htr_lib import UnsignedAmount
 
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
@@ -79,13 +80,13 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
-            TxOutput(htr_amount - 4, script, 0)
+            TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
+            TxOutput(UnsignedAmount.from_v1(htr_amount - 4), script, 0)
         ]
 
         tx2 = Transaction(
@@ -101,14 +102,14 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=0, amount=4)]
+            fees=[FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(4))]
         )
         tx2.headers.append(fee_header)
 
         # Melt 100 tokens from fee_token and add 4 outputs, should charge only by the outputs count
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 4)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(4))
         self.assertEqual(tx_fee, fee_header.total_fee_amount())
         #  It's the tx item output signature
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -135,10 +136,10 @@ class FeeTokenTest(unittest.TestCase):
         ]
 
         outputs = [
-            TxOutput(100, script, 2),
-            TxOutput(100, script, 2),
-            TxOutput(100, script, 2),
-            TxOutput(96-5, script, 0)
+            TxOutput(UnsignedAmount.from_v1(100), script, 2),
+            TxOutput(UnsignedAmount.from_v1(100), script, 2),
+            TxOutput(UnsignedAmount.from_v1(100), script, 2),
+            TxOutput(UnsignedAmount.from_v1(96-5), script, 0)
         ]
 
         tx3 = Transaction(
@@ -153,7 +154,7 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx3,
-            fees=[FeeHeaderEntry(token_index=0, amount=5)],
+            fees=[FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(5))],
         )
         tx3.headers.append(fee_header)
 
@@ -162,7 +163,7 @@ class FeeTokenTest(unittest.TestCase):
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx3_fee = tx3.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
         # Multiple inputs should be only charge once per token when no outputs are present
-        self.assertEqual(tx3_fee, 5)
+        self.assertEqual(tx3_fee, UnsignedAmount.from_v1(5))
 
         self.sign_inputs(tx3)
         self.resolve_and_propagate(tx3)
@@ -177,7 +178,7 @@ class FeeTokenTest(unittest.TestCase):
 
         # melt tokens and transfer melt authority
         melt_amount = 100
-        new_token_amount = tx.outputs[0].value - melt_amount
+        new_token_amount = tx.outputs[0].value.raw() - melt_amount
 
         inputs = [
             # token amount
@@ -188,8 +189,8 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount - 500 - 100 = 400
-            TxOutput(new_token_amount, script, 1),
-            TxOutput(4, script, 0)
+            TxOutput(UnsignedAmount.from_v1(new_token_amount), script, 1),
+            TxOutput(UnsignedAmount.from_v1(4), script, 0)
         ]
 
         tx2 = Transaction(
@@ -205,14 +206,14 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=0, amount=1)],
+            fees=[FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(1))],
         )
         tx2.headers.append(fee_header)
 
         # pick the last tip tx output in HTR then subtracts the fee
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 1)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
         self.assertEqual(tx_fee, fee_header.total_fee_amount())
 
         #  It's the tx item output signature
@@ -242,7 +243,7 @@ class FeeTokenTest(unittest.TestCase):
         ]
 
         outputs = [
-            TxOutput(4, script, 0)
+            TxOutput(UnsignedAmount.from_v1(4), script, 0)
         ]
 
         tx2 = Transaction(
@@ -258,7 +259,7 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=0, amount=1)],
+            fees=[FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(1))],
         )
         tx2.headers.append(fee_header)
 
@@ -266,7 +267,7 @@ class FeeTokenTest(unittest.TestCase):
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
         # check if only the melting operation was considered
-        self.assertEqual(tx_fee, 1)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
         self.assertEqual(tx_fee, fee_header.total_fee_amount())
 
         self.sign_inputs(tx2)
@@ -298,11 +299,11 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(new_token_amount, script, 1),
+            TxOutput(UnsignedAmount.from_v1(new_token_amount), script, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             # change value: 500 from initial mint amount - 100 fee
-            TxOutput(400, script, 2)
+            TxOutput(UnsignedAmount.from_v1(400), script, 2)
         ]
 
         tx2 = Transaction(
@@ -318,13 +319,13 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=2, amount=100)],
+            fees=[FeeHeaderEntry(token_index=2, amount=UnsignedAmount.from_v1(100))],
         )
         tx2.headers.append(fee_header)
 
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 1)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
         self.assertEqual(tx_fee, fee_header.total_fee_amount())
 
         #  It's the signature of the output of the tx item
@@ -342,7 +343,7 @@ class FeeTokenTest(unittest.TestCase):
             token_amount=new_token_amount
         )
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(deposit_token_uid)
-        self.assertEqual(400, tokens_index.get_total())
+        self.assertEqual(UnsignedAmount.from_v1(400), tokens_index.get_total())
 
     def test_fee_and_deposit_token_melt_paid_with_deposit(self) -> None:
         # fbt -> Fee based token
@@ -370,18 +371,20 @@ class FeeTokenTest(unittest.TestCase):
             TxInput(dbt_tx.hash, 0, b'')
         ]
         dbt_melt_amount = 200
-        htr_change_value = get_deposit_token_withdraw_amount(self.manager._settings, dbt_melt_amount)
+        htr_change_value = get_deposit_token_withdraw_amount(
+            self.manager._settings, UnsignedAmount.from_v1(dbt_melt_amount)
+        )
         # 200 dbt -> 2 htr
-        self.assertEqual(htr_change_value, 2)
+        self.assertEqual(htr_change_value, UnsignedAmount.from_v1(2))
         outputs = [
             # New token amount
-            TxOutput(new_token_amount, script, 1),
+            TxOutput(UnsignedAmount.from_v1(new_token_amount), script, 1),
             # Melt authority
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             # HTR change output
-            TxOutput(htr_change_value, script, 0),
+            TxOutput(htr_change_value.to_v1(), script, 0),
             # deposit token change output: 500 - 100(fee in the header) - 200(melt) = 200
-            TxOutput(200, script, 2)
+            TxOutput(UnsignedAmount.from_v1(200), script, 2)
         ]
 
         tx2 = Transaction(
@@ -397,13 +400,13 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=2, amount=100)],
+            fees=[FeeHeaderEntry(token_index=2, amount=UnsignedAmount.from_v1(100))],
         )
         tx2.headers.append(fee_header)
 
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 1)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
         self.assertEqual(tx_fee, fee_header.total_fee_amount())
 
         #  It's the signature of the output of the tx item
@@ -421,7 +424,7 @@ class FeeTokenTest(unittest.TestCase):
             token_amount=new_token_amount
         )
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(deposit_token_uid)
-        self.assertEqual(200, tokens_index.get_total())
+        self.assertEqual(UnsignedAmount.from_v1(200), tokens_index.get_total())
 
     def test_fee_token_tx_paid_with_htr_and_deposit(self) -> None:
         # fbt -> Fee based token
@@ -451,14 +454,14 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # New token amount
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
-            TxOutput(100, script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
+            TxOutput(UnsignedAmount.from_v1(100), script, 1),
             # Deposit token change
-            TxOutput(300, script, 2),  # 500 - 200
-            TxOutput(2, script)  # 5 - 3
+            TxOutput(UnsignedAmount.from_v1(300), script, 2),  # 500 - 200
+            TxOutput(UnsignedAmount.from_v1(2), script)  # 5 - 3
         ]
 
         tx2 = Transaction(
@@ -475,14 +478,14 @@ class FeeTokenTest(unittest.TestCase):
             settings=self._settings,
             tx=tx2,
             fees=[
-                FeeHeaderEntry(token_index=0, amount=3),
-                FeeHeaderEntry(token_index=2, amount=200)
+                FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(3)),
+                FeeHeaderEntry(token_index=2, amount=UnsignedAmount.from_v1(200))
             ],
         )
         tx2.headers.append(fee_header)
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 5)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(5))
         self.assertEqual(tx_fee, fee_header.total_fee_amount())
 
         #  It's the signature of the output of the tx item
@@ -514,11 +517,11 @@ class FeeTokenTest(unittest.TestCase):
         ]
         outputs = [
             # Token minted output
-            TxOutput(mint_amount, script, 1),
+            TxOutput(UnsignedAmount.from_v1(mint_amount), script, 1),
             # Token mint authority
-            TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
+            TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001),
             # change amount
-            TxOutput(4, script, 0)
+            TxOutput(UnsignedAmount.from_v1(4), script, 0)
         ]
 
         tx2 = Transaction(
@@ -533,14 +536,14 @@ class FeeTokenTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx2,
-            fees=[FeeHeaderEntry(token_index=0, amount=1)],
+            fees=[FeeHeaderEntry(token_index=0, amount=UnsignedAmount.from_v1(1))],
         )
         tx2.headers.append(fee_header)
         # pick the last tip tx output in HTR then subtracts the fee
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 1)
-        self.assertEqual(fee_header.total_fee_amount(), 1)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
+        self.assertEqual(fee_header.total_fee_amount(), UnsignedAmount.from_v1(1))
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -573,9 +576,9 @@ class FeeTokenTest(unittest.TestCase):
         ]
         outputs = [
             # Token output
-            TxOutput(250, script, 1),
+            TxOutput(UnsignedAmount.from_v1(250), script, 1),
             # Token output
-            TxOutput(250, script, 1),
+            TxOutput(UnsignedAmount.from_v1(250), script, 1),
         ]
 
         tx2 = Transaction(
@@ -589,7 +592,7 @@ class FeeTokenTest(unittest.TestCase):
         )
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 2)
+        self.assertEqual(tx_fee, UnsignedAmount.from_v1(2))
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -598,7 +601,11 @@ class FeeTokenTest(unittest.TestCase):
         with pytest.raises(InvalidNewTransaction) as e:
             self.resolve_and_propagate(tx2)
         assert isinstance(e.value.__cause__, InputOutputMismatch)
-        assert "Fee amount is different than expected. (amount=0, expected=2)" in str(e.value)
+        expected_msg = (
+            f'Fee amount is different than expected. '
+            f'(amount=0, expected={UnsignedAmount.from_v1(2).normalized()})'
+        )
+        assert expected_msg in str(e.value)
 
     def test_fee_token_burn_authority(self) -> None:
         initial_mint_amount = 500
@@ -622,7 +629,7 @@ class FeeTokenTest(unittest.TestCase):
         )
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
         tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
-        self.assertEqual(tx_fee, 0)
+        self.assertEqual(tx_fee, UnsignedAmount.zero())
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -656,10 +663,10 @@ class FeeTokenTest(unittest.TestCase):
 
         outputs = [
             # mint output
-            TxOutput(500, script, 0b00000001),
+            TxOutput(UnsignedAmount.from_v1(500), script, 0b00000001),
             # authority outputs
-            TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
-            TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+            TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001),
+            TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             # deposit output
             TxOutput(self.genesis_blocks[0].outputs[0].value, script, 0)
         ]
@@ -740,7 +747,7 @@ class FeeTokenTest(unittest.TestCase):
         self.assertEqual(TokenUtxoInfo(melt_tx_hash, melt_output), melt[0])
 
         # check total amount of tokens
-        self.assertEqual(token_amount, tokens_index.get_total())
+        self.assertEqual(UnsignedAmount.from_v1(token_amount), tokens_index.get_total())
 
     def sign_inputs(self, tx: Transaction) -> None:
         wallet = self.manager.wallet

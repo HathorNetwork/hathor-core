@@ -565,7 +565,8 @@ class NCFee:
         """
         Get the amount converted to HTR
         """
+        amount = UnsignedAmount.from_version(self.amount, version=token_amount_version)
         if self.token_uid == HATHOR_TOKEN_UID:
-            return self.amount
+            return amount
         else:
-            return get_deposit_token_withdraw_amount(settings, self.amount)
+            return get_deposit_token_withdraw_amount(settings, amount)

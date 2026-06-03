@@ -31,6 +31,7 @@ from hathor.transaction.scripts import Opcode
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 
 
 class MyBlueprint(Blueprint):
@@ -90,10 +91,12 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
@@ -152,10 +155,12 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
@@ -202,10 +207,12 @@ class FeeTokensTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx2.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=UnsignedAmount.from_v1(100), script=b'', token_data=1)
         tx2.outputs.append(dbt_output)
 
-        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
+        dbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(100)
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(dbt_withdraw)
 
@@ -223,7 +230,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: Fee amount is different than expected. (amount=1, expected=0)',
+            reason=f'InputOutputMismatch: Fee amount is different than expected. (amount={10**16}, expected=0)',
         )
 
     def test_postponed_token_verification_failure_does_not_contaminate_state(self) -> None:
@@ -254,10 +261,12 @@ class FeeTokensTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx2.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=UnsignedAmount.from_v1(100), script=b'', token_data=1)
         tx2.outputs.append(dbt_output)
 
-        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
+        dbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(100)
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(dbt_withdraw)
 
@@ -267,7 +276,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert tx1.get_metadata().voided_by is None
 
         nc_storage_before = self.manager.get_best_block_nc_storage(tx1.hash)
-        expected_htr_balance = Balance(value=1, can_mint=False, can_melt=False)
+        expected_htr_balance = Balance(value=SignedAmount(10**16), can_mint=False, can_melt=False)
         assert nc_storage_before.get_balance(self._settings.HATHOR_TOKEN_UID) == expected_htr_balance
 
         artifacts.propagate_with(self.manager, up_to='b12')
@@ -279,7 +288,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: Fee amount is different than expected. (amount=1, expected=0)',
+            reason=f'InputOutputMismatch: Fee amount is different than expected. (amount={10**16}, expected=0)',
         )
 
         nc_storage_after_fail = self.manager.get_best_block_nc_storage(tx1.hash)
@@ -319,13 +328,16 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
+        missing_htr = 1000
         removed_htr_output = tx2.outputs.pop()
         assert removed_htr_output.token_data == 0
-        assert removed_htr_output.value == 1000
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        assert removed_htr_output.value.raw() == missing_htr
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
@@ -343,7 +355,10 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: There\'s an invalid deficit of HTR. (amount=-1000, expected=0)',
+            reason=(
+                f'InputOutputMismatch: There\'s an invalid deficit of HTR. '
+                f'(amount=SignedAmount(-{missing_htr * 10**16}), expected=SignedAmount(0))'
+            )
         )
 
     def test_postponed_verification_fail_mint_htr(self) -> None:
@@ -370,12 +385,15 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
-        extra_htr_output = TxOutput(value=1000, script=b'')
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
+        extra_htr = 1000
+        extra_htr_output = TxOutput(value=UnsignedAmount.from_v1(extra_htr), script=b'')
         tx2.outputs.append(fbt_output)
         tx2.outputs.append(extra_htr_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
@@ -390,7 +408,8 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         assert isinstance(e.value.__cause__, InvalidNewTransaction)
         assert e.value.__cause__.args[0] == (
-            'full validation failed: There\'s an invalid surplus of HTR. (amount=1000, expected=0)'
+            f'full validation failed: There\'s an invalid surplus of HTR. '
+            f'(amount=SignedAmount({extra_htr * 10**16}), expected=SignedAmount(0))'
         )
 
     def test_postponed_verification_pay_fee_with_fbt(self) -> None:
@@ -416,14 +435,16 @@ class FeeTokensTestCase(BlueprintTestCase):
         fbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='FBT')
         tx2.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9 - 100, script=b'', token_data=1)
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9 - 100), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
-        fee_entry = FeeHeaderEntry(token_index=1, amount=100)
+        fee_entry = FeeHeaderEntry(token_index=1, amount=UnsignedAmount.from_v1(100))
         fee_header = FeeHeader(self._settings, tx2, [fee_entry])
         tx2.headers.append(fee_header)
 
@@ -471,11 +492,13 @@ class FeeTokensTestCase(BlueprintTestCase):
         tx2.tokens.append(fbt_id)
         tx3.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
         tx3.outputs.append(fbt_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 
@@ -534,11 +557,13 @@ class FeeTokensTestCase(BlueprintTestCase):
         tx2.tokens.append(fbt_id)
         tx3.tokens.append(fbt_id)
 
-        fbt_output = TxOutput(value=10 ** 9, script=b'', token_data=1)
+        fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
         tx3.outputs.append(fbt_output)
 
-        fbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10 ** 9)
+        fbt_withdraw = NanoHeaderAction(
+            type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10 ** 9),
+        )
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(fbt_withdraw)
 

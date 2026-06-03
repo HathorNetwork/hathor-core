@@ -31,6 +31,7 @@ from hathor.transaction.types import MetaNCCallRecord
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
 from hathor_tests import unittest
+from hathorlib.token_amount import UnsignedAmount
 
 
 class TestMetadata(unittest.TestCase):
@@ -61,14 +62,14 @@ class TestMetadata(unittest.TestCase):
                     ),
                     CreateTokenRecord(
                         token_uid=TokenUid(b'ttt'),
-                        amount=123,
+                        amount=UnsignedAmount.from_v1(123),
                         token_symbol='s',
                         token_name='n',
                         token_version=TokenVersion.FEE,
                     ),
                     UpdateTokenBalanceRecord(
                         token_uid=TokenUid(b'ttt'),
-                        amount=123,
+                        amount=UnsignedAmount.from_v1(123).to_signed(),
                     ),
                     UpdateAuthoritiesRecord(
                         type=IndexRecordType.REVOKE_AUTHORITIES,
