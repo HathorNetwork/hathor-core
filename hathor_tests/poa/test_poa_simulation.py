@@ -38,7 +38,6 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import not_none
 from hathor_tests.poa.utils import get_settings, get_signer
 from hathor_tests.simulation.base import SimulatorTestCase
-from hathorlib.decimal_places import VertexDecimalVersion
 
 
 def _get_blocks_by_height(manager: HathorManager) -> defaultdict[int, list[PoaBlock]]:
@@ -507,7 +506,8 @@ class PoaSimulationTest(SimulatorTestCase):
             GENESIS_TX1_NONCE=0,
             GENESIS_TX2_NONCE=0,
             DISPLAY_DECIMAL_PLACES=0,
-            VERTEX_DECIMAL_PLACES={VertexDecimalVersion.V1: 0},
+            TOKEN_AMOUNT_V1_DECIMAL_PLACES=0,
+            TOKEN_AMOUNT_V2_DECIMAL_PLACES=0,
             GENESIS_TOKEN_MAIN_UNITS=tokens,
             TOKEN_DEPOSIT_PERCENTAGE_PPB=100,
             BLOCKS_PER_HALVING=None,

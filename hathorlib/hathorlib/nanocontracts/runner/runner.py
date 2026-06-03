@@ -90,6 +90,7 @@ from hathorlib.nanocontracts.utils import (
     is_nc_public_method,
     is_nc_view_method,
 )
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import clean_token_string
 from hathorlib.utils.token_validation import validate_fee_amount, validate_token_name_and_symbol
@@ -126,6 +127,7 @@ class Runner:
         reactor: ClockProtocol,
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
+        token_amount_version: TokenAmountVersion,
         tx_storage: NCTransactionStorageProtocol,
         blueprint_service: BlueprintServiceProtocol,
         storage_factory: NCStorageFactory,
@@ -140,6 +142,7 @@ class Runner:
         self._settings = settings
         self.reactor = reactor
         self._runtime_version = runtime_version
+        self.token_amount_version = token_amount_version
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -470,7 +473,7 @@ class Runner:
         # call below, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
         for action in actions:
-            rules = BalanceRules.get_rules(self._settings, action)
+            rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
             rules.nc_caller_execution_rule(previous_changes_tracker)
 
         # All calls must begin with non-negative balance.
@@ -673,7 +676,7 @@ class Runner:
 
         self._validate_actions(method, called_method_name, ctx)
         for action in ctx.__all_actions__:
-            rules = BalanceRules.get_rules(self._settings, action)
+            rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
             rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
@@ -1285,7 +1288,7 @@ class Runner:
                 raise NCFail('syscall `get_settings` is not yet supported')
             case NanoRuntimeVersion.V2:
                 return NanoSettings(
-                    fee_per_output=self._settings.FEE_PER_OUTPUT,
+                    fee_per_output=self._settings.FEE_PER_OUTPUT_V1,
                 )
             case _:
                 assert_never(self._runtime_version)
@@ -1421,7 +1424,7 @@ class Runner:
             # because we registered all fee tokens in the paid fees dict, it should contain at
             # least the length of fees
             assert fee.token_uid in self._paid_actions_fees
-            fee_sum += fee.get_htr_value(self._settings)
+            fee_sum += fee.__get_htr_value__(self._settings, self.token_amount_version)
 
         chargeable_actions = {NCActionType.DEPOSIT, NCActionType.WITHDRAWAL}
         for token_uid, actions in ctx_actions.items():
@@ -1470,6 +1473,7 @@ class RunnerFactory:
         self,
         *,
         runtime_version: NanoRuntimeVersion,
+        token_amount_version: TokenAmountVersion,
         block_storage: NCBlockStorage,
         seed: bytes | None = None,
     ) -> Runner:
@@ -1477,6 +1481,7 @@ class RunnerFactory:
             reactor=self.reactor,
             settings=self.settings,
             runtime_version=runtime_version,
+            token_amount_version=token_amount_version,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
             blueprint_service=self.blueprint_service,

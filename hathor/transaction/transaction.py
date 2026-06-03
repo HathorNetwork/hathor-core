@@ -36,7 +36,7 @@ from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
-from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 T = TypeVar('T', bound=AnyVertexHeader)
@@ -267,7 +267,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
-        json['decimal_version'] = self.get_decimal_version().value
+        json['token_amount_version'] = self.get_token_amount_version().value
 
         if self.is_nano_contract():
             nano_header = self.get_nano_header()
@@ -345,7 +345,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         nano_header = self.get_nano_header()
 
         for action in nano_header.get_actions():
-            rules = BalanceRules.get_rules(self._settings, action)
+            rules = BalanceRules.get_rules(self._settings, action, self.get_token_amount_version())
             if action.token_uid not in token_dict:
                 # we try to load this token version from storage in case it's not in the inputs
                 token_dict[action.token_uid] = TokenInfo(
@@ -474,9 +474,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self.set_static_metadata(static_metadata)
 
     @final
-    def get_decimal_version(self) -> VertexDecimalVersion:
-        """
-        Return the decimal-places version under which this transaction's token amounts are interpreted.
-        """
+    def get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which this transaction's token amounts are interpreted."""
         # Transactions are always V1. This will be updated in the future.
-        return VertexDecimalVersion.V1
+        return TokenAmountVersion.V1

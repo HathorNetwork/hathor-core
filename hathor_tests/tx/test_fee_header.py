@@ -12,7 +12,7 @@ from hathor_tests import unittest
 
 def _serialize_fee_header(header: FeeHeader) -> bytes:
     serializer = Serializer.build_bytes_serializer()
-    serialize_fee_header(serializer, header, decimal_version=header.tx.get_decimal_version())
+    serialize_fee_header(serializer, header, token_amount_version=header.tx.get_token_amount_version())
     return bytes(serializer.finalize())
 
 
@@ -23,7 +23,7 @@ def _deserialize_fee_header(
     verbose: VerboseCallback = None,
 ) -> tuple[FeeHeader, bytes]:
     deserializer = Deserializer.build_bytes_deserializer(buf)
-    fees = deserialize_fee_header(deserializer, decimal_version=tx.get_decimal_version(), verbose=verbose)
+    fees = deserialize_fee_header(deserializer, token_amount_version=tx.get_token_amount_version(), verbose=verbose)
     header = FeeHeader(settings=tx._settings, tx=tx, fees=fees)
     return header, bytes(deserializer.read_all())
 
@@ -78,7 +78,7 @@ class FeeHeaderTest(unittest.TestCase):
             tx=tx,
             fees=[FeeHeaderEntry(token_index=0, amount=500)],  # HTR paying
         )
-        sighash_bytes = get_header_sighash_bytes(header_sighash, decimal_version=tx.get_decimal_version())
+        sighash_bytes = get_header_sighash_bytes(header_sighash, token_amount_version=tx.get_token_amount_version())
         serialized_bytes = _serialize_fee_header(header_sighash)
 
         # The fee header sighash bytes are identical to its full serialization.

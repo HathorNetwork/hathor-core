@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from hathor.serialization import Serializer
 from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import BaseTransaction, TxInput, TxOutput
@@ -118,13 +118,13 @@ def serialize_headers(serializer: Serializer, vertex: BaseTransaction) -> None:
     from hathor.transaction.vertex_parser._headers import serialize_header
     match vertex:
         case Transaction():
-            decimal_version = vertex.get_decimal_version()
+            token_amount_version = vertex.get_token_amount_version()
         case Block():
-            decimal_version = VertexDecimalVersion.V1  # Blocks are always V1.
+            token_amount_version = TokenAmountVersion.V1  # Blocks are always V1.
         case _:
             raise AssertionError('unreachable')
     for h in vertex.headers:
-        serialize_header(serializer, h, decimal_version=decimal_version)
+        serialize_header(serializer, h, token_amount_version=token_amount_version)
 
 
 def serialize_without_nonce(serializer: Serializer, vertex: BaseTransaction) -> None:
@@ -150,7 +150,9 @@ def serialize_sighash(tx: Transaction, *, skip_cache: bool = False) -> bytes:
         return tx._sighash_cache
 
     from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
-    headers_sighash = [get_header_sighash_bytes(h, decimal_version=tx.get_decimal_version()) for h in tx.headers]
+    headers_sighash = [
+        get_header_sighash_bytes(h, token_amount_version=tx.get_token_amount_version()) for h in tx.headers
+    ]
 
     serializer = Serializer.build_bytes_serializer()
 
@@ -203,11 +205,11 @@ def serialize_tx_input_sighash(txin: TxInput) -> bytes:
     return bytes(serializer.finalize())
 
 
-def serialize_tx_output_bytes(txout: TxOutput, *, decimal_version: VertexDecimalVersion) -> bytes:
+def serialize_tx_output_bytes(txout: TxOutput, *, token_amount_version: TokenAmountVersion) -> bytes:
     """Serialize a TxOutput. Replaces bytes(txout)."""
     from hathor.transaction.vertex_parser._common import serialize_tx_output as _ser
     serializer = Serializer.build_bytes_serializer()
-    _ser(serializer, txout, decimal_version=decimal_version)
+    _ser(serializer, txout, token_amount_version=token_amount_version)
     return bytes(serializer.finalize())
 
 
@@ -238,7 +240,7 @@ def deserialize_tx_input(buf: bytes, *, verbose: VerboseCallback = None) -> tupl
 def deserialize_tx_output(
     buf: bytes,
     *,
-    decimal_version: VertexDecimalVersion,
+    token_amount_version: TokenAmountVersion,
     verbose: VerboseCallback = None,
 ) -> tuple[TxOutput, bytes]:
     """Deserialize a TxOutput from bytes. Replaces TxOutput.create_from_bytes()."""
@@ -246,7 +248,7 @@ def deserialize_tx_output(
     from hathor.transaction.vertex_parser._common import _deserialize_tx_output
 
     deserializer = Deserializer.build_bytes_deserializer(buf)
-    txout = _deserialize_tx_output(deserializer, decimal_version=decimal_version, verbose=verbose)
+    txout = _deserialize_tx_output(deserializer, token_amount_version=token_amount_version, verbose=verbose)
     remaining = bytes(deserializer.read_all())
     return txout, remaining
 
