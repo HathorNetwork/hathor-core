@@ -68,20 +68,20 @@ class TestFeeHeaderVerifier(unittest.TestCase):
         tx = self._create_transaction_with_tokens(1)  # Custom token at index 1
 
         # Invalid zero amount
-        with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got 0"):
+        with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got 0.0"):
             fees = [FeeHeaderEntry(token_index=0, amount=UnsignedAmount.zero())]  # HTR fee
             header = self._create_fee_header(tx, fees)
             FeeHeaderVerifier.verify_fee_list(header, tx)
 
-        # Invalid negative amount
-        with pytest.raises(InvalidFeeAmount, match="fees should be a positive integer, got -50"):
-            fees = [FeeHeaderEntry(token_index=0, amount=-50)]  # HTR fee
-            header = self._create_fee_header(tx, fees)
-            FeeHeaderVerifier.verify_fee_list(header, tx)
-
-        # Invalid non-multiple of 100
-        with pytest.raises(InvalidFeeAmount,
-                           match="fees using deposit custom tokens should be a multiple of 100, got 150"):
+        # Invalid non-multiple of the divisor for a deposit custom token.
+        factor = UnsignedAmount.get_normalization_factor()
+        with pytest.raises(
+            InvalidFeeAmount,
+            match=(
+                f"fees using deposit custom tokens should be a multiple of {self._settings.FEE_DIVISOR * factor}, "
+                f"got {150 * factor}"
+            ),
+        ):
             fees = [FeeHeaderEntry(token_index=1, amount=UnsignedAmount.from_v1(150))]
             header = self._create_fee_header(tx, fees)
             FeeHeaderVerifier.verify_fee_list(header, tx)

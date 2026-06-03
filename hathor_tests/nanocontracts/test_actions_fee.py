@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from hathor.nanocontracts.blueprint import Blueprint
@@ -336,7 +338,7 @@ class NCActionsFeeTestCase(BlueprintTestCase):
                 fee_amount=0
             )
 
-        msg = 'fees using deposit custom tokens should be a multiple of 100, got 101'
+        msg = 'fees using deposit custom tokens should be a multiple of 1000000000000000000, got 1010000000000000000'
         with pytest.raises(NCInvalidFee, match=msg):
             self.runner.call_public_method(
                 self.nc1_id,
@@ -350,8 +352,8 @@ class NCActionsFeeTestCase(BlueprintTestCase):
             )
 
         # paying attempt with a valid value but incorrect amount
-        msg = r'Fee payment balance is different than expected\. \(amount=2, expected=1\)'
-        with pytest.raises(NCInvalidFee, match=msg):
+        msg = 'Fee payment balance is different than expected. (amount=0.02, expected=0.01)'
+        with pytest.raises(NCInvalidFee, match=re.escape(msg)):
             self.runner.call_public_method(
                 self.nc1_id,
                 'move_tokens_to_nc',

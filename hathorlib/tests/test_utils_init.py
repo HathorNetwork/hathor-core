@@ -14,6 +14,8 @@
 
 import unittest
 
+from hathorlib.conf import HathorSettings
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.utils import (
     bytes_to_int,
     clean_token_string,
@@ -89,16 +91,39 @@ class TestNotNone(unittest.TestCase):
 
 
 class TestDepositFunctions(unittest.TestCase):
-    def test_deposit_amount(self) -> None:
-        from hathorlib.conf import HathorSettings
-        settings = HathorSettings()
-        result = get_deposit_token_deposit_amount(settings, 100)
-        self.assertIsInstance(result, int)
-        self.assertGreater(result, 0)
+    # Both helpers consume and produce TokenAmounts. Arg values are V2 atomic units
+    # (10**18 = 1 HTR, 10**16 = 1 HTR cent). Return values are always cent-aligned.
 
-    def test_withdraw_amount(self) -> None:
-        from hathorlib.conf import HathorSettings
-        settings = HathorSettings()
-        result = get_deposit_token_withdraw_amount(settings, 100)
-        self.assertIsInstance(result, int)
-        self.assertGreater(result, 0)
+    def setUp(self) -> None:
+        super().setUp()
+        self.settings = HathorSettings()
+
+    def test_deposit_amount_one_htr_mint(self) -> None:
+        # 1% of 1 HTR = 0.01 HTR = exactly 1 cent.
+        result = get_deposit_token_deposit_amount(self.settings, UnsignedAmount.from_v2(100 * 10**16))
+        assert result.normalized() == 10**16
+
+    def test_deposit_amount_ceils_to_next_cent(self) -> None:
+        # 1% of 1.01 HTR = 0.0101 HTR, ceiled up to 2 cents.
+        result = get_deposit_token_deposit_amount(self.settings, UnsignedAmount.from_v2(101 * 10**16))
+        assert result.normalized() == 2 * 10**16
+
+    def test_deposit_amount_enforces_minimum(self) -> None:
+        # 1% of a sub-cent mint still requires the 1-cent minimum.
+        result = get_deposit_token_deposit_amount(self.settings, UnsignedAmount.from_v2(1))
+        assert result.normalized() == 10**16
+
+    def test_withdraw_amount_one_htr_melt(self) -> None:
+        # 1% of 1 HTR = 0.01 HTR = exactly 1 cent.
+        result = get_deposit_token_withdraw_amount(self.settings, UnsignedAmount.from_v2(100 * 10**16))
+        assert result.normalized() == 10**16
+
+    def test_withdraw_amount_floors_to_previous_cent(self) -> None:
+        # 1% of 1.99 HTR = 0.0199 HTR, floored down to 1 cent.
+        result = get_deposit_token_withdraw_amount(self.settings, UnsignedAmount.from_v2(199 * 10**16))
+        assert result.normalized() == 10**16
+
+    def test_withdraw_amount_below_one_cent_returns_zero(self) -> None:
+        # Sub-cent withdrawals are kept by the system.
+        result = get_deposit_token_withdraw_amount(self.settings, UnsignedAmount.from_v2(1))
+        assert result.normalized() == 0

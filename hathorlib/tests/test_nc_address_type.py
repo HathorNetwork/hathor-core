@@ -59,7 +59,7 @@ class TestNCFee(unittest.TestCase):
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
         fee = NCFee(token_uid=NC_HTR_TOKEN_UID, amount=100)
-        self.assertEqual(fee.__get_htr_value__(settings, TokenAmountVersion.V1), 100)
+        self.assertEqual(fee.__get_htr_value__(settings, TokenAmountVersion.V1), UnsignedAmount.from_v1(100))
 
     def test_custom_token_fee_value(self) -> None:
         from hathorlib.conf import HathorSettings
@@ -68,4 +68,4 @@ class TestNCFee(unittest.TestCase):
         # For custom token, it converts using deposit percentage
         result = fee.__get_htr_value__(settings, TokenAmountVersion.V1)
         self.assertIsInstance(result, UnsignedAmount)
-        self.assertGreater(result, 0)
+        self.assertGreater(result, UnsignedAmount.zero())

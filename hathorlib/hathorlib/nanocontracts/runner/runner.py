@@ -166,7 +166,7 @@ class Runner:
         self._updated_tokens_totals: defaultdict[TokenUid, SignedAmount] = defaultdict(SignedAmount)
 
         # Information about fees paid during execution inter-contract calls.
-        self._paid_actions_fees: defaultdict[TokenUid, UnsignedAmount] = defaultdict(int)
+        self._paid_actions_fees: defaultdict[TokenUid, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
 
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""
@@ -462,8 +462,11 @@ class Runner:
 
         # Validate fees
         for fee in fees:
+            if fee.amount <= 0:
+                raise NCInvalidFee(f'fees should be a positive integer, got {fee.amount}')
+            amount = UnsignedAmount.from_version(fee.amount, version=self.token_amount_version)
             try:
-                validate_fee_amount(self._settings, fee.token_uid, fee.amount)
+                validate_fee_amount(self._settings, fee.token_uid, amount)
             except InvalidFeeAmount as e:
                 raise NCInvalidFee(str(e)) from e
 
@@ -484,10 +487,11 @@ class Runner:
         # execution, the verification of the tokens and amounts will be done after it
         for fee in fees:
             assert fee.amount > 0
+            fee_amount = UnsignedAmount.from_version(fee.amount, version=self.token_amount_version)
             self._update_tokens_amount(
-                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee.amount),
+                fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee_amount.to_signed()),
             )
-            self._register_paid_fee(fee.token_uid, fee.amount)
+            self._register_paid_fee(fee.token_uid, fee_amount)
 
         ctx_actions = Context.__group_actions__(actions)
         # Call the other contract method.
@@ -524,7 +528,7 @@ class Runner:
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
         self._updated_tokens_totals = defaultdict(SignedAmount)
-        self._paid_actions_fees = defaultdict(int)
+        self._paid_actions_fees = defaultdict(UnsignedAmount.zero)
 
     def _validate_balances(self, ctx: Context) -> None:
         """
@@ -559,7 +563,7 @@ class Runner:
                         # Nothing to do here.
                         pass
                     case CreateTokenRecord() | UpdateTokenBalanceRecord():
-                        calculated_tokens_totals[record.token_uid] += record.amount
+                        calculated_tokens_totals[record.token_uid] += record.amount.to_signed()
                     case _:  # pragma: no cover
                         assert_never(record)
 
@@ -575,10 +579,12 @@ class Runner:
         for action in ctx.__all_actions__:
             match action:
                 case NCDepositAction():
-                    total_diffs[action.token_uid] -= action.amount
+                    token_amount = UnsignedAmount.from_version(action.amount, version=self.token_amount_version)
+                    total_diffs[action.token_uid] -= token_amount.to_signed()
 
                 case NCWithdrawalAction():
-                    total_diffs[action.token_uid] += action.amount
+                    token_amount = UnsignedAmount.from_version(action.amount, version=self.token_amount_version)
+                    total_diffs[action.token_uid] += token_amount.to_signed()
 
                 case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
                     # These actions don't affect the tx balance,
@@ -1055,17 +1061,18 @@ class Runner:
         if not balance.can_mint:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot mint {token_uid.hex()} tokens')
 
+        token_amount = UnsignedAmount.from_version(amount, version=self.token_amount_version)
         token_info = self._get_token(token_uid)
         fee_amount = calculate_mint_fee(
             settings=self._settings,
             token_version=token_info.token_version,
-            amount=amount,
+            amount=token_amount,
             fee_payment_token=self._get_token(fee_payment_token),
         )
 
-        assert amount > 0 and fee_amount < 0
+        assert fee_amount < SignedAmount(0)
         self._update_tokens_amount(
-            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=amount),
+            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=token_amount.to_signed()),
             fee=UpdateTokenBalanceRecord(token_uid=fee_payment_token, amount=fee_amount),
         )
 
@@ -1094,15 +1101,15 @@ class Runner:
         if not balance.can_melt:
             raise NCInvalidSyscall(f'contract {call_record.contract_id.hex()} cannot melt {token_uid.hex()} tokens')
 
+        token_amount = UnsignedAmount.from_version(amount, version=self.token_amount_version)
         token_info = self._get_token(token_uid)
         fee_amount = calculate_melt_fee(
             settings=self._settings,
             token_version=token_info.token_version,
-            amount=amount,
+            amount=token_amount,
             fee_payment_token=self._get_token(fee_payment_token),
         )
 
-        assert amount > 0
         match token_info.token_version:
             case TokenVersion.NATIVE:
                 raise AssertionError
@@ -1114,7 +1121,7 @@ class Runner:
                 assert_never(token_info.token_version)
 
         self._update_tokens_amount(
-            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=-amount),
+            operation=UpdateTokenBalanceRecord(token_uid=token_uid, amount=-token_amount.to_signed()),
             fee=UpdateTokenBalanceRecord(token_uid=fee_payment_token, amount=fee_amount),
         )
 
@@ -1303,9 +1310,16 @@ class Runner:
             case NanoRuntimeVersion.V1:
                 raise NCFail('syscall `get_settings` is not yet supported')
             case NanoRuntimeVersion.V2:
-                return NanoSettings(
-                    fee_per_output=self._settings.FEE_PER_OUTPUT_V1,
-                )
+                fee_per_output: int
+                assert self._settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.is_v1()
+                match self.token_amount_version:
+                    case TokenAmountVersion.V1:
+                        fee_per_output = self._settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.raw()
+                    case TokenAmountVersion.V2:
+                        fee_per_output = self._settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.normalized()
+                    case _:
+                        assert_never(self.token_amount_version)
+                return NanoSettings(fee_per_output=fee_per_output)
             case _:
                 assert_never(self._runtime_version)
 
@@ -1361,17 +1375,18 @@ class Runner:
     ) -> None:
         """Create a new token."""
         assert token_version in (TokenVersion.DEPOSIT, TokenVersion.FEE)
+        token_amount = UnsignedAmount.from_version(amount, version=self.token_amount_version)
         fee_amount = calculate_mint_fee(
             settings=self._settings,
             token_version=token_version,
-            amount=amount,
+            amount=token_amount,
             fee_payment_token=fee_payment_token,
         )
-        assert amount > 0 and fee_amount < 0
+        assert fee_amount < SignedAmount(0)
         self._update_tokens_amount(
             operation=CreateTokenRecord(
                 token_uid=token_uid,
-                amount=amount,
+                amount=token_amount,
                 token_version=token_version,  # type: ignore[arg-type]
                 token_symbol=token_symbol,
                 token_name=token_name,
@@ -1405,8 +1420,8 @@ class Runner:
         for record in (operation, fee):
             if record is None:
                 continue
-            changes_tracker.add_balance(record.token_uid, record.amount)
-            self._updated_tokens_totals[record.token_uid] += record.amount
+            changes_tracker.add_balance(record.token_uid, record.amount.to_signed())
+            self._updated_tokens_totals[record.token_uid] += record.amount.to_signed()
             call_record.index_updates.append(record)
 
     def _register_paid_fee(self, token_uid: TokenUid, amount: UnsignedAmount) -> None:
@@ -1423,10 +1438,10 @@ class Runner:
         It should be called only after a nano contract method execution to ensure all tokens are already created.
         """
         # sum of the fee provided by the caller
-        fee_sum = 0
+        fee_sum = UnsignedAmount.zero()
 
         # sum of the expected fee calculated by this method
-        expected_fee = 0
+        expected_fee = UnsignedAmount.zero()
 
         allowed_token_versions = {TokenVersion.DEPOSIT, TokenVersion.NATIVE}
         # check if the payment tokens are all deposit
@@ -1453,7 +1468,9 @@ class Runner:
             token_info = self._get_token(token_uid)
             if token_info.token_version == TokenVersion.FEE:
                 # filter actions to only include deposit and withdrawal actions
-                expected_fee += sum(1 for action in actions if action.type in chargeable_actions)
+                expected_fee += UnsignedAmount.from_v1(
+                    sum(self._settings.FEE_PER_OUTPUT_V1 for action in actions if action.type in chargeable_actions)
+                )
 
         if fee_sum != expected_fee:
             raise NCInvalidFee(

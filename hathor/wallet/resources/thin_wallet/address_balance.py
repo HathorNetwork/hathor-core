@@ -33,15 +33,15 @@ if TYPE_CHECKING:
 
 
 class TokenData:
-    received: UnsignedAmount = 0
-    spent: UnsignedAmount = 0
+    received: UnsignedAmount = UnsignedAmount.zero()
+    spent: UnsignedAmount = UnsignedAmount.zero()
     name: str = ''
     symbol: str = ''
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, api_version: APIVersion) -> dict[str, Any]:
         return {
-            'received': self.received,
-            'spent': self.spent,
+            'received': api_version.unsigned_amount_to_response(self.received),
+            'spent': api_version.unsigned_amount_to_response(self.spent),
             'name': self.name,
             'symbol': self.symbol,
         }
@@ -151,7 +151,7 @@ class AddressBalanceResource(Resource):
                     # But better than get a 500 error
                     tokens_data[token_uid].name = '- (unable to fetch token information)'
                     tokens_data[token_uid].symbol = '- (unable to fetch token information)'
-            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict()
+            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict(self.api_version)
 
         data: dict[str, Any] = {
             'success': True,
@@ -167,9 +167,36 @@ AddressBalanceResource.openapi = {
         'x-visibility': 'public',
         'x-api-versions': ['v1a', 'v2'],
         'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
+            'v2': [
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'tokens_data', '00', 'received'
+                    ],
+                    'value': '1.0',
+                },
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'tokens_data', '00', 'spent'
+                    ],
+                    'value': '1.0',
+                },
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'tokens_data', '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702', 'received'
+                    ],
+                    'value': '1.0',
+                },
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'tokens_data', '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702', 'spent'
+                    ],
+                    'value': '1.0',
+                },
+            ],
         },
         'x-rate-limit': {
             'global': [

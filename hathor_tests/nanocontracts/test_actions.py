@@ -177,14 +177,14 @@ class TestActions(unittest.TestCase):
             assert tx.get_token_uid(out.get_token_index()) == HATHOR_TOKEN_UID, (
                 'expected HTR in output index 0'
             )
-            out.value = (out.value + update_htr_output).to_unsigned().to_v1()
+            out.value = (out.value.to_signed() + update_htr_output).to_unsigned().to_v1()
 
         if update_tka_output is not None:
             out = tx.outputs[1]
             assert tx.get_token_uid(out.get_token_index()) == self.tka.hash, (
                 'expected TKA in output index 1'
             )
-            out.value = (out.value + update_tka_output).to_unsigned().to_v1()
+            out.value = (out.value.to_signed() + update_tka_output).to_unsigned().to_v1()
 
         if add_inputs:
             tx.inputs.extend(add_inputs)

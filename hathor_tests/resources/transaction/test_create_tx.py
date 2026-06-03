@@ -13,11 +13,13 @@ from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
-class TransactionTest(_BaseResourceTest._ResourceTest):
+class _BaseTransactionTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+    api_version: APIVersion
+
     def setUp(self):
         super().setUp()
-        # TODO(decimals): test v2
-        self.web = StubSite(CreateTxResource(self.manager, APIVersion.V1A))
+        self.web = StubSite(CreateTxResource(self.manager, self.api_version))
         self.manager.wallet.unlock(b'MYPASS')
         self.spent_blocks = add_new_blocks(self.manager, 10)
         self.unspent_blocks = add_blocks_unlock_reward(self.manager)
@@ -97,7 +99,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': address,
-                    'value': 6400,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(6400)),
                 }
             ]
         })).json_value()
@@ -134,7 +136,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': address,
-                    'value': 100,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(100)),
                 }
             ]
         })).json_value()
@@ -172,7 +174,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'script': script_str,
-                    'value': 100,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(100)),
                 }
             ]
         })).json_value()
@@ -209,7 +211,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': output_address,
-                    'value': 100,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(100)),
                 }
             ]
         })).json_value()
@@ -254,7 +256,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': output_address,
-                    'value': 600,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(600)),
                 },
             ]
         })).json_value()
@@ -292,7 +294,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
-                    'value': 6400,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(6400)),
                 }
             ]
         })).json_value()
@@ -312,12 +314,12 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
-                    'value': 101,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(101)),
                 }
             ]
         })).json_value()
         self.assertEqual(resp, {
-            'error': 'There\'s an invalid surplus of HTR. (amount=1, expected=0)'
+            'error': 'There\'s an invalid surplus of HTR. (amount=0.01, expected=0.0)'
         })
 
     @inlineCallbacks
@@ -332,12 +334,12 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
-                    'value': 99,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(99)),
                 }
             ]
         })).json_value()
         self.assertEqual(resp, {
-            'error': 'There\'s an invalid deficit of HTR. (amount=-1, expected=0)'
+            'error': 'There\'s an invalid deficit of HTR. (amount=-0.01, expected=0.0)'
         })
 
     @inlineCallbacks
@@ -352,7 +354,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
             'outputs': [
                 {
                     'address': 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199Aa',
-                    'value': 99,
+                    'value': self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(99)),
                 }
             ]
         })).json_value()
@@ -361,3 +363,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         })
 
     # TODO: tests that use the tokens field (i.e. not only HTR)
+
+
+class TransactionV1ATest(_BaseTransactionTest):
+    __test__ = True
+    api_version = APIVersion.V1A
+
+
+class TransactionV2Test(_BaseTransactionTest):
+    __test__ = True
+    api_version = APIVersion.V2

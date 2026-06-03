@@ -31,11 +31,11 @@ from hathor.transaction.scripts import P2PKH
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, get_genesis_key
+from hathorlib.token_amount import UnsignedAmount
 
 settings = HathorSettings()
 
 Amount: TypeAlias = int
-
 
 class MyNamedTuple(NamedTuple):
     amount1: int
@@ -136,7 +136,10 @@ class MyBlueprint(Blueprint):
         )
 
 
-class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
+class _BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+    api_version: APIVersion
+
     def setUp(self):
         super().setUp()
 
@@ -153,8 +156,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
 
         *_, self.last_block = add_blocks_unlock_reward(self.manager)
 
-        # TODO(decimals): test v2
-        self.web = StubSite(NanoContractStateResource(self.manager, APIVersion.V1A))
+        self.web = StubSite(NanoContractStateResource(self.manager, self.api_version))
 
         self.bet_id = bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595')
         self.manager.blueprint_service.register_blueprint(self.bet_id, MyBlueprint)
@@ -324,7 +326,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances1 = data1['balances']
         self.assertEqual(
             balances1,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.zero())),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
         calls1 = data1['calls']
         self.assertEqual(calls1, {
@@ -419,7 +425,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances2 = data2['balances']
         self.assertEqual(
             balances2,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(10**11))),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
 
         # Test __all__ balance
@@ -436,7 +446,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances3 = data3['balances']
         self.assertEqual(
             balances3,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(10**11))),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
 
         # Test getting the state in a previous block
@@ -463,7 +477,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances4 = data4['balances']
         self.assertEqual(
             balances4,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.zero())),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
 
         # With block height
@@ -489,7 +507,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances5 = data5['balances']
         self.assertEqual(
             balances5,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.zero())),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
 
         # With block2.timestamp, should get block2 state
@@ -515,7 +537,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances6 = data6['balances']
         self.assertEqual(
             balances6,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(10**11))),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
 
         # With block2.timestamp - 1, should get block1 state
@@ -541,7 +567,11 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances7 = data7['balances']
         self.assertEqual(
             balances7,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(self.api_version.unsigned_amount_to_response(UnsignedAmount.zero())),
+                'can_mint': False,
+                'can_melt': False,
+            }}
         )
 
         # With block1.timestamp - 1, the contract doesn't exist
@@ -651,3 +681,13 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         # The NC was confirmed by b11 which is now voided, so the contract
         # should not exist at this point (b10). The API must return 404, not crash.
         assert response.responseCode == 404
+
+
+class NanoContractStateV1ATest(_BaseNanoContractStateTest):
+    __test__ = True
+    api_version = APIVersion.V1A
+
+
+class NanoContractStateV2Test(_BaseNanoContractStateTest):
+    __test__ = True
+    api_version = APIVersion.V2

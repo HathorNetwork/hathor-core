@@ -20,6 +20,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.transaction import Block, Transaction, TxOutput
 from hathor.transaction.scripts import P2PKH
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
@@ -66,7 +67,7 @@ def generate_new_genesis(
     block = Block(
         timestamp=block_timestamp,
         weight=min_block_weight,
-        outputs=[TxOutput(tokens, output_script)],
+        outputs=[TxOutput(UnsignedAmount.from_v1(tokens), output_script)],
     )
     mining_service.start_mining(block, update_time=False)
     block.update_hash()

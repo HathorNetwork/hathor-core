@@ -67,7 +67,7 @@ class SendTokensResource(Resource):
             except InvalidAddress:
                 return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
-            value = int(output['value'])
+            value = self.api_version.unsigned_amount_from_request(output['value'])
             timelock = output.get('timelock')
             token_uid = output.get('token_uid')
             if token_uid:
@@ -192,9 +192,22 @@ SendTokensResource.openapi = {
         'x-visibility': 'private',
         'x-api-versions': ['v1a', 'v2'],
         'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
+            'v2': [
+                {
+                    'path': [
+                        'post', 'requestBody', 'content', 'application/json', 'examples', 'data', 'value', 'data',
+                        'outputs', 0, 'value',
+                    ],
+                    'value': '1.0',
+                },
+                {
+                    'path': [
+                        'post', 'requestBody', 'content', 'application/json', 'examples', 'data', 'value', 'data',
+                        'outputs', 1, 'value',
+                    ],
+                    'value': '0.8',
+                },
+            ],
         },
         'post': {
             'tags': ['private_wallet'],

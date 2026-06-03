@@ -230,6 +230,16 @@ def test_vertex_decimal_places() -> None:
         with pytest.raises(ValidationError, match=msg):
             load_yaml_settings(HathorSettings, filepath='some_path')
 
+        mock_settings(yaml_mock, dict(TOKEN_AMOUNT_V1_DECIMAL_PLACES=1, TOKEN_AMOUNT_V2_DECIMAL_PLACES=2))
+        msg = 'number of decimal places must be greater than or equal to 2'
+        with pytest.raises(ValidationError, match=msg):
+            load_yaml_settings(HathorSettings, filepath='some_path')
+
+        mock_settings(yaml_mock, dict(TOKEN_AMOUNT_V1_DECIMAL_PLACES=5, TOKEN_AMOUNT_V2_DECIMAL_PLACES=1))
+        msg = 'number of decimal places must be greater than or equal to 2'
+        with pytest.raises(ValidationError, match=msg):
+            load_yaml_settings(HathorSettings, filepath='some_path')
+
 
 # TODO: Tests below are temporary while settings via python coexist with settings via yaml, just to make sure
 #  the conversion was made correctly. After python settings are removed, this file can be removed too.

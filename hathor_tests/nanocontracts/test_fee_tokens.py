@@ -31,7 +31,7 @@ from hathor.transaction.scripts import Opcode
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
-from hathor_tests.token_amount import UnsignedAmount
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 
 
 class MyBlueprint(Blueprint):
@@ -230,7 +230,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: Fee amount is different than expected. (amount=1, expected=0)',
+            reason='InputOutputMismatch: Fee amount is different than expected. (amount=0.01, expected=0.0)',
         )
 
     def test_postponed_token_verification_failure_does_not_contaminate_state(self) -> None:
@@ -276,7 +276,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         assert tx1.get_metadata().voided_by is None
 
         nc_storage_before = self.manager.get_best_block_nc_storage(tx1.hash)
-        expected_htr_balance = Balance(value=1, can_mint=False, can_melt=False)
+        expected_htr_balance = Balance(value=SignedAmount(10**16), can_mint=False, can_melt=False)
         assert nc_storage_before.get_balance(self._settings.HATHOR_TOKEN_UID) == expected_htr_balance
 
         artifacts.propagate_with(self.manager, up_to='b12')
@@ -288,7 +288,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: Fee amount is different than expected. (amount=1, expected=0)',
+            reason='InputOutputMismatch: Fee amount is different than expected. (amount=0.01, expected=0.0)',
         )
 
         nc_storage_after_fail = self.manager.get_best_block_nc_storage(tx1.hash)
@@ -331,7 +331,7 @@ class FeeTokensTestCase(BlueprintTestCase):
         missing_htr = 1000
         removed_htr_output = tx2.outputs.pop()
         assert removed_htr_output.token_data == 0
-        assert removed_htr_output.value == missing_htr
+        assert removed_htr_output.value.raw() == missing_htr
         fbt_output = TxOutput(value=UnsignedAmount.from_v1(10 ** 9), script=b'', token_data=1)
         tx2.outputs.append(fbt_output)
 
@@ -355,7 +355,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: There\'s an invalid deficit of HTR. (amount=-1000, expected=0)',
+            reason='InputOutputMismatch: There\'s an invalid deficit of HTR. (amount=-10.0, expected=0.0)',
         )
 
     def test_postponed_verification_fail_mint_htr(self) -> None:
@@ -405,7 +405,7 @@ class FeeTokensTestCase(BlueprintTestCase):
 
         assert isinstance(e.value.__cause__, InvalidNewTransaction)
         assert e.value.__cause__.args[0] == (
-            'full validation failed: There\'s an invalid surplus of HTR. (amount=1000, expected=0)'
+            'full validation failed: There\'s an invalid surplus of HTR. (amount=10.0, expected=0.0)'
         )
 
     def test_postponed_verification_pay_fee_with_fbt(self) -> None:
