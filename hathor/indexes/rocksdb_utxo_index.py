@@ -23,6 +23,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.indexes.rocksdb_utils import InternalUid, RocksDBIndexUtils, from_internal_token_uid, to_internal_token_uid
 from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -340,7 +341,7 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
             assert key.address == seek.address
             yield key.to_index_item()
 
-    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                              target_timestamp: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyTimeLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
                                 amount=target_amount, timelock=(target_timestamp or 0xffffffff))
@@ -354,7 +355,7 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
                 continue
             yield i
 
-    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                                target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyHeightLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
                                   amount=target_amount, heightlock=(target_height or 0xffffffff))

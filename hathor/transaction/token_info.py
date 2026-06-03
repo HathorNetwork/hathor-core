@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from hathor.types import TokenUid
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.token_info import TokenDescription, TokenVersion  # noqa: F401
 
 if TYPE_CHECKING:
@@ -41,14 +42,14 @@ class TokenInfo:
         Check if this token has been melted.
         A token is considered melted if its amount is negative.
         """
-        return self.amount < 0
+        return self.amount < SignedAmount(0)
 
     def has_been_minted(self) -> bool:
         """
         Check if this token has been minted.
         A token is considered minted if its amount is positive.
         """
-        return self.amount > 0
+        return self.amount > SignedAmount(0)
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):
@@ -58,7 +59,7 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
         super().__init__(*args, **kwargs)
         self.fees_from_fee_header: int = 0
 
-    def calculate_fee(self, settings: 'HathorSettings') -> int:
+    def calculate_fee(self, settings: 'HathorSettings') -> UnsignedAmount:
         """
          Calculate the total fee based on the number of chargeable
          outputs and inputs for each token in the transaction.
