@@ -45,6 +45,7 @@ from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES
 from hathor.transaction.scripts.p2pkh import P2PKH
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.wallet import BaseWallet, HDWallet, KeyPair
+from hathorlib.token_amount import TokenAmount
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
@@ -387,7 +388,7 @@ class VertexExporter:
             actions = node.get_attr_list(key, default=[])
             for token_name, value in actions:
                 assert isinstance(token_name, str)
-                assert isinstance(value, int)
+                assert isinstance(value, TokenAmount)
                 token_index = 0
                 if token_name != 'HTR':
                     assert isinstance(vertex, Transaction)

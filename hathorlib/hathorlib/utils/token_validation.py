@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError
+from hathorlib.token_amount import TokenAmount
 from hathorlib.utils import clean_token_string
 
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ def validate_token_name_and_symbol(settings: HathorSettings,
         raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))
 
 
-def validate_fee_amount(settings: HathorSettings, token_uid: bytes, amount: int) -> None:
+def validate_fee_amount(settings: HathorSettings, token_uid: bytes, amount: TokenAmount) -> None:
     """Validate the fee amount."""
     if amount <= 0:
         raise InvalidFeeAmount(f'fees should be a positive integer, got {amount}')

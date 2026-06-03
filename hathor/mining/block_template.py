@@ -22,13 +22,14 @@ from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.util import Random
+from hathorlib.token_amount import TokenAmount
 
 T = TypeVar('T', bound=Block)
 
 
 class BlockTemplate(NamedTuple):
     versions: set[int]
-    reward: int  # reward unit value, 64.00 HTR is 6400
+    reward: TokenAmount  # reward unit value, 64.00 HTR is 6400
     weight: float  # calculated from the DAA
     timestamp_now: int  # the reference timestamp the template was generated for
     timestamp_min: int  # min valid timestamp

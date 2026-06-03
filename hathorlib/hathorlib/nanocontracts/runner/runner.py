@@ -90,6 +90,7 @@ from hathorlib.nanocontracts.utils import (
     is_nc_public_method,
     is_nc_view_method,
 )
+from hathorlib.token_amount import TokenAmount, TokenBalance
 from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import clean_token_string
@@ -162,10 +163,10 @@ class Runner:
         self._rng_per_contract: dict[ContractId, NanoRNG] = {}
 
         # Information about updated tokens in the current call via syscalls.
-        self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
+        self._updated_tokens_totals: defaultdict[TokenUid, TokenBalance] = defaultdict(TokenBalance)
 
         # Information about fees paid during execution inter-contract calls.
-        self._paid_actions_fees: defaultdict[TokenUid, int] = defaultdict(int)
+        self._paid_actions_fees: defaultdict[TokenUid, TokenAmount] = defaultdict(int)
 
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""
@@ -522,7 +523,7 @@ class Runner:
         self._call_info = None
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
-        self._updated_tokens_totals = defaultdict(int)
+        self._updated_tokens_totals = defaultdict(TokenBalance)
         self._paid_actions_fees = defaultdict(int)
 
     def _validate_balances(self, ctx: Context) -> None:
@@ -534,7 +535,7 @@ class Runner:
         assert self._call_info.calls is not None
 
         # total_diffs accumulates the balance differences for all contracts called during this execution.
-        total_diffs: defaultdict[TokenUid, int] = defaultdict(int)
+        total_diffs: defaultdict[TokenUid, TokenBalance] = defaultdict(TokenBalance)
 
         # Each list of change trackers account for a single call in a contract.
         for change_trackers in self._call_info.change_trackers.values():
@@ -547,7 +548,7 @@ class Runner:
                 total_diffs[TokenUid(balance_key.token_uid)] += balance
 
         # Accumulate tokens totals from syscalls to compare with the totals from this runner.
-        calculated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
+        calculated_tokens_totals: defaultdict[TokenUid, TokenBalance] = defaultdict(TokenBalance)
         for call in self._call_info.calls:
             if call.index_updates is None:
                 assert call.type == CallType.VIEW
@@ -587,7 +588,7 @@ class Runner:
                 case _:  # pragma: no cover
                     assert_never(action)
 
-        assert all(diff == 0 for diff in total_diffs.values()), (
+        assert all(diff == TokenBalance(0) for diff in total_diffs.values()), (
             f'change tracker diffs do not match actions: {total_diffs}'
         )
 
@@ -1106,9 +1107,9 @@ class Runner:
             case TokenVersion.NATIVE:
                 raise AssertionError
             case TokenVersion.DEPOSIT:
-                assert fee_amount > 0
+                assert fee_amount > TokenBalance(0)
             case TokenVersion.FEE:
-                assert fee_amount < 0
+                assert fee_amount < TokenBalance(0)
             case _:  # pragma: no cover
                 assert_never(token_info.token_version)
 
@@ -1393,7 +1394,7 @@ class Runner:
             self._updated_tokens_totals[record.token_uid] += record.amount
             call_record.index_updates.append(record)
 
-    def _register_paid_fee(self, token_uid: TokenUid, amount: int) -> None:
+    def _register_paid_fee(self, token_uid: TokenUid, amount: TokenAmount) -> None:
         """ Register a fee payment in the current call."""
         self._paid_actions_fees[token_uid] += amount
 

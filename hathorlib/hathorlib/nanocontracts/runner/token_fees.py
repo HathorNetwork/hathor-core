@@ -16,6 +16,7 @@ from typing_extensions import assert_never
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.nanocontracts.exception import NCInvalidFeePaymentToken
+from hathorlib.token_amount import TokenAmount, TokenBalance
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 
@@ -24,9 +25,9 @@ def calculate_mint_fee(
     *,
     settings: HathorSettings,
     token_version: TokenVersion,
-    amount: int,
+    amount: TokenAmount,
     fee_payment_token: TokenDescription,
-) -> int:
+) -> TokenBalance:
     """Calculate the fee for a mint operation."""
     match token_version:
         case TokenVersion.NATIVE:
@@ -45,9 +46,9 @@ def calculate_melt_fee(
     *,
     settings: HathorSettings,
     token_version: TokenVersion,
-    amount: int,
+    amount: TokenAmount,
     fee_payment_token: TokenDescription,
-) -> int:
+) -> TokenBalance:
     """Calculate the fee for a melt operation."""
     match token_version:
         case TokenVersion.NATIVE:
@@ -79,7 +80,7 @@ def _validate_fee_based_payment_token(fee_payment_token: TokenDescription) -> No
             assert_never(fee_payment_token.token_version)
 
 
-def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> int:
+def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> TokenAmount:
     """Calculate the fee for handling a fee-based token"""
     if fee_payment_token.token_id == HATHOR_TOKEN_UID:
         return settings.FEE_PER_OUTPUT_V1

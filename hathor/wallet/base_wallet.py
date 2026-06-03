@@ -33,9 +33,10 @@ from hathor.transaction.scripts import P2PKH, create_output_script, parse_addres
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import int_to_bytes
-from hathor.types import AddressB58, Amount, TokenUid
+from hathor.types import AddressB58, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathorlib.token_amount import TokenAmount
 
 logger = get_logger()
 
@@ -53,14 +54,14 @@ class WalletInputInfo(NamedTuple):
 
 class WalletOutputInfo(NamedTuple):
     address: bytes
-    value: int
+    value: TokenAmount
     timelock: Optional[int]
     token_uid: str = HATHOR_TOKEN_UID.hex()
 
 
 class WalletBalance(NamedTuple):
-    locked: int = 0
-    available: int = 0
+    locked: TokenAmount = 0
+    available: TokenAmount = 0
 
 
 class WalletBalanceUpdate(NamedTuple):
@@ -142,9 +143,9 @@ class BaseWallet:
     def _manually_initialize(self) -> None:
         pass
 
-    def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, Amount]:
+    def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, TokenAmount]:
         """Return balance per address for a given token. This method ignores locks."""
-        balances: defaultdict[AddressB58, Amount] = defaultdict(Amount)
+        balances: defaultdict[AddressB58, TokenAmount] = defaultdict(int)
         for utxo_info, unspent_tx in self.unspent_txs[token_uid].items():
             balances[unspent_tx.address] += unspent_tx.value
         return dict(balances)
@@ -378,7 +379,7 @@ class BaseWallet:
         :param timestamp: the tx timestamp
         :type timestamp: int
         """
-        token_dict: dict[bytes, int] = defaultdict(int)
+        token_dict: dict[bytes, TokenAmount] = defaultdict(int)
         for output in outputs:
             token_uid = bytes.fromhex(output.token_uid)
             token_dict[token_uid] += output.value
@@ -441,7 +442,7 @@ class BaseWallet:
                 public_key_bytes, signature = self.get_input_aux_data(data_to_sign, self.get_private_key(address58))
                 _input.data = P2PKH.create_input_data(public_key_bytes, signature)
 
-    def handle_change_tx(self, sum_inputs: int, sum_outputs: int,
+    def handle_change_tx(self, sum_inputs: TokenAmount, sum_outputs: TokenAmount,
                          token_uid: bytes = HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
         """Creates an output transaction with the change value
 
@@ -467,9 +468,9 @@ class BaseWallet:
         return None
 
     def get_inputs_from_amount(
-        self, amount: int, tx_storage: 'TransactionStorage',
+        self, amount: TokenAmount, tx_storage: 'TransactionStorage',
         token_uid: bytes = HATHOR_TOKEN_UID, max_ts: Optional[int] = None
-    ) -> tuple[list[WalletInputInfo], int]:
+    ) -> tuple[list[WalletInputInfo], TokenAmount]:
         """Creates inputs from our pool of unspent tx given a value
 
         This is a very simple algorithm, so it does not try to find the best combination
@@ -960,7 +961,7 @@ class BaseWallet:
 
 
 class UnspentTx:
-    def __init__(self, tx_id: bytes, index: int, value: int, timestamp: int, address: str, token_data: int,
+    def __init__(self, tx_id: bytes, index: int, value: TokenAmount, timestamp: int, address: str, token_data: int,
                  voided: bool = False, timelock: Optional[int] = None) -> None:
         self.tx_id = tx_id
         self.index = index
@@ -1010,7 +1011,7 @@ class UnspentTx:
 
 
 class SpentTx:
-    def __init__(self, tx_id: bytes, from_tx_id: bytes, from_index: int, value: int, timestamp: int,
+    def __init__(self, tx_id: bytes, from_tx_id: bytes, from_index: int, value: TokenAmount, timestamp: int,
                  voided: bool = False) -> None:
         """tx_id: the tx spending the output
         from_tx_id: tx where we received the tokens

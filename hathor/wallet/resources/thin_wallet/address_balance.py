@@ -24,14 +24,15 @@ from hathor.crypto.util import decode_address
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
+from hathorlib.token_amount import TokenAmount
 
 if TYPE_CHECKING:
     from hathor.transaction import TxOutput
 
 
 class TokenData:
-    received: int = 0
-    spent: int = 0
+    received: TokenAmount = 0
+    spent: TokenAmount = 0
     name: str = ''
     symbol: str = ''
 

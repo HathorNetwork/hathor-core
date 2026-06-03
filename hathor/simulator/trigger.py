@@ -15,6 +15,8 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
+from hathorlib.token_amount import TokenAmount
+
 if TYPE_CHECKING:
     from re import Match, Pattern
 
@@ -56,7 +58,7 @@ class StopAfterNMinedBlocks(Trigger):
 
 class StopAfterMinimumBalance(Trigger):
     """Stop the simulation after `wallet` reaches a minimum unlocked balance."""
-    def __init__(self, wallet: 'BaseWallet', token_uid: bytes, minimum_balance: int) -> None:
+    def __init__(self, wallet: 'BaseWallet', token_uid: bytes, minimum_balance: TokenAmount) -> None:
         self.wallet = wallet
         self.token_uid = token_uid
         self.minimum_balance = minimum_balance

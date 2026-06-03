@@ -40,6 +40,7 @@ from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.token_info import TokenVersion
 from hathor.types import TokenUid
 from hathor.util import collect_n, json_dumpb, json_loadb
+from hathorlib.token_amount import TokenAmount, TokenBalance
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -235,7 +236,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         name: str | None,
         symbol: str | None,
         version: TokenVersion | None,
-        total: int = 0,
+        total: TokenAmount = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
     ) -> None:
@@ -270,7 +271,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: int,
+        total: TokenAmount,
     ) -> None:
         self.create_token_info(
             token_uid=token_uid,
@@ -352,7 +353,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         return dict_info
 
     @override
-    def add_to_total(self, token_uid: bytes, amount: int) -> None:
+    def add_to_total(self, token_uid: bytes, amount: TokenBalance) -> None:
         dict_info = self._get_value_info(token_uid, create_default=True)
         dict_info.total += amount
         key_info = self._to_key_info(token_uid)
@@ -610,8 +611,8 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
         assert self._info.version is not None
         return self._info.version
 
-    def get_total(self) -> int:
-        return self._info.total
+    def get_total(self) -> TokenAmount:
+        return TokenAmount(self._info.total)
 
     def _iter_authority_utxos(self, *, is_mint: bool) -> Iterator[TokenUtxoInfo]:
         it = self._index._db.iterkeys(self._index._cf)
