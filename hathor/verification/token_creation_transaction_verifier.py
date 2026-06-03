@@ -18,6 +18,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenVersion
 from hathor.types import TokenUid
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.token_amount import TokenBalance
 from hathorlib.utils.token_validation import validate_token_name_and_symbol
 
 
@@ -37,7 +38,7 @@ class TokenCreationTransactionVerifier:
         """
         # make sure tokens are being minted
         token_info = token_dict[tx.hash]
-        if token_info.amount <= 0:
+        if token_info.amount <= TokenBalance(0):
             raise InvalidToken('Token creation transaction must mint new tokens')
 
     def verify_token_info(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:

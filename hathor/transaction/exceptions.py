@@ -74,6 +74,7 @@ from hathorlib.exceptions import (  # noqa: F401
     VerifyFailed,
     WeightError,
 )
+from hathorlib.token_amount import TokenBalance
 
 
 class ForbiddenMint(InputOutputMismatch):
@@ -81,9 +82,8 @@ class ForbiddenMint(InputOutputMismatch):
 
     from hathor.types import TokenUid
 
-    def __init__(self, amount: int, token_uid: TokenUid) -> None:
-        super().__init__('{} {} tokens minted, but there is no mint authority input'.format(
-            (-1) * amount, token_uid.hex()))
+    def __init__(self, amount: TokenBalance, token_uid: TokenUid) -> None:
+        super().__init__(f'{-amount} {token_uid.hex()} tokens minted, but there is no mint authority input')
 
 
 class ForbiddenMelt(InputOutputMismatch):
@@ -95,9 +95,8 @@ class ForbiddenMelt(InputOutputMismatch):
         super().__init__(msg)
 
     @classmethod
-    def from_token(cls, amount: int, token_uid: TokenUid) -> 'ForbiddenMelt':
-        return cls('{} {} tokens melted, but there is no melt authority input'.format(
-            (-1) * amount, token_uid.hex()))
+    def from_token(cls, amount: TokenBalance, token_uid: TokenUid) -> 'ForbiddenMelt':
+        return cls(f'{-amount} {token_uid.hex()} tokens melted, but there is no melt authority input')
 
 
 class InvalidRangeProofError(TxValidationError):

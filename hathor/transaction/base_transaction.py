@@ -39,6 +39,7 @@ from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 from hathorlib.base_transaction import TxVersion  # noqa: F401
+from hathorlib.token_amount import TokenAmount
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -323,7 +324,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return ''
 
     @property
-    def sum_outputs(self) -> int:
+    def sum_outputs(self) -> TokenAmount:
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
 
@@ -959,19 +960,19 @@ class TxOutput:
 
     ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
-    def __init__(self, value: int, script: TxOutputScript, token_data: int = 0) -> None:
+    def __init__(self, value: TokenAmount, script: TxOutputScript, token_data: int = 0) -> None:
         """
             value: amount spent (4 bytes)
             script: script in bytes
             token_data: index of the token uid in the uid list
         """
-        assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
+        assert isinstance(value, TokenAmount), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, TxOutputScript), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
         if value <= 0 or value > MAX_OUTPUT_VALUE:
             raise InvalidOutputValue
 
-        self.value = value  # int
+        self.value = value  # TokenAmount
         self.script = script  # bytes
         self.token_data = token_data  # int
 

@@ -110,6 +110,7 @@ from typing_extensions import assert_never
 
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.exceptions import BadDataError
+from hathorlib.token_amount import TokenAmount
 from hathorlib.token_amount_version import TokenAmountVersion
 
 MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2_147_483_647
@@ -212,7 +213,7 @@ def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool =
     serializer.write_bytes(payload)
 
 
-def decode_output_value(deserializer: Deserializer, *, token_amount_version: TokenAmountVersion) -> int:
+def decode_output_value(deserializer: Deserializer, *, token_amount_version: TokenAmountVersion) -> TokenAmount:
     match token_amount_version:
         case TokenAmountVersion.V1:
             return decode_output_value_v1(deserializer)
@@ -222,7 +223,7 @@ def decode_output_value(deserializer: Deserializer, *, token_amount_version: Tok
             assert_never(token_amount_version)
 
 
-def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -> int:
+def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -> TokenAmount:
     """ Decodes either 4 or 8 bytes using our output-value format.
 
     This modules's docstring has more details and examples.
@@ -244,7 +245,7 @@ def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -
     return value
 
 
-def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -> int:
+def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -> TokenAmount:
     """
     Decode and output value for decimal version V2, using length-prefix encoding.
 

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from hathor.transaction.util import get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
+from hathorlib.token_amount import TokenAmount
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -28,13 +29,13 @@ if TYPE_CHECKING:
 @dataclass(slots=True, kw_only=True, frozen=True)
 class FeeHeaderEntry:
     token_index: int
-    amount: int
+    amount: TokenAmount
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class FeeEntry:
     token_uid: TokenUid
-    amount: int
+    amount: TokenAmount
 
 
 @dataclass(slots=True, kw_only=True)
@@ -59,7 +60,7 @@ class FeeHeader:
             for fee in self.fees
         ]
 
-    def total_fee_amount(self) -> int:
+    def total_fee_amount(self) -> TokenAmount:
         """Sum fees amounts in this header and return as HTR"""
         total_fee = 0
         for fee in self.get_fees():

@@ -16,6 +16,8 @@ import re
 import struct
 from typing import TYPE_CHECKING, Any, Optional, Tuple, TypeVar
 
+from hathorlib.token_amount import TokenAmount
+
 if TYPE_CHECKING:
     from hathorlib.conf.settings import HathorSettings
 
@@ -80,11 +82,11 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
     return optional
 
 
-def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: int) -> int:
+def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: TokenAmount) -> TokenAmount:
     return ceil_div(settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(mint_amount), 10**9)
 
 
-def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: int) -> int:
+def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: TokenAmount) -> TokenAmount:
     return settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(melt_amount) // 10**9
 
 

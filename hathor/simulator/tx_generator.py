@@ -24,13 +24,14 @@ from hathor.transaction.exceptions import RewardLocked
 from hathor.types import VertexId
 from hathor.util import Random
 from hathor.wallet.exceptions import InsufficientFunds
+from hathorlib.token_amount import TokenAmount
 
 if TYPE_CHECKING:
     from hathor.manager import HathorManager
 
 logger = get_logger()
 
-GenTxFunction: TypeAlias = Callable[['HathorManager', str, int], Transaction]
+GenTxFunction: TypeAlias = Callable[['HathorManager', str, TokenAmount], Transaction]
 
 
 class RandomTransactionGenerator:

@@ -21,6 +21,7 @@ from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
+from hathorlib.token_amount import TokenAmount, TokenBalance
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.runner.index_records import UpdateAuthoritiesRecord
@@ -61,7 +62,7 @@ class TokenIndexInfo(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_total(self) -> int:
+    def get_total(self) -> TokenAmount:
         """The token's total supply"""
         raise NotImplementedError
 
@@ -143,7 +144,7 @@ class TokensIndex(BaseIndex):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: int = 0,
+        total: TokenAmount = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
     ) -> None:
@@ -157,7 +158,7 @@ class TokensIndex(BaseIndex):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: int,
+        total: TokenAmount,
     ) -> None:
         """Create a token info for a new token created in a contract."""
         raise NotImplementedError
@@ -201,6 +202,6 @@ class TokensIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def add_to_total(self, token_uid: bytes, amount: int) -> None:
+    def add_to_total(self, token_uid: bytes, amount: TokenBalance) -> None:
         """Add an amount to the total of `token_uid`. The amount may be negative."""
         raise NotImplementedError

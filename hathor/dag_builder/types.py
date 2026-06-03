@@ -24,6 +24,7 @@ from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.wallet import BaseWallet
+from hathorlib.token_amount import TokenAmount, TokenBalance
 
 AttributeType: TypeAlias = dict[str, str | int]
 VertexResolverType: TypeAlias = Callable[[BaseTransaction], Any]
@@ -54,7 +55,7 @@ class DAGNode:
     #   =0 means sum(txouts) = sum(txins)
     #   >0 means sum(txouts) > sum(txins), e.g., withdrawal
     #   <0 means sum(txouts) < sum(txins), e.g., deposit
-    balances: dict[str, int] = field(default_factory=dict)
+    balances: dict[str, TokenBalance] = field(default_factory=dict)
 
     def get_all_dependencies(self) -> Iterator[str]:
         yield from self.parents
@@ -102,6 +103,6 @@ class DAGInput(NamedTuple):
 
 
 class DAGOutput(NamedTuple):
-    amount: int
+    amount: TokenAmount
     token: str
     attrs: AttributeType

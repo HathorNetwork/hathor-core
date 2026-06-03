@@ -29,6 +29,7 @@ from hathorlib.nanocontracts.storage.token_proxy import TokenProxy
 from hathorlib.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathorlib.nanocontracts.types import BlueprintId, TokenUid, VertexId
 from hathorlib.serialization import Deserializer, Serializer
+from hathorlib.token_amount import TokenBalance
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 T = TypeVar('T')
@@ -73,7 +74,7 @@ class Balance:
     The balance of a token in the storage, which includes its value (amount of tokens), and the
     stored authorities. This class is immutable and therefore suitable to be used externally.
     """
-    value: int
+    value: TokenBalance
     can_mint: bool
     can_melt: bool
 
@@ -113,7 +114,7 @@ class MutableBalance:
 
     def to_immutable(self) -> Balance:
         return Balance(
-            value=self.value,
+            value=TokenBalance(self.value),
             can_mint=self.can_mint,
             can_melt=self.can_melt,
         )

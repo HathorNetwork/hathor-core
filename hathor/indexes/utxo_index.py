@@ -25,6 +25,7 @@ from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
+from hathorlib.token_amount import TokenAmount
 
 logger = get_logger()
 
@@ -41,7 +42,7 @@ class UtxoIndexItem:
     tx_id: bytes
     index: int
     address: str
-    amount: int
+    amount: TokenAmount
     timelock: Optional[int]
     heightlock: Optional[int]
 
@@ -200,7 +201,7 @@ class UtxoIndex(BaseIndex):
             log_it.debug('re-add input that became unspent')
             self._add_utxo(UtxoIndexItem.from_tx_output(spent_tx, tx_input.index, spent_tx_output))
 
-    def iter_utxos(self, *, address: str, target_amount: int, token_uid: Optional[bytes] = None,
+    def iter_utxos(self, *, address: str, target_amount: TokenAmount, token_uid: Optional[bytes] = None,
                    target_timestamp: Optional[int] = None,
                    target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """ Search UTXOs for a given token_uid+address+target_value, if no token_uid is given, HTR is assumed.
@@ -283,13 +284,13 @@ class UtxoIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: TokenAmount,
                              target_timestamp: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """Iterate over all UTXOs that ONLY HAVE timelocks that will be unlocked at target_timestamp."""
         raise NotImplementedError
 
     @abstractmethod
-    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: TokenAmount,
                                target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """Iterate over all UTXOs that ONLY HAVE heightlocks that will be unlocked at target_height."""
         raise NotImplementedError
