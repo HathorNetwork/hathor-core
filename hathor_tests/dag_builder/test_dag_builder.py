@@ -119,7 +119,7 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
         self.assertEqual(len(tx1.outputs), 1)
         # the default filler fills unspecified utxos with 1 HTR
-        self.assertEqual(tx1.outputs[0].value, 1)
+        self.assertEqual(tx1.outputs[0].value.raw(), 1)
         self.assertEqual(tx1.outputs[0].token_data, 0)
 
     def test_block_parents(self) -> None:
@@ -176,7 +176,7 @@ class DAGBuilderTestCase(unittest.TestCase):
         self.assertEqual(tka.token_symbol, 'TKA')
 
         # tx1.out[1] = 100 TKA
-        self.assertEqual(tx1.outputs[1].value, 100)
+        self.assertEqual(tx1.outputs[1].value.raw(), 100)
         self.assertEqual(tx1.get_token_uid(tx1.outputs[1].token_data), tka.hash)
 
     def test_big_dag(self) -> None:

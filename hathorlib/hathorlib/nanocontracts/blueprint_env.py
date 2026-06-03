@@ -90,7 +90,8 @@ class BlueprintEnvironment:
         then this method will return 50 HTR."""
         contract_id = self.get_contract_id()
         balance = self.__runner.get_balance_before_current_call(contract_id, token_uid)
-        return Amount(balance.value)
+        token_amount = balance.value.to_unsigned().to_version(self.__runner.token_amount_version)
+        return Amount(token_amount.raw())
 
     def get_current_balance(self, token_uid: TokenUid | None = None) -> Amount:
         """
@@ -101,7 +102,8 @@ class BlueprintEnvironment:
         """
         contract_id = self.get_contract_id()
         balance = self.__runner.get_current_balance(contract_id, token_uid)
-        return Amount(balance.value)
+        token_amount = balance.value.to_unsigned().to_version(self.__runner.token_amount_version)
+        return Amount(token_amount.raw())
 
     def can_mint_before_current_call(self, token_uid: TokenUid) -> bool:
         """

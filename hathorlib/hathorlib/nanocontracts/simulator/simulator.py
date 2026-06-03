@@ -405,7 +405,7 @@ class NanoSimulator:
 
         return self._runner_factory.create(
             runtime_version=self._runtime_version,
-            token_amount_version=TokenAmountVersion.V1,
+            token_amount_version=TokenAmountVersion.V2,
             block_storage=self._current_block_storage,
             seed=rng_seed,
         )

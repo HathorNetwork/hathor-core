@@ -7,6 +7,7 @@ from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens
+from hathorlib.token_amount import UnsignedAmount
 
 
 class SearchAddressTest(_BaseResourceTest._ResourceTest):
@@ -91,9 +92,8 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
             self.assertNotIn(tx['tx_id'], tx_ids_data)
 
     @inlineCallbacks
-    def test_address_balance(self):
-        # TODO(decimals): test v2
-        resource = StubSite(AddressBalanceResource(self.manager, APIVersion.V1A))
+    def _check_address_balance(self, api_version):
+        resource = StubSite(AddressBalanceResource(self.manager, api_version))
 
         # Invalid address
         response_error = yield resource.get('thin_wallet/address_search', {b'address': 'vvvv'.encode(), b'count': 3})
@@ -110,10 +110,22 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['total_transactions'], 6)  # 5 blocks mined + token creation tx
         self.assertIn(self._settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
         self.assertIn(self.token_uid.hex(), data['tokens_data'])
-        self.assertEqual(HTR_value, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['received'])
-        self.assertEqual(0, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['spent'])
-        self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
-        self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
+        htr_data = data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]
+        self.assertEqual(
+            api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(HTR_value)), htr_data['received']
+        )
+        self.assertEqual(api_version.unsigned_amount_to_response(UnsignedAmount.zero()), htr_data['spent'])
+        token_data = data['tokens_data'][self.token_uid.hex()]
+        self.assertEqual(api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(100)), token_data['received'])
+        self.assertEqual(api_version.unsigned_amount_to_response(UnsignedAmount.zero()), token_data['spent'])
+
+    @inlineCallbacks
+    def test_address_balance(self):
+        yield self._check_address_balance(APIVersion.V1A)
+
+    @inlineCallbacks
+    def test_address_balance_v2(self):
+        yield self._check_address_balance(APIVersion.V2)
 
     @inlineCallbacks
     def test_zero_count(self):

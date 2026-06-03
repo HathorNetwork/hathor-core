@@ -19,6 +19,7 @@ from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import (
+    APIVersion,
     Resource,
     get_args,
     get_missing_params_msg,
@@ -28,6 +29,7 @@ from hathor.api_util import (
     validate_tx_hash,
 )
 from hathor.conf.get_settings import get_global_settings
+from hathor.manager import HathorManager
 from hathor.transaction import Block
 from hathor.transaction.base_transaction import BaseTransaction, TxVersion, _shielded_output_to_json
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -36,7 +38,6 @@ from hathor.util import json_dumpb
 GET_LIST_ARGS = ['count', 'type']
 
 logger = get_logger()
-
 
 def update_serialized_tokens_array(tx: BaseTransaction, serialized: dict[str, Any]) -> None:
     """ A token creation tx to_json does not add its hash to the array of tokens
@@ -166,8 +167,9 @@ class TransactionResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
         # Important to have the manager so we can know the tx_storage
+        super().__init__(api_version)
         self._log = logger.new()
         self.manager = manager
 
@@ -330,6 +332,7 @@ class TransactionResource(Resource):
 TransactionResource.openapi = {
     '/transaction': {
         'x-visibility': 'public',
+        'x-api-versions': ['v1a', 'v2'],
         'x-rate-limit': {
             'global': [
                 {
@@ -440,6 +443,7 @@ TransactionResource.openapi = {
                                             "inputs": [
                                                 {
                                                     "value": 42500000044,
+                                                    "value_str": "425000000.44",
                                                     "script": "dqkURJPA8tDMJHU8tqv3SiO18ZCLEPaIrA==",
                                                     "decoded": {
                                                         "type": "P2PKH",
@@ -453,7 +457,8 @@ TransactionResource.openapi = {
                                                 }
                                             ],
                                             'outputs': [],
-                                            'tokens': []
+                                            'tokens': [],
+                                            'token_amount_version': 1
                                         },
                                         'meta': {
                                             'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
@@ -524,10 +529,12 @@ TransactionResource.openapi = {
                                                 'outputs': [
                                                     {
                                                         'value': 1909,
+                                                        'value_str': '19.09',
                                                         'script': 'dqkUllFFDJByV5TjVUly3Zc3bB4mMH2IrA=='
                                                     },
                                                     {
                                                         'value': 55,
+                                                        'value_str': '0.55',
                                                         'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
                                                     }
                                                 ],
@@ -558,10 +565,12 @@ TransactionResource.openapi = {
                                                 'outputs': [
                                                     {
                                                         'value': 1894,
+                                                        'value_str': '18.94',
                                                         'script': 'dqkUduvtU77hZm++Pwavtl9OrOSA+XiIrA=='
                                                     },
                                                     {
                                                         'value': 84,
+                                                        'value_str': '0.84',
                                                         'script': 'dqkUjjPg+zwG6JDe901I0ybQxcAPrAuIrA=='
                                                     }
                                                 ],

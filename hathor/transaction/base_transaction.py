@@ -29,7 +29,7 @@ from typing_extensions import Self
 
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
-from hathor.transaction.exceptions import InvalidOutputValue, WeightError
+from hathor.transaction.exceptions import WeightError
 from hathor.transaction.headers import AnyVertexHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
@@ -326,7 +326,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     @property
     def sum_outputs(self) -> UnsignedAmount:
         """Sum of the value of the outputs"""
-        return sum(output.value for output in self.outputs if not output.is_token_authority())
+        return sum(
+            (output.value for output in self.outputs if not output.is_token_authority()),
+            start=UnsignedAmount.zero()
+        )
 
     @property
     def shielded_outputs(self) -> list['ShieldedOutput']:
@@ -997,8 +1000,6 @@ class TxOutput:
         assert isinstance(value, UnsignedAmount), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, TxOutputScript), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
-        if value <= 0 or value > MAX_OUTPUT_VALUE:
-            raise InvalidOutputValue
 
         self.value = value  # UnsignedAmount
         self.script = script  # bytes
@@ -1016,7 +1017,7 @@ class TxOutput:
 
     def __str__(self) -> str:
         cls_name = type(self).__name__
-        value_str = hex(self.value) if self.is_token_authority() else str(self.value)
+        value_str = hex(self.value.raw()) if self.is_token_authority() else str(self.value)
         if self.token_data:
             return f'{cls_name}(token_data={bin(self.token_data)}, value={value_str}, script={self.script.hex()})'
         else:
@@ -1046,11 +1047,11 @@ class TxOutput:
 
     def can_mint_token(self) -> bool:
         """Whether this utxo can mint tokens"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_MINT_MASK) > 0)
+        return self.is_token_authority() and ((self.value.raw() & self.TOKEN_MINT_MASK) > 0)
 
     def can_melt_token(self) -> bool:
         """Whether this utxo can melt tokens"""
-        return self.is_token_authority() and ((self.value & self.TOKEN_MELT_MASK) > 0)
+        return self.is_token_authority() and ((self.value.raw() & self.TOKEN_MELT_MASK) > 0)
 
     def to_human_readable(self) -> dict[str, Any]:
         """Checks what kind of script this is and returns it in human readable form
@@ -1060,7 +1061,7 @@ class TxOutput:
         script_type = parse_address_script(self.script)
         if script_type:
             ret = script_type.to_human_readable()
-            ret['value'] = self.value
+            ret['value'] = str(self.value)
             ret['token_data'] = self.token_data
             return ret
 
@@ -1072,7 +1073,11 @@ class TxOutput:
 
     def to_json(self, *, decode_script: bool = False) -> dict[str, Any]:
         data: dict[str, Any] = {}
-        data['value'] = self.value
+        # `value` is in the output's native decimal version, matching the `token_amount_version` field
+        # the enclosing vertex JSON carries alongside it.
+        # `value_str` carries the value as a decimal string, regardless of the version.
+        data['value'] = self.value.raw()
+        data['value_str'] = str(self.value)
         data['token_data'] = self.token_data
         data['script'] = base64.b64encode(self.script).decode('utf-8')
         if decode_script:

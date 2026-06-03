@@ -83,15 +83,28 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
 
 
 def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: UnsignedAmount) -> UnsignedAmount:
-    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(mint_amount)
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * mint_amount.normalized()
     denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
-    return ceil_div(numerator, denominator)
+    rounded_up_to_1 = ceil_div(numerator, denominator)
+    one_cent = _get_one_v2_cent(settings)
+    rounded_up_to_cent = ceil_div(rounded_up_to_1, one_cent) * one_cent
+    return UnsignedAmount.from_v2(rounded_up_to_cent)
 
 
 def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: UnsignedAmount) -> UnsignedAmount:
-    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(melt_amount)
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * melt_amount.normalized()
     denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
-    return numerator // denominator
+    rounded_down_to_0 = numerator // denominator
+    one_cent = _get_one_v2_cent(settings)
+    rounded_down_to_cent = (rounded_down_to_0 // one_cent) * one_cent
+    return UnsignedAmount.from_v2(rounded_down_to_cent)
+
+
+def _get_one_v2_cent(settings: 'HathorSettings') -> int:
+    """Return the value of one cent in V2 decimal places."""
+    decimal_places = settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES
+    assert decimal_places >= 2
+    return 10 ** (decimal_places - 2)
 
 
 def ceil_div(a: int, b: int) -> int:

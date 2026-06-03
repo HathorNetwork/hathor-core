@@ -178,7 +178,7 @@ class FeeTokenTest(unittest.TestCase):
 
         # melt tokens and transfer melt authority
         melt_amount = 100
-        new_token_amount = tx.outputs[0].value - melt_amount
+        new_token_amount = tx.outputs[0].value.raw() - melt_amount
 
         inputs = [
             # token amount
@@ -382,7 +382,7 @@ class FeeTokenTest(unittest.TestCase):
             # Melt authority
             TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             # HTR change output
-            TxOutput(htr_change_value, script, 0),
+            TxOutput(htr_change_value.to_v1(), script, 0),
             # deposit token change output: 500 - 100(fee in the header) - 200(melt) = 200
             TxOutput(UnsignedAmount.from_v1(200), script, 2)
         ]
@@ -601,10 +601,7 @@ class FeeTokenTest(unittest.TestCase):
         with pytest.raises(InvalidNewTransaction) as e:
             self.resolve_and_propagate(tx2)
         assert isinstance(e.value.__cause__, InputOutputMismatch)
-        expected_msg = (
-            f'Fee amount is different than expected. '
-            f'(amount=0, expected={UnsignedAmount.from_v1(2).normalized()})'
-        )
+        expected_msg = 'Fee amount is different than expected. (amount=0.0, expected=0.02)'
         assert expected_msg in str(e.value)
 
     def test_fee_token_burn_authority(self) -> None:
