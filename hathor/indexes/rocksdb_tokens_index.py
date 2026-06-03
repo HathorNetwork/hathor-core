@@ -29,17 +29,12 @@ from hathor.indexes.rocksdb_utils import (
 )
 from hathor.indexes.tokens_index import TokenIndexInfo, TokensIndex, TokenUtxoInfo
 from hathor.nanocontracts.runner.index_records import IndexRecordType, UpdateAuthoritiesRecord
-from hathor.nanocontracts.types import (
-    NCAcquireAuthorityAction,
-    NCDepositAction,
-    NCGrantAuthorityAction,
-    NCWithdrawalAction,
-)
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.token_info import TokenVersion
 from hathor.types import TokenUid
 from hathor.util import collect_n, json_dumpb, json_loadb
+from hathorlib.nanocontracts.types import NCActionType
 from hathorlib.token_amount import TokenAmount, TokenBalance
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -431,20 +426,20 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.is_nano_contract():
             assert isinstance(tx, Transaction)
             nano_header = tx.get_nano_header()
-            ctx = nano_header.get_context()
-            for action in ctx.__all_actions__:
-                match action:
-                    case NCDepositAction():
-                        self.add_to_total(action.token_uid, action.amount)
-                    case NCWithdrawalAction():
-                        self.add_to_total(action.token_uid, -action.amount)
-                    case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
+            for action in nano_header.nc_actions:
+                token_uid = tx.get_token_uid(action.token_index)
+                match action.type:
+                    case NCActionType.DEPOSIT:
+                        self.add_to_total(token_uid, action.amount)
+                    case NCActionType.WITHDRAWAL:
+                        self.add_to_total(token_uid, -action.amount)
+                    case NCActionType.GRANT_AUTHORITY | NCActionType.ACQUIRE_AUTHORITY:
                         # These actions don't affect the token balance but do affect the counters
                         # of contracts holding token authorities. They are handled directly by
                         # the IndexesManager via index update records created by the Runner.
                         pass
                     case _:
-                        assert_never(action)
+                        assert_never(action.type)
 
     def remove_tx(self, tx: BaseTransaction) -> None:
         for tx_input in tx.inputs:
@@ -468,19 +463,19 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         if tx.is_nano_contract():
             assert isinstance(tx, Transaction)
             nano_header = tx.get_nano_header()
-            ctx = nano_header.get_context()
-            for action in ctx.__all_actions__:
-                match action:
-                    case NCDepositAction():
-                        self.add_to_total(action.token_uid, -action.amount)
-                    case NCWithdrawalAction():
-                        self.add_to_total(action.token_uid, action.amount)
-                    case NCGrantAuthorityAction() | NCAcquireAuthorityAction():
+            for action in nano_header.nc_actions:
+                token_uid = tx.get_token_uid(action.token_index)
+                match action.type:
+                    case NCActionType.DEPOSIT:
+                        self.add_to_total(token_uid, -action.amount)
+                    case NCActionType.WITHDRAWAL:
+                        self.add_to_total(token_uid, action.amount)
+                    case NCActionType.GRANT_AUTHORITY | NCActionType.ACQUIRE_AUTHORITY:
                         # These actions don't affect the nc token balance,
                         # so no need for any special handling on the index.
                         pass
                     case _:
-                        assert_never(action)
+                        assert_never(action.type)
 
     def iter_all_tokens(self) -> Iterator[tuple[bytes, TokenIndexInfo]]:
         self.log.debug('seek to start')
