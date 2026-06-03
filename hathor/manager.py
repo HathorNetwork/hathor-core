@@ -69,6 +69,7 @@ from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
@@ -793,7 +794,7 @@ class HathorManager:
         )
         return block
 
-    def get_tokens_issued_per_block(self, height: int) -> int:
+    def get_tokens_issued_per_block(self, height: int) -> UnsignedAmount:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         best_block = self.tx_storage.get_best_block()
         return self.daa_factory.create_from_parent(best_block).get_tokens_issued_per_block(height)
