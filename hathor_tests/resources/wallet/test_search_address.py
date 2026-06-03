@@ -109,8 +109,10 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         self.assertIn(self._settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
         self.assertIn(self.token_uid.hex(), data['tokens_data'])
         self.assertEqual(HTR_value, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['received'])
+        self.assertEqual(HTR_value * 10**16, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['received_v2'])
         self.assertEqual(0, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['spent'])
         self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
+        self.assertEqual(100 * 10**16, data['tokens_data'][self.token_uid.hex()]['received_v2'])
         self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
 
     @inlineCallbacks

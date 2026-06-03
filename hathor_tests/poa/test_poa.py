@@ -27,6 +27,7 @@ from hathor.transaction.exceptions import PoaValidationError
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
+from hathorlib.token_amount import TokenAmount
 
 
 def test_get_hashed_poa_data() -> None:
@@ -117,7 +118,7 @@ def test_verify_poa() -> None:
     )
 
     # Test no rewards
-    block.outputs = [TxOutput(123, b'')]
+    block.outputs = [TxOutput(TokenAmount.from_v1(123), b'')]
     with pytest.raises(PoaValidationError) as e:
         block_verifier.verify_poa(block)
     assert str(e.value) == 'blocks must not have rewards in a PoA network'

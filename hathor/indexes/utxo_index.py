@@ -225,7 +225,7 @@ class UtxoIndex(BaseIndex):
         )
 
         next_higher: Optional[UtxoIndexItem] = None
-        amount_sum = 0
+        amount_sum = TokenAmount.zero()
         count_utxos = 0
         # we may have up to 3 items with amount higher than target_amount, skip until we get one lower, then yield it
         # and start counting the amount_sum
@@ -279,7 +279,13 @@ class UtxoIndex(BaseIndex):
     # then yield UTXOs with amounts in decreasing order until there are no more UTXOs
 
     @abstractmethod
-    def _iter_utxos_nolock(self, *, token_uid: bytes, address: str, target_amount: int) -> Iterator[UtxoIndexItem]:
+    def _iter_utxos_nolock(
+        self,
+        *,
+        token_uid: bytes,
+        address: str,
+        target_amount: TokenAmount,
+    ) -> Iterator[UtxoIndexItem]:
         """Iterate over all UTXOs that DO NOT HAVE any locks."""
         raise NotImplementedError
 

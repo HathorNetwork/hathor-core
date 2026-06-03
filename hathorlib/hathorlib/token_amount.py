@@ -12,8 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TypeAlias
-
-# Temporary aliases.
-TokenBalance: TypeAlias = int
-TokenAmount: TypeAlias = int
+# Re-export for compatibility.
+from htr_lib import TokenAmount, TokenBalance  # noqa: F401

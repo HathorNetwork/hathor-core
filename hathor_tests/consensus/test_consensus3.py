@@ -3,6 +3,7 @@ import pytest
 from hathor.simulator.utils import add_new_block, add_new_blocks
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
+from hathorlib.token_amount import TokenAmount
 
 
 class DoubleSpendingTestCase(unittest.TestCase):
@@ -28,9 +29,9 @@ class DoubleSpendingTestCase(unittest.TestCase):
 
         addr = manager.wallet.get_unused_address()
         outputs = []
-        outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
-        outputs.append(WalletOutputInfo(decode_address(addr), 1000, None))
-        outputs.append(WalletOutputInfo(decode_address(addr), 6400 - 1001, None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1000), None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(6400 - 1001), None))
         tx_fund0 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
         tx_fund0.weight = 1
         tx_fund0.parents = manager.get_new_tx_parents()
@@ -40,7 +41,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
 
         def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
-            outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None)]
             tx1 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
             tx1.weight = 1
             tx1.parents = manager.get_new_tx_parents(tx1.timestamp)
@@ -50,7 +51,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             inputs = []
             inputs.append(WalletInputInfo(tx1.hash, 0, manager.wallet.get_private_key(addr)))
             inputs.append(WalletInputInfo(tx_fund.hash, 1, manager.wallet.get_private_key(addr)))
-            outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[1].value+1, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[1].value + TokenAmount.from_v1(1), None)]
             tx2 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx1.timestamp+1)
             tx2.weight = 1
             tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
@@ -58,7 +59,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             self.assertTrue(manager.propagate_tx(tx2))
 
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
-            outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None)]
             tx3 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
             tx3.weight = tx1.weight + tx2.weight + 0.1
             tx3.parents = manager.get_new_tx_parents(tx3.timestamp)
@@ -77,8 +78,10 @@ class DoubleSpendingTestCase(unittest.TestCase):
             inputs.append(WalletInputInfo(tx2.hash, 0, manager.wallet.get_private_key(addr)))
             inputs.append(WalletInputInfo(tx4.hash, 0, manager.wallet.get_private_key(addr)))
             outputs = []
-            outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
-            outputs.append(WalletOutputInfo(decode_address(addr), 2*tx_fund.outputs[1].value, None))
+            outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None))
+            outputs.append(
+                WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(2*tx_fund.outputs[1].value.raw()), None)
+            )
             tx5: Transaction = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx2.timestamp+1)
             tx5.weight = tx3.weight - tx1.weight + 0.1
             tx5.parents = [tx2.hash, tx4.hash]
@@ -117,10 +120,10 @@ class DoubleSpendingTestCase(unittest.TestCase):
 
         addr = manager.wallet.get_unused_address()
         outputs = []
-        outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
-        outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
-        outputs.append(WalletOutputInfo(decode_address(addr), 1000, None))
-        outputs.append(WalletOutputInfo(decode_address(addr), 6400-1002, None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1000), None))
+        outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(6400-1002), None))
         tx_fund0 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
         tx_fund0.weight = 1
         tx_fund0.parents = manager.get_new_tx_parents()
@@ -130,7 +133,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
 
         def do_step(tx_fund: Transaction) -> Transaction:
             inputs = [WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr))]
-            outputs = [WalletOutputInfo(decode_address(addr), 1, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None)]
             tx1 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
             tx1.weight = 1
             tx1.parents = manager.get_new_tx_parents(tx1.timestamp)
@@ -140,7 +143,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             inputs = []
             inputs.append(WalletInputInfo(tx1.hash, 0, manager.wallet.get_private_key(addr)))
             inputs.append(WalletInputInfo(tx_fund.hash, 1, manager.wallet.get_private_key(addr)))
-            outputs = [WalletOutputInfo(decode_address(addr), 2, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(2), None)]
             tx2 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx1.timestamp+1)
             tx2.weight = 1.1
             tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
@@ -150,7 +153,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             inputs = []
             inputs.append(WalletInputInfo(tx_fund.hash, 2, manager.wallet.get_private_key(addr)))
             inputs.append(WalletInputInfo(tx_fund.hash, 1, manager.wallet.get_private_key(addr)))
-            outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[2].value+1, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[2].value + TokenAmount.from_v1(1), None)]
             tx3 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
             tx3.weight = 1
             tx3.parents = manager.get_new_tx_parents(tx3.timestamp)
@@ -160,7 +163,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             inputs = []
             inputs.append(WalletInputInfo(tx_fund.hash, 0, manager.wallet.get_private_key(addr)))
             inputs.append(WalletInputInfo(tx_fund.hash, 2, manager.wallet.get_private_key(addr)))
-            outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[2].value+1, None)]
+            outputs = [WalletOutputInfo(decode_address(addr), tx_fund.outputs[2].value + TokenAmount.from_v1(1), None)]
             tx4 = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx_fund.timestamp+1)
             tx4.weight = tx1.weight + tx2.weight + 0.1
             tx4.parents = manager.get_new_tx_parents(tx4.timestamp)
@@ -171,9 +174,11 @@ class DoubleSpendingTestCase(unittest.TestCase):
             inputs.append(WalletInputInfo(tx3.hash, 0, manager.wallet.get_private_key(addr)))
             inputs.append(WalletInputInfo(tx4.hash, 0, manager.wallet.get_private_key(addr)))
             outputs = []
-            outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
-            outputs.append(WalletOutputInfo(decode_address(addr), 1, None))
-            outputs.append(WalletOutputInfo(decode_address(addr), 2*tx_fund.outputs[2].value, None))
+            outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None))
+            outputs.append(WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(1), None))
+            outputs.append(
+                WalletOutputInfo(decode_address(addr), TokenAmount.from_v1(2*tx_fund.outputs[2].value.raw()), None)
+            )
             tx5: Transaction = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx4.timestamp+1)
             tx5.weight = 1
             tx5.parents = manager.get_new_tx_parents(tx5.timestamp)

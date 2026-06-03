@@ -55,6 +55,7 @@ from hathor.transaction.transaction import Transaction
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.vertex_children import VertexChildrenService
 from hathor.types import VertexId
+from hathorlib.token_amount import TokenAmount
 from hathorlib.token_info import TokenDescription
 
 if TYPE_CHECKING:
@@ -952,7 +953,10 @@ class TransactionStorage(ABC):
             timestamp=self._settings.GENESIS_BLOCK_TIMESTAMP,
             weight=self._settings.MIN_BLOCK_WEIGHT,
             outputs=[
-                TxOutput(self._settings.GENESIS_TOKEN_ATOMIC_UNITS, self._settings.GENESIS_OUTPUT_SCRIPT),
+                TxOutput(
+                    TokenAmount.from_v1(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
+                    self._settings.GENESIS_OUTPUT_SCRIPT,
+                ),
             ],
         )
         block.update_hash()

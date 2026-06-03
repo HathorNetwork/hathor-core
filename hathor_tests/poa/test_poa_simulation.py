@@ -38,6 +38,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import not_none
 from hathor_tests.poa.utils import get_settings, get_signer
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathorlib.token_amount import TokenAmount
 
 
 def _get_blocks_by_height(manager: HathorManager) -> defaultdict[int, list[PoaBlock]]:
@@ -552,9 +553,9 @@ class PoaSimulationTest(SimulatorTestCase):
             parents=[self.simulator.settings.GENESIS_TX1_HASH, self.simulator.settings.GENESIS_TX2_HASH],
             inputs=[TxInput(self.simulator.settings.GENESIS_BLOCK_HASH, 0, b'')],
             outputs=[
-                TxOutput(1_000_000_000_000, script, 0b00000001),
-                TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001),
-                TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001),
+                TxOutput(TokenAmount.from_v1(1_000_000_000_000), script, 0b00000001),
+                TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001),
+                TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             ],
             token_name='custom-token',
             token_symbol='CTK',

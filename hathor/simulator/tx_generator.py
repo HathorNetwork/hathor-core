@@ -111,7 +111,7 @@ class RandomTransactionGenerator:
         """ Generate a new transaction and schedule the mining part of the transaction.
         """
         balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
-        if balance.available == 0 and self.ignore_no_funds:
+        if balance.available == TokenAmount.zero() and self.ignore_no_funds:
             self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
             return
 
@@ -120,12 +120,15 @@ class RandomTransactionGenerator:
         else:
             address = self.rng.choice(self.send_to)
 
-        value = self.rng.randint(1, balance.available)
+        # The wallet builds transactions in the V1 encoding, so the random amount is drawn in V1
+        # units (and tagged V1) to stay exactly representable when the output is encoded.
+        available = balance.available.to_v1()
+        value = self.rng.randint(1, available.raw())
         self.log.debug('randomized step: send to', address=address, amount=value / 100)
 
         if not self.double_spending_only:
             try:
-                tx = self.gen_new_tx(self.manager, address, value)
+                tx = self.gen_new_tx(self.manager, address, TokenAmount.from_v1(value))
             except (InsufficientFunds, RewardLocked):
                 self.delayedcall = self.clock.callLater(0, self.schedule_next_transaction)
                 return

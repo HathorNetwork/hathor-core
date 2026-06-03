@@ -165,8 +165,11 @@ class NanoContractStateResource(Resource):
                 # User wants to get the balance of all tokens in the nano contract
                 all_balances = nc_storage.get_all_balances()
                 for key_balance, balance in all_balances.items():
+                    token_amount = balance.value.to_amount()
+                    value_v1 = token_amount.maybe_to_v1()
                     balances[key_balance.token_uid.hex()] = NCBalanceSuccessResponse(
-                        value=str(balance.value),
+                        value=str(value_v1.raw()) if value_v1 is not None else None,
+                        value_v2=str(token_amount.normalized()),
                         can_mint=balance.can_mint,
                         can_melt=balance.can_melt,
                     )
@@ -179,8 +182,11 @@ class NanoContractStateResource(Resource):
                 continue
 
             balance = nc_storage.get_balance(token_uid)
+            token_amount = balance.value.to_amount()
+            value_v1 = token_amount.maybe_to_v1()
             balances[token_uid_hex] = NCBalanceSuccessResponse(
-                value=str(balance.value),
+                value=str(value_v1.raw()) if value_v1 is not None else None,
+                value_v2=str(token_amount.normalized()),
                 can_mint=balance.can_mint,
                 can_melt=balance.can_melt,
             )
@@ -280,7 +286,8 @@ class NCValueSuccessResponse(Response):
 
 
 class NCBalanceSuccessResponse(Response):
-    value: str
+    value: str | None
+    value_v2: str
     can_mint: bool
     can_melt: bool
 

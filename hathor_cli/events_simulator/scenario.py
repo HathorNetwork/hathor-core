@@ -15,6 +15,8 @@
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
+from hathorlib.token_amount import TokenAmount
+
 if TYPE_CHECKING:
     from hathor.dag_builder import DAGBuilder
     from hathor.dag_builder.artifacts import DAGArtifacts
@@ -83,13 +85,13 @@ def simulate_single_chain_blocks_and_transactions(
     add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
-    tx = gen_new_tx(manager, address, 1000)
+    tx = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     tx.weight = manager.daa_factory.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx)
     simulator.run(60)
 
-    tx = gen_new_tx(manager, address, 2000)
+    tx = gen_new_tx(manager, address, TokenAmount.from_v1(2000))
     tx.weight = manager.daa_factory.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx)
@@ -133,7 +135,7 @@ def simulate_unvoided_transaction(simulator: 'Simulator', manager: 'HathorManage
     simulator.run(60)
 
     # A tx is created with weight 19.0005
-    tx = gen_new_tx(manager, address, 1000)
+    tx = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     tx.weight = 19.0005
     tx.update_hash()
     assert manager.propagate_tx(tx)
@@ -181,14 +183,14 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     simulator.run(60)
 
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
-    assert balance_per_address[address] == 6400
-    tx = gen_new_tx(manager, address, 1000)
+    assert balance_per_address[address] == TokenAmount.from_v1(6400)
+    tx = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     tx.weight = manager.daa_factory.minimum_tx_weight(tx)
     tx.update_hash()
     assert manager.propagate_tx(tx)
     simulator.run(60)
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
-    assert balance_per_address[address] == 1000
+    assert balance_per_address[address] == TokenAmount.from_v1(1000)
 
     # re-org: replace last two blocks with one block, new height will be just one short of enough
     block_to_replace = blocks[-2]
@@ -204,7 +206,7 @@ def simulate_invalid_mempool_transaction(simulator: 'Simulator', manager: 'Hatho
     assert not manager.tx_storage.transaction_exists(tx.hash)
     assert bool(tx.get_metadata().voided_by)
     balance_per_address = manager.wallet.get_balance_per_address(settings.HATHOR_TOKEN_UID)
-    assert balance_per_address[address] == 6400
+    assert balance_per_address[address] == TokenAmount.from_v1(6400)
 
     return None
 
@@ -221,7 +223,7 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> O
     add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
-    tx1 = gen_new_tx(manager, address, 1000)
+    tx1 = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     original_script = tx1.outputs[1].script
     tx1.outputs[1].script = b''
     tx1.weight = manager.daa_factory.minimum_tx_weight(tx1)
@@ -229,9 +231,9 @@ def simulate_empty_script(simulator: 'Simulator', manager: 'HathorManager') -> O
     assert manager.propagate_tx(tx1)
     simulator.run(60)
 
-    tx2 = gen_new_tx(manager, address, 1000)
+    tx2 = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     tx2.inputs = [TxInput(tx_id=tx1.hash, index=1, data=b'\x51')]
-    tx2.outputs = [TxOutput(value=1000, script=original_script)]
+    tx2.outputs = [TxOutput(value=TokenAmount.from_v1(1000), script=original_script)]
     tx2.weight = manager.daa_factory.minimum_tx_weight(tx2)
     tx2.update_hash()
     assert manager.propagate_tx(tx2)
@@ -256,7 +258,7 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
     add_new_blocks(manager, settings.REWARD_SPEND_MIN_BLOCKS + 1)
     simulator.run(60)
 
-    tx1 = gen_new_tx(manager, address, 1000)
+    tx1 = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     s = HathorScript()
     some_data = b'some_data'
     s.pushData(some_data)
@@ -269,9 +271,9 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
     assert manager.propagate_tx(tx1)
     simulator.run(60)
 
-    tx2 = gen_new_tx(manager, address, 1000)
+    tx2 = gen_new_tx(manager, address, TokenAmount.from_v1(1000))
     tx2.inputs = [TxInput(tx_id=tx1.hash, index=1, data=bytes([len(some_data)]) + some_data)]
-    tx2.outputs = [TxOutput(value=1000, script=original_script)]
+    tx2.outputs = [TxOutput(value=TokenAmount.from_v1(1000), script=original_script)]
     tx2.weight = manager.daa_factory.minimum_tx_weight(tx2)
     tx2.update_hash()
     assert manager.propagate_tx(tx2)

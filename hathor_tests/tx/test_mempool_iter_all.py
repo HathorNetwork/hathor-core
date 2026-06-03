@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from hathor.simulator.utils import add_new_blocks, gen_new_tx
 from hathor_tests import unittest
+from hathorlib.token_amount import TokenAmount
 
 
 class MempoolIterAllTraversalTestCase(unittest.TestCase):
@@ -33,7 +34,7 @@ class MempoolIterAllTraversalTestCase(unittest.TestCase):
 
         address = self.get_address(0)
         assert address is not None
-        tx = gen_new_tx(self.manager, address, value=10)
+        tx = gen_new_tx(self.manager, address, value=TokenAmount.from_v1(10))
         self.manager.propagate_tx(tx)
         self.run_to_completion()
 

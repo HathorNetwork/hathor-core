@@ -25,7 +25,6 @@ from hathor.transaction.exceptions import (
     HeaderNotSupported,
     IncorrectParents,
     InvalidOutputScriptSize,
-    InvalidOutputValue,
     InvalidToken,
     InvalidVersionError,
     ParentDoesNotExist,
@@ -152,11 +151,6 @@ class VertexVerifier:
             if (output.get_token_index() == 0) and output.is_token_authority():
                 raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
                     output.to_human_readable()))
-
-            # output value must be positive
-            if output.value <= 0:
-                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
-                    output.value, index))
 
             if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(

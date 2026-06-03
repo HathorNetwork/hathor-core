@@ -322,7 +322,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances1 = data1['balances']
         self.assertEqual(
             balances1,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'value_v2': '0', 'can_mint': False, 'can_melt': False}}
         )
         calls1 = data1['calls']
         self.assertEqual(calls1, {
@@ -415,9 +415,12 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(fields2[dict_with_bytes_param], {'errmsg': 'not a blueprint field'})
         # self.assertEqual(fields2[dict_with_bytes_param], {'value': '1x0'})
         balances2 = data2['balances']
+        value = 100000000000
         self.assertEqual(
             balances2,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(value), 'value_v2': str(value * 10**16), 'can_mint': False, 'can_melt': False
+            }}
         )
 
         # Test __all__ balance
@@ -432,9 +435,12 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data3['blueprint_id'], self.bet_id.hex())
         self.assertEqual(data3['blueprint_name'], 'MyBlueprint')
         balances3 = data3['balances']
+        value = 100000000000
         self.assertEqual(
             balances3,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(value), 'value_v2': str(value * 10**16), 'can_mint': False, 'can_melt': False
+            }}
         )
 
         # Test getting the state in a previous block
@@ -461,7 +467,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances4 = data4['balances']
         self.assertEqual(
             balances4,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'value_v2': '0', 'can_mint': False, 'can_melt': False}}
         )
 
         # With block height
@@ -487,7 +493,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances5 = data5['balances']
         self.assertEqual(
             balances5,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'value_v2': '0', 'can_mint': False, 'can_melt': False}}
         )
 
         # With block2.timestamp, should get block2 state
@@ -513,7 +519,9 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances6 = data6['balances']
         self.assertEqual(
             balances6,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '100000000000', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {
+                'value': str(value), 'value_v2': str(value * 10**16), 'can_mint': False, 'can_melt': False
+            }}
         )
 
         # With block2.timestamp - 1, should get block1 state
@@ -539,7 +547,7 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         balances7 = data7['balances']
         self.assertEqual(
             balances7,
-            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'can_mint': False, 'can_melt': False}}
+            {settings.HATHOR_TOKEN_UID.hex(): {'value': '0', 'value_v2': '0', 'can_mint': False, 'can_melt': False}}
         )
 
         # With block1.timestamp - 1, the contract doesn't exist

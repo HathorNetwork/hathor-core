@@ -10,6 +10,7 @@ from typing import Any, Optional, cast
 import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
+from htr_lib import TokenAmount
 from twisted.internet.task import Clock
 
 from hathor.conf import HathorSettings
@@ -115,7 +116,7 @@ def gen_custom_base_tx(manager: HathorManager,
     assert wallet is not None
 
     inputs = []
-    value = 0
+    value = TokenAmount.zero()
     parents = []
     for tx_base, txout_index in tx_inputs:
         spent_tx = tx_base
@@ -136,12 +137,16 @@ def gen_custom_base_tx(manager: HathorManager,
     else:
         output_address = address
     if n_outputs == 1:
-        outputs = [WalletOutputInfo(address=decode_address(output_address), value=int(value), timelock=None)]
-    elif n_outputs == 2:
-        assert int(value) > 1
         outputs = [
-            WalletOutputInfo(address=decode_address(output_address), value=int(value) - 1, timelock=None),
-            WalletOutputInfo(address=decode_address(output_address), value=1, timelock=None),
+            WalletOutputInfo(address=decode_address(output_address), value=value, timelock=None),
+        ]
+    elif n_outputs == 2:
+        assert value > TokenAmount.from_v1(1)
+        outputs = [
+            WalletOutputInfo(
+                address=decode_address(output_address), value=value - TokenAmount.from_v1(1), timelock=None
+            ),
+            WalletOutputInfo(address=decode_address(output_address), value=TokenAmount.from_v1(1), timelock=None),
         ]
     else:
         raise NotImplementedError
@@ -199,7 +204,7 @@ def add_new_tx(
         :return: Transaction created
         :rtype: :py:class:`hathor.transaction.transaction.Transaction`
     """
-    tx = gen_new_tx(manager, address, value)
+    tx = gen_new_tx(manager, address, TokenAmount.from_v1(value))
     tx.name = name
     if propagate:
         manager.propagate_tx(tx)
@@ -454,10 +459,10 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     address = decode_address(address_b58)
     script = P2PKH.create_output_script(address)
 
-    deposit_amount = get_deposit_token_deposit_amount(manager._settings, mint_amount)
+    deposit_amount = get_deposit_token_deposit_amount(manager._settings, TokenAmount.from_v1(mint_amount))
     if nft_data:
         # NFT creation needs 0.01 HTR of fee
-        deposit_amount += 1
+        deposit_amount += TokenAmount.from_v1(1)
     genesis = manager.tx_storage.get_all_genesis()
     genesis_blocks = [tx for tx in genesis if tx.is_block]
     genesis_txs = [tx for tx in genesis if not tx.is_block]
@@ -471,11 +476,11 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
         genesis_hash = genesis_block.hash
         assert genesis_hash is not None
         deposit_input = [TxInput(genesis_hash, 0, b'')]
-        change_output = TxOutput(genesis_block.outputs[0].value - deposit_amount, script, 0)
+        change_output = TxOutput((genesis_block.outputs[0].value - deposit_amount).to_v1(), script, 0)
         parents = [tx.hash for tx in genesis_txs]
         timestamp = int(manager.reactor.seconds())
     else:
-        total_reward = 0
+        total_reward = TokenAmount.zero()
         deposit_input = []
         while total_reward < deposit_amount:
             block = add_new_block(manager, advance_clock=1, address=address)
@@ -483,7 +488,7 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
             total_reward += block.outputs[0].value
 
         if total_reward > deposit_amount:
-            change_output = TxOutput(total_reward - deposit_amount, script, 0)
+            change_output = TxOutput((total_reward - deposit_amount).to_v1(), script, 0)
         else:
             change_output = None
 
@@ -495,14 +500,14 @@ def create_tokens(manager: 'HathorManager', address_b58: Optional[str] = None, m
     outputs = []
     if nft_data:
         script_data = DataScript.create_output_script(nft_data)
-        output_data = TxOutput(1, script_data, 0)
+        output_data = TxOutput(TokenAmount.from_v1(1), script_data, 0)
         outputs.append(output_data)
     # mint output
     if mint_amount > 0:
-        outputs.append(TxOutput(mint_amount, script, 0b00000001))
+        outputs.append(TxOutput(TokenAmount.from_v1(mint_amount), script, 0b00000001))
     # authority outputs
-    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
-    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001))
+    outputs.append(TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001))
     # deposit output
     if change_output:
         outputs.append(change_output)
@@ -589,19 +594,24 @@ def create_fee_tokens(
 
     outputs = []
     # mint output
-    outputs.append(TxOutput(mint_amount, script, 0b00000001))
+    outputs.append(TxOutput(TokenAmount.from_v1(mint_amount), script, 0b00000001))
 
     # authority outputs
-    outputs.append(TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001))
-    outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
+    outputs.append(TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001))
+    outputs.append(TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001))
 
     # fee
-    fee = settings.FEE_PER_OUTPUT_V1
+    fee = settings.FEE_TOKEN_AMOUNT_PER_OUTPUT
 
     # fee output
-    outputs.append(TxOutput(genesis_block.outputs[0].value - fee - (genesis_output_amount or 0), script, 0))
+    fee_output_raw = (
+        genesis_block.outputs[0].value.raw()
+        - fee.raw()
+        - (genesis_output_amount or 0)
+    )
+    outputs.append(TxOutput(TokenAmount.from_v1(fee_output_raw), script, 0))
     if genesis_output_amount:
-        outputs.append(TxOutput(genesis_output_amount, script, 0))
+        outputs.append(TxOutput(TokenAmount.from_v1(genesis_output_amount), script, 0))
 
     tx = TokenCreationTransaction(
         weight=1,
@@ -667,17 +677,17 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     burn_amount = len(data)
 
     # Get the inputs to be used to burn the HTR
-    total_reward = 0
+    total_reward = TokenAmount.zero()
     burn_input = []
-    while total_reward < burn_amount:
+    while total_reward < TokenAmount.from_v1(burn_amount):
         block = add_new_block(manager, advance_clock=1, address=address)
         burn_input.append(TxInput(block.hash, 0, b''))
         total_reward += block.outputs[0].value
 
     # Create the change output, if needed
     change_output: Optional[TxOutput]
-    if total_reward > burn_amount:
-        change_output = TxOutput(total_reward - burn_amount, script, 0)
+    if total_reward > TokenAmount.from_v1(burn_amount):
+        change_output = TxOutput(total_reward - TokenAmount.from_v1(burn_amount), script, 0)
     else:
         change_output = None
 
@@ -692,7 +702,7 @@ def add_tx_with_data_script(manager: 'HathorManager', data: list[str], propagate
     outputs = []
     for d in data:
         script_data = DataScript.create_output_script(d)
-        output_data = TxOutput(1, script_data, 0)
+        output_data = TxOutput(TokenAmount.from_v1(1), script_data, 0)
         outputs.append(output_data)
 
     # Add change output to array

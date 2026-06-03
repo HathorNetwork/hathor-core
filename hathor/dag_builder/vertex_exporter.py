@@ -163,18 +163,18 @@ class VertexExporter:
                     index = len(tokens)
 
             script = self.get_next_p2pkh_script()
-            outputs.append(TxOutput(value=amount, token_data=index, script=script))
+            outputs.append(TxOutput(value=node.denormalize_amount(amount), token_data=index, script=script))
 
         if token_creation:
             # Create mint and melt authorities to be used by future transactions
             outputs.extend([
                 TxOutput(
-                    value=TxOutput.TOKEN_MINT_MASK,
+                    value=node.as_node_amount(TxOutput.TOKEN_MINT_MASK),
                     token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
                     script=self.get_next_p2pkh_script(),
                 ),
                 TxOutput(
-                    value=TxOutput.TOKEN_MELT_MASK,
+                    value=node.as_node_amount(TxOutput.TOKEN_MELT_MASK),
                     token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
                     script=self.get_next_p2pkh_script(),
                 ),
@@ -403,7 +403,7 @@ class VertexExporter:
                 nc_actions.append(NanoHeaderAction(
                     type=action,
                     token_index=token_index,
-                    amount=value,
+                    amount=node.denormalize_amount(value),
                 ))
 
         append_actions(NCActionType.DEPOSIT, NC_DEPOSIT_KEY)
@@ -443,7 +443,7 @@ class VertexExporter:
         entries = []
         for token_name, fee_amount in fees:
             assert isinstance(token_name, str)
-            assert isinstance(fee_amount, int)
+            assert isinstance(fee_amount, TokenAmount)
             token_index = 0
             if token_name != 'HTR':
                 token_id = self._get_token_id(token_name)
@@ -453,7 +453,7 @@ class VertexExporter:
                     vertex.tokens.append(token_id)
                 token_index = 1 + vertex.tokens.index(token_id)
 
-            entry = FeeHeaderEntry(token_index=token_index, amount=fee_amount)
+            entry = FeeHeaderEntry(token_index=token_index, amount=node.denormalize_amount(fee_amount))
             entries.append(entry)
 
         fee_header = FeeHeader(
@@ -537,7 +537,7 @@ class VertexExporter:
             vertex.hash = self._settings.GENESIS_BLOCK_HASH
             vertex.timestamp = self._settings.GENESIS_BLOCK_TIMESTAMP
             txout = TxOutput(
-                value=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
+                value=TokenAmount.from_v1(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
                 token_data=0,
                 script=self._settings.GENESIS_OUTPUT_SCRIPT
             )

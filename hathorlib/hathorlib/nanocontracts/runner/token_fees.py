@@ -34,10 +34,10 @@ def calculate_mint_fee(
             raise AssertionError
         case TokenVersion.DEPOSIT:
             _validate_deposit_based_payment_token(fee_payment_token)
-            return -get_deposit_token_deposit_amount(settings, amount)
+            return -get_deposit_token_deposit_amount(settings, amount).to_balance()
         case TokenVersion.FEE:
             _validate_fee_based_payment_token(fee_payment_token)
-            return -_calculate_unit_fee_token_fee(settings, fee_payment_token)
+            return -_calculate_unit_fee_token_fee(settings, fee_payment_token).to_balance()
         case _:  # pragma: no cover
             assert_never(token_version)
 
@@ -55,10 +55,10 @@ def calculate_melt_fee(
             raise AssertionError
         case TokenVersion.DEPOSIT:
             _validate_deposit_based_payment_token(fee_payment_token)
-            return +get_deposit_token_withdraw_amount(settings, amount)
+            return +get_deposit_token_withdraw_amount(settings, amount).to_balance()
         case TokenVersion.FEE:
             _validate_fee_based_payment_token(fee_payment_token)
-            return -_calculate_unit_fee_token_fee(settings, fee_payment_token)
+            return -_calculate_unit_fee_token_fee(settings, fee_payment_token).to_balance()
         case _:  # pragma: no cover
             assert_never(token_version)
 
@@ -83,7 +83,7 @@ def _validate_fee_based_payment_token(fee_payment_token: TokenDescription) -> No
 def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> TokenAmount:
     """Calculate the fee for handling a fee-based token"""
     if fee_payment_token.token_id == HATHOR_TOKEN_UID:
-        return settings.FEE_PER_OUTPUT_V1
-    numerator = settings.FEE_PER_OUTPUT_V1 * 10**9
+        return settings.FEE_TOKEN_AMOUNT_PER_OUTPUT
+    numerator = settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.normalized() * 10 ** 9
     assert numerator % settings.TOKEN_DEPOSIT_PERCENTAGE_PPB == 0
-    return numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_PPB
+    return TokenAmount.from_v2(numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_PPB)

@@ -31,15 +31,19 @@ if TYPE_CHECKING:
 
 
 class TokenData:
-    received: TokenAmount = 0
-    spent: TokenAmount = 0
+    received: TokenAmount = TokenAmount.zero()
+    spent: TokenAmount = TokenAmount.zero()
     name: str = ''
     symbol: str = ''
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
+        received_v1 = self.received.maybe_to_v1()
+        spent_v1 = self.spent.maybe_to_v1()
         return {
-            'received': self.received,
-            'spent': self.spent,
+            'received': received_v1.raw() if received_v1 is not None else None,
+            'spent': spent_v1.raw() if spent_v1 is not None else None,
+            'received_v2': self.received.normalized(),
+            'spent_v2': self.spent.normalized(),
             'name': self.name,
             'symbol': self.symbol,
         }
@@ -197,6 +201,8 @@ AddressBalanceResource.openapi = {
                                                 'symbol': 'HTR',
                                                 'received': 1000,
                                                 'spent': 800,
+                                                'received_v2': 1000 * 10**16,
+                                                'spent_v2': 800 * 10**16,
                                             },
                                             '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702': {
                                                 'name': 'NewCoin',

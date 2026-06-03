@@ -284,7 +284,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             json['fees'] = [
                 {
                     'token_uid': fee.token_uid.hex(),
-                    'amount': fee.amount,
+                    'amount': fee.amount.raw(),
                 }
                 for fee in fee_header.get_fees()
             ]
@@ -373,7 +373,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 raise InvalidToken('token {} cannot be used to pay fees'.format(fee.token_uid.hex()))
 
             # act as a regular output subtracting from the total amount (which is done with sum in this context)
-            token_info.amount += fee.amount
+            token_info.amount += fee.amount.to_balance()
             token_dict[fee.token_uid] = token_info
 
     def _get_token_info_from_inputs(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
@@ -400,7 +400,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 token_info.can_mint = token_info.can_mint or spent_output.can_mint_token()
                 token_info.can_melt = token_info.can_melt or spent_output.can_melt_token()
             else:
-                token_info.amount -= spent_output.value
+                token_info.amount -= spent_output.value.to_balance()
 
                 if token_version == TokenVersion.FEE:
                     token_info.chargeable_inputs += 1
@@ -430,11 +430,11 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
             if tx_output.is_token_authority():
                 # make sure we only have authorities that we know of
-                if tx_output.value > TxOutput.ALL_AUTHORITIES:
-                    raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value))
+                if tx_output.value.raw() > TxOutput.ALL_AUTHORITIES:
+                    raise InvalidToken('Invalid authorities in output (0b{0:b})'.format(tx_output.value.raw()))
             else:
                 # for regular outputs subtract from the total amount
-                token_info.amount += tx_output.value
+                token_info.amount += tx_output.value.to_balance()
 
                 if token_info.version == TokenVersion.FEE:
                     token_info.chargeable_outputs += 1

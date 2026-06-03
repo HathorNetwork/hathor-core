@@ -20,6 +20,7 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount import TokenAmount
 
 
 class MyBlueprint(Blueprint):
@@ -60,9 +61,12 @@ class TestIndexes2(BlueprintTestCase):
         htr_token_info = self.tokens_index.get_token_info(HATHOR_TOKEN_UID)
 
         assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
-        assert tka_token_info.get_total() == amount
-        assert htr_token_info.get_total() == (
-            self._settings.GENESIS_TOKEN_ATOMIC_UNITS
-            + 11 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
-            - get_deposit_token_deposit_amount(self._settings, amount)
+        assert tka_token_info.get_total() == TokenAmount.from_v1(amount).to_balance()
+        # The deposit amount is already a TokenAmount; sum everything in V2-normalized form so
+        # the subtraction stays in a consistent unit (mixing V1 raw with V2 raw would underflow).
+        expected_htr_normalized = (
+            TokenAmount.from_v1(self._settings.GENESIS_TOKEN_ATOMIC_UNITS).normalized()
+            + TokenAmount.from_v1(11 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK).normalized()
+            - get_deposit_token_deposit_amount(self._settings, TokenAmount.from_v1(amount)).normalized()
         )
+        assert htr_token_info.get_total() == TokenAmount.from_v2(expected_htr_normalized).to_balance()

@@ -40,6 +40,7 @@ from hathorlib.token_amount import TokenAmount
 
 logger = get_logger()
 
+
 # check interval for maybe_spent_txs
 UTXO_CHECK_INTERVAL = 10
 # how long a utxo might be in an intermediate state, being considered spent before we receive the tx that spends it
@@ -60,8 +61,8 @@ class WalletOutputInfo(NamedTuple):
 
 
 class WalletBalance(NamedTuple):
-    locked: TokenAmount = 0
-    available: TokenAmount = 0
+    locked: TokenAmount = TokenAmount.zero()
+    available: TokenAmount = TokenAmount.zero()
 
 
 class WalletBalanceUpdate(NamedTuple):
@@ -145,7 +146,7 @@ class BaseWallet:
 
     def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, TokenAmount]:
         """Return balance per address for a given token. This method ignores locks."""
-        balances: defaultdict[AddressB58, TokenAmount] = defaultdict(int)
+        balances: defaultdict[AddressB58, TokenAmount] = defaultdict(TokenAmount.zero)
         for utxo_info, unspent_tx in self.unspent_txs[token_uid].items():
             balances[unspent_tx.address] += unspent_tx.value
         return dict(balances)
@@ -245,7 +246,9 @@ class BaseWallet:
                 token_dict[token_uid] = token_index
 
             timelock = int_to_bytes(txout.timelock, 4) if txout.timelock else None
-            tx_outputs.append(TxOutput(txout.value, create_output_script(txout.address, timelock), token_index))
+            tx_outputs.append(
+                TxOutput(txout.value.to_v1(), create_output_script(txout.address, timelock), token_index)
+            )
 
         tx_inputs = []
         private_keys = []
@@ -379,7 +382,7 @@ class BaseWallet:
         :param timestamp: the tx timestamp
         :type timestamp: int
         """
-        token_dict: dict[bytes, TokenAmount] = defaultdict(int)
+        token_dict: dict[bytes, TokenAmount] = defaultdict(TokenAmount.zero)
         for output in outputs:
             token_uid = bytes.fromhex(output.token_uid)
             token_dict[token_uid] += output.value
@@ -488,7 +491,7 @@ class BaseWallet:
         :raises InsufficientFunds: if the wallet does not have enough ballance
         """
         inputs_tx = []
-        total_inputs_amount = 0
+        total_inputs_amount = TokenAmount.zero()
 
         utxos = self.unspent_txs[token_uid]
         for utxo in utxos.values():
@@ -515,7 +518,7 @@ class BaseWallet:
             utxo.maybe_spent_ts = int(self.reactor.seconds())
             self.maybe_spent_txs[token_uid][(_input.tx_id, _input.index)] = utxo
 
-        return inputs_tx, total_inputs_amount
+        return inputs_tx, total_inputs_amount.to_v1()
 
     def can_spend_block(self, tx_storage: 'TransactionStorage', tx_id: bytes) -> bool:
         tx = tx_storage.get_transaction(tx_id)
@@ -895,7 +898,7 @@ class BaseWallet:
         """
         smallest_timestamp = inf
         for token_id, utxos in self.unspent_txs.items():
-            balance = {'locked': 0, 'available': 0}
+            balance = {'locked': TokenAmount.zero(), 'available': TokenAmount.zero()}
             for utxo in chain(utxos.values(), self.maybe_spent_txs[token_id].values()):
                 if utxo.is_token_authority():
                     # authority utxos don't transfer value
@@ -975,11 +978,13 @@ class UnspentTx:
         self.maybe_spent_ts = inf
 
     def to_dict(self) -> dict[str, Any]:
+        value_v1 = self.value.maybe_to_v1()
         data: dict[str, Any] = {}
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['index'] = self.index
-        data['value'] = self.value
+        data['value'] = value_v1.raw() if value_v1 is not None else None
+        data['value_v2'] = self.value.normalized()
         data['address'] = self.address
         data['token_data'] = self.token_data
         data['voided'] = self.voided
@@ -988,8 +993,8 @@ class UnspentTx:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> 'UnspentTx':
-        return cls(bytes.fromhex(data['tx_id']), data['index'], data['value'], data['timestamp'], data['address'],
-                   data['token_data'], data['voided'], data['timelock'])
+        return cls(bytes.fromhex(data['tx_id']), data['index'], TokenAmount.from_v2(data['value_v2']),
+                   data['timestamp'], data['address'], data['token_data'], data['voided'], data['timelock'])
 
     def is_locked(self, reactor: Reactor) -> bool:
         """ Returns if the unspent tx is locked or available to be spent
@@ -1025,17 +1030,19 @@ class SpentTx:
         self.voided = voided
 
     def to_dict(self) -> dict[str, Any]:
+        value_v1 = self.value.maybe_to_v1()
         data: dict[str, Any] = {}
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['from_tx_id'] = self.from_tx_id.hex()
         data['from_index'] = self.from_index
-        data['value'] = self.value
+        data['value'] = value_v1.raw() if value_v1 is not None else None
+        data['value_v2'] = self.value.normalized()
         data['voided'] = self.voided
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> 'SpentTx':
         return cls(
-            bytes.fromhex(data['tx_id']), bytes.fromhex(data['from_tx_id']), data['from_index'], data['value'],
-            data['timestamp'])
+            bytes.fromhex(data['tx_id']), bytes.fromhex(data['from_tx_id']), data['from_index'],
+            TokenAmount.from_v2(data['value_v2']), data['timestamp'])

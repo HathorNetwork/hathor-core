@@ -43,7 +43,18 @@ class BalanceResource(Resource):
         if not self.manager.wallet:
             return {'success': False, 'message': 'No wallet started on node'}
 
-        data = {'success': True, 'balance': self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]._asdict()}
+        wallet_balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
+        available_v1 = wallet_balance.available.maybe_to_v1()
+        locked_v1 = wallet_balance.locked.maybe_to_v1()
+        data = {
+            'success': True,
+            'balance': {
+                'available': available_v1.raw() if available_v1 is not None else None,
+                'locked': locked_v1.raw() if locked_v1 is not None else None,
+                'available_v2': wallet_balance.available.normalized(),
+                'locked_v2': wallet_balance.locked.normalized(),
+            },
+        }
         return json_dumpb(data)
 
 
@@ -66,7 +77,9 @@ BalanceResource.openapi = {
                                     'value': {
                                         'balance': {
                                             'available': 5000,
-                                            'locked': 1000
+                                            'locked': 1000,
+                                            'available_v2': 5000 * 10**16,
+                                            'locked_v2': 1000 * 10**16,
                                         }
                                     }
                                 }

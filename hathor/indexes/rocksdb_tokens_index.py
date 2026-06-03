@@ -231,7 +231,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         name: str | None,
         symbol: str | None,
         version: TokenVersion | None,
-        total: TokenAmount = 0,
+        total: TokenAmount = TokenAmount.zero(),
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
     ) -> None:
@@ -241,7 +241,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             value = self._to_value_info(_InfoDict(
                 name=name,
                 symbol=symbol,
-                total=total,
+                total=total.normalized(),
                 version=version,
                 n_contracts_can_mint=n_contracts_can_mint,
                 n_contracts_can_melt=n_contracts_can_melt,
@@ -254,7 +254,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             info.name = name
             info.symbol = symbol
             info.version = version
-            info.total += total
+            info.total += total.normalized()
             info.n_contracts_can_mint += n_contracts_can_mint
             info.n_contracts_can_melt += n_contracts_can_melt
             value = self._to_value_info(info)
@@ -322,7 +322,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             name=None,
             symbol=None,
             version=None,
-            total=0,
+            total=TokenAmount.zero(),
         )
 
     def _create_genesis_info(self) -> None:
@@ -331,7 +331,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             name=self._settings.HATHOR_TOKEN_NAME,
             symbol=self._settings.HATHOR_TOKEN_SYMBOL,
             version=TokenVersion.NATIVE,
-            total=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
+            total=TokenAmount.from_v1(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
         )
 
     def _get_value_info(self, token_uid: bytes, *, create_default: bool = True) -> _InfoDict:
@@ -350,7 +350,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     @override
     def add_to_total(self, token_uid: bytes, amount: TokenBalance) -> None:
         dict_info = self._get_value_info(token_uid, create_default=True)
-        dict_info.total += amount
+        dict_info.total += amount.raw()
         key_info = self._to_key_info(token_uid)
         new_value_info = self._to_value_info(dict_info)
         self._db.put((self._cf, key_info), new_value_info)
@@ -369,7 +369,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 # add to melt index
                 self._add_authority_utxo(token_uid, tx.hash, index, is_mint=False)
         else:
-            self.add_to_total(token_uid, tx_output.value)
+            self.add_to_total(token_uid, tx_output.value.to_balance())
 
     def _remove_utxo(self, tx: BaseTransaction, index: int) -> None:
         """ Remove tx from mint/melt indexes and total amount
@@ -386,7 +386,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 # remove from melt index
                 self._remove_authority_utxo(token_uid, tx.hash, index, is_mint=False)
         else:
-            self.add_to_total(token_uid, -tx_output.value)
+            self.add_to_total(token_uid, -tx_output.value.to_balance())
 
     def add_tx(self, tx: BaseTransaction) -> None:
         # if it's a TokenCreationTransaction, update name and symbol
@@ -430,9 +430,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 token_uid = tx.get_token_uid(action.token_index)
                 match action.type:
                     case NCActionType.DEPOSIT:
-                        self.add_to_total(token_uid, action.amount)
+                        self.add_to_total(token_uid, action.amount.to_balance())
                     case NCActionType.WITHDRAWAL:
-                        self.add_to_total(token_uid, -action.amount)
+                        self.add_to_total(token_uid, -action.amount.to_balance())
                     case NCActionType.GRANT_AUTHORITY | NCActionType.ACQUIRE_AUTHORITY:
                         # These actions don't affect the token balance but do affect the counters
                         # of contracts holding token authorities. They are handled directly by
@@ -467,9 +467,9 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 token_uid = tx.get_token_uid(action.token_index)
                 match action.type:
                     case NCActionType.DEPOSIT:
-                        self.add_to_total(token_uid, -action.amount)
+                        self.add_to_total(token_uid, -action.amount.to_balance())
                     case NCActionType.WITHDRAWAL:
-                        self.add_to_total(token_uid, action.amount)
+                        self.add_to_total(token_uid, action.amount.to_balance())
                     case NCActionType.GRANT_AUTHORITY | NCActionType.ACQUIRE_AUTHORITY:
                         # These actions don't affect the nc token balance,
                         # so no need for any special handling on the index.
@@ -607,7 +607,7 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
         return self._info.version
 
     def get_total(self) -> TokenAmount:
-        return TokenAmount(self._info.total)
+        return TokenAmount.from_v2(self._info.total)
 
     def _iter_authority_utxos(self, *, is_mint: bool) -> Iterator[TokenUtxoInfo]:
         it = self._index._db.iterkeys(self._index._cf)

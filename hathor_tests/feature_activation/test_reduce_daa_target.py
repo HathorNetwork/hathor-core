@@ -26,6 +26,7 @@ from hathor.daa.common import _calculate_next_weight
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathorlib.token_amount import TokenAmount
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -90,14 +91,16 @@ class TestAlgorithmV1:
     def test_get_tokens_issued_per_block_normal_reward(self) -> None:
         settings = _get_settings()
         v1 = _make_v1(settings)
-        assert v1.get_tokens_issued_per_block(1) == settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        assert v1.get_tokens_issued_per_block(1) == TokenAmount.from_v1(
+            settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        )
 
     def test_get_mined_tokens_matches_per_block_sum(self) -> None:
         settings = _get_settings()
         v1 = _make_v1(settings)
         # The cumulative count must equal summing per-block rewards 1..height.
         height = 5
-        expected = sum(v1.get_tokens_issued_per_block(h) for h in range(1, height + 1))
+        expected = sum(v1.get_tokens_issued_per_block(h).raw() for h in range(1, height + 1))
         assert v1.get_mined_tokens(height) == expected
 
 
@@ -113,7 +116,7 @@ class TestAlgorithmV2:
         settings = _get_settings()
         v2 = _make_v2(settings)
         # AVG_TIME=30, REDUCED_10X=75 (7.5s), factor=300//75=4
-        expected = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4
+        expected = TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4)
         assert v2.get_tokens_issued_per_block(1) == expected
 
     def test_get_mined_tokens_uses_reduced_reward(self) -> None:
@@ -122,7 +125,7 @@ class TestAlgorithmV2:
         v2 = _make_v2(settings)
         height = 5
         # The cumulative count must equal summing V2's per-block rewards 1..height.
-        expected = sum(v2.get_tokens_issued_per_block(h) for h in range(1, height + 1))
+        expected = sum(v2.get_tokens_issued_per_block(h).raw() for h in range(1, height + 1))
         assert v2.get_mined_tokens(height) == expected
         # And it must be strictly less than V1's count (factor=4, all blocks mid-halving).
         v1 = _make_v1(settings)
@@ -171,8 +174,8 @@ class TestGetMinedTokensV2StartHeight:
         v2 = _make_v2(settings, v2_start_height=v2_start_height)
         v1 = _make_v1(settings)
         # Heights [1, 2] V1; [3, 5] V2. Sum each per-block reward to verify.
-        v1_part = sum(v1.get_tokens_issued_per_block(h) for h in range(1, v2_start_height))
-        v2_part = sum(v2.get_tokens_issued_per_block(h) for h in range(v2_start_height, height + 1))
+        v1_part = sum(v1.get_tokens_issued_per_block(h).raw() for h in range(1, v2_start_height))
+        v2_part = sum(v2.get_tokens_issued_per_block(h).raw() for h in range(v2_start_height, height + 1))
         assert v2.get_mined_tokens(height) == v1_part + v2_part
 
     def test_v2_start_height_one_past_height_only_one_v2_block(self) -> None:
@@ -182,7 +185,7 @@ class TestGetMinedTokensV2StartHeight:
         # Heights [1..4] V1, height 5 V2.
         expected = (
             v1.get_mined_tokens(4)
-            + v2.get_tokens_issued_per_block(5)
+            + v2.get_tokens_issued_per_block(5).raw()
         )
         assert v2.get_mined_tokens(5) == expected
 
@@ -194,8 +197,8 @@ class TestGetMinedTokensV2StartHeight:
         v2 = _make_v2(settings, v2_start_height=v2_start_height)
         v1 = _make_v1(settings)
         manual = sum(
-            v1.get_tokens_issued_per_block(h) if h < v2_start_height
-            else v2.get_tokens_issued_per_block(h)
+            v1.get_tokens_issued_per_block(h).raw() if h < v2_start_height
+            else v2.get_tokens_issued_per_block(h).raw()
             for h in range(1, height + 1)
         )
         assert v2.get_mined_tokens(height) == manual
@@ -211,8 +214,8 @@ class TestGetMinedTokensV2StartHeight:
         v2 = _make_v2(settings, v2_start_height=v2_start_height)
         v1 = _make_v1(settings)
         manual = sum(
-            v1.get_tokens_issued_per_block(h) if h < v2_start_height
-            else v2.get_tokens_issued_per_block(h)
+            v1.get_tokens_issued_per_block(h).raw() if h < v2_start_height
+            else v2.get_tokens_issued_per_block(h).raw()
             for h in range(1, height + 1)
         )
         assert v2.get_mined_tokens(height) == manual
@@ -283,7 +286,7 @@ class TestDAAFactoryCreateFromBlock:
         block = self._mock_non_genesis_block()
 
         reward = factory.create_from_block(block).get_tokens_issued_per_block(1)
-        assert reward == settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        assert reward == TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK)
 
     def test_with_block_parent_feature_active_reduces_reward(self) -> None:
         settings = _get_settings()
@@ -295,7 +298,7 @@ class TestDAAFactoryCreateFromBlock:
 
         reward = factory.create_from_block(block).get_tokens_issued_per_block(1)
         # AVG_TIME=30, REDUCED_10X=75 (7.5s), factor=300//75=4
-        expected = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4
+        expected = TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4)
         assert reward == expected
 
     def test_create_from_block_asserts_without_feature_service(self) -> None:
@@ -315,7 +318,7 @@ class TestDAAFactoryCreateFromBlock:
         block.is_genesis = True
 
         reward = factory.create_from_block(block).get_tokens_issued_per_block(1)
-        assert reward == settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        assert reward == TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK)
 
 
 class TestDAAFactoryRewardForNextBlock:
@@ -330,7 +333,7 @@ class TestDAAFactoryRewardForNextBlock:
         parent_block.get_height.return_value = 10
 
         reward = factory.create_from_parent(parent_block).get_reward_for_next_block(parent_block)
-        assert reward == settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        assert reward == TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK)
 
     def test_feature_active_reduces_reward(self) -> None:
         settings = _get_settings()
@@ -342,7 +345,7 @@ class TestDAAFactoryRewardForNextBlock:
         parent_block.get_height.return_value = 10
 
         reward = factory.create_from_parent(parent_block).get_reward_for_next_block(parent_block)
-        expected = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4
+        expected = TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4)
         assert reward == expected
 
     def test_create_from_parent_asserts_without_feature_service(self) -> None:
@@ -413,8 +416,8 @@ class TestDAAFactoryV2StartHeight:
         daa = factory.create_from_parent(parent_block)
         v1 = _make_v1(settings)
         # Heights [1..4] V1, [5..10] V2.
-        manual = sum(v1.get_tokens_issued_per_block(h) for h in range(1, 5)) + \
-            sum(daa.get_tokens_issued_per_block(h) for h in range(5, 11))
+        manual = sum(v1.get_tokens_issued_per_block(h).raw() for h in range(1, 5)) + \
+            sum(daa.get_tokens_issued_per_block(h).raw() for h in range(5, 11))
         assert daa.get_mined_tokens(10) == manual
 
 
@@ -620,8 +623,8 @@ class ActivationBoundaryTest(SimulatorTestCase):
         assert feature_service.get_state(
             block=activation_block, feature=Feature.REDUCE_DAA_TARGET
         ) == FeatureState.ACTIVE
-        v1_reward = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
-        v2_reward = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4
+        v1_reward = TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK)
+        v2_reward = TokenAmount.from_v1(settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // 4)
         assert activation_block.sum_outputs == v1_reward, (
             f'activation block (height 16) should still be V1 under Shape B '
             f'(parent at 15 is LOCKED_IN). got {activation_block.sum_outputs}, '
@@ -653,7 +656,7 @@ class ActivationBoundaryTest(SimulatorTestCase):
         # Activation boundary is 16; first V2 block is 17. v2_start_height = 17.
         assert daa._config.v2_start_height == 17
 
-        per_block_sum = 16 * v1_reward + (last_height - 16) * v2_reward
+        per_block_sum = 16 * v1_reward.raw() + (last_height - 16) * v2_reward.raw()
         assert daa.get_mined_tokens(last_height) == per_block_sum, (
             f'cumulative mined tokens at height {last_height} should split V1[1..16]+V2[17..20]: '
             f'got {daa.get_mined_tokens(last_height)}, expected {per_block_sum}'
@@ -661,7 +664,7 @@ class ActivationBoundaryTest(SimulatorTestCase):
 
         # Sanity: had we (incorrectly) applied the reduction factor to the entire chain,
         # we would get this wrong number — verify we are NOT producing it.
-        wrong_all_v2 = last_height * v2_reward
+        wrong_all_v2 = last_height * v2_reward.raw()
         assert daa.get_mined_tokens(last_height) != wrong_all_v2
 
     def test_get_activation_height_walks_back_through_boundaries(self) -> None:

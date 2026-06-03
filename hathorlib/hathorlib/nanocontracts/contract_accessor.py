@@ -71,7 +71,7 @@ class ContractAccessor(FauxImmutable):
         then this method will return 47 HTR.
         """
         balance = self.__runner.get_current_balance(self.__contract_id, token_uid)
-        return Amount(balance.value)
+        return Amount(balance.value.to_amount().to_version(self.__runner.token_amount_version).raw())
 
     def can_mint(self, token_uid: TokenUid) -> bool:
         """
