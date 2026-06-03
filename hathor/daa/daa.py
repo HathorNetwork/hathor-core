@@ -106,7 +106,7 @@ class DifficultyAdjustmentAlgorithm:
     def get_tokens_issued_per_block(self, height: int) -> TokenAmount:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         amount = _get_base_tokens_issued_per_block(self._settings, height)
-        return amount // self._config.reward_reduction_factor
+        return TokenAmount.from_v1(amount // self._config.reward_reduction_factor)
 
     def get_reward_for_next_block(self, parent_block: Block) -> TokenAmount:
         """Return the reward for the next block after parent_block."""

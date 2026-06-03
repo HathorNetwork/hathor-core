@@ -19,6 +19,7 @@ from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount import TokenAmount
 
 
 class MyBlueprint(Blueprint):
@@ -72,10 +73,10 @@ class TokenCreationTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx3.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=TokenAmount.from_v1(100), script=b'', token_data=1)
         tx3.outputs.append(dbt_output)
 
-        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
+        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=TokenAmount.from_v1(100))
         tx3_nano_header = tx3.get_nano_header()
         tx3_nano_header.nc_actions.append(dbt_withdraw)
 
@@ -121,10 +122,10 @@ class TokenCreationTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx3.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=TokenAmount.from_v1(100), script=b'', token_data=1)
         tx3.outputs.append(dbt_output)
 
-        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
+        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=TokenAmount.from_v1(100))
         tx3_nano_header = tx3.get_nano_header()
         tx3_nano_header.nc_actions.append(dbt_withdraw)
 
@@ -166,10 +167,10 @@ class TokenCreationTestCase(BlueprintTestCase):
         dbt_id = derive_child_token_id(ContractId(tx1.hash), token_symbol='DBT')
         tx2.tokens.append(dbt_id)
 
-        dbt_output = TxOutput(value=100, script=b'', token_data=1)
+        dbt_output = TxOutput(value=TokenAmount.from_v1(100), script=b'', token_data=1)
         tx2.outputs.append(dbt_output)
 
-        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
+        dbt_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=TokenAmount.from_v1(100))
         tx2_nano_header = tx2.get_nano_header()
         tx2_nano_header.nc_actions.append(dbt_withdraw)
 
@@ -200,10 +201,10 @@ class TokenCreationTestCase(BlueprintTestCase):
         fake_token_id = self.gen_random_token_uid()
         tx1.tokens.append(fake_token_id)
 
-        fake_output = TxOutput(value=100, script=b'', token_data=1)
+        fake_output = TxOutput(value=TokenAmount.from_v1(100), script=b'', token_data=1)
         tx1.outputs.append(fake_output)
 
-        fake_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=100)
+        fake_withdraw = NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=TokenAmount.from_v1(100))
         tx1_nano_header = tx1.get_nano_header()
         tx1_nano_header.nc_actions.append(fake_withdraw)
 

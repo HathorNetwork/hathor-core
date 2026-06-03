@@ -55,6 +55,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * 10**16,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[:1]])
@@ -68,6 +69,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * 10**16,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[4:1:-1]])
@@ -81,6 +83,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * 10**16,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
@@ -94,6 +97,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * 10**16,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])

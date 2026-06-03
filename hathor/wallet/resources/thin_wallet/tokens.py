@@ -65,6 +65,8 @@ class TokenResource(Resource):
                 'index': index
             })
 
+        total_token_amount = token_info.get_total()
+        total_v1 = total_token_amount.maybe_to_v1()
         data = {
             'name': token_info.get_name(),
             'symbol': token_info.get_symbol(),
@@ -76,7 +78,8 @@ class TokenResource(Resource):
             'melt': melt,
             'can_mint': token_info.can_mint(),
             'can_melt': token_info.can_melt(),
-            'total': token_info.get_total(),
+            'total': total_v1.raw() if total_v1 is not None else None,
+            'total_v2': total_token_amount.normalized(),
             'transactions_count': transactions_count,
         }
         return data

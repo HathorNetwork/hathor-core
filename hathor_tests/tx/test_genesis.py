@@ -7,6 +7,7 @@ from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor_tests import unittest
+from hathorlib.token_amount import TokenAmount
 
 settings = HathorSettings()
 
@@ -71,7 +72,10 @@ class GenesisTest(unittest.TestCase):
         genesis_blocks = [tx for tx in genesis if tx.is_block]
         genesis_block = genesis_blocks[0]
 
-        self.assertEqual(settings.GENESIS_TOKEN_ATOMIC_UNITS, sum([output.value for output in genesis_block.outputs]))
+        self.assertEqual(
+            TokenAmount.from_v1(settings.GENESIS_TOKEN_ATOMIC_UNITS),
+            sum(([output.value for output in genesis_block.outputs]), start=TokenAmount.zero()),
+        )
 
     def test_genesis_weight(self):
         genesis = self.storage.get_all_genesis()

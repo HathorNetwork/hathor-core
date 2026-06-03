@@ -13,6 +13,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount, int_to_bytes
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending, create_tokens, get_genesis_key
+from hathorlib.token_amount import TokenAmount
 
 
 class TokenTest(unittest.TestCase):
@@ -40,7 +41,7 @@ class TokenTest(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis]
 
         output_script = P2PKH.create_output_script(self.address)
-        tx_outputs = [TxOutput(100, output_script, 1)]
+        tx_outputs = [TxOutput(TokenAmount.from_v1(100), output_script, 1)]
 
         block = Block(
             nonce=100,
@@ -115,7 +116,7 @@ class TokenTest(unittest.TestCase):
         self.manager.verification_service.verify(tx2, self.get_verification_params(self.manager))
 
         # missing tokens
-        token_output = TxOutput(utxo.value - 1, script, 1)
+        token_output = TxOutput((utxo.value - TokenAmount.from_v1(1)).to_v1(), script, 1)
         tx3 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx3.get_sighash_all()
@@ -136,12 +137,12 @@ class TokenTest(unittest.TestCase):
 
         # mint tokens and transfer mint authority
         mint_amount = 10000000
-        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount)
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, TokenAmount.from_v1(mint_amount))
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
-        token_output1 = TxOutput(mint_amount, script, 1)
-        token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
-        deposit_output = TxOutput(tx.outputs[3].value - deposit_amount, script, 0)
+        token_output1 = TxOutput(TokenAmount.from_v1(mint_amount), script, 1)
+        token_output2 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
+        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount).to_v1(), script, 0)
         tx2 = Transaction(
             weight=1,
             inputs=[_input1, _input2],
@@ -170,13 +171,13 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(500 + mint_amount, tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(500 + mint_amount), tokens_index.get_total())
 
         # try to mint 1 token unit without deposit
         mint_amount = 1
         _input1 = TxInput(tx.hash, 1, b'')
-        token_output1 = TxOutput(mint_amount, script, 1)
-        token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
+        token_output1 = TxOutput(TokenAmount.from_v1(mint_amount), script, 1)
+        token_output2 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
         tx3 = Transaction(
             weight=1,
             inputs=[_input1],
@@ -196,12 +197,15 @@ class TokenTest(unittest.TestCase):
 
         # try to mint and deposit less tokens than necessary
         mint_amount = 10000000
-        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount) - 1
+        deposit_amount = (
+            get_deposit_token_deposit_amount(self._settings, TokenAmount.from_v1(mint_amount))
+            - TokenAmount.from_v1(1)
+        )
         _input1 = TxInput(tx.hash, 1, b'')
         _input2 = TxInput(tx.hash, 3, b'')
-        token_output1 = TxOutput(mint_amount, script, 1)
-        token_output2 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
-        deposit_output = TxOutput(tx.outputs[3].value - deposit_amount, script, 0)
+        token_output1 = TxOutput(TokenAmount.from_v1(mint_amount), script, 1)
+        token_output2 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
+        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount).to_v1(), script, 0)
         tx4 = Transaction(
             weight=1,
             inputs=[_input1, _input2],
@@ -222,7 +226,7 @@ class TokenTest(unittest.TestCase):
 
         # try to mint using melt authority UTXO
         _input1 = TxInput(tx.hash, 2, b'')
-        token_output = TxOutput(10000000, script, 1)
+        token_output = TxOutput(TokenAmount.from_v1(10000000), script, 1)
         tx5 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx5.get_sighash_all()
@@ -241,12 +245,12 @@ class TokenTest(unittest.TestCase):
 
         # melt tokens and transfer melt authority
         melt_amount = 100
-        new_amount = tx.outputs[0].value - melt_amount
-        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount)
+        new_amount = (tx.outputs[0].value - TokenAmount.from_v1(melt_amount)).to_v1()
+        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, TokenAmount.from_v1(melt_amount)).to_v1()
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(new_amount, script, 1)
-        token_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+        token_output2 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001)
         withdraw_output = TxOutput(withdraw_amount, script, 0)
         tx2 = Transaction(
             weight=1,
@@ -280,12 +284,12 @@ class TokenTest(unittest.TestCase):
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
-        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, melt_amount)
+        withdraw_amount = get_deposit_token_withdraw_amount(self._settings, TokenAmount.from_v1(melt_amount))
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
-        token_output1 = TxOutput(tx.outputs[0].value - melt_amount, script, 1)
-        token_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
-        withdraw_output = TxOutput(withdraw_amount + 1, script, 0)
+        token_output1 = TxOutput((tx.outputs[0].value - TokenAmount.from_v1(melt_amount)).to_v1(), script, 1)
+        token_output2 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001)
+        withdraw_output = TxOutput((withdraw_amount + TokenAmount.from_v1(1)).to_v1(), script, 0)
         tx3 = Transaction(
             weight=1,
             inputs=[_input1, _input2],
@@ -307,7 +311,7 @@ class TokenTest(unittest.TestCase):
         # try to melt using mint authority UTXO
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 1, b'')
-        token_output = TxOutput(tx.outputs[0].value - 1, script, 1)
+        token_output = TxOutput((tx.outputs[0].value - TokenAmount.from_v1(1)).to_v1(), script, 1)
         tx4 = Transaction(weight=1, inputs=[_input1, _input2], outputs=[token_output], parents=parents,
                           tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx4.get_sighash_all()
@@ -329,7 +333,7 @@ class TokenTest(unittest.TestCase):
 
         # input with mint and output with melt
         _input1 = TxInput(tx.hash, 1, b'')
-        token_output = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
+        token_output = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001)
         tx2 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx2.get_sighash_all()
@@ -341,7 +345,7 @@ class TokenTest(unittest.TestCase):
 
         # input with melt and output with mint
         _input1 = TxInput(tx.hash, 2, b'')
-        token_output = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
+        token_output = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
         tx3 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx3.get_sighash_all()
@@ -369,21 +373,21 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(100, tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(100), tokens_index.get_total())
 
         # new tx minting tokens
         mint_amount = 300
-        deposit_amount = get_deposit_token_deposit_amount(self._settings, mint_amount)
+        deposit_amount = get_deposit_token_deposit_amount(self._settings, TokenAmount.from_v1(mint_amount))
         script = P2PKH.create_output_script(self.address)
         # inputs
         mint_input = TxInput(tx.hash, 1, b'')
         melt_input = TxInput(tx.hash, 2, b'')
         deposit_input = TxInput(tx.hash, 3, b'')
         # outputs
-        mint_output = TxOutput(mint_amount, script, 1)
-        authority_output1 = TxOutput(TxOutput.TOKEN_MINT_MASK, script, 0b10000001)
-        authority_output2 = TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001)
-        deposit_output = TxOutput(tx.outputs[3].value - deposit_amount, script, 0)
+        mint_output = TxOutput(TokenAmount.from_v1(mint_amount), script, 1)
+        authority_output1 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
+        authority_output2 = TxOutput(TokenAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001)
+        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount).to_v1(), script, 0)
         tx2 = Transaction(
             weight=1,
             inputs=[mint_input, melt_input, deposit_input],
@@ -414,7 +418,7 @@ class TokenTest(unittest.TestCase):
         self.assertIn(TokenUtxoInfo(tx2.hash, 0), mint)
         self.assertIn(TokenUtxoInfo(tx2.hash, 1), melt)
         # check total amount of tokens has been updated
-        self.assertEqual(400, tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(400), tokens_index.get_total())
 
         # create conflicting tx by changing parents
         tx3 = Transaction.create_from_struct(tx2.get_struct())
@@ -436,7 +440,7 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # should have same amount of tokens
-        self.assertEqual(400, tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(400), tokens_index.get_total())
 
     def test_token_info(self):
         def update_tx(tx):
@@ -533,7 +537,7 @@ class TokenTest(unittest.TestCase):
         # try an unknown authority
         input1 = TxInput(tx.hash, 1, b'')
         input2 = TxInput(tx.hash, 2, b'')
-        output = TxOutput((TxOutput.ALL_AUTHORITIES << 1), script, 0b10000001)
+        output = TxOutput(TokenAmount.from_v1(TxOutput.ALL_AUTHORITIES << 1), script, 0b10000001)
         tx2 = Transaction(
             weight=1,
             inputs=[input1, input2],
@@ -596,7 +600,7 @@ class TokenTest(unittest.TestCase):
         parents = [tx.hash for tx in self.genesis]
 
         output_script = P2PKH.create_output_script(self.address)
-        output = TxOutput(0b11, output_script, 0b10000000)
+        output = TxOutput(TokenAmount.from_v1(0b11), output_script, 0b10000000)
         self.assertTrue(output.is_token_authority())
 
         block = Block(

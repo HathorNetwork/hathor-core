@@ -8,6 +8,7 @@ from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header,
 from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
 from hathor.types import TokenUid
 from hathor_tests import unittest
+from hathorlib.token_amount import TokenAmount
 
 
 def _serialize_fee_header(header: FeeHeader) -> bytes:
@@ -40,8 +41,8 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[
-                FeeHeaderEntry(token_index=0, amount=100),  # HTR paying
-                FeeHeaderEntry(token_index=1, amount=200),  # Custom token paying
+                FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(100)),  # HTR paying
+                FeeHeaderEntry(token_index=1, amount=TokenAmount.from_v1(200)),  # Custom token paying
             ],
         )
         serialized = _serialize_fee_header(header_round_trip)
@@ -58,7 +59,7 @@ class FeeHeaderTest(unittest.TestCase):
         header_verbose = FeeHeader(
             settings=self._settings,
             tx=tx,
-            fees=[FeeHeaderEntry(token_index=0, amount=300)],  # HTR paying
+            fees=[FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(300))],  # HTR paying
         )
         serialized_verbose = _serialize_fee_header(header_verbose)
         deserialized_verbose, remaining = _deserialize_fee_header(tx, serialized_verbose, verbose=verbose_callback)
@@ -76,7 +77,7 @@ class FeeHeaderTest(unittest.TestCase):
         header_sighash = FeeHeader(
             settings=self._settings,
             tx=tx,
-            fees=[FeeHeaderEntry(token_index=0, amount=500)],  # HTR paying
+            fees=[FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(500))],  # HTR paying
         )
         sighash_bytes = get_header_sighash_bytes(header_sighash, token_amount_version=tx.get_token_amount_version())
         serialized_bytes = _serialize_fee_header(header_sighash)
@@ -95,25 +96,25 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[
-                FeeHeaderEntry(token_index=0, amount=100),  # HTR
-                FeeHeaderEntry(token_index=1, amount=200),  # token1 (must be multiple of 100)
+                FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(100)),  # HTR
+                FeeHeaderEntry(token_index=1, amount=TokenAmount.from_v1(200)),  # token1 (must be multiple of 100)
             ],
         )
         fees = header.get_fees()
 
         assert len(fees) == 2
-        assert fees[0] == FeeEntry(token_uid=tx.get_token_uid(0), amount=100)  # HTR
-        assert fees[1] == FeeEntry(token_uid=token1_uid, amount=200)  # token1
+        assert fees[0] == FeeEntry(token_uid=tx.get_token_uid(0), amount=TokenAmount.from_v1(100))  # HTR
+        assert fees[1] == FeeEntry(token_uid=token1_uid, amount=TokenAmount.from_v1(200))  # token1
 
         # Test with single fee
         header_single = FeeHeader(
             settings=self._settings,
             tx=tx,
-            fees=[FeeHeaderEntry(token_index=0, amount=300)],  # HTR only
+            fees=[FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(300))],  # HTR only
         )
         fees_single = header_single.get_fees()
         assert len(fees_single) == 1
-        assert fees_single[0] == FeeEntry(token_uid=tx.get_token_uid(0), amount=300)
+        assert fees_single[0] == FeeEntry(token_uid=tx.get_token_uid(0), amount=TokenAmount.from_v1(300))
 
     def test_fee_header_edge_cases(self) -> None:
         """Test FeeHeader edge cases and comprehensive scenarios."""
@@ -128,9 +129,9 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[
-                FeeHeaderEntry(token_index=0, amount=100),  # HTR
-                FeeHeaderEntry(token_index=2, amount=50),  # token2
-                FeeHeaderEntry(token_index=4, amount=25),  # token4
+                FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(100)),  # HTR
+                FeeHeaderEntry(token_index=2, amount=TokenAmount.from_v1(50)),  # token2
+                FeeHeaderEntry(token_index=4, amount=TokenAmount.from_v1(25)),  # token4
             ],
         )
         serialized_complex = _serialize_fee_header(header_complex)
@@ -139,35 +140,35 @@ class FeeHeaderTest(unittest.TestCase):
         assert len(remaining) == 0
         assert len(deserialized_complex.fees) == 3
         assert deserialized_complex.fees[0].token_index == 0
-        assert deserialized_complex.fees[0].amount == 100
+        assert deserialized_complex.fees[0].amount == TokenAmount.from_v1(100)
         assert deserialized_complex.fees[1].token_index == 2
-        assert deserialized_complex.fees[1].amount == 50
+        assert deserialized_complex.fees[1].amount == TokenAmount.from_v1(50)
         assert deserialized_complex.fees[2].token_index == 4
-        assert deserialized_complex.fees[2].amount == 25
+        assert deserialized_complex.fees[2].amount == TokenAmount.from_v1(25)
 
         # Test max values
         header_max = FeeHeader(
             settings=self._settings,
             tx=tx,
-            fees=[FeeHeaderEntry(token_index=0, amount=2 ** 63 - 1)],  # Max amount
+            fees=[FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(2 ** 63 - 1))],  # Max amount
         )
         serialized_max = _serialize_fee_header(header_max)
         deserialized_max, remaining = _deserialize_fee_header(tx, serialized_max)
         assert len(remaining) == 0
-        assert deserialized_max.fees[0].amount == 2 ** 63 - 1
+        assert deserialized_max.fees[0].amount == TokenAmount.from_v1(2 ** 63 - 1)
 
         # Test single fee
         header_single = FeeHeader(
             settings=self._settings,
             tx=tx,
-            fees=[FeeHeaderEntry(token_index=1, amount=42)],  # Single custom token fee
+            fees=[FeeHeaderEntry(token_index=1, amount=TokenAmount.from_v1(42))],  # Single custom token fee
         )
         serialized_single = _serialize_fee_header(header_single)
         deserialized_single, remaining = _deserialize_fee_header(tx, serialized_single)
         assert len(remaining) == 0
         assert len(deserialized_single.fees) == 1
         assert deserialized_single.fees[0].token_index == 1
-        assert deserialized_single.fees[0].amount == 42
+        assert deserialized_single.fees[0].amount == TokenAmount.from_v1(42)
 
     def test_to_json_includes_fees(self) -> None:
         """Test that Transaction.to_json() includes fee header data when present."""
@@ -179,8 +180,8 @@ class FeeHeaderTest(unittest.TestCase):
             settings=self._settings,
             tx=tx,
             fees=[
-                FeeHeaderEntry(token_index=0, amount=100),
-                FeeHeaderEntry(token_index=1, amount=200),
+                FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(100)),
+                FeeHeaderEntry(token_index=1, amount=TokenAmount.from_v1(200)),
             ],
         )
         tx.headers = [fee_header]
@@ -211,7 +212,7 @@ class FeeHeaderTest(unittest.TestCase):
         fee_header = FeeHeader(
             settings=self._settings,
             tx=tx,
-            fees=[FeeHeaderEntry(token_index=0, amount=50)],
+            fees=[FeeHeaderEntry(token_index=0, amount=TokenAmount.from_v1(50))],
         )
         tx.headers = [fee_header]
 

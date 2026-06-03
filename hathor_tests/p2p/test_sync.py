@@ -6,6 +6,7 @@ from hathor.transaction.storage.exceptions import TransactionIsNotABlock
 from hathor.util import not_none
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
+from hathorlib.token_amount import TokenAmount
 
 
 class SyncMethodsTestCase(unittest.TestCase):
@@ -28,7 +29,7 @@ class SyncMethodsTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
+            WalletOutputInfo(address=decode_address(address), value=TokenAmount.from_v1(int(value)), timelock=None))
 
         tx: Transaction = self.manager1.wallet.prepare_transaction_compute_inputs(
             Transaction, outputs, self.manager1.tx_storage

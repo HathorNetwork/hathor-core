@@ -13,6 +13,7 @@ from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
+from hathorlib.token_amount import TokenAmount
 
 
 class MyBlueprint(Blueprint):
@@ -118,7 +119,7 @@ class DAGBuilderTestCase(unittest.TestCase):
         tx1 = artifacts.get_typed_vertex('tx1', Transaction)
         self.assertEqual(len(tx1.outputs), 1)
         # the default filler fills unspecified utxos with 1 HTR
-        self.assertEqual(tx1.outputs[0].value, 1)
+        self.assertEqual(tx1.outputs[0].value.raw(), 1)
         self.assertEqual(tx1.outputs[0].token_data, 0)
 
     def test_block_parents(self) -> None:
@@ -175,7 +176,7 @@ class DAGBuilderTestCase(unittest.TestCase):
         self.assertEqual(tka.token_symbol, 'TKA')
 
         # tx1.out[1] = 100 TKA
-        self.assertEqual(tx1.outputs[1].value, 100)
+        self.assertEqual(tx1.outputs[1].value.raw(), 100)
         self.assertEqual(tx1.get_token_uid(tx1.outputs[1].token_data), tka.hash)
 
     def test_big_dag(self) -> None:
@@ -451,8 +452,8 @@ if foo:
         assert isinstance(fee_header, FeeHeader)
         assert fee_header.tx == tx1
         assert fee_header.get_fees() == [
-            FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1),
-            FeeEntry(token_uid=dbt.hash, amount=100),
+            FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=TokenAmount.from_v1(1)),
+            FeeEntry(token_uid=dbt.hash, amount=TokenAmount.from_v1(100)),
         ]
 
         assert len(fbt1.headers) == 1
@@ -460,14 +461,14 @@ if foo:
 
         assert isinstance(fee_header, FeeHeader)
         assert fee_header.tx == fbt1
-        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1)]
+        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=TokenAmount.from_v1(1))]
 
         assert len(fbt2.headers) == 1
         fee_header = fbt2.headers[0]
 
         assert isinstance(fee_header, FeeHeader)
         assert fee_header.tx == fbt2
-        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1)]
+        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=TokenAmount.from_v1(1))]
 
         artifacts.propagate_with(self.manager)
 

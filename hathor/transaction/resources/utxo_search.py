@@ -28,6 +28,7 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
+from hathorlib.token_amount import TokenAmount
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -119,16 +120,25 @@ class UtxoSearchResource(Resource):
         target_height = get_arg_default(raw_args, 'target_height', best_block_height)
 
         # collect UTXOs
-        iter_utxos = utxo_index.iter_utxos(token_uid=token_uid, address=address, target_amount=target_amount,
-                                           target_timestamp=target_timestamp, target_height=target_height)
+        iter_utxos = utxo_index.iter_utxos(
+            token_uid=token_uid,
+            address=address,
+            target_amount=TokenAmount.from_v1(target_amount),  # Using v1 to keep API compatibility.
+            target_timestamp=target_timestamp,
+            target_height=target_height,
+        )
 
-        utxo_list = [{
-            'txid': utxo.tx_id.hex(),
-            'index': utxo.index,
-            'amount': utxo.amount,
-            'timelock': utxo.timelock,
-            'heightlock': utxo.heightlock,
-        } for utxo in iter_utxos]
+        utxo_list = []
+        for utxo in iter_utxos:
+            amount_v1 = utxo.amount.maybe_to_v1()
+            utxo_list.append({
+                'txid': utxo.tx_id.hex(),
+                'index': utxo.index,
+                'amount': amount_v1.raw() if amount_v1 is not None else None,
+                'amount_v2': utxo.amount.normalized(),
+                'timelock': utxo.timelock,
+                'heightlock': utxo.heightlock,
+            })
 
         data = {'success': True, 'utxos': utxo_list}
         return json_dumpb(data)
@@ -232,6 +242,7 @@ UtxoSearchResource.openapi = {
                                                 ),
                                                 'index': 0,
                                                 'amount': 1_000_000_000,
+                                                'amount_v2': 1_000_000_000 * 10**16,
                                                 'timelock': None,
                                                 'heightlock': 10,
                                             },

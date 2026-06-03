@@ -221,7 +221,7 @@ class NCChangesTracker(NCContractStorage):
         balance_diff = self._balance_diff.get(internal_key, TokenBalance(0))
         authorities_diff = self._authorities_diff.get(internal_key, _NCAuthorityDiff())
 
-        balance.value += balance_diff
+        balance.value += balance_diff.raw()
         balance.grant_authorities(
             grant_mint=authorities_diff.grant_mint(),
             grant_melt=authorities_diff.grant_melt(),
@@ -256,11 +256,11 @@ class NCChangesTracker(NCContractStorage):
         return {key: self.get_balance(key.token_uid) for key in set(all_balance_keys)}
 
     @override
-    def add_balance(self, token_uid: bytes, amount: int) -> None:
+    def add_balance(self, token_uid: bytes, balance: TokenBalance) -> None:
         self.check_if_locked()
         internal_key = BalanceKey(self.nc_id, token_uid)
         old = self._balance_diff.get(internal_key, TokenBalance(0))
-        new = old + amount
+        new = old + balance
         self._balance_diff[internal_key] = new
 
     @override

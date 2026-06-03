@@ -25,6 +25,7 @@ from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.wallet import BaseWallet
 from hathorlib.token_amount import TokenAmount, TokenBalance
+from hathorlib.token_amount_version import TokenAmountVersion
 
 AttributeType: TypeAlias = dict[str, str | int]
 VertexResolverType: TypeAlias = Callable[[BaseTransaction], Any]
@@ -89,6 +90,20 @@ class DAGNode:
         """Return the token version for this node."""
         from hathor.dag_builder.builder import TOKEN_VERSION_KEY
         return TokenVersion[self.attrs.get(TOKEN_VERSION_KEY, TokenVersion.DEPOSIT.name).upper()]
+
+    def _get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which this node's amounts are interpreted."""
+        # Hardcoded V1 until the DSL grows a `token_amount_version` attribute.
+        return TokenAmountVersion.V1
+
+    def as_node_amount(self, raw_amount: int) -> TokenAmount:
+        """Wrap a raw amount (in the node's native decimal version) into a TokenAmount."""
+        return TokenAmount.from_version(raw_amount, version=self._get_token_amount_version())
+
+    def denormalize_amount(self, amount: TokenAmount) -> TokenAmount:
+        """Convert an `amount` to a TokenAmount in the node's native decimal version."""
+        token_amount_version = self._get_token_amount_version()
+        return amount.to_version(token_amount_version)
 
     def get_required_literal(self, attr: str) -> str:
         """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""

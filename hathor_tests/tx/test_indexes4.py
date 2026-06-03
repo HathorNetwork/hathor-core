@@ -4,6 +4,7 @@ from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
+from hathorlib.token_amount import TokenAmount
 
 
 class SimulatorIndexesTestCase(unittest.TestCase):
@@ -18,9 +19,9 @@ class SimulatorIndexesTestCase(unittest.TestCase):
         address1 = self.get_address(0)
         address2 = self.get_address(1)
         address3 = self.get_address(2)
-        output1 = WalletOutputInfo(address=decode_address(address1), value=123, timelock=None)
-        output2 = WalletOutputInfo(address=decode_address(address2), value=234, timelock=None)
-        output3 = WalletOutputInfo(address=decode_address(address3), value=345, timelock=None)
+        output1 = WalletOutputInfo(address=decode_address(address1), value=TokenAmount.from_v1(123), timelock=None)
+        output2 = WalletOutputInfo(address=decode_address(address2), value=TokenAmount.from_v1(234), timelock=None)
+        output3 = WalletOutputInfo(address=decode_address(address3), value=TokenAmount.from_v1(345), timelock=None)
         outputs = [output1, output2, output3]
 
         tx1 = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
@@ -46,7 +47,7 @@ class SimulatorIndexesTestCase(unittest.TestCase):
 
         for _ in range(100):
             address = self.get_address(0)
-            value = 500
+            value = TokenAmount.from_v1(500)
             tx = gen_new_tx(manager, address, value)
             assert manager.propagate_tx(tx)
             self.clock.advance(1)

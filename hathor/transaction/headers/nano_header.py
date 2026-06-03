@@ -58,19 +58,20 @@ class NanoHeaderAction:
             from hathor.nanocontracts.exception import NCInvalidAction
             raise NCInvalidAction(f'{self.type.name} token index {self.token_index} not found')
 
+        raw_amount = self.amount.raw()
         match self.type:
             case NCActionType.DEPOSIT:
-                return NCDepositAction(token_uid=token_uid, amount=self.amount)
+                return NCDepositAction(token_uid=token_uid, amount=raw_amount)
             case NCActionType.WITHDRAWAL:
-                return NCWithdrawalAction(token_uid=token_uid, amount=self.amount)
+                return NCWithdrawalAction(token_uid=token_uid, amount=raw_amount)
             case NCActionType.GRANT_AUTHORITY:
-                mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
-                melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
+                mint = raw_amount & TxOutput.TOKEN_MINT_MASK > 0
+                melt = raw_amount & TxOutput.TOKEN_MELT_MASK > 0
                 self._validate_authorities(token_uid)
                 return NCGrantAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
             case NCActionType.ACQUIRE_AUTHORITY:
-                mint = self.amount & TxOutput.TOKEN_MINT_MASK > 0
-                melt = self.amount & TxOutput.TOKEN_MELT_MASK > 0
+                mint = raw_amount & TxOutput.TOKEN_MINT_MASK > 0
+                melt = raw_amount & TxOutput.TOKEN_MELT_MASK > 0
                 self._validate_authorities(token_uid)
                 return NCAcquireAuthorityAction(token_uid=token_uid, mint=mint, melt=melt)
             case _:
@@ -79,10 +80,10 @@ class NanoHeaderAction:
     def _validate_authorities(self, token_uid: TokenUid) -> None:
         """Check that the authorities in the `amount` are valid."""
         from hathor.transaction.base_transaction import TxOutput
-        if self.amount > TxOutput.ALL_AUTHORITIES:
+        if self.amount.raw() > TxOutput.ALL_AUTHORITIES:
             from hathor.nanocontracts.exception import NCInvalidAction
             raise NCInvalidAction(
-                f'action {self.type.name} token {token_uid.hex()} invalid authorities: 0b{self.amount:b}'
+                f'action {self.type.name} token {token_uid.hex()} invalid authorities: 0b{self.amount.raw():b}'
             )
 
 
