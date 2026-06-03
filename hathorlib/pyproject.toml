@@ -23,8 +23,6 @@ homepage = "https://hathor.network/"
 repository = "https://github.com/HathorNetwork/python-hathorlib/"
 # https://pypi.org/classifiers/
 classifiers = [
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
@@ -34,7 +32,7 @@ include = ["hathorlib/py.typed"]
 exclude = ["tests", "tests.*"]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4"
+python = ">=3.11,<4"
 base58 = "~2.1.1"
 structlog = {version = "~22.3.0"}
 aiohttp = {version = "~3.9.3", optional = true}
@@ -42,6 +40,7 @@ cryptography = "~42.0.5"
 pycoin = "~0.92"
 pydantic = "^2.0"
 pyyaml = "^6.0.1"
+htr-lib = {path = "../htr-rs/crates/htr-lib", develop = true}
 
 [tool.poetry.dev-dependencies]
 isort = {version = "~5.13.2", extras = ["colors"]}

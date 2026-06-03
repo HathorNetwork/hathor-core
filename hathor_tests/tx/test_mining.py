@@ -112,7 +112,7 @@ class MiningTest(unittest.TestCase):
             tokens=[],
             version=0,
             weight=60,
-            decimal_version=1,
+            token_amount_version=1,
         )
 
         self.assertTrue(isinstance(block, Block))

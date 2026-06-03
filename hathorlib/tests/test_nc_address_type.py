@@ -16,6 +16,7 @@ import unittest
 
 from hathorlib.exceptions import InvalidAddress
 from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, Address, NCFee, TokenUid
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.utils.address import get_address_b58_from_public_key, get_public_key_from_bytes_compressed
 
 
@@ -57,13 +58,13 @@ class TestNCFee(unittest.TestCase):
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
         fee = NCFee(token_uid=NC_HTR_TOKEN_UID, amount=100)
-        self.assertEqual(fee.get_htr_value(settings), 100)
+        self.assertEqual(fee.__get_htr_value__(settings, TokenAmountVersion.V1), 100)
 
     def test_custom_token_fee_value(self) -> None:
         from hathorlib.conf import HathorSettings
         settings = HathorSettings()
         fee = NCFee(token_uid=TokenUid(b'\x01' * 32), amount=1000)
         # For custom token, it converts using deposit percentage
-        result = fee.get_htr_value(settings)
+        result = fee.__get_htr_value__(settings, TokenAmountVersion.V1)
         self.assertIsInstance(result, int)
         self.assertGreater(result, 0)

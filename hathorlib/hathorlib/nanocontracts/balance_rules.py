@@ -30,6 +30,7 @@ from hathorlib.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCWithdrawalAction,
 )
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenVersion
 
 if TYPE_CHECKING:
@@ -46,11 +47,12 @@ class BalanceRules(ABC, Generic[T]):
     which is always a contract, and one for the caller, which may be a transaction or another contract.
     """
 
-    __slots__ = ('settings', 'action')
+    __slots__ = ('settings', 'action', 'token_amount_version')
 
-    def __init__(self, settings: HathorSettings, action: T) -> None:
+    def __init__(self, settings: HathorSettings, action: T, token_amount_version: TokenAmountVersion) -> None:
         self.settings = settings
         self.action = action
+        self.token_amount_version = token_amount_version
 
     @abstractmethod
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -77,17 +79,21 @@ class BalanceRules(ABC, Generic[T]):
         raise NotImplementedError
 
     @staticmethod
-    def get_rules(settings: HathorSettings, action: NCAction) -> BalanceRules:
+    def get_rules(
+        settings: HathorSettings,
+        action: NCAction,
+        token_amount_version: TokenAmountVersion,
+    ) -> BalanceRules:
         """Get the balance rules instance for the provided action."""
         match action:
             case NCDepositAction():
-                return _DepositRules(settings, action)
+                return _DepositRules(settings, action, token_amount_version)
             case NCWithdrawalAction():
-                return _WithdrawalRules(settings, action)
+                return _WithdrawalRules(settings, action, token_amount_version)
             case NCGrantAuthorityAction():
-                return _GrantAuthorityRules(settings, action)
+                return _GrantAuthorityRules(settings, action, token_amount_version)
             case NCAcquireAuthorityAction():
-                return _AcquireAuthorityRules(settings, action)
+                return _AcquireAuthorityRules(settings, action, token_amount_version)
             case _:
                 assert_never(action)
 
@@ -100,6 +106,7 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     - In the execution-phase (callee), the amount is added to the nano contract balance.
     - In the execution-phase (caller), the amount is removed from the nano contract balance.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -127,6 +134,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     - In the execution-phase (callee), the amount is removed from the nano contract balance.
     - In the execution-phase (caller), the amount is added to the nano contract balance.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -154,6 +162,7 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
     - In the execution phase (callee), the authorities are granted to the nano contract.
     - In the execution phase (caller), we check whether the balance can grant the authorities to the called contract.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -206,6 +215,7 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     - In the execution phase (callee), we check whether the nano contract balance can grant those authorities.
     - In the execution phase (caller), we grant the authorities to the caller.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:

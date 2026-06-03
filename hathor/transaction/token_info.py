@@ -67,13 +67,13 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 
          The fee is determined using the following rules:
          - If a token has one or more chargeable outputs, the fee is calculated
-           as `chargeable_outputs * settings.FEE_PER_OUTPUT`.
+           as `chargeable_outputs * settings.FEE_PER_OUTPUT_V1`.
          - If a token has zero chargeable outputs but one or more chargeable inputs,
-           a flat fee of `settings.FEE_PER_OUTPUT` is applied.
+           a flat fee of `settings.FEE_PER_OUTPUT_V1` is applied.
 
          Args:
              settings (HathorSettings): The configuration object containing fee-related
-                 parameters, such as `FEE_PER_OUTPUT`.
+                 parameters, such as `FEE_PER_OUTPUT_V1`.
 
          Returns:
              int: The total transaction fee
@@ -82,10 +82,10 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 
         for token_uid, token_info in self.items():
             if token_info.chargeable_outputs > 0:
-                fee += token_info.chargeable_outputs * settings.FEE_PER_OUTPUT
+                fee += token_info.chargeable_outputs * settings.FEE_PER_OUTPUT_V1
             else:
                 if token_info.chargeable_inputs > 0:
-                    fee += settings.FEE_PER_OUTPUT
+                    fee += settings.FEE_PER_OUTPUT_V1
         return fee
 
 

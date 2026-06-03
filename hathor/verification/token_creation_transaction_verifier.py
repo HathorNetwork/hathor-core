@@ -16,9 +16,9 @@ from hathor.conf.settings import HathorSettings
 from hathor.transaction.exceptions import InvalidToken, TransactionDataError
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenVersion
-from hathor.transaction.util import validate_token_name_and_symbol
 from hathor.types import TokenUid
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.utils.token_validation import validate_token_name_and_symbol
 
 
 class TokenCreationTransactionVerifier:

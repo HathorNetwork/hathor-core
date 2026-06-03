@@ -21,7 +21,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator, mo
 from typing_extensions import Self
 
 from hathorlib.conf.utils import parse_hex_str
-from hathorlib.decimal_places import VertexDecimalVersion
 
 HATHOR_TOKEN_UID: bytes = b'\x00'
 
@@ -87,9 +86,8 @@ class HathorSettings(BaseModel):
 
     # Number of decimal places for each supported vertex decimal version.
     # A version absent from this mapping is not supported on this network.
-    VERTEX_DECIMAL_PLACES: dict[VertexDecimalVersion, int] = {
-        VertexDecimalVersion.V1: 2,
-    }
+    TOKEN_AMOUNT_V1_DECIMAL_PLACES: int = 2
+    TOKEN_AMOUNT_V2_DECIMAL_PLACES: int = 18
 
     # Minimum weight of a tx
     MIN_TX_WEIGHT: int = 14
@@ -125,11 +123,10 @@ class HathorSettings(BaseModel):
     def GENESIS_TOKEN_ATOMIC_UNITS(self) -> int:
         """Genesis pre-mined tokens in atomic units, that is, the on-chain integer amount."""
         # Blocks are always V1.
-        decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
-        return int(self.GENESIS_TOKEN_MAIN_UNITS * (10 ** decimal_places))
+        return int(self.GENESIS_TOKEN_MAIN_UNITS * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
 
-    # Fee rate settings
-    FEE_PER_OUTPUT: int = 1
+    # Fee rate settings in V1 decimals (that is, 0.01 HTR)
+    FEE_PER_OUTPUT_V1: int = 1
 
     @property
     def FEE_DIVISOR(self) -> int:
@@ -147,14 +144,12 @@ class HathorSettings(BaseModel):
     @property
     def INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK(self) -> int:
         # Blocks are always V1.
-        decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
-        return int(self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** decimal_places))
+        return int(self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
 
     @property
     def MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK(self) -> int:
         # Blocks are always V1.
-        decimal_places = VertexDecimalVersion.V1.get_decimal_places(self)
-        return int(self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** decimal_places))
+        return int(self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
 
     # Assume that: amount < minimum
     # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
@@ -588,8 +583,9 @@ class HathorSettings(BaseModel):
         return self
 
     @model_validator(mode='after')
-    def _validate_vertex_decimal_places(self) -> Self:
-        """Validate that V1 is mapped."""
-        if VertexDecimalVersion.V1 not in self.VERTEX_DECIMAL_PLACES:
-            raise ValueError('VERTEX_DECIMAL_PLACES must define V1.')
+    def _validate_token_amount_decimal_places(self) -> Self:
+        if self.TOKEN_AMOUNT_V2_DECIMAL_PLACES < self.TOKEN_AMOUNT_V1_DECIMAL_PLACES:
+            raise ValueError(
+                'TOKEN_AMOUNT_V2_DECIMAL_PLACES must be greater than or equal to TOKEN_AMOUNT_V1_DECIMAL_PLACES'
+            )
         return self

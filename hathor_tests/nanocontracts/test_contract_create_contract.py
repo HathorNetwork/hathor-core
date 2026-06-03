@@ -20,6 +20,7 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount_version import TokenAmountVersion
 
 INT_NC_TYPE = make_nc_type(int)
 CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type(ContractId | None)  # type: ignore[arg-type]
@@ -255,7 +256,8 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # Confirm that contract ids are different.
         assert len(set(contracts)) == len(contracts)
 
-        runner = self.manager.get_best_block_nc_runner()
+        best_block = self.manager.tx_storage.get_best_block()
+        runner = self.manager.get_nc_runner(best_block, token_amount_version=TokenAmountVersion.V1)
         for idx, nc_id in enumerate(contracts):
             assert runner.has_contract_been_initialized(nc_id), f'index={idx}'
 
@@ -316,7 +318,8 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # Reorg!
         artifacts.propagate_with(self.manager)
 
-        runner = self.manager.get_best_block_nc_runner()
+        best_block = self.manager.tx_storage.get_best_block()
+        runner = self.manager.get_nc_runner(best_block, token_amount_version=TokenAmountVersion.V1)
         for nc_id in contracts:
             assert not runner.has_contract_been_initialized(nc_id)
 

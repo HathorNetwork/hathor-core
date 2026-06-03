@@ -52,7 +52,7 @@ class TestRuntimeV2(BlueprintTestCase):
     def test_syscall_get_settings_v2(self) -> None:
         self.runner = self.build_runner(NanoRuntimeVersion.V2)
         result = self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
-        assert result == self._settings.FEE_PER_OUTPUT
+        assert result == self._settings.FEE_PER_OUTPUT_V1
 
     def test_activation(self) -> None:
         feature_settings = FeatureSettings(

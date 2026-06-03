@@ -33,6 +33,7 @@ from hathorlib.nanocontracts.blueprint_syntax_validation import (
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathorlib.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathorlib.serialization import SerializationError
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.utils import get_deposit_token_withdraw_amount
 from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import InnerTypeMixin
@@ -559,7 +560,7 @@ class NCFee:
     token_uid: TokenUid
     amount: int
 
-    def get_htr_value(self, settings: HathorSettings) -> int:
+    def __get_htr_value__(self, settings: HathorSettings, token_amount_version: TokenAmountVersion) -> int:
         """
         Get the amount converted to HTR
         """

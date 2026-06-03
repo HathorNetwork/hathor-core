@@ -19,6 +19,7 @@ from typing import Sequence
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import FeeHeaderTokenNotFound, InvalidFeeHeader
 from hathor.transaction.headers import FeeHeader
+from hathorlib.utils.token_validation import validate_fee_amount
 
 MAX_FEES_LEN: int = 16
 
@@ -35,7 +36,6 @@ class FeeHeaderVerifier:
         token_indices = [fee.token_index for fee in fees]
         FeeHeaderVerifier._verify_duplicate_indexes('fees', token_indices)
 
-        from hathor.transaction.util import validate_fee_amount
         for fee in fees:
             FeeHeaderVerifier._verify_token_index('fees', fee.token_index, len(tx.tokens))
             validate_fee_amount(fee_header.settings, tx.get_token_uid(fee.token_index), fee.amount)
