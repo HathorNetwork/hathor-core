@@ -23,6 +23,8 @@ from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.indexes.rocksdb_utils import InternalUid, RocksDBIndexUtils, from_internal_token_uid, to_internal_token_uid
 from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
+from hathorlib.serialization import Deserializer, Serializer
+from hathorlib.serialization.encoding.output_value import decode_length_prefix_varint, encode_length_prefix_varint
 from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -100,8 +102,10 @@ class _SeekKeyNoLock(_SeekKeyBase):
 
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
-        array.extend(struct.pack('>Q', self.amount))
-        assert len(array) == 1 + 32 + 25 + 8
+        serializer = Serializer.build_bytes_serializer()
+        length = encode_length_prefix_varint(serializer, self.amount, strict=False)
+        array.extend(serializer.finalize())
+        assert len(array) == 1 + 32 + 25 + length + 1
 
 
 @dataclass(frozen=True)
@@ -116,9 +120,10 @@ class _KeyNoLock(_SeekKeyNoLock):
 
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
+        len_before = len(array)
         array.extend(self.tx_id)
         array.append(self.index)
-        assert len(array) == 1 + 32 + 25 + 8 + 32 + 1
+        assert len(array) == len_before + 32 + 1
 
     def to_index_item(self) -> UtxoIndexItem:
         return UtxoIndexItem(
@@ -146,8 +151,10 @@ class _SeekKeyTimeLock(_SeekKeyBase):
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
         array.extend(struct.pack('>I', self.timelock))
-        array.extend(struct.pack('>Q', self.amount))
-        assert len(array) == 1 + 32 + 25 + 4 + 8
+        serializer = Serializer.build_bytes_serializer()
+        length = encode_length_prefix_varint(serializer, self.amount, strict=False)
+        array.extend(serializer.finalize())
+        assert len(array) == 1 + 32 + 25 + 4 + length + 1
 
 
 @dataclass(frozen=True)
@@ -162,9 +169,10 @@ class _KeyTimeLock(_SeekKeyTimeLock):
 
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
+        len_before = len(array)
         array.extend(self.tx_id)
         array.append(self.index)
-        assert len(array) == 1 + 32 + 25 + 4 + 8 + 32 + 1
+        assert len(array) == len_before + 32 + 1
 
     def to_index_item(self) -> UtxoIndexItem:
         return UtxoIndexItem(
@@ -193,8 +201,10 @@ class _SeekKeyHeightLock(_SeekKeyBase):
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
         array.extend(struct.pack('>I', self.heightlock))
-        array.extend(struct.pack('>Q', self.amount))
-        assert len(array) == 1 + 32 + 25 + 4 + 8
+        serializer = Serializer.build_bytes_serializer()
+        length = encode_length_prefix_varint(serializer, self.amount, strict=False)
+        array.extend(serializer.finalize())
+        assert len(array) == 1 + 32 + 25 + 4 + length + 1
 
 
 @dataclass(frozen=True)
@@ -209,9 +219,10 @@ class _KeyHeightLock(_SeekKeyHeightLock):
 
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
+        len_before = len(array)
         array.extend(self.tx_id)
         array.append(self.index)
-        assert len(array) == 1 + 32 + 25 + 4 + 8 + 32 + 1
+        assert len(array) == len_before + 32 + 1
 
     def to_index_item(self) -> UtxoIndexItem:
         return UtxoIndexItem(
@@ -227,40 +238,58 @@ class _KeyHeightLock(_SeekKeyHeightLock):
 
 def _parse_key(key: bytes) -> _KeyBase:
     assert len(key) >= 1
-    tag = _Tag(key[0])
+    deserializer = Deserializer.build_bytes_deserializer(key)
+    tag = _Tag(deserializer.read_byte())
     if tag == _Tag.INVALID:
         raise ValueError('invalid tag found')
     elif tag == _Tag.NOLOCK:
-        assert len(key) == 1 + 32 + 25 + 8 + 32 + 1
+        token_uid_internal = InternalUid(bytes(deserializer.read_bytes(32)))
+        address = bytes(deserializer.read_bytes(25))
+        amount = decode_length_prefix_varint(deserializer, strict=False)
+        tx_id = bytes(deserializer.read_bytes(32))
+        index = deserializer.read_byte()
+        deserializer.finalize()
         return _KeyNoLock(
             tag=tag,
-            token_uid_internal=InternalUid(key[1:33]),
-            address=key[33:58],
-            amount=struct.unpack('>Q', key[58:66])[0],
-            tx_id=key[66:98],
-            index=key[98],
+            token_uid_internal=token_uid_internal,
+            address=address,
+            amount=amount,
+            tx_id=tx_id,
+            index=index,
         )
     elif tag == _Tag.TIMELOCK:
-        assert len(key) == 1 + 32 + 25 + 4 + 8 + 32 + 1
+        token_uid_internal = InternalUid(bytes(deserializer.read_bytes(32)))
+        address = bytes(deserializer.read_bytes(25))
+        timelock = deserializer.read_struct('>I')[0]
+        amount = decode_length_prefix_varint(deserializer, strict=False)
+        tx_id = bytes(deserializer.read_bytes(32))
+        index = deserializer.read_byte()
+        deserializer.finalize()
         return _KeyTimeLock(
             tag=tag,
-            token_uid_internal=InternalUid(key[1:33]),
-            address=key[33:58],
-            timelock=struct.unpack('>I', key[58:62])[0],
-            amount=struct.unpack('>Q', key[62:70])[0],
-            tx_id=key[70:102],
-            index=key[102],
+            token_uid_internal=token_uid_internal,
+            address=address,
+            timelock=timelock,
+            amount=amount,
+            tx_id=tx_id,
+            index=index,
         )
     elif tag == _Tag.HEIGHTLOCK:
-        assert len(key) == 1 + 32 + 25 + 4 + 8 + 32 + 1
+        token_uid_internal = InternalUid(bytes(deserializer.read_bytes(32)))
+        address = bytes(deserializer.read_bytes(25))
+        heightlock = deserializer.read_struct('>I')[0]
+        amount = decode_length_prefix_varint(deserializer, strict=False)
+        tx_id = bytes(deserializer.read_bytes(32))
+        index = deserializer.read_byte()
+        deserializer.finalize()
         return _KeyHeightLock(
             tag=tag,
-            token_uid_internal=InternalUid(key[1:33]),
-            address=key[33:58],
-            heightlock=struct.unpack('>I', key[58:62])[0],
-            amount=struct.unpack('>Q', key[62:70])[0],
-            tx_id=key[70:102],
-            index=key[102],
+            token_uid_internal=token_uid_internal,
+            address=address,
+            heightlock=heightlock,
+            amount=amount,
+            tx_id=tx_id,
+            index=index,
         )
     else:
         # XXX: if/elif is exhaustive for all possible tags and invalid tag value will fail sooner
@@ -302,13 +331,13 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
     This index uses the following key formats:
 
         key_nolock     = [tag][token_uid][address][amount][tx_id][index] tag=NOLOCK
-                         |1b-||--32b----||--25b--||--8b--||-32b-||-1b--|
+                         |1b-||--32b----||--25b--||varint||-32b-||-1b--|
 
         key_timelock   = [tag][token_uid][address][timelock][amount][tx_id][index] tag=TIMELOCK
-                         |1b-||--32b----||--25b--||--4b----||--8b--||-32b-||-1b--|
+                         |1b-||--32b----||--25b--||--4b----||varint||-32b-||-1b--|
 
         key_heightlock = [tag][token_uid][address][heightlock][amount][tx_id][index] tag=HEIGHTLOCK
-                         |1b-||--32b----||--25b--||--4b------||--8b--||-32b-||-1b--|
+                         |1b-||--32b----||--25b--||--4b------||varint||-32b-||-1b--|
 
     It works nicely because rocksdb uses a tree sorted by key under the hood.
     """
