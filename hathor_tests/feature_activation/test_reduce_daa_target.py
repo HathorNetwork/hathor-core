@@ -100,7 +100,7 @@ class TestAlgorithmV1:
         v1 = _make_v1(settings)
         # The cumulative count must equal summing per-block rewards 1..height.
         height = 5
-        expected = sum(v1.get_tokens_issued_per_block(h) for h in range(1, height + 1))
+        expected = sum(v1.get_tokens_issued_per_block(h).raw() for h in range(1, height + 1))
         assert v1.get_mined_tokens(height) == expected
 
 
@@ -125,7 +125,7 @@ class TestAlgorithmV2:
         v2 = _make_v2(settings)
         height = 5
         # The cumulative count must equal summing V2's per-block rewards 1..height.
-        expected = sum(v2.get_tokens_issued_per_block(h) for h in range(1, height + 1))
+        expected = sum(v2.get_tokens_issued_per_block(h).raw() for h in range(1, height + 1))
         assert v2.get_mined_tokens(height) == expected
         # And it must be strictly less than V1's count (factor=4, all blocks mid-halving).
         v1 = _make_v1(settings)
@@ -174,8 +174,8 @@ class TestGetMinedTokensV2StartHeight:
         v2 = _make_v2(settings, v2_start_height=v2_start_height)
         v1 = _make_v1(settings)
         # Heights [1, 2] V1; [3, 5] V2. Sum each per-block reward to verify.
-        v1_part = sum(v1.get_tokens_issued_per_block(h) for h in range(1, v2_start_height))
-        v2_part = sum(v2.get_tokens_issued_per_block(h) for h in range(v2_start_height, height + 1))
+        v1_part = sum(v1.get_tokens_issued_per_block(h).raw() for h in range(1, v2_start_height))
+        v2_part = sum(v2.get_tokens_issued_per_block(h).raw() for h in range(v2_start_height, height + 1))
         assert v2.get_mined_tokens(height) == v1_part + v2_part
 
     def test_v2_start_height_one_past_height_only_one_v2_block(self) -> None:
@@ -185,7 +185,7 @@ class TestGetMinedTokensV2StartHeight:
         # Heights [1..4] V1, height 5 V2.
         expected = (
             v1.get_mined_tokens(4)
-            + v2.get_tokens_issued_per_block(5)
+            + v2.get_tokens_issued_per_block(5).raw()
         )
         assert v2.get_mined_tokens(5) == expected
 
@@ -197,8 +197,8 @@ class TestGetMinedTokensV2StartHeight:
         v2 = _make_v2(settings, v2_start_height=v2_start_height)
         v1 = _make_v1(settings)
         manual = sum(
-            v1.get_tokens_issued_per_block(h) if h < v2_start_height
-            else v2.get_tokens_issued_per_block(h)
+            v1.get_tokens_issued_per_block(h).raw() if h < v2_start_height
+            else v2.get_tokens_issued_per_block(h).raw()
             for h in range(1, height + 1)
         )
         assert v2.get_mined_tokens(height) == manual
@@ -214,8 +214,8 @@ class TestGetMinedTokensV2StartHeight:
         v2 = _make_v2(settings, v2_start_height=v2_start_height)
         v1 = _make_v1(settings)
         manual = sum(
-            v1.get_tokens_issued_per_block(h) if h < v2_start_height
-            else v2.get_tokens_issued_per_block(h)
+            v1.get_tokens_issued_per_block(h).raw() if h < v2_start_height
+            else v2.get_tokens_issued_per_block(h).raw()
             for h in range(1, height + 1)
         )
         assert v2.get_mined_tokens(height) == manual
@@ -416,8 +416,8 @@ class TestDAAFactoryV2StartHeight:
         daa = factory.create_from_parent(parent_block)
         v1 = _make_v1(settings)
         # Heights [1..4] V1, [5..10] V2.
-        manual = sum(v1.get_tokens_issued_per_block(h) for h in range(1, 5)) + \
-            sum(daa.get_tokens_issued_per_block(h) for h in range(5, 11))
+        manual = sum(v1.get_tokens_issued_per_block(h).raw() for h in range(1, 5)) + \
+            sum(daa.get_tokens_issued_per_block(h).raw() for h in range(5, 11))
         assert daa.get_mined_tokens(10) == manual
 
 

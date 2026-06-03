@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from hathor.types import TokenUid
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 @dataclass(slots=True, kw_only=True)
 class TokenInfo:
     version: TokenVersion | None
-    amount: int = 0
+    amount: SignedAmount = field(default_factory=SignedAmount)
     can_mint: bool = False
     can_melt: bool = False
     # count of non-authority outputs that is used to calculate the fee
@@ -57,7 +57,7 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.fees_from_fee_header: int = 0
+        self.fees_from_fee_header = UnsignedAmount.zero()
 
     def calculate_fee(self, settings: 'HathorSettings') -> UnsignedAmount:
         """
@@ -83,11 +83,11 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 
         for token_uid, token_info in self.items():
             if token_info.chargeable_outputs > 0:
-                fee += token_info.chargeable_outputs * settings.FEE_PER_OUTPUT_V1
+                fee += token_info.chargeable_outputs * settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.normalized()
             else:
                 if token_info.chargeable_inputs > 0:
-                    fee += settings.FEE_PER_OUTPUT_V1
-        return fee
+                    fee += settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.normalized()
+        return UnsignedAmount.from_v2(fee)
 
 
 def get_token_version(

@@ -16,8 +16,10 @@ import re
 from enum import StrEnum, unique
 from typing import Any, Optional, TypeVar, Union, cast
 
+from htr_lib import UnsignedAmount
 from twisted.web.http import Request
 from twisted.web.resource import Resource as TwistedResource
+from typing_extensions import assert_never
 
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
@@ -122,6 +124,38 @@ def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> tuple[boo
 class APIVersion(StrEnum):
     V1A = 'v1a'
     V2 = 'v2'
+
+    def unsigned_amount_from_request(self, value: str) -> UnsignedAmount:
+        """
+        Given an API version and a value from a request, convert it to an UnsignedAmount accordingly.
+
+        - V1A APIs read the value as an int with 2 decimal places.
+        - V2 APIs read the value as a decimal str, regardless of how many decimal places (e.g. `1.2345`).
+        """
+        match self:
+            case APIVersion.V1A:
+                return UnsignedAmount.from_v1(parse_int(value))
+            case APIVersion.V2:
+                return UnsignedAmount.parse(value)
+            case _:
+                assert_never(self)
+
+
+    def unsigned_amount_to_response(self, amount: UnsignedAmount) -> int | str:
+        """
+        Given an API version and an UnsignedAmount, convert it to a response value.
+
+        - V1A APIs convert the value to Token Amount V1 and output it as an int.
+          It fails when a value is not denormalizable to 2 decimal places.
+        - V2 APIs output the valeu as a decimal string (e.g. 1.0).
+        """
+        match self:
+            case APIVersion.V1A:
+                return amount.to_v1().raw()
+            case APIVersion.V2:
+                return str(amount)
+            case _:
+                assert_never(self)
 
 
 # API versions a path is served under when it does not declare `x-api-versions`. Paths without an

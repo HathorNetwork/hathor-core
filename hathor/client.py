@@ -33,6 +33,8 @@ from hathor.pubsub import EventArguments, HathorEvents
 from hathor.transaction import BaseTransaction, Block, TransactionMetadata
 from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.storage import TransactionStorage
+from hathorlib.token_amount import UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
 logger = get_logger()
 
@@ -369,9 +371,10 @@ def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
     else:
         data.pop('inputs', [])
 
+    token_amount_version = TokenAmountVersion(data['token_amount_version'])
     outputs = []
     for output in data['outputs']:
-        value = output['value']
+        value = UnsignedAmount.from_version(output['value'], version=token_amount_version.value)
         script = base64.b64decode(output['script'])
         token_data = output['token_data']
         outputs.append(TxOutput(value, script, token_data))

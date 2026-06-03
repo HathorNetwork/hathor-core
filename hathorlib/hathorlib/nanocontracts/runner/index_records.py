@@ -70,13 +70,13 @@ class CreateTokenRecord:
     def __post_init__(self) -> None:
         assert self.type == IndexRecordType.CREATE_TOKEN
         assert self.token_version in (TokenVersion.DEPOSIT, TokenVersion.FEE)
-        assert self.amount > 0
+        assert self.amount > UnsignedAmount.zero()
 
     def to_json(self) -> dict[str, Any]:
         return dict(
             type=self.type,
             token_uid=self.token_uid.hex(),
-            amount=self.amount,
+            amount=self.amount.normalized(),
             token_name=self.token_name,
             token_symbol=self.token_symbol,
             token_version=self.token_version,
@@ -88,7 +88,7 @@ class CreateTokenRecord:
         assert token_version in (TokenVersion.DEPOSIT, TokenVersion.FEE)
         return cls(
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            amount=json_dict['amount'],
+            amount=UnsignedAmount.from_v2(json_dict['amount']),
             token_version=token_version,  # type: ignore[arg-type]
             token_name=json_dict['token_name'],
             token_symbol=json_dict['token_symbol'],
@@ -109,7 +109,7 @@ class UpdateTokenBalanceRecord:
         assert self.type == IndexRecordType.UPDATE_TOKEN_BALANCE
 
     def to_json(self) -> dict[str, Any]:
-        return dict(type=self.type, token_uid=self.token_uid.hex(), amount=self.amount)
+        return dict(type=self.type, token_uid=self.token_uid.hex(), amount=self.amount.raw())
 
     @classmethod
     def from_json(cls, json_dict: dict[str, Any]) -> Self:

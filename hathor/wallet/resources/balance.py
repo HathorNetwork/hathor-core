@@ -44,7 +44,14 @@ class BalanceResource(Resource):
         if not self.manager.wallet:
             return {'success': False, 'message': 'No wallet started on node'}
 
-        data = {'success': True, 'balance': self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]._asdict()}
+        wallet_balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
+        data = {
+            'success': True,
+            'balance': {
+                'available': self.api_version.unsigned_amount_to_response(wallet_balance.available),
+                'locked': self.api_version.unsigned_amount_to_response(wallet_balance.locked),
+            },
+        }
         return json_dumpb(data)
 
 
@@ -53,9 +60,22 @@ BalanceResource.openapi = {
         'x-visibility': 'private',
         'x-api-versions': ['v1a', 'v2'],
         'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
+            'v2': [
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'balance', 'available',
+                    ],
+                    'value': '1.0',
+                },
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'balance', 'locked',
+                    ],
+                    'value': '1.0',
+                },
+            ],
         },
         'get': {
             'tags': ['private_wallet'],

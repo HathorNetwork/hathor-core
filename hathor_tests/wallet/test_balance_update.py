@@ -86,7 +86,13 @@ class HathorSyncMethodsTestCase(unittest.TestCase):
                                tx2.timestamp, voided=True)
         self.assertEqual(len(self.manager.wallet.voided_spent), 1)
         self.assertEqual(len(self.manager.wallet.voided_spent[key]), 1)
-        self.assertEqual(self.manager.wallet.voided_spent[key][0].to_dict(), voided_spent.to_dict())
+        actual = self.manager.wallet.voided_spent[key][0]
+        self.assertEqual(actual.timestamp, voided_spent.timestamp)
+        self.assertEqual(actual.tx_id, voided_spent.tx_id)
+        self.assertEqual(actual.from_tx_id, voided_spent.from_tx_id)
+        self.assertEqual(actual.from_index, voided_spent.from_index)
+        self.assertEqual(actual.value, voided_spent.value)
+        self.assertEqual(actual.voided, voided_spent.voided)
 
     def test_balance_update2(self):
         # Tx2 is twin with tx1 with equal acc weight, so both will get voided

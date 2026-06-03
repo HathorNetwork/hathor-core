@@ -22,7 +22,8 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data, {
             'version': 0,
             'weight': 1.0,
-            'outputs': [{'value': 6400, 'token_data': 0, 'script': 'dqkUPW28v25nssvMMiWZR1alal4tOieIrA=='}],
+            'outputs': [{'value': 6400, 'value_str': '64.0', 'token_data': 0,
+                         'script': 'dqkUPW28v25nssvMMiWZR1alal4tOieIrA=='}],
             'metadata': {
                 'hash': None,
                 'spent_outputs': [],
@@ -63,7 +64,7 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data, {
             'version': 0,
             'weight': 1.0,
-            'outputs': [{'value': 6400, 'token_data': 0, 'script': ''}],
+            'outputs': [{'value': 6400, 'value_str': '64.0', 'token_data': 0, 'script': ''}],
             'metadata': {
                 'hash': None,
                 'spent_outputs': [],

@@ -42,7 +42,9 @@ class DefaultFiller:
         # create the dummy and genesis nodes before builder.build() is called
         genesis_block = self._get_or_create_node('genesis_block', default_type=DAGNodeType.Genesis)
         if len(genesis_block.outputs) == 0:
-            genesis_block.outputs.append(DAGOutput(self._settings.GENESIS_TOKEN_ATOMIC_UNITS, 'HTR', {}))
+            genesis_block.outputs.append(DAGOutput(
+                genesis_block.as_node_amount(self._settings.GENESIS_TOKEN_ATOMIC_UNITS), 'HTR', {}
+            ))
         self._get_or_create_node('genesis_1', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('genesis_2', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('dummy', default_type=DAGNodeType.Transaction)
@@ -110,14 +112,14 @@ class DefaultFiller:
 
         balance = sum(outputs) - sum(inputs)
         """
-        ins: defaultdict[str, UnsignedAmount] = defaultdict(int)
+        ins: defaultdict[str, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
         for tx_name, index in node.inputs:
             node2 = self._get_or_create_node(tx_name)
             txout = node2.outputs[index]
             assert txout is not None
             ins[txout.token] += txout.amount
 
-        outs: defaultdict[str, UnsignedAmount] = defaultdict(int)
+        outs: defaultdict[str, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
         for txout in node.outputs:
             assert txout is not None
             outs[txout.token] += txout.amount
@@ -125,7 +127,7 @@ class DefaultFiller:
         keys = set(ins.keys()) | set(outs.keys()) | set(node.balances.keys())
         balance = {}
         for key in keys:
-            balance[key] = outs.get(key, 0) - ins.get(key, 0)
+            balance[key] = outs[key].to_signed() - ins[key].to_signed()
 
         return balance
 
@@ -138,9 +140,9 @@ class DefaultFiller:
             diff -= target
             if diff < SignedAmount(0):
                 index = self.get_next_index(node.outputs)
-                node.outputs[index] = DAGOutput(abs(diff), key, {'_origin': 'f3'})
+                node.outputs[index] = DAGOutput((-diff).to_unsigned(), key, {'_origin': 'f3'})
             elif diff > SignedAmount(0):
-                txin = self.find_txin(diff, key)
+                txin = self.find_txin(diff.to_unsigned(), key)
                 node.inputs.add(txin)
 
     def run(self) -> None:
@@ -154,18 +156,19 @@ class DefaultFiller:
                 continue
             if node.name == 'dummy':
                 continue
+            one_htr = node.as_node_amount(1)
             if not node.inputs and not node.outputs:
                 if node.type == DAGNodeType.Block:
                     continue
-                node.outputs.append(DAGOutput(1, 'HTR', {'_origin': 'f4'}))
+                node.outputs.append(DAGOutput(one_htr, 'HTR', {'_origin': 'f4'}))
             for i in range(len(node.outputs)):
                 txout = node.outputs[i]
                 if txout is None:
-                    node.outputs[i] = DAGOutput(1, 'HTR', {'_origin': 'f5'})
-                elif txout.amount == 0:
+                    node.outputs[i] = DAGOutput(one_htr, 'HTR', {'_origin': 'f5'})
+                elif txout.amount == UnsignedAmount.zero():
                     assert not txout.token
                     assert not txout.attrs
-                    node.outputs[i] = DAGOutput(1, 'HTR', {'_origin': 'f6'})
+                    node.outputs[i] = DAGOutput(one_htr, 'HTR', {'_origin': 'f6'})
 
         tokens = []
         for node in list(self._builder.topological_sorting()):
@@ -212,12 +215,12 @@ class DefaultFiller:
                     diff = balance.get('HTR', SignedAmount(0))
 
                     # TODO Use the actual height. DAG construction has no chain context, so V1.
-                    target = self._daa_factory.create_v1().get_tokens_issued_per_block(1)
+                    target = self._daa_factory.create_v1().get_tokens_issued_per_block(1).to_signed()
                     assert diff >= SignedAmount(0)
                     assert diff <= target
 
                     if diff < target:
-                        node.outputs.append(DAGOutput(target - diff, 'HTR', {'_origin': 'f7'}))
+                        node.outputs.append(DAGOutput((target - diff).to_unsigned(), 'HTR', {'_origin': 'f7'}))
 
                 case DAGNodeType.Transaction:
                     if node.name == 'dummy':
@@ -254,25 +257,25 @@ class DefaultFiller:
                 case TokenVersion.NATIVE:
                     raise AssertionError
                 case TokenVersion.DEPOSIT:
-                    htr_deposit = get_deposit_token_deposit_amount(self._settings, balance[token])
+                    htr_deposit = get_deposit_token_deposit_amount(self._settings, balance[token].to_unsigned())
                 case TokenVersion.FEE:
-                    htr_deposit = 0
+                    htr_deposit = UnsignedAmount.zero()
 
             htr_balance = balance.get('HTR', SignedAmount(0))
 
             # target = sum(outputs) - sum(inputs)
             # <0 means deposit
             # >0 means withdrawal
-            htr_target = node.balances.get('HTR', 0) - htr_deposit
+            htr_target = node.balances.get('HTR', SignedAmount(0)) - htr_deposit.to_signed()
 
             diff = htr_balance - htr_target
 
             if diff < SignedAmount(0):
                 index = self.get_next_index(node.outputs)
-                node.outputs[index] = DAGOutput(-diff, 'HTR', {'_origin': 'f8'})
+                node.outputs[index] = DAGOutput((-diff).to_unsigned(), 'HTR', {'_origin': 'f8'})
 
             elif diff > SignedAmount(0):
-                txin = self.find_txin(diff, 'HTR')
+                txin = self.find_txin(diff.to_unsigned(), 'HTR')
                 node.inputs.add(txin)
 
         if 'dummy' in self._builder._nodes:
@@ -288,7 +291,7 @@ class DefaultFiller:
 
                 if diff < SignedAmount(0):
                     index = self.get_next_index(node.outputs)
-                    node.outputs[index] = DAGOutput(-diff, 'HTR', {})
+                    node.outputs[index] = DAGOutput((-diff).to_unsigned(), 'HTR', {})
 
                 for node in self._builder._nodes.values():
                     if node.type == DAGNodeType.Block:
