@@ -71,6 +71,8 @@ jobs:
           sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
       - name: Install uv
         run: pipx install uv
+      - name: Check uv.lock is up to date
+        run: uv lock --check
       - name: Install uv dependencies
         run: uv sync --frozen --dev --python 3.13
       - name: Run checks
