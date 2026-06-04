@@ -105,13 +105,21 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         HTR_value = (
             self._settings.GENESIS_TOKEN_ATOMIC_UNITS - 1 + (self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK * 5)
         )
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
+        htr_uid_hex = self._settings.HATHOR_TOKEN_UID.hex()
         self.assertEqual(data['total_transactions'], 6)  # 5 blocks mined + token creation tx
-        self.assertIn(self._settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
+        self.assertIn(htr_uid_hex, data['tokens_data'])
         self.assertIn(self.token_uid.hex(), data['tokens_data'])
-        self.assertEqual(HTR_value, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['received'])
-        self.assertEqual(0, data['tokens_data'][self._settings.HATHOR_TOKEN_UID.hex()]['spent'])
+        self.assertEqual(HTR_value, data['tokens_data'][htr_uid_hex]['received'])
+        self.assertEqual(0, data['tokens_data'][htr_uid_hex]['spent'])
+        self.assertEqual(HTR_value * v1_to_v2, data['tokens_data'][htr_uid_hex]['received_v2'])
+        self.assertEqual(0, data['tokens_data'][htr_uid_hex]['spent_v2'])
         self.assertEqual(100, data['tokens_data'][self.token_uid.hex()]['received'])
         self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent'])
+        self.assertEqual(100 * v1_to_v2, data['tokens_data'][self.token_uid.hex()]['received_v2'])
+        self.assertEqual(0, data['tokens_data'][self.token_uid.hex()]['spent_v2'])
 
     @inlineCallbacks
     def test_zero_count(self):

@@ -16,6 +16,9 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_simple_gets(self):
         address = self.get_address(0).encode('ascii')
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
 
         add_new_blocks(self.manager, 4, advance_clock=1)
 
@@ -55,6 +58,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * v1_to_v2,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[:1]])
@@ -68,6 +72,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * v1_to_v2,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[4:1:-1]])
@@ -81,6 +86,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * v1_to_v2,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])
@@ -94,6 +100,7 @@ class UtxoSearchTest(_BaseResourceTest._ResourceTest):
             'txid': b.hash_hex,
             'index': 0,
             'amount': 6400,
+            'amount_v2': 6400 * v1_to_v2,
             'timelock': None,
             'heightlock': b.static_metadata.height + self._settings.REWARD_SPEND_MIN_BLOCKS,
         } for b in blocks[::-1]])

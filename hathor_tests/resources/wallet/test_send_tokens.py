@@ -50,7 +50,18 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_balance = yield self.web_balance.get("wallet/balance")
         data_balance = response_balance.json_value()
         tokens_per_block = self.manager.get_tokens_issued_per_block(1)
-        self.assertEqual(data_balance['balance'], {'available': tokens_per_block - 505, 'locked': 0})
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
+        self.assertEqual(
+            data_balance['balance'],
+            {
+                'available': tokens_per_block - 505,
+                'locked': 0,
+                'available_v2': (tokens_per_block - 505) * v1_to_v2,
+                'locked_v2': 0,
+            },
+        )
 
         # Getting history, so we can get the input
         response_history = yield self.web_history.get("wallet/history", {b'page': 1, b'count': 10})

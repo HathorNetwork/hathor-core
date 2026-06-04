@@ -65,6 +65,10 @@ class TokenResource(Resource):
                 'index': index
             })
 
+        total = token_info.get_total()
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
         data = {
             'name': token_info.get_name(),
             'symbol': token_info.get_symbol(),
@@ -76,7 +80,9 @@ class TokenResource(Resource):
             'melt': melt,
             'can_mint': token_info.can_mint(),
             'can_melt': token_info.can_melt(),
-            'total': token_info.get_total(),
+            # `total` is in V1 atomic units; `total_v2` is the same value in V2 atomic units.
+            'total': total,
+            'total_v2': total * v1_to_v2,
             'transactions_count': transactions_count,
         }
         return data
@@ -216,6 +222,7 @@ TokenResource.openapi = {
                                         'can_mint': True,
                                         'can_melt': True,
                                         'total': 50000,
+                                        'total_v2': 50000 * 10**16,
                                         'transactions_count': 3,
                                     }
                                 },

@@ -20,6 +20,7 @@ from pydantic import Field
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, set_cors
+from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
@@ -48,6 +49,7 @@ class NanoContractStateResource(Resource):
 
     def __init__(self, manager: 'HathorManager') -> None:
         super().__init__()
+        self._settings = get_global_settings()
         self.manager = manager
 
     def render_GET(self, request: 'Request') -> bytes:
@@ -158,6 +160,9 @@ class NanoContractStateResource(Resource):
         runner.token_amount_version = token_amount_version
 
         value: Any
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
         # Get balances.
         balances: dict[str, NCBalanceSuccessResponse | NCValueErrorResponse] = {}
         for token_uid_hex in params.balances:
@@ -167,6 +172,7 @@ class NanoContractStateResource(Resource):
                 for key_balance, balance in all_balances.items():
                     balances[key_balance.token_uid.hex()] = NCBalanceSuccessResponse(
                         value=str(balance.value),
+                        value_v2=str(balance.value * v1_to_v2),
                         can_mint=balance.can_mint,
                         can_melt=balance.can_melt,
                     )
@@ -181,6 +187,7 @@ class NanoContractStateResource(Resource):
             balance = nc_storage.get_balance(token_uid)
             balances[token_uid_hex] = NCBalanceSuccessResponse(
                 value=str(balance.value),
+                value_v2=str(balance.value * v1_to_v2),
                 can_mint=balance.can_mint,
                 can_melt=balance.can_melt,
             )
@@ -280,7 +287,14 @@ class NCValueSuccessResponse(Response):
 
 
 class NCBalanceSuccessResponse(Response):
+    """A contract's balance for a single token.
+
+    `value` is the V1-atomic-unit string representation (1 = 0.01 HTR); `value_v2` is the
+    same balance as V2 atomic units (1 = 10**-18 HTR), as a string to avoid JSON-number
+    precision loss for large balances.
+    """
     value: str
+    value_v2: str
     can_mint: bool
     can_melt: bool
 

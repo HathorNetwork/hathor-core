@@ -967,11 +967,11 @@ class TransactionTest(unittest.TestCase):
         tx2.update_hash()
         assert tx == tx2
 
-        # Validating that all output values must be positive
-        value = 1
+        # Output-value bounds are enforced by the output encoder when serializing the tx,
+        # so resolving a tx whose output value was mutated to a negative number fails there.
         address = decode_address('WUDtnw3GYjvUnZmiHAmus6hhs9GoSUSJMG')
         script = P2PKH.create_output_script(address)
-        output = TxOutput(value, script)
+        output = TxOutput(1, script)
         output.value = -1
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
         _input = TxInput(random_bytes, 0, random_bytes)
@@ -979,12 +979,7 @@ class TransactionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.manager.cpu_mining_service.resolve(tx)
 
-        # 'Manually resolving', to validate verify method
-        tx.hash = bytes.fromhex('012cba011be3c29f1c406f9015e42698b97169dbc6652d1f5e4d5c5e83138858')
-        with self.assertRaises(InvalidOutputValue):
-            self.manager.verification_service.verify(tx, self.get_verification_params(self.manager))
-
-        # Invalid output value
+        # Output-value bounds are also enforced at decode time.
         invalid_output = bytes.fromhex('ffffffff')
         deserializer = Deserializer.build_bytes_deserializer(invalid_output)
         with self.assertRaises(BadDataError):

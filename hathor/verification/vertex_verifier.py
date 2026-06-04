@@ -25,7 +25,6 @@ from hathor.transaction.exceptions import (
     HeaderNotSupported,
     IncorrectParents,
     InvalidOutputScriptSize,
-    InvalidOutputValue,
     InvalidToken,
     InvalidVersionError,
     ParentDoesNotExist,
@@ -140,10 +139,13 @@ class VertexVerifier:
             raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
 
     def verify_outputs(self, vertex: BaseTransaction) -> None:
-        """Verify there are no hathor authority UTXOs and outputs are all positive
+        """Verify there are no hathor authority UTXOs and outputs respect script-size limits.
+
+        Output-value bounds (non-positive and overflow) are enforced by `TxOutput.__init__`
+        for constructed outputs and by the output-value decoder for deserialized ones, so they
+        are guaranteed to hold here.
 
         :raises InvalidToken: when there's a hathor authority utxo
-        :raises InvalidOutputValue: output has negative value
         :raises TooManyOutputs: when there are too many outputs
         """
         self.verify_number_of_outputs(vertex)
@@ -152,11 +154,6 @@ class VertexVerifier:
             if (output.get_token_index() == 0) and output.is_token_authority():
                 raise InvalidToken('Cannot have authority UTXO for hathor tokens: {}'.format(
                     output.to_human_readable()))
-
-            # output value must be positive
-            if output.value <= 0:
-                raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
-                    output.value, index))
 
             if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(

@@ -36,10 +36,17 @@ class TokenData:
     name: str = ''
     symbol: str = ''
 
-    def to_dict(self):
+    def to_dict(self, *, v1_to_v2: int) -> dict[str, Any]:
+        """Return the per-token totals in both decimal versions.
+
+        `received` and `spent` are V1 atomic units (1 = 0.01 HTR); `received_v2` and
+        `spent_v2` are V2 atomic units, scaled by `v1_to_v2`.
+        """
         return {
             'received': self.received,
             'spent': self.spent,
+            'received_v2': self.received * v1_to_v2,
+            'spent_v2': self.spent * v1_to_v2,
             'name': self.name,
             'symbol': self.symbol,
         }
@@ -121,6 +128,9 @@ class AddressBalanceResource(Resource):
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         tokens_data[token_uid].received += tx_output.value
 
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
         return_tokens_data: dict[str, dict[str, Any]] = {}
         for token_uid in tokens_data.keys():
             if token_uid == self._settings.HATHOR_TOKEN_UID:
@@ -136,7 +146,7 @@ class AddressBalanceResource(Resource):
                     # But better than get a 500 error
                     tokens_data[token_uid].name = '- (unable to fetch token information)'
                     tokens_data[token_uid].symbol = '- (unable to fetch token information)'
-            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict()
+            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict(v1_to_v2=v1_to_v2)
 
         data = {
             'success': True,
@@ -197,12 +207,16 @@ AddressBalanceResource.openapi = {
                                                 'symbol': 'HTR',
                                                 'received': 1000,
                                                 'spent': 800,
+                                                'received_v2': 1000 * 10**16,
+                                                'spent_v2': 800 * 10**16,
                                             },
                                             '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702': {
                                                 'name': 'NewCoin',
                                                 'symbol': 'NCN',
                                                 'received': 100,
                                                 'spent': 20,
+                                                'received_v2': 100 * 10**16,
+                                                'spent_v2': 20 * 10**16,
                                             },
                                         }
                                     }

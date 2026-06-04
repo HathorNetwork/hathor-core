@@ -376,9 +376,13 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['melt'][0]['tx_id'], tx.hash_hex)
         self.assertEqual(data['mint'][0]['index'], 1)
         self.assertEqual(data['melt'][0]['index'], 2)
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
         self.assertTrue(data['can_mint'])
         self.assertTrue(data['can_melt'])
         self.assertEqual(data['total'], amount)
+        self.assertEqual(data['total_v2'], amount * v1_to_v2)
         self.assertEqual(data['name'], token_name)
         self.assertEqual(data['symbol'], token_symbol)
         self.assertEqual(data['version'], token_info_version)

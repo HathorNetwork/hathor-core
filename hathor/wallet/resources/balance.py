@@ -33,7 +33,9 @@ class BalanceResource(Resource):
 
     def render_GET(self, request):
         """ GET request for /wallet/balance/
-            Returns the int balance of the wallet
+            Returns the wallet balance for HTR in both decimal versions: the legacy `available`
+            and `locked` fields are V1 atomic units (1 = 0.01 HTR); the `available_v2` and
+            `locked_v2` fields are V2 atomic units (1 = 10**-18 HTR).
 
             :rtype: string (json)
         """
@@ -43,7 +45,19 @@ class BalanceResource(Resource):
         if not self.manager.wallet:
             return {'success': False, 'message': 'No wallet started on node'}
 
-        data = {'success': True, 'balance': self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]._asdict()}
+        wallet_balance = self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID]
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
+        data = {
+            'success': True,
+            'balance': {
+                'available': wallet_balance.available,
+                'locked': wallet_balance.locked,
+                'available_v2': wallet_balance.available * v1_to_v2,
+                'locked_v2': wallet_balance.locked * v1_to_v2,
+            },
+        }
         return json_dumpb(data)
 
 
@@ -66,7 +80,9 @@ BalanceResource.openapi = {
                                     'value': {
                                         'balance': {
                                             'available': 5000,
-                                            'locked': 1000
+                                            'locked': 1000,
+                                            'available_v2': 5000 * 10**16,
+                                            'locked_v2': 1000 * 10**16,
                                         }
                                     }
                                 }

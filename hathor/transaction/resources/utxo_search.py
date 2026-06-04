@@ -122,10 +122,15 @@ class UtxoSearchResource(Resource):
         iter_utxos = utxo_index.iter_utxos(token_uid=token_uid, address=address, target_amount=target_amount,
                                            target_timestamp=target_timestamp, target_height=target_height)
 
+        v1_to_v2 = 10 ** (
+            self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES
+        )
+        # `amount` is in V1 atomic units; `amount_v2` is the same value in V2 atomic units.
         utxo_list = [{
             'txid': utxo.tx_id.hex(),
             'index': utxo.index,
             'amount': utxo.amount,
+            'amount_v2': utxo.amount * v1_to_v2,
             'timelock': utxo.timelock,
             'heightlock': utxo.heightlock,
         } for utxo in iter_utxos]
@@ -232,6 +237,7 @@ UtxoSearchResource.openapi = {
                                                 ),
                                                 'index': 0,
                                                 'amount': 1_000_000_000,
+                                                'amount_v2': 1_000_000_000 * 10**16,
                                                 'timelock': None,
                                                 'heightlock': 10,
                                             },

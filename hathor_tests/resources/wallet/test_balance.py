@@ -17,10 +17,15 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_get(self):
+        settings = self.manager._settings
+        v1_to_v2 = 10 ** (settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES - settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES)
         response = yield self.web.get("wallet/balance")
         data = response.json_value()
         self.assertTrue(data['success'])
-        self.assertEqual(data['balance'], {'available': 0, 'locked': 0})
+        self.assertEqual(
+            data['balance'],
+            {'available': 0, 'locked': 0, 'available_v2': 0, 'locked_v2': 0},
+        )
 
         # Mining new block
         response_mining = yield self.web_mining.get("mining")
@@ -37,4 +42,12 @@ class BalanceTest(_BaseResourceTest._ResourceTest):
         data2 = response2.json_value()
         self.assertTrue(data2['success'])
         tokens = self.manager.get_tokens_issued_per_block(1)
-        self.assertEqual(data2['balance'], {'available': tokens, 'locked': 0})
+        self.assertEqual(
+            data2['balance'],
+            {
+                'available': tokens,
+                'locked': 0,
+                'available_v2': tokens * v1_to_v2,
+                'locked_v2': 0,
+            },
+        )
