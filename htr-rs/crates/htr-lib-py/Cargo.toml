@@ -9,6 +9,9 @@ name = "htr_lib_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+htr-lib = { path = "../htr-lib" }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
 pyo3 = { workspace = true }
 
 [lints]
