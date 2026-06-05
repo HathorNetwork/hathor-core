@@ -748,7 +748,7 @@ develop = true
 [package.dependencies]
 base58 = "~2.1.1"
 cryptography = "~42.0.5"
-htr-lib = {path = "../htr-rs/crates/htr-lib", develop = true}
+htr-lib = {path = "../htr-rs/crates/htr-lib-py", develop = true}
 pycoin = "~0.92"
 pydantic = "^2.0"
 pyyaml = "^6.0.1"
@@ -773,7 +773,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "htr-rs/crates/htr-lib"
+url = "htr-rs/crates/htr-lib-py"
 
 [[package]]
 name = "hyperlink"
@@ -2802,4 +2802,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "58a786af84bc2fbde8df7f40f4ce980b2dfc3a22afad6be166b31219d258d5f9"
+content-hash = "858a582a9f72db827ea949160e2c018dde515acf32d19d13379fb6ef71842cc3"
