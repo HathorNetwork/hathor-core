@@ -83,8 +83,12 @@ from hathor_tps_bench.workload.registry import register_txtype
 
 # A transaction's output COUNT is serialized as a single unsigned byte, so a tx can hold
 # at most 255 outputs. Each `fund` tx therefore mints at most that many UTXOs; we cap at
-# 200 for headroom (the filler may append one change output for the leftover reward).
+# 200 for headroom (each fund also carries one change output that chains to the next fund).
 FUND_CHUNK = 200
+
+# The unittests block reward (sub-units). Constant within the few blocks we mine — see the
+# funding note in render_dsl for why we depend on total *value*, not on this exact figure.
+COINBASE_VALUE = 6400
 
 
 @register_txtype("transparent")
@@ -105,9 +109,18 @@ class TransparentTxSource(TxSource):
         # A coinbase reward can't be spent until REWARD_SPEND_MIN_BLOCKS (=10) blocks
         # later (the "reward lock"). The funds spend coinbases b1..b{n_funds}, so the
         # latest coinbase is at height n_funds; `lock` sits comfortably past its maturity.
-        lock = n_funds + 12
-        tx_anchor = lock + 5            # payload txs are ordered after this block
-        total_blocks = tx_anchor + 3    # mine a few spare blocks past the last anchor
+        # How much value we must mint = n_utxos UTXOs of value `per`. We source it from a
+        # CHAIN of fund txs: the FIRST fund consolidates a few coinbases, then each fund
+        # mints its UTXOs and passes the leftover (its change output) to the NEXT fund. The
+        # number of COINBASE BLOCKS is therefore bounded by total *value* (≈ value/6400),
+        # NOT by the UTXO count. (One-coinbase-per-fund would need n_utxos/200 blocks, which
+        # for large N*I crosses the reward halving at block BLOCKS_PER_HALVING=120 and a
+        # 255-block cap — the funding would break above N*I ~ 20k.)
+        total_value = n_utxos * per
+        n_coin = max(1, math.ceil(total_value / COINBASE_VALUE) + 1)  # +1 = change headroom
+        lock = n_coin + 12             # past the last coinbase's reward maturity (10 blocks)
+        tx_anchor = lock + 5           # payload txs are ordered after this block
+        total_blocks = tx_anchor + 3   # a few spare blocks past the last anchor
 
         # Output split: a tx has num_inputs*per HTR to distribute across num_outputs
         # outputs. Give each `base`, and let the LAST output absorb any remainder so the
@@ -124,21 +137,29 @@ class TransparentTxSource(TxSource):
             remaining -= s
 
         # --- emit the DSL ------------------------------------------------------------
-        # 1) The block chain (mints the coinbases). 2) Pin the auto-`dummy`'s creation
-        #    after the reward lock: the filler funds any shortfall from a hidden `dummy`
-        #    tx that spends genesis's reward, so if `dummy` were dated too early it would
-        #    trip "reward still needs N blocks to be unlocked". `b{lock} < dummy` fixes that.
+        # Pin the auto-`dummy`'s creation past the reward lock (the filler funds shortfalls
+        # from a hidden `dummy` that spends genesis; dated too early it trips the reward lock).
         lines = [f"blockchain genesis b[1..{total_blocks}]", f"b{lock} < dummy"]
 
-        # 2) Funding: each fund spends ONE coinbase (the full block reward) ...
-        for f in range(n_funds):
-            lines.append(f"b{f + 1}.out[0] <<< fund{f}")           # fund{f} spends b{f+1}'s coinbase
-        # ... and re-mints it as `size` pinned UTXOs of value `per`. (size*per is well
-        # under the 6400 reward, so the filler appends one change output for the rest —
-        # harmless, and still <=255 outputs.) Order each fund after the reward lock.
+        # fund0 CONSOLIDATES all the coinbases (b1..b{n_coin}) — the whole funding value.
+        for c in range(n_coin):
+            lines.append(f"b{c + 1}.out[0] <<< fund0")
+        # Each fund mints `size` pinned UTXOs of value `per`; its CHANGE output (index = size,
+        # the value the filler computes to balance) is spent by the NEXT fund — the chain.
+        # We ALSO chain the funds in the PARENT DAG (`fund_f --> fund_{f-1} fund_{f-2}`): without
+        # it the filler parents every fund to genesis, and once n_funds exceeds ~253 genesis's
+        # children count overflows its 1-byte field ("ubyte ... 0..255"). Chaining leaves only
+        # fund0/fund1 on genesis. (Funds are never mempool tips anyway — their outputs are spent.)
         for f, size in enumerate(sizes):
             for k in range(size):
                 lines.append(f"fund{f}.out[{k}] = {per} HTR")      # pin each minted UTXO
+            if f + 1 < n_funds:
+                lines.append(f"fund{f}.out[{size}] <<< fund{f + 1}")  # change → next fund
+            if f >= 2:
+                lines.append(f"fund{f} --> fund{f - 1}")           # 2 explicit parents => the
+                lines.append(f"fund{f} --> fund{f - 2}")           # filler adds no genesis parent
+            elif f == 1:
+                lines.append("fund1 --> fund0")
             lines.append(f"b{lock} < fund{f}")                     # created past reward maturity
 
         # 3) Payload txs. Walk the flat list of (fund, output-index) UTXOs and hand each

@@ -18,25 +18,33 @@ resolve too.
 
 ## Running
 
-`list` / `validate` import nothing from `hathor` (fast); `run` / `sweep` boot a real in-process node.
-After the install above you can use the console script or `-m`, from anywhere (the hathor-core repo root):
+Everything is flag-driven; `--config` is optional (built-in defaults otherwise). `list` / `validate`
+stay hathor-free (fast); `run` / `script` boot a real in-process node. Run from the hathor-core repo root:
 
 ```bash
-poetry run hathor-tps-bench list
-poetry run hathor-tps-bench validate --config tps_benchmarking/benchmarks/engine/scenarios/organic.yaml
+poetry run hathor-tps-bench list                    # tx types · benchmarks · scripts
 
-# One measured run: K txs (+W warm-up, discarded). Writes results/<run>/ with
-# per_tx_stages.csv, samples.csv, batch_summary.json, summary.md, and 4 plots.
-poetry run hathor-tps-bench run --config .../scenarios/organic.yaml --num-txs 500 --warmup 100
+# Single run — pure flags, no config needed. -n txs · -i inputs · -o outputs · -w warm-up.
+poetry run hathor-tps-bench run -n 2500 -i 7 -o 13              # 2500 txs, 7-in/13-out
+poetry run hathor-tps-bench run -n 1000 --window 15            # set the rolling-curve window
 
-# Sweeps (fresh node per point):
-poetry run hathor-tps-bench sweep --config .../scenarios/organic.yaml --axis io           # tx shape I:O
-poetry run hathor-tps-bench sweep --config .../scenarios/organic.yaml --axis n \
-    --values 50,100,500,1000,5000                                                          # batch size
+# Sweeps — add ONE --sweep-* flag; others stay fixed. Fresh node per point.
+poetry run hathor-tps-bench run -n 3600 --sweep-inputs 1 10     # I = 1..10  (O, N fixed)
+poetry run hathor-tps-bench run -n 3600 --sweep-outputs 2 25    # O = 2..25
+poetry run hathor-tps-bench run -i 2 -o 2 --sweep-txs 100 500 2500
+
+# Named scripts (scripts/<name>.py) for bespoke experiments:
+poetry run hathor-tps-bench script demo_experiments all
+
+# Optional config as a base; flags still override it:
+poetry run hathor-tps-bench run --config .../scenarios/organic.yaml -n 500
 ```
 
-Two tx types: **`organic`** (tip-confirming chain, the realistic/representative workload) and
-**`transparent`** (genesis-parented — kept to demonstrate the O(N²) tip-explosion pathology).
+Each run writes `results/<run>/` (gitignored): `per_tx_stages.csv`, `samples.csv`, `batch_summary.json`,
+`summary.md`, and plots (rolling mean+**median** TPS, per-stage, latency histogram, C(N); sweeps add
+overlaid rolling-median curves + throughput-vs-axis). Two tx types: **`organic`** (default —
+tip-confirming chain, realistic) and **`transparent`** (genesis-parented, kept to show the O(N²)
+tip-explosion). Future tx types register in the workload registry → `--tx-type <name>`.
 
 ## Results
 

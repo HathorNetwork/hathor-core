@@ -16,27 +16,47 @@ def _pyplot():
     return plt
 
 
-def generate(out_dir: Path, result: RunResult, *, window: int = 25) -> list[str]:
+def timestamp() -> str:
+    """A filename-safe stamp, e.g. '05-06-2026-05h-43min-57s' (DD-MM-YYYY-HHh-MMmin-SSs)."""
+    from datetime import datetime
+    return datetime.now().strftime("%d-%m-%Y-%Hh-%Mmin-%Ss")
+
+
+def _stamped(name: str, stamp: str) -> str:
+    """'rolling_tps.png' -> 'rolling_tps-<stamp>.png'."""
+    base = name[:-4] if name.endswith(".png") else name
+    return f"{base}-{stamp}.png"
+
+
+def generate(out_dir: Path, result: RunResult, *, window: int | None = None) -> list[str]:
     try:
         plt = _pyplot()
     except Exception:
         return []  # graceful degrade — CSV/JSON/markdown still get written
     out_dir.mkdir(parents=True, exist_ok=True)
     made: list[str] = []
+    stamp = timestamp()
 
     def _save(fig, name: str) -> None:
+        fname = _stamped(name, stamp)
         fig.tight_layout()
-        fig.savefig(out_dir / name, dpi=120)
+        fig.savefig(out_dir / fname, dpi=120)
         plt.close(fig)
-        made.append(name)
+        made.append(fname)
 
     # 1) The headline chart: rolling TPS vs tx index — transient (warm-up tail / cache) -> steady.
-    roll = compute.rolling_tps(result, window=window)
+    #    Mean (faint) shows the RocksDB write-stall dips; median (bold) is the robust trend.
+    w = window if window else compute.rolling_window(len(result.records))
+    roll_mean = compute.rolling_tps(result, window=w)
+    roll_med = compute.rolling_tps_median(result, window=w)
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot([i for i, _ in roll], [t for _, t in roll], lw=1.1, color="#1f6feb")
-    ax.set(xlabel="measured tx index", ylabel=f"rolling TPS (window={window})",
+    ax.plot([i for i, _ in roll_mean], [t for _, t in roll_mean], lw=0.6, color="#c9c9c9",
+            label="rolling mean (spikes = write-stalls)")
+    ax.plot([i for i, _ in roll_med], [t for _, t in roll_med], lw=1.2, color="#1f6feb",
+            label="rolling median (robust)")
+    ax.set(xlabel="measured tx index", ylabel=f"rolling TPS (window={w})",
            title="Throughput vs tx index — transient → steady state")
-    ax.grid(alpha=0.3)
+    ax.legend(fontsize=8); ax.grid(alpha=0.3)
     _save(fig, "rolling_tps.png")
 
     # 2) Per-stage mean latency, annotated with each stage's share of the total.
@@ -70,19 +90,22 @@ def generate(out_dir: Path, result: RunResult, *, window: int = 25) -> list[str]
     return made
 
 
-def sweep_plots(out_dir: Path, points: list, *, x_label: str) -> list[str]:
-    """Cross-run charts for a sweep: TPS vs axis, and stacked per-stage means vs axis."""
+def sweep_plots(out_dir: Path, points: list, *, x_label: str, window: int | None = None) -> list[str]:
+    """Cross-run charts for a sweep: TPS vs axis, stacked per-stage means, and overlaid
+    rolling-median TPS curves (one per point)."""
     try:
         plt = _pyplot()
     except Exception:
         return []
     out_dir.mkdir(parents=True, exist_ok=True)
     made: list[str] = []
+    stamp = timestamp()
     xs = list(range(len(points)))
     labels = [p.label for p in points]
 
     def _save(fig, name):
-        fig.tight_layout(); fig.savefig(out_dir / name, dpi=120); plt.close(fig); made.append(name)
+        fname = _stamped(name, stamp)
+        fig.tight_layout(); fig.savefig(out_dir / fname, dpi=120); plt.close(fig); made.append(fname)
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(xs, [p.tps for p in points], "o-", color="#1f6feb")
@@ -101,4 +124,23 @@ def sweep_plots(out_dir: Path, points: list, *, x_label: str) -> list[str]:
     ax.set(ylabel="mean wall µs / tx", xlabel=x_label, title=f"Per-stage cost vs {x_label}")
     ax.legend(fontsize=8, ncol=5)
     _save(fig, "sweep_stages.png")
+
+    # 3) Overlaid rolling-median TPS curves — one per point (the demo-style chart).
+    from statistics import median
+    fig, ax = plt.subplots(figsize=(10, 5))
+    drew = False
+    for p in points:
+        if not p.totals_us:
+            continue
+        w = window if window else compute.rolling_window(len(p.totals_us))
+        ys = [1e6 / median(p.totals_us[max(0, i - w + 1): i + 1]) for i in range(len(p.totals_us))]
+        ax.plot(range(len(ys)), ys, lw=1.0, label=f"{p.label} (~{p.tps:.0f} tps)")
+        drew = True
+    if drew:
+        ax.set(xlabel="measured tx index", ylabel="rolling median TPS",
+               title=f"Rolling median TPS per {x_label}")
+        ax.legend(title=x_label, fontsize=8); ax.grid(alpha=0.3)
+        _save(fig, "sweep_rolling.png")
+    else:
+        plt.close(fig)
     return made

@@ -137,7 +137,8 @@ spike_cp4_reset, spike_cp4_diag.
    HEADLINE ~215 tx/s (i5-11300H, 1in/2out, band 160-270). Findings: N-cost bounded to 10k (no creep);
    inputs dominate ~base+2.6ms·(I-1), outputs free; M/Tb flat/Tb-indep; CPU single-thread is the lever
    (cores ~2× Amdahl ceiling; RAM=cache knob ~2-4GB). Top opt = drop redundant 2nd validate_full (~1.3×).
-   CP-5+CP-6 UNCOMMITTED (user commits). NEXT: run examples + extract plots + build a report (usage phase).
+   ALL COMMITTED: CP-4 @ b70ed4c4, CP-5+CP-6 @ 84e36887 (tree clean; base future diffs on 84e36887).
+   NEXT: run examples + extract plots + build a report (usage/demonstration phase).
 
 ## 8. CP-5/CP-6 DESIGN DECISIONS & REMINDERS (locked with user 2026-06-05)
 - **Warm-up**: add a configurable `warmup_txs` (W, ~100). Drive W txs and DISCARD their records, then

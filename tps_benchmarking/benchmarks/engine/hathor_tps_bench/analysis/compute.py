@@ -2,12 +2,18 @@
 rolling-TPS series, the cumulative C(N) curve, and the headline figures. Stdlib only."""
 from __future__ import annotations
 
-from statistics import mean
+from statistics import mean, median
 
 from hathor_tps_bench.config import STAGES
 from hathor_tps_bench.metrics.collector import RunResult
 
 _MB = 1024 * 1024
+
+
+def rolling_window(n: int) -> int:
+    """Window for rolling curves: 50 by default, but for small batches (N<=500) use 10%
+    of N, never below 5. min(50, max(5, round(0.1*N))) satisfies all three at once."""
+    return min(50, max(5, round(0.10 * n)))
 
 
 def _pct(sorted_vals: list[float], p: float) -> float:
@@ -41,14 +47,29 @@ def stage_table(result: RunResult) -> list[dict]:
 
 
 def rolling_tps(result: RunResult, window: int = 25) -> list[tuple[int, float]]:
-    """Sliding-window TPS vs measured-tx index — the transient->steady-state curve.
-    TPS at i = window_size / Σ(per-tx total wall over the window)."""
+    """Sliding-window MEAN TPS vs measured-tx index — the transient->steady-state curve.
+    TPS at i = window_size / Σ(per-tx total wall over the window). Sensitive to outliers
+    (a single RocksDB write-stall spike dips it for `window` txs) — use rolling_tps_median
+    for a robust trend."""
     totals_ns = [r.total_wall_ns() for r in result.records]
     out: list[tuple[int, float]] = []
     for i in range(len(totals_ns)):
         win = totals_ns[max(0, i - window + 1): i + 1]
         s = sum(win)
         out.append((i, (len(win) * 1e9 / s) if s else 0.0))
+    return out
+
+
+def rolling_tps_median(result: RunResult, window: int | None = None) -> list[tuple[int, float]]:
+    """Sliding-window MEDIAN TPS — robust to the ~0.5% RocksDB write-stall spikes that make
+    the mean curve dip abruptly. TPS at i = 1 / median(per-tx total wall over the window).
+    Window defaults to rolling_window(N)."""
+    totals_ns = [r.total_wall_ns() for r in result.records]
+    w = window if window is not None else rolling_window(len(totals_ns))
+    out: list[tuple[int, float]] = []
+    for i in range(len(totals_ns)):
+        m = median(totals_ns[max(0, i - w + 1): i + 1])
+        out.append((i, (1e9 / m) if m else 0.0))
     return out
 
 

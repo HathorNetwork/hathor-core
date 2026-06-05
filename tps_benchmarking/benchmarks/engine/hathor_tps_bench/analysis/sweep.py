@@ -4,7 +4,7 @@ and collect a headline + per-stage means for each. Imports hathor lazily (inside
 so `list`/`validate` stay light."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -17,6 +17,7 @@ class SweepPoint:
     tps: float
     mean_total_us: float
     stage_means_us: dict   # {S1..S6: µs}
+    totals_us: list = field(default_factory=list)  # per-tx total wall (µs) — for overlaid curves
 
 
 def _run_one(cfg, tx_type: str, num_inputs: int, num_outputs: int, K: int, W: int):
@@ -42,6 +43,7 @@ def _run_one(cfg, tx_type: str, num_inputs: int, num_outputs: int, K: int, W: in
         num_inputs=num_inputs, num_outputs=num_outputs, num_txs=K,
         accepted=head["accepted"], tps=head["processing_tps"],
         mean_total_us=head["mean_total_us"], stage_means_us=means,
+        totals_us=[r.total_wall_ns() / 1000.0 for r in result.records],
     )
     return point, result
 

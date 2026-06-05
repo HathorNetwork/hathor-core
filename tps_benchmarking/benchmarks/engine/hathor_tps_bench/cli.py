@@ -22,9 +22,11 @@ from hathor_tps_bench.workload import list_txtypes
 def _cmd_list(args: argparse.Namespace) -> int:
     txtypes = list_txtypes()
     benches = list_benchmarks()
+    scripts = _list_scripts()
     print(f"hathor_tps_bench v{__version__}")
     print(f"\ntx types   ({len(txtypes)}): {', '.join(txtypes) or '(none registered yet)'}")
     print(f"benchmarks ({len(benches)}): {', '.join(benches) or '(none registered yet)'}")
+    print(f"scripts    ({len(scripts)}): {', '.join(scripts) or '(none)'}")
     return 0
 
 
@@ -50,14 +52,41 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_run(args: argparse.Namespace) -> int:
-    cfg, errs = _load_and_validate(args.config)
-    if errs:
-        print("config invalid; run `validate` for details", file=sys.stderr)
-        return 1
+def _apply_overrides(cfg: RootConfig, args: argparse.Namespace) -> None:
+    """Apply CLI flag overrides onto a (possibly default) config. Flags win over the YAML."""
+    w = cfg.workload
+    for attr, val in (("tx_type", getattr(args, "tx_type", None)),
+                      ("num_txs", args.num_txs), ("num_inputs", getattr(args, "num_inputs", None)),
+                      ("num_outputs", getattr(args, "num_outputs", None)), ("warmup_txs", args.warmup)):
+        if val is not None:
+            setattr(w, attr, val)
+    if getattr(args, "window", None) is not None:
+        cfg.reporting.window = args.window
+    if getattr(args, "seed", None) is not None:
+        cfg.env.seed = args.seed
 
-    # CP-3 builds the workload; CP-4 drives + measures it. (Reporting = CP-5.)
-    # Imports are lazy here so `list`/`validate` never pull in hathor/matplotlib.
+
+def _load_config(args: argparse.Namespace) -> tuple[RootConfig | None, list[str]]:
+    """Load --config if given (else built-in defaults), apply flag overrides, then validate."""
+    try:
+        cfg = RootConfig.from_yaml(args.config) if args.config else RootConfig()
+    except FileNotFoundError:
+        return None, [f"config file not found: {args.config}"]
+    except Exception as e:  # noqa: BLE001
+        return None, [f"failed to parse config: {e}"]
+    _apply_overrides(cfg, args)
+    return cfg, cfg.validate()
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    cfg, errs = _load_config(args)
+    if errs:
+        print("config invalid:", *(f"\n  - {e}" for e in errs), file=sys.stderr)
+        return 1
+    # Sweep mode if any --sweep-* flag is present; else a single run.
+    if args.sweep_inputs or args.sweep_outputs or args.sweep_txs:
+        return _run_sweep(cfg, args)
+
     from dataclasses import asdict
     from pathlib import Path
 
@@ -67,12 +96,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     from hathor_tps_bench.workload import get_txtype
 
     w = cfg.workload
-    if args.num_txs:
-        w.num_txs = args.num_txs            # override K (measured)
-    if args.warmup is not None:
-        w.warmup_txs = args.warmup          # override W (warm-up, discarded)
     K, W = w.num_txs, w.warmup_txs
-    print(f"[run] scenario '{cfg.name}': {w.tx_type} I={w.num_inputs} O={w.num_outputs}, "
+    print(f"[run] {w.tx_type} I={w.num_inputs} O={w.num_outputs}, "
           f"K={K} measured (+{W} warm-up) on an in-process node...")
 
     source = get_txtype(w.tx_type)()
@@ -100,7 +125,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     persist.write_summary_json(run_dir / "batch_summary.json",
                                {"scenario": cfg.name, "workload": asdict(w),
                                 "headline": head, "stages": rows, "mtb": mtb})
-    plot_names = plots.generate(run_dir / "plots", result) if "plots" in fmts else []
+    plot_names = (plots.generate(run_dir / "plots", result, window=cfg.reporting.window)
+                  if "plots" in fmts else [])
     if "markdown" in fmts:
         report.write_report(run_dir / "summary.md", cfg, head, rows, plot_names)
     print(f"\n[run] results → {run_dir}/  ({len(plot_names)} plots)")
@@ -130,6 +156,66 @@ def _print_run_summary(result, cfg) -> None:
     print(f"  energy (analytical)   : {energy:.2f} J  (cpu_s x {cfg.measure.tdp_watts} W x {cfg.measure.cpu_util})")
 
 
+def _emit_sweep(cfg, points, axis: str, x_label: str) -> int:
+    from pathlib import Path
+
+    from hathor_tps_bench.analysis import plots
+    run_dir = Path(cfg.results_root) / f"sweep_{cfg.name}_{cfg.workload.tx_type}_{axis}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    plot_names = (plots.sweep_plots(run_dir / "plots", points, x_label=x_label,
+                                    window=cfg.reporting.window)
+                  if "plots" in cfg.reporting.formats else [])
+    _write_sweep_report(run_dir / "summary.md", cfg, axis, x_label, points, plot_names)
+    print(f"\n[sweep] results → {run_dir}/  ({len(plot_names)} plots)")
+    return 0
+
+
+def _run_sweep(cfg, args) -> int:
+    """Dispatch a sweep from the friendly --sweep-* flags on `run`."""
+    from hathor_tps_bench.analysis import sweep
+    w = cfg.workload
+    W = w.warmup_txs
+    log = lambda p: print(f"  {p.label:10} {p.tps:6.0f} tps   acc {p.accepted}/{p.num_txs}")
+    if args.sweep_inputs:
+        lo, hi = args.sweep_inputs
+        print(f"[sweep] inputs {lo}..{hi} (O={w.num_outputs}, N={w.num_txs}, {w.tx_type})...")
+        pts = sweep.io_sweep(cfg, w.tx_type, [(i, w.num_outputs) for i in range(lo, hi + 1)],
+                             w.num_txs, W, on_point=log)
+        return _emit_sweep(cfg, pts, "inputs", "inputs I")
+    if args.sweep_outputs:
+        lo, hi = args.sweep_outputs
+        print(f"[sweep] outputs {lo}..{hi} (I={w.num_inputs}, N={w.num_txs}, {w.tx_type})...")
+        pts = sweep.io_sweep(cfg, w.tx_type, [(w.num_inputs, o) for o in range(lo, hi + 1)],
+                             w.num_txs, W, on_point=log)
+        return _emit_sweep(cfg, pts, "outputs", "outputs O")
+    ns = args.sweep_txs
+    print(f"[sweep] txs {ns} (I={w.num_inputs}, O={w.num_outputs}, {w.tx_type})...")
+    pts = sweep.n_sweep(cfg, w.tx_type, ns, w.num_inputs, w.num_outputs, W, on_point=log)
+    return _emit_sweep(cfg, pts, "txs", "batch size N")
+
+
+def _scripts_dir():
+    from pathlib import Path
+    return Path(__file__).resolve().parent.parent / "scripts"
+
+
+def _list_scripts() -> list[str]:
+    d = _scripts_dir()
+    return sorted(p.stem for p in d.glob("*.py")) if d.exists() else []
+
+
+def _cmd_script(args: argparse.Namespace) -> int:
+    import runpy
+    path = _scripts_dir() / f"{args.name}.py"
+    if not path.exists():
+        print(f"no script {args.name!r}; available: {', '.join(_list_scripts()) or '(none)'}",
+              file=sys.stderr)
+        return 2
+    sys.argv = [str(path)] + (args.args or [])
+    runpy.run_path(str(path), run_name="__main__")
+    return 0
+
+
 def _parse_shapes(s: str | None):
     return [(int(i), int(o)) for i, o in (tok.split(":") for tok in s.split(","))] if s else None
 
@@ -139,36 +225,24 @@ def _parse_ints(s: str | None):
 
 
 def _cmd_sweep(args: argparse.Namespace) -> int:
-    cfg, errs = _load_and_validate(args.config)
+    """Back-compat axis interface (`--axis io|n --values ...`). The friendly way is
+    `run --sweep-inputs/--sweep-outputs/--sweep-txs`."""
+    cfg, errs = _load_config(args)
     if errs:
-        print("config invalid:", *(f"\n  - {e}" for e in errs))
+        print("config invalid:", *(f"\n  - {e}" for e in errs), file=sys.stderr)
         return 2
-    from pathlib import Path
-
-    from hathor_tps_bench.analysis import plots, sweep
-
+    from hathor_tps_bench.analysis import sweep
     w = cfg.workload
-    W = args.warmup if args.warmup is not None else w.warmup_txs
-    log = lambda p: print(f"  {p.label:9} {p.tps:6.0f} tps   total {p.mean_total_us:7.0f} us   "
-                          f"acc {p.accepted}/{p.num_txs}")
-    print(f"[sweep] axis={args.axis} on {w.tx_type} (W={W}) — fresh node per point...")
+    W = w.warmup_txs
+    log = lambda p: print(f"  {p.label:10} {p.tps:6.0f} tps   acc {p.accepted}/{p.num_txs}")
+    print(f"[sweep] axis={args.axis} on {w.tx_type} — fresh node per point...")
     if args.axis == "io":
         shapes = _parse_shapes(args.values) or [(1, 2), (2, 2), (3, 2), (4, 2), (5, 2), (1, 3), (1, 4), (1, 5)]
-        K = args.num_txs or 300
-        points = sweep.io_sweep(cfg, w.tx_type, shapes, K, W, on_point=log)
-        x_label = "tx shape (I:O)"
-    else:
-        ns = _parse_ints(args.values) or [50, 100, 200, 500, 1000, 2000]
-        points = sweep.n_sweep(cfg, w.tx_type, ns, w.num_inputs, w.num_outputs, W, on_point=log)
-        x_label = "batch size N"
-
-    run_dir = Path(cfg.results_root) / f"sweep_{cfg.name}_{w.tx_type}_{args.axis}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    plot_names = (plots.sweep_plots(run_dir / "plots", points, x_label=x_label)
-                  if "plots" in cfg.reporting.formats else [])
-    _write_sweep_report(run_dir / "summary.md", cfg, args.axis, x_label, points, plot_names)
-    print(f"\n[sweep] results → {run_dir}/  ({len(plot_names)} plots)")
-    return 0
+        points = sweep.io_sweep(cfg, w.tx_type, shapes, w.num_txs, W, on_point=log)
+        return _emit_sweep(cfg, points, "io", "tx shape (I:O)")
+    ns = _parse_ints(args.values) or [50, 100, 200, 500, 1000, 2000]
+    points = sweep.n_sweep(cfg, w.tx_type, ns, w.num_inputs, w.num_outputs, W, on_point=log)
+    return _emit_sweep(cfg, points, "n", "batch size N")
 
 
 def _write_sweep_report(path, cfg, axis, x_label, points, plot_names) -> None:
@@ -198,20 +272,35 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument("--config", required=True, help="path to scenario YAML")
     pv.set_defaults(fn=_cmd_validate)
 
-    pr = sub.add_parser("run", help="run a scenario (CP-4/CP-5)")
-    pr.add_argument("--config", required=True, help="path to scenario YAML")
-    pr.add_argument("--select", nargs="*", help="override which benchmarks to run")
-    pr.add_argument("--num-txs", type=int, dest="num_txs", help="override workload.num_txs (K, measured)")
-    pr.add_argument("--warmup", type=int, dest="warmup", help="override workload.warmup_txs (W, discarded)")
+    pr = sub.add_parser("run", help="single run, OR a sweep if a --sweep-* flag is given")
+    pr.add_argument("--config", help="optional base scenario YAML (else built-in defaults)")
+    pr.add_argument("--tx-type", dest="tx_type", help="tx type (organic | transparent | ...)")
+    pr.add_argument("-n", "--num-txs", type=int, dest="num_txs", help="measured txs K")
+    pr.add_argument("-i", "--num-inputs", type=int, dest="num_inputs", help="inputs per tx I")
+    pr.add_argument("-o", "--num-outputs", type=int, dest="num_outputs", help="outputs per tx O")
+    pr.add_argument("-w", "--warmup", type=int, dest="warmup", help="warm-up txs W (discarded)")
+    pr.add_argument("--window", type=int, help="rolling-curve window (default: adaptive)")
+    pr.add_argument("--seed", type=int, help="RNG seed")
+    pr.add_argument("--sweep-inputs", nargs=2, type=int, metavar=("MIN", "MAX"),
+                    help="sweep I over [MIN..MAX] (O, N fixed)")
+    pr.add_argument("--sweep-outputs", nargs=2, type=int, metavar=("MIN", "MAX"),
+                    help="sweep O over [MIN..MAX] (I, N fixed)")
+    pr.add_argument("--sweep-txs", nargs="+", type=int, metavar="N",
+                    help="sweep batch size over the given list")
     pr.set_defaults(fn=_cmd_run)
 
-    psw = sub.add_parser("sweep", help="run a parameter sweep (io | n), fresh node per point")
-    psw.add_argument("--config", required=True, help="path to scenario YAML")
-    psw.add_argument("--axis", choices=["io", "n"], default="io", help="sweep tx shape (io) or batch size (n)")
+    psw = sub.add_parser("sweep", help="(back-compat) sweep via --axis io|n --values ...")
+    psw.add_argument("--config", help="optional base scenario YAML")
+    psw.add_argument("--axis", choices=["io", "n"], default="io")
     psw.add_argument("--values", help="io: '1:2,2:2,3:2'   n: '50,100,500,1000'")
-    psw.add_argument("--num-txs", type=int, dest="num_txs", help="K per point (io sweep)")
-    psw.add_argument("--warmup", type=int, dest="warmup", help="override warmup_txs per point")
+    psw.add_argument("-n", "--num-txs", type=int, dest="num_txs")
+    psw.add_argument("-w", "--warmup", type=int, dest="warmup")
     psw.set_defaults(fn=_cmd_sweep)
+
+    psc = sub.add_parser("script", help="run a named script from scripts/ (e.g. demo_experiments)")
+    psc.add_argument("name", help="script name (without .py); see `list`")
+    psc.add_argument("args", nargs=argparse.REMAINDER, help="extra args passed to the script")
+    psc.set_defaults(fn=_cmd_script)
     return p
 
 

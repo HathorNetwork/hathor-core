@@ -19,7 +19,7 @@ STAGES: tuple[str, ...] = ("S1", "S2", "S3S4", "S5", "S6")
 
 @dataclass
 class WorkloadConfig:
-    tx_type: str = "transparent"   # registry key
+    tx_type: str = "organic"       # registry key; organic = realistic, tip-confirming
     num_txs: int = 500             # K — the MEASURED txs
     num_inputs: int = 1            # I
     num_outputs: int = 2           # O
@@ -72,14 +72,18 @@ class MeasureConfig:
 @dataclass
 class ReportingConfig:
     formats: list[str] = field(default_factory=lambda: ["csv", "plots", "markdown"])
+    window: int | None = None   # rolling-curve window; None = adaptive min(50,max(5,10%N))
 
     _ALLOWED = ("csv", "xlsx", "plots", "markdown", "html")
 
     def validate(self) -> list[str]:
-        return [
+        errs = [
             f"reporting.formats has unknown entry {f!r} (allowed: {self._ALLOWED})"
             for f in self.formats if f not in self._ALLOWED
         ]
+        if self.window is not None and self.window < 1:
+            errs.append("reporting.window must be >= 1 (or omitted for adaptive)")
+        return errs
 
 
 @dataclass
@@ -87,7 +91,7 @@ class RootConfig:
     name: str = "baseline"
     benchmarks: list[str] = field(default_factory=lambda: ["stage-latency"])
     n_sweep: list[int] | None = None              # batch-size sweep; None = single run
-    results_root: str = "results"
+    results_root: str = "tps_benchmarking/benchmarks/engine/results"  # from hathor-core root; gitignored
     workload: WorkloadConfig = field(default_factory=WorkloadConfig)
     env: EnvConfig = field(default_factory=EnvConfig)
     measure: MeasureConfig = field(default_factory=MeasureConfig)
