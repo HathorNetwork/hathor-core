@@ -606,7 +606,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "../htr-rs/crates/htr-lib"
+url = "../htr-rs/crates/htr-lib-py"
 
 [[package]]
 name = "idna"
@@ -1696,4 +1696,4 @@ client = ["aiohttp"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "d6b63929cdfdfb246f448599c27ec83dae3c588938daa1a1a4e02875956ae682"
+content-hash = "7052d997ee60f1089149812a8246b0d13b367edac22b2bc222126604631d8156"

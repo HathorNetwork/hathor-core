@@ -42,4 +42,4 @@ install:
 
 # Generate the CI file for building/uploading wheels. This is currently unused and kept here for reference.
 maturin-generate-ci:
-  maturin generate-ci github -m crates/htr-lib/Cargo.toml
+  maturin generate-ci github -m crates/htr-lib-py/Cargo.toml
