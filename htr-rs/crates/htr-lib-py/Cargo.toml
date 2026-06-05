@@ -9,7 +9,10 @@ name = "htr_lib_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { workspace = true }
+htr-lib = { path = "../htr-lib" }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+pyo3 = { version = "0.28.3", features = ["num-bigint"] }
 
 [lints]
 workspace = true
