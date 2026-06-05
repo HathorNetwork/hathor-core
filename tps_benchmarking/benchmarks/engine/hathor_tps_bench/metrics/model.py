@@ -44,7 +44,7 @@ class Sample:
     """One background time-series sample (read from /proc)."""
     t_rel_s: float        # seconds since batch start
     tx_done: int          # how many txs processed by this instant
-    rss_bytes: int
+    rss_bytes: int      # shouldn't it be bytes here??
     num_fds: int
     io_read_bytes: int    # cumulative since process start
     io_write_bytes: int

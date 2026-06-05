@@ -442,6 +442,55 @@ Node **energy** is modelled, not measured (no reliable RAPL counters under WSL/c
 so the assumption is explicit in the report. The mining-energy term (`2^weight × J/hash`) is trivial
 at weight 1 and reported only for completeness.
 
+## Throughput is bounded by block cadence — the M/Tb model (and a measurement confound)
+
+A single batch number is **not** a network rate, and treating it as one is the easiest way to get this
+wrong. Here is why, and how we propose to read the benchmark correctly.
+
+**The mempool-growth problem.** If we drive transactions without ever adding a block, the unconfirmed
+mempool grows without bound. Consensus (S5) scales with the unconfirmed mempool, so the *per-tx* cost
+climbs as the batch proceeds, and the perceived throughput keeps falling: "I sent 100 → 120 tx/s" but
+"I sent 200 → 80 tx/s." In real Hathor this never runs away, because **blocks arrive about every
+`Tb` seconds** (DAA-adjusted, order of tens of seconds) and confirm the mempool, resetting the
+between-blocks transaction count `M`. Mainnet today is block-dominated (far more blocks than txs), so
+each tx effectively arrives to a near-empty mempool — close to the *clean-slate* cost.
+
+**Two numbers, not one.** Let `C(N)` be the cumulative processing time for a batch of `N` (mempool
+growing 0→N) — exactly what the driver records. Then `perceived_TPS(N) = N / C(N)`, a decreasing curve.
+
+- **Clean-slate ceiling** `1 / τ₀` (τ₀ = per-tx total at an empty mempool): the optimistic upper bound.
+- **Sustainable rate** `M / Tb`: the node can clear at most the `M` txs whose cumulative cost fills a
+  block interval, i.e. `C(M) = Tb`. Geometrically, on the `perceived_TPS`-vs-`N` plot the line
+  `Y = N/Tb` (slope **1/Tb**, not 1) crosses the curve exactly at `(M, M/Tb)`, since
+  `N/Tb = N/C(N) ⟺ C(N) = Tb`. We report `M/Tb` as a small table over `Tb ∈ {7.5, 15, 30, 60, 90} s`.
+
+Because per-tx cost grows ~linearly with the mempool, `C(N)` is ~quadratic, so the sustainable rate is
+far below the clean-slate ceiling and **rises as `Tb` shrinks** (more frequent blocks reset the mempool
+sooner) — block cadence is a first-order lever on tx throughput.
+
+**Status: this model is a HYPOTHESIS, not yet validated — and the current workload confounds it.** A
+CP-4 block-reset experiment (drive M txs → inject one block → drive M more) did **not** confirm that a
+block resets S5. The cause is the workload, not the node: our transparent batch parents every tx to
+**genesis**, so the mempool is a *disconnected fan*. A block selects 2 tips as parents and transitively
+confirms only what is reachable from them — with genesis-parenting, just those ~2 txs (measured: a block
+confirmed 2 of 251). Worse, feeding genesis-parented txs into a chain that has advanced by a block sends
+consensus into a pathological state (per-tx S5 jumped ~10 ms → ~120 ms). So the earlier "S5 grows with
+M" figures are **provisional/inflated**, and the M/Tb model cannot be tested until the workload builds
+an **organic, tip-confirming DAG** (each tx confirms 2 recent tips, like real traffic), so that (a) a
+block sweeps the whole reachable mempool and (b) consensus traverses a realistic connected DAG.
+
+**A second, non-resettable component.** S6 (`_post_consensus`) is the 2nd `validate_full` (∝ inputs)
+plus index updates. The **mempool-tips** index is resettable by a block, but the **non-critical
+indexes** (utxo / address / timestamp) grow with *total* stored txs and are **never** reset — a
+permanent storage-scaling cost the M/Tb model does not capture. We should therefore split S6 reporting
+into "re-verify" vs "index" sub-costs and track the permanent part against storage size.
+
+**Plan (prerequisite-ordered):** (1) build the organic tip-confirming workload; (2) re-run the
+block-reset experiment to validate (or refute) the M/Tb model and measure how much a block actually
+resets; (3) tabulate `C(N)` and per-stage times across `N` (1…1000) and the resulting `M/Tb` for each
+`Tb`, with plots; (4) measure the block's own O(M) confirmation cost and fold it into the `Tb` budget
+(`C(M) + block_confirm(M) ≤ Tb`).
+
 ## Example
 
 A single transaction from an `N=500, I=1, O=2` run produces a record like this (illustrative shape,

@@ -3,18 +3,32 @@
 In-process benchmark engine for Hathor full-node transaction processing.
 Design: `tps_benchmarking/planning/003-prime-rfc-fullnode-tps-benchmark.md`.
 
-## Running
+## Install (once)
 
-The package imports nothing from `hathor` for `list`/`validate` (scaffold only); the
-node harness and driver arrive in CP-3/CP-4. Run from this `engine/` directory so the
-package is importable:
+Editable-install the package into the hathor-core poetry env so it resolves from any cwd
+(and so editors/Pylance can resolve `hathor_tps_bench.*`). Run from the hathor-core repo root:
 
 ```bash
-cd tps_benchmarking/benchmarks/engine
-poetry run python -m hathor_tps_bench list
-poetry run python -m hathor_tps_bench validate --config scenarios/basic.yaml
-poetry run python -m hathor_tps_bench run --config scenarios/basic.yaml   # stub until CP-4/CP-5
+poetry run pip install -e tps_benchmarking/benchmarks/engine
 ```
+
+In VS Code, also select the poetry interpreter
+(`Python: Select Interpreter` → the `hathor-...-py3.11` env) so `hathor` / `hathor_tests`
+resolve too.
+
+## Running
+
+`list` / `validate` import nothing from `hathor` (fast); `run` boots a real in-process node.
+After the install above you can use the console script or `-m`, from anywhere:
+
+```bash
+poetry run hathor-tps-bench list
+poetry run hathor-tps-bench validate --config tps_benchmarking/benchmarks/engine/scenarios/basic.yaml
+poetry run hathor-tps-bench run --config tps_benchmarking/benchmarks/engine/scenarios/basic.yaml --num-txs 100
+# (equivalently: poetry run python -m hathor_tps_bench ...)
+```
+
+`run` currently builds the workload on a real node and reports it; per-stage timing + reports land in CP-4/CP-5.
 
 ## Layout (built incrementally)
 

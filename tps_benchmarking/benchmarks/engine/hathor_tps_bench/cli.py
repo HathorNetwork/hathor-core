@@ -56,9 +56,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print("config invalid; run `validate` for details", file=sys.stderr)
         return 1
 
-    # CP-3: build the workload on a real in-process node and report it.
-    # (Per-stage timing + reporting are wired in CP-4 / CP-5.) Imports are lazy here so
-    # `list`/`validate` never pull in hathor.
+    # CP-3 builds the workload; CP-4 drives + measures it. (Reporting = CP-5.)
+    # Imports are lazy here so `list`/`validate` never pull in hathor.
+    from hathor_tps_bench.config import STAGES
+    from hathor_tps_bench.driver import run_batch
     from hathor_tps_bench.node import NodeHarness
     from hathor_tps_bench.workload import get_txtype
 
@@ -72,16 +73,36 @@ def _cmd_run(args: argparse.Namespace) -> int:
     harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow).start()
     try:
         prepared = source.build(harness, w.num_txs, w.num_inputs, w.num_outputs)
-        exact = sum(1 for p in prepared
-                    if p.n_inputs == w.num_inputs and p.n_outputs == w.num_outputs)
-        distinct_inputs = {(i.tx_id, i.index) for p in prepared for i in p.tx.inputs}
-        print(f"[run] built {len(prepared)} txs preloaded with funding")
-        print(f"[run] exact I/O     : {exact}/{len(prepared)}")
-        print(f"[run] distinct inputs: {len(distinct_inputs)} (expected {w.num_txs * w.num_inputs})")
-        print("[run] driver/timing lands in CP-4 — nothing measured yet.")
+        print(f"[run] built {len(prepared)} txs; driving S1..S6 on the single thread...")
+        result = run_batch(harness, prepared, sampler_interval_s=cfg.measure.sampler_interval_s)
+        _print_run_summary(result, cfg)
     finally:
         harness.stop()
     return 0
+
+
+def _print_run_summary(result, cfg) -> None:
+    means_w = result.stage_mean_wall_us()
+    means_c = result.stage_mean_cpu_us()
+    total = result.total_mean_wall_us()
+    b = result.batch
+    mb = 1024 * 1024
+
+    print(f"\n[result] accepted {result.accepted}/{result.n}")
+    print(f"  {'stage':6} {'mean wall us':>13} {'mean cpu us':>12} {'share':>7}")
+    for s in result.stage_mean_wall_us():
+        share = (means_w[s] / total) if total else 0.0
+        print(f"  {s:6} {means_w[s]:13.1f} {means_c[s]:12.1f} {share:7.1%}")
+    print(f"  {'TOTAL':6} {total:13.1f}")
+    print(f"\n  processing throughput : {result.processing_tps():.0f} tx/s "
+          f"(1 / mean per-tx total wall)")
+    print(f"  batch wall / cpu      : {b.wall_s:.3f} s / {b.cpu_s:.3f} s")
+    print(f"  peak RSS / growth     : {b.rss_peak_bytes / mb:.1f} MB / {b.rss_growth_bytes / mb:.1f} MB")
+    print(f"  disk written (flushed): {b.io_write_bytes / mb:.2f} MB")
+    print(f"  peak open FDs         : {b.fd_peak}")
+    energy = b.energy_joules(cfg.measure.tdp_watts, cfg.measure.cpu_util)
+    print(f"  energy (analytical)   : {energy:.2f} J  (cpu_s x {cfg.measure.tdp_watts} W x {cfg.measure.cpu_util})")
+    print("\n  [note] CSV / plots / report land in CP-5.")
 
 
 def build_parser() -> argparse.ArgumentParser:

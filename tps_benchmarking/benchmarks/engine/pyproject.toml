@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hathor-tps-bench"
+version = "0.0.1"
+description = "In-process benchmark engine for Hathor full-node transaction processing."
+requires-python = ">=3.11"
+# Runtime deps are provided by the ambient hathor-core poetry env (pyyaml, hathor, ...).
+# Reporting deps (pandas, matplotlib, openpyxl) are added in CP-5.
+
+[project.scripts]
+hathor-tps-bench = "hathor_tps_bench.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hathor_tps_bench*"]
