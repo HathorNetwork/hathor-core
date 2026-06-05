@@ -20,9 +20,11 @@ STAGES: tuple[str, ...] = ("S1", "S2", "S3S4", "S5", "S6")
 @dataclass
 class WorkloadConfig:
     tx_type: str = "transparent"   # registry key
-    num_txs: int = 500
+    num_txs: int = 500             # K — the MEASURED txs
     num_inputs: int = 1            # I
     num_outputs: int = 2           # O
+    warmup_txs: int = 100          # W — driven but DISCARDED, to burn in caches/JIT
+                                   # (steady-state; NO block — that would re-cool the cache)
 
     def validate(self) -> list[str]:
         errs: list[str] = []
@@ -32,6 +34,8 @@ class WorkloadConfig:
             errs.append("workload.num_inputs must be >= 1")
         if self.num_outputs < 1:
             errs.append("workload.num_outputs must be >= 1")
+        if self.warmup_txs < 0:
+            errs.append("workload.warmup_txs must be >= 0")
         return errs
 
 

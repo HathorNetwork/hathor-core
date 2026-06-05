@@ -6,7 +6,7 @@ name: organic-baseline
 benchmarks:
   - stage-latency
 
-results_root: results
+results_root: tps_benchmarking/benchmarks/engine/results   # run from the hathor-core repo root
 
 workload:
   tx_type: organic

@@ -95,11 +95,12 @@ block cadence". Also: S6 has a PERMANENT, non-block-resettable component (non-cr
 total storage) — should split S6 reporting into re-verify vs index.
 
 ## 5. Checkpoint / build state
-Done & committed (`5dc5a40e`, branch `tool/tps-benchmarking`): CP-1 spike, CP-2 scaffold, CP-3
-harness+workload. **CP-4 (probes+driver+organic fix) DONE; checkpoint markdown PRODUCED**
-(`checkpoint-diffs/CP-4-probes-driver-consensus-finding-and-organic-fix.md`, 1159 lines, + 23pp colored
-PDF in OneDrive `benchmark-checkpoints/`). CP-4 code + `engine/pyproject.toml` + `README.md` + RFC edits +
-CP-4 spikes + `organic.yaml` + `discussions/project-context.md` are **uncommitted** (user commits the bundle).
+COMMITTED (branch `tool/tps-benchmarking`): CP-1/2/3 at `5dc5a40e` (+ plans at `386ef18c`); **CP-4 at
+`b70ed4c4`** ("add(tps): probes, tx-dag flow, spikes" — probes, driver, organic workload, spikes, CP-4
+checkpoint doc, RFC M/Tb edits). **CP-5 is the ONLY uncommitted work** (`analysis/`, warm-up in
+config/driver, cli reporting, pyproject matplotlib dep, scenario yamls, `.gitignore`, CP-5 checkpoint
+doc). NOTE for future checkpoint diffs: base CP-N's diff on the CP-(N-1) COMMIT (not 5dc5a40e); the user
+commits each checkpoint themselves. CP-5 doc's diff is correctly vs `b70ed4c4`.
 Checkpoint docs: `tps_benchmarking/checkpoint-diffs/CP-{1,2,3}-*.md` (+ OneDrive `pr6-lifecycle`-sibling
 `benchmark-checkpoints/` as md + colored PDF). Tasks: #1-5 done, #6 analysis/reporting (CP-5), #7
 baseline run (CP-6) pending.
@@ -125,8 +126,18 @@ spike_cp4_reset, spike_cp4_diag.
 - VS Code: select interpreter `~/.cache/pypoetry/virtualenvs/hathor-4nrGODYv-py3.11/bin/python`.
 
 ## 7. Immediate next actions
-1. CP-1..CP-4 DONE (see §3b, §5). Next = **CP-5** (analysis/reporting: persist CSV/JSON, C(N) curve,
-   per-stage tables across N, M/Tb table, plots), then **CP-6** (baseline experiments + final TPS + docs).
+1. CP-1..**CP-5 DONE** (see §3b, §8). CP-5 = `analysis/` pkg (compute/persist/plots/report) + warm-up
+   (config `warmup_txs` W, build W+K, drive W discarded, measure K) + CLI writes results/<run>/
+   (per_tx_stages.csv, samples.csv, batch_summary.json, summary.md, 4 plots: rolling_tps, stage_means,
+   latency_hist, cumulative_cn). matplotlib added as engine dep; results gitignored under engine.
+   Checkpoint markdown `checkpoint-diffs/CP-5-analysis-reporting-and-warmup.md` (+15pp PDF in OneDrive).
+   Validated: organic K=500/W=100 → 215 tx/s; per_tx CSV = K rows.
+2. **CP-6 DONE → PHASE 1 COMPLETE.** Added `analysis/sweep.py` + `sweep` CLI (io|n, fresh node/point),
+   `compute.mtb_table`+`scale_to_specs` (M/Tb in run json), `plots.sweep_plots`, `docs/baseline-results.md`.
+   HEADLINE ~215 tx/s (i5-11300H, 1in/2out, band 160-270). Findings: N-cost bounded to 10k (no creep);
+   inputs dominate ~base+2.6ms·(I-1), outputs free; M/Tb flat/Tb-indep; CPU single-thread is the lever
+   (cores ~2× Amdahl ceiling; RAM=cache knob ~2-4GB). Top opt = drop redundant 2nd validate_full (~1.3×).
+   CP-5+CP-6 UNCOMMITTED (user commits). NEXT: run examples + extract plots + build a report (usage phase).
 
 ## 8. CP-5/CP-6 DESIGN DECISIONS & REMINDERS (locked with user 2026-06-05)
 - **Warm-up**: add a configurable `warmup_txs` (W, ~100). Drive W txs and DISCARD their records, then

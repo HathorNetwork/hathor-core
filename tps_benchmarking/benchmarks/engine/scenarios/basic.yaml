@@ -10,7 +10,7 @@ benchmarks:
 # Optional batch-size sweep (throughput-vs-N). Omit for a single run.
 # n_sweep: [100, 500, 1000, 5000]
 
-results_root: results
+results_root: tps_benchmarking/benchmarks/engine/results   # run from the hathor-core repo root
 
 workload:
   tx_type: transparent

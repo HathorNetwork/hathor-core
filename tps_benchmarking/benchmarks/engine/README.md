@@ -18,17 +18,31 @@ resolve too.
 
 ## Running
 
-`list` / `validate` import nothing from `hathor` (fast); `run` boots a real in-process node.
-After the install above you can use the console script or `-m`, from anywhere:
+`list` / `validate` import nothing from `hathor` (fast); `run` / `sweep` boot a real in-process node.
+After the install above you can use the console script or `-m`, from anywhere (the hathor-core repo root):
 
 ```bash
 poetry run hathor-tps-bench list
-poetry run hathor-tps-bench validate --config tps_benchmarking/benchmarks/engine/scenarios/basic.yaml
-poetry run hathor-tps-bench run --config tps_benchmarking/benchmarks/engine/scenarios/basic.yaml --num-txs 100
-# (equivalently: poetry run python -m hathor_tps_bench ...)
+poetry run hathor-tps-bench validate --config tps_benchmarking/benchmarks/engine/scenarios/organic.yaml
+
+# One measured run: K txs (+W warm-up, discarded). Writes results/<run>/ with
+# per_tx_stages.csv, samples.csv, batch_summary.json, summary.md, and 4 plots.
+poetry run hathor-tps-bench run --config .../scenarios/organic.yaml --num-txs 500 --warmup 100
+
+# Sweeps (fresh node per point):
+poetry run hathor-tps-bench sweep --config .../scenarios/organic.yaml --axis io           # tx shape I:O
+poetry run hathor-tps-bench sweep --config .../scenarios/organic.yaml --axis n \
+    --values 50,100,500,1000,5000                                                          # batch size
 ```
 
-`run` currently builds the workload on a real node and reports it; per-stage timing + reports land in CP-4/CP-5.
+Two tx types: **`organic`** (tip-confirming chain, the realistic/representative workload) and
+**`transparent`** (genesis-parented — kept to demonstrate the O(N²) tip-explosion pathology).
+
+## Results
+
+**~215 tx/s** single-thread for a 1-in/2-out tx on an i5-11300H (warmed steady state), dominated by
+*verification run twice* and consensus. Full analysis — N-scaling, the I/O sweep, the M/Tb table, and
+hardware scaling — in **`docs/baseline-results.md`**.
 
 ## Layout (built incrementally)
 
@@ -41,6 +55,9 @@ poetry run hathor-tps-bench run --config tps_benchmarking/benchmarks/engine/scen
 | `cli.py` | `list` / `validate` / `run` | CP-2 |
 | `node/` | in-process `HathorManager` harness | CP-3 |
 | `workload/transparent.py` | DAGBuilder transparent I-in/O-out source | CP-3 |
-| `probes/`, `driver/` | per-stage timing, sampler, single-thread loop | CP-4 |
-| `analysis/` | compute, plots, CSV/markdown report | CP-5 |
-| `spikes/spike_cp1.py` | CP-1 de-risk spike (throwaway) | CP-1 |
+| `workload/transparent.py` | also `OrganicTxSource` (tip-confirming chain) | CP-4 |
+| `probes/`, `driver/` | per-stage timing, sampler, single-thread loop, warm-up | CP-4/5 |
+| `analysis/compute,persist,plots,report` | stats, CSV/JSON, plots, summary.md | CP-5 |
+| `analysis/sweep.py` | I/O- and N-sweep orchestration | CP-6 |
+| `docs/baseline-results.md` | the headline TPS + full analysis | CP-6 |
+| `spikes/spike_cp*.py` | de-risk spikes (throwaway) | CP-1/4 |

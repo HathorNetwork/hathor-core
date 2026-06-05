@@ -79,19 +79,32 @@ def _drive_one(manager, vh, settings, params, raw: bytes, index: int) -> TxRecor
     )
 
 
-def run_batch(harness, prepared, *, sampler_interval_s: float = 0.1) -> RunResult:
+def run_batch(harness, prepared, *, sampler_interval_s: float = 0.1, warmup: int = 0) -> RunResult:
+    """Drive `prepared` through S1..S6. The first `warmup` txs are driven through the full
+    pipeline but their records are DISCARDED — they burn in the RocksDB read cache and the
+    interpreter so the measured window reflects steady state, not the cold start. (We do
+    NOT inject a block before measuring: in the organic chain tips are already ~1 so a block
+    resets nothing, and block processing evicts the tx LRU cache — which would re-introduce
+    the very cold transient we are removing; see CP-4.)"""
     manager = harness.manager
     vh = manager.vertex_handler
     settings = manager._settings
-    params = build_params(manager)
+    params = build_params(manager)  # best_block is fixed across the batch (no blocks added)
 
+    # --- warm-up: drive W txs, keep nothing. They still extend the DAG (real processing). ---
+    warmup = max(0, min(warmup, len(prepared)))
+    for i in range(warmup):
+        _drive_one(manager, vh, settings, params, prepared[i].raw, i)
+    measured = prepared[warmup:]
+
+    # Snapshot resources AFTER warm-up so batch figures cover only the measured K txs.
     io_r0, io_w0 = procstats.read_io()
     rss_start = procstats.read_rss_bytes()
     sampler = ProcSampler(interval_s=sampler_interval_s).start()
 
     records: list[TxRecord] = []
     w0, c0 = time.perf_counter(), time.process_time()
-    for i, p in enumerate(prepared):
+    for i, p in enumerate(measured):  # i = position within the measured window (0..K-1)
         records.append(_drive_one(manager, vh, settings, params, p.raw, i))
         sampler.set_progress(i + 1)
     wall_s = time.perf_counter() - w0
