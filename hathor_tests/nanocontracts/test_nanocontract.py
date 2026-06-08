@@ -27,6 +27,7 @@ from hathor.nanocontracts.types import (
     view,
 )
 from hathor.nanocontracts.utils import sign_openssl, sign_openssl_multisig
+from hathor.serialization import Deserializer
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import (
     EqualVerifyFailed,
@@ -39,6 +40,8 @@ from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import NanoHeaderAction
 from hathor.transaction.scripts import P2PKH, HathorScript, Opcode
 from hathor.transaction.validation_state import ValidationState
+from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
+from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header
 from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT, MAX_NC_SCRIPT_SIZE
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
@@ -158,8 +161,13 @@ class NCNanoContractTestCase(unittest.TestCase):
     def test_serialization_skip_signature(self) -> None:
         nc = self._get_nc()
         nano_header = nc.get_nano_header()
-        sighash_bytes = nano_header.get_sighash_bytes()
-        deserialized, buf = NanoHeader.deserialize(Transaction(), sighash_bytes)
+        sighash_bytes = get_header_sighash_bytes(nano_header, decimal_version=nano_header.tx.get_decimal_version())
+
+        tx = Transaction()
+        deserializer = Deserializer.build_bytes_deserializer(sighash_bytes)
+        data = deserialize_nano_header(deserializer, decimal_version=tx.get_decimal_version())
+        deserialized = NanoHeader.create_from_data(tx, data)
+        buf = bytes(deserializer.read_all())
 
         assert len(buf) == 0
         assert deserialized.nc_seqnum == nano_header.nc_seqnum
