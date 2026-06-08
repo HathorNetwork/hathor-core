@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
-    from hathorlib.transaction.shielded_tx_output import OutputMode, ShieldedOutput
+    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 logger = get_logger()
 
@@ -935,14 +935,6 @@ class TxInput:
         return vertex_serializer.serialize_tx_input_sighash(self)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
-        """ Creates a TxInput from a serialized input. Returns the input
-        and remaining bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_input(buf, verbose=verbose)
-
-    @classmethod
     def create_from_dict(cls, data: dict) -> 'TxInput':
         """ Creates a TxInput from a human readable dict."""
         return cls(
@@ -1010,31 +1002,9 @@ class TxOutput:
         else:
             return f'{cls_name}(value={value_str}, script={self.script.hex()})'
 
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the output
-
-        :rtype: bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.serialize_tx_output_bytes(self)
-
-    @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
-        """ Creates a TxOutput from a serialized output. Returns the output
-        and remaining bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_output(buf, verbose=verbose)
-
     def get_token_index(self) -> int:
         """The token uid index in the list"""
         return self.token_data & self.TOKEN_INDEX_MASK
-
-    @staticmethod
-    def mode() -> OutputMode:
-        """Return the output mode (TRANSPARENT for standard TxOutput)."""
-        from hathorlib.transaction.shielded_tx_output import OutputMode as _OutputMode
-        return _OutputMode.TRANSPARENT
 
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""
