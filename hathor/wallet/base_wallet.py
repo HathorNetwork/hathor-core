@@ -688,7 +688,7 @@ class BaseWallet:
         """
         from hathor_ct_crypto import create_asset_commitment, derive_tag
         expected_tag = derive_tag(token_id)
-        expected_commitment = create_asset_commitment(expected_tag, asset_bf)
+        expected_commitment = create_asset_commitment(tag_bytes=expected_tag, r_asset=asset_bf)
         if expected_commitment != asset_commitment:
             raise ValueError(
                 'recovered token UID does not match asset_commitment — '
@@ -700,14 +700,13 @@ class BaseWallet:
 
         Returns True if any shielded output was recovered.
         """
-        from hathor.crypto.shielded import SHIELDED_CRYPTO_AVAILABLE
         from hathor.crypto.shielded.recovery import recover_shielded_secrets
         from hathorlib.transaction.shielded_tx_output import FullShieldedOutput
 
-        if not SHIELDED_CRYPTO_AVAILABLE:
+        if not get_global_settings().ENABLE_SHIELDED_TRANSACTIONS:
             if tx.shielded_outputs:
                 self.log.error(
-                    'cannot recover shielded outputs: hathor_ct_crypto native library is not available',
+                    'cannot recover shielded outputs: shielded transactions are disabled',
                     tx=tx.hash_hex,
                 )
             return False

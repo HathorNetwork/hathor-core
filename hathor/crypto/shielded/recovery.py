@@ -66,12 +66,16 @@ def recover_shielded_secrets(
     if not output.ephemeral_pubkey:
         raise ValueError('output has no ephemeral_pubkey for ECDH recovery')
 
-    shared_secret = derive_ecdh_shared_secret(private_key_bytes, output.ephemeral_pubkey)
+    shared_secret = derive_ecdh_shared_secret(
+        private_key_bytes=private_key_bytes,
+        peer_pubkey_bytes=output.ephemeral_pubkey,
+    )
     nonce = derive_rewind_nonce(shared_secret)
 
     token_uid: bytes
     if isinstance(output, AmountShieldedOutput):
-        token_uid = get_token_uid(output.token_data & 0x7F)
+        from hathor.transaction import TxOutput
+        token_uid = get_token_uid(output.token_data & TxOutput.TOKEN_INDEX_MASK)
         generator = derive_asset_tag(token_uid)
     elif isinstance(output, FullShieldedOutput):
         generator = output.asset_commitment
@@ -80,7 +84,10 @@ def recover_shielded_secrets(
         raise ValueError(f'unknown shielded output type: {type(output).__name__}')
 
     value, blinding_factor, message = rewind_range_proof(
-        output.range_proof, output.commitment, nonce, generator
+        proof=output.range_proof,
+        commitment=output.commitment,
+        nonce=nonce,
+        generator=generator,
     )
 
     asset_blinding_factor: bytes | None = None
