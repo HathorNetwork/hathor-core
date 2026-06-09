@@ -120,10 +120,12 @@ class TransactionVerifier:
                 spent_tx = tx.get_spent_tx(tx_input)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            if tx_input.index >= len(spent_tx.outputs):
+            try:
+                script = spent_tx.resolve_spent_output(tx_input.index).script
+            except IndexError:
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.resolve_spent_output(tx_input.index).script)
+            n_txops += counter.get_sigops_count(tx_input.data, script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(

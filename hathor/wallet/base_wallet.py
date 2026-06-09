@@ -17,7 +17,7 @@ from collections import defaultdict
 from enum import Enum
 from itertools import chain
 from math import inf
-from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Optional, Union
+from typing import Any, Iterable, NamedTuple, Optional, Union
 
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 from pycoin.key.Key import Key
@@ -36,9 +36,6 @@ from hathor.transaction.util import int_to_bytes
 from hathor.types import AddressB58, Amount, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
-
-if TYPE_CHECKING:
-    from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 logger = get_logger()
 
@@ -356,7 +353,7 @@ class BaseWallet:
         for _input in inputs:
             new_input = None
             output_tx = tx_storage.get_transaction(_input.tx_id)
-            resolved = self._resolve_spent_output(output_tx, _input.index)
+            resolved = output_tx.resolve_spent_output(_input.index)
 
             # For shielded outputs, try to find the token_id from our tracked UTXOs
             key = (_input.tx_id, _input.index)
@@ -620,7 +617,7 @@ class BaseWallet:
         for _input in tx.inputs:
             assert tx.storage is not None
             output_tx = tx.storage.get_transaction(_input.tx_id)
-            resolved = self._resolve_spent_output(output_tx, _input.index)
+            resolved = output_tx.resolve_spent_output(_input.index)
 
             script_type_out = parse_address_script(resolved.script)
             if not script_type_out:
@@ -679,18 +676,6 @@ class BaseWallet:
             # TODO update history file?
             # XXX should wallet always update it or it will be called externally?
             self.update_balance()
-
-    def _resolve_spent_output(self, output_tx: BaseTransaction, index: int) -> 'Union[TxOutput, ShieldedOutput]':
-        """Return the output (transparent or shielded) that an input at `index` spends.
-
-        TEMPORARY (PR 6): this duplicates locally what `BaseTransaction.resolve_spent_output` will do
-        once its shielded-aware union return lands in PR 7. When that lands, delete this helper and
-        switch the call sites back to `output_tx.resolve_spent_output(index)`. Whoever picks up the
-        PR-7 `resolve_spent_output` union should remove this.
-        """
-        if output_tx.is_shielded_output(index):
-            return output_tx.shielded_outputs[index - len(output_tx.outputs)]
-        return output_tx.outputs[index]
 
     @staticmethod
     def _verify_recovered_token_uid(token_id: bytes, asset_bf: bytes, asset_commitment: bytes) -> None:

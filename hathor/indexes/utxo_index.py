@@ -143,7 +143,11 @@ class UtxoIndex(BaseIndex):
         # remove all inputs
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
-            spent_tx_output = spent_tx.resolve_spent_output(tx_input.index)
+            resolved = spent_tx.resolve_spent_output(tx_input.index)
+            if not isinstance(resolved, TxOutput):
+                # Shielded outputs don't have public value/token for the UTXO index
+                continue
+            spent_tx_output = resolved
             log_it = log.new(tx_id=spent_tx.hash_hex, index=tx_input.index)
             if _should_skip_output(spent_tx_output):
                 log_it.debug('ignore input')
@@ -184,7 +188,11 @@ class UtxoIndex(BaseIndex):
         # re-add inputs that aren't voided
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
-            spent_tx_output = spent_tx.resolve_spent_output(tx_input.index)
+            resolved = spent_tx.resolve_spent_output(tx_input.index)
+            if not isinstance(resolved, TxOutput):
+                # Shielded outputs don't have public value/token for the UTXO index
+                continue
+            spent_tx_output = resolved
             log_it = log.new(tx_id=spent_tx.hash_hex, index=tx_input.index)
             if _should_skip_output(spent_tx_output):
                 log_it.debug('ignore input')

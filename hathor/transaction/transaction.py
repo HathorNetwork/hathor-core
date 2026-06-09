@@ -389,8 +389,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.resolve_spent_output(tx_input.index)
 
+            try:
+                resolved = spent_tx.resolve_spent_output(tx_input.index)
+            except IndexError:
+                # Out of bounds — will be caught by _verify_inputs
+                continue
+
+            # NOTE (PR-5 scope): the SEMANTIC "skip shielded inputs (amount hidden — verified
+            # by the homomorphic balance equation)" decision for token accounting belongs to
+            # PR-5's token-info work. While ENABLE_SHIELDED_TRANSACTIONS is DISABLED (the only
+            # state that ships), tx.shielded_outputs is always empty so this assert cannot fire.
+            # When PR-5 lands, replace this assert with the proper shielded-skip:
+            #     from hathorlib.transaction.shielded_tx_output import OutputMode
+            #     if resolved.mode() != OutputMode.TRANSPARENT:
+            #         continue  # Shielded input: skip for token info (amount is hidden)
+            assert isinstance(resolved, TxOutput)
+            spent_output = resolved
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)
 
