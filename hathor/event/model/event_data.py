@@ -49,9 +49,15 @@ class ShieldedTxOutput(BaseModel):
     Shielded outputs hide the public value, so this carries the cryptographic
     fields instead of ``value``/``decoded``. The ``type`` discriminator lets a
     smart union with ``TxOutput`` route shielded inputs here without ambiguity.
+
+    ``mode`` is the canonical int discriminator from
+    ``hathorlib.transaction.shielded_tx_output.OutputMode`` (1 = AmountShielded,
+    2 = FullShielded) — downstream consumers should use it instead of inferring
+    mode from the presence of ``asset_commitment``/``surjection_proof``.
     """
     model_config = ConfigDict(extra='ignore')
     type: Literal['shielded']
+    mode: int
     commitment: str
     range_proof: str
     script: str
@@ -154,6 +160,16 @@ class TxDataWithoutMeta(BaseEventData):
     weight: float
     inputs: list['TxInput']
     outputs: list['TxOutput']
+    # Shielded outputs are persisted on the tx alongside (not inside)
+    # ``outputs``. ``BaseTransaction.to_json`` emits them under
+    # ``shielded_outputs`` whenever the tx has any; without this field
+    # the pydantic ``extra='ignore'`` config silently drops the key
+    # and downstream consumers (the EventQueue WS API, hathor-wallet-service)
+    # never see the shielded outputs of a tx — which made it impossible
+    # for shielded-aware wallets to discover their own shielded receives
+    # over the wallet-service event stream. ``ShieldedTxOutput`` already
+    # mirrors the JSON shape ``_shielded_output_to_json`` produces.
+    shielded_outputs: list[ShieldedTxOutput] = []
     parents: list[str]
     tokens: list[str]
     # TODO: Token name and symbol could be in a different class because they're only used by TokenCreationTransaction

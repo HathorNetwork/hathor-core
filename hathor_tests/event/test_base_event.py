@@ -47,6 +47,7 @@ def test_create_base_event(event_id: int, group_id: int | None) -> None:
             headers=[],
             inputs=[],
             outputs=[],
+            shielded_outputs=[],
             parents=[],
             token_name=None,
             token_symbol=None,

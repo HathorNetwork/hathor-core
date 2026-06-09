@@ -81,11 +81,20 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
 
 
 def _shielded_output_to_json(output: 'ShieldedOutput', *, decode_script: bool = False) -> dict[str, Any]:
-    """Serialize a shielded output to a JSON-compatible dict."""
+    """Serialize a shielded output to a JSON-compatible dict.
+
+    The ``mode`` field is the int value of ``OutputMode`` returned by the
+    output's ``mode()`` static method (1 = AmountShielded, 2 = FullShielded
+    — see ``hathorlib/transaction/shielded_tx_output.py``). It is the
+    canonical mode discriminator on the wire; downstream consumers
+    should rely on it instead of inferring mode from the presence of
+    ``asset_commitment``/``surjection_proof``.
+    """
     from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
     data: dict[str, Any] = {
         'type': 'shielded',
+        'mode': output.mode().value,
         'commitment': output.commitment.hex(),
         'range_proof': base64.b64encode(output.range_proof).decode('utf-8'),
         'script': base64.b64encode(output.script).decode('utf-8'),

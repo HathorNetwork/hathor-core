@@ -103,6 +103,20 @@ class GetTxExtraDataShieldedTest(unittest.TestCase):
         self.assertGreater(len(inputs), 0)
         shielded_inputs = [i for i in inputs if i.get('type') == 'shielded']
         self.assertGreater(len(shielded_inputs), 0)
+        # And carry the canonical ``mode`` discriminator from
+        # ``OutputMode`` (1 = AmountShielded, 2 = FullShielded). The
+        # DSL above produces AmountShielded outputs (``[shielded]``).
+        for s_in in shielded_inputs:
+            self.assertEqual(s_in['mode'], 1)
+
+        # The tx's own shielded outputs are serialized at the top level
+        # under ``shielded_outputs``; assert the ``mode`` field is there
+        # too so the normal REST API path matches the events API path.
+        shielded_outputs = result['tx'].get('shielded_outputs', [])
+        self.assertEqual(len(shielded_outputs), 2)
+        for s_out in shielded_outputs:
+            self.assertEqual(s_out['type'], 'shielded')
+            self.assertEqual(s_out['mode'], 1)
 
     def test_get_tx_extra_data_mixed_inputs(self) -> None:
         """get_tx_extra_data handles a tx with both transparent and shielded inputs."""
