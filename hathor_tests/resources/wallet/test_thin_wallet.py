@@ -8,6 +8,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.token_info import TokenVersion
+from hathor.util import json_loadb
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -645,6 +646,28 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': 'aaa'})
         data = response.json_value()
         self.assertFalse(data['success'])
+
+    def test_send_tokens_invalid_json_body(self):
+        # An empty or malformed body reaches the resource as raw bytes (not None); it must
+        # produce a graceful failure response with success=False.
+        for raw_body in (b'', b'   ', b'{not json'):
+            request = TestDummyRequest('POST', 'thin_wallet/send_tokens')
+            request.content.setvalue(raw_body)
+            result = self.web.resource.render(request)
+            data = json_loadb(result)
+            self.assertFalse(data['success'])
+
+        # empty body is reported as missing JSON
+        request = TestDummyRequest('POST', 'thin_wallet/send_tokens')
+        request.content.setvalue(b'')
+        data = json_loadb(self.web.resource.render(request))
+        self.assertEqual(data['return_code'], 'missing_json')
+
+        # non-empty malformed JSON is reported as invalid JSON
+        request = TestDummyRequest('POST', 'thin_wallet/send_tokens')
+        request.content.setvalue(b'{not json')
+        data = json_loadb(self.web.resource.render(request))
+        self.assertEqual(data['return_code'], 'invalid_json')
 
     @inlineCallbacks
     def test_token_history_zero_count(self):
