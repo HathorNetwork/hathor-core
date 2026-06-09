@@ -111,3 +111,27 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
         block = create_tx_from_dict(data)
         CpuMiningService().resolve(block, update_time=False)
         self.assertTrue(self.manager.propagate_tx(block))
+
+    @inlineCallbacks
+    def _mine_template(self):
+        from hathor.client import create_tx_from_dict
+        resp = yield self.get_block_template.get('', {b'address': b'HC7w4j7mPet49BBN5a2An3XUiPvK6C1TL7'})
+        block = create_tx_from_dict(resp.json_value())
+        CpuMiningService().resolve(block, update_time=False)
+        return block
+
+    @inlineCallbacks
+    def test_submit_block_resource_accepts_with_switches_off(self):
+        # with no controls active, the resource takes the unchanged synchronous path
+        block = yield self._mine_template()
+        resp = yield self.submit_block.post('submit_block', {'hexdata': bytes(block).hex()})
+        self.assertEqual(resp.json_value(), {'result': True})
+        self.assertTrue(self.manager.tx_storage.transaction_exists(block.hash))
+
+    @inlineCallbacks
+    def test_submit_block_resource_respects_ignore_switch(self):
+        block = yield self._mine_template()
+        self.manager.ignore_mining_submissions = True
+        resp = yield self.submit_block.post('submit_block', {'hexdata': bytes(block).hex()})
+        self.assertEqual(resp.json_value(), {'result': False})
+        self.assertFalse(self.manager.tx_storage.transaction_exists(block.hash))

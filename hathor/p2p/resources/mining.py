@@ -17,7 +17,10 @@ import binascii
 import struct
 from json import JSONDecodeError
 
+from twisted.internet.defer import ensureDeferred
+from twisted.python.failure import Failure
 from twisted.web.http import Request
+from twisted.web.server import NOT_DONE_YET
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args
@@ -41,7 +44,7 @@ class MiningResource(Resource):
     def __init__(self, manager):
         self.manager = manager
 
-    def render_POST(self, request: Request) -> bytes:
+    def render_POST(self, request: Request) -> bytes | int:
         """ POST request /mining/
             Expects a parameter 'block_bytes' that is the block in bytes
             Create the block object from the bytes and propagate it
@@ -67,10 +70,25 @@ class MiningResource(Resource):
             # binascii.Error: incorrect base64 data
             return b'0'
 
+        if self.manager.has_mining_submission_controls:
+            # ignore switch and/or submission delay are active: process asynchronously
+            deferred = ensureDeferred(self.manager.asubmit_block(block))
+            deferred.addCallback(self._cb_submit, request)
+            deferred.addErrback(self._err_submit, request)
+            return NOT_DONE_YET
+
         ret = self.manager.submit_block(block)
         if ret:
             return b'1'
         return b'0'
+
+    def _cb_submit(self, ret: bool, request: Request) -> None:
+        request.write(b'1' if ret else b'0')
+        request.finish()
+
+    def _err_submit(self, reason: Failure, request: Request) -> None:
+        request.write(b'0')
+        request.finish()
 
     def render_GET(self, request):
         """ GET request /mining/

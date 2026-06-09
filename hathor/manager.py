@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Iterator, Optional, Union
 from structlog import get_logger
 from twisted.internet import defer
 from twisted.internet.defer import Deferred
-from twisted.internet.task import LoopingCall
+from twisted.internet.task import LoopingCall, deferLater
 from twisted.python.threadpool import ThreadPool
 
 from hathor.checkpoint import Checkpoint
@@ -177,6 +177,13 @@ class HathorManager:
         self.network = settings.NETWORK_NAME
 
         self.is_started: bool = False
+
+        # Seconds to defer processing of a submitted block, so a competing block found on another node has time to
+        # arrive via p2p and advance the local tip, at which point the parent-tip guard in submit_block rejects the
+        # sibling.
+        self.mining_submission_delay: float = 0.0
+        # When True, submit_block rejects every submission.
+        self.ignore_mining_submissions: bool = False
 
         # XXX: first checkpoint must be genesis (height=0)
         self.checkpoints: list[Checkpoint] = checkpoints or []
@@ -800,6 +807,32 @@ class HathorManager:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         best_block = self.tx_storage.get_best_block()
         return self.daa_factory.create_from_parent(best_block).get_tokens_issued_per_block(height)
+
+    @property
+    def has_mining_submission_controls(self) -> bool:
+        """Whether any mining-submission control (ignore switch or delay) is currently active.
+
+        When False, asubmit_block is equivalent to a plain synchronous submit_block call, so
+        callers may keep using the synchronous path unchanged.
+        """
+        return self.ignore_mining_submissions or self.mining_submission_delay > 0
+
+    async def asubmit_block(self, blk: Block) -> bool:
+        """Async version of submit_block that applies the optional mining-submission controls.
+
+        It honors the ignore switch and the configurable submission delay and then delegates to submit_block. The delay
+        is applied *before* any validation, so a competing block found on another node has time to arrive via p2p and
+        advance the local tip, at which point submit_block's parent-tip guard rejects the would-be sibling and no work
+        is wasted.
+        """
+        if self.ignore_mining_submissions:
+            self.log.warn('asubmit_block(): ignoring submission, ignore switch is on', blk=blk.hash_hex)
+            return False
+        delay = self.mining_submission_delay
+        if delay > 0:
+            self.log.debug('asubmit_block(): delaying submission', blk=blk.hash_hex, delay=delay)
+            await deferLater(self.reactor, delay, lambda: None)
+        return self.submit_block(blk)
 
     def submit_block(self, blk: Block) -> bool:
         """Used by submit block from all mining APIs.
