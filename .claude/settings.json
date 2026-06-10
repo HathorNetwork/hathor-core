@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(poetry run make *)",
+      "Bash(poetry run pytest *)",
+      "Bash(poetry run mypy *)",
+      "Bash(poetry run flake8 *)",
+      "Bash(poetry run isort *)",
+      "Bash(make *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git status *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(cargo test *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo build *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(git checkout -- *)",
+      "Bash(git clean -f *)"
+    ]
+  }
+}
