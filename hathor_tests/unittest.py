@@ -170,6 +170,16 @@ class TestCase(unittest.TestCase):
         builder = TestBuilder(settings)
         builder.set_rng(self.rng) \
             .set_reactor(self.clock)
+        # Opt-in: run the whole suite with the parallel script-verification pool enabled, e.g.
+        # HATHOR_TEST_SCRIPT_VERIFICATION=thread:4 (or process:4). Each xdist worker gets its own small pool.
+        script_verification = os.environ.get('HATHOR_TEST_SCRIPT_VERIFICATION')
+        if script_verification:
+            from hathor.verification.script_verification_pool import ScriptVerificationMode
+            kind, _, workers = script_verification.partition(':')
+            mode = ScriptVerificationMode.THREADS if kind == 'thread' else ScriptVerificationMode.PROCESSES
+            builder.set_script_verification_config(
+                mode=mode, num_workers=int(workers or '4'), min_inputs=1,
+            )
         return builder
 
     def create_peer_from_builder(self, builder: Builder, start_manager: bool = True) -> HathorManager:

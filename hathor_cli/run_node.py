@@ -139,6 +139,13 @@ class RunNode:
                             '/push-tx API')
         parser.add_argument('--max-output-script-size', type=int, default=None, help='Custom max accepted script size '
                             'on /push-tx API')
+        parser.add_argument('--script-verification-workers', type=int, default=0,
+                            help='Number of worker processes used to verify input signatures in parallel '
+                                 '(0 = serial, the default)')
+        parser.add_argument('--script-verification-executor', choices=['process', 'thread'], default='process',
+                            help='Executor backing the script-verification workers (default: process; threads are '
+                                 'not recommended on current CPython)')
+        parser.add_argument('--x-script-verification-min-inputs', type=int, default=4, help=SUPPRESS)
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
         parser.add_argument('--enable-crash-api', action='store_true', help='Enable _crash/* endpoints')

@@ -52,6 +52,7 @@ from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random, get_environment_info
+from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -154,6 +155,11 @@ class Builder:
         self._vertex_verifiers: Optional[VertexVerifiers] = None
         self._vertex_verifiers_builder: _VertexVerifiersBuilder | None = None
         self._verification_service: Optional[VerificationService] = None
+
+        self._script_verification_pool: Optional[ScriptVerificationPool] = None
+        self._script_verification_mode: ScriptVerificationMode = ScriptVerificationMode.DISABLED
+        self._script_verification_workers: int = 0
+        self._script_verification_min_inputs: int = 4
 
         self._rocksdb_path: str | tempfile.TemporaryDirectory | None = None
         self._rocksdb_storage: Optional[RocksDBStorage] = None
@@ -282,6 +288,7 @@ class Builder:
             feature_service=feature_service,
             vertex_json_serializer=vertex_json_serializer,
             blueprint_service=blueprint_service,
+            script_verification_pool=self._get_or_create_script_verification_pool(),
             **kwargs
         )
 
@@ -635,9 +642,19 @@ class Builder:
                     feature_service=feature_service,
                     tx_storage=tx_storage,
                     blueprint_service=blueprint_service,
+                    script_verification_pool=self._get_or_create_script_verification_pool(),
                 )
 
         return self._vertex_verifiers
+
+    def _get_or_create_script_verification_pool(self) -> ScriptVerificationPool:
+        if self._script_verification_pool is None:
+            self._script_verification_pool = ScriptVerificationPool(
+                mode=self._script_verification_mode,
+                num_workers=self._script_verification_workers,
+                min_inputs=self._script_verification_min_inputs,
+            )
+        return self._script_verification_pool
 
     def _get_or_create_daa_factory(self) -> DAAFactory:
         if self._daa_factory is None:
@@ -854,6 +871,20 @@ class Builder:
     def set_vertex_verifiers_builder(self, builder: _VertexVerifiersBuilder) -> 'Builder':
         self.check_if_can_modify()
         self._vertex_verifiers_builder = builder
+        return self
+
+    def set_script_verification_config(
+        self,
+        *,
+        mode: ScriptVerificationMode,
+        num_workers: int,
+        min_inputs: int = 4,
+    ) -> 'Builder':
+        """Configure the worker pool used to verify input scripts (signatures) in parallel."""
+        self.check_if_can_modify()
+        self._script_verification_mode = mode
+        self._script_verification_workers = num_workers
+        self._script_verification_min_inputs = min_inputs
         return self
 
     def set_daa_factory(self, daa_factory: DAAFactory) -> 'Builder':

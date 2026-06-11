@@ -25,6 +25,7 @@ from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifi
 from hathor.verification.nano_header_verifier import NanoHeaderVerifier
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
+from hathor.verification.script_verification_pool import ScriptVerificationPool
 from hathor.verification.token_creation_transaction_verifier import TokenCreationTransactionVerifier
 from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
@@ -51,6 +52,7 @@ class VertexVerifiers(NamedTuple):
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
         blueprint_service: BlueprintService,
+        script_verification_pool: ScriptVerificationPool | None = None,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using the default verifier for each vertex type,
@@ -66,6 +68,7 @@ class VertexVerifiers(NamedTuple):
             feature_service=feature_service,
             tx_storage=tx_storage,
             blueprint_service=blueprint_service,
+            script_verification_pool=script_verification_pool,
         )
 
     @classmethod
@@ -79,6 +82,7 @@ class VertexVerifiers(NamedTuple):
         feature_service: FeatureService,
         tx_storage: TransactionStorage,
         blueprint_service: BlueprintService,
+        script_verification_pool: ScriptVerificationPool | None = None,
     ) -> 'VertexVerifiers':
         """
         Create a VertexVerifiers instance using a custom vertex_verifier.
@@ -91,7 +95,12 @@ class VertexVerifiers(NamedTuple):
         )
         merge_mined_block_verifier = MergeMinedBlockVerifier(settings=settings, feature_service=feature_service)
         poa_block_verifier = PoaBlockVerifier(settings=settings)
-        tx_verifier = TransactionVerifier(settings=settings, daa_factory=daa_factory, feature_service=feature_service)
+        tx_verifier = TransactionVerifier(
+            settings=settings,
+            daa_factory=daa_factory,
+            feature_service=feature_service,
+            script_verification_pool=script_verification_pool,
+        )
         token_creation_tx_verifier = TokenCreationTransactionVerifier(settings=settings)
         nano_header_verifier = NanoHeaderVerifier(
             settings=settings,

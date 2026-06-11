@@ -39,6 +39,7 @@ from hathor.transaction.exceptions import (
     VerifyFailed,
 )
 from hathor.transaction.scripts.execute import (
+    DetachedUtxoScriptExtras,
     Stack,
     UtxoScriptExtras,
     binary_to_int,
@@ -191,8 +192,8 @@ def op_greaterthan_timestamp(context: ScriptContext) -> None:
     buf = context.stack.pop()
     assert isinstance(buf, bytes)
     (timelock,) = struct.unpack('!I', buf)
-    assert isinstance(context.extras, UtxoScriptExtras)
-    if context.extras.tx.timestamp <= timelock:
+    assert isinstance(context.extras, (UtxoScriptExtras, DetachedUtxoScriptExtras))
+    if context.extras.timestamp <= timelock:
         raise TimeLocked('The output is locked until {}'.format(
             datetime.datetime.fromtimestamp(timelock).strftime("%m/%d/%Y %I:%M:%S %p")))
 
@@ -263,7 +264,7 @@ def op_checksig(context: ScriptContext) -> None:
         # pubkey is not compressed public key
         raise ScriptError('OP_CHECKSIG: pubkey is not a public key') from e
     try:
-        public_key.verify(signature, context.extras.tx.get_sighash_all_data(), ec.ECDSA(hashes.SHA256()))
+        public_key.verify(signature, context.extras.get_sighash_all_data(), ec.ECDSA(hashes.SHA256()))
         # valid, push true to stack
         context.stack.append(1)
     except InvalidSignature:
@@ -511,20 +512,17 @@ def op_find_p2pkh(context: ScriptContext) -> None:
         raise MissingStackItems('OP_FIND_P2PKH: empty stack')
 
     from hathor.transaction.scripts import P2PKH
-    assert isinstance(context.extras, UtxoScriptExtras)
-    spent_tx = context.extras.spent_tx
-    txin = context.extras.txin
-    tx = context.extras.tx
-    contract_value = spent_tx.resolve_spent_output(txin.index).value
+    assert isinstance(context.extras, (UtxoScriptExtras, DetachedUtxoScriptExtras))
+    contract_value = context.extras.spent_output_value
 
     address = context.stack.pop()
     if not isinstance(address, bytes):
         raise VerifyFailed
     address_b58 = get_address_b58_from_bytes(address)
-    for output in tx.outputs:
-        p2pkh_out = P2PKH.parse_script(output.script)
+    for output_value, output_script in context.extras.iter_outputs():
+        p2pkh_out = P2PKH.parse_script(output_script)
         if p2pkh_out:
-            if p2pkh_out.address == address_b58 and output.value == contract_value:
+            if p2pkh_out.address == address_b58 and output_value == contract_value:
                 context.stack.append(1)
                 return
     # didn't find any match
