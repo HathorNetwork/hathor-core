@@ -82,12 +82,12 @@ Profile shares:
 
 ## Recommendations (in order)
 
-0. **Remove the redundant post-consensus re-validation** (finding #4) — replace the `assert validate_full(...)` in
-   `_post_consensus` with a cheap state assertion (e.g. `assert vertex.get_metadata().validation.is_fully_connected()`),
-   or gate the full re-run behind a debug flag. Nothing between `_validate_vertex` and `_post_consensus` can
-   invalidate the vertex (consensus only writes metadata like `voided_by`/`spent_outputs`; it never unsets the
-   validation state), so the re-verification is pure defense at ~2× the entire verification cost. Verify with the
-   call counts in the profile (must drop from 2× to 1× per vertex).
+0. **Remove the redundant post-consensus re-validation** (finding #4) — **DONE**: `_post_consensus` now asserts
+   `vertex.get_metadata().validation.is_fully_connected()` instead of re-running `validate_full`. Nothing between
+   `_validate_vertex` and `_post_consensus` can invalidate the vertex (consensus only writes metadata like
+   `voided_by`/`spent_outputs`; it never unsets the validation state), so the re-verification was pure defense at
+   ~2× the entire verification cost. Measured: serial 8-input `on_new_tx` 16.2 → 10.0 ms (−38%); rust:12 (tips
+   no-op) 3.94 → 3.35 ms (−15%) and 1-input 1.68 → 1.33 ms (−21%); `validate_full` call counts dropped 2× → 1×.
 1. **Make `mempool_tips_index.update()` incremental** — pure Python, the single highest-leverage change
    (3.2× on 1-input txs in this profile). Only the new tx's parents/spent-txs can stop being tips on a normal add;
    the global "did any tip become voided" sweep is only needed on conflict/voiding events (known at that point) and

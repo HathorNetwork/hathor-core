@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 import datetime
-from dataclasses import replace
 from typing import Any, Generator
 
 from structlog import get_logger
@@ -242,13 +241,11 @@ class VertexHandler:
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
-        # XXX: during post consensus we don't need to verify weights again, so we can disable it
-        params = replace(params, skip_block_weight_verification=True)
-        assert self._verification_service.validate_full(
-            vertex,
-            params,
-            init_static_metadata=False,
-        )
+        # _validate_vertex already ran the full validation for this vertex, and nothing between it and this
+        # point can invalidate the vertex (consensus only writes metadata such as voided_by/spent_outputs; it
+        # never unsets the validation state). Re-running validate_full here would double the entire
+        # verification cost per vertex, so only the resulting state is asserted.
+        assert vertex.get_metadata().validation.is_fully_connected()
 
         self._tx_storage.indexes.update_critical_indexes(vertex)
         with non_critical_code(self._log):
