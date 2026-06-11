@@ -18,6 +18,30 @@ def count_sigops_outputs(
     ...
 
 
+def verify_outputs(
+    outputs: Sequence[tuple[int, int, int]],
+    max_num_outputs: int,
+    max_output_script_size: int,
+) -> tuple[str, str] | None:
+    """VertexVerifier.verify_outputs (incl. the number-of-outputs check) over marshalled
+    `(value, script_len, token_data)` tuples. Returns `None` or `(kind, message)`."""
+    ...
+
+
+def verify_output_token_indexes(
+    token_data_list: Sequence[int],
+    tokens_count: int,
+) -> tuple[str, str] | None:
+    """TransactionVerifier.verify_output_token_indexes over the outputs' token_data bytes."""
+    ...
+
+
+def verify_pow(hash: bytes, target_be: bytes) -> tuple[str, str] | None:
+    """VertexVerifier.verify_pow's comparison: hash (big-endian) must be strictly below the
+    Python-computed target (minimal big-endian bytes)."""
+    ...
+
+
 def verify_scripts_batch(
     jobs: Sequence[object],
     max_multisig_pubkeys: int,

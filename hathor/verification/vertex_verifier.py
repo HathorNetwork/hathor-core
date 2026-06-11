@@ -143,10 +143,25 @@ class VertexVerifier:
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
-        numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
-        minimum_target = vertex.get_target(override_weight)
-        if numeric_hash >= minimum_target:
-            raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
+        pool = self._script_verification_pool
+
+        def python_check() -> None:
+            numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
+            minimum_target = vertex.get_target(override_weight)
+            if numeric_hash >= minimum_target:
+                raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
+
+        def rust_check() -> None:
+            assert pool is not None
+            # get_target stays in Python (incl. its WeightError on non-finite weights); Rust only compares.
+            pool.rust_verify_pow(vertex.hash, vertex.get_target(override_weight))
+
+        if pool is not None and pool.rust_verification:
+            rust_check()
+        elif pool is not None and pool.shadow_rust_verification:
+            pool.run_shadow_check('verify_pow', python_check, rust_check)
+        else:
+            python_check()
 
     def verify_outputs(self, vertex: BaseTransaction) -> None:
         """Verify there are no hathor authority UTXOs and outputs are all positive
@@ -156,6 +171,29 @@ class VertexVerifier:
         :raises TooManyOutputs: when there are too many outputs
         """
         self.verify_number_of_outputs(vertex)
+        pool = self._script_verification_pool
+
+        def python_check() -> None:
+            self._verify_output_items(settings=self._settings, vertex=vertex)
+
+        def rust_check() -> None:
+            assert pool is not None
+            pool.rust_verify_outputs(
+                [(output.value, len(output.script), output.token_data) for output in vertex.outputs],
+                max_num_outputs=self._settings.MAX_NUM_OUTPUTS,
+                max_output_script_size=self._settings.MAX_OUTPUT_SCRIPT_SIZE,
+            )
+
+        if pool is not None and pool.rust_verification:
+            rust_check()
+        elif pool is not None and pool.shadow_rust_verification:
+            pool.run_shadow_check('verify_outputs', python_check, rust_check)
+        else:
+            python_check()
+
+    @staticmethod
+    def _verify_output_items(*, settings: HathorSettings, vertex: BaseTransaction) -> None:
+        """The authoritative Python per-output checks of `verify_outputs` (consensus reference)."""
         for index, output in enumerate(vertex.outputs):
             # no hathor authority UTXO
             if (output.get_token_index() == 0) and output.is_token_authority():
@@ -167,9 +205,9 @@ class VertexVerifier:
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
 
-            if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
+            if len(output.script) > settings.MAX_OUTPUT_SCRIPT_SIZE:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
-                    len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
+                    len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:

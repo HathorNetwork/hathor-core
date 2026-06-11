@@ -40,13 +40,18 @@ from hathor.transaction.exceptions import (
     DataIndexError,
     EqualVerifyFailed,
     FinalStackInvalid,
+    InvalidOutputScriptSize,
+    InvalidOutputValue,
     InvalidScriptError,
     InvalidStackData,
+    InvalidToken,
     MissingStackItems,
     OracleChecksigFailed,
     OutOfData,
+    PowError,
     ScriptError,
     TimeLocked,
+    TooManyOutputs,
     VerifyFailed,
 )
 from hathor.transaction.scripts.execute import DetachedUtxoScriptExtras, raw_script_eval
@@ -114,10 +119,21 @@ def _python_outcome_category(outcome: ScriptError | BaseException | None) -> str
     return type(outcome).__name__
 
 
+# Rust error kinds from the stateless verification checks (htr_lib.verify_*): TxValidationError subclasses the
+# corresponding Python verifier raises directly.
+_RUST_VERIFICATION_ERRORS: dict[str, type[BaseException]] = {
+    'TooManyOutputs': TooManyOutputs,
+    'InvalidToken': InvalidToken,
+    'InvalidOutputValue': InvalidOutputValue,
+    'InvalidOutputScriptSize': InvalidOutputScriptSize,
+    'PowError': PowError,
+}
+
+
 def raise_rust_error(kind: str, message: str) -> NoReturn:
     """Raise the Python exception a Rust ``(kind, message)`` error maps to. Used by verification checks where the
-    Python reference lets the exception propagate raw (e.g. the sigops counting walk)."""
-    error_cls = _RUST_SCRIPT_ERRORS.get(kind)
+    Python reference lets the exception propagate raw (e.g. the sigops counting walk and the stateless checks)."""
+    error_cls = _RUST_SCRIPT_ERRORS.get(kind) or _RUST_VERIFICATION_ERRORS.get(kind)
     if error_cls is not None:
         raise error_cls(message)
     raise _make_rust_raised_exception(kind, message)
@@ -266,6 +282,39 @@ class ScriptVerificationPool:
         if error is not None:
             raise_rust_error(error[0], error[1])
         return total
+
+    def rust_verify_outputs(
+        self,
+        outputs: Sequence[tuple[int, int, int]],
+        *,
+        max_num_outputs: int,
+        max_output_script_size: int,
+    ) -> None:
+        """Rust-backed `VertexVerifier.verify_outputs` (incl. the number-of-outputs check) over marshalled
+        ``(value, script_len, token_data)`` tuples."""
+        import htr_lib
+        error = htr_lib.verify_outputs(list(outputs), max_num_outputs, max_output_script_size)
+        if error is not None:
+            raise_rust_error(error[0], error[1])
+
+    def rust_verify_output_token_indexes(self, token_data_list: Sequence[int], *, tokens_count: int) -> None:
+        """Rust-backed `TransactionVerifier.verify_output_token_indexes`."""
+        import htr_lib
+        error = htr_lib.verify_output_token_indexes(list(token_data_list), tokens_count)
+        if error is not None:
+            raise_rust_error(error[0], error[1])
+
+    def rust_verify_pow(self, vertex_hash: bytes, target: int) -> None:
+        """Rust-backed `VertexVerifier.verify_pow` comparison. The target is the Python-computed
+        ``vertex.get_target()`` value (the float math stays in Python so there is no libm-divergence risk);
+        negative targets (possible for absurdly large weights, where ``2**x`` underflows) clamp to zero, which
+        rejects every hash exactly like the negative target does."""
+        import htr_lib
+        target = max(target, 0)
+        target_bytes = target.to_bytes(max(1, (target.bit_length() + 7) // 8), 'big')
+        error = htr_lib.verify_pow(vertex_hash, target_bytes)
+        if error is not None:
+            raise_rust_error(error[0], error[1])
 
     def run_shadow_check(self, check: str, python_fn: Callable[[], _T], rust_fn: Callable[[], _T]) -> _T:
         """Run a verification check through Python (authoritative) and Rust, compare the outcome categories
