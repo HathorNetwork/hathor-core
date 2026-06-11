@@ -85,6 +85,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             capacity=cache_config.capacity,
             cache=OrderedDict(),
             dirty_txs=set(),
+            pending_tx_bytes=set(),
         )
 
         super().__init__(
@@ -194,6 +195,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         super().remove_transaction(tx)
         self.cache_data.cache.pop(tx.hash, None)
         self.cache_data.dirty_txs.discard(tx.hash)
+        self.cache_data.pending_tx_bytes.discard(tx.hash)
         self._db.delete((self._cf_tx, tx.hash))
         self._db.delete((self._cf_meta, tx.hash))
         self._db.delete((self._cf_static_meta, tx.hash))
@@ -205,13 +207,20 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._save_to_weakref(tx)
 
     def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        self._update_cache(tx)
+        # Mark dirtiness before touching the cache: _update_cache may evict (and flush) other dirty entries.
         self.cache_data.dirty_txs.add(tx.hash)
+        if not only_metadata:
+            self.cache_data.pending_tx_bytes.add(tx.hash)
+        self._update_cache(tx)
 
     def _save_transaction_to_db(self, tx: 'BaseTransaction') -> None:
         key = tx.hash
-        tx_data = self._tx_to_bytes(tx)
-        self._db.put((self._cf_tx, key), tx_data)
+        if key in self.cache_data.pending_tx_bytes:
+            # Vertex bytes are immutable: they are serialized and written only on the first flush after a full
+            # save. Metadata-only updates flush just the metadata column family.
+            self.cache_data.pending_tx_bytes.discard(key)
+            tx_data = self._tx_to_bytes(tx)
+            self._db.put((self._cf_tx, key), tx_data)
         meta_data = tx.get_metadata(use_storage=False).to_bytes()
         self._db.put((self._cf_meta, key), meta_data)
 

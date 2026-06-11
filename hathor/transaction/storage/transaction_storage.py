@@ -84,6 +84,10 @@ class CacheData:
     capacity: int
     cache: OrderedDict[bytes, BaseTransaction]
     dirty_txs: set[bytes]  # txs that have been modified but are not persisted yet
+    # txs whose vertex bytes have not been written to the tx column family yet. Vertex bytes are immutable, so
+    # each tx is written once (on the first flush after a full save); metadata-only saves never re-serialize or
+    # rewrite the vertex bytes.
+    pending_tx_bytes: set[bytes]
     flush_deferred: Deferred[None] | None = None
     hit: int = 0
     miss: int = 0
