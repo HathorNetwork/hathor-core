@@ -115,7 +115,8 @@ class BuildArtifacts(NamedTuple):
 
 
 _VertexVerifiersBuilder: TypeAlias = Callable[
-    [Reactor, HathorSettingsType, DAAFactory, FeatureService, TransactionStorage, BlueprintService],
+    [Reactor, HathorSettingsType, DAAFactory, FeatureService, TransactionStorage, BlueprintService,
+     ScriptVerificationPool],
     VertexVerifiers
 ]
 
@@ -633,6 +634,7 @@ class Builder:
                     feature_service,
                     tx_storage,
                     blueprint_service,
+                    self._get_or_create_script_verification_pool(),
                 )
             else:
                 self._vertex_verifiers = VertexVerifiers.create_defaults(

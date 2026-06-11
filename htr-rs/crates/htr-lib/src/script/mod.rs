@@ -10,6 +10,7 @@ pub mod crypto;
 pub mod interpreter;
 pub mod matchers;
 pub mod opcodes;
+pub mod sigops;
 
 use std::sync::OnceLock;
 
@@ -180,4 +181,30 @@ pub fn verify_scripts_batch(
         })
     });
     Ok(results)
+}
+
+/// Count the signature operations of a vertex's output scripts (the Rust path of
+/// `VertexVerifier.verify_sigops_output`).
+///
+/// Walks every script in order and returns `(None, total)` on success, or
+/// `(Some((kind, message)), 0)` for the first malformed script — `kind` is the Python
+/// exception class name (`OutOfData` or `InvalidScriptError`), matching what the Python
+/// `SigopCounter` walk would raise. The limit comparison stays in Python.
+#[pyfunction]
+pub fn count_sigops_outputs(
+    py: Python<'_>,
+    scripts: Vec<Vec<u8>>,
+    max_multisig_pubkeys: u64,
+    enable_checkdatasig_count: bool,
+) -> (Option<(String, String)>, u64) {
+    py.detach(|| {
+        let mut total: u64 = 0;
+        for script in &scripts {
+            match sigops::count_sigops(script, max_multisig_pubkeys, enable_checkdatasig_count) {
+                Ok(count) => total += count,
+                Err(e) => return (Some((e.kind.python_name().to_string(), e.message)), 0),
+            }
+        }
+        (None, total)
+    })
 }

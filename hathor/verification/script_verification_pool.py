@@ -32,7 +32,7 @@ import struct
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Callable, NoReturn, Sequence, TypeVar
 
 from structlog import get_logger
 
@@ -56,6 +56,8 @@ if TYPE_CHECKING:
     from hathor.transaction.scripts.opcode import OpcodesVersion
 
 logger = get_logger()
+
+_T = TypeVar('_T')
 
 
 class ScriptVerificationMode(str, Enum):
@@ -110,6 +112,15 @@ def _python_outcome_category(outcome: ScriptError | BaseException | None) -> str
     if isinstance(outcome, struct.error):
         return 'StructError'
     return type(outcome).__name__
+
+
+def raise_rust_error(kind: str, message: str) -> NoReturn:
+    """Raise the Python exception a Rust ``(kind, message)`` error maps to. Used by verification checks where the
+    Python reference lets the exception propagate raw (e.g. the sigops counting walk)."""
+    error_cls = _RUST_SCRIPT_ERRORS.get(kind)
+    if error_cls is not None:
+        raise error_cls(message)
+    raise _make_rust_raised_exception(kind, message)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -233,6 +244,69 @@ class ScriptVerificationPool:
     @property
     def _is_rust_mode(self) -> bool:
         return self._mode in (ScriptVerificationMode.RUST, ScriptVerificationMode.SHADOW_RUST)
+
+    @property
+    def rust_verification(self) -> bool:
+        """Whether started in RUST mode: rust-backed verification checks replace the Python ones."""
+        return self._rust_started and self._mode is ScriptVerificationMode.RUST
+
+    @property
+    def shadow_rust_verification(self) -> bool:
+        """Whether started in SHADOW_RUST mode: Python stays authoritative, rust runs too and mismatches are
+        logged and counted."""
+        return self._rust_started and self._mode is ScriptVerificationMode.SHADOW_RUST
+
+    def count_sigops_outputs(self, scripts: Sequence[bytes], *, enable_checkdatasig_count: bool) -> int:
+        """Rust-backed output-sigops counting (`SigopCounter` over each output script). Raises exactly what the
+        Python walk would raise on a malformed script (`OutOfData` / `InvalidScriptError`)."""
+        import htr_lib
+        error, total = htr_lib.count_sigops_outputs(
+            list(scripts), self._max_multisig_pubkeys, enable_checkdatasig_count,
+        )
+        if error is not None:
+            raise_rust_error(error[0], error[1])
+        return total
+
+    def run_shadow_check(self, check: str, python_fn: Callable[[], _T], rust_fn: Callable[[], _T]) -> _T:
+        """Run a verification check through Python (authoritative) and Rust, compare the outcome categories
+        (returned value or exception class), and log + count any disagreement. Always returns/raises the Python
+        outcome."""
+        python_error: BaseException | None = None
+        python_result: _T | None = None
+        try:
+            python_result = python_fn()
+        except BaseException as e:
+            python_error = e
+
+        try:
+            rust_error: BaseException | None = None
+            rust_result: _T | None = None
+            try:
+                rust_result = rust_fn()
+            except BaseException as e:
+                rust_error = e
+            python_category = _python_outcome_category(python_error)
+            rust_category = _python_outcome_category(rust_error)
+            mismatch = python_category != rust_category or (
+                python_error is None and python_result != rust_result
+            )
+            if mismatch:
+                self._shadow_mismatches += 1
+                logger.error(
+                    'rust shadow verification mismatch',
+                    check=check,
+                    python_category=python_category,
+                    rust_category=rust_category,
+                    python_result=python_result,
+                    rust_result=rust_result,
+                )
+        except Exception:
+            self._shadow_mismatches += 1
+            logger.error('rust shadow verification crashed', check=check, exc_info=True)
+
+        if python_error is not None:
+            raise python_error
+        return python_result  # type: ignore[return-value]
 
     def start(self) -> None:
         """Create and warm up the executor (or the Rust thread pool). No-op when disabled or already started."""

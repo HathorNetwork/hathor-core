@@ -5,6 +5,19 @@ def sum_as_string(a: int, b: int) -> str:
     ...
 
 
+def count_sigops_outputs(
+    scripts: Sequence[bytes],
+    max_multisig_pubkeys: int,
+    enable_checkdatasig_count: bool,
+) -> tuple[tuple[str, str] | None, int]:
+    """Count signature operations over output scripts.
+
+    Returns `(None, total)` on success, or `((kind, message), 0)` for the first malformed
+    script, where `kind` is the Python exception class name the reference would raise.
+    """
+    ...
+
+
 def verify_scripts_batch(
     jobs: Sequence[object],
     max_multisig_pubkeys: int,
