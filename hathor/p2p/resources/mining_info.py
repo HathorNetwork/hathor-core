@@ -44,7 +44,8 @@ class MiningInfoResource(Resource):
         difficulty = max(int(Weight(block.weight).to_pdiff()), 1)
 
         parent = block.get_block_parent()
-        hashrate = 2**(parent.weight - log(30, 2))
+        avg_time = self.manager.daa_factory.create_from_parent(parent).avg_time_between_blocks
+        hashrate = 2**(parent.weight - log(avg_time, 2))
 
         mined_tokens = self.manager.daa_factory.create_from_parent(parent).get_mined_tokens(height)
 
