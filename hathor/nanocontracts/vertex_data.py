@@ -57,10 +57,10 @@ def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
     except IndexError:
         return None
 
-    # Only return TxOutput; shielded outputs lack value/token_data for TxOutputData
     from hathor.transaction import TxOutput as _TxOutput
-    if not isinstance(resolved, _TxOutput):
-        return None
+
+    # Only return TxOutput; shielded outputs lack value/token_data for TxOutputData
+    assert isinstance(resolved, _TxOutput), "Output must be TxOutput"
 
     return resolved
 

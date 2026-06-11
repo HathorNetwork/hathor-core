@@ -151,8 +151,13 @@ class TransactionVerifier:
                     len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
                 ))
 
+            from hathor.transaction import TxOutput
+            from hathorlib.transaction.shielded_tx_output import ShieldedOutput
+
             spent_tx = tx.get_spent_tx(input_tx)
-            assert input_tx.index < len(spent_tx.outputs)
+            resolved = spent_tx.resolve_spent_output(input_tx.index)
+            assert isinstance(resolved, (TxOutput, ShieldedOutput)), \
+                'resolve_spent_output must return TxOutput or ShieldedOutput'
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(

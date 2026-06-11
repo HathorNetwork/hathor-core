@@ -471,7 +471,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert self.storage is not None
         addresses: set[str] = set()
 
-        def add_address_from_output(output: 'TxOutput') -> None:
+        def add_address_from_output(output: 'TxOutput' | 'ShieldedOutput') -> None:
             script_type_out = parse_address_script(output.script)
             if script_type_out:
                 address = script_type_out.address
@@ -482,9 +482,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             # resolve_spent_output is shielded-aware; both transparent TxOutput and
             # shielded outputs expose `.script`, so we parse it directly.
             resolved = tx2.resolve_spent_output(txin.index)
-            script_type_resolved = parse_address_script(resolved.script)
-            if script_type_resolved:
-                addresses.add(script_type_resolved.address)
+            add_address_from_output(resolved)
 
         for txout in self.outputs:
             add_address_from_output(txout)
@@ -834,17 +832,16 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
             # Shielded inputs need a different serialization shape than transparent ones,
             # since shielded outputs have a commitment instead of a value.
+            resolved_output = tx2.resolve_spent_output(tx_in.index)
             if tx2.is_shielded_output(tx_in.index):
-                shielded_out = tx2.resolve_spent_output(tx_in.index)
-                output_data: dict[str, Any] = {
-                    'type': 'shielded',
-                    'commitment': shielded_out.commitment.hex(),  # type: ignore[union-attr]
-                    'script': shielded_out.script.hex(),
-                    'tx_id': tx2.hash_hex,
-                    'index': tx_in.index,
-                }
+                shielded_out = resolved_output
+                assert isinstance(shielded_out, ShieldedOutput), "Output must be shielded."
+                output_data: dict[str, Any] = _shielded_output_to_json(shielded_out, decode_script=True)
+                output_data['tx_id'] = tx2.hash_hex
+                output_data['index'] = tx_in.index
             else:
-                tx2_out = tx2.outputs[tx_in.index]
+                tx2_out = resolved_output
+                assert isinstance(tx2_out, TxOutput), "Output must be transparent."
                 output_data = serialize_output(tx2, tx2_out)
                 output_data['type'] = 'transparent'
                 output_data['tx_id'] = tx2.hash_hex
