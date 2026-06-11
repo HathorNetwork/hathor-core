@@ -255,6 +255,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
             TokenAmount.from_v1(1), self.manager.tx_storage, token_uid=self.token_uid
         )
+        deposit_amount = deposit_amount.to_v1()
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [], timestamp=int(self.manager.reactor.seconds()))
         tx = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx, is_custom_token=is_custom_token, nc_actions=[
             NanoHeaderAction(
@@ -586,6 +587,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(
             TokenAmount.from_v1(6500), self.manager.tx_storage
         )
+        deposit_amount_1 = deposit_amount_1.to_v1()
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
             NanoHeaderAction(
@@ -615,6 +617,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(
             TokenAmount.from_v1(3), self.manager.tx_storage
         )
+        deposit_amount_2 = deposit_amount_2.to_v1()
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
             NanoHeaderAction(
@@ -715,6 +718,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         _inputs, deposit_amount_2 = self.wallet.get_inputs_from_amount(
             TokenAmount.from_v1(6500), self.manager.tx_storage
         )
+        deposit_amount_2 = deposit_amount_2.to_v1()
         tx2 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx2 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx2, address=address2, nc_actions=[
             NanoHeaderAction(
@@ -744,6 +748,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         _inputs, deposit_amount_1 = self.wallet.get_inputs_from_amount(
             TokenAmount.from_v1(1), self.manager.tx_storage
         )
+        deposit_amount_1 = deposit_amount_1.to_v1()
         tx1 = self.wallet.prepare_transaction(Transaction, _inputs, [])
         tx1 = self._gen_nc_tx(nc_id, 'deposit', [], nc=tx1, address=address1, nc_actions=[
             NanoHeaderAction(

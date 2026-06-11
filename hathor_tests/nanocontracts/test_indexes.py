@@ -109,6 +109,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
             TokenAmount.from_v1(1), self.manager.tx_storage
         )
+        deposit_amount = deposit_amount.to_v1()
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
         self.fill_nc_tx(tx, self.myblueprint_id, 'initialize', [], nc_actions=[
             NanoHeaderAction(
@@ -126,7 +127,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         token_info1 = self.manager.tx_storage.indexes.tokens.get_token_info(self._settings.HATHOR_TOKEN_UID)
         self.assertEqual(
-            token_info0.get_total() + TokenAmount.from_v1(64_00 * new_blocks).to_balance(),
+            token_info0.get_total() + TokenAmount.from_v1(64_00 * new_blocks),
             token_info1.get_total(),
         )
 
@@ -144,7 +145,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         token_info1 = self.manager.tx_storage.indexes.tokens.get_token_info(self._settings.HATHOR_TOKEN_UID)
         self.assertEqual(
-            token_info0.get_total() + TokenAmount.from_v1(64_00 * new_blocks).to_balance(),
+            token_info0.get_total() + TokenAmount.from_v1(64_00 * new_blocks),
             token_info1.get_total(),
         )
 

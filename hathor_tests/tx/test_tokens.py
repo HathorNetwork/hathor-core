@@ -171,7 +171,7 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(TokenAmount.from_v1(500 + mint_amount).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(500 + mint_amount), tokens_index.get_total())
 
         # try to mint 1 token unit without deposit
         mint_amount = 1
@@ -280,7 +280,7 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(new_amount.to_balance(), tokens_index.get_total())
+        self.assertEqual(new_amount, tokens_index.get_total())
 
         # melt tokens and withdraw more than what's allowed
         melt_amount = 100
@@ -373,7 +373,7 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # check total amount of tokens
-        self.assertEqual(TokenAmount.from_v1(100).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(100), tokens_index.get_total())
 
         # new tx minting tokens
         mint_amount = 300
@@ -418,7 +418,7 @@ class TokenTest(unittest.TestCase):
         self.assertIn(TokenUtxoInfo(tx2.hash, 0), mint)
         self.assertIn(TokenUtxoInfo(tx2.hash, 1), melt)
         # check total amount of tokens has been updated
-        self.assertEqual(TokenAmount.from_v1(400).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(400), tokens_index.get_total())
 
         # create conflicting tx by changing parents
         tx3 = Transaction.create_from_struct(tx2.get_struct())
@@ -440,7 +440,7 @@ class TokenTest(unittest.TestCase):
         self.assertEqual(1, len(mint))
         self.assertEqual(1, len(melt))
         # should have same amount of tokens
-        self.assertEqual(TokenAmount.from_v1(400).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(400), tokens_index.get_total())
 
     def test_token_info(self):
         def update_tx(tx):

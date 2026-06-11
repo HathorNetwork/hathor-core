@@ -65,7 +65,7 @@ class TokenResource(Resource):
                 'index': index
             })
 
-        total_token_amount = token_info.get_total().to_amount()
+        total_token_amount = token_info.get_total()
         total_v1 = total_token_amount.maybe_to_v1()
         data = {
             'name': token_info.get_name(),

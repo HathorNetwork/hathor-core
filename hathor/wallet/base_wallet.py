@@ -37,6 +37,7 @@ from hathor.types import AddressB58, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.token_amount import TokenAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
 logger = get_logger()
 
@@ -144,6 +145,11 @@ class BaseWallet:
     def _manually_initialize(self) -> None:
         pass
 
+    def _get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which token amounts in wallet-built vertices are encoded."""
+        # Hardcoded V1 until the wallet builds V2 vertices.
+        return TokenAmountVersion.V1
+
     def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, TokenAmount]:
         """Return balance per address for a given token. This method ignores locks."""
         balances: defaultdict[AddressB58, TokenAmount] = defaultdict(TokenAmount.zero)
@@ -219,6 +225,9 @@ class BaseWallet:
 
         Can be used to create blocks by passing empty list to inputs.
 
+        Output values may be TokenAmounts of any version; each one is denormalized to the
+        wallet's token amount version when its TxOutput is built.
+
         :param cls: defines if we're creating a Transaction or Block
         :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
 
@@ -246,9 +255,8 @@ class BaseWallet:
                 token_dict[token_uid] = token_index
 
             timelock = int_to_bytes(txout.timelock, 4) if txout.timelock else None
-            tx_outputs.append(
-                TxOutput(txout.value.to_v1(), create_output_script(txout.address, timelock), token_index)
-            )
+            value = txout.value.to_version(self._get_token_amount_version())
+            tx_outputs.append(TxOutput(value, create_output_script(txout.address, timelock), token_index))
 
         tx_inputs = []
         private_keys = []
@@ -450,10 +458,10 @@ class BaseWallet:
         """Creates an output transaction with the change value
 
         :param sum_inputs: Sum of the input amounts
-        :type sum_inputs: int
+        :type sum_inputs: TokenAmount
 
         :param sum_outputs: Total value we're spending
-        :type outputs: int
+        :type outputs: TokenAmount
 
         :param token_uid: token uid of this utxo
         :type token_uid: bytes
@@ -480,13 +488,16 @@ class BaseWallet:
         of inputs.
 
         :param amount: amount requested
-        :type amount: int
+        :type amount: TokenAmount
 
         :param token_uid: the token uid for the requested amount
         :type token_uid: bytes
 
         :param max_ts: maximum timestamp the inputs can have
         :type max_ts: int
+
+        :return: the chosen inputs and the total amount they carry, as a V2 TokenAmount
+        :rtype: tuple[list[WalletInputInfo], TokenAmount]
 
         :raises InsufficientFunds: if the wallet does not have enough ballance
         """
@@ -518,7 +529,7 @@ class BaseWallet:
             utxo.maybe_spent_ts = int(self.reactor.seconds())
             self.maybe_spent_txs[token_uid][(_input.tx_id, _input.index)] = utxo
 
-        return inputs_tx, total_inputs_amount.to_v1()
+        return inputs_tx, total_inputs_amount
 
     def can_spend_block(self, tx_storage: 'TransactionStorage', tx_id: bytes) -> bool:
         tx = tx_storage.get_transaction(tx_id)

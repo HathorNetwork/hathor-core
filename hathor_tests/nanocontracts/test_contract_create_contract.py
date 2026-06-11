@@ -294,11 +294,11 @@ class NCBlueprintTestCase(BlueprintTestCase):
             self._settings.GENESIS_TOKEN_ATOMIC_UNITS
             + 34 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
             - 2 - 5 + 1
-        ).to_balance()
+        )
         # 200 from nc1.out[0]
         # +456 from nc5.nc_method
         # -123 from nc6.nc_method
-        assert tka_total == TokenAmount.from_v1(200 + 456 - 123).to_balance()
+        assert tka_total == TokenAmount.from_v1(200 + 456 - 123)
 
         # nc_history
         expected_list = [
@@ -346,9 +346,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # genesis + 50 blocks - 2 from the TKA mint in nc1.out[0]
         assert htr_total == TokenAmount.from_v1(
             self._settings.GENESIS_TOKEN_ATOMIC_UNITS + 52 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 2
-        ).to_balance()
+        )
         # 200 from nc1.out[0]
-        assert tka_total == TokenAmount.from_v1(200).to_balance()
+        assert tka_total == TokenAmount.from_v1(200)
 
         # nc_history
         expected_list = [

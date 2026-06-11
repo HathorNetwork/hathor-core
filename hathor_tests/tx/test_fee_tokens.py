@@ -343,7 +343,7 @@ class FeeTokenTest(unittest.TestCase):
             token_amount=new_token_amount
         )
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(deposit_token_uid)
-        self.assertEqual(TokenAmount.from_v1(400).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(400), tokens_index.get_total())
 
     def test_fee_and_deposit_token_melt_paid_with_deposit(self) -> None:
         # fbt -> Fee based token
@@ -424,7 +424,7 @@ class FeeTokenTest(unittest.TestCase):
             token_amount=new_token_amount
         )
         tokens_index = self.manager.tx_storage.indexes.tokens.get_token_info(deposit_token_uid)
-        self.assertEqual(TokenAmount.from_v1(200).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(200), tokens_index.get_total())
 
     def test_fee_token_tx_paid_with_htr_and_deposit(self) -> None:
         # fbt -> Fee based token
@@ -747,7 +747,7 @@ class FeeTokenTest(unittest.TestCase):
         self.assertEqual(TokenUtxoInfo(melt_tx_hash, melt_output), melt[0])
 
         # check total amount of tokens
-        self.assertEqual(TokenAmount.from_v1(token_amount).to_balance(), tokens_index.get_total())
+        self.assertEqual(TokenAmount.from_v1(token_amount), tokens_index.get_total())
 
     def sign_inputs(self, tx: Transaction) -> None:
         wallet = self.manager.wallet
