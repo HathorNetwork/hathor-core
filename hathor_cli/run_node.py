@@ -26,8 +26,8 @@ logger = get_logger()
 # LOGGING_CAPTURE_STDOUT = True
 
 if TYPE_CHECKING:
-    from hathor_cli.run_node_args import RunNodeArgs
     from hathor.sysctl.runner import SysctlRunner
+    from hathor_cli.run_node_args import RunNodeArgs
 
 
 @contextmanager
@@ -68,9 +68,9 @@ class RunNode:
         Create a new parser with the run_node CLI arguments.
         Arguments must also be added to hathor_cli.run_node_args.RunNodeArgs
         """
-        from hathor_cli.util import create_parser
         from hathor.feature_activation.feature import Feature
         from hathor.nanocontracts.nc_exec_logs import NCLogConfig
+        from hathor_cli.util import create_parser
         parser = create_parser(prefix=cls.env_vars_prefix)
 
         parser.add_argument('--hostname', help='Hostname used to be accessed by other peers')
@@ -142,9 +142,11 @@ class RunNode:
         parser.add_argument('--script-verification-workers', type=int, default=0,
                             help='Number of worker processes used to verify input signatures in parallel '
                                  '(0 = serial, the default)')
-        parser.add_argument('--script-verification-executor', choices=['process', 'thread'], default='process',
+        parser.add_argument('--script-verification-executor', choices=['process', 'thread', 'rust', 'shadow-rust'],
+                            default='process',
                             help='Executor backing the script-verification workers (default: process; threads are '
-                                 'not recommended on current CPython)')
+                                 'not recommended on current CPython; rust runs in-process native threads; '
+                                 'shadow-rust keeps Python authoritative and logs any Rust mismatch)')
         parser.add_argument('--x-script-verification-min-inputs', type=int, default=4, help=SUPPRESS)
         parser.add_argument('--sentry-dsn', help='Sentry DSN')
         parser.add_argument('--enable-debug-api', action='store_true', help='Enable _debug/* endpoints')
@@ -512,12 +514,12 @@ class RunNode:
             ]))
 
     def __init__(self, *, argv=None):
+        from hathor.conf.get_settings import get_global_settings
         from hathorlib.conf import (
             LOCALNET_SETTINGS_FILEPATH,
             NANO_TESTNET_SETTINGS_FILEPATH,
             TESTNET_INDIA_SETTINGS_FILEPATH,
         )
-        from hathor.conf.get_settings import get_global_settings
         self.log = logger.new()
 
         if argv is None:

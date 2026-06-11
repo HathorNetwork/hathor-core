@@ -28,17 +28,34 @@ all complete, returning the results in input order.
 from __future__ import annotations
 
 import multiprocessing
+import struct
 from concurrent.futures import Executor, ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Sequence
 
-from hathor.transaction.exceptions import ScriptError
+from structlog import get_logger
+
+from hathor.transaction.exceptions import (
+    DataIndexError,
+    EqualVerifyFailed,
+    FinalStackInvalid,
+    InvalidScriptError,
+    InvalidStackData,
+    MissingStackItems,
+    OracleChecksigFailed,
+    OutOfData,
+    ScriptError,
+    TimeLocked,
+    VerifyFailed,
+)
 from hathor.transaction.scripts.execute import DetachedUtxoScriptExtras, raw_script_eval
 
 if TYPE_CHECKING:
     from hathor.transaction import BaseTransaction, Transaction, TxInput
     from hathor.transaction.scripts.opcode import OpcodesVersion
+
+logger = get_logger()
 
 
 class ScriptVerificationMode(str, Enum):
@@ -46,6 +63,53 @@ class ScriptVerificationMode(str, Enum):
     DISABLED = 'disabled'   # serial, inline on the calling thread (default)
     THREADS = 'threads'     # concurrent.futures.ThreadPoolExecutor
     PROCESSES = 'processes'  # concurrent.futures.ProcessPoolExecutor (spawn)
+    RUST = 'rust'           # htr_lib batch call (in-process rayon threads, GIL released)
+    SHADOW_RUST = 'shadow-rust'  # Python is authoritative; Rust runs too and mismatches are logged
+
+
+# Rust error kinds (htr_lib.verify_scripts_batch) that map to ScriptError subclasses. These become job *results*
+# and are wrapped as InvalidInputData by the verifier's merge, exactly like the Python path.
+_RUST_SCRIPT_ERRORS: dict[str, type[ScriptError]] = {
+    'OutOfData': OutOfData,
+    'MissingStackItems': MissingStackItems,
+    'EqualVerifyFailed': EqualVerifyFailed,
+    'FinalStackInvalid': FinalStackInvalid,
+    'OracleChecksigFailed': OracleChecksigFailed,
+    'DataIndexError': DataIndexError,
+    'InvalidStackData': InvalidStackData,
+    'VerifyFailed': VerifyFailed,
+    'TimeLocked': TimeLocked,
+    'ScriptError': ScriptError,
+}
+
+
+def _make_rust_raised_exception(kind: str, message: str) -> BaseException:
+    """Build the exception for a Rust error kind that is *raised* out of ``run_jobs`` unwrapped, replicating the
+    exact exception types the Python evaluator lets escape (``execute_script_verification_job`` catches only
+    ``ScriptError``)."""
+    match kind:
+        case 'InvalidScriptError':
+            return InvalidScriptError(message)
+        case 'AssertionError':
+            return AssertionError(message)
+        case 'StructError':
+            return struct.error(message)
+        case 'IndexError':
+            return IndexError(message)
+        case 'UnicodeDecodeError':
+            return UnicodeDecodeError('utf-8', b'', 0, 1, message or 'invalid utf-8')
+        case _:
+            raise ValueError(f'unknown rust script verification error kind: {kind}')
+
+
+def _python_outcome_category(outcome: ScriptError | BaseException | None) -> str:
+    """Categorize a Python evaluation outcome for shadow-mode comparison: the exception class name, normalized so
+    it matches the Rust kind strings (``struct.error``'s class name is ``error``)."""
+    if outcome is None:
+        return 'valid'
+    if isinstance(outcome, struct.error):
+        return 'StructError'
+    return type(outcome).__name__
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -129,13 +193,28 @@ class ScriptVerificationPool:
     serially inline so single-input transactions never pay pool overhead.
     """
 
-    __slots__ = ('_mode', '_num_workers', '_min_inputs', '_executor')
+    __slots__ = (
+        '_mode',
+        '_num_workers',
+        '_min_inputs',
+        '_executor',
+        '_rust_started',
+        '_max_multisig_pubkeys',
+        '_max_multisig_signatures',
+        '_p2pkh_version_byte',
+        '_shadow_mismatches',
+    )
 
     def __init__(self, *, mode: ScriptVerificationMode, num_workers: int, min_inputs: int = 2) -> None:
         self._mode = mode
         self._num_workers = num_workers
         self._min_inputs = max(1, min_inputs)
         self._executor: Executor | None = None
+        self._rust_started = False
+        self._max_multisig_pubkeys = 0
+        self._max_multisig_signatures = 0
+        self._p2pkh_version_byte = b''
+        self._shadow_mismatches = 0
 
     @property
     def enabled(self) -> bool:
@@ -144,11 +223,32 @@ class ScriptVerificationPool:
 
     @property
     def started(self) -> bool:
-        return self._executor is not None
+        return self._executor is not None or self._rust_started
+
+    @property
+    def shadow_mismatches(self) -> int:
+        """Number of per-job Python/Rust disagreements observed in SHADOW_RUST mode."""
+        return self._shadow_mismatches
+
+    @property
+    def _is_rust_mode(self) -> bool:
+        return self._mode in (ScriptVerificationMode.RUST, ScriptVerificationMode.SHADOW_RUST)
 
     def start(self) -> None:
-        """Create and warm up the executor. No-op when disabled or already started."""
-        if not self.enabled or self._executor is not None:
+        """Create and warm up the executor (or the Rust thread pool). No-op when disabled or already started."""
+        if not self.enabled or self.started:
+            return
+        if self._is_rust_mode:
+            # The Rust path reads no global state: the settings the opcodes need are snapshotted here and passed
+            # on every batch call.
+            from hathor.conf.get_settings import get_global_settings
+            settings = get_global_settings()
+            self._max_multisig_pubkeys = settings.MAX_MULTISIG_PUBKEYS
+            self._max_multisig_signatures = settings.MAX_MULTISIG_SIGNATURES
+            self._p2pkh_version_byte = settings.P2PKH_VERSION_BYTE
+            self._rust_started = True
+            # Warm up: size and spawn the rayon thread pool now (its size is fixed on first call).
+            self._verify_scripts_batch_rust([])
             return
         if self._mode is ScriptVerificationMode.THREADS:
             self._executor = ThreadPoolExecutor(max_workers=self._num_workers, thread_name_prefix='script-verify')
@@ -168,14 +268,108 @@ class ScriptVerificationPool:
         if self._executor is not None:
             self._executor.shutdown(wait=False, cancel_futures=True)
             self._executor = None
+        self._rust_started = False
 
     def run_jobs(self, jobs: Sequence[ScriptVerificationJob]) -> list[ScriptError | None]:
         """Run all jobs and return their results in input order (``None`` == valid, else the ScriptError).
 
         Falls back to a serial inline loop when the pool is not started or when there are too few jobs to be worth
-        the fan-out overhead (``len(jobs) < min_inputs``).
+        the fan-out overhead (``len(jobs) < min_inputs``). The Rust modes skip the ``min_inputs`` gate: the batch
+        call is a single in-process call, so it wins even at one input.
         """
+        if self._rust_started:
+            if self._mode is ScriptVerificationMode.SHADOW_RUST:
+                return self._run_jobs_shadow(jobs)
+            return self._run_jobs_rust(jobs)
         if self._executor is None or len(jobs) < self._min_inputs:
             return [execute_script_verification_job(job) for job in jobs]
         futures = [self._executor.submit(execute_script_verification_job, job) for job in jobs]
         return [future.result() for future in futures]
+
+    def _verify_scripts_batch_rust(self, jobs: Sequence[ScriptVerificationJob]) -> list[tuple[str, str] | None]:
+        """Call the Rust batch verifier with the snapshotted settings."""
+        import htr_lib
+        return htr_lib.verify_scripts_batch(
+            list(jobs),
+            self._max_multisig_pubkeys,
+            self._max_multisig_signatures,
+            self._p2pkh_version_byte,
+            self._num_workers,
+        )
+
+    def _run_jobs_rust(self, jobs: Sequence[ScriptVerificationJob]) -> list[ScriptError | None]:
+        """RUST mode: one batch call; map (kind, message) pairs back to the Python exception model."""
+        if not jobs:
+            return []
+        raw = self._verify_scripts_batch_rust(jobs)
+        results: list[ScriptError | None] = []
+        for item in raw:
+            if item is None:
+                results.append(None)
+                continue
+            kind, message = item
+            error_cls = _RUST_SCRIPT_ERRORS.get(kind)
+            if error_cls is None:
+                # Non-ScriptError kinds escape run_jobs unwrapped; raising at the first one in job order mirrors
+                # both the serial loop and the executor paths' `future.result()` semantics.
+                raise _make_rust_raised_exception(kind, message)
+            results.append(error_cls(message))
+        return results
+
+    def _run_jobs_shadow(self, jobs: Sequence[ScriptVerificationJob]) -> list[ScriptError | None]:
+        """SHADOW_RUST mode: Python is authoritative; Rust runs the same jobs and any per-job category mismatch
+        is logged and counted. Always returns/raises the Python outcome."""
+        # Python pass, replicating the serial loop: stop at the first non-ScriptError exception.
+        python_results: list[ScriptError | None] = []
+        python_raised: BaseException | None = None
+        for job in jobs:
+            try:
+                python_results.append(execute_script_verification_job(job))
+            except BaseException as e:
+                python_raised = e
+                break
+
+        try:
+            raw = self._verify_scripts_batch_rust(jobs)
+        except Exception:
+            self._shadow_mismatches += 1
+            logger.error('rust shadow script verification crashed', exc_info=True)
+        else:
+            self._compare_shadow(jobs, python_results, python_raised, raw)
+
+        if python_raised is not None:
+            raise python_raised
+        return python_results
+
+    def _compare_shadow(
+        self,
+        jobs: Sequence[ScriptVerificationJob],
+        python_results: list[ScriptError | None],
+        python_raised: BaseException | None,
+        raw: list[tuple[str, str] | None],
+    ) -> None:
+        """Compare per-job outcome categories; Python evaluated only ``len(python_results)`` jobs (plus the one
+        that raised), so later jobs are not compared."""
+        python_categories = [_python_outcome_category(result) for result in python_results]
+        if python_raised is not None:
+            python_categories.append(_python_outcome_category(python_raised))
+        for index, python_category in enumerate(python_categories):
+            rust_item = raw[index]
+            rust_category = 'valid' if rust_item is None else rust_item[0]
+            if python_category == rust_category:
+                continue
+            self._shadow_mismatches += 1
+            job = jobs[index]
+            logger.error(
+                'rust shadow script verification mismatch',
+                input_index=job.input_index,
+                python_category=python_category,
+                rust_category=rust_category,
+                rust_message=None if rust_item is None else rust_item[1],
+                input_data=job.input_data.hex(),
+                output_script=job.output_script.hex(),
+                sighash_all_data=job.sighash_all_data.hex(),
+                tx_timestamp=job.tx_timestamp,
+                spent_output_value=job.spent_output_value,
+                opcodes_version=int(job.opcodes_version),
+            )

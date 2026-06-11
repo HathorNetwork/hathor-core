@@ -20,6 +20,9 @@ Compares, for transactions with varying numbers of inputs, the wall time of veri
                payload adds no measurable overhead vs. ``script_eval``)
   - threads:   ``ScriptVerificationPool`` backed by a ThreadPoolExecutor
   - processes: ``ScriptVerificationPool`` backed by a ProcessPoolExecutor (spawn)
+  - rust:      ``ScriptVerificationPool`` in RUST mode (htr_lib batch call, in-process rayon threads).
+               The rayon pool is global and sized on first use, so this arm runs with a single worker
+               count: the largest of ``--workers`` (capped at cpu_count).
 
 Run with (from the repo root):
 
@@ -175,30 +178,43 @@ def run(*, input_counts: list[int], kinds: list[str], worker_counts: list[int], 
           f'{"us/input":>9} {"speedup":>8}')
     print('-' * 96)
 
-    for kind in kinds:
-        builder = builders[kind]
-        for n in input_counts:
-            built = builder(n)
-            # Sanity: every arm must agree the tx is valid before we time it.
-            _verify_serial_script_eval(built)
+    # The rust arm shares one pool for the whole run: the rayon thread pool is global and its size is
+    # fixed by the first call.
+    rust_workers = min(max(worker_counts), cpu_count)
+    rust_pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=rust_workers, min_inputs=1)
+    rust_pool.start()
 
-            baseline_median, baseline_p90 = _measure(lambda: _verify_serial_script_eval(built), repeat=repeat)
-            _row(kind, n, 'serial (script_eval)', '-', baseline_median, baseline_p90, baseline_median)
+    try:
+        for kind in kinds:
+            builder = builders[kind]
+            for n in input_counts:
+                built = builder(n)
+                # Sanity: every arm must agree the tx is valid before we time it.
+                _verify_serial_script_eval(built)
+                _verify_with_pool(built, rust_pool)
 
-            det_median, det_p90 = _measure(lambda: _verify_serial_detached(built), repeat=repeat)
-            _row(kind, n, 'serial (detached)', '-', det_median, det_p90, baseline_median)
+                baseline_median, baseline_p90 = _measure(lambda: _verify_serial_script_eval(built), repeat=repeat)
+                _row(kind, n, 'serial (script_eval)', '-', baseline_median, baseline_p90, baseline_median)
 
-            for mode in (ScriptVerificationMode.THREADS, ScriptVerificationMode.PROCESSES):
-                for workers in worker_counts:
-                    workers = min(workers, cpu_count)
-                    pool = ScriptVerificationPool(mode=mode, num_workers=workers, min_inputs=1)
-                    pool.start()
-                    try:
-                        median, p90 = _measure(lambda: _verify_with_pool(built, pool), repeat=repeat)
-                    finally:
-                        pool.stop()
-                    _row(kind, n, mode.value, str(workers), median, p90, baseline_median)
-            print('-' * 96)
+                det_median, det_p90 = _measure(lambda: _verify_serial_detached(built), repeat=repeat)
+                _row(kind, n, 'serial (detached)', '-', det_median, det_p90, baseline_median)
+
+                for mode in (ScriptVerificationMode.THREADS, ScriptVerificationMode.PROCESSES):
+                    for workers in worker_counts:
+                        workers = min(workers, cpu_count)
+                        pool = ScriptVerificationPool(mode=mode, num_workers=workers, min_inputs=1)
+                        pool.start()
+                        try:
+                            median, p90 = _measure(lambda: _verify_with_pool(built, pool), repeat=repeat)
+                        finally:
+                            pool.stop()
+                        _row(kind, n, mode.value, str(workers), median, p90, baseline_median)
+
+                median, p90 = _measure(lambda: _verify_with_pool(built, rust_pool), repeat=repeat)
+                _row(kind, n, 'rust', str(rust_workers), median, p90, baseline_median)
+                print('-' * 96)
+    finally:
+        rust_pool.stop()
 
 
 def _row(kind: str, n: int, arm: str, workers: str, median: float, p90: float, baseline: float) -> None:

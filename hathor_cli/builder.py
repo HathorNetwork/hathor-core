@@ -454,12 +454,16 @@ class CliBuilder:
     def _create_script_verification_pool(self) -> ScriptVerificationPool:
         """Build the input-script verification worker pool from CLI args (disabled when workers == 0)."""
         num_workers: int = self._args.script_verification_workers
+        executor_modes = {
+            'thread': ScriptVerificationMode.THREADS,
+            'process': ScriptVerificationMode.PROCESSES,
+            'rust': ScriptVerificationMode.RUST,
+            'shadow-rust': ScriptVerificationMode.SHADOW_RUST,
+        }
         if num_workers <= 0:
             mode = ScriptVerificationMode.DISABLED
-        elif self._args.script_verification_executor == 'thread':
-            mode = ScriptVerificationMode.THREADS
         else:
-            mode = ScriptVerificationMode.PROCESSES
+            mode = executor_modes[self._args.script_verification_executor]
         self.log.info('script verification pool', mode=mode.value, workers=num_workers)
         return ScriptVerificationPool(
             mode=mode,

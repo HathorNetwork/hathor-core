@@ -38,3 +38,35 @@ opcodes V2, median wall time over many iterations.
 - Ship **default OFF** first; flip the default on after a testnet soak.
 
 Reproduce: `uv run python extras/benchmarking/script_verification/benchmark_script_verification.py`
+
+## Rust arm (htr_lib.verify_scripts_batch — in-process rayon, libsecp256k1)
+
+Same machine/method as above (24 cores, CPython 3.13, repeat=50, rayon pool sized to 8 workers). The Rust arm
+is one GIL-released batch call: no pickling, no IPC, no subprocess spawn, and `libsecp256k1` verifies several
+times faster per signature than OpenSSL's generic ECDSA.
+
+### Speedup vs serial (and vs the best process-pool cell)
+
+| inputs | p2pkh rust | p2pkh best process | multisig rust | multisig best process |
+|-------:|-----------:|-------------------:|--------------:|----------------------:|
+|   1    | **10.9x**  | 0.36x | **6.3x**  | 0.37x |
+|   2    | **8.2x**   | 0.78x | **14.7x** | 1.31x |
+|   8    | **12.1x**  | 2.51x | **20.7x** | 2.86x |
+|  32    | **16.2x**  | 2.51x | **53.2x** | 3.61x |
+| 255    | **58.2x**  | 3.99x | **45.3x** | 3.05x |
+
+Per-input cost drops from ~320 µs (serial p2pkh) to ~5–40 µs, and from ~780 µs (serial 2-of-3 multisig)
+to ~15–130 µs.
+
+### Findings
+
+- **Rust wins everywhere, including the 1-input case** the process pool loses (10.9x vs 0.36x at 1 p2pkh
+  input). There is no crossover: the `RUST` mode runs with `min_inputs` gating disabled.
+- **Rust beats the process pool's best cell by 5–15x** at every size; the gap *grows* with input count
+  (no serial dispatch thread, no oversubscription cliff).
+- Correctness is enforced by the differential suite in `hathor_tests/tx/test_rust_script_verification.py`
+  (corpus + mutations + hypothesis fuzz + DER-acceptance fuzz, zero category mismatches) and by the
+  `shadow-rust` executor for live soak.
+- **Recommendation:** `--script-verification-executor rust` (with `--script-verification-workers` sizing the
+  rayon pool) once the testnet shadow soak is clean; the process/thread modes remain behind the flag as
+  fallback.
