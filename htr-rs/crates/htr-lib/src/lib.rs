@@ -4,6 +4,7 @@ use pyo3::prelude::*;
 
 pub mod script;
 pub mod verify;
+pub mod vertex;
 
 // Prohibit compilation for non-64-bit targets to ensure consistent use of `usize`.
 #[cfg(not(target_pointer_width = "64"))]
@@ -22,6 +23,7 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(script::verify_scripts_batch, m)?)?;
     m.add_function(wrap_pyfunction!(script::count_sigops_inputs, m)?)?;
     m.add_function(wrap_pyfunction!(verify::verify_vertex_stateless, m)?)?;
+    m.add_function(wrap_pyfunction!(vertex::parse_vertex, m)?)?;
     Ok(())
 }
 

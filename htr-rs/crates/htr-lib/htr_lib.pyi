@@ -29,6 +29,23 @@ def count_sigops_inputs(
     ...
 
 
+def parse_vertex(
+    data: bytes,
+    max_size: int,
+) -> tuple[
+    int, int, float, int, int, bytes,           # version, signal_bits, weight, timestamp, nonce, hash
+    list[bytes], list[bytes],                   # parents, tokens
+    list[tuple[bytes, int, bytes]],             # inputs: (tx_id, index, data)
+    list[tuple[int, bytes, int]],               # outputs: (value, script, token_data)
+    bytes,                                      # block data
+    tuple[int, str, str] | None,                # token info: (token_version, name, symbol)
+] | None:
+    """Parse a serialized vertex (regular block/tx/token-creation, no headers), returning the
+    field tree plus the computed vertex hash — or None for anything unsupported or malformed
+    (the caller falls back to the Python parser)."""
+    ...
+
+
 def verify_scripts_batch(
     jobs: Sequence[object],
     max_multisig_pubkeys: int,
