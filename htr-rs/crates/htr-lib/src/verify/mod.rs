@@ -249,6 +249,10 @@ pub const CHECK_POW: u8 = 0;
 pub const CHECK_OUTPUTS: u8 = 1;
 pub const CHECK_OUTPUT_TOKEN_INDEXES: u8 = 2;
 pub const CHECK_SIGOPS_OUTPUT: u8 = 3;
+pub const CHECK_NO_INPUTS: u8 = 4;
+pub const CHECK_BLOCK_DATA: u8 = 5;
+pub const CHECK_BLOCK_TOKEN_INDEXES: u8 = 6;
+pub const CHECK_NUMBER_OF_INPUTS: u8 = 7;
 
 /// The per-vertex data marshalled once from Python for [`verify_vertex_stateless`].
 ///
@@ -261,6 +265,12 @@ pub struct VertexCheckData {
     tokens_count: u64,
     vertex_hash: Vec<u8>,
     pow_target_be: Vec<u8>,
+    inputs_count: u64,
+    min_inputs: u64,
+    is_genesis: bool,
+    block_data_len: u64,
+    max_num_inputs: u64,
+    block_data_max_size: u64,
     max_num_outputs: u64,
     max_output_script_size: u64,
     max_tx_sigops_output: u64,
@@ -297,6 +307,52 @@ fn check_sigops_output(data: &VertexCheckData) -> Option<CheckError> {
     None
 }
 
+/// `BlockVerifier.verify_no_inputs`: blocks must not have inputs.
+fn check_no_inputs(data: &VertexCheckData) -> Option<CheckError> {
+    if data.inputs_count > 0 {
+        let message = format!("number of inputs {}", data.inputs_count);
+        return Some(CheckError::new("BlockWithInputs", message));
+    }
+    None
+}
+
+/// `BlockVerifier.verify_data`: the block data field is size-limited.
+fn check_block_data(data: &VertexCheckData) -> Option<CheckError> {
+    if data.block_data_len > data.block_data_max_size {
+        let message = format!("block data has {} bytes", data.block_data_len);
+        return Some(CheckError::new("TransactionDataError", message));
+    }
+    None
+}
+
+/// `BlockVerifier.verify_output_token_indexes`: block outputs must all be HTR (token index 0).
+fn check_block_token_indexes(data: &VertexCheckData) -> Option<CheckError> {
+    for (index, &(_, _, token_data)) in data.outputs.iter().enumerate() {
+        if token_data & TOKEN_INDEX_MASK > 0 {
+            let message = format!("in output: index {index}");
+            return Some(CheckError::new("BlockWithTokensError", message));
+        }
+    }
+    None
+}
+
+/// `TransactionVerifier.verify_number_of_inputs`: the input count must be within range
+/// (the minimum is waived for genesis, exactly like the Python check).
+fn check_number_of_inputs(data: &VertexCheckData) -> Option<CheckError> {
+    if data.inputs_count > data.max_num_inputs {
+        let message = "Maximum number of inputs exceeded";
+        return Some(CheckError::new("TooManyInputs", message));
+    }
+    if data.inputs_count < data.min_inputs && !data.is_genesis {
+        let message = format!(
+            "Transaction must have at least {} input(s)",
+            data.min_inputs
+        );
+        return Some(CheckError::new("TooFewInputs", message));
+    }
+    None
+}
+
 fn run_check(check: u8, data: &VertexCheckData) -> Option<CheckError> {
     match check {
         CHECK_POW => check_pow(&data.vertex_hash, &data.pow_target_be),
@@ -317,6 +373,10 @@ fn run_check(check: u8, data: &VertexCheckData) -> Option<CheckError> {
             check_output_token_indexes(&token_data_list, data.tokens_count)
         }
         CHECK_SIGOPS_OUTPUT => check_sigops_output(data),
+        CHECK_NO_INPUTS => check_no_inputs(data),
+        CHECK_BLOCK_DATA => check_block_data(data),
+        CHECK_BLOCK_TOKEN_INDEXES => check_block_token_indexes(data),
+        CHECK_NUMBER_OF_INPUTS => check_number_of_inputs(data),
         _ => unreachable!("check ids are validated before the GIL is released"),
     }
 }
@@ -335,7 +395,7 @@ pub fn verify_vertex_stateless(
     use pyo3::exceptions::PyValueError;
     use rayon::prelude::*;
 
-    if let Some(&bad) = checks.iter().find(|&&c| c > CHECK_SIGOPS_OUTPUT) {
+    if let Some(&bad) = checks.iter().find(|&&c| c > CHECK_NUMBER_OF_INPUTS) {
         return Err(PyValueError::new_err(format!("unknown check id: {bad}")));
     }
     let results = py.detach(|| {
@@ -360,6 +420,12 @@ mod stateless_tests {
             tokens_count,
             vertex_hash: vec![0xAB; 32],
             pow_target_be: vec![0xFF; 33], // huge target: pow always passes
+            inputs_count: 1,
+            min_inputs: 1,
+            is_genesis: false,
+            block_data_len: 0,
+            max_num_inputs: 255,
+            block_data_max_size: 100,
             max_num_outputs: 255,
             max_output_script_size: 1024,
             max_tx_sigops_output: 1275,
@@ -430,5 +496,82 @@ mod stateless_tests {
         let mut d = data(vec![(1, vec![], 0)], 0);
         d.pow_target_be = vec![0x00];
         assert_eq!(kinds(&[CHECK_POW], &d), vec![Some("PowError")]);
+    }
+}
+
+#[cfg(test)]
+mod batch2_tests {
+    use super::*;
+
+    fn base() -> VertexCheckData {
+        VertexCheckData {
+            outputs: vec![],
+            tokens_count: 0,
+            vertex_hash: vec![0xAB; 32],
+            pow_target_be: vec![],
+            inputs_count: 0,
+            min_inputs: 1,
+            is_genesis: false,
+            block_data_len: 0,
+            max_num_inputs: 255,
+            block_data_max_size: 100,
+            max_num_outputs: 255,
+            max_output_script_size: 1024,
+            max_tx_sigops_output: 1275,
+            max_multisig_pubkeys: 20,
+            enable_checkdatasig_count: true,
+        }
+    }
+
+    fn kind(error: Option<CheckError>) -> Option<&'static str> {
+        error.map(|e| e.kind)
+    }
+
+    #[test]
+    fn test_no_inputs() {
+        let mut d = base();
+        assert!(check_no_inputs(&d).is_none());
+        d.inputs_count = 1;
+        assert_eq!(kind(check_no_inputs(&d)), Some("BlockWithInputs"));
+    }
+
+    #[test]
+    fn test_block_data() {
+        let mut d = base();
+        d.block_data_len = 100;
+        assert!(check_block_data(&d).is_none());
+        d.block_data_len = 101;
+        assert_eq!(kind(check_block_data(&d)), Some("TransactionDataError"));
+    }
+
+    #[test]
+    fn test_block_token_indexes() {
+        let mut d = base();
+        d.outputs = vec![(1, vec![], 0), (1, vec![], 0x80)];
+        // the authority bit alone is index 0: passes this check
+        assert!(check_block_token_indexes(&d).is_none());
+        d.outputs = vec![(1, vec![], 0), (1, vec![], 1)];
+        assert_eq!(
+            kind(check_block_token_indexes(&d)),
+            Some("BlockWithTokensError")
+        );
+    }
+
+    #[test]
+    fn test_number_of_inputs() {
+        let mut d = base();
+        d.inputs_count = 1;
+        assert!(check_number_of_inputs(&d).is_none());
+        d.inputs_count = 256;
+        assert_eq!(kind(check_number_of_inputs(&d)), Some("TooManyInputs"));
+        d.inputs_count = 0;
+        assert_eq!(kind(check_number_of_inputs(&d)), Some("TooFewInputs"));
+        // genesis is exempt from the minimum
+        d.is_genesis = true;
+        assert!(check_number_of_inputs(&d).is_none());
+        // nano contracts have min_inputs = 0
+        d.is_genesis = false;
+        d.min_inputs = 0;
+        assert!(check_number_of_inputs(&d).is_none());
     }
 }

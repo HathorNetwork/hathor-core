@@ -37,6 +37,8 @@ from typing import TYPE_CHECKING, Callable, NoReturn, Sequence, TypeVar
 from structlog import get_logger
 
 from hathor.transaction.exceptions import (
+    BlockWithInputs,
+    BlockWithTokensError,
     DataIndexError,
     EqualVerifyFailed,
     FinalStackInvalid,
@@ -51,8 +53,11 @@ from hathor.transaction.exceptions import (
     PowError,
     ScriptError,
     TimeLocked,
+    TooFewInputs,
+    TooManyInputs,
     TooManyOutputs,
     TooManySigOps,
+    TransactionDataError,
     VerifyFailed,
 )
 from hathor.transaction.scripts.execute import DetachedUtxoScriptExtras, raw_script_eval
@@ -129,6 +134,11 @@ _RUST_VERIFICATION_ERRORS: dict[str, type[BaseException]] = {
     'InvalidOutputScriptSize': InvalidOutputScriptSize,
     'PowError': PowError,
     'TooManySigOps': TooManySigOps,
+    'BlockWithInputs': BlockWithInputs,
+    'BlockWithTokensError': BlockWithTokensError,
+    'TransactionDataError': TransactionDataError,
+    'TooManyInputs': TooManyInputs,
+    'TooFewInputs': TooFewInputs,
 }
 
 

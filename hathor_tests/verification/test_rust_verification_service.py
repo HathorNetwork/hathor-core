@@ -97,6 +97,19 @@ def _make_block(outputs: list[TxOutput], *, weight: float = 0.0) -> Block:
     return block
 
 
+def _make_block_with_inputs(outputs: list[TxOutput] | None = None) -> Block:
+    block = Block(timestamp=1000, weight=0.0, outputs=outputs or [TxOutput(6400, P2PKH_OUT)])
+    block.inputs = [TxInput(b'\x00' * 32, 0, b'')]  # hand-crafted invalid block
+    _set_hash(block)
+    return block
+
+
+def _make_block_with_data(data: bytes) -> Block:
+    block = Block(timestamp=1000, weight=0.0, outputs=[TxOutput(6400, P2PKH_OUT)], data=data)
+    _set_hash(block)
+    return block
+
+
 def test_verify_without_storage_equivalence() -> None:
     settings = get_global_settings()
     over_limit_count = settings.MAX_TX_SIGOPS_OUTPUT // 16 + 1
@@ -121,7 +134,14 @@ def test_verify_without_storage_equivalence() -> None:
         ('tx bad value + bad sigops', _make_tx([_output(0, b'\x00')])),
         # ordering: token index (rust) fails before sigops (rust) — both from the same combined call
         ('tx bad token index + bad sigops', _make_tx([TxOutput(1, b'\x00', 1)])),
+        ('tx too many inputs', _make_tx([TxOutput(100, P2PKH_OUT)], num_inputs=256)),
         ('block valid', _make_block([TxOutput(6400, P2PKH_OUT)])),
+        ('block with inputs', _make_block_with_inputs()),
+        ('block data too large', _make_block_with_data(b'\x00' * 101)),
+        ('block data at limit', _make_block_with_data(b'\x00' * 100)),
+        ('block custom token index', _make_block([TxOutput(6400, P2PKH_OUT, 1)])),
+        # ordering: no-inputs (rust) fails before the bad output (rust) for the same block
+        ('block inputs + bad output', _make_block_with_inputs(outputs=[_output(0, b'')])),
         ('block pow fail', _make_block([TxOutput(6400, P2PKH_OUT)], weight=300.0)),
         ('block hathor authority', _make_block([TxOutput(1, b'\x51', 0b10000000)])),
         ('block sigops invalid opcode', _make_block([TxOutput(1, b'\x00')])),

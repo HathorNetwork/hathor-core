@@ -56,6 +56,10 @@ CHECK_POW = 0
 CHECK_OUTPUTS = 1
 CHECK_OUTPUT_TOKEN_INDEXES = 2
 CHECK_SIGOPS_OUTPUT = 3
+CHECK_NO_INPUTS = 4
+CHECK_BLOCK_DATA = 5
+CHECK_BLOCK_TOKEN_INDEXES = 6
+CHECK_NUMBER_OF_INPUTS = 7
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -66,6 +70,12 @@ class StatelessVertexCheckData:
     tokens_count: int
     vertex_hash: bytes
     pow_target_be: bytes  # minimal big-endian; empty while CHECK_POW stays on the Python path
+    inputs_count: int
+    min_inputs: int
+    is_genesis: bool
+    block_data_len: int
+    max_num_inputs: int
+    block_data_max_size: int
     max_num_outputs: int
     max_output_script_size: int
     max_tx_sigops_output: int
@@ -130,11 +140,18 @@ class RustVerificationService(VerificationService):
     ) -> _RustCheckResults:
         """Marshal the vertex once and run all requested checks in a single GIL-released Rust call."""
         tokens = getattr(vertex, 'tokens', None) or []
+        min_inputs = vertex.get_minimum_number_of_inputs() if isinstance(vertex, Transaction) else 0
         data = StatelessVertexCheckData(
             outputs=[(output.value, output.script, output.token_data) for output in vertex.outputs],
             tokens_count=len(tokens),
             vertex_hash=vertex.hash,
             pow_target_be=b'',  # CHECK_POW stays on the Python verifier path (see module docstring)
+            inputs_count=len(getattr(vertex, 'inputs', None) or []),
+            min_inputs=min_inputs,
+            is_genesis=vertex.is_genesis,
+            block_data_len=len(getattr(vertex, 'data', None) or b''),
+            max_num_inputs=self._settings.MAX_NUM_INPUTS,
+            block_data_max_size=self._settings.BLOCK_DATA_MAX_SIZE,
             max_num_outputs=self._settings.MAX_NUM_OUTPUTS,
             max_output_script_size=self._settings.MAX_OUTPUT_SCRIPT_SIZE,
             max_tx_sigops_output=self._settings.MAX_TX_SIGOPS_OUTPUT,
@@ -187,11 +204,13 @@ class RustVerificationService(VerificationService):
             self._verify_without_storage_nano_header(vertex, params)
 
     def _verify_without_storage_base_block_rust(self, block: Block, params: VerificationParams) -> None:
-        results = self._run_rust_checks(block, params, [CHECK_OUTPUTS, CHECK_SIGOPS_OUTPUT])
-        self.verifiers.block.verify_no_inputs(block)
+        results = self._run_rust_checks(block, params, [
+            CHECK_NO_INPUTS, CHECK_OUTPUTS, CHECK_BLOCK_TOKEN_INDEXES, CHECK_BLOCK_DATA, CHECK_SIGOPS_OUTPUT,
+        ])
+        results.consume(CHECK_NO_INPUTS)
         results.consume(CHECK_OUTPUTS)
-        self.verifiers.block.verify_output_token_indexes(block)
-        self.verifiers.block.verify_data(block)
+        results.consume(CHECK_BLOCK_TOKEN_INDEXES)
+        results.consume(CHECK_BLOCK_DATA)
         results.consume(CHECK_SIGOPS_OUTPUT)
 
     @override
@@ -250,12 +269,12 @@ class RustVerificationService(VerificationService):
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
 
     def _verify_without_storage_tx_rust(self, tx: Transaction, params: VerificationParams) -> None:
-        results = self._run_rust_checks(
-            tx, params, [CHECK_OUTPUTS, CHECK_OUTPUT_TOKEN_INDEXES, CHECK_SIGOPS_OUTPUT],
-        )
+        results = self._run_rust_checks(tx, params, [
+            CHECK_NUMBER_OF_INPUTS, CHECK_OUTPUTS, CHECK_OUTPUT_TOKEN_INDEXES, CHECK_SIGOPS_OUTPUT,
+        ])
         if self._settings.CONSENSUS_ALGORITHM.is_pow():
             self.verifiers.vertex.verify_pow(tx)
-        self.verifiers.tx.verify_number_of_inputs(tx)
+        results.consume(CHECK_NUMBER_OF_INPUTS)
         results.consume(CHECK_OUTPUTS)
         results.consume(CHECK_OUTPUT_TOKEN_INDEXES)
         results.consume(CHECK_SIGOPS_OUTPUT)
