@@ -266,7 +266,14 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         return False
 
     def get_maximum_number_of_headers(self) -> int:
-        """Return the maximum number of headers for this vertex."""
+        """Return the maximum number of headers for this vertex.
+
+        Bumped to 5 when shielded transactions are enabled so a single tx can
+        carry FeeHeader + (ShieldedOutputs|UnshieldBalance) + MintHeader +
+        MeltHeader, with one slot of margin for NanoHeader coexistence.
+        """
+        if self._settings.ENABLE_SHIELDED_TRANSACTIONS:
+            return 5
         return 3
 
     @classmethod

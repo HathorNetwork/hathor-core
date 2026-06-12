@@ -52,6 +52,7 @@ from hathor.transaction.exceptions import (
     WeightError,
 )
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
@@ -355,10 +356,9 @@ class TransactionVerifier:
     def verify_mint_melt_basic(self, tx: Transaction) -> None:
         """Top-level: basic (no-storage) verification for MintHeader/MeltHeader.
 
-        Fires whenever either header is present. Covers Rules M1 and M3, the
+        Fires whenever either header is present. Performs Rules M1, M3, the
         well-formedness checks against tx.tokens length, and the NanoHeader
-        same-token guard. The authority (Rule M2) and undeclared-supply (Rule M4)
-        checks need storage and run later in `verify`.
+        same-token guard.
         """
         if not tx.has_mint_header() and not tx.has_melt_header():
             return
@@ -407,12 +407,14 @@ class TransactionVerifier:
     def verify_mint_melt_requires_shielded(self, tx: Transaction) -> None:
         """Rule M1: MintHeader/MeltHeader is valid only on shielded transactions.
 
-        No-storage: "shielded" is detected via header presence —
+        Phase 1 (no storage): "shielded" is detected via header presence —
         ShieldedOutputsHeader covers the mixed/partial-unshield case, and
-        UnshieldBalanceHeader covers the full-unshield case. A tx that carries
-        shielded inputs with neither header would also fail here; that case is
-        independently rejected by the shielded balance verification (PR landing
-        the augmented balance equation).
+        UnshieldBalanceHeader covers the full-unshield case (RFC unresolved Q6).
+        A tx that carries shielded inputs with neither header would also fail
+        here (no shielded marker found), and is independently rejected by the
+        parent shielded RFC's mutual-exclusion invariant inside
+        verify_shielded_balance — so the storage-bound case is already covered
+        upstream and downstream.
         """
         if not tx.has_mint_header() and not tx.has_melt_header():
             return
@@ -424,12 +426,13 @@ class TransactionVerifier:
         )
 
     def verify_mint_melt_nano_compatibility(self, tx: Transaction) -> None:
-        """Reject the same token minted/melted via both a NanoHeader action and a Mint/Melt header.
+        """Reject same-token mint/melt declared via both NanoHeader actions and Mint/Melt headers.
 
-        A NanoHeader may coexist with Mint/Melt headers. Cross-token combinations
-        are fine, but a single token cannot be minted (or melted) through both
-        channels at once — the amount would be ambiguous and the augmented balance
-        equation would double-count.
+        Per the user's choice on RFC unresolved Q3, a NanoHeader may coexist with
+        Mint/Melt headers in the same tx. Cross-token combinations are fine, but
+        a single token cannot be minted (or melted) through both channels at once
+        because the amount would be ambiguous and the augmented balance equation
+        would double-count.
         """
         if not tx.is_nano_contract():
             return
@@ -437,7 +440,9 @@ class TransactionVerifier:
             return
 
         nano_header = tx.get_nano_header()
-        nano_action_token_uids: set[bytes] = {action.token_uid for action in nano_header.get_actions()}
+        nano_action_token_uids: set[bytes] = set()
+        for action in nano_header.get_actions():
+            nano_action_token_uids.add(action.token_uid)
 
         if tx.has_mint_header():
             for entry in tx.get_mint_header().entries:
@@ -456,20 +461,24 @@ class TransactionVerifier:
                         f'NanoHeader action; supply changes must use a single channel per token'
                     )
 
-    def verify_mint_melt_authority_inputs(self, tx: Transaction) -> None:
+    def verify_mint_melt_authority_inputs(
+        self,
+        tx: Transaction,
+        *,
+        spent_txs: dict[bytes, BaseTransaction] | None = None,
+    ) -> None:
         """Rule M2: every MintHeader/MeltHeader entry needs the matching authority input.
 
         For each (token_index, amount) in MintHeader, the tx MUST consume at
         least one mint authority input for tx.tokens[token_index - 1]. Symmetric
-        for MeltHeader. Authority inputs/outputs remain transparent, so this
-        check walks `tx.inputs` and inspects each spent transparent output.
+        for MeltHeader. Authority inputs/outputs remain transparent (parent
+        Rule 7), so this check walks `tx.inputs` and inspects each spent
+        transparent output.
 
         TokenCreationTransaction is exempt for token_index=1 (the new token):
         the TCT itself grants both authorities to the issuer, so the MintHeader
         entry for the new token does not require a pre-existing authority input.
         """
-        from hathor.transaction.token_creation_tx import TokenCreationTransaction
-
         if not tx.has_mint_header() and not tx.has_melt_header():
             return
 
@@ -479,11 +488,12 @@ class TransactionVerifier:
         mint_authorities: set[bytes] = set()
         melt_authorities: set[bytes] = set()
         for tx_input in tx.inputs:
-            spent_tx = tx.storage.get_transaction(tx_input.tx_id)
-            if tx_input.index >= len(spent_tx.outputs):
-                # Shielded inputs cannot be authority outputs.
+            spent_tx = spent_txs[tx_input.tx_id] if spent_txs else tx.storage.get_transaction(tx_input.tx_id)
+            spent_index = tx_input.index
+            if spent_index >= len(spent_tx.outputs):
+                # Shielded inputs cannot be authority outputs (parent Rule 7).
                 continue
-            spent_output = spent_tx.outputs[tx_input.index]
+            spent_output = spent_tx.outputs[spent_index]
             if not spent_output.is_token_authority():
                 continue
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
@@ -496,28 +506,29 @@ class TransactionVerifier:
 
         if tx.has_mint_header():
             for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
                 if is_tct and entry.token_index == 1:
                     # The new token's authority is granted by the TCT itself.
                     continue
-                token_uid = tx.get_token_uid(entry.token_index)
                 if token_uid not in mint_authorities:
                     raise ForbiddenMint(entry.amount, token_uid)
 
         if tx.has_melt_header():
             for entry in tx.get_melt_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
                 if is_tct and entry.token_index == 1:
                     continue
-                token_uid = tx.get_token_uid(entry.token_index)
                 if token_uid not in melt_authorities:
                     raise ForbiddenMelt.from_token(entry.amount, token_uid)
 
     def verify_no_undeclared_mint_melt(self, tx: Transaction, token_dict: TokenInfoDict) -> None:
-        """Rule M4: reject mint/melt that is not declared via MintHeader/MeltHeader.
+        """Reject mint/melt that is not declared via MintHeader/MeltHeader.
 
-        Shielded txs hide non-HTR amounts, so a transparent token_dict surplus/deficit
+        Shielded txs hide non-HTR amounts, so transparent token_dict surplus/deficit
         on a non-NATIVE token is only legitimate when covered by a corresponding
-        Mint/Melt header entry. Without the header there is no public scalar to feed
-        the augmented balance equation and the prover could mint from nothing.
+        Mint/Melt header entry. Without the header, there is no public scalar to
+        feed the augmented balance equation (Rule M4) and the prover could mint
+        from nothing.
         """
         mint_token_uids: set[bytes] = set()
         melt_token_uids: set[bytes] = set()
