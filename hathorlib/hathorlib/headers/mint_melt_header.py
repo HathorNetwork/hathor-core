@@ -24,11 +24,12 @@ from hathorlib.utils import int_to_bytes
 
 if TYPE_CHECKING:
     from hathorlib.base_transaction import BaseTransaction
+    from hathorlib.serialization import Deserializer, Serializer
 
 
 # Per RFC 0000-shielded-outputs-mint-melt §4.1.
 MAX_MINT_MELT_ENTRIES = 16
-ENTRY_SIZE = 1 + 8  # token_index(1) + amount(8 BE)
+AMOUNT_SIZE = 8  # amount is a u64, big-endian
 
 
 @dataclass(frozen=True)
@@ -41,8 +42,8 @@ class MintMeltEntry:
     skip a range proof on these headers: by construction the declared scalar
     cannot encode a negative or zero supply change, so it cannot be used to
     sneak a negative value into the Pedersen-augmented balance equation.
-    Validated both at construction and at deserialize-time so programmatic
-    builders fail fast at the call site rather than at serialize time.
+    Validated at construction so programmatic builders fail fast at the call
+    site, and again at deserialize-time via this same constructor.
     """
 
     token_index: int
@@ -57,27 +58,23 @@ class MintMeltEntry:
             raise ValueError(f'amount must be in [1, 2**64); got {self.amount}')
 
 
-def serialize_entries(entries: list[MintMeltEntry]) -> bytes:
-    """Serialize: num_entries(1) | entries..."""
-    parts: list[bytes] = []
-    parts.append(int_to_bytes(len(entries), 1))
+def serialize_entries(serializer: Serializer, entries: list[MintMeltEntry]) -> None:
+    """Serialize `num_entries(1) | (token_index(1) | amount(8 BE))...` into the serializer."""
+    serializer.write_bytes(int_to_bytes(len(entries), 1))
     for entry in entries:
-        parts.append(int_to_bytes(entry.token_index, 1))
-        parts.append(struct.pack('!Q', entry.amount))
-    return b''.join(parts)
+        serializer.write_bytes(int_to_bytes(entry.token_index, 1))
+        serializer.write_bytes(int_to_bytes(entry.amount, AMOUNT_SIZE))
 
 
-def deserialize_entries(buf: bytes, *, header_name: str) -> tuple[list[MintMeltEntry], bytes]:
-    """Parse `num_entries(1) | entries...`. Returns (entries, leftover).
+def deserialize_entries(deserializer: Deserializer, *, header_name: str) -> list[MintMeltEntry]:
+    """Parse `num_entries(1) | entries...` from the deserializer.
 
     Wire-format level checks only: count bounds, per-entry token_index/amount
-    bounds, and uniqueness of token_index within this header. Cross-header
-    rules (Rule M3, bounds against tx.tokens length) are enforced later in
-    the verifier.
+    bounds (via MintMeltEntry), and uniqueness of token_index within this
+    header. Cross-header rules (M2/M3, bounds against tx.tokens length) are
+    enforced later in the verifier.
     """
-    if len(buf) < 1:
-        raise ValueError(f'{header_name}: missing num_entries byte')
-    num_entries = buf[0]
+    num_entries = deserializer.read_byte()
     if num_entries < 1:
         raise ValueError(f'{header_name}: must contain at least 1 entry')
     if num_entries > MAX_MINT_MELT_ENTRIES:
@@ -85,56 +82,33 @@ def deserialize_entries(buf: bytes, *, header_name: str) -> tuple[list[MintMeltE
             f'{header_name}: too many entries: {num_entries} exceeds maximum {MAX_MINT_MELT_ENTRIES}'
         )
 
-    needed = 1 + num_entries * ENTRY_SIZE
-    if len(buf) < needed:
-        raise ValueError(
-            f'{header_name}: requires {needed} bytes, got {len(buf)}'
-        )
-
     entries: list[MintMeltEntry] = []
     seen_indexes: set[int] = set()
-    offset = 1
     for _ in range(num_entries):
-        token_index = buf[offset]
-        offset += 1
-        (amount,) = struct.unpack_from('!Q', buf, offset)
-        offset += 8
-
-        if token_index < 1:
-            raise ValueError(
-                f'{header_name}: token_index must be >= 1 (got {token_index}); HTR is forbidden'
-            )
-        if token_index > MAX_MINT_MELT_ENTRIES:
-            raise ValueError(
-                f'{header_name}: token_index {token_index} exceeds maximum {MAX_MINT_MELT_ENTRIES}'
-            )
-        if amount < 1:
-            raise ValueError(
-                f'{header_name}: amount must be >= 1 (got {amount})'
-            )
+        token_index = deserializer.read_byte()
+        amount = int.from_bytes(bytes(deserializer.read_bytes(AMOUNT_SIZE)), 'big')
         if token_index in seen_indexes:
-            raise ValueError(
-                f'{header_name}: duplicate token_index {token_index}'
-            )
+            raise ValueError(f'{header_name}: duplicate token_index {token_index}')
         seen_indexes.add(token_index)
+        # MintMeltEntry enforces the token_index/amount bounds.
         entries.append(MintMeltEntry(token_index=token_index, amount=amount))
 
-    return entries, bytes(buf[offset:])
+    return entries
 
 
 @dataclass(frozen=True)
 class _MintMeltHeaderBase(VertexBaseHeader):
-    """Shared deserialize/serialize/sighash logic for MintHeader and MeltHeader.
+    """Shared (de)serialization for MintHeader and MeltHeader.
 
     Subclasses set `_HEADER_ID` and `_HEADER_NAME`. The wire format and entry
     constraints are identical (RFC §4.1).
 
     Design note: a single header carries a list of (token_index, amount)
-    entries rather than spreading entries across multiple headers. The
-    codebase enforces one-instance-per-header-type (see verify_headers in
-    hathor-core's vertex_verifier), so allowing repeated MintHeader/MeltHeader
-    instances would require relaxing that invariant. Bundling the entries keeps
-    the per-entry uniqueness check local to the header.
+    entries rather than spreading entries across multiple headers. The codebase
+    enforces one-instance-per-header-type (see verify_headers in hathor-core's
+    vertex_verifier), so allowing repeated MintHeader/MeltHeader instances would
+    require relaxing that invariant. Bundling the entries keeps the per-entry
+    uniqueness check local to the header.
     """
 
     _HEADER_ID: ClassVar[bytes] = b''
@@ -144,6 +118,8 @@ class _MintMeltHeaderBase(VertexBaseHeader):
 
     @classmethod
     def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[_MintMeltHeaderBase, bytes]:
+        """Deserialize: header_id(1) | num_entries(1) | entries..."""
+        from hathorlib.serialization import Deserializer
         from hathorlib.transaction import Transaction
 
         if not isinstance(tx, Transaction):
@@ -151,25 +127,33 @@ class _MintMeltHeaderBase(VertexBaseHeader):
                 f'{cls._HEADER_NAME} requires a Transaction, got {type(tx).__name__}'
             )
 
-        if len(buf) < 1:
-            raise ValueError(f'{cls._HEADER_NAME}: empty buffer')
-        header_id = buf[0:1]
-        if header_id != cls._HEADER_ID:
-            raise ValueError(
-                f'{cls._HEADER_NAME}: unexpected header id: expected {cls._HEADER_ID!r}, got {header_id!r}'
-            )
-
+        deserializer = Deserializer.build_bytes_deserializer(buf)
         try:
-            entries, leftover = deserialize_entries(buf[1:], header_name=cls._HEADER_NAME)
+            header_id = bytes(deserializer.read_bytes(1))
+            if header_id != cls._HEADER_ID:
+                raise ValueError(
+                    f'{cls._HEADER_NAME}: unexpected header id: '
+                    f'expected {cls._HEADER_ID!r}, got {header_id!r}'
+                )
+            entries = deserialize_entries(deserializer, header_name=cls._HEADER_NAME)
         except ValueError:
             raise
         except (IndexError, struct.error) as e:
-            raise ValueError(f'{cls._HEADER_NAME}: malformed: {e}') from e
+            # OutOfDataError (truncation) is a struct.error subclass, caught here.
+            raise ValueError(f'malformed {cls._HEADER_NAME}: {e}') from e
 
-        return cls(entries=entries), leftover
+        # Whatever follows this header (subsequent headers) is the unconsumed leftover.
+        remaining = bytes(deserializer.read_all())
+        return cls(entries=entries), remaining
 
     def serialize(self) -> bytes:
-        return self._HEADER_ID + serialize_entries(self.entries)
+        """Serialize: header_id(1) | num_entries(1) | entries..."""
+        from hathorlib.serialization import Serializer
+
+        serializer = Serializer.build_bytes_serializer()
+        serializer.write_bytes(self._HEADER_ID)
+        serialize_entries(serializer, self.entries)
+        return bytes(serializer.finalize())
 
     def get_sighash_bytes(self) -> bytes:
         # Full serialization is bound to the signature: any mutation to the

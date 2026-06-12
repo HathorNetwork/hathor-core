@@ -18,9 +18,9 @@ The header classes are imported from hathorlib (not mirrored in hathor-core); th
 (de)serialization path is these free functions, driven through the serialization framework
 from `_headers.py` — mirroring `_shielded_outputs_header.py` / `_unshield_balance_header.py`.
 
-The wire-format entry parsing (per-entry bounds, uniqueness) is owned by
-``hathorlib.headers.mint_melt_header.deserialize_entries``; these functions only wrap it
-with the framework's deserializer-driven byte consumption.
+The wire-format entry parsing (count bounds, per-entry bounds, uniqueness) is owned by
+``hathorlib.headers.mint_melt_header.{serialize,deserialize}_entries``; these functions only
+add the header-id framing and map errors onto ``InvalidMintMeltHeaderError``.
 """
 
 from __future__ import annotations
@@ -29,16 +29,12 @@ from typing import TYPE_CHECKING
 
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.headers.types import VertexHeaderId
-from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.headers.mint_melt_header import (
-    ENTRY_SIZE,
-    MAX_MINT_MELT_ENTRIES,
-    MintMeltEntry,
-    deserialize_entries,
-)
+from hathor.transaction.util import VerboseCallback
+from hathorlib.headers.mint_melt_header import MintMeltEntry, deserialize_entries, serialize_entries
 
 if TYPE_CHECKING:
-    from hathor.serialization import Deserializer
+    from hathor.serialization import Deserializer, Serializer
+    from hathor.transaction.headers import MeltHeader, MintHeader
 
 
 def _deserialize_mint_melt_header(
@@ -62,24 +58,7 @@ def _deserialize_mint_melt_header(
             raise InvalidMintMeltHeaderError(
                 f'{header_name}: unexpected header id: expected {header_id_value!r}, got {header_id!r}'
             )
-
-        num_entries = deserializer.read_byte()
-        if verbose:
-            verbose('num_entries', num_entries)
-        if num_entries < 1:
-            raise InvalidMintMeltHeaderError(f'{header_name}: must contain at least 1 entry')
-        if num_entries > MAX_MINT_MELT_ENTRIES:
-            raise InvalidMintMeltHeaderError(
-                f'{header_name}: too many entries: {num_entries} exceeds maximum {MAX_MINT_MELT_ENTRIES}'
-            )
-
-        entries_buf = bytes(deserializer.read_bytes(num_entries * ENTRY_SIZE))
-        # hathorlib.deserialize_entries owns the per-entry bound/uniqueness checks; it expects
-        # the count byte to lead the buffer, so prepend it back.
-        entries, leftover = deserialize_entries(
-            int_to_bytes(num_entries, 1) + entries_buf, header_name=header_name
-        )
-        assert not leftover, f'{header_name}: unexpected leftover after entries'
+        entries = deserialize_entries(deserializer, header_name=header_name)
     except InvalidMintMeltHeaderError:
         raise
     except (SerializationError, ValueError) as e:
@@ -114,3 +93,15 @@ def deserialize_melt_header(
         header_name='MeltHeader',
         verbose=verbose,
     )
+
+
+def serialize_mint_header(serializer: Serializer, header: MintHeader) -> None:
+    """Serialize a MintHeader into the serializer."""
+    serializer.write_bytes(VertexHeaderId.MINT_HEADER.value)
+    serialize_entries(serializer, header.entries)
+
+
+def serialize_melt_header(serializer: Serializer, header: MeltHeader) -> None:
+    """Serialize a MeltHeader into the serializer."""
+    serializer.write_bytes(VertexHeaderId.MELT_HEADER.value)
+    serialize_entries(serializer, header.entries)

@@ -221,6 +221,13 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                # A shielded TCT carries shielded outputs of the new token plus a
+                # MintHeader declaring its initial supply.
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)

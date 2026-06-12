@@ -131,8 +131,12 @@ def serialize_header(
                 serialize_unshield_balance_header,
             )
             serialize_unshield_balance_header(serializer, header)
-        case MintHeader() | MeltHeader():
-            serializer.write_bytes(header.serialize())
+        case MintHeader():
+            from hathor.transaction.vertex_parser._mint_melt_header import serialize_mint_header
+            serialize_mint_header(serializer, header)
+        case MeltHeader():
+            from hathor.transaction.vertex_parser._mint_melt_header import serialize_melt_header
+            serialize_melt_header(serializer, header)
         case _:
             raise AssertionError('unreachable')
 
@@ -152,7 +156,15 @@ def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: Vertex
             serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header, decimal_version=decimal_version)
             return bytes(serializer.finalize())
-        case MintHeader() | MeltHeader():
-            return header.get_sighash_bytes()
+        case MintHeader():
+            from hathor.transaction.vertex_parser._mint_melt_header import serialize_mint_header
+            serializer = Serializer.build_bytes_serializer()
+            serialize_mint_header(serializer, header)
+            return bytes(serializer.finalize())
+        case MeltHeader():
+            from hathor.transaction.vertex_parser._mint_melt_header import serialize_melt_header
+            serializer = Serializer.build_bytes_serializer()
+            serialize_melt_header(serializer, header)
+            return bytes(serializer.finalize())
         case _:
             raise AssertionError('unreachable')
