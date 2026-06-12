@@ -1,0 +1,164 @@
+#!/usr/bin/env python
+"""Measure end-to-end sync TPS on a REAL reactor (no simulated clock).
+
+A synthetic DAG (blocks confirming spend-chains of txs) is built once with the DAG Builder,
+serialized, and then fed to a fresh manager exactly like p2p sync does: every vertex enters
+through ``verification_service.verify_bytes`` and every block is connected through
+``vertex_handler.on_new_block(block, deps=txs)``. The real reactor means the batched
+precompute actually runs on the reactor thread pool (deferToThreadPool), storage is real
+RocksDB, and the measured number is honest wall-clock TPS of the connect pipeline.
+
+    python tools/cpu_profiling/bench_real_tps.py --arm batched --blocks 40 --txs 50
+    python tools/cpu_profiling/bench_real_tps.py --arm no-precompute
+    python tools/cpu_profiling/bench_real_tps.py --arm python
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+import _common  # noqa: F401  (sets HATHOR_CONFIG_YAML + the global reactor before hathor imports)
+
+import argparse  # noqa: E402
+import time  # noqa: E402
+from typing import Any, Generator  # noqa: E402
+
+from _common import build_manager, get_dag_builder, reward_lock_blocks  # noqa: E402
+
+from hathor.manager import HathorManager  # noqa: E402
+from hathor.reactor import get_global_reactor  # noqa: E402
+from hathor.simulator.patches import SimulatorCpuMiningService  # noqa: E402
+from hathor.simulator.simulator import _build_vertex_verifiers  # noqa: E402
+from hathor.transaction import Block, Transaction  # noqa: E402
+from hathor.util import Random  # noqa: E402
+from hathor.verification.script_verification_pool import ScriptVerificationMode  # noqa: E402
+from hathor_tests.unittest import TestBuilder  # noqa: E402
+
+BASE_BLOCKS = reward_lock_blocks() + 2
+
+
+def build_dag_str(*, num_txs: int, num_blocks: int) -> str:
+    """Blocks x1..xR each confirming a spend-chain group of `num_txs` txs (one dummy-funded
+    tx per group keeps the dummy under the 255-output wire limit)."""
+    lines = [
+        f'blockchain genesis b[1..{BASE_BLOCKS}]',
+        f'blockchain b{BASE_BLOCKS} x[1..{num_blocks}]',
+        f'b{BASE_BLOCKS - 1} < dummy',
+        f'b{BASE_BLOCKS} --> dummy',
+        '',
+    ]
+    for r in range(num_blocks):
+        for i in range(num_txs - 1):
+            lines.append(f'g{r}_t{i}.out[0] <<< g{r}_t{i + 1}')
+        lines.append(f'x{r + 1} --> g{r}_t{num_txs - 1}')
+        lines.append('')
+    return '\n'.join(lines)
+
+
+def build_payloads(num_txs: int, num_blocks: int) -> dict[str, bytes]:
+    """Build the DAG once (throwaway simulated-clock manager) and serialize every vertex."""
+    source = build_manager(seed=1234)
+    dag_str = build_dag_str(num_txs=num_txs, num_blocks=num_blocks)
+    artifacts = get_dag_builder(source).build_from_str(dag_str)
+    return {node.name: bytes(vertex) for node, vertex in artifacts.list}
+
+
+def build_target(arm: str, workers: int) -> HathorManager:
+    """A fresh manager on the REAL reactor (thread pool available, real RocksDB temp dir)."""
+    builder = (
+        TestBuilder()
+        .set_rng(Random(5678))
+        .set_reactor(get_global_reactor())
+        .set_vertex_verifiers_builder(_build_vertex_verifiers)
+        .set_cpu_mining_service(SimulatorCpuMiningService())
+    )
+    if arm != 'python':
+        builder.set_script_verification_config(
+            mode=ScriptVerificationMode.RUST, num_workers=workers, min_inputs=1)
+    artifacts = builder.build()
+    manager = artifacts.manager
+    manager.start()
+    return manager
+
+
+def feed(
+    manager: HathorManager,
+    payloads: dict[str, bytes],
+    num_txs: int,
+    num_blocks: int,
+) -> Generator[Any, Any, float]:
+    """Feed the DAG through the p2p entrypoints; return the payload-section wall time."""
+    service = manager.verification_service
+    storage = manager.tx_storage
+
+    def parse(name: str) -> Any:
+        return service.verify_bytes(payloads[name], storage=storage)
+
+    # base chain (reward-lock window) + the dummy funding tx, not measured
+    for i in range(1, BASE_BLOCKS + 1):
+        block = parse(f'b{i}')
+        assert isinstance(block, Block)
+        deps = []
+        if i == BASE_BLOCKS:
+            dummy = parse('dummy')
+            assert isinstance(dummy, Transaction)
+            deps = [dummy]
+        ok = yield manager.vertex_handler.on_new_block(block, deps=deps)
+        assert ok, f'base block b{i} rejected'
+
+    # payload: the measured section, fed exactly like sync's on_block_complete
+    start = time.perf_counter()
+    for r in range(num_blocks):
+        txs = [parse(f'g{r}_t{i}') for i in range(num_txs)]
+        block = parse(f'x{r + 1}')
+        assert isinstance(block, Block)
+        ok = yield manager.vertex_handler.on_new_block(block, deps=txs)
+        assert ok, f'payload block x{r + 1} rejected'
+    return time.perf_counter() - start
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--arm', choices=['batched', 'no-precompute', 'python'], required=True)
+    parser.add_argument('--workers', type=int, default=12)
+    parser.add_argument('--blocks', type=int, default=40)
+    parser.add_argument('--txs', type=int, default=50)
+    args = parser.parse_args()
+
+    if args.arm == 'no-precompute':
+        from hathor.verification.rust_verification_service import RustVerificationService
+        RustVerificationService.precompute_stateless_batch = (  # type: ignore[method-assign]
+            lambda self, vertices, params, **kwargs: None)
+
+    payloads = build_payloads(args.txs, args.blocks)
+    manager = build_target(args.arm, args.workers)
+    reactor = get_global_reactor()
+    exit_code = 1
+
+    from twisted.internet.defer import inlineCallbacks
+
+    @inlineCallbacks
+    def run() -> Generator[Any, Any, None]:
+        nonlocal exit_code
+        try:
+            elapsed = yield inlineCallbacks(feed)(manager, payloads, args.txs, args.blocks)
+            total = args.blocks * args.txs
+            print(f'{args.arm}: connected {total} txs (+{args.blocks} blocks) '
+                  f'in {elapsed:.2f}s -> {total / elapsed:.0f} tx/s [real reactor]')
+            exit_code = 0
+        except BaseException as e:
+            print(f'{args.arm}: FAILED: {e!r}')
+            raise
+        finally:
+            reactor.stop()
+
+    reactor.callWhenRunning(run)
+    reactor.run()
+    sys.exit(exit_code)
+
+
+if __name__ == '__main__':
+    main()

@@ -125,6 +125,11 @@ IBD/sync improves more than mempool TPS (it is verification-bound, exactly what 
    path, so coverage and rejection semantics are unchanged. `verify_bytes` captures original wire bytes per
    vertex (FIFO-capped) so the pipeline usually skips re-serialization.
 
+   **Real-reactor measurement** (`tools/cpu_profiling/bench_real_tps.py`: no simulated clock, real
+   RocksDB, vertices entering through `verify_bytes` + `on_new_block` exactly like sync; 2,000 spend-chain
+   txs): ~1,160 tx/s with the fused pipeline vs ~955 without precompute (+22%) vs ~877 with the pure-Python
+   service (+32%).
+
    Still open: folding the stateless checks into the same fused call (one FFI crossing per batch instead of
    two), and the remaining Python in the loop — the connect-time job rebuild in `_verify_inputs_parallel`'s
    precheck phase, and `verify_sigops_input`'s Python dep fetches.
