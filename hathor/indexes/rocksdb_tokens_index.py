@@ -42,7 +42,7 @@ from hathor.types import TokenUid
 from hathor.util import collect_n, json_dumpb, json_loadb
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 
@@ -283,7 +283,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         )
 
     def destroy_token(self, token_uid: bytes) -> None:
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
 
         # a writebatch works similar to a "SQL transaction" in that if it fails, either all persist or none
         key_info = self._to_key_info(token_uid)

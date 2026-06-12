@@ -15,12 +15,12 @@
 from abc import abstractmethod
 from typing import Any, Callable, Generic, Iterator, Optional, Sized, TypeVar
 
-import rocksdb
 from structlog import get_logger
 from typing_extensions import override
 
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
 from hathor.indexes.tx_group_index import TxGroupIndex
+from hathor.storage import rocksdb_compat as rocksdb
 from hathor.transaction import BaseTransaction
 from hathor.transaction.util import bytes_to_int, int_to_bytes
 

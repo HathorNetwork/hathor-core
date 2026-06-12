@@ -25,7 +25,7 @@ from hathor.indexes.rocksdb_utils import InternalUid, RocksDBIndexUtils, from_in
 from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 

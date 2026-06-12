@@ -34,10 +34,9 @@ from hathor.types import VertexId
 from hathor.util import json_loadb, progress
 
 if TYPE_CHECKING:
-    import rocksdb
-
     from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCStorageFactory
+    from hathor.storage import rocksdb_compat as rocksdb
     from hathor.transaction import BaseTransaction
 
 logger = get_logger()
@@ -287,6 +286,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         tx = self.get_transaction_from_weakref(hash_bytes)
         if tx is None:
             meta_data = self._db.get((self._cf_meta, hash_bytes))
+            assert meta_data is not None, 'expected metadata to exist when tx exists'
             tx = self._load_from_bytes(tx_data, meta_data)
             self._load_static_metadata(tx)
             assert tx.hash == hash_bytes
@@ -361,7 +361,7 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
     @override
     def migrate_vertex_children(self) -> None:
         """Migrate vertex children from metadata to their own column family."""
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
         assert isinstance(self.vertex_children, RocksDBVertexChildrenService)
 
         def get_old_children_set(vertex_id: VertexId) -> set[VertexId]:
