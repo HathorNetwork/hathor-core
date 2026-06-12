@@ -69,6 +69,9 @@ def build_target(arm: str, workers: int) -> HathorManager:
         .set_reactor(get_global_reactor())
         .set_vertex_verifiers_builder(_build_vertex_verifiers)
         .set_cpu_mining_service(SimulatorCpuMiningService())
+        # production nodes run with the tx-storage cache; without it every get falls through
+        # to weakrefs/RocksDB and the LRU bookkeeping degenerates into pure eviction churn
+        .use_tx_storage_cache(100_000)
     )
     if arm != 'python':
         builder.set_script_verification_config(
