@@ -155,10 +155,13 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
-        # signal a mempool tips index update for all affected transactions,
-        # because that index is used on _compute_vertices_that_became_invalid below.
-        for tx_affected in _sorted_affected_txs(context.txs_affected):
-            self.tx_storage.indexes.mempool_tips.update(tx_affected)
+        # On reorgs, the mempool tips index must be synced *before* _compute_vertices_that_became_invalid
+        # below reads it. On the common (non-reorg) path nothing in between reads or mutates consensus state,
+        # so the single update_critical_indexes pass at the end of this method (which also updates the tips)
+        # suffices — running this loop unconditionally would update every affected tx's tips twice.
+        if context.reorg_info is not None:
+            for tx_affected in _sorted_affected_txs(context.txs_affected):
+                self.tx_storage.indexes.mempool_tips.update(tx_affected)
 
         txs_to_remove: list[BaseTransaction] = []
         new_best_height, new_best_tip = self.tx_storage.indexes.height.get_height_tip()
