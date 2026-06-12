@@ -321,6 +321,10 @@ def test_precomputed_batch_equivalence() -> None:
             htr_lib.verify_vertex_stateless = original
         assert batched == fresh
         assert calls == [], 'precomputed results were not consumed'
+        # consumption does NOT pop: validate_full reads the results twice (verify_basic and
+        # verify); the call sites' discard_precomputed is the single point of removal
+        assert len(service._precomputed) == len(vertices)
+        service.discard_precomputed(vertices)
         assert not service._precomputed
 
         # a params mismatch must NOT consume precomputed results

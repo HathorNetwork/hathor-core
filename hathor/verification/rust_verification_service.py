@@ -216,12 +216,15 @@ class RustVerificationService(VerificationService):
     ) -> _RustCheckResults:
         """Return this vertex's stateless check results: either precomputed by a batch call
         (`precompute_stateless_batch`) or from a fresh single-vertex GIL-released Rust call."""
-        precomputed = self._precomputed.pop(vertex.hash, None)
+        precomputed = self._precomputed.get(vertex.hash)
         if precomputed is not None:
             stored_params, results = precomputed
             # params identity guard: a vertex could concurrently arrive through another path (e.g.
             # real-time relay during a sync batch) whose params differ — only consume results
-            # precomputed for this exact verification stage
+            # precomputed for this exact verification stage. The entry is read, NOT popped:
+            # validate_full runs verify_without_storage twice (inside verify_basic and inside
+            # verify), and both runs must hit; the call sites' discard_precomputed (in a finally
+            # block) is the single point of removal.
             if stored_params is params:
                 return results
         data = self._build_check_data(vertex, params)
