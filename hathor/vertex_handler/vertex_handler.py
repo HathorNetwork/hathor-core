@@ -40,6 +40,9 @@ cpu = get_cpu_profiler()
 
 
 class VertexHandler:
+    # during block sync, yield control back to the reactor after this many connected txs
+    CONNECT_YIELD_EVERY = 8
+
     __slots__ = (
         '_log',
         '_reactor',
@@ -112,11 +115,17 @@ class VertexHandler:
             # loop below consumes the results
             yield defer_stateless_precompute(self._reactor, service, batch, params, include_scripts=True)
         try:
+            connected = 0
             for tx in pending:
                 if not self._tx_storage.transaction_exists(tx.hash):
                     if not self._old_on_new_vertex(tx, params):
                         return False
-                    yield deferLater(self._reactor, 0, lambda: None)
+                    connected += 1
+                    # yield to the reactor periodically instead of after every tx: each yield is
+                    # a full asyncio round trip (~20us), and the batched precompute already keeps
+                    # per-tx reactor blockage short
+                    if connected % self.CONNECT_YIELD_EVERY == 0:
+                        yield deferLater(self._reactor, 0, lambda: None)
 
             if not self._tx_storage.transaction_exists(block.hash):
                 if not self._old_on_new_vertex(block, params):
@@ -212,7 +221,11 @@ class VertexHandler:
         vertex.storage = self._tx_storage
 
         try:
-            metadata = vertex.get_metadata()
+            # when the vertex is not in storage (the common case for new vertices), the storage
+            # lookup inside get_metadata is a guaranteed miss — a wasted RocksDB read plus an
+            # exception per vertex — so it is skipped and a fresh metadata is created directly,
+            # which is exactly what the miss path produces
+            metadata = vertex.get_metadata(use_storage=already_exists)
         except TransactionDoesNotExist:
             raise InvalidNewTransaction('cannot get metadata')
 
