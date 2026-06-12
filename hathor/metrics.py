@@ -20,6 +20,7 @@ from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
+from hathor.mining.ws import MiningWebsocketFactory
 from hathor.p2p.manager import ConnectionsManager, PeerConnectionsMetrics
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor
@@ -116,6 +117,9 @@ class Metrics:
     connecting_peers: int = 0
     # Peers known
     known_peers: int = 0
+
+    mining_ws_connections: int = 0
+    mining_ws_factory: MiningWebsocketFactory | None = None
 
     def __post_init__(self) -> None:
         self.log = logger.new()
@@ -225,6 +229,10 @@ class Metrics:
             self.websocket_connections = len(self.websocket_factory.connections)
             self.subscribed_addresses = len(self.websocket_factory.address_connections)
 
+    def set_mining_ws_data(self) -> None:
+        if self.mining_ws_factory:
+            self.mining_ws_connections = len(self.mining_ws_factory.connections)
+
     def set_stratum_data(self) -> None:
         """ Set stratum metrics data for the mining process
         """
@@ -301,6 +309,7 @@ class Metrics:
         """ Call methods that collect data to metrics
         """
         self.set_websocket_data()
+        self.set_mining_ws_data()
         self.set_stratum_data()
         self.set_cache_data()
         self.collect_peer_connection_metrics()
