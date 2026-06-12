@@ -68,7 +68,11 @@ MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa_factory', '_feature_service', '_script_verification_pool')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', '_script_verification_pool',
+                 '_verified_weights')
+
+    # FIFO cap for the verified-weights cache (a dict used as an ordered set)
+    _VERIFIED_WEIGHTS_CAP = 16384
 
     def __init__(
         self,
@@ -82,6 +86,10 @@ class TransactionVerifier:
         self._daa_factory = daa_factory
         self._feature_service = feature_service
         self._script_verification_pool = script_verification_pool
+        # hashes whose minimum-weight check already passed: the check is a pure function of the
+        # tx bytes and settings, and it runs twice per synced tx (the tx-streaming verify_basic
+        # and the one inside validate_full)
+        self._verified_weights: dict[bytes, None] = {}
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -98,6 +106,8 @@ class TransactionVerifier:
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
+        if tx._hash is not None and tx._hash in self._verified_weights:
+            return
         min_tx_weight = self._daa_factory.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
@@ -106,6 +116,10 @@ class TransactionVerifier:
         elif tx.weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
+        if tx._hash is not None:
+            self._verified_weights[tx._hash] = None
+            while len(self._verified_weights) > self._VERIFIED_WEIGHTS_CAP:
+                self._verified_weights.pop(next(iter(self._verified_weights)))
 
     def verify_sigops_input(self, tx: Transaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
@@ -214,11 +228,16 @@ class TransactionVerifier:
         """Parallel counterpart of :meth:`_verify_inputs_serial`: the cheap, storage-touching checks run serially
         on this thread while the script evaluations are fanned out to ``script_pool``; results are merged so the
         surfaced error matches the serial loop exactly (see the class docstring above)."""
+        # When the batched precompute already evaluated this tx's scripts, the job tuples are
+        # never used — skip building them (the sighash/spent-output extraction per input).
+        # Single-threaded reactor: nothing can evict the cache between this check and phase 2.
+        use_cache = script_pool.has_script_results(tx._hash, int(opcodes_version))
+
         # OP_FIND_P2PKH (V1 only) is the sole opcode that reads the tx outputs; avoid building/pickling them
         # otherwise. Shared by every input's job for this tx.
         shared_outputs: tuple[tuple[int, bytes], ...] = (
             tuple((output.value, output.script) for output in tx.outputs)
-            if opcodes_version == OpcodesVersion.V1 else ()
+            if opcodes_version == OpcodesVersion.V1 and not use_cache else ()
         )
 
         # Phase 1: cheap checks in input order. We stop at the first pre-script failure (size/spent-tx/timestamp)
@@ -256,14 +275,15 @@ class TransactionVerifier:
                 break
 
             scheduled_indices.append(index)
-            jobs.append(build_script_verification_job(
-                input_index=index,
-                tx=tx,
-                txin=input_tx,
-                spent_tx=spent_tx,
-                opcodes_version=opcodes_version,
-                shared_outputs=shared_outputs,
-            ))
+            if not use_cache:
+                jobs.append(build_script_verification_job(
+                    input_index=index,
+                    tx=tx,
+                    txin=input_tx,
+                    spent_tx=spent_tx,
+                    opcodes_version=opcodes_version,
+                    shared_outputs=shared_outputs,
+                ))
 
             # check if any other input in this tx is spending the same output
             key = (input_tx.tx_id, input_tx.index)
@@ -275,9 +295,15 @@ class TransactionVerifier:
 
         # Phase 2: run the script jobs in parallel and index the results by input. A batched
         # sync precompute may have already evaluated this tx's scripts (one Rust call for the
-        # whole batch); the pool consumes that cache when present. The raw _hash is used because
-        # locally-built txs are verified before being mined (no hash yet — and no cache entry).
-        results = script_pool.run_jobs_with_cache(tx._hash, int(opcodes_version), jobs)
+        # whole batch); that cache is consumed directly (no jobs were built). The raw _hash is
+        # used because locally-built txs are verified before being mined (no hash yet).
+        results: list[ScriptError | None] | None
+        if use_cache:
+            assert tx._hash is not None
+            results = script_pool.consume_script_results(tx._hash, int(opcodes_version), scheduled_indices)
+            assert results is not None, 'cache checked at phase 1 and the reactor is single-threaded'
+        else:
+            results = script_pool.run_jobs_with_cache(tx._hash, int(opcodes_version), jobs)
         result_by_index = dict(zip(scheduled_indices, results))
 
         # Phase 3: merge in input order. The first failing input wins, and for a given input the script error (if

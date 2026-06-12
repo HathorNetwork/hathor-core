@@ -469,6 +469,33 @@ class ScriptVerificationPool:
             return None
         return per_input
 
+    def has_script_results(self, tx_hash: bytes | None, opcodes_version: int) -> bool:
+        """Whether precomputed script results exist for this tx under this opcodes version
+        (used to skip building the job tuples entirely; reactor-thread only, so the check
+        cannot race the consume)."""
+        if tx_hash is None or not self.rust_verification:
+            return False
+        cached = self._cached_script_results.get(tx_hash)
+        return cached is not None and cached[0] == opcodes_version
+
+    def consume_script_results(
+        self,
+        tx_hash: bytes,
+        opcodes_version: int,
+        indices: Sequence[int],
+    ) -> list[ScriptError | None] | None:
+        """Pop and map this tx's precomputed results for exactly `indices` (the inputs the
+        caller scheduled, in input order). Returns None when absent/mismatched — callers must
+        have checked `has_script_results` first and treat None as a hard miss."""
+        cached = self._cached_script_results.pop(tx_hash, None)
+        if cached is None:
+            return None
+        cached_version, by_index = cached
+        if cached_version != opcodes_version or not all(index in by_index for index in indices):
+            return None
+        raw = [by_index[index] for index in indices]
+        return self._map_raw_script_results(raw)
+
     def run_jobs_with_cache(
         self,
         tx_hash: bytes | None,
