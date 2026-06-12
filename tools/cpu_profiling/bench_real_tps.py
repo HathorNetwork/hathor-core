@@ -15,27 +15,22 @@ RocksDB, and the measured number is honest wall-clock TPS of the connect pipelin
 
 from __future__ import annotations
 
+import argparse
 import sys
-from pathlib import Path
+import time
+from typing import Any, Generator
 
-sys.path.insert(0, str(Path(__file__).parent))
+# _common sets HATHOR_CONFIG_YAML + the global reactor at import time, before any hathor import runs
+from _common import build_manager, get_dag_builder, reward_lock_blocks
 
-import _common  # noqa: F401  (sets HATHOR_CONFIG_YAML + the global reactor before hathor imports)
-
-import argparse  # noqa: E402
-import time  # noqa: E402
-from typing import Any, Generator  # noqa: E402
-
-from _common import build_manager, get_dag_builder, reward_lock_blocks  # noqa: E402
-
-from hathor.manager import HathorManager  # noqa: E402
-from hathor.reactor import get_global_reactor  # noqa: E402
-from hathor.simulator.patches import SimulatorCpuMiningService  # noqa: E402
-from hathor.simulator.simulator import _build_vertex_verifiers  # noqa: E402
-from hathor.transaction import Block, Transaction  # noqa: E402
-from hathor.util import Random  # noqa: E402
-from hathor.verification.script_verification_pool import ScriptVerificationMode  # noqa: E402
-from hathor_tests.unittest import TestBuilder  # noqa: E402
+from hathor.manager import HathorManager
+from hathor.reactor import get_global_reactor
+from hathor.simulator.patches import SimulatorCpuMiningService
+from hathor.simulator.simulator import _build_vertex_verifiers
+from hathor.transaction import Block, Transaction
+from hathor.util import Random
+from hathor.verification.script_verification_pool import ScriptVerificationMode
+from hathor_tests.unittest import TestBuilder
 
 BASE_BLOCKS = reward_lock_blocks() + 2
 
