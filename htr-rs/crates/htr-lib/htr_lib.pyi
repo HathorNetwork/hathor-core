@@ -46,6 +46,16 @@ def parse_vertex(
     ...
 
 
+def verify_vertices_stateless_batch(
+    items: Sequence[tuple[Sequence[int], object]],
+    num_workers: int,
+) -> list[list[tuple[str, str] | None]]:
+    """Run the stateless checks for a batch of vertices in one GIL-released call, parallel
+    across vertices. Each item is (checks, data) as in verify_vertex_stateless; result order
+    matches the input."""
+    ...
+
+
 def verify_scripts_batch(
     jobs: Sequence[object],
     max_multisig_pubkeys: int,

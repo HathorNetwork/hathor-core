@@ -17,6 +17,8 @@ call per vertex) must surface the exact same exception type as the pure-Python V
 every outcome — including the cases where multiple checks fail and the canonical Python check order
 decides which error wins."""
 
+from typing import Any
+
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.utils import Features
 from hathor.reactor import get_global_reactor
@@ -69,13 +71,17 @@ def _make_params() -> VerificationParams:
     return VerificationParams(nc_block_root_id=None, features=Features.all_enabled())
 
 
+_synthetic_hash_counter = iter(range(1, 1_000_000))
+
+
 def _set_hash(vertex: Block | Transaction) -> None:
     """Hash the vertex; constructor-invalid outputs (e.g. zero value) cannot even be serialized, so
-    those get a synthetic hash — fine here since their weight-0 PoW target (2**256) accepts any hash."""
+    those get a unique synthetic hash — fine here since their weight-0 PoW target (2**256) accepts
+    any hash, and uniqueness mirrors reality (the precompute store is keyed by hash)."""
     try:
         vertex.update_hash()
     except Exception:
-        vertex.hash = b'\xab' * 32
+        vertex.hash = next(_synthetic_hash_counter).to_bytes(32, 'big')
 
 
 def _make_tx(outputs: list[TxOutput], *, tokens: list[bytes] | None = None,
@@ -257,3 +263,75 @@ def test_verify_sigops_input_equivalence() -> None:
     finally:
         for pool in pools:
             pool.stop()
+
+
+def test_precomputed_batch_equivalence() -> None:
+    """A batched precompute must yield byte-identical outcomes to fresh per-vertex calls, the
+    results must actually be consumed (no second FFI call), and leftovers must be discardable."""
+    import htr_lib
+
+    settings = get_global_settings()
+    pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=2, min_inputs=1)
+    pool.start()
+    verifiers = VertexVerifiers.create_defaults(
+        reactor=get_global_reactor(), settings=settings,
+        daa_factory=None, feature_service=None, tx_storage=None,  # type: ignore[arg-type]
+        blueprint_service=None,  # type: ignore[arg-type]
+        script_verification_pool=pool,
+    )
+    service = RustVerificationService(settings=settings, verifiers=verifiers, script_verification_pool=pool)
+    params = _make_params()
+    over_limit_count = settings.MAX_TX_SIGOPS_OUTPUT // 16 + 1
+    vertices: list[Block | Transaction] = [
+        _make_tx([TxOutput(100, P2PKH_OUT)]),
+        _make_tx([_output(0, b'\x51')]),
+        _make_tx([TxOutput(1, b'\x60\xae')] * over_limit_count),
+        _make_tx([TxOutput(1, b'\x00', 1)]),
+        _make_block([TxOutput(6400, P2PKH_OUT)]),
+        _make_block([_output(0, b'\x51')]),
+    ]
+
+    def outcomes() -> list[str]:
+        result = []
+        for vertex in vertices:
+            try:
+                service.verify_without_storage(vertex, params)
+                result.append('valid')
+            except BaseException as e:
+                result.append(type(e).__name__)
+        return result
+
+    try:
+        fresh = outcomes()
+
+        service.precompute_stateless_batch(vertices, params)
+        assert len(service._precomputed) == len(vertices)
+        # consumption must not make any fresh per-vertex FFI call
+        original = htr_lib.verify_vertex_stateless
+        calls = []
+
+        def counting(*args: Any, **kwargs: Any) -> Any:
+            calls.append(1)
+            return original(*args, **kwargs)
+
+        htr_lib.verify_vertex_stateless = counting
+        try:
+            batched = outcomes()
+        finally:
+            htr_lib.verify_vertex_stateless = original
+        assert batched == fresh
+        assert calls == [], 'precomputed results were not consumed'
+        assert not service._precomputed
+
+        # a params mismatch must NOT consume precomputed results
+        service.precompute_stateless_batch(vertices, params)
+        other_params = _make_params()
+        for vertex in vertices[:1]:
+            try:
+                service.verify_without_storage(vertex, other_params)
+            except BaseException:
+                pass
+        service.discard_precomputed(vertices)
+        assert not service._precomputed
+    finally:
+        pool.stop()

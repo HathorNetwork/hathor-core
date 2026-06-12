@@ -35,6 +35,7 @@ Notes on what deliberately stays on the Python verifier methods:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Sequence
 
 import htr_lib
 from typing_extensions import override
@@ -51,6 +52,9 @@ from hathor.verification.verification_params import VerificationParams
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 
+if TYPE_CHECKING:
+    from twisted.internet.defer import Deferred
+
 # Check identifiers, matching htr-rs/crates/htr-lib/src/verify/mod.rs.
 CHECK_POW = 0
 CHECK_OUTPUTS = 1
@@ -60,6 +64,33 @@ CHECK_NO_INPUTS = 4
 CHECK_BLOCK_DATA = 5
 CHECK_BLOCK_TOKEN_INDEXES = 6
 CHECK_NUMBER_OF_INPUTS = 7
+
+def defer_stateless_precompute(
+    reactor: object,
+    service: 'RustVerificationService',
+    vertices: Sequence[BaseTransaction],
+    params: VerificationParams,
+) -> 'Deferred[None]':
+    """Run `service.precompute_stateless_batch` on the reactor's thread pool when the reactor
+    supports threads (production: the Rust call releases the GIL, so verification of the batch
+    overlaps reactor work), or synchronously otherwise (tests with simulated clocks; the call
+    still amortizes the FFI and parallelizes across vertices via rayon)."""
+    from twisted.internet import interfaces
+    from twisted.internet.defer import succeed
+    from twisted.internet.threads import deferToThreadPool
+
+    if interfaces.IReactorThreads.providedBy(reactor) and getattr(reactor, 'running', False):
+        return deferToThreadPool(
+            reactor, reactor.getThreadPool(), service.precompute_stateless_batch, vertices, params,
+        )
+    service.precompute_stateless_batch(vertices, params)
+    result: Deferred[None] = succeed(None)
+    return result
+
+
+# the canonical check sets per vertex kind, in request order
+_BLOCK_CHECKS = [CHECK_NO_INPUTS, CHECK_OUTPUTS, CHECK_BLOCK_TOKEN_INDEXES, CHECK_BLOCK_DATA, CHECK_SIGOPS_OUTPUT]
+_TX_CHECKS = [CHECK_NUMBER_OF_INPUTS, CHECK_OUTPUTS, CHECK_OUTPUT_TOKEN_INDEXES, CHECK_SIGOPS_OUTPUT]
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -99,7 +130,7 @@ class _RustCheckResults:
 
 
 class RustVerificationService(VerificationService):
-    __slots__ = ('_script_verification_pool',)
+    __slots__ = ('_script_verification_pool', '_precomputed')
 
     def __init__(
         self,
@@ -117,6 +148,10 @@ class RustVerificationService(VerificationService):
             nc_storage_factory=nc_storage_factory,
         )
         self._script_verification_pool = script_verification_pool
+        # results of a batched stateless pre-verification keyed by vertex hash, holding the params
+        # they were computed under; consumed (popped) by _run_rust_checks, leftovers discarded by
+        # the call sites in a finally block (discard_precomputed)
+        self._precomputed: dict[bytes, tuple[VerificationParams, _RustCheckResults]] = {}
 
     @override
     def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
@@ -138,10 +173,25 @@ class RustVerificationService(VerificationService):
         params: VerificationParams,
         checks: list[int],
     ) -> _RustCheckResults:
-        """Marshal the vertex once and run all requested checks in a single GIL-released Rust call."""
+        """Return this vertex's stateless check results: either precomputed by a batch call
+        (`precompute_stateless_batch`) or from a fresh single-vertex GIL-released Rust call."""
+        precomputed = self._precomputed.pop(vertex.hash, None)
+        if precomputed is not None:
+            stored_params, results = precomputed
+            # params identity guard: a vertex could concurrently arrive through another path (e.g.
+            # real-time relay during a sync batch) whose params differ — only consume results
+            # precomputed for this exact verification stage
+            if stored_params is params:
+                return results
+        data = self._build_check_data(vertex, params)
+        raw = htr_lib.verify_vertex_stateless(checks, data, self._script_verification_pool.num_workers)
+        return _RustCheckResults(dict(zip(checks, raw)))
+
+    def _build_check_data(self, vertex: BaseTransaction, params: VerificationParams) -> StatelessVertexCheckData:
+        """Marshal one vertex's fields for the Rust stateless checks."""
         tokens = getattr(vertex, 'tokens', None) or []
         min_inputs = vertex.get_minimum_number_of_inputs() if isinstance(vertex, Transaction) else 0
-        data = StatelessVertexCheckData(
+        return StatelessVertexCheckData(
             outputs=[(output.value, output.script, output.token_data) for output in vertex.outputs],
             tokens_count=len(tokens),
             vertex_hash=vertex.hash,
@@ -158,8 +208,6 @@ class RustVerificationService(VerificationService):
             max_multisig_pubkeys=self._settings.MAX_MULTISIG_PUBKEYS,
             enable_checkdatasig_count=params.features.count_checkdatasig_op,
         )
-        raw = htr_lib.verify_vertex_stateless(checks, data, self._script_verification_pool.num_workers)
-        return _RustCheckResults(dict(zip(checks, raw)))
 
     def _verify_without_storage_rust(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Mirror of `VerificationService.verify_without_storage`, consuming the Rust results in the
@@ -203,10 +251,48 @@ class RustVerificationService(VerificationService):
             assert self._settings.ENABLE_NANO_CONTRACTS
             self._verify_without_storage_nano_header(vertex, params)
 
+    @staticmethod
+    def _checks_for(vertex: BaseTransaction) -> list[int] | None:
+        """The rust check ids for this vertex kind (in request order), or None for unknown versions."""
+        match vertex.version:
+            case TxVersion.REGULAR_BLOCK | TxVersion.MERGE_MINED_BLOCK | TxVersion.POA_BLOCK:
+                return _BLOCK_CHECKS
+            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION | TxVersion.ON_CHAIN_BLUEPRINT:
+                return _TX_CHECKS
+            case _:
+                return None
+
+    def precompute_stateless_batch(self, vertices: Sequence[BaseTransaction], params: VerificationParams) -> None:
+        """Run the stateless checks for a whole batch of vertices in one GIL-released Rust call
+        (parallel across vertices) and stash the per-vertex results for later consumption by the
+        serial verification of each vertex. Safe to call from a worker thread: the Rust call
+        releases the GIL, and the results dict is only read by the reactor after this returns.
+
+        Pair with `discard_precomputed` in a finally block so entries for vertices that never
+        reach their stateless checks (earlier failures) do not accumulate."""
+        if not self._script_verification_pool.rust_verification:
+            return
+        items = []
+        keyed = []
+        for vertex in vertices:
+            checks = self._checks_for(vertex)
+            if checks is None or vertex.is_genesis or vertex.hash in self._settings.SKIP_VERIFICATION:
+                continue
+            items.append((checks, self._build_check_data(vertex, params)))
+            keyed.append((vertex.hash, checks))
+        if not items:
+            return
+        raw_batch = htr_lib.verify_vertices_stateless_batch(items, self._script_verification_pool.num_workers)
+        for (vertex_hash, checks), raw in zip(keyed, raw_batch):
+            self._precomputed[vertex_hash] = (params, _RustCheckResults(dict(zip(checks, raw))))
+
+    def discard_precomputed(self, vertices: Sequence[BaseTransaction]) -> None:
+        """Drop any unconsumed precomputed results for these vertices."""
+        for vertex in vertices:
+            self._precomputed.pop(vertex.hash, None)
+
     def _verify_without_storage_base_block_rust(self, block: Block, params: VerificationParams) -> None:
-        results = self._run_rust_checks(block, params, [
-            CHECK_NO_INPUTS, CHECK_OUTPUTS, CHECK_BLOCK_TOKEN_INDEXES, CHECK_BLOCK_DATA, CHECK_SIGOPS_OUTPUT,
-        ])
+        results = self._run_rust_checks(block, params, _BLOCK_CHECKS)
         results.consume(CHECK_NO_INPUTS)
         results.consume(CHECK_OUTPUTS)
         results.consume(CHECK_BLOCK_TOKEN_INDEXES)
@@ -269,9 +355,7 @@ class RustVerificationService(VerificationService):
                 'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
 
     def _verify_without_storage_tx_rust(self, tx: Transaction, params: VerificationParams) -> None:
-        results = self._run_rust_checks(tx, params, [
-            CHECK_NUMBER_OF_INPUTS, CHECK_OUTPUTS, CHECK_OUTPUT_TOKEN_INDEXES, CHECK_SIGOPS_OUTPUT,
-        ])
+        results = self._run_rust_checks(tx, params, _TX_CHECKS)
         if self._settings.CONSENSUS_ALGORITHM.is_pow():
             self.verifiers.vertex.verify_pow(tx)
         results.consume(CHECK_NUMBER_OF_INPUTS)

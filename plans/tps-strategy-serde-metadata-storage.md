@@ -90,8 +90,19 @@ IBD/sync improves more than mempool TPS (it is verification-bound, exactly what 
    hash). Measured: deserialize 34.4 → 5.4 µs (6.4×) at 1-io, 8.7× at 8-io, 15.6× at 255-io; pipeline effect
    ~3–5% (within end-to-end noise; matters more for IBD where every vertex is parsed from network bytes). The Rust
    *serializer* lands with Phase 3, which is what actually consumes this work.
-2. **Phase-3 pipeline batching** — sync-v2 `_queue` + block tx-lists feed one parallel Rust stateless stage
-   (raw bytes in), serial connect/commit unchanged. The actual TPS multiplier.
+2. **Phase-3 pipeline batching** — **stateless stage DONE**: `htr_lib.verify_vertices_stateless_batch` runs
+   all stateless checks of a whole batch in parallel (rayon across vertices, one FFI call, GIL released);
+   `RustVerificationService.precompute_stateless_batch` stores per-vertex results keyed by hash (params-identity
+   guarded) and `verify_without_storage` consumes them with the canonical Python check order preserved. Wired at
+   the two sync call sites: `TransactionStreamingClient.process_queue` (batches of 64) and
+   `VertexHandler.on_new_block` (block + its pending deps). On a real reactor the precompute runs on the reactor
+   thread pool (`defer_stateless_precompute`), removing the stateless stage from the serial path entirely; under
+   the simulated clock it runs inline. Measured: stateless stage 14.1 → 6.0 µs/vertex (2.3×, batch=64,
+   rayon×12); end-to-end two-peer sync of 2,000 spend-chain txs (simulator, inline precompute — a lower bound):
+   ~752 tx/s batched vs ~658 per-vertex (+14%) vs ~610 pure-Python service (+23%). The bigger Phase-3 step —
+   feeding *raw vertex bytes* to one Rust call that parses + verifies (bypassing the Python parse on the serial
+   path) and batching the *script* stage across vertices — remains open and is where the projected multiplier
+   lives.
 3. **Alongside, cheap:** dedupe per-update metadata saves; binary metadata format defined in Rust, migrated once
    (or orjson interim).
 4. **Defer storage-to-Rust** until the Rust core consumes it natively (post-Phase-3); by then Rust owns both wire

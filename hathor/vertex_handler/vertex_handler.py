@@ -98,15 +98,32 @@ class VertexHandler:
             ),
         )
 
-        for tx in deps:
-            if not self._tx_storage.transaction_exists(tx.hash):
-                if not self._old_on_new_vertex(tx, params):
-                    return False
-                yield deferLater(self._reactor, 0, lambda: None)
+        from hathor.verification.rust_verification_service import (
+            RustVerificationService,
+            defer_stateless_precompute,
+        )
 
-        if not self._tx_storage.transaction_exists(block.hash):
-            if not self._old_on_new_vertex(block, params):
-                return False
+        pending = [tx for tx in deps if not self._tx_storage.transaction_exists(tx.hash)]
+        service = self._verification_service
+        batch: list[BaseTransaction] = [*pending, block]
+        if len(pending) > 1 and isinstance(service, RustVerificationService):
+            # one Rust call pre-verifies the stateless checks of the whole list in parallel
+            # (off-reactor when the reactor supports threads, GIL released); the serial connect
+            # loop below consumes the results
+            yield defer_stateless_precompute(self._reactor, service, batch, params)
+        try:
+            for tx in pending:
+                if not self._tx_storage.transaction_exists(tx.hash):
+                    if not self._old_on_new_vertex(tx, params):
+                        return False
+                    yield deferLater(self._reactor, 0, lambda: None)
+
+            if not self._tx_storage.transaction_exists(block.hash):
+                if not self._old_on_new_vertex(block, params):
+                    return False
+        finally:
+            if isinstance(service, RustVerificationService):
+                service.discard_precomputed(batch)
 
         return True
 

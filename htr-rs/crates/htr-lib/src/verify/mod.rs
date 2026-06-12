@@ -575,3 +575,42 @@ mod batch2_tests {
         assert!(check_number_of_inputs(&d).is_none());
     }
 }
+
+/// One vertex's check results: `None` (passed) or `(kind, message)` per requested check.
+type VertexCheckResults = Vec<Option<(String, String)>>;
+
+/// Run the stateless checks for a *batch* of vertices in a single GIL-released call, in
+/// parallel across vertices on the shared rayon pool. Each item is `(checks, data)` exactly
+/// as in [`verify_vertex_stateless`]; the result preserves item and check order, so callers
+/// can precompute a whole sync batch and consume each vertex's results later at its canonical
+/// position in the Python check sequence.
+#[pyfunction]
+pub fn verify_vertices_stateless_batch(
+    py: Python<'_>,
+    items: Vec<(Vec<u8>, VertexCheckData)>,
+    num_workers: usize,
+) -> PyResult<Vec<VertexCheckResults>> {
+    use pyo3::exceptions::PyValueError;
+    use rayon::prelude::*;
+
+    for (checks, _) in &items {
+        if let Some(&bad) = checks.iter().find(|&&c| c > CHECK_NUMBER_OF_INPUTS) {
+            return Err(PyValueError::new_err(format!("unknown check id: {bad}")));
+        }
+    }
+    let results = py.detach(|| {
+        let pool = crate::script::thread_pool(num_workers);
+        pool.install(|| {
+            items
+                .par_iter()
+                .map(|(checks, data)| {
+                    checks
+                        .iter()
+                        .map(|&check| run_check(check, data).map(CheckError::into_py))
+                        .collect()
+                })
+                .collect()
+        })
+    });
+    Ok(results)
+}
