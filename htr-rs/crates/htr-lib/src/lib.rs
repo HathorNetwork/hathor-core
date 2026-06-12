@@ -24,6 +24,7 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify::verify_outputs, m)?)?;
     m.add_function(wrap_pyfunction!(verify::verify_output_token_indexes, m)?)?;
     m.add_function(wrap_pyfunction!(verify::verify_pow, m)?)?;
+    m.add_function(wrap_pyfunction!(verify::verify_vertex_stateless, m)?)?;
     Ok(())
 }
 

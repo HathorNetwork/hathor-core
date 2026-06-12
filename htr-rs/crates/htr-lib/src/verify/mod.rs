@@ -264,3 +264,193 @@ mod tests {
         assert_eq!(kind(check_pow(&[0x00; 32], &[])), Some("PowError"));
     }
 }
+
+/// Check identifiers for [`verify_vertex_stateless`], matching the constants on the Python
+/// side (`RustVerificationService`).
+pub const CHECK_POW: u8 = 0;
+pub const CHECK_OUTPUTS: u8 = 1;
+pub const CHECK_OUTPUT_TOKEN_INDEXES: u8 = 2;
+pub const CHECK_SIGOPS_OUTPUT: u8 = 3;
+
+/// The per-vertex data marshalled once from Python for [`verify_vertex_stateless`].
+///
+/// Extracted by attribute from the Python `StatelessVertexCheckData` dataclass (same pattern
+/// as `ScriptJob`): named fields keep the boundary self-describing and extraction errors
+/// name the offending field. Each output is `(value, script, token_data)`.
+#[derive(FromPyObject)]
+pub struct VertexCheckData {
+    outputs: Vec<(i64, Vec<u8>, i64)>,
+    tokens_count: u64,
+    vertex_hash: Vec<u8>,
+    pow_target_be: Vec<u8>,
+    max_num_outputs: u64,
+    max_output_script_size: u64,
+    max_tx_sigops_output: u64,
+    max_multisig_pubkeys: u64,
+    enable_checkdatasig_count: bool,
+}
+
+/// `VertexVerifier.verify_sigops_output` including its limit check: sum the sigops of every
+/// output script and compare against the per-tx limit.
+fn check_sigops_output(data: &VertexCheckData) -> Option<CheckError> {
+    let mut total: u64 = 0;
+    for (_, script, _) in &data.outputs {
+        match crate::script::sigops::count_sigops(
+            script,
+            data.max_multisig_pubkeys,
+            data.enable_checkdatasig_count,
+        ) {
+            Ok(count) => total += count,
+            Err(e) => {
+                return Some(CheckError {
+                    kind: e.kind.python_name(),
+                    message: e.message,
+                });
+            }
+        }
+    }
+    if total > data.max_tx_sigops_output {
+        let message = format!(
+            "TX[{}]: Maximum number of sigops for all outputs exceeded ({total})",
+            hex(&data.vertex_hash)
+        );
+        return Some(CheckError::new("TooManySigOps", message));
+    }
+    None
+}
+
+fn run_check(check: u8, data: &VertexCheckData) -> Option<CheckError> {
+    match check {
+        CHECK_POW => check_pow(&data.vertex_hash, &data.pow_target_be),
+        CHECK_OUTPUTS => {
+            let fields: Vec<OutputFields> = data
+                .outputs
+                .iter()
+                .map(|(value, script, token_data)| (*value, script.len() as u64, *token_data))
+                .collect();
+            check_outputs(&fields, data.max_num_outputs, data.max_output_script_size)
+        }
+        CHECK_OUTPUT_TOKEN_INDEXES => {
+            let token_data_list: Vec<i64> = data
+                .outputs
+                .iter()
+                .map(|(_, _, token_data)| *token_data)
+                .collect();
+            check_output_token_indexes(&token_data_list, data.tokens_count)
+        }
+        CHECK_SIGOPS_OUTPUT => check_sigops_output(data),
+        _ => unreachable!("check ids are validated before the GIL is released"),
+    }
+}
+
+/// Run the requested stateless checks for one vertex in a single GIL-released call, in
+/// parallel on the shared rayon pool. Returns one entry per requested check, in request
+/// order: `None` (passed) or `(kind, message)`. The caller consumes the results in the
+/// canonical Python check order, so which error *surfaces* is unaffected by the parallelism.
+#[pyfunction]
+pub fn verify_vertex_stateless(
+    py: Python<'_>,
+    checks: Vec<u8>,
+    data: VertexCheckData,
+    num_workers: usize,
+) -> PyResult<Vec<Option<(String, String)>>> {
+    use pyo3::exceptions::PyValueError;
+    use rayon::prelude::*;
+
+    if let Some(&bad) = checks.iter().find(|&&c| c > CHECK_SIGOPS_OUTPUT) {
+        return Err(PyValueError::new_err(format!("unknown check id: {bad}")));
+    }
+    let results = py.detach(|| {
+        let pool = crate::script::thread_pool(num_workers);
+        pool.install(|| {
+            checks
+                .par_iter()
+                .map(|&check| run_check(check, &data).map(CheckError::into_py))
+                .collect()
+        })
+    });
+    Ok(results)
+}
+
+#[cfg(test)]
+mod stateless_tests {
+    use super::*;
+
+    fn data(outputs: Vec<(i64, Vec<u8>, i64)>, tokens_count: u64) -> VertexCheckData {
+        VertexCheckData {
+            outputs,
+            tokens_count,
+            vertex_hash: vec![0xAB; 32],
+            pow_target_be: vec![0xFF; 33], // huge target: pow always passes
+            max_num_outputs: 255,
+            max_output_script_size: 1024,
+            max_tx_sigops_output: 1275,
+            max_multisig_pubkeys: 20,
+            enable_checkdatasig_count: true,
+        }
+    }
+
+    fn kinds(checks: &[u8], data: &VertexCheckData) -> Vec<Option<&'static str>> {
+        checks
+            .iter()
+            .map(|&c| run_check(c, data).map(|e| e.kind))
+            .collect()
+    }
+
+    #[test]
+    fn test_all_checks_pass() {
+        let outputs = vec![(100, vec![0xAC], 1), (5, vec![0x51], 0)];
+        let d = data(outputs, 1);
+        let all = [
+            CHECK_POW,
+            CHECK_OUTPUTS,
+            CHECK_OUTPUT_TOKEN_INDEXES,
+            CHECK_SIGOPS_OUTPUT,
+        ];
+        assert_eq!(kinds(&all, &d), vec![None, None, None, None]);
+    }
+
+    #[test]
+    fn test_independent_failures() {
+        // value 0 fails OUTPUTS; token index 3 > 1 fails TOKEN_INDEXES; both reported in
+        // their own slots so the caller picks the canonical-order winner.
+        let outputs = vec![(0, vec![], 3)];
+        let d = data(outputs, 1);
+        let all = [
+            CHECK_POW,
+            CHECK_OUTPUTS,
+            CHECK_OUTPUT_TOKEN_INDEXES,
+            CHECK_SIGOPS_OUTPUT,
+        ];
+        assert_eq!(
+            kinds(&all, &d),
+            vec![None, Some("InvalidOutputValue"), Some("InvalidToken"), None]
+        );
+    }
+
+    #[test]
+    fn test_sigops_limit_and_malformed() {
+        // 80 outputs of OP_16 OP_CHECKMULTISIG = 1280 sigops > 1275
+        let outputs = vec![(1, vec![0x60, 0xAE], 0); 80];
+        let d = data(outputs, 0);
+        assert_eq!(
+            kinds(&[CHECK_SIGOPS_OUTPUT], &d),
+            vec![Some("TooManySigOps")]
+        );
+        // malformed script keeps the walk's error kind
+        let d = data(vec![(1, vec![0x00], 0)], 0);
+        assert_eq!(
+            kinds(&[CHECK_SIGOPS_OUTPUT], &d),
+            vec![Some("InvalidScriptError")]
+        );
+        let d = data(vec![(1, vec![0x05, 0x01], 0)], 0);
+        assert_eq!(kinds(&[CHECK_SIGOPS_OUTPUT], &d), vec![Some("OutOfData")]);
+    }
+
+    #[test]
+    fn test_pow_failure() {
+        let mut d = data(vec![(1, vec![], 0)], 0);
+        d.pow_target_be = vec![0x00];
+        assert_eq!(kinds(&[CHECK_POW], &d), vec![Some("PowError")]);
+    }
+}

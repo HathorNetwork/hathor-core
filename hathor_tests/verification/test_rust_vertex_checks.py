@@ -12,19 +12,20 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-"""Differential tests for the Rust stateless vertex checks: verify_outputs (incl. number of outputs),
-verify_output_token_indexes and verify_pow, against the authoritative Python implementations."""
+"""Check-level differential fuzz for the Rust stateless checks (htr_lib.verify_outputs,
+verify_output_token_indexes, verify_pow) against the authoritative Python verifier implementations.
+Service-level end-to-end coverage lives in test_rust_verification_service.py."""
 
 import math
 from types import SimpleNamespace
 from typing import Callable
 
+import htr_lib
 from hypothesis import HealthCheck, given, settings as hypothesis_settings, strategies as st
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction, TxOutput
-from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
 from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
 
@@ -44,15 +45,6 @@ def _make_output(value: int, script_len: int, token_data: int) -> TxOutput:
     return output
 
 
-def _make_pools() -> dict[ScriptVerificationMode | None, ScriptVerificationPool | None]:
-    pools: dict[ScriptVerificationMode | None, ScriptVerificationPool | None] = {None: None}
-    for mode in (ScriptVerificationMode.RUST, ScriptVerificationMode.SHADOW_RUST):
-        pool = ScriptVerificationPool(mode=mode, num_workers=2, min_inputs=1)
-        pool.start()
-        pools[mode] = pool
-    return pools
-
-
 def _outcome(fn: Callable[[], None]) -> str:
     try:
         fn()
@@ -61,51 +53,40 @@ def _outcome(fn: Callable[[], None]) -> str:
         return type(e).__name__
 
 
+def _python_vertex_verifier() -> VertexVerifier:
+    return VertexVerifier(
+        reactor=get_global_reactor(), settings=get_global_settings(),
+        feature_service=None,  # type: ignore[arg-type]  # unused by these checks
+    )
+
+
+def _rust_kind(error: tuple[str, str] | None) -> str:
+    return 'valid' if error is None else error[0]
+
+
 def assert_equivalent_outputs(outputs_fields: list[OutputFields]) -> None:
     settings = get_global_settings()
     vertex = SimpleNamespace(outputs=[_make_output(*fields) for fields in outputs_fields])
-    pools = _make_pools()
-    try:
-        outcomes = {}
-        for mode, pool in pools.items():
-            verifier = VertexVerifier(
-                reactor=get_global_reactor(), settings=settings,
-                feature_service=None, script_verification_pool=pool,  # type: ignore[arg-type]
-            )
-            outcomes[mode] = _outcome(lambda: verifier.verify_outputs(vertex))  # type: ignore[arg-type]
-        baseline = outcomes[None]
-        assert all(o == baseline for o in outcomes.values()), f'{outputs_fields[:5]}...: {outcomes}'
-        shadow_pool = pools[ScriptVerificationMode.SHADOW_RUST]
-        assert shadow_pool is not None and shadow_pool.shadow_mismatches == 0, outputs_fields[:5]
-    finally:
-        for pool in pools.values():
-            if pool is not None:
-                pool.stop()
+    python = _outcome(lambda: _python_vertex_verifier().verify_outputs(vertex))  # type: ignore[arg-type]
+    rust = _rust_kind(htr_lib.verify_outputs(
+        [(value, script_len, token_data) for value, script_len, token_data in outputs_fields],
+        settings.MAX_NUM_OUTPUTS,
+        settings.MAX_OUTPUT_SCRIPT_SIZE,
+    ))
+    assert python == rust, f'{outputs_fields[:5]}...: python={python} rust={rust}'
 
 
 def assert_equivalent_token_indexes(token_data_list: list[int], tokens_count: int) -> None:
-    settings = get_global_settings()
     tx = SimpleNamespace(
         outputs=[_make_output(1, 0, token_data) for token_data in token_data_list],
         tokens=[bytes(32)] * tokens_count,
     )
-    pools = _make_pools()
-    try:
-        outcomes = {}
-        for mode, pool in pools.items():
-            verifier = TransactionVerifier(
-                settings=settings, daa_factory=None, feature_service=None,  # type: ignore[arg-type]
-                script_verification_pool=pool,
-            )
-            outcomes[mode] = _outcome(lambda: verifier.verify_output_token_indexes(tx))  # type: ignore[arg-type]
-        baseline = outcomes[None]
-        assert all(o == baseline for o in outcomes.values()), f'{token_data_list}/{tokens_count}: {outcomes}'
-        shadow_pool = pools[ScriptVerificationMode.SHADOW_RUST]
-        assert shadow_pool is not None and shadow_pool.shadow_mismatches == 0
-    finally:
-        for pool in pools.values():
-            if pool is not None:
-                pool.stop()
+    verifier = TransactionVerifier(
+        settings=get_global_settings(), daa_factory=None, feature_service=None,  # type: ignore[arg-type]
+    )
+    python = _outcome(lambda: verifier.verify_output_token_indexes(tx))  # type: ignore[arg-type]
+    rust = _rust_kind(htr_lib.verify_output_token_indexes(token_data_list, tokens_count))
+    assert python == rust, f'{token_data_list}/{tokens_count}: python={python} rust={rust}'
 
 
 def test_outputs_corpus() -> None:
@@ -172,66 +153,54 @@ def test_fuzz_token_indexes(token_data_list: list[int], tokens_count: int) -> No
     assert_equivalent_token_indexes(token_data_list, tokens_count)
 
 
-def test_pow_equivalence() -> None:
-    """Differential over the weight space: both paths share Python's get_target, Rust only compares."""
-    settings = get_global_settings()
+def _rust_pow_outcome(vertex_hash: bytes, target: int) -> str:
+    """Mirror the marshalling: negative targets (float underflow at absurd weights) clamp to zero."""
+    target = max(target, 0)
+    target_bytes = target.to_bytes(max(1, (target.bit_length() + 7) // 8), 'big')
+    return _rust_kind(htr_lib.verify_pow(vertex_hash, target_bytes))
+
+
+def test_pow_weight_space() -> None:
+    """Differential over the weight space, target computed by Python's get_target in both paths."""
     tx = Transaction(outputs=[TxOutput(1, b'\x51')])
     tx.update_hash()
-    pools = _make_pools()
+    verifier = _python_vertex_verifier()
     # weight 0 -> target 2**256 (always passes); 256+ -> target 0 (always fails); 1500 -> float
-    # underflow makes get_target return -1 (clamped to 0 in the rust path); inf/nan -> WeightError.
-    weights = [0.0, 1.0, 60.0, 255.9, 256.0, 300.0, 1500.0, math.inf, math.nan]
-    try:
-        for weight in weights:
-            tx.weight = weight
-            outcomes = {}
-            for mode, pool in pools.items():
-                verifier = VertexVerifier(
-                    reactor=get_global_reactor(), settings=settings,
-                    feature_service=None, script_verification_pool=pool,  # type: ignore[arg-type]
-                )
-                outcomes[mode] = _outcome(lambda: verifier.verify_pow(tx))
-            baseline = outcomes[None]
-            assert all(o == baseline for o in outcomes.values()), f'weight={weight}: {outcomes}'
-        shadow_pool = pools[ScriptVerificationMode.SHADOW_RUST]
-        assert shadow_pool is not None and shadow_pool.shadow_mismatches == 0
-    finally:
-        for pool in pools.values():
-            if pool is not None:
-                pool.stop()
+    # underflow makes get_target return -1 (clamped to 0 in the rust marshalling); inf/nan ->
+    # WeightError raised by get_target itself, identically on both paths.
+    for weight in [0.0, 1.0, 60.0, 255.9, 256.0, 300.0, 1500.0, math.inf, math.nan]:
+        tx.weight = weight
+        python = _outcome(lambda: verifier.verify_pow(tx))
+        try:
+            target = tx.get_target()
+        except BaseException as e:
+            rust = type(e).__name__
+        else:
+            rust = _rust_pow_outcome(tx.hash, target)
+        assert python == rust, f'weight={weight}: python={python} rust={rust}'
 
 
 def test_pow_boundary() -> None:
-    """Exact boundary semantics at the helper level: hash must be strictly below the target."""
-    pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=2, min_inputs=1)
-    pool.start()
-    try:
-        hash_int = int.from_bytes(b'\xab' * 32, 'big')
-        for target, expect_error in [
-            (hash_int + 1, False),    # hash < target: ok
-            (hash_int, True),         # equal: rejected
-            (hash_int - 1, True),     # above: rejected
-            (2**256, False),          # max target accepts any hash
-            (0, True),                # zero target rejects everything
-            (-1, True),               # negative target (weight underflow) rejects everything
-        ]:
-            outcome = _outcome(lambda: pool.rust_verify_pow(b'\xab' * 32, target))
-            python = 'PowError' if hash_int >= target else 'valid'
-            assert outcome == python, f'target={target}: rust={outcome} python={python}'
-    finally:
-        pool.stop()
+    """Exact boundary semantics: hash must be strictly below the target."""
+    hash_bytes = b'\xab' * 32
+    hash_int = int.from_bytes(hash_bytes, 'big')
+    for target, expect_error in [
+        (hash_int + 1, False),    # hash < target: ok
+        (hash_int, True),         # equal: rejected
+        (hash_int - 1, True),     # above: rejected
+        (2**256, False),          # max target accepts any hash
+        (0, True),                # zero target rejects everything
+        (-1, True),               # negative target (weight underflow) rejects everything
+    ]:
+        outcome = _rust_pow_outcome(hash_bytes, target)
+        assert (outcome == 'PowError') == expect_error, f'target={target}: {outcome}'
 
 
 @FUZZ
 @given(hash_bytes=st.binary(min_size=32, max_size=32), weight=st.floats(min_value=0.0, max_value=300.0))
 def test_fuzz_pow(hash_bytes: bytes, weight: float) -> None:
     """Random hash/weight pairs: the Rust comparison must equal Python's int comparison."""
-    pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=2, min_inputs=1)
-    pool.start()
-    try:
-        target = int(2 ** (256 - weight) - 1)
-        rust = _outcome(lambda: pool.rust_verify_pow(hash_bytes, target))
-        python = 'PowError' if int.from_bytes(hash_bytes, 'big') >= target else 'valid'
-        assert rust == python
-    finally:
-        pool.stop()
+    target = int(2 ** (256 - weight) - 1)
+    rust = _rust_pow_outcome(hash_bytes, target)
+    python = 'PowError' if int.from_bytes(hash_bytes, 'big') >= target else 'valid'
+    assert rust == python

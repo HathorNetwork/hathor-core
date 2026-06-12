@@ -309,12 +309,22 @@ class CliBuilder:
             blueprint_service=blueprint_service,
             script_verification_pool=script_verification_pool,
         )
-        verification_service = VerificationService(
-            settings=settings,
-            verifiers=vertex_verifiers,
-            tx_storage=tx_storage,
-            nc_storage_factory=self.nc_storage_factory,
-        )
+        if script_verification_pool.enabled and script_verification_pool.is_rust_mode:
+            from hathor.verification.rust_verification_service import RustVerificationService
+            verification_service: VerificationService = RustVerificationService(
+                settings=settings,
+                verifiers=vertex_verifiers,
+                tx_storage=tx_storage,
+                nc_storage_factory=self.nc_storage_factory,
+                script_verification_pool=script_verification_pool,
+            )
+        else:
+            verification_service = VerificationService(
+                settings=settings,
+                verifiers=vertex_verifiers,
+                tx_storage=tx_storage,
+                nc_storage_factory=self.nc_storage_factory,
+            )
 
         cpu_mining_service = CpuMiningService()
 

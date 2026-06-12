@@ -374,26 +374,10 @@ class TransactionVerifier:
 
         :raises InvalidToken: output references non existent token uid
         """
-        pool = self._script_verification_pool
-
-        def python_check() -> None:
-            for output in tx.outputs:
-                # check index is valid
-                if output.get_token_index() > len(tx.tokens):
-                    raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
-
-        def rust_check() -> None:
-            assert pool is not None
-            pool.rust_verify_output_token_indexes(
-                [output.token_data for output in tx.outputs], tokens_count=len(tx.tokens),
-            )
-
-        if pool is not None and pool.rust_verification:
-            rust_check()
-        elif pool is not None and pool.shadow_rust_verification:
-            pool.run_shadow_check('verify_output_token_indexes', python_check, rust_check)
-        else:
-            python_check()
+        for output in tx.outputs:
+            # check index is valid
+            if output.get_token_index() > len(tx.tokens):
+                raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     @classmethod
     def verify_transparent_balance(

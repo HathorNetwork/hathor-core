@@ -20,12 +20,7 @@ import htr_lib
 from hypothesis import HealthCheck, given, settings as hypothesis_settings, strategies as st
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.reactor import get_global_reactor
-from hathor.transaction import Transaction, TxOutput
-from hathor.transaction.exceptions import TooManySigOps
 from hathor.transaction.scripts import SigopCounter
-from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
-from hathor.verification.vertex_verifier import VertexVerifier
 
 FUZZ = hypothesis_settings(max_examples=400, deadline=None, derandomize=True,
                            suppress_health_check=[HealthCheck.too_slow])
@@ -117,74 +112,41 @@ def test_fuzz_opcode_sequences(opcodes: list[int], suffix: bytes) -> None:
     assert_scripts_equivalent([bytes(opcodes) + suffix])
 
 
-def _make_vertex(scripts: list[bytes]) -> Transaction:
-    tx = Transaction(outputs=[TxOutput(1, script) for script in scripts])
-    tx.update_hash()
-    return tx
+def test_combined_call_sigops_slot() -> None:
+    """The sigops check inside the combined verify_vertex_stateless call (which also applies the limit)
+    must match the Python verify_sigops_output outcome, including TooManySigOps."""
+    from hathor.verification.rust_verification_service import CHECK_SIGOPS_OUTPUT, StatelessVertexCheckData
 
-
-def _make_verifier(mode: ScriptVerificationMode | None) -> tuple[VertexVerifier, ScriptVerificationPool | None]:
-    settings = get_global_settings()
-    pool = None
-    if mode is not None:
-        pool = ScriptVerificationPool(mode=mode, num_workers=2, min_inputs=1)
-        pool.start()
-    verifier = VertexVerifier(
-        reactor=get_global_reactor(),
-        settings=settings,
-        feature_service=None,  # type: ignore[arg-type]  # not used by verify_sigops_output
-        script_verification_pool=pool,
-    )
-    return verifier, pool
-
-
-def test_verify_sigops_output_equivalence() -> None:
-    """End-to-end: verify_sigops_output must surface the same exception type under python/rust/shadow."""
     settings = get_global_settings()
     over_limit_count = settings.MAX_TX_SIGOPS_OUTPUT // 16 + 1
-    cases = [
+    cases: list[tuple[str, list[bytes]]] = [
         ('valid p2pkh', [P2PKH_OUT]),
         ('empty', []),
-        ('over limit', [b'\x60\xae'] * over_limit_count),     # 16 sigops per output
+        ('over limit', [b'\x60\xae'] * over_limit_count),
         ('malformed', [P2PKH_OUT, b'\x00']),
         ('truncated', [b'\x05\x01']),
     ]
-    verifiers = {mode: _make_verifier(mode) for mode in (None, ScriptVerificationMode.RUST,
-                                                         ScriptVerificationMode.SHADOW_RUST)}
-    try:
-        for label, scripts in cases:
-            vertex = _make_vertex(scripts)
-            outcomes = {}
-            for mode, (verifier, _) in verifiers.items():
-                try:
-                    verifier.verify_sigops_output(vertex)
-                    outcomes[mode] = 'valid'
-                except BaseException as e:
-                    outcomes[mode] = type(e).__name__
-            baseline = outcomes[None]
-            assert all(outcome == baseline for outcome in outcomes.values()), f'{label}: {outcomes}'
-
-        _, shadow_pool = verifiers[ScriptVerificationMode.SHADOW_RUST]
-        assert shadow_pool is not None
-        assert shadow_pool.shadow_mismatches == 0
-    finally:
-        for _, pool in verifiers.values():
-            if pool is not None:
-                pool.stop()
-
-
-def test_over_limit_raises_too_many_sigops() -> None:
-    settings = get_global_settings()
-    over_limit_count = settings.MAX_TX_SIGOPS_OUTPUT // 16 + 1
-    vertex = _make_vertex([b'\x60\xae'] * over_limit_count)
-    verifier, pool = _make_verifier(ScriptVerificationMode.RUST)
-    try:
+    counter = SigopCounter(max_multisig_pubkeys=settings.MAX_MULTISIG_PUBKEYS, enable_checkdatasig_count=True)
+    mismatches = []
+    for label, scripts in cases:
         try:
-            verifier.verify_sigops_output(vertex)
-        except TooManySigOps:
-            pass
-        else:
-            raise AssertionError('expected TooManySigOps')
-    finally:
-        assert pool is not None
-        pool.stop()
+            total = sum(counter.get_sigops_count(script) for script in scripts)
+            python = 'TooManySigOps' if total > settings.MAX_TX_SIGOPS_OUTPUT else 'valid'
+        except BaseException as e:
+            python = type(e).__name__
+        data = StatelessVertexCheckData(
+            outputs=[(1, script, 0) for script in scripts],
+            tokens_count=0,
+            vertex_hash=b'\xab' * 32,
+            pow_target_be=b'',
+            max_num_outputs=settings.MAX_NUM_OUTPUTS,
+            max_output_script_size=settings.MAX_OUTPUT_SCRIPT_SIZE,
+            max_tx_sigops_output=settings.MAX_TX_SIGOPS_OUTPUT,
+            max_multisig_pubkeys=settings.MAX_MULTISIG_PUBKEYS,
+            enable_checkdatasig_count=True,
+        )
+        (result,) = htr_lib.verify_vertex_stateless([CHECK_SIGOPS_OUTPUT], data, 2)
+        rust = 'valid' if result is None else result[0]
+        if python != rust:
+            mismatches.append(f'{label}: python={python} rust={rust}')
+    assert not mismatches, '\n'.join(mismatches)

@@ -58,12 +58,7 @@ class VertexVerifiers(NamedTuple):
         Create a VertexVerifiers instance using the default verifier for each vertex type,
         from all required dependencies.
         """
-        vertex_verifier = VertexVerifier(
-            reactor=reactor,
-            settings=settings,
-            feature_service=feature_service,
-            script_verification_pool=script_verification_pool,
-        )
+        vertex_verifier = VertexVerifier(reactor=reactor, settings=settings, feature_service=feature_service)
 
         return cls.create(
             reactor=reactor,

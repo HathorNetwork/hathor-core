@@ -259,12 +259,7 @@ def _build_vertex_verifiers(
     return VertexVerifiers.create(
         reactor=reactor,
         settings=settings,
-        vertex_verifier=SimulatorVertexVerifier(
-            reactor=reactor,
-            settings=settings,
-            feature_service=feature_service,
-            script_verification_pool=script_verification_pool,
-        ),
+        vertex_verifier=SimulatorVertexVerifier(reactor=reactor, settings=settings, feature_service=feature_service),
         daa_factory=daa_factory,
         feature_service=feature_service,
         tx_storage=tx_storage,

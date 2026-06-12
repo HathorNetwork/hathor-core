@@ -42,6 +42,19 @@ def verify_pow(hash: bytes, target_be: bytes) -> tuple[str, str] | None:
     ...
 
 
+def verify_vertex_stateless(
+    checks: Sequence[int],
+    data: object,
+    num_workers: int,
+) -> list[tuple[str, str] | None]:
+    """Run the requested stateless checks for one vertex in a single GIL-released call (parallel
+    on the shared rayon pool). One entry per requested check, in request order.
+
+    `data` must expose the `StatelessVertexCheckData` fields as attributes (extracted by name).
+    """
+    ...
+
+
 def verify_scripts_batch(
     jobs: Sequence[object],
     max_multisig_pubkeys: int,

@@ -52,6 +52,7 @@ from hathor.transaction.exceptions import (
     ScriptError,
     TimeLocked,
     TooManyOutputs,
+    TooManySigOps,
     VerifyFailed,
 )
 from hathor.transaction.scripts.execute import DetachedUtxoScriptExtras, raw_script_eval
@@ -127,6 +128,7 @@ _RUST_VERIFICATION_ERRORS: dict[str, type[BaseException]] = {
     'InvalidOutputValue': InvalidOutputValue,
     'InvalidOutputScriptSize': InvalidOutputScriptSize,
     'PowError': PowError,
+    'TooManySigOps': TooManySigOps,
 }
 
 
@@ -258,8 +260,14 @@ class ScriptVerificationPool:
         return self._shadow_mismatches
 
     @property
-    def _is_rust_mode(self) -> bool:
+    def is_rust_mode(self) -> bool:
+        """Whether the configured mode is rust-backed (RUST or SHADOW_RUST)."""
         return self._mode in (ScriptVerificationMode.RUST, ScriptVerificationMode.SHADOW_RUST)
+
+    @property
+    def num_workers(self) -> int:
+        """Configured worker count (sizes the rust rayon pool on its first use)."""
+        return self._num_workers
 
     @property
     def rust_verification(self) -> bool:
@@ -271,50 +279,6 @@ class ScriptVerificationPool:
         """Whether started in SHADOW_RUST mode: Python stays authoritative, rust runs too and mismatches are
         logged and counted."""
         return self._rust_started and self._mode is ScriptVerificationMode.SHADOW_RUST
-
-    def count_sigops_outputs(self, scripts: Sequence[bytes], *, enable_checkdatasig_count: bool) -> int:
-        """Rust-backed output-sigops counting (`SigopCounter` over each output script). Raises exactly what the
-        Python walk would raise on a malformed script (`OutOfData` / `InvalidScriptError`)."""
-        import htr_lib
-        error, total = htr_lib.count_sigops_outputs(
-            list(scripts), self._max_multisig_pubkeys, enable_checkdatasig_count,
-        )
-        if error is not None:
-            raise_rust_error(error[0], error[1])
-        return total
-
-    def rust_verify_outputs(
-        self,
-        outputs: Sequence[tuple[int, int, int]],
-        *,
-        max_num_outputs: int,
-        max_output_script_size: int,
-    ) -> None:
-        """Rust-backed `VertexVerifier.verify_outputs` (incl. the number-of-outputs check) over marshalled
-        ``(value, script_len, token_data)`` tuples."""
-        import htr_lib
-        error = htr_lib.verify_outputs(list(outputs), max_num_outputs, max_output_script_size)
-        if error is not None:
-            raise_rust_error(error[0], error[1])
-
-    def rust_verify_output_token_indexes(self, token_data_list: Sequence[int], *, tokens_count: int) -> None:
-        """Rust-backed `TransactionVerifier.verify_output_token_indexes`."""
-        import htr_lib
-        error = htr_lib.verify_output_token_indexes(list(token_data_list), tokens_count)
-        if error is not None:
-            raise_rust_error(error[0], error[1])
-
-    def rust_verify_pow(self, vertex_hash: bytes, target: int) -> None:
-        """Rust-backed `VertexVerifier.verify_pow` comparison. The target is the Python-computed
-        ``vertex.get_target()`` value (the float math stays in Python so there is no libm-divergence risk);
-        negative targets (possible for absurdly large weights, where ``2**x`` underflows) clamp to zero, which
-        rejects every hash exactly like the negative target does."""
-        import htr_lib
-        target = max(target, 0)
-        target_bytes = target.to_bytes(max(1, (target.bit_length() + 7) // 8), 'big')
-        error = htr_lib.verify_pow(vertex_hash, target_bytes)
-        if error is not None:
-            raise_rust_error(error[0], error[1])
 
     def run_shadow_check(self, check: str, python_fn: Callable[[], _T], rust_fn: Callable[[], _T]) -> _T:
         """Run a verification check through Python (authoritative) and Rust, compare the outcome categories
@@ -361,7 +325,7 @@ class ScriptVerificationPool:
         """Create and warm up the executor (or the Rust thread pool). No-op when disabled or already started."""
         if not self.enabled or self.started:
             return
-        if self._is_rust_mode:
+        if self.is_rust_mode:
             # The Rust path reads no global state: the settings the opcodes need are snapshotted here and passed
             # on every batch call.
             from hathor.conf.get_settings import get_global_settings

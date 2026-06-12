@@ -130,7 +130,7 @@ impl ScriptJob {
 
 /// The dedicated rayon pool used for script verification. Sized on first use; later calls
 /// with a different `num_workers` reuse the existing pool.
-fn thread_pool(num_workers: usize) -> &'static rayon::ThreadPool {
+pub(crate) fn thread_pool(num_workers: usize) -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
         rayon::ThreadPoolBuilder::new()

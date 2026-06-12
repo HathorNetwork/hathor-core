@@ -42,7 +42,6 @@ from hathor.transaction.headers import (
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
 )
-from hathor.verification.script_verification_pool import ScriptVerificationPool
 from hathor.verification.verification_params import VerificationParams
 
 # tx should have 2 parents, both other transactions
@@ -57,20 +56,12 @@ MAX_PAST_TIMESTAMP_ALLOWED: int = 3600 * 36  # 36 hours
 
 
 class VertexVerifier:
-    __slots__ = ('_settings', '_feature_service', '_reactor', '_script_verification_pool')
+    __slots__ = ('_settings', '_feature_service', '_reactor')
 
-    def __init__(
-        self,
-        *,
-        reactor: Reactor,
-        settings: HathorSettings,
-        feature_service: FeatureService,
-        script_verification_pool: 'ScriptVerificationPool | None' = None,
-    ):
+    def __init__(self, *, reactor: Reactor, settings: HathorSettings, feature_service: FeatureService):
         self._reactor = reactor
         self._settings = settings
         self._feature_service = feature_service
-        self._script_verification_pool = script_verification_pool
 
     def verify_version_basic(self, vertex: BaseTransaction) -> None:
         """Verify that the vertex version is valid."""
@@ -143,25 +134,10 @@ class VertexVerifier:
         :raises PowError: when the hash is equal or greater than the target
         """
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
-        pool = self._script_verification_pool
-
-        def python_check() -> None:
-            numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
-            minimum_target = vertex.get_target(override_weight)
-            if numeric_hash >= minimum_target:
-                raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
-
-        def rust_check() -> None:
-            assert pool is not None
-            # get_target stays in Python (incl. its WeightError on non-finite weights); Rust only compares.
-            pool.rust_verify_pow(vertex.hash, vertex.get_target(override_weight))
-
-        if pool is not None and pool.rust_verification:
-            rust_check()
-        elif pool is not None and pool.shadow_rust_verification:
-            pool.run_shadow_check('verify_pow', python_check, rust_check)
-        else:
-            python_check()
+        numeric_hash = int(vertex.hash_hex, vertex.HEX_BASE)
+        minimum_target = vertex.get_target(override_weight)
+        if numeric_hash >= minimum_target:
+            raise PowError(f'Transaction has invalid data ({numeric_hash} < {minimum_target})')
 
     def verify_outputs(self, vertex: BaseTransaction) -> None:
         """Verify there are no hathor authority UTXOs and outputs are all positive
@@ -171,29 +147,6 @@ class VertexVerifier:
         :raises TooManyOutputs: when there are too many outputs
         """
         self.verify_number_of_outputs(vertex)
-        pool = self._script_verification_pool
-
-        def python_check() -> None:
-            self._verify_output_items(settings=self._settings, vertex=vertex)
-
-        def rust_check() -> None:
-            assert pool is not None
-            pool.rust_verify_outputs(
-                [(output.value, len(output.script), output.token_data) for output in vertex.outputs],
-                max_num_outputs=self._settings.MAX_NUM_OUTPUTS,
-                max_output_script_size=self._settings.MAX_OUTPUT_SCRIPT_SIZE,
-            )
-
-        if pool is not None and pool.rust_verification:
-            rust_check()
-        elif pool is not None and pool.shadow_rust_verification:
-            pool.run_shadow_check('verify_outputs', python_check, rust_check)
-        else:
-            python_check()
-
-    @staticmethod
-    def _verify_output_items(*, settings: HathorSettings, vertex: BaseTransaction) -> None:
-        """The authoritative Python per-output checks of `verify_outputs` (consensus reference)."""
         for index, output in enumerate(vertex.outputs):
             # no hathor authority UTXO
             if (output.get_token_index() == 0) and output.is_token_authority():
@@ -205,9 +158,9 @@ class VertexVerifier:
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
 
-            if len(output.script) > settings.MAX_OUTPUT_SCRIPT_SIZE:
+            if len(output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
                 raise InvalidOutputScriptSize('size: {} and max-size: {}'.format(
-                    len(output.script), settings.MAX_OUTPUT_SCRIPT_SIZE
+                    len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
@@ -216,34 +169,12 @@ class VertexVerifier:
             raise TooManyOutputs('Maximum number of outputs exceeded')
 
     def verify_sigops_output(self, vertex: BaseTransaction, enable_checkdatasig_count: bool = True) -> None:
-        """Count sig operations on all outputs and verify that the total sum is below the limit.
-
-        The counting walk runs in Rust when the script-verification pool is in a rust mode; the Python
-        implementation (`_verify_sigops_output`) remains the consensus reference and the shadow mode compares both.
-        """
-        pool = self._script_verification_pool
-
-        def python_check() -> None:
-            self._verify_sigops_output(
-                settings=self._settings,
-                vertex=vertex,
-                enable_checkdatasig_count=enable_checkdatasig_count,
-            )
-
-        def rust_check() -> None:
-            assert pool is not None
-            n_txops = pool.count_sigops_outputs(
-                [tx_output.script for tx_output in vertex.outputs],
-                enable_checkdatasig_count=enable_checkdatasig_count,
-            )
-            self._check_sigops_output_limit(settings=self._settings, vertex=vertex, n_txops=n_txops)
-
-        if pool is not None and pool.rust_verification:
-            rust_check()
-        elif pool is not None and pool.shadow_rust_verification:
-            pool.run_shadow_check('verify_sigops_output', python_check, rust_check)
-        else:
-            python_check()
+        """Alias to `_verify_sigops_output` for compatibility."""
+        self._verify_sigops_output(
+            settings=self._settings,
+            vertex=vertex,
+            enable_checkdatasig_count=enable_checkdatasig_count,
+        )
 
     @staticmethod
     def _verify_sigops_output(
@@ -267,11 +198,6 @@ class VertexVerifier:
         for tx_output in vertex.outputs:
             n_txops += counter.get_sigops_count(tx_output.script)
 
-        VertexVerifier._check_sigops_output_limit(settings=settings, vertex=vertex, n_txops=n_txops)
-
-    @staticmethod
-    def _check_sigops_output_limit(*, settings: HathorSettings, vertex: BaseTransaction, n_txops: int) -> None:
-        """Shared limit check for the Python and Rust counting paths."""
         if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))

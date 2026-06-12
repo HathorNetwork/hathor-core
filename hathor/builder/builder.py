@@ -602,12 +602,23 @@ class Builder:
             verifiers = self._get_or_create_vertex_verifiers()
             storage = self._get_or_create_tx_storage()
             nc_storage_factory = self._get_or_create_nc_storage_factory()
-            self._verification_service = VerificationService(
-                settings=settings,
-                verifiers=verifiers,
-                tx_storage=storage,
-                nc_storage_factory=nc_storage_factory,
-            )
+            pool = self._get_or_create_script_verification_pool()
+            if pool.enabled and pool.is_rust_mode:
+                from hathor.verification.rust_verification_service import RustVerificationService
+                self._verification_service = RustVerificationService(
+                    settings=settings,
+                    verifiers=verifiers,
+                    tx_storage=storage,
+                    nc_storage_factory=nc_storage_factory,
+                    script_verification_pool=pool,
+                )
+            else:
+                self._verification_service = VerificationService(
+                    settings=settings,
+                    verifiers=verifiers,
+                    tx_storage=storage,
+                    nc_storage_factory=nc_storage_factory,
+                )
 
         return self._verification_service
 

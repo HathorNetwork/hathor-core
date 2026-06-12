@@ -14,6 +14,7 @@
 
 from unittest.mock import Mock, patch
 
+from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_from_public_key
 from hathor.manager import HathorManager
 from hathor.transaction import BitcoinAuxPow, Block, MergeMinedBlock, Transaction, TxInput, TxOutput
@@ -36,6 +37,15 @@ class VerificationTest(unittest.TestCase):
     verification methods, but rather simply asserts that each verification method is called when it is supposed to be
     called. This guarantee is mostly useful during the verification refactors.
     """
+
+    def get_builder(self, settings: HathorSettings | None = None) -> unittest.TestBuilder:
+        # These tests assert the *Python* dispatch call graph (each verifier method called once). The rust
+        # verification service intentionally bypasses the migrated verifier methods, so pin the python path
+        # even under HATHOR_TEST_SCRIPT_VERIFICATION=rust/shadow-rust suite runs.
+        from hathor.verification.script_verification_pool import ScriptVerificationMode
+        builder = super().get_builder(settings)
+        builder.set_script_verification_config(mode=ScriptVerificationMode.DISABLED, num_workers=0)
+        return builder
 
     def setUp(self) -> None:
         super().setUp()
