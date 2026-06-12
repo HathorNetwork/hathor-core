@@ -246,6 +246,20 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         tx_exists = self._db.get((self._cf_tx, hash_bytes)) is not None
         return tx_exists
 
+    @override
+    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+        # Lock-free fast path: an LRU-cache hit needs neither the per-hash load lock (the
+        # lock dedups concurrent *loads*; hits never load) nor weakref re-registration
+        # (everything inserted into the cache was registered then, and the cache's strong
+        # reference keeps that entry alive). Dict get/move_to_end are GIL-atomic, so this is
+        # safe from the precompute worker threads too.
+        if tx := self.cache_data.cache.get(hash_bytes):
+            self.cache_data.cache.move_to_end(hash_bytes, last=True)
+            self.cache_data.hit += 1
+            self.post_get_validation(tx)
+            return tx
+        return super().get_transaction(hash_bytes)
+
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         if tx := self.cache_data.cache.get(hash_bytes):
             self.cache_data.cache.move_to_end(hash_bytes, last=True)

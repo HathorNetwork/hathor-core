@@ -463,7 +463,16 @@ class TransactionStorage(ABC):
         A failure means there is a bug in the code that allowed the condition to reach the "get" code. This is a last
         second measure to prevent getting a transaction while using the wrong scope.
         """
+        from hathor.transaction.validation_state import ValidationState
         tx_meta = tx.get_metadata()
+        # Fast path for the overwhelmingly common case (~38 gets per added tx): default
+        # VALID scope and a fully-valid tx. Equivalent to the slow path: FULL is
+        # fully-connected and neither partial nor invalid, so is_allowed reduces to
+        # `VALID in scope`, and marker consistency reduces to the marker being absent.
+        if self._allow_scope is TxAllowScope.VALID and tx_meta.validation is ValidationState.FULL:
+            assert self._settings.PARTIALLY_VALIDATED_ID not in tx_meta.get_frozen_voided_by(), \
+                   'Inconsistent ValidationState and voided_by'
+            return
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
 
