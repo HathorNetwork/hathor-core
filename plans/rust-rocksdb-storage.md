@@ -110,11 +110,13 @@ it. The python-rocksdb dependency is retired once the flag becomes the default.
 
 ## Compatibility & risks
 
-1. **librocksdb version one-way door.** The Rust crate bundles a newer librocksdb than python-rocksdb.
-   Reading old DBs is backward-compatible; once *written* by the newer version, rollback to the Python
-   binding may fail. Mitigation: explicit rollback test in CI (open-new-then-open-old over a fixture DB);
-   release notes flag the migration as one-way without re-sync; keep both backends behind the flag for one
-   release cycle.
+1. **librocksdb version one-way door — confirmed empirically, resolved by decision.** The Rust crate
+   bundles librocksdb 10.x; once it writes an SST, python-rocksdb fails to open the DB with
+   `Corruption: Unknown Footer version`. **Decision (2026-06): no cross-binding file compatibility is
+   maintained in either direction — switching backends means a fresh database and a re-sync from scratch.**
+   (Pinning `format_version=5` would have made files mutually readable, but carrying that constraint isn't
+   worth it for a migration that happens once per node.) The newer binding *can* read python-written DBs;
+   that is informational, not a supported path.
 2. **Option parity.** mmap flags, write buffer, WAL cap, block cache size must match — they affect
    performance and disk behavior, not correctness, but regressions here would be silent. Pin them in one
    shared constant table and assert them in the differential harness.
@@ -131,13 +133,13 @@ it. The python-rocksdb dependency is retired once the flag becomes the default.
 ## Rollout
 
 1. Rust module + Python wrapper behind `--storage-backend rust-rocksdb` (default `python-rocksdb`),
-   mirroring the script-verification flag discipline.
+   mirroring the script-verification flag discipline. Switching backends on an existing data dir is
+   unsupported (risk #1): the node must start from a fresh database and re-sync.
 2. **Differential harness:** run the same operation stream against both backends (fresh temp DBs), compare
    every result including iterator order and property queries; plus the full test suite with the flag on.
-3. Rollback/compat test (risk #1).
-4. Benchmark: index-scan parity (chunked iterators), get/put parity, and the real target — batch-verify
+3. Benchmark: index-scan parity (chunked iterators), get/put parity, and the real target — batch-verify
    dependency resolution via the native path vs Python-supplied deps.
-5. Testnet soak with the flag on; then flip the default; then retire python-rocksdb.
+4. Testnet soak with the flag on; then flip the default; then retire python-rocksdb.
 
 ## Sequencing
 

@@ -3,6 +3,7 @@
 use pyo3::prelude::*;
 
 pub mod script;
+pub mod storage;
 pub mod verify;
 pub mod vertex;
 
@@ -28,6 +29,9 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(vertex::parse_vertex, m)?)?;
+    m.add_class::<storage::RocksDb>()?;
+    m.add_class::<storage::RocksDbWriteBatch>()?;
+    m.add_class::<storage::RocksDbIterator>()?;
     Ok(())
 }
 
