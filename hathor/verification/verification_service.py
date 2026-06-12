@@ -32,7 +32,7 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('_settings', 'verifiers', '_tx_storage', '_nc_storage_factory')
+    __slots__ = ('_settings', 'verifiers', '_tx_storage', '_nc_storage_factory', '_vertex_parser')
 
     def __init__(
         self,
@@ -42,10 +42,23 @@ class VerificationService:
         tx_storage: TransactionStorage | None = None,
         nc_storage_factory: NCStorageFactory | None = None,
     ) -> None:
+        from hathor.transaction.vertex_parser import VertexParser
         self._settings = settings
         self.verifiers = verifiers
         self._tx_storage = tx_storage
         self._nc_storage_factory = nc_storage_factory
+        self._vertex_parser = VertexParser(settings=settings)
+
+    def verify_bytes(self, data: bytes, *, storage: TransactionStorage | None = None) -> BaseTransaction:
+        """The single entrypoint for turning wire bytes into a vertex: every caller that
+        receives a serialized vertex (p2p sync, APIs, mining) goes through here.
+
+        Parsing uses the Rust fast path with Python fallback; parse failures raise exactly
+        like ``VertexParser.deserialize`` (``struct.error``). Verification itself runs at the
+        canonical validation points — this method is where parse-time verification work
+        (e.g. the fused Rust parse+verify call) gets wired as it is migrated.
+        """
+        return self._vertex_parser.deserialize(data, storage=storage)
 
     def validate_basic(self, vertex: BaseTransaction, params: VerificationParams) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.

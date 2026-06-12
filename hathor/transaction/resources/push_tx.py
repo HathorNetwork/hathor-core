@@ -69,7 +69,7 @@ class PushTxResource(Resource):
     def handle_push_tx(self, params: dict[str, Any], client_addr: str) -> dict[str, Any]:
         try:
             tx_bytes = bytes.fromhex(params['hex_tx'])
-            tx = self.manager.vertex_parser.deserialize(tx_bytes)
+            tx = self.manager.verification_service.verify_bytes(tx_bytes)
         except ValueError:
             return {'success': False, 'message': 'Invalid hexadecimal data', 'can_force': False}
         except struct.error:

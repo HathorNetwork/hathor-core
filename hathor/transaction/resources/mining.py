@@ -120,7 +120,8 @@ class SubmitBlockResource(Resource):
 
         data = json_loadb(request.content.read())
 
-        tx = self.manager.vertex_parser.deserialize(bytes.fromhex(data['hexdata']), storage=self.manager.tx_storage)
+        tx = self.manager.verification_service.verify_bytes(
+            bytes.fromhex(data['hexdata']), storage=self.manager.tx_storage)
 
         if not tx.is_block:
             self.log.debug('expected Block, received Transaction', data=data)
