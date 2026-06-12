@@ -436,7 +436,11 @@ class TransactionStorage(ABC):
         """
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
-        self._save_static_metadata(tx)
+        if not only_metadata:
+            # static metadata is immutable and initialized before the first full save;
+            # metadata-only saves (several per consensus update) were rewriting the same
+            # bytes every time
+            self._save_static_metadata(tx)
 
     @abstractmethod
     def _save_static_metadata(self, vertex: BaseTransaction) -> None:
