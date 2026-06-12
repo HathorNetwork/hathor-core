@@ -260,7 +260,7 @@ class VerificationService:
             # TODO do genesis validation
             return
         self.verify_without_storage(tx, params)
-        self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
+        self._verify_sigops_input(tx, params)
         self.verifiers.tx.verify_inputs(tx, params)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
@@ -276,6 +276,10 @@ class VerificationService:
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
+
+    def _verify_sigops_input(self, tx: Transaction, params: VerificationParams) -> None:
+        """Dispatch point for the input-sigops check (overridden by the rust verification service)."""
+        self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
 
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.

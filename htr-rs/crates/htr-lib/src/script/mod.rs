@@ -183,28 +183,40 @@ pub fn verify_scripts_batch(
     Ok(results)
 }
 
-/// Count the signature operations of a vertex's output scripts (the Rust path of
-/// `VertexVerifier.verify_sigops_output`).
+/// Count the signature operations of a transaction's inputs (the counting core of
+/// `TransactionVerifier.verify_sigops_input`).
 ///
-/// Walks every script in order and returns `(None, total)` on success, or
-/// `(Some((kind, message)), 0)` for the first malformed script — `kind` is the Python
-/// exception class name (`OutOfData` or `InvalidScriptError`), matching what the Python
-/// `SigopCounter` walk would raise. The limit comparison stays in Python.
+/// Each pair is `(input_data, spent_output_script)`; when the spent output script is a
+/// MultiSig pattern, the redeem script is unwrapped from the input data and counted instead
+/// (`get_sigops_count`). Returns one `(error, count)` entry per pair, in order — the caller
+/// (which fetched the spent outputs from storage) merges them with its fetch errors in the
+/// canonical per-input order, so the surfaced exception matches the Python loop exactly.
 #[pyfunction]
-pub fn count_sigops_outputs(
+pub fn count_sigops_inputs(
     py: Python<'_>,
-    scripts: Vec<Vec<u8>>,
+    pairs: Vec<(Vec<u8>, Vec<u8>)>,
     max_multisig_pubkeys: u64,
     enable_checkdatasig_count: bool,
-) -> (Option<(String, String)>, u64) {
+    num_workers: usize,
+) -> Vec<(Option<(String, String)>, u64)> {
     py.detach(|| {
-        let mut total: u64 = 0;
-        for script in &scripts {
-            match sigops::count_sigops(script, max_multisig_pubkeys, enable_checkdatasig_count) {
-                Ok(count) => total += count,
-                Err(e) => return (Some((e.kind.python_name().to_string(), e.message)), 0),
-            }
-        }
-        (None, total)
+        let pool = thread_pool(num_workers);
+        pool.install(|| {
+            pairs
+                .par_iter()
+                .map(|(input_data, output_script)| {
+                    let result = sigops::get_sigops_count(
+                        input_data,
+                        Some(output_script),
+                        max_multisig_pubkeys,
+                        enable_checkdatasig_count,
+                    );
+                    match result {
+                        Ok(count) => (None, count),
+                        Err(e) => (Some((e.kind.python_name().to_string(), e.message)), 0),
+                    }
+                })
+                .collect()
+        })
     })
 }

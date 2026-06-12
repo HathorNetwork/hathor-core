@@ -163,3 +163,77 @@ def test_rust_service_uses_python_when_pool_not_started() -> None:
     service = RustVerificationService(settings=settings, verifiers=verifiers, script_verification_pool=pool)
     tx = _make_tx([TxOutput(100, P2PKH_OUT)])
     service.verify_without_storage(tx, _make_params())  # pool not started: python path, must not raise
+
+
+class _StubStorage:
+    """Returns the given spent tx for its own hash and raises TransactionDoesNotExist otherwise."""
+
+    def __init__(self, spent_tx: Transaction) -> None:
+        self._spent_tx = spent_tx
+
+    def get_transaction(self, tx_id: bytes) -> Transaction:
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        if tx_id != self._spent_tx.hash:
+            raise TransactionDoesNotExist(tx_id.hex())
+        return self._spent_tx
+
+
+def test_verify_sigops_input_equivalence() -> None:
+    """The _verify_sigops_input override (Python fetch + one Rust counting call) must surface the same
+    exception type as the Python verifier loop, including the per-input interleaving of fetch and
+    counting errors."""
+    settings = get_global_settings()
+    over_limit_count = settings.MAX_TX_SIGOPS_INPUT // 16 + 1
+
+    multisig_out = bytes.fromhex('a914435d1cb21e38a88634dfe325e1ec0fd5c98adc4387')
+    # redeem script: OP_2 <3 pubkey pushes> OP_3 OP_CHECKMULTISIG, wrapped in the input data push
+    redeem = b'\x52' + (b'\x21' + b'\x02' * 33) * 3 + b'\x53\xae'
+    multisig_input_data = b'\x05' + b'\xab' * 5 + bytes([0x4C, len(redeem)]) + redeem
+
+    spent_tx = Transaction(timestamp=900, outputs=[TxOutput(100, P2PKH_OUT), TxOutput(100, multisig_out)])
+    spent_tx.update_hash()
+    missing_id = b'\xfe' * 32
+
+    def make_tx(inputs: list[TxInput]) -> Transaction:
+        tx = Transaction(timestamp=1000, weight=0.0, inputs=inputs, outputs=[TxOutput(100, P2PKH_OUT)])
+        tx.storage = _StubStorage(spent_tx)  # type: ignore[assignment]
+        tx.update_hash()
+        return tx
+
+    cases: list[tuple[str, Transaction]] = [
+        ('valid p2pkh input', make_tx([TxInput(spent_tx.hash, 0, b'\xac')])),
+        ('multisig redeem unwrap', make_tx([TxInput(spent_tx.hash, 1, multisig_input_data)])),
+        ('missing spent tx', make_tx([TxInput(missing_id, 0, b'')])),
+        ('spent output index out of range', make_tx([TxInput(spent_tx.hash, 9, b'')])),
+        ('malformed input data', make_tx([TxInput(spent_tx.hash, 0, b'\x00')])),
+        ('truncated input data', make_tx([TxInput(spent_tx.hash, 0, b'\x05\x01')])),
+        ('multisig output, pushless input', make_tx([TxInput(spent_tx.hash, 1, b'\x6f')])),
+        ('over limit', make_tx([TxInput(spent_tx.hash, 0, b'\x60\xae')] * over_limit_count)),
+        # interleaving: input 0 counting error must surface before input 1's fetch error
+        ('count error before later fetch error',
+         make_tx([TxInput(spent_tx.hash, 0, b'\x00'), TxInput(missing_id, 0, b'')])),
+        # interleaving: input 0 fetch error must surface before input 1's counting error
+        ('fetch error before later count error',
+         make_tx([TxInput(missing_id, 0, b''), TxInput(spent_tx.hash, 0, b'\x00')])),
+    ]
+
+    services, pools = _make_services()
+    params = _make_params()
+    try:
+        failures = []
+        for label, tx in cases:
+            outcomes = {}
+            for name, service in services.items():
+                try:
+                    service._verify_sigops_input(tx, params)
+                    outcomes[name] = 'valid'
+                except BaseException as e:
+                    outcomes[name] = type(e).__name__
+            if len(set(outcomes.values())) != 1:
+                failures.append(f'{label}: {outcomes}')
+        assert not failures, 'sigops_input outcome mismatches:\n' + '\n'.join(failures)
+        for pool in pools:
+            assert pool.shadow_mismatches == 0
+    finally:
+        for pool in pools:
+            pool.stop()

@@ -118,28 +118,6 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-#[pyfunction]
-pub fn verify_outputs(
-    outputs: Vec<OutputFields>,
-    max_num_outputs: u64,
-    max_output_script_size: u64,
-) -> Option<(String, String)> {
-    check_outputs(&outputs, max_num_outputs, max_output_script_size).map(CheckError::into_py)
-}
-
-#[pyfunction]
-pub fn verify_output_token_indexes(
-    token_data_list: Vec<i64>,
-    tokens_count: u64,
-) -> Option<(String, String)> {
-    check_output_token_indexes(&token_data_list, tokens_count).map(CheckError::into_py)
-}
-
-#[pyfunction]
-pub fn verify_pow(hash: Vec<u8>, target_be: Vec<u8>) -> Option<(String, String)> {
-    check_pow(&hash, &target_be).map(CheckError::into_py)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

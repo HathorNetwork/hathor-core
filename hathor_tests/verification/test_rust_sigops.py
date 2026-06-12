@@ -43,9 +43,11 @@ def python_outcome(script: bytes, *, enable_checkdatasig_count: bool = True) -> 
 
 
 def rust_outcome(script: bytes, *, enable_checkdatasig_count: bool = True) -> tuple[str, int]:
+    # An empty spent-output script is not a multisig pattern, so the pair counts the raw script —
+    # equivalent to the bare count_sigops walk, with the exact count returned for comparison.
     settings = get_global_settings()
-    error, total = htr_lib.count_sigops_outputs(
-        [script], settings.MAX_MULTISIG_PUBKEYS, enable_checkdatasig_count,
+    ((error, total),) = htr_lib.count_sigops_inputs(
+        [(script, b'')], settings.MAX_MULTISIG_PUBKEYS, enable_checkdatasig_count, 2,
     )
     if error is not None:
         return error[0], 0

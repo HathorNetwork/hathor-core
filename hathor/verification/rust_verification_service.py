@@ -42,6 +42,7 @@ from typing_extensions import override
 from hathor.conf.settings import HathorSettings
 from hathor.nanocontracts import NCStorageFactory, OnChainBlueprint
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock, Transaction, TxVersion
+from hathor.transaction.exceptions import InexistentInput, TooManySigOps
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
@@ -192,6 +193,61 @@ class RustVerificationService(VerificationService):
         self.verifiers.block.verify_output_token_indexes(block)
         self.verifiers.block.verify_data(block)
         results.consume(CHECK_SIGOPS_OUTPUT)
+
+    @override
+    def _verify_sigops_input(self, tx: Transaction, params: VerificationParams) -> None:
+        pool = self._script_verification_pool
+        if pool.rust_verification:
+            self._verify_sigops_input_rust(tx, params)
+        elif pool.shadow_rust_verification:
+            pool.run_shadow_check(
+                'verify_sigops_input',
+                lambda: VerificationService._verify_sigops_input(self, tx, params),
+                lambda: self._verify_sigops_input_rust(tx, params),
+            )
+        else:
+            super()._verify_sigops_input(tx, params)
+
+    def _verify_sigops_input_rust(self, tx: Transaction, params: VerificationParams) -> None:
+        """`TransactionVerifier.verify_sigops_input` with the counting in Rust: Python fetches the spent
+        outputs (storage), one Rust call counts every (input_data, spent_script) pair, and the results are
+        merged in per-input order so fetch errors and counting errors interleave exactly like the Python
+        loop (a fetch failure at input i stops the loop: later inputs are never counted, and counting
+        errors of earlier inputs surface first)."""
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        pairs: list[tuple[bytes, bytes]] = []
+        fetch_error: InexistentInput | None = None
+        for tx_input in tx.inputs:
+            try:
+                spent_tx = tx.get_spent_tx(tx_input)
+            except TransactionDoesNotExist:
+                fetch_error = InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
+                break
+            if tx_input.index >= len(spent_tx.outputs):
+                fetch_error = InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    tx_input.tx_id.hex(), tx_input.index))
+                break
+            pairs.append((tx_input.data, spent_tx.resolve_spent_output(tx_input.index).script))
+
+        n_txops = 0
+        if pairs:
+            results = htr_lib.count_sigops_inputs(
+                pairs,
+                self._settings.MAX_MULTISIG_PUBKEYS,
+                params.features.count_checkdatasig_op,
+                self._script_verification_pool.num_workers,
+            )
+            for error, count in results:
+                if error is not None:
+                    raise_rust_error(error[0], error[1])
+                n_txops += count
+
+        if fetch_error is not None:
+            raise fetch_error
+        if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
+            raise TooManySigOps(
+                'TX[{}]: Max number of sigops for inputs exceeded ({})'.format(tx.hash_hex, n_txops))
 
     def _verify_without_storage_tx_rust(self, tx: Transaction, params: VerificationParams) -> None:
         results = self._run_rust_checks(

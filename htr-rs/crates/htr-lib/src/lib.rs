@@ -20,10 +20,7 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
     m.add_function(wrap_pyfunction!(script::verify_scripts_batch, m)?)?;
-    m.add_function(wrap_pyfunction!(script::count_sigops_outputs, m)?)?;
-    m.add_function(wrap_pyfunction!(verify::verify_outputs, m)?)?;
-    m.add_function(wrap_pyfunction!(verify::verify_output_token_indexes, m)?)?;
-    m.add_function(wrap_pyfunction!(verify::verify_pow, m)?)?;
+    m.add_function(wrap_pyfunction!(script::count_sigops_inputs, m)?)?;
     m.add_function(wrap_pyfunction!(verify::verify_vertex_stateless, m)?)?;
     Ok(())
 }

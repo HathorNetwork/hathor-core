@@ -12,9 +12,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-"""Check-level differential fuzz for the Rust stateless checks (htr_lib.verify_outputs,
-verify_output_token_indexes, verify_pow) against the authoritative Python verifier implementations.
-Service-level end-to-end coverage lives in test_rust_verification_service.py."""
+"""Check-level differential fuzz for the Rust stateless checks against the authoritative Python
+verifier implementations, exercised through the production entry point (htr_lib.verify_vertex_stateless
+with a single check requested). Service-level end-to-end coverage lives in
+test_rust_verification_service.py."""
 
 import math
 from types import SimpleNamespace
@@ -26,6 +27,12 @@ from hypothesis import HealthCheck, given, settings as hypothesis_settings, stra
 from hathor.conf.get_settings import get_global_settings
 from hathor.reactor import get_global_reactor
 from hathor.transaction import Transaction, TxOutput
+from hathor.verification.rust_verification_service import (
+    CHECK_OUTPUT_TOKEN_INDEXES,
+    CHECK_OUTPUTS,
+    CHECK_POW,
+    StatelessVertexCheckData,
+)
 from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
 
@@ -64,14 +71,36 @@ def _rust_kind(error: tuple[str, str] | None) -> str:
     return 'valid' if error is None else error[0]
 
 
-def assert_equivalent_outputs(outputs_fields: list[OutputFields]) -> None:
+def _run_single_check(
+    check: int,
+    *,
+    outputs: list[tuple[int, bytes, int]] | None = None,
+    tokens_count: int = 0,
+    vertex_hash: bytes = b'\xab' * 32,
+    pow_target_be: bytes = b'',
+) -> tuple[str, str] | None:
     settings = get_global_settings()
+    data = StatelessVertexCheckData(
+        outputs=outputs or [],
+        tokens_count=tokens_count,
+        vertex_hash=vertex_hash,
+        pow_target_be=pow_target_be,
+        max_num_outputs=settings.MAX_NUM_OUTPUTS,
+        max_output_script_size=settings.MAX_OUTPUT_SCRIPT_SIZE,
+        max_tx_sigops_output=settings.MAX_TX_SIGOPS_OUTPUT,
+        max_multisig_pubkeys=settings.MAX_MULTISIG_PUBKEYS,
+        enable_checkdatasig_count=True,
+    )
+    (result,) = htr_lib.verify_vertex_stateless([check], data, 2)
+    return result
+
+
+def assert_equivalent_outputs(outputs_fields: list[OutputFields]) -> None:
     vertex = SimpleNamespace(outputs=[_make_output(*fields) for fields in outputs_fields])
     python = _outcome(lambda: _python_vertex_verifier().verify_outputs(vertex))  # type: ignore[arg-type]
-    rust = _rust_kind(htr_lib.verify_outputs(
-        [(value, script_len, token_data) for value, script_len, token_data in outputs_fields],
-        settings.MAX_NUM_OUTPUTS,
-        settings.MAX_OUTPUT_SCRIPT_SIZE,
+    rust = _rust_kind(_run_single_check(
+        CHECK_OUTPUTS,
+        outputs=[(value, b'\x00' * script_len, token_data) for value, script_len, token_data in outputs_fields],
     ))
     assert python == rust, f'{outputs_fields[:5]}...: python={python} rust={rust}'
 
@@ -85,7 +114,11 @@ def assert_equivalent_token_indexes(token_data_list: list[int], tokens_count: in
         settings=get_global_settings(), daa_factory=None, feature_service=None,  # type: ignore[arg-type]
     )
     python = _outcome(lambda: verifier.verify_output_token_indexes(tx))  # type: ignore[arg-type]
-    rust = _rust_kind(htr_lib.verify_output_token_indexes(token_data_list, tokens_count))
+    rust = _rust_kind(_run_single_check(
+        CHECK_OUTPUT_TOKEN_INDEXES,
+        outputs=[(1, b'', token_data) for token_data in token_data_list],
+        tokens_count=tokens_count,
+    ))
     assert python == rust, f'{token_data_list}/{tokens_count}: python={python} rust={rust}'
 
 
@@ -157,7 +190,7 @@ def _rust_pow_outcome(vertex_hash: bytes, target: int) -> str:
     """Mirror the marshalling: negative targets (float underflow at absurd weights) clamp to zero."""
     target = max(target, 0)
     target_bytes = target.to_bytes(max(1, (target.bit_length() + 7) // 8), 'big')
-    return _rust_kind(htr_lib.verify_pow(vertex_hash, target_bytes))
+    return _rust_kind(_run_single_check(CHECK_POW, vertex_hash=vertex_hash, pow_target_be=target_bytes))
 
 
 def test_pow_weight_space() -> None:
