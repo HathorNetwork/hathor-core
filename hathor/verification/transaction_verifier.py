@@ -273,8 +273,11 @@ class TransactionVerifier:
                 break
             spent_outputs.add(key)
 
-        # Phase 2: run the script jobs in parallel and index the results by input.
-        results = script_pool.run_jobs(jobs)
+        # Phase 2: run the script jobs in parallel and index the results by input. A batched
+        # sync precompute may have already evaluated this tx's scripts (one Rust call for the
+        # whole batch); the pool consumes that cache when present. The raw _hash is used because
+        # locally-built txs are verified before being mined (no hash yet — and no cache entry).
+        results = script_pool.run_jobs_with_cache(tx._hash, int(opcodes_version), jobs)
         result_by_index = dict(zip(scheduled_indices, results))
 
         # Phase 3: merge in input order. The first failing input wins, and for a given input the script error (if

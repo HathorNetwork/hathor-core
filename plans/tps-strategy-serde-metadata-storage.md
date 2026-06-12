@@ -99,10 +99,25 @@ IBD/sync improves more than mempool TPS (it is verification-bound, exactly what 
    thread pool (`defer_stateless_precompute`), removing the stateless stage from the serial path entirely; under
    the simulated clock it runs inline. Measured: stateless stage 14.1 → 6.0 µs/vertex (2.3×, batch=64,
    rayon×12); end-to-end two-peer sync of 2,000 spend-chain txs (simulator, inline precompute — a lower bound):
-   ~752 tx/s batched vs ~658 per-vertex (+14%) vs ~610 pure-Python service (+23%). The bigger Phase-3 step —
-   feeding *raw vertex bytes* to one Rust call that parses + verifies (bypassing the Python parse on the serial
-   path) and batching the *script* stage across vertices — remains open and is where the projected multiplier
-   lives.
+   ~752 tx/s batched vs ~658 per-vertex (+14%) vs ~610 pure-Python service (+23%).
+
+   **Script stage batched (DONE).** `precompute_stateless_batch` now also evaluates the input scripts of the
+   whole batch with a single `verify_scripts_batch` call (parallel across all inputs of all txs): jobs are
+   built per input with spent txs resolved from the batch itself (spend chains) or storage, raw results are
+   stashed in the script pool keyed by tx hash + opcodes version, and
+   `TransactionVerifier._verify_inputs_parallel` consumes them via `run_jobs_with_cache` — restricted to the
+   inputs the fresh path would actually schedule, so precheck/conflict/raise-kind interleavings surface
+   identically (differential suite: `hathor_tests/verification/test_script_precompute.py`). Any tx with an
+   unresolvable dep is skipped and evaluated fresh at connect time.
+
+   **Unified bytes entrypoint (DONE).** `VerificationService.verify_bytes(data, storage=...)` is now the
+   single bytes→vertex entrypoint used by every caller (sync-v2 agent ×3, push_tx, mining APIs, mining WS,
+   send_tokens, decode_tx); only the trusted DB-load path keeps calling the parser directly. This is where
+   the future fused Rust parse+verify call slots in without touching callers again.
+
+   Still open (the remaining multiplier): one fused Rust call that takes raw bytes and does parse + sighash +
+   stateless + scripts natively (with the sighash splice and Rust-side dep resolution through the shared
+   RocksDB handle), removing the Python job-building from the precompute thread.
 3. **Alongside, cheap:** dedupe per-update metadata saves; binary metadata format defined in Rust, migrated once
    (or orjson interim).
 4. **Defer storage-to-Rust** until the Rust core consumes it natively (post-Phase-3); by then Rust owns both wire

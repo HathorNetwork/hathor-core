@@ -242,6 +242,7 @@ class ScriptVerificationPool:
         '_max_multisig_signatures',
         '_p2pkh_version_byte',
         '_shadow_mismatches',
+        '_cached_script_results',
     )
 
     def __init__(self, *, mode: ScriptVerificationMode, num_workers: int, min_inputs: int = 2) -> None:
@@ -254,6 +255,11 @@ class ScriptVerificationPool:
         self._max_multisig_signatures = 0
         self._p2pkh_version_byte = b''
         self._shadow_mismatches = 0
+        # raw per-input Rust script results precomputed by a batched call, keyed by tx hash:
+        # tx_hash -> (opcodes_version, {input_index: None | (kind, message)}). Populated by
+        # RustVerificationService.precompute_stateless_batch (possibly from a worker thread;
+        # dict ops are GIL-atomic), consumed by run_jobs_with_cache, discarded with the batch.
+        self._cached_script_results: dict[bytes, tuple[int, dict[int, tuple[str, str] | None]]] = {}
 
     @property
     def enabled(self) -> bool:
@@ -399,6 +405,11 @@ class ScriptVerificationPool:
         if not jobs:
             return []
         raw = self._verify_scripts_batch_rust(jobs)
+        return self._map_raw_script_results(raw)
+
+    @staticmethod
+    def _map_raw_script_results(raw: Sequence[tuple[str, str] | None]) -> list[ScriptError | None]:
+        """Map raw Rust ``(kind, message)`` items back to the Python exception model, in order."""
         results: list[ScriptError | None] = []
         for item in raw:
             if item is None:
@@ -412,6 +423,44 @@ class ScriptVerificationPool:
                 raise _make_rust_raised_exception(kind, message)
             results.append(error_cls(message))
         return results
+
+    def stash_script_results(
+        self,
+        tx_hash: bytes,
+        opcodes_version: int,
+        results_by_index: dict[int, tuple[str, str] | None],
+    ) -> None:
+        """Store one tx's precomputed raw script results (one entry per input index)."""
+        self._cached_script_results[tx_hash] = (opcodes_version, results_by_index)
+
+    def discard_script_results(self, tx_hash: bytes) -> None:
+        """Drop any unconsumed precomputed script results for this tx."""
+        self._cached_script_results.pop(tx_hash, None)
+
+    def run_jobs_with_cache(
+        self,
+        tx_hash: bytes | None,
+        opcodes_version: int,
+        jobs: Sequence[ScriptVerificationJob],
+    ) -> list[ScriptError | None]:
+        """Like ``run_jobs``, but consume this tx's precomputed batch results when available.
+
+        Script results are a pure function of the tx bytes, the spent txs' bytes (both fixed by
+        the input hashes) and the opcodes version, so a precomputed entry is valid whenever the
+        version matches. The cache holds results for *all* inputs; only the requested ``jobs``
+        (the inputs the caller actually scheduled, in input order) are mapped, so raise-kind
+        errors surface at exactly the same job as a fresh run. ``tx_hash`` may be None
+        (locally-built txs verified before mining): nothing can be cached for those.
+        """
+        cached = None
+        if tx_hash is not None and self.rust_verification:
+            cached = self._cached_script_results.pop(tx_hash, None)
+        if cached is not None:
+            cached_version, by_index = cached
+            if cached_version == opcodes_version and all(job.input_index in by_index for job in jobs):
+                raw = [by_index[job.input_index] for job in jobs]
+                return self._map_raw_script_results(raw)
+        return self.run_jobs(jobs)
 
     def _run_jobs_shadow(self, jobs: Sequence[ScriptVerificationJob]) -> list[ScriptError | None]:
         """SHADOW_RUST mode: Python is authoritative; Rust runs the same jobs and any per-job category mismatch

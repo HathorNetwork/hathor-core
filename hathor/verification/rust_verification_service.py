@@ -47,7 +47,11 @@ from hathor.transaction.exceptions import InexistentInput, TooManySigOps
 from hathor.transaction.poa import PoaBlock
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.verification.script_verification_pool import ScriptVerificationPool, raise_rust_error
+from hathor.verification.script_verification_pool import (
+    ScriptVerificationJob,
+    ScriptVerificationPool,
+    raise_rust_error,
+)
 from hathor.verification.verification_params import VerificationParams
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
@@ -70,20 +74,25 @@ def defer_stateless_precompute(
     service: 'RustVerificationService',
     vertices: Sequence[BaseTransaction],
     params: VerificationParams,
+    *,
+    include_scripts: bool = False,
 ) -> 'Deferred[None]':
     """Run `service.precompute_stateless_batch` on the reactor's thread pool when the reactor
     supports threads (production: the Rust call releases the GIL, so verification of the batch
     overlaps reactor work), or synchronously otherwise (tests with simulated clocks; the call
     still amortizes the FFI and parallelizes across vertices via rayon)."""
+    import functools
+
     from twisted.internet import interfaces
     from twisted.internet.defer import succeed
     from twisted.internet.threads import deferToThreadPool
 
+    call = functools.partial(
+        service.precompute_stateless_batch, vertices, params, include_scripts=include_scripts,
+    )
     if interfaces.IReactorThreads.providedBy(reactor) and getattr(reactor, 'running', False):
-        return deferToThreadPool(
-            reactor, reactor.getThreadPool(), service.precompute_stateless_batch, vertices, params,
-        )
-    service.precompute_stateless_batch(vertices, params)
+        return deferToThreadPool(reactor, reactor.getThreadPool(), call)
+    call()
     result: Deferred[None] = succeed(None)
     return result
 
@@ -262,15 +271,32 @@ class RustVerificationService(VerificationService):
             case _:
                 return None
 
-    def precompute_stateless_batch(self, vertices: Sequence[BaseTransaction], params: VerificationParams) -> None:
-        """Run the stateless checks for a whole batch of vertices in one GIL-released Rust call
-        (parallel across vertices) and stash the per-vertex results for later consumption by the
-        serial verification of each vertex. Safe to call from a worker thread: the Rust call
-        releases the GIL, and the results dict is only read by the reactor after this returns.
+    def precompute_stateless_batch(
+        self,
+        vertices: Sequence[BaseTransaction],
+        params: VerificationParams,
+        *,
+        include_scripts: bool = False,
+    ) -> None:
+        """Run the stateless checks — and, when ``include_scripts`` is set, the input-script
+        evaluations — for a whole batch of vertices, each as one GIL-released Rust call
+        (parallel across vertices/inputs), and stash the per-vertex results for later
+        consumption by the serial verification of each vertex. Safe to call from a worker
+        thread: the Rust calls release the GIL, and the results dicts are only read by the
+        reactor after this returns.
+
+        ``include_scripts`` must be set only by stages whose downstream verification actually
+        runs ``verify_inputs`` (the full-validation stage at block connect): the tx-streaming
+        stage only runs ``verify_basic``, and script results stashed there would be discarded
+        unconsumed — evaluating every script twice. Script jobs are built for every input whose
+        spent tx is resolvable — from the batch itself (spend chains during sync) or from
+        storage; a tx with any unresolvable input is simply skipped (the fresh path at connect
+        time keeps its exact error semantics).
 
         Pair with `discard_precomputed` in a finally block so entries for vertices that never
         reach their stateless checks (earlier failures) do not accumulate."""
-        if not self._script_verification_pool.rust_verification:
+        pool = self._script_verification_pool
+        if not pool.rust_verification:
             return
         items = []
         keyed = []
@@ -280,16 +306,87 @@ class RustVerificationService(VerificationService):
                 continue
             items.append((checks, self._build_check_data(vertex, params)))
             keyed.append((vertex.hash, checks))
-        if not items:
+        if items:
+            raw_batch = htr_lib.verify_vertices_stateless_batch(items, pool.num_workers)
+            for (vertex_hash, checks), raw in zip(keyed, raw_batch):
+                self._precomputed[vertex_hash] = (params, _RustCheckResults(dict(zip(checks, raw))))
+        if include_scripts:
+            self._precompute_scripts_batch(vertices, params)
+
+    def _precompute_scripts_batch(self, vertices: Sequence[BaseTransaction], params: VerificationParams) -> None:
+        """Evaluate the input scripts of every eligible tx in the batch with a single Rust
+        call and stash the raw per-input results in the script pool (consumed by
+        `TransactionVerifier._verify_inputs_parallel` via `run_jobs_with_cache`)."""
+
+        pool = self._script_verification_pool
+        opcodes_version = int(params.features.opcodes_version)
+        by_hash = {vertex.hash: vertex for vertex in vertices}
+        jobs: list[ScriptVerificationJob] = []
+        owners: list[tuple[bytes, int]] = []
+        for vertex in vertices:
+            vertex_jobs = self._build_script_jobs(vertex, by_hash, params)
+            if vertex_jobs is None:
+                continue
+            for job in vertex_jobs:
+                jobs.append(job)
+                owners.append((vertex.hash, job.input_index))
+        if not jobs:
             return
-        raw_batch = htr_lib.verify_vertices_stateless_batch(items, self._script_verification_pool.num_workers)
-        for (vertex_hash, checks), raw in zip(keyed, raw_batch):
-            self._precomputed[vertex_hash] = (params, _RustCheckResults(dict(zip(checks, raw))))
+        raw = pool._verify_scripts_batch_rust(jobs)
+        per_tx: dict[bytes, dict[int, tuple[str, str] | None]] = {}
+        for (tx_hash, input_index), item in zip(owners, raw):
+            per_tx.setdefault(tx_hash, {})[input_index] = item
+        for tx_hash, by_index in per_tx.items():
+            pool.stash_script_results(tx_hash, opcodes_version, by_index)
+
+    def _build_script_jobs(
+        self,
+        vertex: BaseTransaction,
+        by_hash: dict[bytes, BaseTransaction],
+        params: VerificationParams,
+    ) -> 'list[ScriptVerificationJob] | None':
+        """Build one script job per input of `vertex`, resolving spent txs from the batch or
+        from storage. Returns None (skip: fresh evaluation at connect time) when the vertex is
+        not a tx with inputs or any input is unresolvable; results are pure functions of the
+        immutable tx/dep bytes plus the opcodes version, so precomputing is always safe."""
+        from hathor.transaction.scripts.opcode import OpcodesVersion
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        from hathor.verification.script_verification_pool import build_script_verification_job
+
+        if not isinstance(vertex, Transaction) or vertex.is_genesis or not vertex.inputs:
+            return None
+        opcodes_version = params.features.opcodes_version
+        shared_outputs: tuple[tuple[int, bytes], ...] = (
+            tuple((output.value, output.script) for output in vertex.outputs)
+            if opcodes_version == OpcodesVersion.V1 else ()
+        )
+        jobs = []
+        for index, txin in enumerate(vertex.inputs):
+            spent_tx = by_hash.get(txin.tx_id)
+            if spent_tx is None:
+                if self._tx_storage is None:
+                    return None
+                try:
+                    spent_tx = self._tx_storage.get_transaction(txin.tx_id)
+                except TransactionDoesNotExist:
+                    return None
+            if txin.index >= len(spent_tx.outputs):
+                return None
+            jobs.append(build_script_verification_job(
+                input_index=index,
+                tx=vertex,
+                txin=txin,
+                spent_tx=spent_tx,
+                opcodes_version=opcodes_version,
+                shared_outputs=shared_outputs,
+            ))
+        return jobs
 
     def discard_precomputed(self, vertices: Sequence[BaseTransaction]) -> None:
-        """Drop any unconsumed precomputed results for these vertices."""
+        """Drop any unconsumed precomputed results (stateless and scripts) for these vertices."""
         for vertex in vertices:
             self._precomputed.pop(vertex.hash, None)
+            self._script_verification_pool.discard_script_results(vertex.hash)
 
     def _verify_without_storage_base_block_rust(self, block: Block, params: VerificationParams) -> None:
         results = self._run_rust_checks(block, params, _BLOCK_CHECKS)

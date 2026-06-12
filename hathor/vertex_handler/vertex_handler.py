@@ -110,7 +110,7 @@ class VertexHandler:
             # one Rust call pre-verifies the stateless checks of the whole list in parallel
             # (off-reactor when the reactor supports threads, GIL released); the serial connect
             # loop below consumes the results
-            yield defer_stateless_precompute(self._reactor, service, batch, params)
+            yield defer_stateless_precompute(self._reactor, service, batch, params, include_scripts=True)
         try:
             for tx in pending:
                 if not self._tx_storage.transaction_exists(tx.hash):
