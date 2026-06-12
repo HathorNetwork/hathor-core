@@ -79,6 +79,20 @@ def deserialize_headers(
                 assert isinstance(vertex, Transaction)
                 excess_bf = deserialize_unshield_balance_header(deserializer)
                 header = UnshieldBalanceHeader(excess_blinding_factor=excess_bf)
+            case VertexHeaderId.MINT_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import MintHeader
+                from hathor.transaction.vertex_parser._mint_melt_header import deserialize_mint_header
+                assert isinstance(vertex, Transaction)
+                mint_entries = deserialize_mint_header(deserializer)
+                header = MintHeader(entries=mint_entries)
+            case VertexHeaderId.MELT_HEADER:
+                from hathor.transaction import Transaction
+                from hathor.transaction.headers import MeltHeader
+                from hathor.transaction.vertex_parser._mint_melt_header import deserialize_melt_header
+                assert isinstance(vertex, Transaction)
+                melt_entries = deserialize_melt_header(deserializer)
+                header = MeltHeader(entries=melt_entries)
             case _:
                 raise ValueError(f'Unknown header type: {header_type!r}')
         vertex.headers.append(header)
@@ -93,6 +107,8 @@ def serialize_header(
     """Serialize a single header into the serializer."""
     from hathor.transaction.headers import (
         FeeHeader,
+        MeltHeader,
+        MintHeader,
         NanoHeader,
         ShieldedOutputsHeader,
         UnshieldBalanceHeader,
@@ -115,13 +131,15 @@ def serialize_header(
                 serialize_unshield_balance_header,
             )
             serialize_unshield_balance_header(serializer, header)
+        case MintHeader() | MeltHeader():
+            serializer.write_bytes(header.serialize())
         case _:
             raise AssertionError('unreachable')
 
 
 def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: VertexDecimalVersion) -> bytes:
     """Get sighash bytes for a header."""
-    from hathor.transaction.headers import FeeHeader, NanoHeader
+    from hathor.transaction.headers import FeeHeader, MeltHeader, MintHeader, NanoHeader
 
     match header:
         case NanoHeader():
@@ -134,5 +152,7 @@ def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: Vertex
             serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header, decimal_version=decimal_version)
             return bytes(serializer.finalize())
+        case MintHeader() | MeltHeader():
+            return header.get_sighash_bytes()
         case _:
             raise AssertionError('unreachable')

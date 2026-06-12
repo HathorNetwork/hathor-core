@@ -126,3 +126,7 @@ class ShieldedMintMeltForbiddenError(TxValidationError):
 
 class InvalidShieldedOutputError(TxValidationError):
     """Generic invalid shielded output error."""
+
+
+class InvalidMintMeltHeaderError(TxValidationError):
+    """MintHeader or MeltHeader is malformed (bad entries, duplicates, out-of-range)."""

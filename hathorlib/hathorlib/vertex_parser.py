@@ -26,10 +26,10 @@ class VertexParser:
     @staticmethod
     def get_supported_headers() -> dict[VertexHeaderId, type[VertexBaseHeader]]:
         """Return a dict of supported headers."""
-        # NOTE: MintHeader/MeltHeader (0x14/0x15) imports and dict entries are
-        # deferred — see hathorlib/headers/__init__.py for the full explanation.
         from hathorlib.headers import (
             FeeHeader,
+            MeltHeader,
+            MintHeader,
             NanoHeader,
             ShieldedOutputsHeader,
             UnshieldBalanceHeader,
@@ -40,6 +40,8 @@ class VertexParser:
             VertexHeaderId.FEE_HEADER: FeeHeader,
             VertexHeaderId.SHIELDED_OUTPUTS_HEADER: ShieldedOutputsHeader,
             VertexHeaderId.UNSHIELD_BALANCE_HEADER: UnshieldBalanceHeader,
+            VertexHeaderId.MINT_HEADER: MintHeader,
+            VertexHeaderId.MELT_HEADER: MeltHeader,
         }
 
     @staticmethod
