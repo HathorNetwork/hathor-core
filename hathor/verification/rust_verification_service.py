@@ -97,6 +97,11 @@ def defer_stateless_precompute(
     return result
 
 
+# htr_lib.verify_scripts_from_bytes per-tx statuses
+_PIPELINE_EVALUATED = 0
+_PIPELINE_UNRESOLVED = 1
+_PIPELINE_PARSE_FAILED = 2
+
 # the canonical check sets per vertex kind, in request order
 _BLOCK_CHECKS = [CHECK_NO_INPUTS, CHECK_OUTPUTS, CHECK_BLOCK_TOKEN_INDEXES, CHECK_BLOCK_DATA, CHECK_SIGOPS_OUTPUT]
 _TX_CHECKS = [CHECK_NUMBER_OF_INPUTS, CHECK_OUTPUTS, CHECK_OUTPUT_TOKEN_INDEXES, CHECK_SIGOPS_OUTPUT]
@@ -139,7 +144,12 @@ class _RustCheckResults:
 
 
 class RustVerificationService(VerificationService):
-    __slots__ = ('_script_verification_pool', '_precomputed')
+    __slots__ = ('_script_verification_pool', '_precomputed', '_wire_bytes')
+
+    # FIFO cap for the wire-bytes cache: entries are normally consumed by the next batch
+    # precompute and discarded with it; the cap only bounds vertices that never reach a batch
+    # (e.g. relayed vertices rejected early).
+    _WIRE_BYTES_CAP = 16384
 
     def __init__(
         self,
@@ -161,6 +171,18 @@ class RustVerificationService(VerificationService):
         # they were computed under; consumed (popped) by _run_rust_checks, leftovers discarded by
         # the call sites in a finally block (discard_precomputed)
         self._precomputed: dict[bytes, tuple[VerificationParams, _RustCheckResults]] = {}
+        # original wire bytes per vertex hash, captured by verify_bytes so the batched script
+        # pipeline can hand them straight to Rust without re-serializing
+        self._wire_bytes: dict[bytes, bytes] = {}
+
+    @override
+    def verify_bytes(self, data: bytes, *, storage: TransactionStorage | None = None) -> BaseTransaction:
+        vertex = super().verify_bytes(data, storage=storage)
+        if self._script_verification_pool.rust_verification:
+            self._wire_bytes[vertex.hash] = data
+            while len(self._wire_bytes) > self._WIRE_BYTES_CAP:
+                self._wire_bytes.pop(next(iter(self._wire_bytes)))
+        return vertex
 
     @override
     def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
@@ -314,16 +336,116 @@ class RustVerificationService(VerificationService):
             self._precompute_scripts_batch(vertices, params)
 
     def _precompute_scripts_batch(self, vertices: Sequence[BaseTransaction], params: VerificationParams) -> None:
-        """Evaluate the input scripts of every eligible tx in the batch with a single Rust
-        call and stash the raw per-input results in the script pool (consumed by
-        `TransactionVerifier._verify_inputs_parallel` via `run_jobs_with_cache`)."""
+        """Evaluate the input scripts of every eligible tx in the batch and stash the raw
+        per-input results in the script pool (consumed by
+        `TransactionVerifier._verify_inputs_parallel` via `run_jobs_with_cache`).
 
+        The whole pipeline — parse, sighash, dependency resolution, evaluation — runs in Rust
+        (`htr_lib.verify_scripts_from_bytes`): spent txs are resolved from the batch's own
+        bytes, then natively from RocksDB through the shared handle. Dependencies Rust cannot
+        see (unflushed entries in the Python storage cache) are supplied in a second call, and
+        anything still unresolved or unparseable (header-carrying txs, …) falls back to the
+        Python job-building path — so coverage and rejection semantics are unchanged."""
         pool = self._script_verification_pool
         opcodes_version = int(params.features.opcodes_version)
-        by_hash = {vertex.hash: vertex for vertex in vertices}
+        eligible = [
+            vertex for vertex in vertices
+            if isinstance(vertex, Transaction) and not vertex.is_genesis and vertex.inputs
+        ]
+        if not eligible:
+            return
+
+        payloads = [self._wire_bytes.get(vertex.hash) or bytes(vertex) for vertex in eligible]
+        outcomes = self._run_scripts_pipeline(payloads, [], opcodes_version)
+
+        # Second pass: supply the dependencies Rust could not see, from the Python storage
+        # layer (its cache holds recently-saved txs that are not flushed to RocksDB yet).
+        missing: set[bytes] = set()
+        for status, _, missing_hashes in outcomes:
+            if status == _PIPELINE_UNRESOLVED:
+                missing.update(missing_hashes)
+        supplied = self._fetch_dep_bytes(missing)
+        if supplied:
+            retry_indices = [
+                index for index, (status, _, _) in enumerate(outcomes) if status == _PIPELINE_UNRESOLVED
+            ]
+            retry_outcomes = self._run_scripts_pipeline(
+                [payloads[index] for index in retry_indices], supplied, opcodes_version,
+            )
+            for index, outcome in zip(retry_indices, retry_outcomes):
+                outcomes[index] = outcome
+
+        fallback: list[BaseTransaction] = []
+        for vertex, (status, results, _) in zip(eligible, outcomes):
+            if status == _PIPELINE_EVALUATED:
+                by_index = dict(enumerate(results))
+                pool.stash_script_results(vertex.hash, opcodes_version, by_index)
+            else:
+                fallback.append(vertex)
+        if fallback:
+            self._precompute_scripts_python(fallback, vertices, params)
+
+    def _run_scripts_pipeline(
+        self,
+        payloads: list[bytes],
+        supplied: list[bytes],
+        opcodes_version: int,
+    ) -> list[tuple[int, list[tuple[str, str] | None], list[bytes]]]:
+        """One fused Rust call: parse + sighash + dep resolution + script evaluation."""
+        pool = self._script_verification_pool
+        return htr_lib.verify_scripts_from_bytes(
+            payloads,
+            supplied,
+            self._native_db(),
+            'tx',
+            opcodes_version,
+            self._settings.MAX_SERIALIZED_VERTEX_SIZE,
+            self._settings.MAX_MULTISIG_PUBKEYS,
+            self._settings.MAX_MULTISIG_SIGNATURES,
+            self._settings.P2PKH_VERSION_BYTE,
+            pool.num_workers,
+        )
+
+    def _native_db(self) -> 'htr_lib.RocksDb | None':
+        """The shared Rust RocksDB handle, when this node's storage is RocksDB-backed."""
+        from hathor.storage import RocksDBStorage
+        rocksdb_storage: RocksDBStorage | None = getattr(self._tx_storage, '_rocksdb_storage', None)
+        if rocksdb_storage is None:
+            return None
+        return rocksdb_storage.get_db().inner
+
+    def _fetch_dep_bytes(self, hashes: set[bytes]) -> list[bytes]:
+        """Serialize the dependencies the Rust pipeline could not resolve, from the Python
+        storage layer (cache-resident, unflushed txs). Hashes that do not exist are simply
+        skipped: the affected txs fall back to the Python path / fresh evaluation."""
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        if not hashes or self._tx_storage is None:
+            return []
+        supplied = []
+        for dep_hash in hashes:
+            try:
+                dep = self._tx_storage.get_transaction(dep_hash)
+            except TransactionDoesNotExist:
+                continue
+            supplied.append(self._wire_bytes.get(dep_hash) or bytes(dep))
+        return supplied
+
+    def _precompute_scripts_python(
+        self,
+        fallback: list[BaseTransaction],
+        all_vertices: Sequence[BaseTransaction],
+        params: VerificationParams,
+    ) -> None:
+        """Python job-building path for txs the Rust pipeline could not cover (header-carrying
+        vertices, deps only materializable in Python): builds `ScriptVerificationJob`s and runs
+        one batched Rust evaluation over them."""
+        pool = self._script_verification_pool
+        opcodes_version = int(params.features.opcodes_version)
+        by_hash = {vertex.hash: vertex for vertex in all_vertices}
         jobs: list[ScriptVerificationJob] = []
         owners: list[tuple[bytes, int]] = []
-        for vertex in vertices:
+        for vertex in fallback:
             vertex_jobs = self._build_script_jobs(vertex, by_hash, params)
             if vertex_jobs is None:
                 continue
@@ -387,6 +509,7 @@ class RustVerificationService(VerificationService):
         for vertex in vertices:
             self._precomputed.pop(vertex.hash, None)
             self._script_verification_pool.discard_script_results(vertex.hash)
+            self._wire_bytes.pop(vertex.hash, None)
 
     def _verify_without_storage_base_block_rust(self, block: Block, params: VerificationParams) -> None:
         results = self._run_rust_checks(block, params, _BLOCK_CHECKS)

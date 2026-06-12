@@ -92,7 +92,11 @@ impl RocksDb {
     /// as a strictly-more-robust fallback if repair itself fails on the empty directory).
     #[new]
     #[pyo3(signature = (path, cache_capacity=None))]
-    fn new(py: Python<'_>, path: String, cache_capacity: Option<usize>) -> PyResult<Self> {
+    pub(crate) fn new(
+        py: Python<'_>,
+        path: String,
+        cache_capacity: Option<usize>,
+    ) -> PyResult<Self> {
         let state = py.detach(|| -> Result<DbState, rocksdb::Error> {
             let opts = build_options(cache_capacity);
             let cf_names = match Db::list_cf(&opts, &path) {
@@ -166,7 +170,7 @@ impl RocksDb {
     }
 
     /// Apply a write batch atomically (all column families, all ops, one WAL write).
-    fn write(&self, py: Python<'_>, batch: &RocksDbWriteBatch) -> PyResult<()> {
+    pub(crate) fn write(&self, py: Python<'_>, batch: &RocksDbWriteBatch) -> PyResult<()> {
         let db = self.db()?;
         let ops = batch.take_ops()?;
         py.detach(|| {
@@ -262,7 +266,7 @@ impl RocksDb {
     }
 
     /// Create a column family. Errors if it already exists.
-    fn create_cf(&self, py: Python<'_>, name: &str) -> PyResult<()> {
+    pub(crate) fn create_cf(&self, py: Python<'_>, name: &str) -> PyResult<()> {
         let mut guard = self.state.lock().expect("RocksDb mutex poisoned");
         let state = guard
             .as_mut()
@@ -348,13 +352,13 @@ impl RocksDbWriteBatch {
 #[pymethods]
 impl RocksDbWriteBatch {
     #[new]
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             ops: Mutex::new(Some(Vec::new())),
         }
     }
 
-    fn put(&self, cf: &str, key: Vec<u8>, value: Vec<u8>) -> PyResult<()> {
+    pub(crate) fn put(&self, cf: &str, key: Vec<u8>, value: Vec<u8>) -> PyResult<()> {
         let mut guard = self.ops.lock().expect("RocksDbWriteBatch mutex poisoned");
         let ops = guard
             .as_mut()

@@ -23,8 +23,29 @@ const HASH_NONCE_SIZE: usize = 16;
 /// Token versions accepted by Python's `TokenVersion(raw)`: STANDARD/DEPOSIT/ETHEREUM.
 const MAX_TOKEN_VERSION: u8 = 2;
 
-type ParsedInput = (Vec<u8>, u8, Vec<u8>);
-type ParsedOutput = (u64, Vec<u8>, u8);
+pub(crate) type ParsedInput = (Vec<u8>, u8, Vec<u8>);
+pub(crate) type ParsedOutput = (u64, Vec<u8>, u8);
+
+/// A fully parsed vertex plus the wire-layout metadata native consumers need (the sighash
+/// splice and the batch script pipeline). `parse_vertex` flattens this into the Python tuple.
+pub(crate) struct Parsed {
+    pub version: u8,
+    pub signal_bits: u8,
+    pub weight: f64,
+    pub timestamp: u32,
+    pub nonce: u128,
+    pub hash: Vec<u8>,
+    pub parents: Vec<Vec<u8>>,
+    pub tokens: Vec<Vec<u8>>,
+    pub inputs: Vec<ParsedInput>,
+    pub outputs: Vec<ParsedOutput>,
+    pub block_data: Vec<u8>,
+    pub token_info: Option<(u8, String, String)>,
+    /// End of the funds region in the wire bytes (sighash covers `[0, funds_end)`).
+    pub funds_end: usize,
+    /// Byte range of each input's data-length+data fields, in input order.
+    pub input_data_spans: Vec<(usize, usize)>,
+}
 
 /// The parsed field tree handed back to Python for object construction:
 /// `(version, signal_bits, weight, timestamp, nonce, hash, parents, tokens, inputs, outputs,
@@ -114,13 +135,20 @@ fn decode_output_value(r: &mut Reader<'_>) -> Option<u64> {
     Some(value as u64)
 }
 
-fn parse_inputs(r: &mut Reader<'_>, count: u8) -> Option<Vec<ParsedInput>> {
+fn parse_inputs(
+    r: &mut Reader<'_>,
+    count: u8,
+    spans: &mut Vec<(usize, usize)>,
+) -> Option<Vec<ParsedInput>> {
     let mut inputs = Vec::with_capacity(count as usize);
+    spans.reserve(count as usize);
     for _ in 0..count {
         let tx_id = r.take(TX_HASH_SIZE)?.to_vec();
         let index = r.u8()?;
+        let span_start = r.pos;
         let data_len = r.u16()? as usize;
         let data = r.take(data_len)?.to_vec();
+        spans.push((span_start, r.pos));
         inputs.push((tx_id, index, data));
     }
     Some(inputs)
@@ -173,10 +201,11 @@ fn compute_hash(funds: &[u8], graph: &[u8], nonce: u128) -> Vec<u8> {
     hash
 }
 
-fn parse(data: &[u8]) -> Option<ParsedVertex> {
+pub(crate) fn parse(data: &[u8]) -> Option<Parsed> {
     let mut r = Reader::new(data);
     let signal_bits = r.u8()?;
     let version = r.u8()?;
+    let mut input_data_spans = Vec::new();
 
     let (tokens, inputs, outputs, token_info, nonce_size) = match version {
         VERSION_REGULAR_BLOCK => {
@@ -192,14 +221,14 @@ fn parse(data: &[u8]) -> Option<ParsedVertex> {
             for _ in 0..tokens_len {
                 tokens.push(r.take(TX_HASH_SIZE)?.to_vec());
             }
-            let inputs = parse_inputs(&mut r, inputs_len)?;
+            let inputs = parse_inputs(&mut r, inputs_len, &mut input_data_spans)?;
             let outputs = parse_outputs(&mut r, outputs_len)?;
             (tokens, inputs, outputs, None, 4usize)
         }
         VERSION_TOKEN_CREATION_TRANSACTION => {
             let inputs_len = r.u8()?;
             let outputs_len = r.u8()?;
-            let inputs = parse_inputs(&mut r, inputs_len)?;
+            let inputs = parse_inputs(&mut r, inputs_len, &mut input_data_spans)?;
             let outputs = parse_outputs(&mut r, outputs_len)?;
             let token_version = r.u8()?;
             if token_version > MAX_TOKEN_VERSION {
@@ -244,20 +273,39 @@ fn parse(data: &[u8]) -> Option<ParsedVertex> {
 
     let hash = compute_hash(&data[..funds_end], &data[funds_end..graph_end], nonce);
 
-    Some((
+    Some(Parsed {
         version,
         signal_bits,
-        graph.weight,
-        graph.timestamp,
+        weight: graph.weight,
+        timestamp: graph.timestamp,
         nonce,
         hash,
-        graph.parents,
+        parents: graph.parents,
         tokens,
         inputs,
         outputs,
         block_data,
         token_info,
-    ))
+        funds_end,
+        input_data_spans,
+    })
+}
+
+/// The sighash preimage: the funds region of the wire bytes with every input's
+/// data-length+data replaced by a zero length. Byte-identical to Python's
+/// `serialize_tx_sighash` / `serialize_token_creation_sighash` for header-less vertices,
+/// because the parser only accepts canonical encodings (any accepted byte string
+/// re-serializes to itself — the round-trip differential property).
+pub(crate) fn sighash_preimage(data: &[u8], parsed: &Parsed) -> Vec<u8> {
+    let mut out = Vec::with_capacity(parsed.funds_end);
+    let mut pos = 0;
+    for &(start, end) in &parsed.input_data_spans {
+        out.extend_from_slice(&data[pos..start]);
+        out.extend_from_slice(&[0, 0]); // data_len = 0; the data bytes are omitted
+        pos = end;
+    }
+    out.extend_from_slice(&data[pos..parsed.funds_end]);
+    out
 }
 
 /// Parse a serialized vertex, returning the field tree (plus the computed vertex hash) for
@@ -268,7 +316,32 @@ pub fn parse_vertex(data: Vec<u8>, max_size: usize) -> Option<ParsedVertex> {
     if data.len() > max_size {
         return None; // Python raises SerializedSizeError with the proper message
     }
-    parse(&data)
+    let p = parse(&data)?;
+    Some((
+        p.version,
+        p.signal_bits,
+        p.weight,
+        p.timestamp,
+        p.nonce,
+        p.hash,
+        p.parents,
+        p.tokens,
+        p.inputs,
+        p.outputs,
+        p.block_data,
+        p.token_info,
+    ))
+}
+
+/// The sighash preimage for a serialized vertex (differential-testing surface for the splice:
+/// must equal Python's `tx.get_sighash_all()`), or `None` when the bytes are unsupported.
+#[pyfunction]
+pub fn sighash_from_vertex_bytes(data: Vec<u8>, max_size: usize) -> Option<Vec<u8>> {
+    if data.len() > max_size {
+        return None;
+    }
+    let parsed = parse(&data)?;
+    Some(sighash_preimage(&data, &parsed))
 }
 
 #[cfg(test)]
@@ -297,33 +370,68 @@ mod tests {
     #[test]
     fn test_parse_regular_transaction() {
         let data = build_tx_bytes();
-        let parsed = parse(&data).unwrap();
-        let (
-            version,
-            signal_bits,
-            weight,
-            timestamp,
-            nonce,
-            hash,
-            parents,
-            tokens,
-            inputs,
-            outputs,
-            block_data,
-            token_info,
-        ) = parsed;
-        assert_eq!(version, 1);
-        assert_eq!(signal_bits, 0);
-        assert_eq!(weight, 10.5);
-        assert_eq!(timestamp, 1000);
-        assert_eq!(nonce, 7);
-        assert_eq!(hash.len(), 32);
-        assert_eq!(parents, vec![vec![0x22; 32]]);
-        assert!(tokens.is_empty());
-        assert_eq!(inputs, vec![(vec![0x11; 32], 0, vec![0xAA, 0xBB, 0xCC])]);
-        assert_eq!(outputs, vec![(100, vec![0x51], 0)]);
-        assert!(block_data.is_empty());
-        assert!(token_info.is_none());
+        let p = parse(&data).unwrap();
+        assert_eq!(p.version, 1);
+        assert_eq!(p.signal_bits, 0);
+        assert_eq!(p.weight, 10.5);
+        assert_eq!(p.timestamp, 1000);
+        assert_eq!(p.nonce, 7);
+        assert_eq!(p.hash.len(), 32);
+        assert_eq!(p.parents, vec![vec![0x22; 32]]);
+        assert!(p.tokens.is_empty());
+        assert_eq!(p.inputs, vec![(vec![0x11; 32], 0, vec![0xAA, 0xBB, 0xCC])]);
+        assert_eq!(p.outputs, vec![(100, vec![0x51], 0)]);
+        assert!(p.block_data.is_empty());
+        assert!(p.token_info.is_none());
+        // funds region: 5 header bytes + input (32+1+2+3) + output (4+1+2+1) = 51
+        assert_eq!(p.funds_end, 51);
+        // the input's data-length+data span: starts after sb/ver/lens (5) + tx_id (32) + index (1)
+        assert_eq!(p.input_data_spans, vec![(38, 43)]);
+    }
+
+    #[test]
+    fn test_sighash_preimage_splices_input_data() {
+        let data = build_tx_bytes();
+        let p = parse(&data).unwrap();
+        let preimage = sighash_preimage(&data, &p);
+        // identical to the funds region with the 3 data bytes dropped and the length zeroed
+        let mut expected = Vec::new();
+        expected.extend_from_slice(&data[..38]); // through tx_id + index
+        expected.extend_from_slice(&[0x00, 0x00]); // data_len = 0
+        expected.extend_from_slice(&data[43..51]); // the output
+        assert_eq!(preimage, expected);
+    }
+
+    #[test]
+    fn test_sighash_preimage_multiple_inputs() {
+        // 2 inputs with different data sizes; splice must zero both spans in order
+        let mut d = vec![0x00, 0x01, 0x00, 0x02, 0x01]; // sb, version, tokens, inputs=2, outputs=1
+        d.extend_from_slice(&[0x11; 32]);
+        d.push(0x00);
+        d.extend_from_slice(&[0x00, 0x02, 0xAA, 0xBB]);
+        d.extend_from_slice(&[0x33; 32]);
+        d.push(0x01);
+        d.extend_from_slice(&[0x00, 0x00]); // empty data
+        d.extend_from_slice(&100i32.to_be_bytes());
+        d.push(0x00);
+        d.extend_from_slice(&[0x00, 0x01, 0x51]);
+        d.extend_from_slice(&10.5f64.to_be_bytes());
+        d.extend_from_slice(&1000u32.to_be_bytes());
+        d.push(0x00); // no parents
+        d.extend_from_slice(&7u32.to_be_bytes());
+        let p = parse(&d).unwrap();
+        let preimage = sighash_preimage(&d, &p);
+        let mut expected = vec![0x00, 0x01, 0x00, 0x02, 0x01];
+        expected.extend_from_slice(&[0x11; 32]);
+        expected.push(0x00);
+        expected.extend_from_slice(&[0x00, 0x00]);
+        expected.extend_from_slice(&[0x33; 32]);
+        expected.push(0x01);
+        expected.extend_from_slice(&[0x00, 0x00]);
+        expected.extend_from_slice(&100i32.to_be_bytes());
+        expected.push(0x00);
+        expected.extend_from_slice(&[0x00, 0x01, 0x51]);
+        assert_eq!(preimage, expected);
     }
 
     #[test]
@@ -366,7 +474,7 @@ mod tests {
         d.push(0x00); // no parents
         d.extend_from_slice(&0u32.to_be_bytes()); // nonce
         let parsed = parse(&d).unwrap();
-        assert_eq!(parsed.9, vec![(5_000_000_000, vec![0x51], 0)]);
+        assert_eq!(parsed.outputs, vec![(5_000_000_000, vec![0x51], 0)]);
 
         // a small value wrongly using 8 bytes is rejected
         let mut bad = vec![0x00, 0x01, 0x00, 0x00, 0x01];
@@ -400,9 +508,9 @@ mod tests {
         d.extend_from_slice(&[0x00; 12]); // nonce high bytes
         d.extend_from_slice(&42u32.to_be_bytes()); // nonce low (16B total)
         let parsed = parse(&d).unwrap();
-        assert_eq!(parsed.0, 0);
-        assert_eq!(parsed.4, 42);
-        assert_eq!(parsed.6.len(), 3);
-        assert_eq!(parsed.10, vec![0xDE, 0xAD]);
+        assert_eq!(parsed.version, 0);
+        assert_eq!(parsed.nonce, 42);
+        assert_eq!(parsed.parents.len(), 3);
+        assert_eq!(parsed.block_data, vec![0xDE, 0xAD]);
     }
 }

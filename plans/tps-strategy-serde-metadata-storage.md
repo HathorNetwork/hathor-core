@@ -115,9 +115,19 @@ IBD/sync improves more than mempool TPS (it is verification-bound, exactly what 
    send_tokens, decode_tx); only the trusted DB-load path keeps calling the parser directly. This is where
    the future fused Rust parse+verify call slots in without touching callers again.
 
-   Still open (the remaining multiplier): one fused Rust call that takes raw bytes and does parse + sighash +
-   stateless + scripts natively (with the sighash splice and Rust-side dep resolution through the shared
-   RocksDB handle), removing the Python job-building from the precompute thread.
+   **Fused script pipeline (DONE).** `htr_lib.verify_scripts_from_bytes`: raw tx bytes in, per-input script
+   results out, with parse, sighash (a splice of the wire bytes' funds region — valid because the parser only
+   accepts canonical encodings; differential suite `test_rust_sighash.py`), dependency resolution and
+   evaluation all in one GIL-released Rust call. Deps resolve tiered: the batch's own bytes (spend chains) →
+   caller-supplied bytes → a native RocksDB read of the `tx` column family through the shared handle (the
+   first consumer of `RocksDb::native()`). Unflushed Python-cache deps are supplied in a second call;
+   anything still unresolved or unparseable (header-carrying txs) falls back to the Python job-building
+   path, so coverage and rejection semantics are unchanged. `verify_bytes` captures original wire bytes per
+   vertex (FIFO-capped) so the pipeline usually skips re-serialization.
+
+   Still open: folding the stateless checks into the same fused call (one FFI crossing per batch instead of
+   two), and the remaining Python in the loop — the connect-time job rebuild in `_verify_inputs_parallel`'s
+   precheck phase, and `verify_sigops_input`'s Python dep fetches.
 3. **Alongside, cheap:** dedupe per-update metadata saves; binary metadata format defined in Rust, migrated once
    (or orjson interim).
 4. **Defer storage-to-Rust** until the Rust core consumes it natively (post-Phase-3); by then Rust owns both wire

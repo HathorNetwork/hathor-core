@@ -46,6 +46,35 @@ def parse_vertex(
     ...
 
 
+def sighash_from_vertex_bytes(
+    data: bytes,
+    max_size: int,
+) -> bytes | None:
+    """The sighash preimage of a serialized vertex (equals Python's `tx.get_sighash_all()`),
+    or None when the bytes are unsupported (the caller computes it in Python)."""
+    ...
+
+
+def verify_scripts_from_bytes(
+    items: Sequence[bytes],
+    supplied_deps: Sequence[bytes],
+    db: 'RocksDb | None',
+    tx_cf: str,
+    opcodes_version: int,
+    max_size: int,
+    max_multisig_pubkeys: int,
+    max_multisig_signatures: int,
+    p2pkh_version_byte: bytes,
+    num_workers: int,
+) -> list[tuple[int, list[tuple[str, str] | None], list[bytes]]]:
+    """Fused batch script pipeline: parse each serialized tx, compute its sighash, resolve
+    spent txs (batch -> supplied bytes -> native RocksDB read of `tx_cf`) and evaluate every
+    input script — all in one GIL-released call. One `(status, results, missing)` per item:
+    status 0 = evaluated (one result per input, in order), 1 = unresolvable deps (hashes
+    listed), 2 = unsupported tx bytes."""
+    ...
+
+
 def verify_vertices_stateless_batch(
     items: Sequence[tuple[Sequence[int], object]],
     num_workers: int,

@@ -166,11 +166,50 @@ class ScriptPrecomputeTest(unittest.TestCase):
         assert tx.hash not in self.pool._cached_script_results
 
     def test_storage_resolved_dep(self) -> None:
-        # the spent tx comes from the service's tx_storage instead of the batch
+        # the spent tx comes from the service's tx_storage instead of the batch: the Rust
+        # pipeline reports it missing, and the second (supplied) pass resolves it
         tx = build_p2pkh_tx([0, 1])
+        fresh = self._verify(tx)
         self.service._tx_storage = tx.storage  # the helpers' stub storage returns the spent tx
         try:
-            jobs = self.service._build_script_jobs(tx, {}, _make_params())
-            assert jobs is not None and len(jobs) == 2
+            self.service._precompute_scripts_batch([tx], _make_params())
+            assert tx.hash in self.pool._cached_script_results
+            cached = self._verify(tx)
+            assert (type(cached), str(cached)) == (type(fresh), str(fresh))
         finally:
             self.service._tx_storage = None
+
+    def test_native_db_resolved_dep(self) -> None:
+        # the spent tx lives only in the RocksDB tx column family: the Rust pipeline must
+        # resolve it natively through the shared handle (no Python storage involved)
+        from hathor.storage import RocksDBStorage
+
+        tx = build_p2pkh_tx([0, 1])
+        spent_tx = tx.storage._spent_tx  # type: ignore[union-attr]
+        fresh = self._verify(tx)
+
+        rocksdb_storage = RocksDBStorage.create_temp()
+        try:
+            db = rocksdb_storage.get_db()
+            db.inner.create_cf('tx')
+            db.inner.put('tx', spent_tx.hash, bytes(spent_tx))
+
+            class _StorageWithRocksDB:
+                """Just enough of TransactionRocksDBStorage for _native_db/_fetch_dep_bytes."""
+                _rocksdb_storage = rocksdb_storage
+
+                @staticmethod
+                def get_transaction(tx_id: bytes) -> Transaction:
+                    from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+                    raise TransactionDoesNotExist(tx_id.hex())
+
+            self.service._tx_storage = _StorageWithRocksDB()  # type: ignore[assignment]
+            try:
+                self.service._precompute_scripts_batch([tx], _make_params())
+                assert tx.hash in self.pool._cached_script_results
+                cached = self._verify(tx)
+                assert (type(cached), str(cached)) == (type(fresh), str(fresh))
+            finally:
+                self.service._tx_storage = None
+        finally:
+            rocksdb_storage.close()
