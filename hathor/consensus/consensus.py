@@ -155,6 +155,11 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
+        # persist the algorithms' deferred metadata saves (deduped); everything below reads
+        # the same in-memory objects, and the removal paths require saves to be written
+        # through from here on
+        context.flush_saves()
+
         # On reorgs, the mempool tips index must be synced *before* _compute_vertices_that_became_invalid
         # below reads it. On the common (non-reorg) path nothing in between reads or mutates consensus state,
         # so the single update_critical_indexes pass at the end of this method (which also updates the tips)

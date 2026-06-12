@@ -50,6 +50,8 @@ class ConsensusAlgorithmContext:
         'reorg_info',
         'nc_events',
         'nc_exec_success',
+        '_pending_saves',
+        '_saves_flushed',
     )
 
     consensus: 'ConsensusAlgorithm'
@@ -68,12 +70,33 @@ class ConsensusAlgorithmContext:
         self.reorg_info = None
         self.nc_events = None
         self.nc_exec_success = []
+        # metadata saves are deferred and deduped while the algorithms run (an 8-input tx
+        # would otherwise save the same spent tx's metadata once per input); unsafe_update
+        # flushes once, after which save() writes through (the reorg removal paths run after
+        # the flush and keep their original immediate-persistence semantics)
+        self._pending_saves: dict[bytes, BaseTransaction] = {}
+        self._saves_flushed = False
 
     def save(self, tx: BaseTransaction) -> None:
         """Only metadata is ever saved in a consensus update."""
         assert tx.storage is not None
         self.txs_affected.add(tx)
-        tx.storage.save_transaction(tx, only_metadata=True)
+        if self._saves_flushed:
+            tx.storage.save_transaction(tx, only_metadata=True)
+        else:
+            self._pending_saves[tx.hash] = tx
+
+    def flush_saves(self) -> None:
+        """Persist every deferred metadata save (each affected tx exactly once) and switch
+        save() to write-through. Must be called exactly once per consensus update, before any
+        path that deletes transactions (a deferred save flushed after a removal would
+        resurrect the removed tx's metadata row)."""
+        assert not self._saves_flushed
+        self._saves_flushed = True
+        for tx in self._pending_saves.values():
+            assert tx.storage is not None
+            tx.storage.save_transaction(tx, only_metadata=True)
+        self._pending_saves.clear()
 
     def mark_as_reorg(self, reorg_info: ReorgInfo) -> None:
         """Must only be called once, will raise an assert error if called twice."""
