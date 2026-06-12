@@ -123,6 +123,10 @@ class SyncMempoolTestCase(unittest.TestCase):
         # inject invalid tx in manager1 to be sent to manager2 through mempool-sync
         invalid_tx = txs[0].clone()
         invalid_tx.parents[1] = invalid_tx.parents[0]  # duplicate parents
+        # the cloned metadata carries txs[0]'s spent_outputs, which describes a different tx and would
+        # (correctly) disqualify this clone from being a mempool tip — clear the stale spenders
+        for spent in invalid_tx.get_metadata().spent_outputs.values():
+            spent.clear()
         cpu_mining = CpuMiningService()
         cpu_mining.resolve(invalid_tx)
         self.manager1.tx_storage.save_transaction(invalid_tx)

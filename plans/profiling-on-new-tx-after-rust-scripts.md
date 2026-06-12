@@ -88,7 +88,12 @@ Profile shares:
    `voided_by`/`spent_outputs`; it never unsets the validation state), so the re-verification was pure defense at
    ~2× the entire verification cost. Measured: serial 8-input `on_new_tx` 16.2 → 10.0 ms (−38%); rust:12 (tips
    no-op) 3.94 → 3.35 ms (−15%) and 1-input 1.68 → 1.33 ms (−21%); `validate_full` call counts dropped 2× → 1×.
-1. **Make `mempool_tips_index.update()` incremental** — pure Python, the single highest-leverage change
+1. **Make `mempool_tips_index.update()` incremental** — **DONE**: `update()` now syncs only the affected tx and
+   its direct dependencies (bidirectionally, using the same tip predicate as `init_loop_step`), instead of scanning
+   every tip per call. Correctness rests on the fact that consensus calls `update()` for every vertex whose
+   metadata changed, and tip-ness depends only on a tx's own state plus its children/spenders. Measured (real
+   index, rust:12): 1-input `on_new_tx` 5.85 → 1.66 ms/call; tips update cost dropped ~19× per call (~900 → ~48 µs)
+   and is no longer a bottleneck. Original recommendation: pure Python, the single highest-leverage change
    (3.2× on 1-input txs in this profile). Only the new tx's parents/spent-txs can stop being tips on a normal add;
    the global "did any tip become voided" sweep is only needed on conflict/voiding events (known at that point) and
    on reorgs (already a separately-identified path via `context.reorg_info`).

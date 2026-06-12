@@ -130,66 +130,67 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
     # PROVIDES:
 
+    def _is_tip(self, tx_storage: 'TransactionStorage', tx: BaseTransaction) -> bool:
+        """Whether `tx` currently satisfies the mempool-tip predicate (same rules as `init_loop_step`):
+        an unconfirmed, non-voided transaction with no non-voided child or spender."""
+        if not tx.is_transaction:
+            return False
+        meta = tx.get_metadata()
+        if meta.voided_by or meta.validation.is_invalid():
+            return False
+        if meta.first_block is not None:
+            return False
+        if any_non_voided(tx_storage, tx.get_children()):
+            return False
+        if any_non_voided(tx_storage, chain(*meta.spent_outputs.values())):
+            return False
+        return True
+
     def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+        """Incrementally sync the index for one affected tx.
+
+        Consensus calls this for *every* vertex whose metadata changed (the new vertex, its parents and
+        spent txs, conflict winners/losers, newly confirmed txs), so only `tx` itself and its direct
+        dependencies can change tip-ness here — tip-ness depends solely on a tx's own state and its
+        children/spenders, and any tx whose children/spenders changed is itself in the affected set.
+        This replaces a full scan of every tip per call (O(mempool) per added tx, quadratic under load)
+        with O(dependencies) work.
+        """
         assert tx.storage is not None
-        tx_meta = tx.get_metadata()
-        to_remove: set[bytes] = set()
-        deps_to_check: set[bytes] = set()
         tx_storage = tx.storage
-        for tip_tx in self.iter(tx_storage):
-            meta = tip_tx.get_metadata()
-            # a new tx/block added might cause a tx in the tips to become voided. For instance, there might be a tx1
-            # double spending tx2, where tx1 is valid and tx2 voided. A new block confirming tx2 will make it valid
-            # while tx1 becomes voided, so it has to be removed from the tips. The txs confirmed by tx1 need to be
-            # double checked, as they might themselves become tips (hence we use deps_to_check)
-            if meta.voided_by or meta.validation.is_invalid():
-                to_remove.add(tip_tx.hash)
-                deps_to_check.update(tip_tx.get_all_dependencies())
-                continue
-
-            # might also happen that a tip has a child or a spender that became valid, so it's not a tip anymore
-            has_non_voided_child = lambda: any_non_voided(tx_storage, tip_tx.get_children())
-            has_non_voided_spender = lambda: any_non_voided(tx_storage, chain(*meta.spent_outputs.values()))
-            if has_non_voided_child() or has_non_voided_spender():
-                to_remove.add(tip_tx.hash)
-
-        if to_remove:
-            self._discard_many(to_remove)
-            self.log.debug('removed txs from tips', txs=[tx.hex() for tx in to_remove])
-
-        # Check if any of the txs pointed by the removed tips is a tip again. This happens
-        # if it doesn't have any other valid child or spender.
-        to_add = set()
-        for tx_hash in deps_to_check:
-            meta = not_none(tx_storage.get_metadata(tx_hash))
-            if meta.voided_by:
-                continue
-            to_remove_parent = tx_storage.get_transaction(tx_hash)
-            # check if it has any valid children or spenders
-            has_non_voided_child = lambda: any_non_voided(tx_storage, to_remove_parent.get_children())
-            has_non_voided_spender = lambda: any_non_voided(tx_storage, chain(*meta.spent_outputs.values()))
-            if not has_non_voided_child() and not has_non_voided_spender():
-                to_add.add(tx_hash)
-
-        if to_add:
-            self._add_many(to_add)
-            self.log.debug('added txs to tips', txs=[tx.hex() for tx in to_add])
-
+        tx_meta = tx.get_metadata()
         voided_or_invalid = bool(tx_meta.voided_by) or tx_meta.validation.is_invalid()
-        remove = force_remove or voided_or_invalid
 
         if force_remove and not voided_or_invalid:
             self.log.warn('removing tx even though it isn\'t voided or invalid, some tests can do this')
 
-        if remove:
-            self.log.debug('remove from mempool', tx=tx.hash_hex, validation=tx_meta.validation,
-                           is_voided=bool(tx_meta.voided_by))
+        if not force_remove and self._is_tip(tx_storage, tx):
+            self._add(tx.hash)
+            # its dependencies now have a non-voided child/spender (this tx), so they cannot be tips
+            self._discard_many(tx.get_all_dependencies())
             return
 
-        self._discard_many(tx.get_all_dependencies())
+        self._discard(tx.hash)
+        if not tx.is_transaction and not voided_or_invalid:
+            # a connected block: its tx parents (and everything below) just got confirmed
+            self._discard_many(tx.get_all_dependencies())
+            return
 
-        if tx.is_transaction and tx_meta.first_block is None:
-            self._add(tx.hash)
+        # `tx` left the mempool view (voided/invalid/confirmed/removed): each of its dependencies may
+        # have just lost its only non-voided child/spender and become a tip again — or may have ceased
+        # being one. Re-evaluate exactly them.
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        for dep_hash in tx.get_all_dependencies():
+            try:
+                dep = tx_storage.get_transaction(dep_hash)
+            except TransactionDoesNotExist:
+                # the dependency itself was removed from storage (e.g. a removal cascade during a reorg)
+                self._discard(dep_hash)
+                continue
+            if self._is_tip(tx_storage, dep):
+                self._add(dep_hash)
+            else:
+                self._discard(dep_hash)
 
     def iter(self, tx_storage: 'TransactionStorage', max_timestamp: Optional[float] = None) -> Iterator[Transaction]:
         it: Iterator[BaseTransaction] = map(tx_storage.get_transaction, self._index)
