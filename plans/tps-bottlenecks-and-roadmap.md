@@ -146,6 +146,37 @@ only by the structural end-state (#1-long, #3).
 
 ## 5. Recommended roadmap
 
+### Execution status (updated after landing Phases A + B-partial)
+
+Real-reactor benchmark ladder (same workload as §1):
+
+| state | TPS |
+|---|---:|
+| baseline at the time of this doc | ~1,559 |
+| + Phase A (items 1–5 below) | ~1,861 (+19%) |
+| + B7 get fast path + B8 save dedup | ~2,259 (+21%) |
+| + static-metadata rewrite skip | **~2,485 (+10%; +59% total)** |
+
+Landed: Phase A complete (stash retention, metadata-probe skip, weight cache, yield batching, job-rebuild
+skip), B7 (lock-free LRU-hit path without per-hash lock/weakref churn; fused scope validation), B8
+(deferred+deduped consensus metadata saves, write-through after flush for the removal paths), plus a
+post-B8 profiling find: metadata-only saves were rewriting the immutable static metadata every time
+(4.1 puts/tx → 1).
+
+Fresh profile (post-B7/B8) re-ranks the remainder: the top self-time items are now the compat-layer FFI
+ops — RocksDB iterator scans (107 ms profiled; 3.9 of the ~8 scans/tx are `any_non_voided` reading the
+children CF inside `_is_tip`) and puts (75 ms; **8.2 of 17.5 puts/tx are the info index persisting its
+counters on every add**). So the refined next items:
+
+- **B6 (tips counters)**: the concrete target is eliminating the per-`_is_tip` children-CF scan — a
+  non-voided child/spender counter (or per-update children memo) saves an iterator round trip per check,
+  not just gets.
+- **NEW: info-index counter batching** — 8.2 puts/tx for a handful of integers; persist once per consensus
+  update (or per block during sync).
+- **WriteBatch per block** for the remaining index puts (timestamp index, tips markers).
+- B9 (static metadata at precompute) revised down: GIL-bound Python compute gains little off-thread; its
+  real value arrives with the Rust static-metadata format (Phase C).
+
 **Phase A — semantics-free quick wins (each independently committable):**
 1. Stash not popped until `discard` (#7, XS).
 2. Skip the guaranteed-miss metadata probe for new vertices (#part of get path, XS).
