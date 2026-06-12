@@ -31,7 +31,7 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(vertex::parse_vertex, m)?)?;
     m.add_function(wrap_pyfunction!(vertex::sighash_from_vertex_bytes, m)?)?;
-    m.add_function(wrap_pyfunction!(pipeline::verify_scripts_from_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(pipeline::verify_tx_from_bytes, m)?)?;
     m.add_class::<storage::RocksDb>()?;
     m.add_class::<storage::RocksDbWriteBatch>()?;
     m.add_class::<storage::RocksDbIterator>()?;

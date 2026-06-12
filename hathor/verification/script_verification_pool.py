@@ -243,6 +243,7 @@ class ScriptVerificationPool:
         '_p2pkh_version_byte',
         '_shadow_mismatches',
         '_cached_script_results',
+        '_cached_sigops_results',
     )
 
     def __init__(self, *, mode: ScriptVerificationMode, num_workers: int, min_inputs: int = 2) -> None:
@@ -260,6 +261,9 @@ class ScriptVerificationPool:
         # RustVerificationService.precompute_stateless_batch (possibly from a worker thread;
         # dict ops are GIL-atomic), consumed by run_jobs_with_cache, discarded with the batch.
         self._cached_script_results: dict[bytes, tuple[int, dict[int, tuple[str, str] | None]]] = {}
+        # raw per-input sigops results precomputed by the fused pipeline, keyed by tx hash:
+        # tx_hash -> (enable_checkdatasig_count, [(error | None, count)] in input order)
+        self._cached_sigops_results: dict[bytes, tuple[bool, list[tuple[tuple[str, str] | None, int]]]] = {}
 
     @property
     def enabled(self) -> bool:
@@ -434,8 +438,36 @@ class ScriptVerificationPool:
         self._cached_script_results[tx_hash] = (opcodes_version, results_by_index)
 
     def discard_script_results(self, tx_hash: bytes) -> None:
-        """Drop any unconsumed precomputed script results for this tx."""
+        """Drop any unconsumed precomputed script/sigops results for this tx."""
         self._cached_script_results.pop(tx_hash, None)
+        self._cached_sigops_results.pop(tx_hash, None)
+
+    def stash_sigops_results(
+        self,
+        tx_hash: bytes,
+        enable_checkdatasig_count: bool,
+        per_input: list[tuple[tuple[str, str] | None, int]],
+    ) -> None:
+        """Store one tx's precomputed raw input-sigops results (one entry per input)."""
+        self._cached_sigops_results[tx_hash] = (enable_checkdatasig_count, per_input)
+
+    def pop_sigops_results(
+        self,
+        tx_hash: bytes | None,
+        enable_checkdatasig_count: bool,
+    ) -> list[tuple[tuple[str, str] | None, int]] | None:
+        """Consume this tx's precomputed sigops results, or None when absent or computed
+        under a different checkdatasig flag (the count depends on it). Like the script cache,
+        results are a pure function of the immutable tx/dep bytes plus that flag."""
+        if tx_hash is None or not self.rust_verification:
+            return None
+        cached = self._cached_sigops_results.pop(tx_hash, None)
+        if cached is None:
+            return None
+        cached_flag, per_input = cached
+        if cached_flag != enable_checkdatasig_count:
+            return None
+        return per_input
 
     def run_jobs_with_cache(
         self,

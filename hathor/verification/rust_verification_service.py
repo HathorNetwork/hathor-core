@@ -97,7 +97,17 @@ def defer_stateless_precompute(
     return result
 
 
-# htr_lib.verify_scripts_from_bytes per-tx statuses
+# one htr_lib.verify_tx_from_bytes per-tx outcome:
+# (status, stateless results, per-input (sigops error, count), per-input script results, missing dep hashes)
+_PipelineOutcome = tuple[
+    int,
+    'list[tuple[str, str] | None]',
+    'list[tuple[tuple[str, str] | None, int]]',
+    'list[tuple[str, str] | None]',
+    'list[bytes]',
+]
+
+# htr_lib.verify_tx_from_bytes per-tx statuses
 _PIPELINE_EVALUATED = 0
 _PIPELINE_UNRESOLVED = 1
 _PIPELINE_PARSE_FAILED = 2
@@ -300,111 +310,168 @@ class RustVerificationService(VerificationService):
         *,
         include_scripts: bool = False,
     ) -> None:
-        """Run the stateless checks — and, when ``include_scripts`` is set, the input-script
-        evaluations — for a whole batch of vertices, each as one GIL-released Rust call
-        (parallel across vertices/inputs), and stash the per-vertex results for later
+        """Run every Rust-side verification for a whole batch of vertices with a SINGLE
+        GIL-released Rust call (`htr_lib.verify_tx_from_bytes`): parse, the stateless checks,
+        and — when ``include_scripts`` is set — input-sigops counting, sighash and full script
+        evaluation, with spent txs resolved from the batch's own bytes, then natively from
+        RocksDB through the shared handle. The per-vertex results are stashed for later
         consumption by the serial verification of each vertex. Safe to call from a worker
-        thread: the Rust calls release the GIL, and the results dicts are only read by the
+        thread: the Rust call releases the GIL, and the results dicts are only read by the
         reactor after this returns.
 
         ``include_scripts`` must be set only by stages whose downstream verification actually
         runs ``verify_inputs`` (the full-validation stage at block connect): the tx-streaming
         stage only runs ``verify_basic``, and script results stashed there would be discarded
-        unconsumed — evaluating every script twice. Script jobs are built for every input whose
-        spent tx is resolvable — from the batch itself (spend chains during sync) or from
-        storage; a tx with any unresolvable input is simply skipped (the fresh path at connect
-        time keeps its exact error semantics).
+        unconsumed — evaluating every script twice.
+
+        Fallback tiers keep coverage and rejection semantics unchanged: dependencies Rust
+        cannot see (unflushed entries in the Python storage cache) are supplied in a second
+        call; vertices whose bytes Rust cannot parse (header-carrying txs, merge-mined/PoA
+        blocks, hand-crafted unserializable test vertices) get the object-based stateless
+        batch and the Python script-job path. Dep hashes Rust fetched natively from RocksDB
+        are pre-loaded into the Python object cache through the storage's own loader.
 
         Pair with `discard_precomputed` in a finally block so entries for vertices that never
         reach their stateless checks (earlier failures) do not accumulate."""
         pool = self._script_verification_pool
         if not pool.rust_verification:
             return
-        items = []
-        keyed = []
+
+        eligible: list[BaseTransaction] = []
+        payloads: list[bytes | None] = []
         for vertex in vertices:
-            checks = self._checks_for(vertex)
-            if checks is None or vertex.is_genesis or vertex.hash in self._settings.SKIP_VERIFICATION:
+            if self._checks_for(vertex) is None or vertex.is_genesis \
+                    or vertex.hash in self._settings.SKIP_VERIFICATION:
                 continue
-            items.append((checks, self._build_check_data(vertex, params)))
-            keyed.append((vertex.hash, checks))
-        if items:
-            raw_batch = htr_lib.verify_vertices_stateless_batch(items, pool.num_workers)
-            for (vertex_hash, checks), raw in zip(keyed, raw_batch):
-                self._precomputed[vertex_hash] = (params, _RustCheckResults(dict(zip(checks, raw))))
-        if include_scripts:
-            self._precompute_scripts_batch(vertices, params)
-
-    def _precompute_scripts_batch(self, vertices: Sequence[BaseTransaction], params: VerificationParams) -> None:
-        """Evaluate the input scripts of every eligible tx in the batch and stash the raw
-        per-input results in the script pool (consumed by
-        `TransactionVerifier._verify_inputs_parallel` via `run_jobs_with_cache`).
-
-        The whole pipeline — parse, sighash, dependency resolution, evaluation — runs in Rust
-        (`htr_lib.verify_scripts_from_bytes`): spent txs are resolved from the batch's own
-        bytes, then natively from RocksDB through the shared handle. Dependencies Rust cannot
-        see (unflushed entries in the Python storage cache) are supplied in a second call, and
-        anything still unresolved or unparseable (header-carrying txs, …) falls back to the
-        Python job-building path — so coverage and rejection semantics are unchanged."""
-        pool = self._script_verification_pool
-        opcodes_version = int(params.features.opcodes_version)
-        eligible = [
-            vertex for vertex in vertices
-            if isinstance(vertex, Transaction) and not vertex.is_genesis and vertex.inputs
-        ]
+            data = self._wire_bytes.get(vertex.hash)
+            if data is None:
+                try:
+                    data = bytes(vertex)
+                except Exception:
+                    data = None  # constructor-invalid vertex (tests): object-based fallback
+            eligible.append(vertex)
+            payloads.append(data)
         if not eligible:
             return
 
-        payloads = [self._wire_bytes.get(vertex.hash) or bytes(vertex) for vertex in eligible]
-        outcomes = self._run_scripts_pipeline(payloads, [], opcodes_version)
+        serializable = {index: payload for index, payload in enumerate(payloads) if payload is not None}
+        indices = list(serializable)
+        outcomes_by_index: dict[int, _PipelineOutcome] = {}
+        if indices:
+            outcomes, fetched = self._run_pipeline(
+                [serializable[index] for index in indices], [], params, include_scripts,
+            )
+            outcomes_by_index = dict(zip(indices, outcomes))
+            self._warm_dep_cache(fetched)
 
         # Second pass: supply the dependencies Rust could not see, from the Python storage
         # layer (its cache holds recently-saved txs that are not flushed to RocksDB yet).
-        missing: set[bytes] = set()
-        for status, _, missing_hashes in outcomes:
-            if status == _PIPELINE_UNRESOLVED:
-                missing.update(missing_hashes)
-        supplied = self._fetch_dep_bytes(missing)
-        if supplied:
-            retry_indices = [
-                index for index, (status, _, _) in enumerate(outcomes) if status == _PIPELINE_UNRESOLVED
-            ]
-            retry_outcomes = self._run_scripts_pipeline(
-                [payloads[index] for index in retry_indices], supplied, opcodes_version,
-            )
-            for index, outcome in zip(retry_indices, retry_outcomes):
-                outcomes[index] = outcome
+        if include_scripts:
+            missing: set[bytes] = set()
+            for outcome in outcomes_by_index.values():
+                if outcome[0] == _PIPELINE_UNRESOLVED:
+                    missing.update(outcome[4])
+            supplied = self._fetch_dep_bytes(missing)
+            if supplied:
+                retry = [
+                    index for index in indices if outcomes_by_index[index][0] == _PIPELINE_UNRESOLVED
+                ]
+                retry_outcomes, fetched = self._run_pipeline(
+                    [serializable[index] for index in retry], supplied, params, include_scripts,
+                )
+                outcomes_by_index.update(zip(retry, retry_outcomes))
+                self._warm_dep_cache(fetched)
 
-        fallback: list[BaseTransaction] = []
-        for vertex, (status, results, _) in zip(eligible, outcomes):
-            if status == _PIPELINE_EVALUATED:
-                by_index = dict(enumerate(results))
-                pool.stash_script_results(vertex.hash, opcodes_version, by_index)
-            else:
-                fallback.append(vertex)
-        if fallback:
-            self._precompute_scripts_python(fallback, vertices, params)
+        opcodes_version = int(params.features.opcodes_version)
+        enable_checkdatasig = params.features.count_checkdatasig_op
+        fallback_stateless: list[BaseTransaction] = []
+        fallback_scripts: list[BaseTransaction] = []
+        for index, vertex in enumerate(eligible):
+            maybe_outcome = outcomes_by_index.get(index)
+            if maybe_outcome is None or maybe_outcome[0] == _PIPELINE_PARSE_FAILED:
+                fallback_stateless.append(vertex)
+                if include_scripts and isinstance(vertex, Transaction) and vertex.inputs:
+                    fallback_scripts.append(vertex)
+                continue
+            status, stateless, sigops, scripts, _missing = maybe_outcome
+            # Rust returns the stateless results in the canonical per-kind order — the same
+            # _BLOCK_CHECKS/_TX_CHECKS sequences (mirrored constants, pinned by tests).
+            checks = self._checks_for(vertex)
+            assert checks is not None
+            self._precomputed[vertex.hash] = (params, _RustCheckResults(dict(zip(checks, stateless))))
+            if include_scripts and isinstance(vertex, Transaction) and vertex.inputs:
+                if status == _PIPELINE_EVALUATED:
+                    pool.stash_script_results(vertex.hash, opcodes_version, dict(enumerate(scripts)))
+                    pool.stash_sigops_results(vertex.hash, enable_checkdatasig, sigops)
+                else:
+                    fallback_scripts.append(vertex)
 
-    def _run_scripts_pipeline(
+        if fallback_stateless:
+            self._precompute_stateless_python(fallback_stateless, params)
+        if fallback_scripts:
+            self._precompute_scripts_python(fallback_scripts, vertices, params)
+
+    def _run_pipeline(
         self,
         payloads: list[bytes],
         supplied: list[bytes],
-        opcodes_version: int,
-    ) -> list[tuple[int, list[tuple[str, str] | None], list[bytes]]]:
-        """One fused Rust call: parse + sighash + dep resolution + script evaluation."""
-        pool = self._script_verification_pool
-        return htr_lib.verify_scripts_from_bytes(
+        params: VerificationParams,
+        include_scripts: bool,
+    ) -> tuple[list[_PipelineOutcome], list[bytes]]:
+        """The single fused Rust call; returns (per-tx outcomes, natively-fetched dep hashes)."""
+        settings = self._settings
+        return htr_lib.verify_tx_from_bytes(
             payloads,
             supplied,
             self._native_db(),
             'tx',
-            opcodes_version,
-            self._settings.MAX_SERIALIZED_VERTEX_SIZE,
-            self._settings.MAX_MULTISIG_PUBKEYS,
-            self._settings.MAX_MULTISIG_SIGNATURES,
-            self._settings.P2PKH_VERSION_BYTE,
-            pool.num_workers,
+            include_scripts,
+            int(params.features.opcodes_version),
+            settings.MAX_SERIALIZED_VERTEX_SIZE,
+            settings.MAX_NUM_INPUTS,
+            settings.BLOCK_DATA_MAX_SIZE,
+            settings.MAX_NUM_OUTPUTS,
+            settings.MAX_OUTPUT_SCRIPT_SIZE,
+            settings.MAX_TX_SIGOPS_OUTPUT,
+            settings.MAX_MULTISIG_PUBKEYS,
+            settings.MAX_MULTISIG_SIGNATURES,
+            params.features.count_checkdatasig_op,
+            settings.P2PKH_VERSION_BYTE,
+            self._script_verification_pool.num_workers,
         )
+
+    def _warm_dep_cache(self, hashes: list[bytes]) -> None:
+        """Pre-load deps Rust fetched natively from RocksDB into the Python object cache,
+        through the storage's own loader — exactly as if a later precheck had loaded them,
+        just off the hot path."""
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+
+        if self._tx_storage is None:
+            return
+        for dep_hash in hashes:
+            try:
+                self._tx_storage.get_transaction(dep_hash)
+            except TransactionDoesNotExist:
+                continue
+
+    def _precompute_stateless_python(
+        self,
+        fallback: list[BaseTransaction],
+        params: VerificationParams,
+    ) -> None:
+        """Object-based stateless batch for vertices the pipeline could not parse
+        (merge-mined/PoA blocks, header-carrying txs, unserializable test vertices)."""
+        pool = self._script_verification_pool
+        items = []
+        keyed = []
+        for vertex in fallback:
+            checks = self._checks_for(vertex)
+            assert checks is not None  # filtered by the caller
+            items.append((checks, self._build_check_data(vertex, params)))
+            keyed.append((vertex.hash, checks))
+        raw_batch = htr_lib.verify_vertices_stateless_batch(items, pool.num_workers)
+        for (vertex_hash, checks), raw in zip(keyed, raw_batch):
+            self._precomputed[vertex_hash] = (params, _RustCheckResults(dict(zip(checks, raw))))
 
     def _native_db(self) -> 'htr_lib.RocksDb | None':
         """The shared Rust RocksDB handle, when this node's storage is RocksDB-backed."""
@@ -557,12 +624,21 @@ class RustVerificationService(VerificationService):
 
         n_txops = 0
         if pairs:
-            results = htr_lib.count_sigops_inputs(
-                pairs,
-                self._settings.MAX_MULTISIG_PUBKEYS,
-                params.features.count_checkdatasig_op,
-                self._script_verification_pool.num_workers,
+            # The fused batch pipeline may have already counted this tx's input sigops (the
+            # cache covers ALL inputs; the fetch loop above may have stopped early, so only
+            # its prefix is consumed — same restriction discipline as the script cache).
+            cached = self._script_verification_pool.pop_sigops_results(
+                tx._hash, params.features.count_checkdatasig_op,
             )
+            if cached is not None and len(cached) >= len(pairs):
+                results = cached[:len(pairs)]
+            else:
+                results = htr_lib.count_sigops_inputs(
+                    pairs,
+                    self._settings.MAX_MULTISIG_PUBKEYS,
+                    params.features.count_checkdatasig_op,
+                    self._script_verification_pool.num_workers,
+                )
             for error, count in results:
                 if error is not None:
                     raise_rust_error(error[0], error[1])

@@ -55,23 +55,39 @@ def sighash_from_vertex_bytes(
     ...
 
 
-def verify_scripts_from_bytes(
+def verify_tx_from_bytes(
     items: Sequence[bytes],
     supplied_deps: Sequence[bytes],
     db: 'RocksDb | None',
     tx_cf: str,
+    include_scripts: bool,
     opcodes_version: int,
     max_size: int,
+    max_num_inputs: int,
+    block_data_max_size: int,
+    max_num_outputs: int,
+    max_output_script_size: int,
+    max_tx_sigops_output: int,
     max_multisig_pubkeys: int,
     max_multisig_signatures: int,
+    enable_checkdatasig_count: bool,
     p2pkh_version_byte: bytes,
     num_workers: int,
-) -> list[tuple[int, list[tuple[str, str] | None], list[bytes]]]:
-    """Fused batch script pipeline: parse each serialized tx, compute its sighash, resolve
-    spent txs (batch -> supplied bytes -> native RocksDB read of `tx_cf`) and evaluate every
-    input script — all in one GIL-released call. One `(status, results, missing)` per item:
-    status 0 = evaluated (one result per input, in order), 1 = unresolvable deps (hashes
-    listed), 2 = unsupported tx bytes."""
+) -> tuple[
+    list[tuple[int, list[tuple[str, str] | None], list[tuple[tuple[str, str] | None, int]],
+               list[tuple[str, str] | None], list[bytes]]],
+    list[bytes],
+]:
+    """The fused batch verification pipeline: parse each serialized vertex and run every
+    Rust-side verification in one GIL-released call — the stateless checks (always, in the
+    canonical per-kind order), and, when `include_scripts` is set, input-sigops counting,
+    sighash and full script evaluation with spent txs resolved from the batch itself,
+    `supplied_deps`, or a native RocksDB read of `tx_cf`.
+
+    Returns (outcomes, fetched): one `(status, stateless, sigops, scripts, missing)` per item
+    — status 0 = evaluated, 1 = unresolvable deps (stateless results still present), 2 =
+    unsupported bytes — plus the dep hashes read natively from RocksDB (for Python-side
+    object-cache warming)."""
     ...
 
 

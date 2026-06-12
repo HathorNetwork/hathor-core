@@ -130,9 +130,16 @@ IBD/sync improves more than mempool TPS (it is verification-bound, exactly what 
    txs): ~1,160 tx/s with the fused pipeline vs ~955 without precompute (+22%) vs ~877 with the pure-Python
    service (+32%).
 
-   Still open: folding the stateless checks into the same fused call (one FFI crossing per batch instead of
-   two), and the remaining Python in the loop — the connect-time job rebuild in `_verify_inputs_parallel`'s
-   precheck phase, and `verify_sigops_input`'s Python dep fetches.
+   **Single fused call (DONE).** `htr_lib.verify_tx_from_bytes` is now the ONE Rust crossing per batch:
+   parse + stateless checks (canonical per-kind order, mirrored constants pinned by tests) + input-sigops
+   counting + sighash + script evaluation. `precompute_stateless_batch` drives it for both sync stages
+   (`include_scripts` only at the full-validation stage); per-tx stateless/sigops/script results are stashed
+   and consumed at their canonical positions; dep hashes Rust fetched natively from RocksDB are pre-loaded
+   into the Python object cache through the storage's own loader. Fallback tiers unchanged (supplied second
+   pass for Python-cache-resident deps; object-based stateless + Python job path for unparseable vertices).
+
+   Still open: the connect-time job rebuild in `_verify_inputs_parallel`'s precheck phase (skippable on a
+   cache hit), and the per-vertex receive-time parse (kept deliberately: Python objects must materialize).
 3. **Alongside, cheap:** dedupe per-update metadata saves; binary metadata format defined in Rust, migrated once
    (or orjson interim).
 4. **Defer storage-to-Rust** until the Rust core consumes it natively (post-Phase-3); by then Rust owns both wire

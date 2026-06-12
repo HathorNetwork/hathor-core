@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 """Differential tests for the batched script precompute: verifying a tx whose scripts were
-pre-evaluated by `RustVerificationService._precompute_scripts_batch` (one Rust call for a whole
+pre-evaluated by `RustVerificationService.precompute_stateless_batch` (one fused Rust call for a whole
 batch, results cached in the script pool) must surface the exact same outcome — same exception
 type and message, same interleaving with precheck/conflict errors — as a fresh evaluation."""
 
@@ -92,7 +92,7 @@ class ScriptPrecomputeTest(unittest.TestCase):
 
         fresh = self._verify(tx, verify_version)
 
-        self.service._precompute_scripts_batch([spent_tx, tx], params or _make_params())
+        self.service.precompute_stateless_batch([spent_tx, tx], params or _make_params(), include_scripts=True)
         assert tx.hash in self.pool._cached_script_results
 
         # the cached path must not make any fresh Rust script call
@@ -159,10 +159,96 @@ class ScriptPrecomputeTest(unittest.TestCase):
             expect_cache_hit=False,
         )
 
+    def test_sigops_cache_consumed(self) -> None:
+        # the fused pipeline also counts input sigops; _verify_sigops_input must consume the
+        # cache (no fresh count_sigops_inputs call) and reach the same outcome
+        import htr_lib
+        tx = build_multisig_tx(2)
+        params = _make_params()
+        spent_tx = tx.storage._spent_tx  # type: ignore[union-attr]
+
+        fresh_outcome = self._sigops_outcome(tx, params)
+        self.service.precompute_stateless_batch([spent_tx, tx], params, include_scripts=True)
+        assert tx.hash in self.pool._cached_sigops_results
+
+        calls = []
+        original = htr_lib.count_sigops_inputs
+
+        def counting(*args: object, **kwargs: object) -> object:
+            calls.append(1)
+            return original(*args, **kwargs)  # type: ignore[arg-type]
+
+        htr_lib.count_sigops_inputs = counting  # type: ignore[assignment]
+        try:
+            cached_outcome = self._sigops_outcome(tx, params)
+        finally:
+            htr_lib.count_sigops_inputs = original
+
+        assert (type(cached_outcome), str(cached_outcome)) == (type(fresh_outcome), str(fresh_outcome))
+        assert calls == [], 'precomputed sigops were not consumed'
+        assert tx.hash not in self.pool._cached_sigops_results
+
+    def test_sigops_cache_checkdatasig_flag_mismatch(self) -> None:
+        # counted under checkdatasig=True, consumed under False: the cache must be skipped
+        import htr_lib
+        tx = build_multisig_tx(2)
+        spent_tx = tx.storage._spent_tx  # type: ignore[union-attr]
+        self.service.precompute_stateless_batch([spent_tx, tx], _make_params(), include_scripts=True)
+
+        no_cds = dataclasses.replace(_make_params().features, count_checkdatasig_op=False)
+        params = VerificationParams(nc_block_root_id=None, features=no_cds)
+        calls = []
+        original = htr_lib.count_sigops_inputs
+
+        def counting(*args: object, **kwargs: object) -> object:
+            calls.append(1)
+            return original(*args, **kwargs)  # type: ignore[arg-type]
+
+        htr_lib.count_sigops_inputs = counting  # type: ignore[assignment]
+        try:
+            self._sigops_outcome(tx, params)
+        finally:
+            htr_lib.count_sigops_inputs = original
+        assert calls, 'flag mismatch must force a fresh count'
+
+    def _sigops_outcome(self, tx: Transaction, params: VerificationParams) -> BaseException | None:
+        try:
+            self.service._verify_sigops_input(tx, params)
+        except BaseException as e:  # noqa: B036
+            return e
+        return None
+
+    def test_fused_stateless_matches_object_path(self) -> None:
+        # the fused pipeline's stateless results (parse-derived, canonical Rust order) must be
+        # byte-identical to the object-based batch path for the same vertices
+        from hathor.transaction import TxInput, TxOutput
+
+        over = self._settings.MAX_TX_SIGOPS_OUTPUT // 16 + 1
+        vertices = [
+            build_p2pkh_tx([0]),
+            Transaction(timestamp=1000, weight=1.0, inputs=[TxInput(b'\x01' * 32, 0, b'')],
+                        outputs=[TxOutput(1, b'\x51', 1)]),  # token index unavailable
+            Transaction(timestamp=1000, weight=1.0, inputs=[TxInput(b'\x01' * 32, 0, b'')],
+                        outputs=[TxOutput(1, b'\x60\xae')] * over),  # sigops over limit
+        ]
+        for vertex in vertices:
+            vertex.update_hash()
+        params = _make_params()
+
+        self.service.precompute_stateless_batch(vertices, params)
+        fused = {v.hash: self.service._precomputed[v.hash][1]._results for v in vertices}
+        self.service.discard_precomputed(vertices)
+
+        self.service._precompute_stateless_python(list(vertices), params)
+        object_path = {v.hash: self.service._precomputed[v.hash][1]._results for v in vertices}
+        self.service.discard_precomputed(vertices)
+
+        assert fused == object_path
+
     def test_unresolvable_dep_skips_precompute(self) -> None:
         # the spent tx is neither in the batch nor in storage: no cache entry is created
         tx = build_p2pkh_tx([0])
-        self.service._precompute_scripts_batch([tx], _make_params())
+        self.service.precompute_stateless_batch([tx], _make_params(), include_scripts=True)
         assert tx.hash not in self.pool._cached_script_results
 
     def test_storage_resolved_dep(self) -> None:
@@ -172,7 +258,7 @@ class ScriptPrecomputeTest(unittest.TestCase):
         fresh = self._verify(tx)
         self.service._tx_storage = tx.storage  # the helpers' stub storage returns the spent tx
         try:
-            self.service._precompute_scripts_batch([tx], _make_params())
+            self.service.precompute_stateless_batch([tx], _make_params(), include_scripts=True)
             assert tx.hash in self.pool._cached_script_results
             cached = self._verify(tx)
             assert (type(cached), str(cached)) == (type(fresh), str(fresh))
@@ -205,7 +291,7 @@ class ScriptPrecomputeTest(unittest.TestCase):
 
             self.service._tx_storage = _StorageWithRocksDB()  # type: ignore[assignment]
             try:
-                self.service._precompute_scripts_batch([tx], _make_params())
+                self.service.precompute_stateless_batch([tx], _make_params(), include_scripts=True)
                 assert tx.hash in self.pool._cached_script_results
                 cached = self._verify(tx)
                 assert (type(cached), str(cached)) == (type(fresh), str(fresh))

@@ -353,6 +353,74 @@ fn check_number_of_inputs(data: &VertexCheckData) -> Option<CheckError> {
     None
 }
 
+/// The canonical check sequences per vertex kind — MUST stay mirrored with the Python
+/// constants `_BLOCK_CHECKS` / `_TX_CHECKS` in `rust_verification_service.py`: the fused
+/// pipeline returns results in this order and Python zips them positionally.
+pub(crate) const BLOCK_CHECKS: &[u8] = &[
+    CHECK_NO_INPUTS,
+    CHECK_OUTPUTS,
+    CHECK_BLOCK_TOKEN_INDEXES,
+    CHECK_BLOCK_DATA,
+    CHECK_SIGOPS_OUTPUT,
+];
+pub(crate) const TX_CHECKS: &[u8] = &[
+    CHECK_NUMBER_OF_INPUTS,
+    CHECK_OUTPUTS,
+    CHECK_OUTPUT_TOKEN_INDEXES,
+    CHECK_SIGOPS_OUTPUT,
+];
+
+/// Batch-wide settings snapshot for natively-built check data (the fused pipeline).
+pub(crate) struct StatelessSettings {
+    pub max_num_inputs: u64,
+    pub block_data_max_size: u64,
+    pub max_num_outputs: u64,
+    pub max_output_script_size: u64,
+    pub max_tx_sigops_output: u64,
+    pub max_multisig_pubkeys: u64,
+    pub enable_checkdatasig_count: bool,
+}
+
+impl VertexCheckData {
+    /// Build check data from a natively parsed vertex. Genesis and SKIP_VERIFICATION
+    /// vertices are filtered out by the Python caller before the bytes reach the pipeline,
+    /// and header-carrying vertices (the only ones with `min_inputs == 0`) never parse —
+    /// so `is_genesis = false` and `min_inputs = 1` hold for everything that gets here.
+    pub(crate) fn from_parsed(parsed: &crate::vertex::Parsed, s: &StatelessSettings) -> Self {
+        Self {
+            outputs: parsed
+                .outputs
+                .iter()
+                .map(|(value, script, token_data)| {
+                    (*value as i64, script.clone(), *token_data as i64)
+                })
+                .collect(),
+            tokens_count: parsed.tokens.len() as u64,
+            vertex_hash: parsed.hash.clone(),
+            pow_target_be: vec![], // CHECK_POW stays on the Python verifier path
+            inputs_count: parsed.inputs.len() as u64,
+            min_inputs: 1,
+            is_genesis: false,
+            block_data_len: parsed.block_data.len() as u64,
+            max_num_inputs: s.max_num_inputs,
+            block_data_max_size: s.block_data_max_size,
+            max_num_outputs: s.max_num_outputs,
+            max_output_script_size: s.max_output_script_size,
+            max_tx_sigops_output: s.max_tx_sigops_output,
+            max_multisig_pubkeys: s.max_multisig_pubkeys,
+            enable_checkdatasig_count: s.enable_checkdatasig_count,
+        }
+    }
+}
+
+/// Run a canonical check sequence, returning one entry per check in sequence order.
+pub(crate) fn run_checks(checks: &[u8], data: &VertexCheckData) -> Vec<Option<(String, String)>> {
+    checks
+        .iter()
+        .map(|&check| run_check(check, data).map(CheckError::into_py))
+        .collect()
+}
+
 fn run_check(check: u8, data: &VertexCheckData) -> Option<CheckError> {
     match check {
         CHECK_POW => check_pow(&data.vertex_hash, &data.pow_target_be),
