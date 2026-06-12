@@ -222,12 +222,12 @@ class VertexVerifier:
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
                 # A shielded TCT carries shielded outputs of the new token plus a
-                # MintHeader declaring its initial supply.
+                # MintHeader declaring its initial supply. A MeltHeader is not
+                # admitted: a creation tx mints, it does not melt.
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
                     allowed_headers.add(MintHeader)
-                    allowed_headers.add(MeltHeader)
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)

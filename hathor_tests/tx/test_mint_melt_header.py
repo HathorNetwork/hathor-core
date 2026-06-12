@@ -179,3 +179,16 @@ def test_allowed_headers_gated() -> None:
     allowed_on = verifier.get_allowed_headers(tx, params_on)
     assert MintHeader in allowed_on
     assert MeltHeader in allowed_on
+
+
+def test_tct_admits_mint_header_but_not_melt_header() -> None:
+    """A TOKEN_CREATION_TRANSACTION mints its new token (MintHeader) but never melts (no MeltHeader)."""
+    from hathor.transaction.token_creation_tx import TokenCreationTransaction
+
+    verifier = VertexVerifier(reactor=Mock(), settings=get_global_settings(), feature_service=Mock())
+    tct = TokenCreationTransaction()
+    params_on = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
+
+    allowed = verifier.get_allowed_headers(tct, params_on)
+    assert MintHeader in allowed
+    assert MeltHeader not in allowed
