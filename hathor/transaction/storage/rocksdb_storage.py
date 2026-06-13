@@ -125,7 +125,10 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self.cache_data.flush_deferred = None
 
     def _flush_to_storage(self, dirty_txs_copy: set[bytes]) -> None:
-        """Write dirty pages to disk."""
+        """Write dirty pages to disk, as a single atomic WriteBatch (one WAL write for the
+        whole flush instead of two FFI puts per tx)."""
+        from hathor.storage import rocksdb_compat
+        batch = rocksdb_compat.WriteBatch()
         for tx_hash in dirty_txs_copy:
             # a dirty tx might be removed from self.cache outside this thread: if _update_cache is called
             # and we need to save the tx to disk immediately. So it might happen that the tx which was
@@ -133,7 +136,9 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             if tx_hash in self.cache_data.cache:
                 tx = self.cache_data.cache[tx_hash]
                 self.cache_data.dirty_txs.discard(tx_hash)
-                self._save_transaction_to_db(tx)
+                self._save_transaction_to_db(tx, batch=batch)
+        if batch.count():
+            self._db.write(batch)
 
     def _cache_popitem(self) -> None:
         """Pop the last recently used cache item."""
@@ -219,16 +224,17 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             self.cache_data.pending_tx_bytes.add(tx.hash)
         self._update_cache(tx)
 
-    def _save_transaction_to_db(self, tx: 'BaseTransaction') -> None:
+    def _save_transaction_to_db(self, tx: 'BaseTransaction', batch: 'rocksdb.WriteBatch | None' = None) -> None:
+        target = batch if batch is not None else self._db
         key = tx.hash
         if key in self.cache_data.pending_tx_bytes:
             # Vertex bytes are immutable: they are serialized and written only on the first flush after a full
             # save. Metadata-only updates flush just the metadata column family.
             self.cache_data.pending_tx_bytes.discard(key)
             tx_data = self._tx_to_bytes(tx)
-            self._db.put((self._cf_tx, key), tx_data)
+            target.put((self._cf_tx, key), tx_data)
         meta_data = tx.get_metadata(use_storage=False).to_bytes()
-        self._db.put((self._cf_meta, key), meta_data)
+        target.put((self._cf_meta, key), meta_data)
 
     @override
     def _save_static_metadata(self, tx: 'BaseTransaction') -> None:
