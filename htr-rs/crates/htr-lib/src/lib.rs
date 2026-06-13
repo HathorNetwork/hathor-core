@@ -2,6 +2,7 @@
 
 use pyo3::prelude::*;
 
+pub mod metadata;
 pub mod pipeline;
 pub mod script;
 pub mod static_meta;
@@ -45,6 +46,8 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
         static_meta::static_metadata_from_bytes,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(metadata::metadata_to_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(metadata::metadata_from_bytes, m)?)?;
     m.add_class::<storage::RocksDb>()?;
     m.add_class::<storage::RocksDbWriteBatch>()?;
     m.add_class::<storage::RocksDbIterator>()?;

@@ -117,6 +117,38 @@ def static_metadata_from_bytes(
     ...
 
 
+def metadata_to_bytes(
+    hash: bytes | None,
+    validation: str,
+    accumulated_weight_be: bytes,
+    score_be: bytes,
+    first_block: bytes | None,
+    voided_by: Sequence[bytes],
+    conflict_with: Sequence[bytes],
+    twins: Sequence[bytes],
+    received_by: Sequence[int],
+    spent_outputs: Sequence[tuple[int, Sequence[bytes]]],
+    feature_states: Sequence[tuple[str, str]] | None,
+    nc_block_root_id: bytes | None,
+    nc_execution: str | None,
+    nc_calls_json: bytes | None,
+    nc_events: Sequence[tuple[bytes, bytes]] | None,
+) -> bytes:
+    """Serialize a TransactionMetadata record (canonical binary format, version 1)."""
+    ...
+
+
+def metadata_from_bytes(data: bytes) -> tuple[
+    tuple[bytes | None, str, bytes, bytes, bytes | None, list[bytes], list[bytes], list[bytes],
+          list[int], list[tuple[int, list[bytes]]]],
+    tuple[list[tuple[str, str]] | None, bytes | None, str | None, bytes | None,
+          list[tuple[bytes, bytes]] | None],
+]:
+    """Parse a TransactionMetadata record: (core, extra) tuples mirroring metadata_to_bytes's
+    arguments in order. Raises ValueError on a corrupt record."""
+    ...
+
+
 def verify_vertices_stateless_batch(
     items: Sequence[tuple[Sequence[int], object]],
     num_workers: int,
