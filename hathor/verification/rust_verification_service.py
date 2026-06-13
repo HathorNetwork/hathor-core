@@ -105,6 +105,7 @@ _PipelineOutcome = tuple[
     'list[tuple[tuple[str, str] | None, int]]',
     'list[tuple[str, str] | None]',
     'list[bytes]',
+    'tuple[int, bytes] | None',
 ]
 
 # htr_lib.verify_tx_from_bytes per-tx statuses
@@ -154,7 +155,7 @@ class _RustCheckResults:
 
 
 class RustVerificationService(VerificationService):
-    __slots__ = ('_script_verification_pool', '_precomputed', '_wire_bytes')
+    __slots__ = ('_script_verification_pool', '_precomputed', '_wire_bytes', '_precomputed_static')
 
     # FIFO cap for the wire-bytes cache: entries are normally consumed by the next batch
     # precompute and discarded with it; the cap only bounds vertices that never reach a batch
@@ -184,6 +185,32 @@ class RustVerificationService(VerificationService):
         # original wire bytes per vertex hash, captured by verify_bytes so the batched script
         # pipeline can hand them straight to Rust without re-serializing
         self._wire_bytes: dict[bytes, bytes] = {}
+        # static metadata computed by the pipeline (a pure function of the immutable DAG, so
+        # no params guard): tx hash -> (min_height, closest_ancestor_block); consumed by
+        # validate_full, discarded with the batch
+        self._precomputed_static: dict[bytes, tuple[int, bytes]] = {}
+
+    @override
+    def validate_full(
+        self,
+        vertex: BaseTransaction,
+        params: VerificationParams,
+        *,
+        sync_checkpoints: bool = False,
+        init_static_metadata: bool = True,
+    ) -> bool:
+        if init_static_metadata and isinstance(vertex, Transaction):
+            entry = self._precomputed_static.pop(vertex.hash, None)
+            if entry is not None:
+                from hathor.transaction.static_metadata import TransactionStaticMetadata
+                vertex.set_static_metadata(TransactionStaticMetadata(
+                    min_height=entry[0],
+                    closest_ancestor_block=entry[1],
+                ))
+                init_static_metadata = False
+        return super().validate_full(
+            vertex, params, sync_checkpoints=sync_checkpoints, init_static_metadata=init_static_metadata,
+        )
 
     @override
     def verify_bytes(self, data: bytes, *, storage: TransactionStorage | None = None) -> BaseTransaction:
@@ -396,7 +423,9 @@ class RustVerificationService(VerificationService):
                 if include_scripts and isinstance(vertex, Transaction) and vertex.inputs:
                     fallback_scripts.append(vertex)
                 continue
-            status, stateless, sigops, scripts, _missing = maybe_outcome
+            status, stateless, sigops, scripts, _missing, static_meta = maybe_outcome
+            if static_meta is not None:
+                self._precomputed_static[vertex.hash] = static_meta
             # Rust returns the stateless results in the canonical per-kind order — the same
             # _BLOCK_CHECKS/_TX_CHECKS sequences (mirrored constants, pinned by tests).
             checks = self._checks_for(vertex)
@@ -428,8 +457,10 @@ class RustVerificationService(VerificationService):
             supplied,
             self._native_db(),
             'tx',
+            'static-meta',
             include_scripts,
             int(params.features.opcodes_version),
+            settings.REWARD_SPEND_MIN_BLOCKS,
             settings.MAX_SERIALIZED_VERTEX_SIZE,
             settings.MAX_NUM_INPUTS,
             settings.BLOCK_DATA_MAX_SIZE,
@@ -580,6 +611,7 @@ class RustVerificationService(VerificationService):
             self._precomputed.pop(vertex.hash, None)
             self._script_verification_pool.discard_script_results(vertex.hash)
             self._wire_bytes.pop(vertex.hash, None)
+            self._precomputed_static.pop(vertex.hash, None)
 
     def _verify_without_storage_base_block_rust(self, block: Block, params: VerificationParams) -> None:
         results = self._run_rust_checks(block, params, _BLOCK_CHECKS)

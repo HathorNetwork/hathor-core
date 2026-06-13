@@ -7,6 +7,7 @@
 use pyo3::prelude::*;
 
 use super::*;
+use crate::static_meta::StaticMeta;
 use crate::storage::RocksDbWriteBatch;
 
 /// Serialized regular tx: one input spending `dep_hash[index]` with `input_data`, one OP_1
@@ -61,8 +62,10 @@ fn run(
         supplied,
         db,
         "tx".to_string(),
+        "static-meta".to_string(),
         include_scripts,
         2,          // opcodes_version V2
+        10,         // reward_spend_min_blocks
         100_000,    // max_size
         255,        // max_num_inputs
         100,        // block_data_max_size
@@ -248,6 +251,173 @@ fn test_sigops_counted_per_input() {
         assert_eq!(outcomes[0].0, STATUS_EVALUATED);
         assert_eq!(outcomes[0].2[0], (None, 0));
         assert_eq!(outcomes[0].2[1], (None, 16));
+    });
+}
+
+fn put_static(py: Python<'_>, db: &Py<RocksDb>, hash: &[u8], meta: &StaticMeta) {
+    let batch = RocksDbWriteBatch::new();
+    batch
+        .put(
+            "static-meta",
+            hash.to_vec(),
+            crate::static_meta::encode(meta),
+        )
+        .unwrap();
+    db.borrow(py).write(py, &batch).unwrap();
+}
+
+#[test]
+fn test_static_metadata_from_db_and_in_batch_chain() {
+    Python::initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.db").to_str().unwrap().to_string();
+    Python::attach(|py| {
+        let db = Py::new(py, RocksDb::new(py, path, None).unwrap()).unwrap();
+        db.borrow(py).create_cf(py, "tx").unwrap();
+        db.borrow(py).create_cf(py, "static-meta").unwrap();
+
+        // a stored funding tx whose outputs the chain spends; its closest ancestor is a
+        // block of height 7 — both static records live only in the DB
+        let funding = dep_bytes(&[&[0x51], &[0x51]]);
+        let funding_hash = hash_of(&funding);
+        let block_hash = vec![0xBB; 32];
+        let batch = RocksDbWriteBatch::new();
+        batch.put("tx", funding_hash.clone(), funding).unwrap();
+        db.borrow(py).write(py, &batch).unwrap();
+        put_static(
+            py,
+            &db,
+            &block_hash,
+            &StaticMeta::Block {
+                height: 7,
+                min_height: 0,
+                bit_counts: vec![],
+                feature_states: vec![],
+            },
+        );
+        put_static(
+            py,
+            &db,
+            &funding_hash,
+            &StaticMeta::Tx {
+                min_height: 3,
+                closest_ancestor_block: block_hash.clone(),
+            },
+        );
+
+        // tx1 spends the funding tx; tx2 spends tx1 (in-batch static resolution)
+        let tx1 = tx_bytes(&funding_hash, 0, b"");
+        let tx1_hash = hash_of(&tx1);
+        let tx2 = tx_bytes(&tx1_hash, 0, b"");
+        let (outcomes, _) = run(py, vec![tx1, tx2], vec![], Some(db.borrow(py)), true);
+
+        // tx1: inherits funding's min_height=3; funding is a tx, so no reward lock; closest
+        // ancestor is funding's closest (the height-7 block)
+        assert_eq!(outcomes[0].0, STATUS_EVALUATED);
+        assert_eq!(outcomes[0].5, Some((3, block_hash.clone())));
+        // tx2: inherits via the in-batch tx1
+        assert_eq!(outcomes[1].5, Some((3, block_hash.clone())));
+    });
+}
+
+#[test]
+fn test_static_metadata_reward_lock_min_height() {
+    Python::initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.db").to_str().unwrap().to_string();
+    Python::attach(|py| {
+        let db = Py::new(py, RocksDb::new(py, path, None).unwrap()).unwrap();
+        db.borrow(py).create_cf(py, "tx").unwrap();
+        db.borrow(py).create_cf(py, "static-meta").unwrap();
+
+        // the spent dep is a BLOCK of height 20: a reward spend
+        let reward_block = dep_bytes(&[&[0x51]]);
+        let reward_hash = hash_of(&reward_block);
+        let batch = RocksDbWriteBatch::new();
+        batch.put("tx", reward_hash.clone(), reward_block).unwrap();
+        db.borrow(py).write(py, &batch).unwrap();
+        put_static(
+            py,
+            &db,
+            &reward_hash,
+            &StaticMeta::Block {
+                height: 20,
+                min_height: 0,
+                bit_counts: vec![],
+                feature_states: vec![],
+            },
+        );
+
+        let tx = tx_bytes(&reward_hash, 0, b"");
+        let (outcomes, _) = run(py, vec![tx], vec![], Some(db.borrow(py)), true);
+        // min_height = height + reward_spend_min_blocks + 1 = 20 + 10 + 1
+        assert_eq!(outcomes[0].5, Some((31, reward_hash.clone())));
+    });
+}
+
+#[test]
+fn test_static_metadata_ambiguous_tie_falls_back() {
+    Python::initialize();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.db").to_str().unwrap().to_string();
+    Python::attach(|py| {
+        let db = Py::new(py, RocksDb::new(py, path, None).unwrap()).unwrap();
+        db.borrow(py).create_cf(py, "tx").unwrap();
+        db.borrow(py).create_cf(py, "static-meta").unwrap();
+
+        // two DISTINCT dep blocks at the same height: Python's set-iteration order would
+        // decide the closest ancestor, so Rust must fall back
+        let dep_a = dep_bytes(&[&[0x51]]);
+        let dep_b = dep_bytes(&[&[0x51], &[0x51]]);
+        let (hash_a, hash_b) = (hash_of(&dep_a), hash_of(&dep_b));
+        let batch = RocksDbWriteBatch::new();
+        batch.put("tx", hash_a.clone(), dep_a).unwrap();
+        batch.put("tx", hash_b.clone(), dep_b).unwrap();
+        db.borrow(py).write(py, &batch).unwrap();
+        for hash in [&hash_a, &hash_b] {
+            put_static(
+                py,
+                &db,
+                hash,
+                &StaticMeta::Block {
+                    height: 5,
+                    min_height: 0,
+                    bit_counts: vec![],
+                    feature_states: vec![],
+                },
+            );
+        }
+
+        let mut d = vec![0x00, 0x01, 0x00, 0x02, 0x01]; // 2 inputs
+        for hash in [&hash_a, &hash_b] {
+            d.extend_from_slice(hash);
+            d.push(0x00);
+            d.extend_from_slice(&[0x00, 0x00]);
+        }
+        d.extend_from_slice(&100i32.to_be_bytes());
+        d.push(0x00);
+        d.extend_from_slice(&[0x00, 0x01, 0x51]);
+        d.extend_from_slice(&10.5f64.to_be_bytes());
+        d.extend_from_slice(&2000u32.to_be_bytes());
+        d.push(0x00);
+        d.extend_from_slice(&7u32.to_be_bytes());
+
+        let (outcomes, _) = run(py, vec![d], vec![], Some(db.borrow(py)), true);
+        assert_eq!(outcomes[0].0, STATUS_EVALUATED); // scripts still evaluate
+        assert_eq!(outcomes[0].5, None); // static falls back to Python
+    });
+}
+
+#[test]
+fn test_static_metadata_missing_dep_record_falls_back() {
+    Python::initialize();
+    Python::attach(|py| {
+        // dep is in the batch for scripts, but nothing provides static records (no db)
+        let dep = dep_bytes(&[&[0x51]]);
+        let tx = tx_bytes(&hash_of(&dep), 0, b"");
+        let (outcomes, _) = run(py, vec![tx, dep], vec![], None, true);
+        assert_eq!(outcomes[0].0, STATUS_EVALUATED);
+        assert_eq!(outcomes[0].5, None);
     });
 }
 

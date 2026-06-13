@@ -60,8 +60,10 @@ def verify_tx_from_bytes(
     supplied_deps: Sequence[bytes],
     db: 'RocksDb | None',
     tx_cf: str,
+    static_cf: str,
     include_scripts: bool,
     opcodes_version: int,
+    reward_spend_min_blocks: int,
     max_size: int,
     max_num_inputs: int,
     block_data_max_size: int,
@@ -75,7 +77,7 @@ def verify_tx_from_bytes(
     num_workers: int,
 ) -> tuple[
     list[tuple[int, list[tuple[str, str] | None], list[tuple[tuple[str, str] | None, int]],
-               list[tuple[str, str] | None], list[bytes]]],
+               list[tuple[str, str] | None], list[bytes], tuple[int, bytes] | None]],
     list[bytes],
 ]:
     """The fused batch verification pipeline: parse each serialized vertex and run every

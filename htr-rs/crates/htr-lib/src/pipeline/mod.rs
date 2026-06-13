@@ -19,6 +19,7 @@ use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
 use crate::script::{self, OpcodesVersion, ScriptConfig, ScriptJob, interpreter, sigops};
+use crate::static_meta::{StaticMeta, decode as decode_static};
 use crate::storage::{Db, RocksDb};
 use crate::verify::{BLOCK_CHECKS, StatelessSettings, TX_CHECKS, VertexCheckData, run_checks};
 use crate::vertex::{Parsed, parse, sighash_preimage};
@@ -34,15 +35,19 @@ pub const STATUS_UNRESOLVED: u8 = 1;
 pub const STATUS_PARSE_FAILED: u8 = 2;
 
 /// `(status, stateless results, per-input (sigops error, count), per-input script results,
-/// missing dep hashes)`. Stateless results are present for every parseable vertex (they are
-/// dependency-free) in the canonical per-kind check order; sigops/script results only when
-/// every dependency resolved.
+/// missing dep hashes, static metadata)`. Stateless results are present for every parseable
+/// vertex (they are dependency-free) in the canonical per-kind check order; sigops/script
+/// results only when every dependency resolved. The static-metadata entry —
+/// `(min_height, closest_ancestor_block)` — is present for txs whose dependencies' static
+/// records were all resolvable (and whose closest-ancestor candidate is unambiguous; see
+/// [`compute_tx_static`]); `None` means the Python fallback computes it.
 type TxOutcome = (
     u8,
     Vec<RawResult>,
     Vec<(RawResult, u64)>,
     Vec<RawResult>,
     Vec<Vec<u8>>,
+    Option<(u64, Vec<u8>)>,
 );
 
 /// The outputs of a resolved dependency: `(value, script)` per output index.
@@ -188,6 +193,145 @@ fn build_dep_stage(
     }
 }
 
+/// A dependency's static-metadata view, as needed by [`compute_tx_static`].
+enum DepStatic {
+    Block {
+        height: u64,
+        min_height: u64,
+    },
+    Tx {
+        min_height: u64,
+        closest_ancestor_block: Vec<u8>,
+    },
+}
+
+/// Batch-local resolver for static-metadata records: in-batch results first, then a native
+/// read of the static-metadata column family (memoized).
+struct StaticResolver<'a> {
+    in_batch: HashMap<Vec<u8>, DepStatic>,
+    fetched: HashMap<Vec<u8>, Option<DepStatic>>,
+    db: Option<&'a Arc<Db>>,
+    static_cf: &'a str,
+}
+
+impl<'a> StaticResolver<'a> {
+    fn get(&mut self, hash: &[u8]) -> Option<&DepStatic> {
+        // Two-phase to satisfy the borrow checker: check in_batch first, then the memoized
+        // fetch map (filling it on demand).
+        if self.in_batch.contains_key(hash) {
+            return self.in_batch.get(hash);
+        }
+        if !self.fetched.contains_key(hash) {
+            let loaded = self.load(hash);
+            self.fetched.insert(hash.to_vec(), loaded);
+        }
+        self.fetched.get(hash).and_then(|entry| entry.as_ref())
+    }
+
+    fn load(&self, hash: &[u8]) -> Option<DepStatic> {
+        let db = self.db?;
+        let handle = db.cf_handle(self.static_cf)?;
+        let bytes = db.get_cf(&handle, hash).ok().flatten()?;
+        match decode_static(&bytes)? {
+            StaticMeta::Block {
+                height, min_height, ..
+            } => Some(DepStatic::Block { height, min_height }),
+            StaticMeta::Tx {
+                min_height,
+                closest_ancestor_block,
+            } => Some(DepStatic::Tx {
+                min_height,
+                closest_ancestor_block,
+            }),
+        }
+    }
+
+    /// The height of the block `hash`, when it resolves to a block record.
+    fn block_height(&mut self, hash: &[u8]) -> Option<u64> {
+        match self.get(hash)? {
+            DepStatic::Block { height, .. } => Some(*height),
+            DepStatic::Tx { .. } => None,
+        }
+    }
+}
+
+/// Port of `TransactionStaticMetadata.create`: `min_height` is the max of the inherited
+/// min-heights (parents + inputs) and the reward-lock heights of any spent block
+/// (`height + reward_spend_min_blocks + 1`); `closest_ancestor_block` is the strictly
+/// highest candidate block over the dependencies (a dep block itself, or a dep tx's
+/// closest ancestor).
+///
+/// Returns `None` (Python fallback) when any dependency's static record is unresolvable —
+/// or when two *distinct* candidate blocks tie at the maximum height: Python iterates a
+/// `set` there, so the tie-breaking is its iteration order, which cannot be reproduced.
+fn compute_tx_static(
+    parsed: &Parsed,
+    resolver: &mut StaticResolver<'_>,
+    reward_spend_min_blocks: u64,
+) -> Option<(u64, Vec<u8>)> {
+    let mut min_height: u64 = 0;
+    // candidate for closest ancestor: (block hash, height); ambiguous tie -> fallback
+    let mut best: Option<(Vec<u8>, u64)> = None;
+    let mut ambiguous = false;
+
+    let parents = parsed.parents.iter();
+    let inputs = parsed.inputs.iter().map(|(tx_id, _, _)| tx_id);
+    let mut seen: Vec<&[u8]> = Vec::with_capacity(parsed.parents.len() + parsed.inputs.len());
+    for dep_hash in parents.chain(inputs) {
+        let is_input = seen.len() >= parsed.parents.len();
+        let first_visit = !seen.contains(&dep_hash.as_slice());
+        seen.push(dep_hash);
+
+        let candidate: (Vec<u8>, u64) = match resolver.get(dep_hash)? {
+            DepStatic::Block {
+                height,
+                min_height: dep_min,
+            } => {
+                let (height, dep_min) = (*height, *dep_min);
+                min_height = min_height.max(dep_min);
+                if is_input {
+                    // spending a block reward locks the tx until the reward matures
+                    min_height = min_height.max(height + reward_spend_min_blocks + 1);
+                }
+                (dep_hash.clone(), height)
+            }
+            DepStatic::Tx {
+                min_height: dep_min,
+                closest_ancestor_block,
+            } => {
+                let (dep_min, closest) = (*dep_min, closest_ancestor_block.clone());
+                min_height = min_height.max(dep_min);
+                let height = resolver.block_height(&closest)?;
+                (closest, height)
+            }
+        };
+
+        // Python's candidate set is deduplicated (get_all_dependencies is a set), so a dep
+        // appearing as both parent and input contributes one candidate.
+        if !first_visit {
+            continue;
+        }
+        match &best {
+            None => best = Some(candidate),
+            Some((best_hash, best_height)) => {
+                if candidate.1 > *best_height {
+                    best = Some(candidate);
+                    ambiguous = false;
+                } else if candidate.1 == *best_height && candidate.0 != *best_hash {
+                    // distinct blocks tied at the max: Python's set-iteration order decides
+                    ambiguous = true;
+                }
+            }
+        }
+    }
+
+    if ambiguous {
+        return None;
+    }
+    let (closest, _) = best?;
+    Some((min_height, closest))
+}
+
 /// Parse a batch of serialized vertices and run every Rust-side verification, end to end in
 /// one GIL-released call: the stateless checks (always, per the canonical per-kind order),
 /// and — when `include_scripts` is set — input-sigops counting and full script evaluation,
@@ -201,8 +345,10 @@ pub fn verify_tx_from_bytes(
     supplied_deps: Vec<Vec<u8>>,
     db: Option<PyRef<'_, RocksDb>>,
     tx_cf: String,
+    static_cf: String,
     include_scripts: bool,
     opcodes_version: u8,
+    reward_spend_min_blocks: u64,
     max_size: usize,
     max_num_inputs: u64,
     block_data_max_size: u64,
@@ -275,14 +421,44 @@ pub fn verify_tx_from_bytes(
                 (HashMap::new(), vec![])
             };
 
+            // Static metadata is computed in batch order so spend chains resolve against
+            // the in-batch results of their predecessors. Blocks are skipped (their static
+            // metadata needs feature-activation walks; Python computes it).
+            let mut static_resolver = StaticResolver {
+                in_batch: HashMap::new(),
+                fetched: HashMap::new(),
+                db: native.as_ref(),
+                static_cf: &static_cf,
+            };
+            let mut statics: Vec<Option<(u64, Vec<u8>)>> = Vec::with_capacity(items.len());
+            for parsed in &parsed_txs {
+                let computed = match parsed {
+                    Some(p) if include_scripts && p.version != VERSION_REGULAR_BLOCK => {
+                        compute_tx_static(p, &mut static_resolver, reward_spend_min_blocks)
+                    }
+                    _ => None,
+                };
+                if let (Some(p), Some((min_height, closest))) = (parsed, &computed) {
+                    static_resolver.in_batch.insert(
+                        p.hash.clone(),
+                        DepStatic::Tx {
+                            min_height: *min_height,
+                            closest_ancestor_block: closest.clone(),
+                        },
+                    );
+                }
+                statics.push(computed);
+            }
+
             // Build jobs + sigops per tx, then flatten the script jobs for evaluation:
             // single-input txs dominate, so load-balancing across all inputs of all txs
             // beats parallelizing per tx.
             let mut outcomes: Vec<TxOutcome> = Vec::with_capacity(items.len());
             let mut flat: Vec<(usize, ScriptJob)> = Vec::new();
             for (tx_index, (data, parsed)) in items.iter().zip(parsed_txs.iter()).enumerate() {
+                let static_meta = statics[tx_index].take();
                 let Some(parsed) = parsed else {
-                    outcomes.push((STATUS_PARSE_FAILED, vec![], vec![], vec![], vec![]));
+                    outcomes.push((STATUS_PARSE_FAILED, vec![], vec![], vec![], vec![], None));
                     continue;
                 };
                 let checks = stateless[tx_index]
@@ -291,18 +467,39 @@ pub fn verify_tx_from_bytes(
                 let is_tx_with_inputs =
                     parsed.version != VERSION_REGULAR_BLOCK && !parsed.inputs.is_empty();
                 if !include_scripts || !is_tx_with_inputs {
-                    outcomes.push((STATUS_EVALUATED, checks, vec![], vec![], vec![]));
+                    outcomes.push((
+                        STATUS_EVALUATED,
+                        checks,
+                        vec![],
+                        vec![],
+                        vec![],
+                        static_meta,
+                    ));
                     continue;
                 }
                 match build_dep_stage(data, parsed, &deps, version, &settings) {
                     Ok(stage) => {
-                        outcomes.push((STATUS_EVALUATED, checks, stage.sigops, vec![], vec![]));
+                        outcomes.push((
+                            STATUS_EVALUATED,
+                            checks,
+                            stage.sigops,
+                            vec![],
+                            vec![],
+                            static_meta,
+                        ));
                         for job in stage.jobs {
                             flat.push((tx_index, job));
                         }
                     }
                     Err(missing) => {
-                        outcomes.push((STATUS_UNRESOLVED, checks, vec![], vec![], missing));
+                        outcomes.push((
+                            STATUS_UNRESOLVED,
+                            checks,
+                            vec![],
+                            vec![],
+                            missing,
+                            static_meta,
+                        ));
                     }
                 }
             }
