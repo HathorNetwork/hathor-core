@@ -156,7 +156,9 @@ Real-reactor benchmark ladder (same workload as §1):
 | + Phase A (items 1–5 below) | ~1,861 (+19%) |
 | + B7 get fast path + B8 save dedup | ~2,259 (+21%) |
 | + static-metadata rewrite skip | ~2,485 (+10%) |
-| + info-index write-on-change, Rust binary static-metadata format, B9 (static metadata computed in the pipeline) | **~2,601 (+67% total; 2.65x vs pure Python)** |
+| + info-index write-on-change, Rust binary static-metadata format, B9 (static metadata computed in the pipeline) | ~2,601 |
+| + NC block-storage cache per root, wire-bytes reuse at flush, scan-last `_is_tip` | ~3,114 |
+| + Phase C: Rust binary TransactionMetadata format (in-memory level; 2.7x smaller records pay on disk) | **~3,145 (+102% total; 3.2x vs pure Python)** |
 
 Landed: Phase A complete (stash retention, metadata-probe skip, weight cache, yield batching, job-rebuild
 skip), B7 (lock-free LRU-hit path without per-hash lock/weakref churn; fused scope validation), B8
@@ -169,9 +171,13 @@ ops — RocksDB iterator scans (107 ms profiled; 3.9 of the ~8 scans/tx are `any
 children CF inside `_is_tip`) and puts (75 ms; **8.2 of 17.5 puts/tx are the info index persisting its
 counters on every add**). So the refined next items:
 
-- **B6 (tips counters)**: the concrete target is eliminating the per-`_is_tip` children-CF scan — a
-  non-voided child/spender counter (or per-update children memo) saves an iterator round trip per check,
-  not just gets.
+- **B6 (tips counters)**: partially addressed — `_is_tip` now checks spenders (metadata-only) before the
+  children-CF scan, short-circuiting in spend-chain mempools. The full counter design remains open; note
+  for whoever takes it: a naive per-dep ±1 protocol double-counts when a dep registers within the same
+  consensus update as the new tx (its full count already includes it) — the index needs an update-epoch
+  signal from consensus, or counts must be event-sourced from tracked-children state only.
+- **NC block storage** DONE (cached per root). **Wire-bytes reuse at flush** DONE (origin bytes carried on
+  the vertex, hash-guarded). **Phase C mutable-metadata format** DONE.
 - ~~info-index counter batching~~ DONE (write-on-change: 8.2 -> ~2 puts/tx).
 - ~~Rust binary static-metadata format~~ DONE (canonical v1 format in htr-rs/src/static_meta; JSON replaced).
 - ~~B9~~ DONE: the pipeline computes tx static metadata natively (in-batch + static-CF reads), consumed by
