@@ -24,13 +24,17 @@ from typing_extensions import Self, override
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.types import VertexId
-from hathor.util import json_loadb
 from hathor.utils.pydantic import BaseModel
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.transaction import BaseTransaction, Block, Transaction
     from hathor.transaction.storage import TransactionStorage
+
+
+# record kinds, matching htr-rs/crates/htr-lib/src/static_meta/mod.rs
+_KIND_BLOCK = 0
+_KIND_TX = 1
 
 
 class VertexStaticMetadata(ABC, BaseModel):
@@ -49,17 +53,46 @@ class VertexStaticMetadata(ABC, BaseModel):
 
     @classmethod
     def from_bytes(cls, data: bytes, *, target: 'BaseTransaction') -> 'VertexStaticMetadata':
-        """Create a static metadata instance from a json bytes representation, with a known vertex type target."""
+        """Create a static metadata instance from the canonical binary representation (the
+        format is defined in Rust — htr-rs/crates/htr-lib/src/static_meta/mod.rs — so the
+        batch pipeline can read these records natively), with a known vertex type target."""
+        import htr_lib
+
         from hathor.transaction import Block, Transaction
-        json_dict = json_loadb(data)
+
+        kind, height, min_height, bit_counts, feature_states, closest_ancestor_block = \
+            htr_lib.static_metadata_from_bytes(data)
 
         if isinstance(target, Block):
-            return BlockStaticMetadata(**json_dict)
+            assert kind == _KIND_BLOCK, 'static metadata record kind does not match the vertex type'
+            return BlockStaticMetadata(
+                height=height,
+                min_height=min_height,
+                feature_activation_bit_counts=list(bit_counts),
+                feature_states={Feature(name): FeatureState(state) for name, state in feature_states},
+            )
 
         if isinstance(target, Transaction):
-            json_dict['closest_ancestor_block'] = bytes.fromhex(json_dict['closest_ancestor_block'])
-            return TransactionStaticMetadata(**json_dict)
+            assert kind == _KIND_TX, 'static metadata record kind does not match the vertex type'
+            return TransactionStaticMetadata(
+                min_height=min_height,
+                closest_ancestor_block=closest_ancestor_block,
+            )
 
+        raise NotImplementedError
+
+    def to_bytes(self) -> bytes:
+        """Serialize to the canonical binary representation (see `from_bytes`)."""
+        import htr_lib
+        if isinstance(self, BlockStaticMetadata):
+            return htr_lib.block_static_metadata_to_bytes(
+                self.height,
+                self.min_height,
+                list(self.feature_activation_bit_counts),
+                [(feature.value, state.value) for feature, state in self.feature_states.items()],
+            )
+        if isinstance(self, TransactionStaticMetadata):
+            return htr_lib.tx_static_metadata_to_bytes(self.min_height, self.closest_ancestor_block)
         raise NotImplementedError
 
 

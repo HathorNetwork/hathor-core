@@ -91,6 +91,30 @@ def verify_tx_from_bytes(
     ...
 
 
+def block_static_metadata_to_bytes(
+    height: int,
+    min_height: int,
+    bit_counts: Sequence[int],
+    feature_states: Sequence[tuple[str, str]],
+) -> bytes:
+    """Serialize a block's static metadata (canonical binary format, version 1)."""
+    ...
+
+
+def tx_static_metadata_to_bytes(min_height: int, closest_ancestor_block: bytes) -> bytes:
+    """Serialize a transaction's static metadata (canonical binary format, version 1)."""
+    ...
+
+
+def static_metadata_from_bytes(
+    data: bytes,
+) -> tuple[int, int, int, list[int], list[tuple[str, str]], bytes]:
+    """Parse a static-metadata record: (kind, height, min_height, bit_counts, feature_states,
+    closest_ancestor_block); block/tx-only fields are zero/empty for the other kind. Raises
+    ValueError on a corrupt record."""
+    ...
+
+
 def verify_vertices_stateless_batch(
     items: Sequence[tuple[Sequence[int], object]],
     num_workers: int,
