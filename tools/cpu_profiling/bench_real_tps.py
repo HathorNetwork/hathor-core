@@ -35,9 +35,14 @@ from hathor_tests.unittest import TestBuilder
 BASE_BLOCKS = reward_lock_blocks() + 2
 
 
-def build_dag_str(*, num_txs: int, num_blocks: int) -> str:
+def build_dag_str(*, num_txs: int, num_blocks: int, num_inputs: int = 1) -> str:
     """Blocks x1..xR each confirming a spend-chain group of `num_txs` txs (one dummy-funded
-    tx per group keeps the dummy under the 255-output wire limit)."""
+    tx per group keeps the dummy under the 255-output wire limit).
+
+    Each payload tx has exactly `num_inputs` inputs and `num_inputs` outputs: tx t_{i+1}
+    spends all `num_inputs` outputs of t_i, so the chain stays in-batch-resolvable. For
+    num_inputs > 1 a per-group source `g{r}_s` (one extra confirmed tx) seeds the chain with
+    `num_inputs` outputs; the source is funded from the dummy by the builder."""
     lines = [
         f'blockchain genesis b[1..{BASE_BLOCKS}]',
         f'blockchain b{BASE_BLOCKS} x[1..{num_blocks}]',
@@ -46,17 +51,30 @@ def build_dag_str(*, num_txs: int, num_blocks: int) -> str:
         '',
     ]
     for r in range(num_blocks):
-        for i in range(num_txs - 1):
-            lines.append(f'g{r}_t{i}.out[0] <<< g{r}_t{i + 1}')
+        if num_inputs == 1:
+            for i in range(num_txs - 1):
+                lines.append(f'g{r}_t{i}.out[0] <<< g{r}_t{i + 1}')
+        else:
+            src = f'g{r}_s'
+            for j in range(num_inputs):
+                lines.append(f'{src}.out[{j}] = 1 HTR')
+            prev = src
+            for i in range(num_txs):
+                tx = f'g{r}_t{i}'
+                for j in range(num_inputs):
+                    lines.append(f'{prev}.out[{j}] <<< {tx}')
+                for j in range(num_inputs):
+                    lines.append(f'{tx}.out[{j}] = 1 HTR')
+                prev = tx
         lines.append(f'x{r + 1} --> g{r}_t{num_txs - 1}')
         lines.append('')
     return '\n'.join(lines)
 
 
-def build_payloads(num_txs: int, num_blocks: int) -> dict[str, bytes]:
+def build_payloads(num_txs: int, num_blocks: int, num_inputs: int) -> dict[str, bytes]:
     """Build the DAG once (throwaway simulated-clock manager) and serialize every vertex."""
     source = build_manager(seed=1234)
-    dag_str = build_dag_str(num_txs=num_txs, num_blocks=num_blocks)
+    dag_str = build_dag_str(num_txs=num_txs, num_blocks=num_blocks, num_inputs=num_inputs)
     artifacts = get_dag_builder(source).build_from_str(dag_str)
     return {node.name: bytes(vertex) for node, vertex in artifacts.list}
 
@@ -87,6 +105,7 @@ def feed(
     payloads: dict[str, bytes],
     num_txs: int,
     num_blocks: int,
+    num_inputs: int,
 ) -> Generator[Any, Any, float]:
     """Feed the DAG through the p2p entrypoints; return the payload-section wall time."""
     service = manager.verification_service
@@ -110,7 +129,9 @@ def feed(
     # payload: the measured section, fed exactly like sync's on_block_complete
     start = time.perf_counter()
     for r in range(num_blocks):
-        txs = [parse(f'g{r}_t{i}') for i in range(num_txs)]
+        # the per-group source (num_inputs > 1) is the chain root and must connect first
+        names = ([f'g{r}_s'] if num_inputs > 1 else []) + [f'g{r}_t{i}' for i in range(num_txs)]
+        txs = [parse(name) for name in names]
         block = parse(f'x{r + 1}')
         assert isinstance(block, Block)
         ok = yield manager.vertex_handler.on_new_block(block, deps=txs)
@@ -124,6 +145,7 @@ def main() -> None:
     parser.add_argument('--workers', type=int, default=12)
     parser.add_argument('--blocks', type=int, default=40)
     parser.add_argument('--txs', type=int, default=50)
+    parser.add_argument('--inputs', type=int, default=1, help='inputs (and outputs) per payload tx')
     args = parser.parse_args()
 
     if args.arm == 'no-precompute':
@@ -131,7 +153,7 @@ def main() -> None:
         RustVerificationService.precompute_stateless_batch = (  # type: ignore[method-assign]
             lambda self, vertices, params, **kwargs: None)
 
-    payloads = build_payloads(args.txs, args.blocks)
+    payloads = build_payloads(args.txs, args.blocks, args.inputs)
     manager = build_target(args.arm, args.workers)
     reactor = get_global_reactor()
     exit_code = 1
@@ -142,10 +164,10 @@ def main() -> None:
     def run() -> Generator[Any, Any, None]:
         nonlocal exit_code
         try:
-            elapsed = yield inlineCallbacks(feed)(manager, payloads, args.txs, args.blocks)
+            elapsed = yield inlineCallbacks(feed)(manager, payloads, args.txs, args.blocks, args.inputs)
             total = args.blocks * args.txs
-            print(f'{args.arm}: connected {total} txs (+{args.blocks} blocks) '
-                  f'in {elapsed:.2f}s -> {total / elapsed:.0f} tx/s [real reactor]')
+            print(f'{args.arm}: {args.inputs}-in/{args.inputs}-out, connected {total} txs '
+                  f'(+{args.blocks} blocks) in {elapsed:.2f}s -> {total / elapsed:.0f} tx/s [real reactor]')
             exit_code = 0
         except BaseException as e:
             print(f'{args.arm}: FAILED: {e!r}')
