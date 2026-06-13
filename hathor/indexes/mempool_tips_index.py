@@ -140,9 +140,13 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             return False
         if meta.first_block is not None:
             return False
-        if any_non_voided(tx_storage, tx.get_children()):
-            return False
+        # spenders first: they come straight from the metadata (cache-fast gets), while
+        # get_children() opens a RocksDB iterator over the children CF — in spend-chain
+        # mempools the spender check short-circuits and the scan never happens. The predicate
+        # is a pure conjunction, so the order is free.
         if any_non_voided(tx_storage, chain(*meta.spent_outputs.values())):
+            return False
+        if any_non_voided(tx_storage, tx.get_children()):
             return False
         return True
 
