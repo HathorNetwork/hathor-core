@@ -158,7 +158,8 @@ Real-reactor benchmark ladder (same workload as §1):
 | + static-metadata rewrite skip | ~2,485 (+10%) |
 | + info-index write-on-change, Rust binary static-metadata format, B9 (static metadata computed in the pipeline) | ~2,601 |
 | + NC block-storage cache per root, wire-bytes reuse at flush, scan-last `_is_tip` | ~3,114 |
-| + Phase C: Rust binary TransactionMetadata format (in-memory level; 2.7x smaller records pay on disk) | **~3,145 (+102% total; 3.2x vs pure Python)** |
+| + Phase C: Rust binary TransactionMetadata format (in-memory level; 2.7x smaller records pay on disk) | ~3,145 |
+| + weight-size from origin bytes, WriteBatch flush, is_new tips hint | **~3,649 (+134% total; 3.7x vs pure Python)** |
 
 Landed: Phase A complete (stash retention, metadata-probe skip, weight cache, yield batching, job-rebuild
 skip), B7 (lock-free LRU-hit path without per-hash lock/weakref churn; fused scope validation), B8
