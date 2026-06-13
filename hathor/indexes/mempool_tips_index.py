@@ -56,11 +56,12 @@ class MempoolTipsIndex(BaseIndex):
         return SCOPE
 
     @abstractmethod
-    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
         """
         This should be called when a new `tx/block` is added to the best chain.
 
-        `remove` will be implied from the tx state but can be set explicitly.
+        `remove` will be implied from the tx state but can be set explicitly. `is_new` marks
+        the vertex being connected right now (see the concrete implementation).
         """
         raise NotImplementedError
 
@@ -150,7 +151,7 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
             return False
         return True
 
-    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
         """Incrementally sync the index for one affected tx.
 
         Consensus calls this for *every* vertex whose metadata changed (the new vertex, its parents and
@@ -159,6 +160,11 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         children/spenders, and any tx whose children/spenders changed is itself in the affected set.
         This replaces a full scan of every tip per call (O(mempool) per added tx, quadratic under load)
         with O(dependencies) work.
+
+        ``is_new`` marks the vertex being connected by the current consensus update: such a
+        vertex provably has no children and no spenders yet (dependents can only be saved
+        after it), so its tip-ness reduces to its own state — no dependency loads, no
+        children-CF scan.
         """
         assert tx.storage is not None
         tx_storage = tx.storage
@@ -168,7 +174,11 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
         if force_remove and not voided_or_invalid:
             self.log.warn('removing tx even though it isn\'t voided or invalid, some tests can do this')
 
-        if not force_remove and self._is_tip(tx_storage, tx):
+        if is_new:
+            is_tip = tx.is_transaction and not voided_or_invalid and tx_meta.first_block is None
+        else:
+            is_tip = self._is_tip(tx_storage, tx)
+        if not force_remove and is_tip:
             self._add(tx.hash)
             # its dependencies now have a non-voided child/spender (this tx), so they cannot be tips
             self._discard_many(tx.get_all_dependencies())

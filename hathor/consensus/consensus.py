@@ -227,7 +227,7 @@ class ConsensusAlgorithm:
                 context.transaction_algorithm.assert_valid_consensus(tx_affected)
                 if tx_affected.is_nano_contract():
                     assert_final_nc_state(tx_affected)
-            self.tx_storage.indexes.update_critical_indexes(tx_affected)
+            self.tx_storage.indexes.update_critical_indexes(tx_affected, is_new=tx_affected is base)
             with non_critical_code(self.log):
                 self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
             pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_UPDATE, kwargs=dict(tx=tx_affected)))

@@ -277,7 +277,8 @@ class VertexHandler:
         # verification cost per vertex, so only the resulting state is asserted.
         assert vertex.get_metadata().validation.is_fully_connected()
 
-        self._tx_storage.indexes.update_critical_indexes(vertex)
+        # the vertex was connected by this very call chain: nothing can have referenced it yet
+        self._tx_storage.indexes.update_critical_indexes(vertex, is_new=True)
         with non_critical_code(self._log):
             self._tx_storage.indexes.update_non_critical_indexes(vertex)
 

@@ -49,8 +49,8 @@ class SimpleRocksDBMempoolTipsIndex(MemoryMempoolTipsIndex):
     def init_finish(self, tx_storage: 'TransactionStorage') -> None:
         self._sync_empty_marker()
 
-    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
-        super().update(tx, force_remove=force_remove)
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
+        super().update(tx, force_remove=force_remove, is_new=is_new)
         self._sync_empty_marker()
 
     def is_empty_marker_set(self) -> bool:
