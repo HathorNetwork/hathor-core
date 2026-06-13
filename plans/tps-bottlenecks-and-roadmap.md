@@ -155,7 +155,8 @@ Real-reactor benchmark ladder (same workload as §1):
 | baseline at the time of this doc | ~1,559 |
 | + Phase A (items 1–5 below) | ~1,861 (+19%) |
 | + B7 get fast path + B8 save dedup | ~2,259 (+21%) |
-| + static-metadata rewrite skip | **~2,485 (+10%; +59% total)** |
+| + static-metadata rewrite skip | ~2,485 (+10%) |
+| + info-index write-on-change, Rust binary static-metadata format, B9 (static metadata computed in the pipeline) | **~2,601 (+67% total; 2.65x vs pure Python)** |
 
 Landed: Phase A complete (stash retention, metadata-probe skip, weight cache, yield batching, job-rebuild
 skip), B7 (lock-free LRU-hit path without per-hash lock/weakref churn; fused scope validation), B8
@@ -171,8 +172,10 @@ counters on every add**). So the refined next items:
 - **B6 (tips counters)**: the concrete target is eliminating the per-`_is_tip` children-CF scan — a
   non-voided child/spender counter (or per-update children memo) saves an iterator round trip per check,
   not just gets.
-- **NEW: info-index counter batching** — 8.2 puts/tx for a handful of integers; persist once per consensus
-  update (or per block during sync).
+- ~~info-index counter batching~~ DONE (write-on-change: 8.2 -> ~2 puts/tx).
+- ~~Rust binary static-metadata format~~ DONE (canonical v1 format in htr-rs/src/static_meta; JSON replaced).
+- ~~B9~~ DONE: the pipeline computes tx static metadata natively (in-batch + static-CF reads), consumed by
+  validate_full; ambiguous closest-ancestor ties and unresolvable deps fall back to Python.
 - **WriteBatch per block** for the remaining index puts (timestamp index, tips markers).
 - B9 (static metadata at precompute) revised down: GIL-bound Python compute gains little off-thread; its
   real value arrives with the Rust static-metadata format (Phase C).
