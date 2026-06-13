@@ -142,7 +142,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
                  'storage', '_settings', '_metadata', '_static_metadata', 'headers', 'name', 'MAX_NUM_INPUTS',
-                 'MAX_NUM_OUTPUTS', '__weakref__']
+                 'MAX_NUM_OUTPUTS', '_origin_bytes', '__weakref__']
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -186,6 +186,9 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
         self._settings = settings or get_global_settings()
+        # (hash, wire bytes) captured by verify_bytes; consumed once by the storage flush so
+        # vertices parsed from the network are never re-serialized
+        self._origin_bytes: tuple[VertexId, bytes] | None = None
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
         self.signal_bits = signal_bits

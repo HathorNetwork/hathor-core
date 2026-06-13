@@ -155,12 +155,7 @@ class _RustCheckResults:
 
 
 class RustVerificationService(VerificationService):
-    __slots__ = ('_script_verification_pool', '_precomputed', '_wire_bytes', '_precomputed_static')
-
-    # FIFO cap for the wire-bytes cache: entries are normally consumed by the next batch
-    # precompute and discarded with it; the cap only bounds vertices that never reach a batch
-    # (e.g. relayed vertices rejected early).
-    _WIRE_BYTES_CAP = 16384
+    __slots__ = ('_script_verification_pool', '_precomputed', '_precomputed_static')
 
     def __init__(
         self,
@@ -182,9 +177,6 @@ class RustVerificationService(VerificationService):
         # they were computed under; consumed (popped) by _run_rust_checks, leftovers discarded by
         # the call sites in a finally block (discard_precomputed)
         self._precomputed: dict[bytes, tuple[VerificationParams, _RustCheckResults]] = {}
-        # original wire bytes per vertex hash, captured by verify_bytes so the batched script
-        # pipeline can hand them straight to Rust without re-serializing
-        self._wire_bytes: dict[bytes, bytes] = {}
         # static metadata computed by the pipeline (a pure function of the immutable DAG, so
         # no params guard): tx hash -> (min_height, closest_ancestor_block); consumed by
         # validate_full, discarded with the batch
@@ -211,15 +203,6 @@ class RustVerificationService(VerificationService):
         return super().validate_full(
             vertex, params, sync_checkpoints=sync_checkpoints, init_static_metadata=init_static_metadata,
         )
-
-    @override
-    def verify_bytes(self, data: bytes, *, storage: TransactionStorage | None = None) -> BaseTransaction:
-        vertex = super().verify_bytes(data, storage=storage)
-        if self._script_verification_pool.rust_verification:
-            self._wire_bytes[vertex.hash] = data
-            while len(self._wire_bytes) > self._WIRE_BYTES_CAP:
-                self._wire_bytes.pop(next(iter(self._wire_bytes)))
-        return vertex
 
     @override
     def verify_without_storage(self, vertex: BaseTransaction, params: VerificationParams) -> None:
@@ -373,7 +356,9 @@ class RustVerificationService(VerificationService):
             if self._checks_for(vertex) is None or vertex.is_genesis \
                     or vertex.hash in self._settings.SKIP_VERIFICATION:
                 continue
-            data = self._wire_bytes.get(vertex.hash)
+            data = None
+            if vertex._origin_bytes is not None and vertex._origin_bytes[0] == vertex.hash:
+                data = vertex._origin_bytes[1]
             if data is None:
                 try:
                     data = bytes(vertex)
@@ -529,7 +514,10 @@ class RustVerificationService(VerificationService):
                 dep = self._tx_storage.get_transaction(dep_hash)
             except TransactionDoesNotExist:
                 continue
-            supplied.append(self._wire_bytes.get(dep_hash) or bytes(dep))
+            if dep._origin_bytes is not None and dep._origin_bytes[0] == dep_hash:
+                supplied.append(dep._origin_bytes[1])
+            else:
+                supplied.append(bytes(dep))
         return supplied
 
     def _precompute_scripts_python(
@@ -610,7 +598,6 @@ class RustVerificationService(VerificationService):
         for vertex in vertices:
             self._precomputed.pop(vertex.hash, None)
             self._script_verification_pool.discard_script_results(vertex.hash)
-            self._wire_bytes.pop(vertex.hash, None)
             self._precomputed_static.pop(vertex.hash, None)
 
     def _verify_without_storage_base_block_rust(self, block: Block, params: VerificationParams) -> None:

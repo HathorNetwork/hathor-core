@@ -32,7 +32,11 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('_settings', 'verifiers', '_tx_storage', '_nc_storage_factory', '_vertex_parser')
+    __slots__ = ('_settings', 'verifiers', '_tx_storage', '_nc_storage_factory', '_vertex_parser',
+                 '_block_storage_cache')
+
+    # FIFO cap for the per-root NC block-storage cache (roots change once per block)
+    _BLOCK_STORAGE_CACHE_CAP = 8
 
     def __init__(
         self,
@@ -48,6 +52,10 @@ class VerificationService:
         self._tx_storage = tx_storage
         self._nc_storage_factory = nc_storage_factory
         self._vertex_parser = VertexParser(settings=settings)
+        # NC block storages are read-only views at a content-addressed root: every tx of a
+        # block verifies against the same root, so rebuilding the trie storage (and re-reading
+        # the root node) per tx is pure waste
+        self._block_storage_cache: dict[bytes, NCBlockStorage] = {}
 
     def verify_bytes(self, data: bytes, *, storage: TransactionStorage | None = None) -> BaseTransaction:
         """The single entrypoint for turning wire bytes into a vertex: every caller that
@@ -58,7 +66,11 @@ class VerificationService:
         canonical validation points — this method is where parse-time verification work
         (e.g. the fused Rust parse+verify call) gets wired as it is migrated.
         """
-        return self._vertex_parser.deserialize(data, storage=storage)
+        vertex = self._vertex_parser.deserialize(data, storage=storage)
+        # keep the original serialization on the vertex (guarded by hash, in case a caller
+        # mutates and re-hashes it): the batch pipeline and the storage flush reuse it
+        vertex._origin_bytes = (vertex.hash, data)
+        return vertex
 
     def validate_basic(self, vertex: BaseTransaction, params: VerificationParams) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -400,4 +412,10 @@ class VerificationService:
         assert self._nc_storage_factory is not None
         if params.nc_block_root_id is None:
             return self._nc_storage_factory.get_empty_block_storage()
-        return self._nc_storage_factory.get_block_storage(params.nc_block_root_id)
+        block_storage = self._block_storage_cache.get(params.nc_block_root_id)
+        if block_storage is None:
+            block_storage = self._nc_storage_factory.get_block_storage(params.nc_block_root_id)
+            self._block_storage_cache[params.nc_block_root_id] = block_storage
+            while len(self._block_storage_cache) > self._BLOCK_STORAGE_CACHE_CAP:
+                self._block_storage_cache.pop(next(iter(self._block_storage_cache)))
+        return block_storage

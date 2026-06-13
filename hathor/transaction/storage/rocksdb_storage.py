@@ -176,6 +176,13 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         return tx
 
     def _tx_to_bytes(self, tx: 'BaseTransaction') -> bytes:
+        origin = tx._origin_bytes
+        if origin is not None:
+            # written exactly once (pending_tx_bytes), so the reference can be dropped
+            tx._origin_bytes = None
+            origin_hash, origin_data = origin
+            if origin_hash == tx._hash:
+                return origin_data
         return bytes(tx)
 
     def get_migration_state(self, migration_name: str) -> MigrationState:
