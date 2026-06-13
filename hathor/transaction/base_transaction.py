@@ -431,6 +431,13 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert self.SERIALIZATION_NONCE_SIZE is not None
         return int_to_bytes(self.nonce, self.SERIALIZATION_NONCE_SIZE)
 
+    def get_serialized_size(self) -> int:
+        """Size in bytes of this vertex's serialization, without re-serializing when the
+        original wire bytes are available (vertices parsed from the network keep them)."""
+        if self._origin_bytes is not None and self._origin_bytes[0] == self._hash:
+            return len(self._origin_bytes[1])
+        return len(self.get_struct())
+
     def get_struct(self) -> bytes:
         """Return the complete serialization of the transaction
 
