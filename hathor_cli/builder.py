@@ -79,6 +79,44 @@ class CliBuilder:
         if not condition:
             self.log.warn(message)
 
+    def _build_finality_service(self, *, settings, tx_storage, p2p_manager, vertex_handler):
+        """Construct the two-tier finality service when it is enabled, wiring the mempool gate."""
+        if not settings.ENABLE_TWO_TIER_FINALITY:
+            return None
+
+        from hathor.feature_activation.utils import Features
+        from hathor.finality.crypto import FinalityValidatorSignerFile
+        from hathor.finality.pending_pool import PendingFinalityPool
+        from hathor.finality.service import FinalityService
+        from hathor.finality.transport import P2PFinalityTransport
+
+        signer = None
+        if self._args.finality_signer_file:
+            signer = FinalityValidatorSignerFile.parse_file(self._args.finality_signer_file).get_signer()
+
+        assert tx_storage.indexes.finality_certificate is not None
+        feature_service = self.feature_service
+
+        def is_feature_active() -> bool:
+            best_block = tx_storage.get_best_block()
+            return Features.from_vertex(
+                settings=settings, feature_service=feature_service, vertex=best_block
+            ).two_tier_finality
+
+        pin_store = tx_storage.indexes.finality_pin if signer is not None else None
+        finality_service = FinalityService(
+            finality_settings=settings.FINALITY,
+            pending_pool=PendingFinalityPool(),
+            certificate_store=tx_storage.indexes.finality_certificate,
+            transport=P2PFinalityTransport(connections=p2p_manager, settings=settings),
+            admit_certified_tx=vertex_handler.on_new_relayed_vertex,
+            is_feature_active=is_feature_active,
+            signer=signer,
+            pin_store=pin_store,
+        )
+        vertex_handler.set_finality_service(finality_service)
+        return finality_service
+
     def create_manager(self, reactor: Reactor) -> HathorManager:
         import hathor
         from hathor.builder import SyncSupportLevel
@@ -373,6 +411,13 @@ class CliBuilder:
                     poa_signer=poa_signer_file.get_signer(),
                 )
 
+        finality_service = self._build_finality_service(
+            settings=settings,
+            tx_storage=tx_storage,
+            p2p_manager=p2p_manager,
+            vertex_handler=vertex_handler,
+        )
+
         self.manager = HathorManager(
             reactor,
             settings=settings,
@@ -395,6 +440,7 @@ class CliBuilder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            finality_service=finality_service,
             runner_factory=runner_factory,
             feature_service=self.feature_service,
             vertex_json_serializer=vertex_json_serializer,

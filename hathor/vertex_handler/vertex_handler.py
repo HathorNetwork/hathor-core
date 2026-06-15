@@ -52,6 +52,7 @@ class VertexHandler:
         '_pubsub',
         '_execution_manager',
         '_log_vertex_bytes',
+        '_finality_service',
     )
 
     def __init__(
@@ -77,6 +78,27 @@ class VertexHandler:
         self._pubsub = pubsub
         self._execution_manager = execution_manager
         self._log_vertex_bytes = log_vertex_bytes
+        # Set after construction to avoid a circular dependency (the finality service needs to admit
+        # certified transactions back through this handler). None when two-tier finality is disabled.
+        self._finality_service: Any = None
+
+    def set_finality_service(self, finality_service: Any) -> None:
+        """Wire the finality service used by the certified-only mempool gate."""
+        self._finality_service = finality_service
+
+    def _divert_to_finality(self, vertex: BaseTransaction) -> bool:
+        """Return True if the vertex is an uncertified finality transaction and was diverted.
+
+        Diverted transactions are handed to the finality service (which keeps them in the pending pool
+        and gets them certified) instead of being admitted to the mempool or relayed.
+        """
+        if self._finality_service is None:
+            return False
+        if not self._finality_service.should_divert_to_pending(vertex):
+            return False
+        assert isinstance(vertex, Transaction)
+        self._finality_service.on_submit_finality_tx(vertex)
+        return True
 
     @cpu.profiler('on_new_block')
     @inlineCallbacks
@@ -114,6 +136,8 @@ class VertexHandler:
     @cpu.profiler('on_new_mempool_transaction')
     def on_new_mempool_transaction(self, tx: Transaction) -> bool:
         """Called by mempool sync."""
+        if self._divert_to_finality(tx):
+            return False
         best_block = self._tx_storage.get_best_block()
         features = Features.for_mempool(
             settings=self._settings,
@@ -135,6 +159,8 @@ class VertexHandler:
         reject_locked_reward: bool = True,
     ) -> bool:
         """Called for unsolicited vertex received, usually due to real time relay."""
+        if self._divert_to_finality(vertex):
+            return False
         best_block = self._tx_storage.get_best_block()
         best_block_meta = best_block.get_metadata()
         if best_block_meta.nc_block_root_id is None:

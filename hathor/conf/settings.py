@@ -37,6 +37,9 @@ class HathorSettings(LibSettings):
     # Used to enable two-tier finality (the finality-validator fast path and its block-validity rule).
     ENABLE_TWO_TIER_FINALITY: FeatureSetting = FeatureSetting.DISABLED
 
+    # Capability advertised by peers that support the two-tier finality commands.
+    CAPABILITY_FINALITY: str = 'finality'
+
     # The finality committee (validators and their voting weights). Dormant unless `enabled`.
     FINALITY: FinalitySettings = FinalitySettings()
 

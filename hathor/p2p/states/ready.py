@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import struct
 from collections import deque
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
@@ -19,6 +20,7 @@ from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf.settings import HathorSettings
+from hathor.finality.fc import FinalityCertificate, Vote
 from hathor.indexes.height_index import HeightInfo
 from hathor.nanocontracts.storage.patricia_trie import NodeId
 from hathor.p2p.messages import ProtocolMessages
@@ -26,7 +28,7 @@ from hathor.p2p.peer import PublicPeer, UnverifiedPeer
 from hathor.p2p.states.base import BaseState
 from hathor.p2p.sync_agent import SyncAgent
 from hathor.p2p.utils import to_height_info, to_serializable_best_blockchain
-from hathor.transaction import BaseTransaction
+from hathor.transaction import BaseTransaction, Transaction
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathor.types import VertexId
 from hathor.util import json_dumps, json_loads
@@ -114,6 +116,14 @@ class ReadyState(BaseState):
                 ProtocolMessages.BLOCK_NC_ROOT_ID: self.handle_block_nc_root_id,
                 ProtocolMessages.GET_NC_DB_NODE: self.handle_get_nc_db_node,
                 ProtocolMessages.NC_DB_NODE: self.handle_nc_db_node,
+            })
+
+        # whether to enable two-tier finality commands
+        if self._settings.CAPABILITY_FINALITY in common_capabilities:
+            self.cmd_map.update({
+                ProtocolMessages.SUBMIT_FINALITY_TX: self.handle_submit_finality_tx,
+                ProtocolMessages.FINALITY_VOTE: self.handle_finality_vote,
+                ProtocolMessages.FINALITY_CERTIFICATE: self.handle_finality_certificate,
             })
 
         # Initialize sync manager and add its commands to the list of available commands.
@@ -410,3 +420,53 @@ class ReadyState(BaseState):
             return
         self.peer_nc_node = nc_db_node_data
         self.log.info('response received', nc_node=nc_db_node_data)
+
+    # ------------------------------------------------------------------
+    # Two-tier finality commands
+    # ------------------------------------------------------------------
+
+    def _deserialize_finality_tx(self, tx_hex: str) -> Transaction:
+        """Deserialize a transaction received in a finality message."""
+        tx = Transaction.create_from_struct(bytes.fromhex(tx_hex), storage=self.protocol.node.tx_storage)
+        if not isinstance(tx, Transaction):
+            raise ValueError('expected a transaction')
+        tx.storage = self.protocol.node.tx_storage
+        return tx
+
+    def handle_submit_finality_tx(self, payload: str) -> None:
+        """Handle a pending transaction submitted for finality."""
+        service = self.protocol.node.finality_service
+        if service is None:
+            return
+        try:
+            tx = self._deserialize_finality_tx(payload)
+        except (ValueError, struct.error):
+            self.protocol.send_error_and_close_connection('invalid SUBMIT-FINALITY-TX received')
+            return
+        service.on_submit_finality_tx(tx, source=self.protocol)
+
+    def handle_finality_vote(self, payload: str) -> None:
+        """Handle a validator vote gossiped among the committee."""
+        service = self.protocol.node.finality_service
+        if service is None:
+            return
+        try:
+            vote = Vote.from_bytes(bytes.fromhex(payload))
+        except ValueError:
+            self.protocol.send_error_and_close_connection('invalid FINALITY-VOTE received')
+            return
+        service.on_vote(vote, source=self.protocol)
+
+    def handle_finality_certificate(self, payload: str) -> None:
+        """Handle a certified transaction with its certificate."""
+        service = self.protocol.node.finality_service
+        if service is None:
+            return
+        try:
+            data = json_loads(payload)
+            tx = self._deserialize_finality_tx(data['tx'])
+            certificate = FinalityCertificate.from_bytes(bytes.fromhex(data['fc']))
+        except (ValueError, KeyError, TypeError, struct.error):
+            self.protocol.send_error_and_close_connection('invalid FINALITY-CERTIFICATE received')
+            return
+        service.on_certificate(tx, certificate, source=self.protocol)

@@ -124,6 +124,9 @@ class RunNode:
                             help='Create an index of UTXOs by token/address/amount and allow searching queries')
         parser.add_argument('--nc-indexes', action='store_true',
                             help='Enable indexes related to nano contracts')
+        parser.add_argument('--finality-signer-file',
+                            help='File containing the two-tier finality validator BLS signer key. '
+                                 'When provided (and finality is enabled), this node acts as a validator.')
         parser.add_argument('--prometheus', action='store_true', help='Send metric data to Prometheus')
         parser.add_argument('--prometheus-prefix', default='',
                             help='A prefix that will be added in all Prometheus metrics')

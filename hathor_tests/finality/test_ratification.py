@@ -27,6 +27,10 @@ class RatificationTestCase(unittest.TestCase):
         )
         self.manager = self.create_peer('testnet', settings=self._settings)
         assert self.manager.tx_storage.indexes.finality_certificate is not None
+        # This test exercises the consensus ratification rule directly, so disable the mempool gate
+        # (which would otherwise divert the uncertified transactions we add). The rule itself only
+        # needs the feature active and the certificate index, both of which remain in place.
+        self.manager.vertex_handler.set_finality_service(None)
 
     def _make_conflicting_pair(self) -> tuple[Transaction, Transaction]:
         """Create two transactions that spend the same output, both in the mempool."""
