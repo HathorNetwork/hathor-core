@@ -81,6 +81,11 @@ def get_settings_hello_dict(settings: HathorSettings) -> dict[str, Any]:
     if consensus_hash := settings.CONSENSUS_ALGORITHM.get_peer_hello_hash():
         settings_dict['CONSENSUS_ALGORITHM'] = consensus_hash
 
+    # When two-tier finality is enabled, only peer with nodes that share the same committee, so that
+    # certificates and votes are always verifiable against a common validator set.
+    if settings.FINALITY.enabled:
+        settings_dict['FINALITY'] = settings.FINALITY.calculate_committee_hash().hex()
+
     return settings_dict
 
 

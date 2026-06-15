@@ -20,6 +20,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
+from hathor.finality.finality_settings import FinalitySettings
 from hathorlib.conf.settings import FeatureSetting, HathorSettings as LibSettings
 
 
@@ -32,6 +33,19 @@ class HathorSettings(LibSettings):
 
     # Used to enable shielded transactions (including mint/melt headers).
     ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
+
+    # Used to enable two-tier finality (the finality-validator fast path and its block-validity rule).
+    ENABLE_TWO_TIER_FINALITY: FeatureSetting = FeatureSetting.DISABLED
+
+    # The finality committee (validators and their voting weights). Dormant unless `enabled`.
+    FINALITY: FinalitySettings = FinalitySettings()
+
+    @field_validator('FINALITY', mode='before')
+    @classmethod
+    def _parse_finality(cls, finality: Any) -> FinalitySettings:
+        if isinstance(finality, dict):
+            return FinalitySettings.model_validate(finality)
+        return finality
 
     # Block checkpoints
     CHECKPOINTS: list[Checkpoint] = []

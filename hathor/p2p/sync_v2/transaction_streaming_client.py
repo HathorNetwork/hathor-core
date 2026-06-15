@@ -67,6 +67,7 @@ class TransactionStreamingClient:
                 restrict_dup_actions=False,
                 daa_version=DAAVersion.V1,
                 shielded_transactions=False,
+                two_tier_finality=False,
             )
         )
 
