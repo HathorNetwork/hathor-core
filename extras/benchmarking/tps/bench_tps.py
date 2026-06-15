@@ -16,22 +16,31 @@
 """Measure end-to-end vertex-processing TPS on a REAL reactor (no simulated clock).
 
 This benchmark isolates the *processing time* of the vertex pipeline for plain UTXO
-transactions (no nano contracts). A synthetic DAG (blocks confirming spend-chains of
-txs) is built once with the DAG Builder, serialized, and then fed to a fresh manager
-exactly like p2p block sync does: every vertex is parsed from its wire bytes and every
-block is connected through ``vertex_handler.on_new_block(block, deps=txs)``, which runs
-full verification, consensus and storage for each dependency tx and the block.
+transactions (no nano contracts). A synthetic DAG (spend-chains of txs, optionally
+confirmed by blocks) is built once with the DAG Builder, serialized, and then fed to a
+fresh manager. The transaction phase and the block phase are timed separately:
 
-The real reactor means storage is real (temp) RocksDB and the measured number is honest
-wall-clock TPS of the connect pipeline. Only the payload section is timed — the
-reward-lock base chain and the funding tx are connected first, untimed.
+  - transactions are connected through the realtime relay path
+    (``vertex_handler.on_new_relayed_vertex``) — parse + full verification + consensus;
+  - blocks are then connected (``vertex_handler.on_new_block``), confirming the txs.
+
+Each phase ends with ``tx_storage.flush()`` so the actual RocksDB write it produced is
+inside the measured window (the tx-storage cache otherwise flushes asynchronously). The
+real reactor means storage is real (temp) RocksDB, so the number is honest wall-clock
+processing time. Only the payload is timed — the reward-lock base chain and the funding
+tx are connected first, untimed.
+
+The report shows, per configuration, the transaction throughput (tx/s, from the
+transaction phase only) and the three phase times: transactions, blocks, and total. With
+``--blocks 0`` there are no confirming blocks, so only the transaction time is measured.
 
 It sweeps a configurable set of inputs/outputs-per-tx (default 1, 2, 4, 8, 16) so the
 table shows how throughput scales as transactions get heavier. For each configuration it
 runs N times and reports the median, mirroring how we track this per PR.
 
     python extras/benchmarking/tps/bench_tps.py
-    python extras/benchmarking/tps/bench_tps.py --inputs 1,2,4,8,16 --runs 3 --txs 50 --blocks 40
+    python extras/benchmarking/tps/bench_tps.py --inputs 1,2,4,8,16 --runs 3 --txs 2000 --blocks 1
+    python extras/benchmarking/tps/bench_tps.py --txs 2000 --blocks 0   # transactions only
     python extras/benchmarking/tps/bench_tps.py --output tps_results.json
     python extras/benchmarking/tps/bench_tps.py --baseline master_tps.json
 """
@@ -123,39 +132,48 @@ def base_blocks() -> int:
     return get_global_settings().REWARD_SPEND_MIN_BLOCKS + 2
 
 
-def build_dag_str(*, num_txs: int, num_blocks: int, num_inputs: int) -> str:
-    """Blocks x1..xR each confirming a spend-chain group of `num_txs` txs (one dummy-funded
-    tx per group keeps the dummy under the 255-output wire limit).
+def _group_chain_lines(r: int, *, num_txs: int, num_inputs: int) -> list[str]:
+    """DSL for group r's spend-chain: `num_txs` txs, each with `num_inputs` inputs and outputs.
 
-    Each payload tx has exactly `num_inputs` inputs and `num_inputs` outputs: tx t_{i+1}
-    spends all `num_inputs` outputs of t_i, so the chain stays resolvable. For num_inputs > 1
-    a per-group source `g{r}_s` (one extra confirmed tx) seeds the chain with `num_inputs`
-    outputs; the source is funded from the dummy by the builder."""
+    tx t_{i+1} spends all `num_inputs` outputs of t_i, so the chain stays resolvable. For
+    num_inputs > 1 a per-group source `g{r}_s` (one extra tx) seeds the chain with `num_inputs`
+    outputs; the source is funded from the dummy by the builder. Chaining keeps the dummy under
+    the 255-output wire limit (one dummy output per group instead of one per tx)."""
+    lines: list[str] = []
+    if num_inputs == 1:
+        for i in range(num_txs - 1):
+            lines.append(f'g{r}_t{i}.out[0] <<< g{r}_t{i + 1}')
+        return lines
+    src = f'g{r}_s'
+    for j in range(num_inputs):
+        lines.append(f'{src}.out[{j}] = 1 HTR')
+    prev = src
+    for i in range(num_txs):
+        tx = f'g{r}_t{i}'
+        for j in range(num_inputs):
+            lines.append(f'{prev}.out[{j}] <<< {tx}')
+        for j in range(num_inputs):
+            lines.append(f'{tx}.out[{j}] = 1 HTR')
+        prev = tx
+    return lines
+
+
+def build_dag_str(*, num_txs: int, num_blocks: int, num_inputs: int) -> str:
+    """Build the DAG DSL.
+
+    For `num_blocks >= 1`: blocks x1..xR, each confirming one spend-chain group of `num_txs` txs.
+    For `num_blocks == 0`: a single unconfirmed group of `num_txs` txs and no blocks — the
+    transactions-only case, fed through the mempool/relay path with nothing confirming them."""
     base = base_blocks()
-    lines = [
-        f'blockchain genesis b[1..{base}]',
-        f'blockchain b{base} x[1..{num_blocks}]',
-        f'b{base - 1} < dummy',
-        f'b{base} --> dummy',
-        '',
-    ]
-    for r in range(num_blocks):
-        if num_inputs == 1:
-            for i in range(num_txs - 1):
-                lines.append(f'g{r}_t{i}.out[0] <<< g{r}_t{i + 1}')
-        else:
-            src = f'g{r}_s'
-            for j in range(num_inputs):
-                lines.append(f'{src}.out[{j}] = 1 HTR')
-            prev = src
-            for i in range(num_txs):
-                tx = f'g{r}_t{i}'
-                for j in range(num_inputs):
-                    lines.append(f'{prev}.out[{j}] <<< {tx}')
-                for j in range(num_inputs):
-                    lines.append(f'{tx}.out[{j}] = 1 HTR')
-                prev = tx
-        lines.append(f'x{r + 1} --> g{r}_t{num_txs - 1}')
+    lines = [f'blockchain genesis b[1..{base}]']
+    if num_blocks >= 1:
+        lines.append(f'blockchain b{base} x[1..{num_blocks}]')
+    lines += [f'b{base - 1} < dummy', f'b{base} --> dummy', '']
+    groups = range(num_blocks) if num_blocks >= 1 else range(1)
+    for r in groups:
+        lines += _group_chain_lines(r, num_txs=num_txs, num_inputs=num_inputs)
+        if num_blocks >= 1:
+            lines.append(f'x{r + 1} --> g{r}_t{num_txs - 1}')
         lines.append('')
     return '\n'.join(lines)
 
@@ -211,8 +229,14 @@ def feed(
     num_txs: int,
     num_blocks: int,
     num_inputs: int,
-) -> Generator[Any, Any, float]:
-    """Feed the DAG through the block-sync entrypoint; return the payload-section wall time."""
+) -> Generator[Any, Any, tuple[float, float]]:
+    """Connect the payload, timing transaction-processing and block-processing separately.
+
+    Returns ``(txs_seconds, blocks_seconds)``. Transactions enter through the realtime relay
+    path (``on_new_relayed_vertex``); blocks are then connected with no deps, confirming the
+    already-present txs. Each phase ends with ``tx_storage.flush()`` so the RocksDB write it
+    produced is inside its measured window (the cache otherwise flushes asynchronously). With
+    ``num_blocks == 0`` there is no block phase, so ``blocks_seconds`` is 0."""
     parser = manager.vertex_parser
     storage = manager.tx_storage
     base = base_blocks()
@@ -232,17 +256,32 @@ def feed(
         ok = yield manager.vertex_handler.on_new_block(block, deps=deps)
         assert ok, f'base block b{i} rejected'
 
-    # payload: the measured section, fed exactly like sync's on_block_complete
-    start = time.perf_counter()
-    for r in range(num_blocks):
+    has_blocks = num_blocks >= 1
+    groups = range(num_blocks) if has_blocks else range(1)
+    txs_seconds = 0.0
+    blocks_seconds = 0.0
+    for r in groups:
         # the per-group source (num_inputs > 1) is the chain root and must connect first
         names = ([f'g{r}_s'] if num_inputs > 1 else []) + [f'g{r}_t{i}' for i in range(num_txs)]
-        txs = [parse(name) for name in names]
-        block = parse(f'x{r + 1}')
-        assert isinstance(block, Block)
-        ok = yield manager.vertex_handler.on_new_block(block, deps=txs)
-        assert ok, f'payload block x{r + 1} rejected'
-    return time.perf_counter() - start
+
+        # transaction phase: parse + verify + consensus + storage flush
+        t0 = time.perf_counter()
+        for name in names:
+            ok = manager.vertex_handler.on_new_relayed_vertex(parse(name))
+            assert ok, f'tx {name} rejected'
+        storage.flush()
+        txs_seconds += time.perf_counter() - t0
+
+        # block phase: the block confirms this group's txs (already connected)
+        if has_blocks:
+            block = parse(f'x{r + 1}')
+            assert isinstance(block, Block)
+            t1 = time.perf_counter()
+            ok = yield manager.vertex_handler.on_new_block(block, deps=[])
+            assert ok, f'payload block x{r + 1} rejected'
+            storage.flush()
+            blocks_seconds += time.perf_counter() - t1
+    return txs_seconds, blocks_seconds
 
 
 def run_sweep(
@@ -251,15 +290,14 @@ def run_sweep(
     num_txs: int,
     num_blocks: int,
     runs: int,
-) -> dict[int, list[float]]:
+) -> dict[int, list[tuple[float, float]]]:
     """Drive every (inputs x run) measurement under a single reactor run and return, per
-    input-count, the list of tx/s for each run."""
+    input-count, the list of (txs_seconds, blocks_seconds) for each run."""
     from twisted.internet.defer import inlineCallbacks
 
     # Built before the reactor runs: the simulated-clock source managers are independent.
     payloads = {n: build_payloads(num_txs, num_blocks, n) for n in inputs}
-    total_txs = num_txs * num_blocks
-    results: dict[int, list[float]] = {n: [] for n in inputs}
+    results: dict[int, list[tuple[float, float]]] = {n: [] for n in inputs}
     failure: dict[str, BaseException] = {}
     reactor = get_global_reactor()
 
@@ -270,11 +308,11 @@ def run_sweep(
                 for _ in range(runs):
                     manager = build_target()
                     try:
-                        elapsed = yield inlineCallbacks(feed)(
+                        timing = yield inlineCallbacks(feed)(
                             manager, payloads[n], num_txs, num_blocks, n)
                     finally:
                         yield manager.stop()
-                    results[n].append(total_txs / elapsed)
+                    results[n].append(timing)
         except BaseException as e:  # noqa: B902 — record and stop the reactor cleanly
             failure['error'] = e
         finally:
@@ -287,8 +325,36 @@ def run_sweep(
     return results
 
 
-def _fmt(value: float) -> str:
+def aggregate(
+    samples: dict[int, list[tuple[float, float]]],
+    *,
+    total_txs: int,
+) -> dict[int, dict[str, float]]:
+    """Per input-count, reduce the per-run (txs_s, blocks_s) to medians and a tx/s figure.
+
+    tx/s uses only the transaction phase — the headline 'transaction processing' throughput.
+    min/max are kept so the report and Bencher can show run-to-run spread."""
+    stats: dict[int, dict[str, float]] = {}
+    for n, run_list in samples.items():
+        txs_t = [t for t, _ in run_list]
+        blk_t = [b for _, b in run_list]
+        tot_t = [t + b for t, b in run_list]
+        tps = [total_txs / t for t in txs_t]
+        stats[n] = {
+            'tps': statistics.median(tps), 'tps_lo': min(tps), 'tps_hi': max(tps),
+            'txs_s': statistics.median(txs_t), 'txs_lo': min(txs_t), 'txs_hi': max(txs_t),
+            'blocks_s': statistics.median(blk_t), 'blocks_lo': min(blk_t), 'blocks_hi': max(blk_t),
+            'total_s': statistics.median(tot_t), 'total_lo': min(tot_t), 'total_hi': max(tot_t),
+        }
+    return stats
+
+
+def _int(value: float) -> str:
     return f'{value:,.0f}'
+
+
+def _secs(value: float) -> str:
+    return f'{value:.3f}'
 
 
 def _pct(value: float, base: float) -> str:
@@ -299,25 +365,29 @@ def _pct(value: float, base: float) -> str:
 
 
 def render_table(
-    medians: dict[int, float],
+    stats: dict[int, dict[str, float]],
     *,
     total_txs: int,
+    num_blocks: int,
     runs: int,
     baseline: dict[int, float] | None,
 ) -> str:
-    """Render the per-input table; columns mirror what we track per PR."""
-    inputs = sorted(medians)
-    one_in = medians[inputs[0]]
-    header = ['inputs/outputs per tx', 'tx/s', 'UTXOs/s (tx/s x N)', 'tx/s vs 1-in']
+    """Render the per-input table; tx/s is transaction-only, plus the three phase times."""
+    inputs = sorted(stats)
+    one_in = stats[inputs[0]]['tps']
+    header = ['inputs/outputs per tx', 'tx/s', 'UTXOs/s (tx/s x N)',
+              'txs (s)', 'blocks (s)', 'total (s)', 'tx/s vs 1-in']
     if baseline:
         header += ['tx/s (base)', 'vs base']
     rows: list[list[str]] = []
     for n in inputs:
-        tps = medians[n]
-        row = [str(n), _fmt(tps), _fmt(tps * n), '—' if n == inputs[0] else _pct(tps, one_in)]
+        s = stats[n]
+        row = [str(n), _int(s['tps']), _int(s['tps'] * n),
+               _secs(s['txs_s']), _secs(s['blocks_s']), _secs(s['total_s']),
+               '—' if n == inputs[0] else _pct(s['tps'], one_in)]
         if baseline:
             base_tps = baseline.get(n)
-            row += [_fmt(base_tps) if base_tps else '—', _pct(tps, base_tps) if base_tps else '—']
+            row += [_int(base_tps) if base_tps else '—', _pct(s['tps'], base_tps) if base_tps else '—']
         rows.append(row)
 
     widths = [max(len(header[c]), *(len(r[c]) for r in rows)) for c in range(len(header))]
@@ -326,25 +396,42 @@ def render_table(
         return '| ' + ' | '.join(cell.rjust(widths[c]) for c, cell in enumerate(cells)) + ' |'
 
     sep = '|' + '|'.join('-' * (w + 2) for w in widths) + '|'
-    title = f'real reactor, {total_txs:,} txs/config, median of {runs} run(s)'
+    blocks_desc = f'{num_blocks} block(s)' if num_blocks >= 1 else 'no blocks (txs only)'
+    title = f'real reactor, {total_txs:,} txs, {blocks_desc}, median of {runs} run(s)'
     out = [title, '', line(header), sep]
     out += [line(r) for r in rows]
     return '\n'.join(out)
 
 
-def to_bmf(medians: dict[int, float], samples: dict[int, list[float]]) -> dict[str, Any]:
-    """Bencher Metric Format: one benchmark per input-count, throughput measure in tx/s.
+def to_bmf(stats: dict[int, dict[str, float]]) -> dict[str, Any]:
+    """Bencher Metric Format: one benchmark per input-count, with a throughput measure (tx/s)
+    and the three phase times in seconds.
 
     Names are zero-padded so Bencher orders them 01, 02, 04, 08, 16 instead of lexically."""
     bmf: dict[str, Any] = {}
-    for n in sorted(medians):
-        runs = samples[n]
+    for n in sorted(stats):
+        s = stats[n]
         bmf[f'tps/{n:02d}-in'] = {
             'throughput': {
-                'value': round(medians[n], 2),
-                'lower_value': round(min(runs), 2),
-                'upper_value': round(max(runs), 2),
-            }
+                'value': round(s['tps'], 2),
+                'lower_value': round(s['tps_lo'], 2),
+                'upper_value': round(s['tps_hi'], 2),
+            },
+            'txs-seconds': {
+                'value': round(s['txs_s'], 4),
+                'lower_value': round(s['txs_lo'], 4),
+                'upper_value': round(s['txs_hi'], 4),
+            },
+            'blocks-seconds': {
+                'value': round(s['blocks_s'], 4),
+                'lower_value': round(s['blocks_lo'], 4),
+                'upper_value': round(s['blocks_hi'], 4),
+            },
+            'total-seconds': {
+                'value': round(s['total_s'], 4),
+                'lower_value': round(s['total_lo'], 4),
+                'upper_value': round(s['total_hi'], 4),
+            },
         }
     return bmf
 
@@ -354,8 +441,9 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--inputs', default=','.join(map(str, DEFAULT_INPUTS)),
                         help='comma-separated inputs/outputs per tx to sweep (default: 1,2,4,8,16)')
-    parser.add_argument('--txs', type=int, default=50, help='payload txs per block (default: 50)')
-    parser.add_argument('--blocks', type=int, default=40, help='payload blocks (default: 40)')
+    parser.add_argument('--txs', type=int, default=2000, help='payload txs per group (default: 2000)')
+    parser.add_argument('--blocks', type=int, default=1,
+                        help='payload blocks, one per group; 0 = transactions only (default: 1)')
     parser.add_argument('--runs', type=int, default=3, help='runs per config; median reported (default: 3)')
     parser.add_argument('--output', default=None, help='write Bencher Metric Format JSON to this path')
     parser.add_argument('--baseline', default=None,
@@ -364,9 +452,11 @@ def main() -> None:
 
     inputs = [int(x) for x in args.inputs.split(',') if x.strip()]
     assert inputs, 'no inputs to sweep'
+    assert args.blocks >= 0, 'blocks must be >= 0'
 
+    total_txs = args.txs * max(args.blocks, 1)
     samples = run_sweep(inputs, num_txs=args.txs, num_blocks=args.blocks, runs=args.runs)
-    medians = {n: statistics.median(s) for n, s in samples.items()}
+    stats = aggregate(samples, total_txs=total_txs)
 
     baseline = None
     if args.baseline:
@@ -379,11 +469,11 @@ def main() -> None:
             baseline[n] = body['throughput']['value']
 
     print()
-    print(render_table(medians, total_txs=args.txs * args.blocks, runs=args.runs, baseline=baseline))
+    print(render_table(stats, total_txs=total_txs, num_blocks=args.blocks, runs=args.runs, baseline=baseline))
     print()
 
     if args.output:
-        bmf = to_bmf(medians, samples)
+        bmf = to_bmf(stats)
         with open(args.output, 'w') as fp:
             json.dump(bmf, fp, indent=2)
         print(f'Bencher Metric Format written to: {args.output}')
