@@ -41,12 +41,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
+
+# Put the repo root on sys.path. CI runs this as a loose script (`python extras/.../bench_tps.py`),
+# which only adds this file's directory to sys.path, and installs deps with `--no-root`, so the
+# `hathor` package lives in the source tree rather than site-packages. Without this, `import hathor`
+# fails with ModuleNotFoundError. The installed `hathorlib` regular package still wins over the repo
+# root's namespace dir, so this is safe.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 # IMPORTANT: the settings must be selected *before* importing any hathor module, because
 # most of them read the global settings at import time. We use the same unittests config
 # the test suite uses, so that the genesis output script matches the DAG Builder genesis
 # wallet and the reward-lock window is small.
-from hathorlib.conf import UNITTESTS_SETTINGS_FILEPATH
+from hathorlib.conf import UNITTESTS_SETTINGS_FILEPATH  # noqa: E402
 
 os.environ.setdefault(
     'HATHOR_CONFIG_YAML',
