@@ -79,7 +79,7 @@ class CliBuilder:
         if not condition:
             self.log.warn(message)
 
-    def _build_finality_service(self, *, settings, tx_storage, p2p_manager, vertex_handler):
+    def _build_finality_service(self, *, settings, tx_storage, p2p_manager, vertex_handler, pubsub):
         """Construct the two-tier finality service when it is enabled, wiring the mempool gate."""
         if not settings.ENABLE_TWO_TIER_FINALITY:
             return None
@@ -115,6 +115,8 @@ class CliBuilder:
             pin_store=pin_store,
         )
         vertex_handler.set_finality_service(finality_service)
+        from hathor.pubsub import HathorEvents
+        pubsub.subscribe(HathorEvents.CONSENSUS_TX_UPDATE, finality_service.handle_consensus_event)
         return finality_service
 
     def create_manager(self, reactor: Reactor) -> HathorManager:
@@ -416,6 +418,7 @@ class CliBuilder:
             tx_storage=tx_storage,
             p2p_manager=p2p_manager,
             vertex_handler=vertex_handler,
+            pubsub=pubsub,
         )
 
         self.manager = HathorManager(

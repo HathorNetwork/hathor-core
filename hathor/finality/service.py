@@ -48,6 +48,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from hathor.finality.finality_settings import FinalitySettings
     from hathor.finality.pending_pool import PendingFinalityPool
     from hathor.finality.stores import FinalityCertificateStore, FinalityPinStore
+    from hathor.pubsub import EventArguments, HathorEvents
 
 logger = get_logger()
 
@@ -276,3 +277,26 @@ class FinalityService:
         self._pending.remove(tx.hash)
         self._admit_certified_tx(tx)
         self._transport.broadcast_certificate(bytes(tx.get_struct()), bytes(certificate), exclude=source)
+
+    # ------------------------------------------------------------------
+    # Settlement housekeeping (validators)
+    # ------------------------------------------------------------------
+
+    def handle_consensus_event(self, key: 'HathorEvents', args: 'EventArguments') -> None:
+        """Pubsub adapter: release pins for transactions that have been settled by a block."""
+        self.on_settlement(args.tx)
+
+    def on_settlement(self, vertex: object) -> None:
+        """Release a validator's pins once a transaction is hard-settled by a block.
+
+        Safety does not depend on this — a consumed UTXO can never be re-spent — so it is pure
+        housekeeping that frees pin storage (and, in the future, unwedges equivocated UTXOs).
+        """
+        if self._pin_store is None or not isinstance(vertex, Transaction):
+            return
+        meta = vertex.get_metadata()
+        if meta.first_block is None or meta.voided_by:
+            return
+        self._pin_store.unpin_resolved(
+            [(VertexId(txin.tx_id), txin.index) for txin in vertex.inputs]
+        )

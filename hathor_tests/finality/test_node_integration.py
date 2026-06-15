@@ -12,11 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathorlib.conf.settings import FeatureSetting
+import hashlib
+from unittest.mock import Mock
 
-from hathor.simulator.utils import add_new_blocks, gen_new_tx
+from hathor.finality.crypto import FinalityValidatorSigner, bls_keygen, bls_pop_prove
+from hathor.finality.finality_settings import FinalitySettings, FinalityValidatorSettings
+from hathor.finality.pending_pool import PendingFinalityPool
+from hathor.finality.service import FinalityService
+from hathor.finality.stores import MemoryFinalityCertificateStore, MemoryFinalityPinStore
+from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
+from hathor.types import VertexId
 from hathor_tests import unittest
 from hathor_tests.utils import add_blocks_unlock_reward
+from hathorlib.conf.settings import FeatureSetting
 
 
 class NodeIntegrationTestCase(unittest.TestCase):
@@ -52,3 +60,45 @@ class NodeIntegrationTestCase(unittest.TestCase):
         result = manager.vertex_handler.on_new_relayed_vertex(tx)
         assert result is False
         assert not manager.tx_storage.transaction_exists(tx.hash)
+
+    def test_settlement_releases_validator_pins(self) -> None:
+        manager = self._finality_manager(enabled=True)
+        # Disable the gate so we can place a normal transaction in the DAG and settle it with a block.
+        manager.vertex_handler.set_finality_service(None)
+        add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
+        address = manager.wallet.get_unused_address(mark_as_used=True)
+        tx = gen_new_tx(manager, address, 100)
+        manager.on_new_tx(tx)
+        block = add_new_block(manager, advance_clock=15)
+        assert tx.get_metadata().first_block == block.hash  # the transaction is now settled
+
+        # A validator that had pinned this transaction's inputs releases those pins on settlement.
+        sk = bls_keygen(hashlib.sha256(b'settle-validator').digest())
+        signer = FinalityValidatorSigner(sk)
+        finality_settings = FinalitySettings(
+            enabled=True,
+            validators=(FinalityValidatorSettings(
+                public_key=bytes(signer.public_key).hex(),
+                pop=bytes(bls_pop_prove(sk)).hex(),
+            ),),
+        )
+        pin_store = MemoryFinalityPinStore()
+        service = FinalityService(
+            finality_settings=finality_settings,
+            pending_pool=PendingFinalityPool(),
+            certificate_store=MemoryFinalityCertificateStore(),
+            transport=Mock(),
+            admit_certified_tx=lambda _tx: True,
+            is_feature_active=lambda: True,
+            signer=signer,
+            pin_store=pin_store,
+        )
+        for txin in tx.inputs:
+            pin_store.try_pin(VertexId(txin.tx_id), txin.index, VertexId(tx.hash))
+            assert pin_store.get_pin(VertexId(txin.tx_id), txin.index) == bytes(tx.hash)
+
+        service.on_settlement(tx)
+
+        for txin in tx.inputs:
+            assert pin_store.get_pin(VertexId(txin.tx_id), txin.index) is None

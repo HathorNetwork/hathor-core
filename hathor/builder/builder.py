@@ -743,6 +743,10 @@ class Builder:
                 pin_store=pin_store,
             )
             vertex_handler.set_finality_service(self._finality_service)
+            from hathor.pubsub import HathorEvents
+            self._get_or_create_pubsub().subscribe(
+                HathorEvents.CONSENSUS_TX_UPDATE, self._finality_service.handle_consensus_event
+            )
 
         return self._finality_service
 
