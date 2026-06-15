@@ -26,7 +26,7 @@ from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
 from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 

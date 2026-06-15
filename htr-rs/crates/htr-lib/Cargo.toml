@@ -7,6 +7,10 @@ edition = "2024"
 num-bigint = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
+rocksdb = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

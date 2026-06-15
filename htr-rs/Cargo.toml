@@ -13,6 +13,8 @@ num-bigint = "0.4"
 num-derive = "0.4"
 num-traits = "0.2"
 pyo3 = { version = "0.29.0", features = ["num-bigint"] }
+rocksdb = "0.24.0"
+tempfile = "3.27.0"
 
 # Overflows must always panic.
 [profile.release]
