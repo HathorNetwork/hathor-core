@@ -112,22 +112,22 @@ def test_token_deposit_percentage_ppb() -> None:
 
     with patch('hathorlib.utils.yaml.dict_from_extended_yaml', yaml_mock):
         # Test default value passes (1% results in FEE_DIVISOR=100)
-        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_PPB=10**7))
+        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=10**7))
         load_yaml_settings(HathorSettings, filepath='some_path')
 
-        # Test fails when TOKEN_DEPOSIT_PERCENTAGE_PPB results in non-integer FEE_DIVISOR (3% -> 33.333...)
-        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_PPB=3 * 10**7))
+        # Test fails when TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR results in non-integer FEE_DIVISOR (3% -> 33.333...)
+        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=3 * 10**7))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
-        assert 'TOKEN_DEPOSIT_PERCENTAGE_PPB must result in an integer FEE_DIVISOR' in str(e.value)
-        assert f'TOKEN_DEPOSIT_PERCENTAGE_PPB={3 * 10**7}' in str(e.value)
+        assert 'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR must result in an integer FEE_DIVISOR' in str(e.value)
+        assert f'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR={3 * 10**7}' in str(e.value)
 
-        # Test fails when TOKEN_DEPOSIT_PERCENTAGE_PPB results in non-integer FEE_DIVISOR (7% -> 14.285...)
-        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_PPB=7 * 10**7))
+        # Test fails when TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR results in non-integer FEE_DIVISOR (7% -> 14.285...)
+        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=7 * 10**7))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
-        assert 'TOKEN_DEPOSIT_PERCENTAGE_PPB must result in an integer FEE_DIVISOR' in str(e.value)
-        assert f'TOKEN_DEPOSIT_PERCENTAGE_PPB={7 * 10**7}' in str(e.value)
+        assert 'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR must result in an integer FEE_DIVISOR' in str(e.value)
+        assert f'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR={7 * 10**7}' in str(e.value)
 
 
 def test_consensus_algorithm() -> None:
