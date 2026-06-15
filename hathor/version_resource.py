@@ -137,8 +137,10 @@ class VersionResource(Resource):
             min_tx_weight=self._settings.MIN_TX_WEIGHT,
             min_tx_weight_coefficient=self._settings.MIN_TX_WEIGHT_COEFFICIENT,
             min_tx_weight_k=self._settings.MIN_TX_WEIGHT_K,
-            token_deposit_percentage=self._settings.TOKEN_DEPOSIT_PERCENTAGE_PPB / 10**9,
-            token_deposit_percentage_ppb=self._settings.TOKEN_DEPOSIT_PERCENTAGE_PPB,
+            token_deposit_percentage=(
+                self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR / self._settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+            ),
+            token_deposit_percentage_ppb=self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
             reward_spend_min_blocks=self._settings.REWARD_SPEND_MIN_BLOCKS,
             max_number_inputs=self._settings.MAX_NUM_INPUTS,
             max_number_outputs=self._settings.MAX_NUM_OUTPUTS,

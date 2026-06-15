@@ -83,6 +83,6 @@ def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: T
     """Calculate the fee for handling a fee-based token"""
     if fee_payment_token.token_id == HATHOR_TOKEN_UID:
         return settings.FEE_PER_OUTPUT
-    numerator = settings.FEE_PER_OUTPUT * 10**9
-    assert numerator % settings.TOKEN_DEPOSIT_PERCENTAGE_PPB == 0
-    return numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_PPB
+    numerator = settings.FEE_PER_OUTPUT * settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+    assert numerator % settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR == 0
+    return numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR

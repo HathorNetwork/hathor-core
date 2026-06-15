@@ -81,14 +81,20 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
 
 
 def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: int) -> int:
-    return ceil_div(settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(mint_amount), 10**9)
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(mint_amount)
+    denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+    return ceil_div(numerator, denominator)
 
 
 def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: int) -> int:
-    return settings.TOKEN_DEPOSIT_PERCENTAGE_PPB * abs(melt_amount) // 10**9
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(melt_amount)
+    denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+    return numerator // denominator
 
 
 def ceil_div(a: int, b: int) -> int:
-    """Calculate ceil division using integer math for non-negative operands."""
+    """
+    Calculate ceil division using integer math for non-negative operands, equivalent to `ceil(a / b)` for integers.
+    """
     assert a >= 0 and b >= 0
     return (a + b - 1) // b
