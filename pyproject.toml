@@ -60,6 +60,7 @@ dependencies = [
     "zope-interface==8.2",
     "packaging==26.0",
     "htr_lib",
+    "py-ecc>=7.0.0,<8.0.0",
 ]
 
 [project.urls]
@@ -125,6 +126,7 @@ mnemonic = "~0.20"
 prometheus_client = "~0.15.0"
 pyopenssl = "=24.2.1"
 pycoin = "~0.92.20230326"
+py-ecc = "~7.0.0"
 requests = "=2.32.3"
 service_identity = "~21.1.0"
 pexpect = "~4.8.0"
