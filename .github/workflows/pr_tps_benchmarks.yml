@@ -1,0 +1,43 @@
+# yamllint disable rule:line-length
+name: tps-benchmarking
+on: # yamllint disable-line rule:truthy
+  pull_request:
+    branches:
+      - master
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark_tps_pr_branch:
+    name: Continuous TPS Benchmarking PRs
+    # DO NOT REMOVE: For handling Fork PRs see Pull Requests from Forks
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bencherdev/bencher@main
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: 3.12
+          os: ubuntu-22.04
+      - name: Set env vars
+        run: cat ./extras/benchmarking/tps/.env >> $GITHUB_ENV
+      - name: Track PR TPS benchmarks with Bencher
+        run: |
+          bencher run \
+            --project hathor-core \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch '${{ github.head_ref }}' \
+            --start-point '${{ github.base_ref }}' \
+            --start-point-hash '${{ github.event.pull_request.base.sha }}' \
+            --start-point-clone-thresholds \
+            --testbed ubuntu-22.04 \
+            --adapter json \
+            --err \
+            --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+            --file $BENCH_FILE \
+            './extras/benchmarking/tps/benchmark_tps.sh'
