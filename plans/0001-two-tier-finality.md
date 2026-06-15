@@ -272,9 +272,32 @@ Quality gates: `make tests` (or `uv run pytest`), `mypy`, lint, `uv.lock` CI con
 - **PR B — DONE** (`feat(finality): committee settings and feature flag [part 2]`):
   `hathor/finality/finality_settings.py`, `FINALITY`/`ENABLE_TWO_TIER_FINALITY` settings,
   `Feature.TWO_TIER_FINALITY`, `Features.two_tier_finality`, peer-hello committee hash, 10 tests.
-- **PR D — IN PROGRESS**: value objects done (`feat(finality): vote and finality certificate value
-  objects [part 3]`): `hathor/finality/fc.py` (`Vote`, `FinalityCertificate`), 12 tests. Remaining:
-  FC store/index, p2p messages + handlers, committee overlay + membership proof.
+- **PR D — IN PROGRESS**: data + storage layers done.
+  - `feat(finality): vote and finality certificate value objects [part 3]`: `hathor/finality/fc.py`
+    (`Vote`, `FinalityCertificate`), 12 tests.
+  - `feat(finality): authoritative pin and certificate stores [part 4]`: `hathor/finality/stores.py`
+    (pin store + certificate store, memory + RocksDB), wired into `RocksDBIndexesManager` as
+    `finality_pin`/`finality_certificate` (created only when `ENABLE_TWO_TIER_FINALITY`, excluded from
+    `iter_all_indexes()`), 8 tests incl. a RocksDB reopen/persistence test.
+  - **Remaining for PR D**: p2p messages (`SUBMIT_FINALITY_TX`, `FINALITY_VOTE`), `ReadyState`
+    handlers gated by `CAPABILITY_FINALITY`, and the committee-overlay membership proof at handshake.
+
+### Foundation complete — remaining work is the "live integration" phase
+Done and committed: crypto (A), committee settings + feature flag (B), FC/Vote value objects and the
+authoritative pin/certificate stores (D-data/storage). All gated; network behaviour is unchanged.
+
+Remaining, in suggested order (each touches core, heavily-tested subsystems and needs integration tests):
+1. **PR D p2p**: message types + handlers + `CAPABILITY_FINALITY` + committee-overlay membership proof.
+2. **PR C**: `validator_service.py` — voting rule (reuse `is_double_spending`/`is_spending_voided_tx`
+   + pin store), atomic all-input pinning, vote gossip over the overlay, accumulation, certify at quorum.
+   Hooks `NETWORK_NEW_TX_ACCEPTED`; lifecycle mirrors `PoaBlockProducer`.
+3. **PR E**: `pending_pool.py` + `submitter.py` (forward to a random validator) + the certified-only
+   mempool-admission gate in `vertex_handler.py` / sync-v2 (independent FC verification).
+4. **PR F**: ratification rule in `block_consensus.py::_score_block_dfs` (void offending block).
+5. **PR G**: `FCRootHeader` (advisory).
+6. **PR H**: settlement signal + pin unpin housekeeping.
+
+CLI/builder wiring (`--finality-signer-file`, construct `FinalityValidatorService`) lands with PR C.
 
 ### Confirmed storage-integration decision (resolves the "non-rebuildable index" trap)
 `IndexesManager._manually_initialize` calls `force_clear()` on every index selected for rebuild
