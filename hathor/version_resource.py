@@ -46,7 +46,8 @@ class VersionResponse(ResponseModel):
     min_tx_weight_coefficient: float = Field(description="Minimum transaction weight coefficient")
     min_tx_weight_k: float = Field(description="Minimum transaction weight k constant")
     token_deposit_percentage: float = Field(description="Token deposit percentage. DEPRECATED")
-    token_deposit_percentage_ppb: int = Field(description="Token deposit percentage in ppb (parts per billion)")
+    token_deposit_percentage_numerator: int = Field(description="Token deposit percentage numerator")
+    token_deposit_percentage_denominator: int = Field(description="Token deposit percentage denominator")
     reward_spend_min_blocks: int = Field(description="Minimum blocks before reward can be spent")
     max_number_inputs: int = Field(description="Maximum number of inputs per transaction")
     max_number_outputs: int = Field(description="Maximum number of outputs per transaction")
@@ -75,7 +76,8 @@ VersionResponse.openapi_examples = {
             min_tx_weight_coefficient=1.6,
             min_tx_weight_k=100,
             token_deposit_percentage=0.01,
-            token_deposit_percentage_ppb=10**7,
+            token_deposit_percentage_numerator=10**7,
+            token_deposit_percentage_denominator=10**9,
             reward_spend_min_blocks=300,
             max_number_inputs=256,
             max_number_outputs=256,
@@ -140,7 +142,8 @@ class VersionResource(Resource):
             token_deposit_percentage=(
                 self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR / self._settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
             ),
-            token_deposit_percentage_ppb=self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+            token_deposit_percentage_numerator=self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+            token_deposit_percentage_denominator=self._settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
             reward_spend_min_blocks=self._settings.REWARD_SPEND_MIN_BLOCKS,
             max_number_inputs=self._settings.MAX_NUM_INPUTS,
             max_number_outputs=self._settings.MAX_NUM_OUTPUTS,
