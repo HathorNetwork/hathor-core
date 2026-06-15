@@ -282,22 +282,31 @@ Quality gates: `make tests` (or `uv run pytest`), `mypy`, lint, `uv.lock` CI con
   - **Remaining for PR D**: p2p messages (`SUBMIT_FINALITY_TX`, `FINALITY_VOTE`), `ReadyState`
     handlers gated by `CAPABILITY_FINALITY`, and the committee-overlay membership proof at handshake.
 
-### Foundation complete — remaining work is the "live integration" phase
-Done and committed: crypto (A), committee settings + feature flag (B), FC/Vote value objects and the
-authoritative pin/certificate stores (D-data/storage). All gated; network behaviour is unchanged.
+### Final status — v1 fast path complete and working
+Done and committed (8 commits), all tests green, no regressions:
+- **A** crypto, **B** settings/feature flag, **D(data)** FC/Vote objects, **D(storage)** pin/cert stores.
+- **C/E** `feat(finality): validator service and pending pool [part 5]` — `FinalityService` (voting rule,
+  atomic pinning, vote gossip, certify-at-quorum, independent cert verification) + `PendingFinalityPool`.
+- **F** `feat(finality): ratification block-validity rule [part 6]` — voids a block that confirms a tx
+  conflicting with a certified one.
+- **D(p2p)/E(gate)/wiring** `feat(finality): p2p transport, certified-only mempool gate, node wiring
+  [part 7]` — `SUBMIT_FINALITY_TX`/`FINALITY_VOTE`/`FINALITY_CERTIFICATE` + `CAPABILITY_FINALITY`,
+  `P2PFinalityTransport`, the `VertexHandler` divert gate, `--finality-signer-file`, and `FinalityService`
+  construction in both `Builder` and `CliBuilder`.
+- **H** `feat(finality): release validator pins on settlement [part 8]`.
 
-Remaining, in suggested order (each touches core, heavily-tested subsystems and needs integration tests):
-1. **PR D p2p**: message types + handlers + `CAPABILITY_FINALITY` + committee-overlay membership proof.
-2. **PR C**: `validator_service.py` — voting rule (reuse `is_double_spending`/`is_spending_voided_tx`
-   + pin store), atomic all-input pinning, vote gossip over the overlay, accumulation, certify at quorum.
-   Hooks `NETWORK_NEW_TX_ACCEPTED`; lifecycle mirrors `PoaBlockProducer`.
-3. **PR E**: `pending_pool.py` + `submitter.py` (forward to a random validator) + the certified-only
-   mempool-admission gate in `vertex_handler.py` / sync-v2 (independent FC verification).
-4. **PR F**: ratification rule in `block_consensus.py::_score_block_dfs` (void offending block).
-5. **PR G**: `FCRootHeader` (advisory).
-6. **PR H**: settlement signal + pin unpin housekeeping.
+**Simplifications taken in v1 (documented):**
+- The "committee overlay" is the set of `CAPABILITY_FINALITY` peers; vote authenticity rests on BLS
+  verification against the committee, not peer identity (a non-validator can neither forge a vote nor
+  reach quorum). The handshake committee-membership *proof* is deferred (DoS/privacy hardening only).
+- Certified transactions propagate via the `FINALITY_CERTIFICATE` gossip path; sync-v2 FC transport for
+  *historical* txs is not needed in v1 (settled conflicts are resolved by consensus anyway).
 
-CLI/builder wiring (`--finality-signer-file`, construct `FinalityValidatorService`) lands with PR C.
+**Deferred — PR G (advisory FC-root block header):** not implemented. It is explicitly advisory (not
+consensus-binding) and only benefits light clients; the binding security comes entirely from PR F.
+Implementing it would add a new header type to the hot vertex-serialization path plus a block-template
+hook to attach the root — meaningful surface/regression risk for no v1 security value. Recommended as a
+follow-up when light-client header verification is prioritized.
 
 ### Confirmed storage-integration decision (resolves the "non-rebuildable index" trap)
 `IndexesManager._manually_initialize` calls `force_clear()` on every index selected for rebuild
