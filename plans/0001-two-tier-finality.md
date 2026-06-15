@@ -265,6 +265,29 @@ Quality gates: `make tests` (or `uv run pytest`), `mypy`, lint, `uv.lock` CI con
 
 ---
 
+## Implementation progress
+
+- **PR A — DONE** (`feat(finality): BLS crypto and validator signer [part 1]`): `hathor/finality/crypto.py`,
+  `py-ecc` dependency, 13 tests.
+- **PR B — DONE** (`feat(finality): committee settings and feature flag [part 2]`):
+  `hathor/finality/finality_settings.py`, `FINALITY`/`ENABLE_TWO_TIER_FINALITY` settings,
+  `Feature.TWO_TIER_FINALITY`, `Features.two_tier_finality`, peer-hello committee hash, 10 tests.
+- **PR D — IN PROGRESS**: value objects done (`feat(finality): vote and finality certificate value
+  objects [part 3]`): `hathor/finality/fc.py` (`Vote`, `FinalityCertificate`), 12 tests. Remaining:
+  FC store/index, p2p messages + handlers, committee overlay + membership proof.
+
+### Confirmed storage-integration decision (resolves the "non-rebuildable index" trap)
+`IndexesManager._manually_initialize` calls `force_clear()` on every index selected for rebuild
+*before* `still_needs_initialization` is consulted, and selection happens whenever an index's
+`index_last_started_at` differs from the storage's `last_started_at` (reindex, `--reset-indexes`,
+version bump, or crash-during-init). The validator **pin store** (authoritative anti-equivocation
+state) and the **FC store** must never be wiped. Therefore implement both as **dedicated persistent
+stores** (own RocksDB column family via `RocksDBIndexUtils`, plus a memory variant for tests),
+constructed by the indexes managers and exposed as `indexes.finality_pin` / `indexes.finality_certificate`,
+but **excluded from `iter_all_indexes()`** so they are never force-cleared. The CF is created in the
+store constructor, so exclusion from the iterator is safe. (`iter_all_indexes` callers:
+`manager.py` init/clear/init_start loops and `transaction_storage.py:922`.)
+
 ## Out of scope (explicitly deferred)
 PoS staking & economic slashing; fraud-proof generation & on-chain equivocation evidence; epoch
 governance/rotation & on-chain committee records; epoch-boundary unlock; PoW tie-break of uncertified

@@ -41,6 +41,7 @@ from hathor.util import tx_progress
 
 if TYPE_CHECKING:  # pragma: no cover
     from hathor.conf.settings import HathorSettings
+    from hathor.finality.stores import FinalityCertificateStore, FinalityPinStore
     from hathor.pubsub import PubSubManager
     from hathor.storage import RocksDBStorage
     from hathor.transaction.storage import TransactionStorage
@@ -74,6 +75,11 @@ class IndexesManager(ABC):
     nc_history: Optional[NCHistoryIndex]
     blueprints: Optional[BlueprintTimestampIndex]
     blueprint_history: Optional[BlueprintHistoryIndex]
+
+    # Authoritative finality stores. These are NOT in `iter_all_indexes()` on purpose: they are not
+    # rebuildable from the DAG and must never be force-cleared by a reindex. See hathor/finality/stores.py.
+    finality_pin: Optional['FinalityPinStore']
+    finality_certificate: Optional['FinalityCertificateStore']
 
     def __init_checks__(self):
         """ Implementations must call this at the **end** of their __init__ for running ValueError checks."""
@@ -454,6 +460,15 @@ class RocksDBIndexesManager(IndexesManager):
         self.nc_history = None
         self.blueprints = None
         self.blueprint_history = None
+
+        # Authoritative finality stores (own column families, never force-cleared). Only created when
+        # two-tier finality is enabled on this network.
+        self.finality_pin = None
+        self.finality_certificate = None
+        if settings.ENABLE_TWO_TIER_FINALITY:
+            from hathor.finality.stores import RocksDBFinalityCertificateStore, RocksDBFinalityPinStore
+            self.finality_pin = RocksDBFinalityPinStore(self._db)
+            self.finality_certificate = RocksDBFinalityCertificateStore(self._db)
 
         # XXX: this has to be at the end of __init__, after everything has been initialized
         self.__init_checks__()
