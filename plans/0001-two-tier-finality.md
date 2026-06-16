@@ -90,6 +90,9 @@ Suggested PR order: A → B → C → D → E → F → G → H. Each PR is inde
 - Add dependency **`py-ecc`** (pure-Python BLS12-381, IETF/ETH2 ciphersuite; clean `uv.lock` story —
   CI checks lockfile consistency). Wrap behind our module so the backend can swap to a native lib
   (`blspy`/`blst`) if benchmarks demand — `py_ecc` pairings are slow (perf risk for sub-second target).
+  Measured: native `blst` is ~400–1400× faster (verify ≈ 0.6 ms vs ≈ 240 ms), making crypto a
+  non-bottleneck and the `py_ecc → blst` swap the recommended production change. See
+  [`bls-benchmark.md`](bls-benchmark.md).
 - Use the **proof-of-possession** ciphersuite (`G2ProofOfPossession`) + `FastAggregateVerify` (all
   validators sign the same message → one multi-pairing check). PoP defeats rogue-key attacks.
 - Functions: `bls_keygen/sk_to_pk/pop_prove/pop_verify/sign/verify/aggregate/fast_aggregate_verify`.
