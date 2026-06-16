@@ -22,17 +22,19 @@ aggregation (``FastAggregateVerify``); this is only safe against rogue-key attac
 committee public key carries a verified proof-of-possession, which is why we use the
 ``G2ProofOfPossession`` ciphersuite and validate the PoP when a committee is loaded.
 
-The concrete BLS backend (``py_ecc``) is wrapped behind the functions below so it can be swapped for
-a native implementation (e.g. ``blspy``/``blst``) without touching the rest of the codebase.
+The concrete BLS backend is the native ``blst`` library, reached through our Rust extension
+(``htr_lib``); the functions below wrap it so the backend stays swappable without touching the rest of
+the codebase. The min-pubkey-size layout and ``G2ProofOfPossession`` ciphersuite are wire-compatible
+with the reference ``py_ecc`` implementation (identical keys, signatures and proofs-of-possession for
+the same input), so the backend can change without invalidating any existing committee or certificate.
 """
 
 from __future__ import annotations
 
 import hashlib
-from typing import NewType, Sequence, cast
+from typing import NewType, Sequence
 
-from eth_typing import BLSPubkey as _EthPubkey, BLSSignature as _EthSignature
-from py_ecc.bls import G2ProofOfPossession as _bls
+import htr_lib
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from hathor.types import VertexId
@@ -62,39 +64,33 @@ ValidatorId = NewType('ValidatorId', bytes)
 
 def bls_keygen(ikm: bytes) -> BLSPrivateKey:
     """Derive a BLS private key from input key material (>= 32 bytes of entropy)."""
-    return BLSPrivateKey(_bls.KeyGen(ikm))
+    return BLSPrivateKey(int.from_bytes(htr_lib.bls_keygen(ikm), 'big'))
 
 
 def bls_sk_to_pk(private_key: BLSPrivateKey) -> BLSPublicKey:
     """Return the compressed public key for a private key."""
-    return BLSPublicKey(_bls.SkToPk(private_key))
+    return BLSPublicKey(htr_lib.bls_sk_to_pk(private_key_to_bytes(private_key)))
 
 
 def bls_pop_prove(private_key: BLSPrivateKey) -> BLSSignature:
     """Produce a proof-of-possession for a private key (defends FastAggregateVerify against
     rogue-key attacks)."""
-    return BLSSignature(_bls.PopProve(private_key))
+    return BLSSignature(htr_lib.bls_pop_prove(private_key_to_bytes(private_key)))
 
 
 def bls_pop_verify(public_key: BLSPublicKey, pop: BLSSignature) -> bool:
     """Verify a proof-of-possession for a public key. Returns False on malformed input."""
-    try:
-        return bool(_bls.PopVerify(cast(_EthPubkey, public_key), cast(_EthSignature, pop)))
-    except (ValueError, AssertionError):
-        return False
+    return htr_lib.bls_pop_verify(bytes(public_key), bytes(pop))
 
 
 def bls_sign(private_key: BLSPrivateKey, message: bytes) -> BLSSignature:
     """Sign a message with a private key."""
-    return BLSSignature(_bls.Sign(private_key, message))
+    return BLSSignature(htr_lib.bls_sign(private_key_to_bytes(private_key), message))
 
 
 def bls_verify(public_key: BLSPublicKey, message: bytes, signature: BLSSignature) -> bool:
     """Verify a single signature. Returns False on malformed input (callers handle untrusted data)."""
-    try:
-        return bool(_bls.Verify(cast(_EthPubkey, public_key), message, cast(_EthSignature, signature)))
-    except (ValueError, AssertionError):
-        return False
+    return htr_lib.bls_verify(bytes(public_key), message, bytes(signature))
 
 
 def bls_aggregate(signatures: Sequence[BLSSignature]) -> BLSSignature:
@@ -106,7 +102,7 @@ def bls_aggregate(signatures: Sequence[BLSSignature]) -> BLSSignature:
     """
     if not signatures:
         raise ValueError('cannot aggregate an empty sequence of signatures')
-    return BLSSignature(_bls.Aggregate([cast(_EthSignature, sig) for sig in signatures]))
+    return BLSSignature(htr_lib.bls_aggregate([bytes(sig) for sig in signatures]))
 
 
 def bls_fast_aggregate_verify(
@@ -120,14 +116,11 @@ def bls_fast_aggregate_verify(
     """
     if not public_keys:
         return False
-    try:
-        return bool(_bls.FastAggregateVerify(
-            [cast(_EthPubkey, pk) for pk in public_keys],
-            message,
-            cast(_EthSignature, aggregate_signature),
-        ))
-    except (ValueError, AssertionError):
-        return False
+    return htr_lib.bls_fast_aggregate_verify(
+        [bytes(pk) for pk in public_keys],
+        message,
+        bytes(aggregate_signature),
+    )
 
 
 def private_key_to_bytes(private_key: BLSPrivateKey) -> bytes:

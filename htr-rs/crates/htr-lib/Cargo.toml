@@ -9,6 +9,7 @@ name = "htr_lib"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+blst = "0.3.16"
 pyo3 = { workspace = true }
 
 [lints]

@@ -2,6 +2,8 @@
 
 use pyo3::prelude::*;
 
+mod bls;
+
 // Prohibit compilation for non-64-bit targets to ensure consistent use of `usize`.
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("compilation is only allowed for 64-bit targets");
@@ -16,6 +18,7 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    bls::register(m)?;
     Ok(())
 }
 

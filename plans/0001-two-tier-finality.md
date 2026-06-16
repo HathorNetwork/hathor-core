@@ -87,12 +87,16 @@ Validators can **stall** (liveness) but never reverse or mint (safety): the per-
 Suggested PR order: A → B → C → D → E → F → G → H. Each PR is independently testable.
 
 ### PR A — BLS crypto + validator signer (`hathor/finality/crypto.py`)
-- Add dependency **`py-ecc`** (pure-Python BLS12-381, IETF/ETH2 ciphersuite; clean `uv.lock` story —
-  CI checks lockfile consistency). Wrap behind our module so the backend can swap to a native lib
-  (`blspy`/`blst`) if benchmarks demand — `py_ecc` pairings are slow (perf risk for sub-second target).
-  Measured: native `blst` is ~400–1400× faster (verify ≈ 0.6 ms vs ≈ 240 ms), making crypto a
-  non-bottleneck and the `py_ecc → blst` swap the recommended production change. See
-  [`bls-benchmark.md`](bls-benchmark.md).
+- BLS12-381 (IETF/ETH2 ciphersuite) is wrapped behind our module so the backend stays swappable. The
+  shipped backend is the native **`blst`** library, reached through the `htr_lib` Rust extension
+  (`htr-rs/crates/htr-lib`, `blst::min_pk`); the layout/ciphersuite is wire-compatible with the `py_ecc`
+  reference, so the backend can change without invalidating any committee or certificate. (The first cut
+  used pure-Python `py_ecc` for a clean `uv.lock` story, but its pairings are ~400–1400× slower —
+  verify ≈ 240 ms vs ≈ 0.6 ms — a perf risk for the sub-second target; it has since been removed.) The
+  primitive benchmark is `internal-rfcs/projects/finality/bls-benchmark.md`. The end-to-end consequence
+  — node-local certification was ≈ 1 s with `py_ecc` before any network hop, and the `blst` swap drops
+  that to ~3–5 ms, leaving the ~2·L network round-trip dominant and soft finality comfortably
+  sub-second — is measured in [`finality-latency-benchmark.md`](finality-latency-benchmark.md).
 - Use the **proof-of-possession** ciphersuite (`G2ProofOfPossession`) + `FastAggregateVerify` (all
   validators sign the same message → one multi-pairing check). PoP defeats rogue-key attacks.
 - Functions: `bls_keygen/sk_to_pk/pop_prove/pop_verify/sign/verify/aggregate/fast_aggregate_verify`.
@@ -223,7 +227,8 @@ Suggested PR order: A → B → C → D → E → F → G → H. Each PR is inde
 - `hathor/feature_activation/{feature.py, utils.py}` + `hathor/conf/settings.py` — flag + gating
 - `hathor/transaction/headers/{types.py, fc_root_header.py}` + `vertex_parser/_headers.py` — FC root header
 - `hathor_cli/{run_node_args.py, builder.py}` + `hathor/builder/builder.py` — wiring
-- `pyproject.toml` / `uv.lock` — `py-ecc`
+- `pyproject.toml` / `uv.lock` — BLS backend (`htr_lib`/`blst`; `py-ecc` removed)
+- `htr-rs/crates/htr-lib` — native `blst` BLS sign/verify/aggregate/PoP exposed to Python via PyO3
 
 ## Reuse (don't reinvent)
 - `PoaSigner`/`PoaSignerFile` → BLS signer; `PoaSettings`/`_calculate_peer_hello_hash` → committee
@@ -257,6 +262,9 @@ Integration (mirror `tests/simulation/` and existing PoA multi-node tests):
 - Simulated committee (n=4, f=1) + a submitter + a plain relay node: submitter forwards to one random
   validator; validators gossip to quorum; assert sub-second soft finality (sim time); the relay node
   only ever sees the tx once certified; a PoW block then settles it.
+- Latency benchmark (`hathor_tests/finality/test_finality_latency_benchmark.py`, env-gated): submission →
+  collect `2f+1` votes → mempool admission, parameterized by committee size `N` and inter-validator
+  latency `L`; see [`finality-latency-benchmark.md`](finality-latency-benchmark.md).
 - Double-spend across validator halves → no FC; tx never leaves any pending pool.
 
 Manual run: nodes started with `--finality-signer-file` on a local/testnet config with `FINALITY.enabled`
@@ -297,6 +305,11 @@ Done and committed (8 commits), all tests green, no regressions:
   `P2PFinalityTransport`, the `VertexHandler` divert gate, `--finality-signer-file`, and `FinalityService`
   construction in both `Builder` and `CliBuilder`.
 - **H** `feat(finality): release validator pins on settlement [part 8]`.
+- **Production BLS backend** — `hathor/finality/crypto.py` now calls native **`blst`** through the
+  `htr_lib` Rust extension (`htr-rs/crates/htr-lib`); `py-ecc` removed. The swap is wire-compatible
+  (identical keys/signatures/PoPs), drops node-local certification from ≈ 1 s to ~3–5 ms, and makes
+  the end-to-end "collect `2f+1` → admit" latency sub-second (network-bound, ~2·L) — measured in
+  [`finality-latency-benchmark.md`](finality-latency-benchmark.md).
 
 **Simplifications taken in v1 (documented):**
 - The "committee overlay" is the set of `CAPABILITY_FINALITY` peers; vote authenticity rests on BLS
