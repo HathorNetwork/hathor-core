@@ -326,6 +326,7 @@ class ResourcesBuilder:
             ws_factory.disable_history_streaming()
         root.putChild(b'ws', WebSocketResource(ws_factory))
 
+        mining_ws_factory: MiningWebsocketFactory | None = None
         if settings.CONSENSUS_ALGORITHM.is_pow():
             # Mining websocket resource
             mining_ws_factory = MiningWebsocketFactory(self.manager)
@@ -351,6 +352,7 @@ class ResourcesBuilder:
         # Set websocket factory in metrics. It'll be started when the manager is started.
         self.manager.websocket_factory = ws_factory
         self.manager.metrics.websocket_factory = ws_factory
+        self.manager.metrics.mining_ws_factory = mining_ws_factory
 
         self._built_status = True
         return status_server
