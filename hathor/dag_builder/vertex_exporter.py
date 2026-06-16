@@ -90,6 +90,10 @@ class VertexExporter:
         # can compute the excess scalar required by UnshieldBalanceHeader on
         # full-unshield txs. Keyed by (node_name, dsl_output_index) → 32-byte vbf.
         self._shielded_blinding_factors: dict[tuple[str, int], bytes] = {}
+        # Generator (asset) blinding per shielded output — ZERO for amount-shielded (unblinded
+        # HTR asset tag), the asset_blinding for full-shielded. Needed so a tx that SPENDS a
+        # full-shielded output (whose commitment is on a BLINDED generator) balances correctly.
+        self._shielded_asset_blinding_factors: dict[tuple[str, int], bytes] = {}
 
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
@@ -523,10 +527,31 @@ class VertexExporter:
             vertex.headers.append(fee_header)
 
     def add_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
-        """Collect outputs with [shielded] or [full-shielded] attrs into a ShieldedOutputsHeader."""
+        """Collect outputs with [shielded] or [full-shielded] attrs into a ShieldedOutputsHeader.
+
+        BALANCE RECONCILIATION (benchmark patch — see below).
+        The Pedersen balance the verifier checks is ``sum(C_in) == sum(C_out) + fee*H``
+        (``verify_shielded_balance``). A shielded output's commitment is
+        ``C = v*H + r*G``; transparent inputs/outputs/fees contribute ``v*H`` with ``r = 0``.
+        For the equation to hold the *value* sides must match (guaranteed by the filler)
+        AND the value-blinding factors must cancel: ``sum(r_in) == sum(r_out)``. The
+        upstream builder assigned every shielded output an independent ``os.urandom(32)``
+        blinding and never reconciled them, so ``sum(r_out) != 0`` and the equation could
+        not hold — every shielded-*output* tx failed verification. (No upstream test
+        caught this: none drives a shielded-output tx through ``verify_shielded_balance``.)
+
+        Fix: assign random blindings to all but the LAST shielded output, then set the
+        last output's blinding to the residual via ``compute_balancing_blinding_factor``,
+        so ``sum(r_out)`` reconciles against the inputs (== 0 for all-transparent inputs).
+        Mirrors ``hathor_tests/tx/test_shielded_audit_equation.py::_shield_in_tx`` and the
+        sibling ``add_unshield_balance_header_if_needed`` (which reads input amounts the
+        same way). Done in two passes: (1) collect specs + finalize blindings,
+        (2) build commitments/proofs with the finalized blindings.
+        """
         import os
 
         from hathor.crypto.shielded import (
+            compute_balancing_blinding_factor,
             create_asset_commitment,
             create_commitment,
             create_range_proof,
@@ -542,45 +567,94 @@ class VertexExporter:
         from hathor.transaction.headers.shielded_outputs_header import ShieldedOutputsHeader
         from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput, ShieldedOutput
 
-        shielded_outputs: list[ShieldedOutput] = []
+        ZERO = bytes(32)  # zero scalar (transparent entries carry blinding == 0)
 
+        # ---- PASS 1: collect one spec per shielded output + assign blindings -------------
+        specs: list[dict] = []
         for dsl_index, txout in enumerate(node.outputs):
             if txout is None:
                 continue
             amount, token_name, attrs = txout
-
             if not attrs.get('shielded') and not attrs.get('full-shielded'):
                 continue
 
             assert isinstance(vertex, Transaction)
-
             token_uid = self._settings.HATHOR_TOKEN_UID if token_name == 'HTR' else self._get_token_id(token_name)
-            # Normalize token UID to 32 bytes for the crypto library
             if len(token_uid) < 32:
                 token_uid = token_uid.ljust(32, b'\x00')
+
             script = self.get_next_p2pkh_script()
-            blinding = os.urandom(32)
-            # Record the value blinding factor keyed by (node_name, DSL output index)
-            # so a later unshielding tx can compute the excess scalar.
-            self._shielded_blinding_factors[(node.name, dsl_index)] = blinding
-
-            # Generate ephemeral keypair for ECDH-based recovery
             ephemeral_privkey, ephemeral_pubkey = generate_ephemeral_keypair()
-
-            # Get recipient's public key from the script (P2PKH)
-            # In the DAG builder, we own the recipient wallet, so we can get the pubkey
             recipient_pubkey = self._get_recipient_pubkey_from_script(script)
             if recipient_pubkey is not None:
-                shared_secret = derive_ecdh_shared_secret(ephemeral_privkey, recipient_pubkey)
-                nonce = derive_rewind_nonce(shared_secret)
+                nonce = derive_rewind_nonce(derive_ecdh_shared_secret(ephemeral_privkey, recipient_pubkey))
             else:
                 nonce = None
                 ephemeral_pubkey = b''  # No ECDH possible without recipient pubkey
 
-            if attrs.get('full-shielded'):
+            is_full = bool(attrs.get('full-shielded'))
+            specs.append({
+                'dsl_index': dsl_index,
+                'amount': amount,
+                'token_name': token_name,
+                'token_uid': token_uid,
+                'script': script,
+                'ephemeral_pubkey': ephemeral_pubkey,
+                'nonce': nonce,
+                'is_full': is_full,
+                'blinding': os.urandom(32),                       # value blinding (last is reconciled below)
+                'asset_blinding': os.urandom(32) if is_full else ZERO,  # generator blinding (full-shielded only)
+            })
+
+        if not specs:
+            return
+
+        # ---- reconcile the LAST output's value blinding so sum(C_in)==sum(C_out)+fee*H ----
+        # Inputs as the verifier folds them: spent transparent outputs -> (value, 0, 0);
+        # spent shielded outputs -> (value, recorded_vbf, 0). (Benchmark shield txs spend
+        # transparent UTXOs, so blindings are 0; shielded inputs are handled for generality.)
+        input_entries: list[tuple[int, bytes, bytes]] = []
+        for tx_name, out_idx in node.inputs:
+            spent_output = self._get_node(tx_name).outputs[out_idx]
+            assert spent_output is not None
+            in_bf = self._shielded_blinding_factors.get((tx_name, out_idx), ZERO)
+            in_gbf = self._shielded_asset_blinding_factors.get((tx_name, out_idx), ZERO)
+            input_entries.append((spent_output.amount, in_bf, in_gbf))
+
+        # Other outputs (everything except the last shielded output): transparent outputs
+        # already on the vertex, all fees, and the first n-1 shielded outputs.
+        other_entries: list[tuple[int, bytes, bytes]] = [(o.value, ZERO, ZERO) for o in vertex.outputs]
+        total_fee = 0
+        for header in vertex.headers:                              # explicit FeeHeader(s) already added
+            for fee_entry in getattr(header, 'fees', []):
+                if fee_entry.token_index == 0:                     # HTR
+                    total_fee += fee_entry.amount
+        for s in specs:                                            # the shielded fee added later by
+            total_fee += (self._settings.FEE_PER_FULL_SHIELDED_OUTPUT if s['is_full']    # _add_or_augment_shielded_fee
+                          else self._settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT)
+        if total_fee:
+            other_entries.append((total_fee, ZERO, ZERO))
+        for s in specs[:-1]:
+            other_entries.append((s['amount'], s['blinding'], s['asset_blinding']))
+
+        last = specs[-1]
+        last['blinding'] = compute_balancing_blinding_factor(
+            last['amount'], last['asset_blinding'], input_entries, other_entries,
+        )
+        for s in specs:   # record final value + asset blindings so later txs spending these reconcile
+            self._shielded_blinding_factors[(node.name, s['dsl_index'])] = s['blinding']
+            self._shielded_asset_blinding_factors[(node.name, s['dsl_index'])] = s['asset_blinding']
+
+        # ---- PASS 2: build commitments/proofs with the finalized blindings ----------------
+        shielded_outputs: list[ShieldedOutput] = []
+        for s in specs:
+            amount, blinding, token_uid = s['amount'], s['blinding'], s['token_uid']
+            script, nonce, ephemeral_pubkey = s['script'], s['nonce'], s['ephemeral_pubkey']
+
+            if s['is_full']:
                 # FullShieldedOutput: both amount and token hidden
                 raw_tag = derive_tag(token_uid)
-                asset_blinding = os.urandom(32)
+                asset_blinding = s['asset_blinding']
                 asset_comm = create_asset_commitment(raw_tag, asset_blinding)
                 commitment = create_commitment(amount, blinding, asset_comm)
 
@@ -591,13 +665,9 @@ class VertexExporter:
                     message=message, nonce=nonce,
                 )
 
-                # Build domain for surjection proof from inputs
-                domain: list[tuple[bytes, bytes, bytes]] = []
-                # For DAG builder, create a trivial surjection (input is same token, zero blinding)
-                input_asset_blinding = bytes(32)  # zero blinding = unblinded
+                # Build domain for surjection proof (trivial: input is same token, zero blinding)
                 input_gen = derive_asset_tag(token_uid)
-                domain.append((input_gen, raw_tag, input_asset_blinding))
-
+                domain: list[tuple[bytes, bytes, bytes]] = [(input_gen, raw_tag, bytes(32))]
                 surjection_proof = create_surjection_proof(raw_tag, asset_blinding, domain)
 
                 output: ShieldedOutput = FullShieldedOutput(
@@ -612,16 +682,13 @@ class VertexExporter:
                 # AmountShieldedOutput: amount hidden, token visible
                 asset_tag = derive_asset_tag(token_uid)
                 commitment = create_commitment(amount, blinding, asset_tag)
-                range_proof = create_range_proof(
-                    amount, blinding, commitment, asset_tag,
-                    nonce=nonce,
-                )
+                range_proof = create_range_proof(amount, blinding, commitment, asset_tag, nonce=nonce)
 
                 # Resolve token_data index
-                if token_name == 'HTR':
+                if s['token_name'] == 'HTR':
                     token_data = 0
                 else:
-                    token_id = self._get_token_id(token_name)
+                    token_id = self._get_token_id(s['token_name'])
                     if token_id in vertex.tokens:
                         token_data = 1 + vertex.tokens.index(token_id)
                     else:
@@ -637,9 +704,6 @@ class VertexExporter:
                 )
 
             shielded_outputs.append(output)
-
-        if not shielded_outputs:
-            return
 
         assert isinstance(vertex, Transaction)
         header = ShieldedOutputsHeader(tx=vertex, shielded_outputs=shielded_outputs)

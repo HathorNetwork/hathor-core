@@ -96,6 +96,16 @@ class GenericDeserializerAdapter(Deserializer, Generic[D]):
     def read_all(self) -> Buffer:
         return self.inner.read_all()
 
+    @override
+    def replace_remaining(self, data: Buffer) -> None:
+        # BENCHMARK BRANCH FIX (upstream gap): the adapter forwarded every other read method
+        # but not replace_remaining, so deserializing a vertex that carries a shielded/unshield/
+        # mint/melt header through create_from_struct -> make_vertex_deserializer().with_max_bytes()
+        # raised "this deserializer does not support replace_remaining". Forward it to the inner
+        # deserializer (BytesDeserializer supports it). Without this, shielded txs cannot be parsed
+        # from bytes (p2p/storage/our S1 re-parse) at all.
+        self.inner.replace_remaining(data)
+
     # allow using this adapter as a context manager:
 
     def __enter__(self) -> Self:

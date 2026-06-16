@@ -14,16 +14,50 @@
 
 from __future__ import annotations
 
+import os
 import struct
 from dataclasses import dataclass
 from enum import IntEnum
 
+
+def _env_capped_int(name: str, default: int, *, hard_max: int) -> int:
+    """Benchmark-branch override for a shielded-policy cap (resolved at import time).
+
+    Set the env var ``name`` to an integer to raise/lower the cap, or to
+    ``max`` / ``lift`` / ``unlimited`` to go straight to ``hard_max``. The result is
+    clamped to ``[1, hard_max]``. Unset -> ``default``. (Set the env var BEFORE
+    importing hathorlib/hathor, e.g. in the benchmark harness, since this is
+    evaluated once at module import.)
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    if raw.strip().lower() in ('max', 'lift', 'unlimited'):
+        return hard_max
+    return min(hard_max, max(1, int(raw)))
+
+
 COMMITMENT_SIZE = 33
 ASSET_COMMITMENT_SIZE = 33
 EPHEMERAL_PUBKEY_SIZE = 33        # Compressed secp256k1 public key
-MAX_RANGE_PROOF_SIZE = 3328       # Borromean @ 40-bit: 3213 B + headroom
+
+# MAX_RANGE_PROOF_SIZE must exceed the serialized range-proof size for the configured
+# RANGE_PROOF_BITS (Borromean grows with the bit-width: ~3213 B @40-bit, ~5070 B @64-bit).
+# BENCHMARK BRANCH: raised from 3328 to fit the new 64-bit range-proof default (~5070 B)
+# with headroom. Toggle via HATHOR_MAX_RANGE_PROOF_SIZE (rp_len is a 2-byte field => ceiling 65535).
+MAX_RANGE_PROOF_SIZE = _env_capped_int('HATHOR_MAX_RANGE_PROOF_SIZE', 8192, hard_max=65535)
+
 MAX_SURJECTION_PROOF_SIZE = 4096  # Surjection proofs grow with input count
-MAX_SHIELDED_OUTPUTS = 32         # Maximum number of shielded outputs per transaction
+
+# MAX_SHIELDED_OUTPUTS — policy cap on shielded outputs per transaction.
+# BENCHMARK BRANCH: default 32 (upstream), but OVERRIDABLE via HATHOR_MAX_SHIELDED_OUTPUTS:
+# set an integer for a custom cap, or 'max'/'lift' to go to the hard ceiling 255 (the
+# header's num_outputs is a single byte, so 255 is the absolute maximum).
+# NOTE: there is NO separate shielded-INPUT cap — shielded inputs are ordinary TxInputs,
+# bounded only by the normal input-count byte (also 255). So "max shielded inputs" == the
+# standard per-tx input limit; this override governs OUTPUTS.
+MAX_SHIELDED_OUTPUTS = _env_capped_int('HATHOR_MAX_SHIELDED_OUTPUTS', 32, hard_max=255)
+
 MAX_SHIELDED_OUTPUT_SCRIPT_SIZE = 1024  # Match settings.MAX_OUTPUT_SCRIPT_SIZE
 
 

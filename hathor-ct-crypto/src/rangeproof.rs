@@ -1,18 +1,38 @@
+use std::env;
 use std::ops::Range;
 
 use secp256k1_zkp::{Generator, PedersenCommitment, RangeProof, SecretKey, Tweak, SECP256K1};
 
 use crate::error::{HathorCtError, Result};
 
-/// Fixed number of bits proven by every range proof.
+/// Default number of bits proven by every range proof.
 ///
-/// Using a constant ensures all proofs are the same size regardless of the
+/// Using a fixed width ensures all proofs are the same size regardless of the
 /// committed value, preventing proof-size side-channels.
 ///
-/// 40 bits covers values up to 2^40 − 1 = 1,099,511,627,775 (≈1 trillion).
-/// HTR has 2 decimal places so this is ~10 trillion cents, well above the
-/// maximum token supply.  Borromean proofs at 40 bits are ~3213 bytes.
-pub const RANGE_PROOF_BITS: usize = 40;
+/// BENCHMARK BRANCH: the default is **64** (was 40 upstream). 40 bits covers
+/// values up to 2^40 − 1 (≈1 trillion); 64 bits is the FULL range of a u64 amount
+/// and the largest the proof system supports. (We initially tried 82 per request,
+/// but the committed `amount` is a u64 and secp256k1-zkp's Borromean range proof
+/// caps min_bits at 64 — 82/96 fail at creation with "failed to generate range
+/// proof". 40→3213 B, 64→5070 B; >64 is impossible without a wider amount type.)
+///
+/// TOGGLEABLE at runtime via the `HATHOR_RANGE_PROOF_BITS` env var (read at proof
+/// creation time, so it can be changed per build without recompiling). Valid range
+/// is 1..=64. Verify does not need the bit-width — a Borromean proof is
+/// self-describing — so only creation reads this; mixing widths across txs is fine.
+pub const RANGE_PROOF_BITS: usize = 64;
+
+/// Resolve the range-proof bit-width: the `HATHOR_RANGE_PROOF_BITS` env override if
+/// set and parseable, otherwise the `RANGE_PROOF_BITS` default. Read on every
+/// creation (cheap; creation happens in untimed benchmark setup), so a benchmark can
+/// sweep widths within a single process by changing the env between batches.
+fn configured_range_proof_bits() -> u8 {
+    match env::var("HATHOR_RANGE_PROOF_BITS") {
+        Ok(v) => v.trim().parse::<u8>().unwrap_or(RANGE_PROOF_BITS as u8),
+        Err(_) => RANGE_PROOF_BITS as u8,
+    }
+}
 
 /// Create a Borromean range proof proving that the committed amount is in [1, 2^RANGE_PROOF_BITS).
 ///
@@ -49,7 +69,7 @@ pub fn create_range_proof(
         &[],                    // additional_commitment
         sk,                     // sk (nonce key)
         0,                      // exp
-        RANGE_PROOF_BITS as u8, // min_bits: fixed to prevent size side-channel
+        configured_range_proof_bits(), // min_bits: default RANGE_PROOF_BITS (64), env-toggleable
         *generator,             // additional_generator
     )
     .map_err(|e| HathorCtError::RangeProofError(e.to_string()))?;

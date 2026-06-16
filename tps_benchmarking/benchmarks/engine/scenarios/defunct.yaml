@@ -1,0 +1,31 @@
+# Defunct scenario — the genesis-parented `defunct` workload, where every tx is a tip
+# (tips = N) so consensus is O(N) per tx => O(N^2) for the batch. Kept ONLY to demonstrate
+# that pathology against the realistic `1-tip-transparent` baseline (scenarios/basic.yaml);
+# not for real measurement. Use a small num_txs — this blows up quadratically.
+name: defunct-demo
+
+benchmarks:
+  - stage-latency
+
+results_root: tps_benchmarking/benchmarks/engine/results   # run from the hathor-core repo root
+
+workload:
+  tx_type: defunct
+  num_txs: 200
+  num_inputs: 1      # I
+  num_outputs: 2     # O
+
+env:
+  network: unittests
+  storage: rocksdb_temp
+  seed: 1234
+  trivial_pow: true
+
+measure:
+  sampler_interval_s: 0.1
+  tdp_watts: 65.0
+  cpu_util: 1.0
+  deep_tracemalloc_sample: 0
+
+reporting:
+  formats: [csv, plots, markdown]
