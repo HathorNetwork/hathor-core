@@ -26,9 +26,12 @@ runs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock') }}
-        restore-keys: |
-          venv-${{ runner.os }}-py${{ inputs.python }}-
+        # htr-lib is an editable (develop) maturin dependency: its compiled extension is built
+        # into the venv on first install, and `poetry sync` will not rebuild it when its version
+        # is unchanged. So the cache key must also cover the htr-rs Rust sources, and we must NOT
+        # provide a restore-keys prefix fallback — a partial-match restore would bring back a venv
+        # holding a stale htr_lib .so built from older sources (e.g. missing newly added classes).
+        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock', 'htr-rs/Cargo.lock', 'htr-rs/**/Cargo.toml', 'htr-rs/**/*.rs', 'htr-rs/crates/htr-lib-py/pyproject.toml') }}
 
     - name: Install Ubuntu dependencies
       if: startsWith(inputs.os, 'ubuntu')

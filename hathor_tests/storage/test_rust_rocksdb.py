@@ -21,13 +21,14 @@ seeks — plus the cross-open compatibility smoke for the librocksdb version gap
 by the Rust layer.
 """
 
-import random
 from pathlib import Path
 from typing import Any
 
 import htr_lib
 import pytest
 import rocksdb
+
+from hathor.util import Random
 
 CF_NAMES = ['default', 'tx', 'meta']
 
@@ -59,7 +60,7 @@ def py_cf(db: rocksdb.DB, name: str) -> object:
 def make_op_stream(seed: int, count: int) -> list[tuple]:
     """A reproducible mixed stream of put/delete/batch ops over a small key space (small
     keyspace so deletes and overwrites actually collide)."""
-    rng = random.Random(seed)
+    rng = Random(seed)
     ops: list[tuple] = []
     for _ in range(count):
         cf = rng.choice(CF_NAMES)
