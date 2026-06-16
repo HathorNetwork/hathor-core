@@ -1,0 +1,104 @@
+# Copyright 2026 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import hashlib
+from unittest.mock import Mock
+
+from hathor.finality.crypto import FinalityValidatorSigner, bls_keygen, bls_pop_prove
+from hathor.finality.finality_settings import FinalitySettings, FinalityValidatorSettings
+from hathor.finality.pending_pool import PendingFinalityPool
+from hathor.finality.service import FinalityService
+from hathor.finality.stores import MemoryFinalityCertificateStore, MemoryFinalityPinStore
+from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
+from hathor.types import VertexId
+from hathor_tests import unittest
+from hathor_tests.utils import add_blocks_unlock_reward
+from hathorlib.conf.settings import FeatureSetting
+
+
+class NodeIntegrationTestCase(unittest.TestCase):
+    def _finality_manager(self, enabled: bool):
+        settings = self._settings.model_copy(
+            update={'ENABLE_TWO_TIER_FINALITY': FeatureSetting.ENABLED if enabled else FeatureSetting.DISABLED}
+        )
+        return self.create_peer('testnet', settings=settings)
+
+    def test_service_not_built_when_disabled(self) -> None:
+        manager = self._finality_manager(enabled=False)
+        assert manager.finality_service is None
+        assert manager.tx_storage.indexes.finality_certificate is None
+        # The finality capability must not be advertised.
+        assert self._settings.CAPABILITY_FINALITY not in manager.get_default_capabilities()
+
+    def test_service_built_when_enabled(self) -> None:
+        manager = self._finality_manager(enabled=True)
+        assert manager.finality_service is not None
+        # This node has no signer, so it is not a validator.
+        assert manager.finality_service.is_validator is False
+        assert self._settings.CAPABILITY_FINALITY in manager.get_default_capabilities()
+
+    def test_uncertified_finality_tx_is_diverted_from_mempool(self) -> None:
+        manager = self._finality_manager(enabled=True)
+        add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
+        address = manager.wallet.get_unused_address(mark_as_used=True)
+        tx = gen_new_tx(manager, address, 100)
+
+        # The node has no validator peers, so the submission cannot be forwarded anywhere: the
+        # transaction must be kept out of the mempool (it is not certified) rather than admitted.
+        result = manager.vertex_handler.on_new_relayed_vertex(tx)
+        assert result is False
+        assert not manager.tx_storage.transaction_exists(tx.hash)
+
+    def test_settlement_releases_validator_pins(self) -> None:
+        manager = self._finality_manager(enabled=True)
+        # Disable the gate so we can place a normal transaction in the DAG and settle it with a block.
+        manager.vertex_handler.set_finality_service(None)
+        add_new_blocks(manager, 3, advance_clock=15)
+        add_blocks_unlock_reward(manager)
+        address = manager.wallet.get_unused_address(mark_as_used=True)
+        tx = gen_new_tx(manager, address, 100)
+        manager.on_new_tx(tx)
+        block = add_new_block(manager, advance_clock=15)
+        assert tx.get_metadata().first_block == block.hash  # the transaction is now settled
+
+        # A validator that had pinned this transaction's inputs releases those pins on settlement.
+        sk = bls_keygen(hashlib.sha256(b'settle-validator').digest())
+        signer = FinalityValidatorSigner(sk)
+        finality_settings = FinalitySettings(
+            enabled=True,
+            validators=(FinalityValidatorSettings(
+                public_key=bytes(signer.public_key).hex(),
+                pop=bytes(bls_pop_prove(sk)).hex(),
+            ),),
+        )
+        pin_store = MemoryFinalityPinStore()
+        service = FinalityService(
+            finality_settings=finality_settings,
+            pending_pool=PendingFinalityPool(),
+            certificate_store=MemoryFinalityCertificateStore(),
+            transport=Mock(),
+            admit_certified_tx=lambda _tx: True,
+            is_feature_active=lambda: True,
+            signer=signer,
+            pin_store=pin_store,
+        )
+        for txin in tx.inputs:
+            pin_store.try_pin(VertexId(txin.tx_id), txin.index, VertexId(tx.hash))
+            assert pin_store.get_pin(VertexId(txin.tx_id), txin.index) == bytes(tx.hash)
+
+        service.on_settlement(tx)
+
+        for txin in tx.inputs:
+            assert pin_store.get_pin(VertexId(txin.tx_id), txin.index) is None

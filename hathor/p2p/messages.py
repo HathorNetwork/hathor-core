@@ -128,3 +128,9 @@ class ProtocolMessages(Enum):
     BLOCK_NC_ROOT_ID = 'BLOCK-NC-ROOT-ID'
     GET_NC_DB_NODE = 'GET-NC-DB-NODE'
     NC_DB_NODE = 'NC-DB-NODE'
+
+    # Two-tier finality commands
+
+    SUBMIT_FINALITY_TX = 'SUBMIT-FINALITY-TX'  # Send a pending transaction to a validator
+    FINALITY_VOTE = 'FINALITY-VOTE'  # A validator's vote, gossiped among the committee
+    FINALITY_CERTIFICATE = 'FINALITY-CERTIFICATE'  # A certified transaction with its certificate

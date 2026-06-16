@@ -58,6 +58,8 @@ from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet, Wallet
 
 if TYPE_CHECKING:
+    from hathor.finality.crypto import FinalityValidatorSigner
+    from hathor.finality.service import FinalityService
     from hathor.nanocontracts.execution import NCBlockExecutor
 
 logger = get_logger()
@@ -193,6 +195,9 @@ class Builder:
         self._poa_signer: PoaSigner | None = None
         self._poa_block_producer: PoaBlockProducer | None = None
 
+        self._finality_signer: 'FinalityValidatorSigner | None' = None
+        self._finality_service: 'FinalityService | None' = None
+
         self._enable_ipv6: bool = False
         self._disable_ipv4: bool = False
 
@@ -251,6 +256,8 @@ class Builder:
         if self._enable_nc_indexes:
             indexes.enable_nc_indexes()
 
+        finality_service = self._get_or_create_finality_service()
+
         kwargs: dict[str, Any] = {}
 
         if self._enable_event_queue is not None:
@@ -278,6 +285,7 @@ class Builder:
             vertex_handler=vertex_handler,
             vertex_parser=vertex_parser,
             poa_block_producer=poa_block_producer,
+            finality_service=finality_service,
             runner_factory=runner_factory,
             feature_service=feature_service,
             vertex_json_serializer=vertex_json_serializer,
@@ -695,6 +703,57 @@ class Builder:
             )
 
         return self._poa_block_producer
+
+    def _get_or_create_finality_service(self) -> 'FinalityService | None':
+        settings = self._get_or_create_settings()
+        if not settings.ENABLE_TWO_TIER_FINALITY:
+            return None
+
+        if self._finality_service is None:
+            from hathor.feature_activation.utils import Features
+            from hathor.finality.pending_pool import PendingFinalityPool
+            from hathor.finality.service import FinalityService
+            from hathor.finality.transport import P2PFinalityTransport
+
+            indexes = self._get_or_create_indexes_manager()
+            assert indexes.finality_certificate is not None
+            tx_storage = self._get_or_create_tx_storage()
+            feature_service = self._get_or_create_feature_service()
+            vertex_handler = self._get_or_create_vertex_handler()
+
+            def is_feature_active() -> bool:
+                best_block = tx_storage.get_best_block()
+                features = Features.from_vertex(
+                    settings=settings, feature_service=feature_service, vertex=best_block
+                )
+                return features.two_tier_finality
+
+            pin_store = indexes.finality_pin if self._finality_signer is not None else None
+            self._finality_service = FinalityService(
+                finality_settings=settings.FINALITY,
+                pending_pool=PendingFinalityPool(),
+                certificate_store=indexes.finality_certificate,
+                transport=P2PFinalityTransport(
+                    connections=self._get_or_create_p2p_manager(),
+                    settings=settings,
+                ),
+                admit_certified_tx=vertex_handler.on_new_relayed_vertex,
+                is_feature_active=is_feature_active,
+                signer=self._finality_signer,
+                pin_store=pin_store,
+            )
+            vertex_handler.set_finality_service(self._finality_service)
+            from hathor.pubsub import HathorEvents
+            self._get_or_create_pubsub().subscribe(
+                HathorEvents.CONSENSUS_TX_UPDATE, self._finality_service.handle_consensus_event
+            )
+
+        return self._finality_service
+
+    def set_finality_signer(self, signer: 'FinalityValidatorSigner') -> 'Builder':
+        self.check_if_can_modify()
+        self._finality_signer = signer
+        return self
 
     def _get_or_create_vertex_json_serializer(self) -> VertexJsonSerializer:
         if self._vertex_json_serializer is None:

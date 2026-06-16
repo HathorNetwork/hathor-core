@@ -351,13 +351,54 @@ class BlockConsensusAlgorithm:
         self.update_score_and_mark_as_the_best_chain(block)
         self.remove_voided_by_from_chain(block)
 
-        if self.update_voided_by_from_parents(block):
+        must_void = self.update_voided_by_from_parents(block)
+
+        # Two-tier finality ratification rule: a block may not confirm a transaction that conflicts
+        # with an already-certified one. If it does, the block is invalid and must be voided, so PoW
+        # can never silently reverse a soft-final (certified) payment.
+        if not must_void and self._fc_enabled_for(block) and self._confirms_certified_conflict(block):
+            self.log.warn('block voided: it ratifies a transaction conflicting with a certified one',
+                          block=block.hash_hex)
+            must_void = True
+
+        if must_void:
             storage = block.storage
             head = storage.get_best_block()
             first_block = self._find_first_parent_in_best_chain(head)
             self.add_voided_by_to_multiple_chains([block], first_block)
             if head.hash != block.hash:
                 self.update_score_and_mark_as_the_best_chain_if_possible(head)
+
+    def _fc_enabled_for(self, block: Block) -> bool:
+        """Return whether the two-tier finality rules are active for this block (gated on its parent)."""
+        if block.is_genesis:
+            return False
+        parent = block.get_block_parent()
+        features = Features.from_vertex(settings=self._settings, feature_service=self.feature_service, vertex=parent)
+        return features.two_tier_finality
+
+    def _confirms_certified_conflict(self, block: Block) -> bool:
+        """Return whether ``block`` confirms a transaction that conflicts with an already-certified one.
+
+        For each transaction this block confirms, and each of its inputs, we look at the other
+        transactions that spend the same output (its conflicting siblings). If any such sibling holds a
+        Finality Certificate, the block is confirming a transaction that conflicts with a certified one.
+        """
+        assert block.storage is not None
+        storage = block.storage
+        fc_index = storage.indexes.finality_certificate if storage.indexes is not None else None
+        if fc_index is None:
+            return False
+        for tx in block.iter_transactions_in_this_block():
+            for txin in tx.inputs:
+                spent_tx = storage.get_transaction(txin.tx_id)
+                spent_meta = spent_tx.get_metadata()
+                for sibling_hash in spent_meta.spent_outputs.get(txin.index, []):
+                    if sibling_hash == tx.hash:
+                        continue
+                    if fc_index.has_certificate(sibling_hash):
+                        return True
+        return False
 
     def update_score_and_mark_as_the_best_chain(self, block: Block) -> None:
         """ Update score and mark the chain as the best chain.

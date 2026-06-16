@@ -71,6 +71,7 @@ from hathor.wallet import BaseWallet
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
 
 if TYPE_CHECKING:
+    from hathor.finality.service import FinalityService
     from hathor.websocket.factory import HathorAdminWebsocketFactory
 
 logger = get_logger()
@@ -126,6 +127,7 @@ class HathorManager:
         environment_info: Optional[EnvironmentInfo] = None,
         enable_event_queue: bool = False,
         poa_block_producer: PoaBlockProducer | None = None,
+        finality_service: Optional['FinalityService'] = None,
         # Websocket factory
         websocket_factory: Optional['HathorAdminWebsocketFactory'] = None
     ) -> None:
@@ -246,6 +248,7 @@ class HathorManager:
         self.environment_info = environment_info
 
         self.poa_block_producer = poa_block_producer
+        self.finality_service = finality_service
 
         # Task that will count the total sync time
         self.lc_check_sync_state = LoopingCall(self.check_sync_state)
@@ -275,6 +278,9 @@ class HathorManager:
         # only include nano-state if ENABLE_NANO_CONTRACTS is true (enabled/feature_activation)
         if self._settings.ENABLE_NANO_CONTRACTS:
             default_capabilities.append(self._settings.CAPABILITY_NANO_STATE)
+        # only advertise finality support if two-tier finality is enabled on this network
+        if self._settings.ENABLE_TWO_TIER_FINALITY:
+            default_capabilities.append(self._settings.CAPABILITY_FINALITY)
         return default_capabilities
 
     def start(self) -> None:
