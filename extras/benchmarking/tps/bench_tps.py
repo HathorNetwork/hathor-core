@@ -50,6 +50,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import sys
 from pathlib import Path
 
@@ -436,6 +437,37 @@ def to_bmf(stats: dict[int, dict[str, float]]) -> dict[str, Any]:
     return bmf
 
 
+def describe_environment() -> str:
+    """A best-effort one-line hardware/runtime fingerprint, recorded for diagnostics.
+
+    Absolute TPS depends on the machine, so the comparison is only valid across runs on the
+    same hardware. Logging this next to the numbers lets a baseline shift be attributed to an
+    environment change (e.g. a CI runner gaining or losing cores) rather than to code.
+
+    `cpus` is the number of cores available to this process (honours cgroup/affinity limits on
+    Linux) — the relevant figure, not the host's physical core count."""
+    # sched_getaffinity (Linux-only) reports cores available to *this* process, honouring
+    # cgroup/affinity limits; fall back to the host count elsewhere.
+    sched_getaffinity = getattr(os, 'sched_getaffinity', None)
+    cpus = len(sched_getaffinity(0)) if sched_getaffinity else (os.cpu_count() or 0)
+    cpu_model = platform.processor() or 'unknown'
+    mem = 'unknown'
+    try:
+        with open('/proc/cpuinfo') as fp:
+            for line in fp:
+                if line.startswith('model name'):
+                    cpu_model = line.split(':', 1)[1].strip()
+                    break
+        with open('/proc/meminfo') as fp:
+            for line in fp:
+                if line.startswith('MemTotal'):
+                    mem = f'{int(line.split()[1]) / (1024 * 1024):.1f} GiB'
+                    break
+    except OSError:
+        pass
+    return f"env: cpus={cpus}, cpu='{cpu_model}', mem={mem}, python={platform.python_version()}"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -469,6 +501,7 @@ def main() -> None:
             baseline[n] = body['throughput']['value']
 
     print()
+    print(describe_environment())
     print(render_table(stats, total_txs=total_txs, num_blocks=args.blocks, runs=args.runs, baseline=baseline))
     print()
 
