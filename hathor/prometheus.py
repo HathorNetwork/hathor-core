@@ -38,6 +38,7 @@ METRIC_INFO = {
     'best_block_height': 'Height of best chain',
     'websocket_connections': 'Number of connections in the websocket',
     'subscribed_addresses': 'Number of subscribed addresses in the websocket',
+    'mining_ws_connections': 'Number of subscribed addresses in the mining websocket',
     'completed_jobs': 'Number of completed jobs in stratum',
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',
