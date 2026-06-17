@@ -199,26 +199,26 @@ endif
 	@echo "Generating all nginx config variants into dist/$(VERSION)/..."
 	# standalone-fullnodes
 	$(call generate_config,$(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx.conf)
-	$(call generate_config,--disable-rate-limits True $(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx_no_rate_limit.conf)
+	$(call generate_config,--disable-rate-limits $(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(STANDALONE_FULLNODES_TRUSTED_PROXIES),standalone-fullnodes/nginx_api_proxy.conf)
 	# hathor-testnet
 	$(call generate_config,$(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx.conf)
-	$(call generate_config,--disable-rate-limits True $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_no_rate_limit.conf)
+	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_api_proxy.conf)
 	$(call generate_config,--override hathor-testnet-india $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india.conf)
-	$(call generate_config,--override hathor-testnet-india --disable-rate-limits True $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_no_rate_limit.conf)
+	$(call generate_config,--override hathor-testnet-india --disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_no_rate_limit.conf)
 	$(call generate_config,--override hathor-testnet-india --enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_api_proxy.conf)
 	# ekvilibro
 	$(call generate_config,$(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx.conf)
-	$(call generate_config,--disable-rate-limits True $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_no_rate_limit.conf)
+	$(call generate_config,--disable-rate-limits $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_api_proxy.conf)
 	# hathor-testnet-playground
 	$(call generate_config,--override hathor-testnet-playground $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx.conf)
-	$(call generate_config,--override hathor-testnet-playground --disable-rate-limits True $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
+	$(call generate_config,--override hathor-testnet-playground --disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
 	$(call generate_config,--override hathor-testnet-playground --enable-api-proxy $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_api_proxy.conf)
 	# aws-main
 	$(call generate_config,,aws-main/nginx.conf)
-	$(call generate_config,--disable-rate-limits True,aws-main/nginx_no_rate_limit.conf)
+	$(call generate_config,--disable-rate-limits,aws-main/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy,aws-main/nginx_api_proxy.conf)
 	@echo "Generated all configs in dist/$(VERSION)/"
 
