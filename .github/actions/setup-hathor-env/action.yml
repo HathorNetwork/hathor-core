@@ -6,6 +6,9 @@ inputs:
     description: The python version
   os:
     description: The OS name
+  htr_lib_release:
+    description: Build the htr-lib extension in release mode (use for benchmarks; debug elsewhere)
+    default: 'false'
 runs:
   using: composite
   steps:
@@ -35,9 +38,9 @@ runs:
       uses: actions/cache@v4
       with:
         path: htr-rs/target
-        key: htr-rs-target-${{ runner.os }}-${{ hashFiles('htr-rs/Cargo.lock', 'htr-rs/crates/**/*.rs', 'htr-rs/**/Cargo.toml') }}
+        key: htr-rs-target-${{ runner.os }}-rel${{ inputs.htr_lib_release }}-${{ hashFiles('htr-rs/Cargo.lock', 'htr-rs/crates/**/*.rs', 'htr-rs/**/Cargo.toml') }}
         restore-keys: |
-          htr-rs-target-${{ runner.os }}-
+          htr-rs-target-${{ runner.os }}-rel${{ inputs.htr_lib_release }}-
 
     - name: Install Ubuntu dependencies
       if: startsWith(inputs.os, 'ubuntu')
@@ -64,8 +67,10 @@ runs:
     # a stale htr_lib in the venv (e.g. missing newly added classes). Force a fresh in-venv build
     # from the current htr-rs sources; cargo reuses the cached target dir so unchanged sources relink
     # quickly. Keep this consistent with the documented `maturin develop` workflow in CLAUDE.md.
+    # Benchmarks must use --release: a debug build compiles the bundled RocksDB at -O0, which is not
+    # representative and trips the performance gate.
     - name: Build htr-lib extension from source
       run: |
         poetry run pip install 'maturin>=1.13,<2.0'
-        poetry run maturin develop --manifest-path htr-rs/crates/htr-lib-py/Cargo.toml
+        poetry run maturin develop ${{ inputs.htr_lib_release == 'true' && '--release' || '' }} --manifest-path htr-rs/crates/htr-lib-py/Cargo.toml
       shell: bash
