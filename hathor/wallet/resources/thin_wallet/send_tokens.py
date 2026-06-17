@@ -15,6 +15,7 @@
 import struct
 from dataclasses import dataclass
 from functools import partial
+from json import JSONDecodeError
 from typing import Any, Optional
 
 from structlog import get_logger
@@ -85,7 +86,7 @@ class SendTokensResource(Resource):
         assert request.content is not None
         raw_data = request.content.read()
 
-        if raw_data is None:
+        if not raw_data:
             return self.return_POST(
                 False,
                 'Missing POST data JSON',
@@ -94,6 +95,12 @@ class SendTokensResource(Resource):
 
         try:
             post_data = json_loadb(raw_data)
+        except JSONDecodeError:
+            return self.return_POST(
+                False,
+                'Invalid JSON in POST data',
+                return_code='invalid_json'
+            )
         except AttributeError:
             return self.return_POST(
                 False,
