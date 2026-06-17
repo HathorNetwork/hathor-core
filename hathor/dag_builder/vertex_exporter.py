@@ -645,6 +645,28 @@ class VertexExporter:
             self._shielded_blinding_factors[(node.name, s['dsl_index'])] = s['blinding']
             self._shielded_asset_blinding_factors[(node.name, s['dsl_index'])] = s['asset_blinding']
 
+        # ---- surjection domain (bug #3 fix): one (generator, raw_tag, asset_blinding) entry per
+        # input, MIRRORING verify_surjection_proofs so a FullShieldedOutput verifies for ANY input
+        # set — not just a single transparent input. Verifier domain generator per input:
+        # transparent / amount-shielded -> derive_asset_tag(uid) (unblinded); full-shielded -> the
+        # spent output's asset_commitment (blinded). Same order as tx.inputs (built from node.inputs);
+        # computed once (shared by all full-shielded outputs of this tx).
+        surj_domain: list[tuple[bytes, bytes, bytes]] = []
+        if any(s['is_full'] for s in specs):
+            for tx_name, out_idx in node.inputs:
+                spent = self._get_node(tx_name).outputs[out_idx]
+                in_uid = self._settings.HATHOR_TOKEN_UID if spent.token == 'HTR' else self._get_token_id(spent.token)
+                if len(in_uid) < 32:
+                    in_uid = in_uid.ljust(32, b'\x00')
+                in_raw = derive_tag(in_uid)
+                if spent.attrs.get('full-shielded'):
+                    in_abf = self._shielded_asset_blinding_factors.get((tx_name, out_idx), ZERO)
+                    in_gen = create_asset_commitment(in_raw, in_abf)
+                else:  # transparent or amount-shielded input -> unblinded asset tag
+                    in_gen = derive_asset_tag(in_uid)
+                    in_abf = ZERO
+                surj_domain.append((in_gen, in_raw, in_abf))
+
         # ---- PASS 2: build commitments/proofs with the finalized blindings ----------------
         shielded_outputs: list[ShieldedOutput] = []
         for s in specs:
@@ -665,10 +687,8 @@ class VertexExporter:
                     message=message, nonce=nonce,
                 )
 
-                # Build domain for surjection proof (trivial: input is same token, zero blinding)
-                input_gen = derive_asset_tag(token_uid)
-                domain: list[tuple[bytes, bytes, bytes]] = [(input_gen, raw_tag, bytes(32))]
-                surjection_proof = create_surjection_proof(raw_tag, asset_blinding, domain)
+                # Surjection over the REAL input domain (bug #3 fix; built above as surj_domain).
+                surjection_proof = create_surjection_proof(raw_tag, asset_blinding, surj_domain)
 
                 output: ShieldedOutput = FullShieldedOutput(
                     commitment=commitment,

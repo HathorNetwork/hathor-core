@@ -2,15 +2,21 @@
 
 Defects discovered in the upstream `feat/shielded-outputs` branch while bringing shielded outputs into the
 TPS benchmark engine. Each is a **self-contained, upstream-ready** write-up (symptom → root cause → why the
-existing tests miss it → fix → reproduction). The fixes are carried on our working branch
+existing tests miss it → fix → reproduction → runnable test). The fixes are carried on our working branch
 `tool/tps-bench-shielded` and flagged in the corresponding CP docs (`../checkpoint-diffs/`) so they can be
 re-applied if the upstream branch is rebased.
+
+Each bug has a **runnable demonstration test** in [`tests/`](tests/) (`unittest.TestCase`; run with the
+shielded native crypto built — see a bug doc's "Reproduction test" section). Bugs #1/#2 (fixed) are green
+regression guards that go red if the fix is reverted; bug #3 (unfixed) keeps the suite green via
+`@unittest.expectedFailure` while documenting the live failure. Run all three:
+`<venv-python> tests/test_bug{1,2,3}_*.py`.
 
 | # | Bug | Component | Severity | Found in | Status |
 |---|-----|-----------|----------|----------|--------|
 | 1 | [Shielded-output txs fail the Pedersen balance check](bug-shielded-pedersen-balance-not-reconciled.md) — the DAGBuilder assigns each shielded output an independent random value-blinding and never reconciles them, so `verify_shielded_balance` can never hold. | `hathor.dag_builder` (`vertex_exporter.py`) | High | CP‑7 | Fixed on branch |
 | 2 | [Shielded txs can't be deserialized from bytes](bug-shielded-deserialize-replace-remaining.md) — `GenericDeserializerAdapter` forwards every read method except `replace_remaining`, so `create_from_struct` → `make_vertex_deserializer().with_max_bytes()` throws on any shielded/unshield/mint/melt header. | `hathorlib.serialization` (`adapters/generic_adapter.py`) | High | CP‑9 | Fixed on branch |
-| 3 | [Full-shielded txs with >1 input fail surjection](bug-shielded-surjection-trivial-domain.md) — the builder constructs the surjection proof over a hard-coded single-input domain, but the verifier derives the domain from all inputs, so any FULLY_SHIELDED tx with >1 input is rejected. AMOUNT_ONLY unaffected. | `hathor.dag_builder` (`vertex_exporter.py`) | High | CP‑11 | Root-caused; fix deferred |
+| 3 | [Full-shielded txs with >1 input fail surjection](bug-shielded-surjection-trivial-domain.md) — the builder constructs the surjection proof over a hard-coded single-input domain, but the verifier derives the domain from all inputs, so any FULLY_SHIELDED tx with >1 input is rejected. AMOUNT_ONLY unaffected. | `hathor.dag_builder` (`vertex_exporter.py`) | High | CP‑11 | Fixed on branch (CP‑13) |
 
 ## Common thread
 

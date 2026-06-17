@@ -51,10 +51,19 @@ class NodeHarness:
             # and weight-1 PoW as the transparent harness, so shielded vs transparent timings
             # stay comparable (we deliberately do NOT swap in the simulator mining/verifiers,
             # which would skip verify_pow). Confirmed in CP-9: the feature flag alone suffices.
-            from hathor.conf.get_settings import get_global_settings
+            import hathor.conf.get_settings as _gs
             from hathor.conf.settings import FeatureSetting
-            settings = get_global_settings().model_copy(
-                update={"ENABLE_SHIELDED_TRANSACTIONS": FeatureSetting.ENABLED})
+            # Also raise MAX_SERIALIZED_VERTEX_SIZE: a full-shielded output is ~5 KB at 64-bit, so a
+            # tx with many of them exceeds the default 48 KB consensus cap. Benchmark-only override
+            # (like the MAX_SHIELDED_OUTPUTS cap) so we can measure fat shielded txs.
+            settings = _gs.get_global_settings().model_copy(update={
+                "ENABLE_SHIELDED_TRANSACTIONS": FeatureSetting.ENABLED,
+                "MAX_SERIALIZED_VERTEX_SIZE": 2_000_000,
+            })
+            # create_from_struct / vertex (de)serialization read the GLOBAL settings singleton, not the
+            # builder's copy, so override the singleton too — otherwise fat shielded txs still hit the
+            # 48 KB cap at (de)serialize. Process-wide and harmless for transparent runs.
+            _gs._settings_singleton = _gs._settings_singleton._replace(settings=settings)
             builder = TestBuilder(settings)
         else:
             builder = TestBuilder()

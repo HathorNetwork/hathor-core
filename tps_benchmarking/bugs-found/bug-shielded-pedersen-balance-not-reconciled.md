@@ -202,3 +202,18 @@ The cleanest form for the upstream test suite is to add the drive-and-assert-acc
 2. Apply the residual-blinding reconciliation in `add_shielded_outputs_header_if_needed` (our §5 fix).
 3. Consider a builder-level assertion that `sum(r_shielded)` reconciles before emitting the header, to fail
    loudly at *build* time rather than at *verify* time.
+
+## 8. Reproduction test (runnable)
+
+`tests/test_bug1_pedersen_balance.py` (`unittest.TestCase`) packages §6 as assertions:
+
+- `test_crypto_root_cause` — **unit, branch-independent**: asserts `verify_commitments_sum` is `False` for two
+  independent random output blindings and `True` once the last is reconciled via
+  `compute_balancing_blinding_factor`. This *is* the bug, provable on any branch.
+- `test_dsl_shielded_tx_verifies` — **integration/e2e**: builds a `[full-shielded]` tx via the DAGBuilder and
+  asserts full verification **accepts** it. RED on unpatched upstream ("shielded balance equation does not
+  hold"); GREEN with the CP-7 reconciliation — a regression guard for the fix.
+
+Current result on this branch: both pass (`OK`). The bug demonstration is `test_crypto_root_cause` (always
+shows the unreconciled case fails), and `test_dsl_shielded_tx_verifies` goes RED the moment the reconciliation
+is reverted. The integration test maps directly to a `hathor_tests` `TestCase` (the §7.1 coverage gap).

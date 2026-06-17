@@ -104,6 +104,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     # MAX_SHIELDED_OUTPUTS / proof-size caps are resolved at import time).
     _apply_shielded_env(args)
 
+    # Multi-batch mode: a sequence of segments driven as one timed stream (TPS-over-time).
+    if getattr(args, "mult_batches", None):
+        return _run_multibatch(cfg, args)
+
     # Sweep mode if any --sweep-* flag is present; else a single run.
     if args.sweep_inputs or args.sweep_outputs or args.sweep_txs:
         return _run_sweep(cfg, args)
@@ -288,6 +292,103 @@ def _write_sweep_report(path, cfg, axis, x_label, points, plot_names) -> None:
     Path(path).write_text("\n".join(L) + "\n", encoding="utf-8")
 
 
+def _parse_segments(tokens: list[str]):
+    """Parse the --mult-batches token stream into a list of Segment (each carries its own mode).
+    Grammar per segment: --n N [-i I -o O] [--shielded|--full-shielded|--amount-shielded -i Is -o Os].
+    The shielded flag is a section separator (transparent slice before it, shielded slice after) AND
+    sets that segment's shielded mode; segments may use different modes."""
+    from hathor_tps_bench.workload.multibatch import Segment
+    segs: list = []
+    cur = None
+    section = "t"
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok == "--n":
+            cur = Segment(n=int(tokens[i + 1])); segs.append(cur); section = "t"; i += 2
+            continue
+        if cur is None:
+            raise ValueError("each segment must start with --n N")
+        if tok in ("--shielded", "--full-shielded"):
+            section = "s"; cur.mode = "full"; i += 1
+        elif tok == "--amount-shielded":
+            section = "s"; cur.mode = "amount"; i += 1
+        elif tok in ("-i", "--num-inputs", "-o", "--num-outputs"):
+            v = int(tokens[i + 1])
+            field = ("t_i" if section == "t" else "s_i") if tok in ("-i", "--num-inputs") \
+                else ("t_o" if section == "t" else "s_o")
+            setattr(cur, field, v); i += 2
+        else:
+            raise ValueError(f"unexpected token {tok!r}")
+    if cur is None:
+        raise ValueError("needs at least one segment (start with --n N)")
+    return segs
+
+
+def _run_multibatch(cfg: RootConfig, args: argparse.Namespace) -> int:
+    """Drive a sequence of segments (per-segment mode) as one continuous timed stream; per-segment TPS."""
+    from pathlib import Path
+    try:
+        segments = _parse_segments(args.mult_batches)
+    except (ValueError, IndexError) as e:
+        print(f"--mult-batches: {e}", file=sys.stderr)
+        return 2
+
+    from hathor_tps_bench.analysis import persist, plots
+    from hathor_tps_bench.driver import run_batch
+    from hathor_tps_bench.node import NodeHarness
+    from hathor_tps_bench.workload.multibatch import build_multibatch
+
+    has_shielded = any(s.s_i or s.s_o for s in segments)
+    total = sum(s.n for s in segments)
+    W = args.warmup or 0
+    desc = "  ".join(f"[{i}] n={s.n} t{s.t_i}/{s.t_o} s{s.s_i}/{s.s_o} {s.mode or '-'}"
+                     for i, s in enumerate(segments))
+    print(f"[mult-batches] {len(segments)} segments, {total} txs (warmup {W})\n  {desc}")
+
+    harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow, shielded=has_shielded).start()
+    try:
+        st = harness.manager._settings
+        prepared, starts = build_multibatch(harness, segments,
+                                            st.FEE_PER_AMOUNT_SHIELDED_OUTPUT, st.FEE_PER_FULL_SHIELDED_OUTPUT)
+        print(f"[mult-batches] built {len(prepared)} txs; driving as one stream...")
+        result = run_batch(harness, prepared, sampler_interval_s=cfg.measure.sampler_interval_s, warmup=W)
+    finally:
+        harness.stop()
+
+    # per-segment TPS over the measured records (record index i == stream index W+i)
+    print(f"\n[result] accepted {result.accepted}/{result.n}  (warmup {W} discarded)")
+    print(f"  {'seg':4} {'shape (t_in/t_out s_in/s_out + mode)':38} {'n':>6} {'TPS':>7}")
+    starts_m = [max(0, s - W) for s in starts] + [len(result.records)]
+    seg_rows = []
+    for k, seg in enumerate(segments):
+        sl = result.records[starts_m[k]:starts_m[k + 1]]
+        wall = sum(r.total_wall_ns() for r in sl)
+        tps = (len(sl) * 1e9 / wall) if wall else 0.0
+        shape = f"t{seg.t_i}/{seg.t_o} s{seg.s_i}/{seg.s_o} {seg.mode or '-'}"
+        print(f"  {k:<4} {shape:38} {len(sl):>6} {tps:>7.0f}")
+        seg_rows.append((k, shape, len(sl), tps, starts_m[k]))
+    print(f"  overall processing throughput: {result.processing_tps():.0f} tx/s")
+
+    run_dir = Path(cfg.results_root) / f"multibatch_{len(segments)}seg_{total}tx"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if "csv" in cfg.reporting.formats:
+        persist.write_per_tx_csv(run_dir / "per_tx_stages.csv", result)
+    plot_names = (plots.generate(run_dir / "plots", result, window=cfg.reporting.window)
+                  if "plots" in cfg.reporting.formats else [])
+    L = [f"# Multi-batch — {len(segments)} segments, {total} txs (warmup {W})", "",
+         "| seg | shape (t_in/t_out s_in/s_out + mode) | n | TPS | measured start |", "|---|---|---|---|---|"]
+    for k, shape, n, tps, start in seg_rows:
+        L.append(f"| {k} | {shape} | {n} | **{tps:.0f}** | {start} |")
+    L += ["", f"overall: **{result.processing_tps():.0f}** tx/s, accepted {result.accepted}/{result.n}"]
+    if plot_names:
+        L += ["", "## TPS over time (segment shifts visible in the rolling curve)", ""] + \
+             [f"![{n}](plots/{n})" for n in plot_names]
+    (run_dir / "summary.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    print(f"\n[mult-batches] results → {run_dir}/  ({len(plot_names)} plots)")
+    return 0
+
+
 def _add_shielded_flags(parser: argparse.ArgumentParser) -> None:
     """Shielded workload selectors + parameter overrides, shared by `run` and `sweep`.
     The selector flags store into the `tx_type` dest; the parameter flags are translated
@@ -342,6 +443,10 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--sweep-txs", nargs="+", type=int, metavar="N",
                     help="sweep batch size over the given list")
     _add_shielded_flags(pr)
+    pr.add_argument("--mult-batches", nargs=argparse.REMAINDER, dest="mult_batches",
+                    help="run a SEQUENCE of segments as one timed stream (TPS-over-time). Each segment: "
+                         "--n N [-i I -o O] [--shielded|--amount-shielded -i Is -o Os]. "
+                         "Example: --mult-batches --n 2000 -i 5 -o 2 --n 2000 -i 5 -o 2 --shielded -i 2 -o 2")
     pr.set_defaults(fn=_cmd_run)
 
     psw = sub.add_parser("sweep", help="(back-compat) sweep via --axis io|n --values ...")
@@ -361,7 +466,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # `--mult-batches` is followed by a free-form segment stream (--n/-i/-o/--shielded ...)
+    # that argparse would mis-parse (abbreviation clashes). Split it off before argparse and
+    # attach the raw tokens to args; the parser keeps the flag only for --help visibility.
+    seg_tokens = None
+    if "--mult-batches" in argv:
+        idx = argv.index("--mult-batches")
+        seg_tokens, argv = argv[idx + 1:], argv[:idx]
     args = build_parser().parse_args(argv)
+    if seg_tokens is not None:
+        args.mult_batches = seg_tokens
     return args.fn(args)
 
 

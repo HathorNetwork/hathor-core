@@ -109,3 +109,15 @@ deserialization; it was the first thing to drive shielded txs through the byte-p
 2. Add a test that serializes a full shielded / unshield / mint / melt **transaction** and parses it back via
    `vertex_parser.deserialize` / `create_from_struct` (asserting equality) — the missing byte-round-trip
    coverage that hid this.
+
+## 7. Reproduction test (runnable)
+
+`tests/test_bug2_deserialize.py` (`unittest.TestCase`), `test_shielded_tx_roundtrips_from_bytes` —
+**integration/e2e**: builds a shielded tx, serializes it (`bytes(tx)`), and parses it back via the standard
+`vertex_parser.deserialize(raw)`, asserting the round-trip succeeds and the hash + shielded-output count
+match. RED on unpatched upstream (`TypeError: this deserializer does not support replace_remaining`); GREEN
+with the §4 adapter forward — a regression guard for the fix.
+
+Current result on this branch: passes (`OK`). The bug demonstration is that the test raises that exact
+`TypeError` the moment the `replace_remaining` forward is removed. Maps directly to a `hathor_tests` `TestCase`
+(the §6.2 coverage gap), and generalises to unshield/mint/melt headers (same read-all/push-back parse path).
