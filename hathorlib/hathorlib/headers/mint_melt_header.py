@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 
@@ -30,9 +29,15 @@ if TYPE_CHECKING:
 # Per RFC 0000-shielded-outputs-mint-melt §4.1.
 MAX_MINT_MELT_ENTRIES = 16
 AMOUNT_SIZE = 8  # amount is a u64, big-endian
+# Exclusive upper bound on a mint/melt amount: a u64 (matches AMOUNT_SIZE).
+# NOTE: once shielded range proofs land, this should be tightened to the
+# range-proof bit width (MAX_AMOUNT = 2 ** RANGE_PROOF_BITS), since a hidden
+# value is always capped by the proof. RANGE_PROOF_BITS isn't defined on this
+# branch yet, so the u64 wire bound stands for now.
+MAX_AMOUNT = 2 ** 64
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class MintMeltEntry:
     """A single (token_index, amount) entry in a MintHeader or MeltHeader.
 
@@ -50,12 +55,12 @@ class MintMeltEntry:
     amount: int
 
     def __post_init__(self) -> None:
-        if not 1 <= self.token_index <= MAX_MINT_MELT_ENTRIES:
+        if not (1 <= self.token_index <= MAX_MINT_MELT_ENTRIES):
             raise ValueError(
                 f'token_index must be in [1, {MAX_MINT_MELT_ENTRIES}]; got {self.token_index}'
             )
-        if not 1 <= self.amount < 2 ** 64:
-            raise ValueError(f'amount must be in [1, 2**64); got {self.amount}')
+        if not (1 <= self.amount < MAX_AMOUNT):
+            raise ValueError(f'amount must be in [1, {MAX_AMOUNT}); got {self.amount}')
 
 
 def serialize_entries(serializer: Serializer, entries: list[MintMeltEntry]) -> None:
@@ -96,7 +101,7 @@ def deserialize_entries(deserializer: Deserializer, *, header_name: str) -> list
     return entries
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _MintMeltHeaderBase(VertexBaseHeader):
     """Shared (de)serialization for MintHeader and MeltHeader.
 
@@ -116,52 +121,25 @@ class _MintMeltHeaderBase(VertexBaseHeader):
 
     entries: list[MintMeltEntry] = field(default_factory=list)
 
+    # These three concrete overrides exist only to satisfy the VertexBaseHeader
+    # ABC; they are intentionally unused. The real (de)serialization is driven
+    # through the framework by hathor-core's free functions in
+    # ``_mint_melt_header.py``, which delegate to the module-level
+    # ``serialize_entries`` / ``deserialize_entries`` helpers above. A future PR
+    # should drop these from the base interface entirely (see PR #1730 review).
+
     @classmethod
     def deserialize(cls, tx: BaseTransaction, buf: bytes) -> tuple[_MintMeltHeaderBase, bytes]:
-        """Deserialize: header_id(1) | num_entries(1) | entries..."""
-        from hathorlib.serialization import Deserializer
-        from hathorlib.transaction import Transaction
-
-        if not isinstance(tx, Transaction):
-            raise ValueError(
-                f'{cls._HEADER_NAME} requires a Transaction, got {type(tx).__name__}'
-            )
-
-        deserializer = Deserializer.build_bytes_deserializer(buf)
-        try:
-            header_id = bytes(deserializer.read_bytes(1))
-            if header_id != cls._HEADER_ID:
-                raise ValueError(
-                    f'{cls._HEADER_NAME}: unexpected header id: '
-                    f'expected {cls._HEADER_ID!r}, got {header_id!r}'
-                )
-            entries = deserialize_entries(deserializer, header_name=cls._HEADER_NAME)
-        except ValueError:
-            raise
-        except (IndexError, struct.error) as e:
-            # OutOfDataError (truncation) is a struct.error subclass, caught here.
-            raise ValueError(f'malformed {cls._HEADER_NAME}: {e}') from e
-
-        # Whatever follows this header (subsequent headers) is the unconsumed leftover.
-        remaining = bytes(deserializer.read_all())
-        return cls(entries=entries), remaining
+        raise NotImplementedError
 
     def serialize(self) -> bytes:
-        """Serialize: header_id(1) | num_entries(1) | entries..."""
-        from hathorlib.serialization import Serializer
-
-        serializer = Serializer.build_bytes_serializer()
-        serializer.write_bytes(self._HEADER_ID)
-        serialize_entries(serializer, self.entries)
-        return bytes(serializer.finalize())
+        raise NotImplementedError
 
     def get_sighash_bytes(self) -> bytes:
-        # Full serialization is bound to the signature: any mutation to the
-        # declared mint/melt amounts invalidates all signatures over the tx.
-        return self.serialize()
+        raise NotImplementedError
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MintHeader(_MintMeltHeaderBase):
     """Publicly declares per-token supply created by this shielded transaction."""
 
@@ -169,7 +147,7 @@ class MintHeader(_MintMeltHeaderBase):
     _HEADER_NAME: ClassVar[str] = 'MintHeader'
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MeltHeader(_MintMeltHeaderBase):
     """Publicly declares per-token supply destroyed by this shielded transaction."""
 

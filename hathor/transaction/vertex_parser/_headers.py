@@ -143,7 +143,14 @@ def serialize_header(
 
 def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: VertexDecimalVersion) -> bytes:
     """Get sighash bytes for a header."""
-    from hathor.transaction.headers import FeeHeader, MeltHeader, MintHeader, NanoHeader
+    from hathor.transaction.headers import (
+        FeeHeader,
+        MeltHeader,
+        MintHeader,
+        NanoHeader,
+        ShieldedOutputsHeader,
+        UnshieldBalanceHeader,
+    )
 
     match header:
         case NanoHeader():
@@ -156,6 +163,12 @@ def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: Vertex
             serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header, decimal_version=decimal_version)
             return bytes(serializer.finalize())
+        case ShieldedOutputsHeader() | UnshieldBalanceHeader():
+            # These headers own their sighash serialization (their full
+            # serialization is bound to the signature). Mirrors the pre-existing
+            # behavior before the explicit-arm refactor replaced the generic
+            # `header.get_sighash_bytes()` fallback with the unreachable guard.
+            return header.get_sighash_bytes()
         case MintHeader():
             from hathor.transaction.vertex_parser._mint_melt_header import serialize_mint_header
             serializer = Serializer.build_bytes_serializer()

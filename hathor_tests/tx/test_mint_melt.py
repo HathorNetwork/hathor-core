@@ -34,9 +34,16 @@ from hathor.transaction.exceptions import (
 )
 from hathor.transaction.headers import MeltHeader, MintHeader, MintMeltEntry, VertexHeaderId
 from hathor.transaction.token_info import TokenVersion
-from hathor.transaction.vertex_parser._mint_melt_header import deserialize_melt_header, deserialize_mint_header
-from hathor.verification.transaction_verifier import TransactionVerifier
-from hathorlib.serialization import Deserializer
+from hathor.transaction.vertex_parser._headers import get_header_sighash_bytes
+from hathor.transaction.vertex_parser._mint_melt_header import (
+    deserialize_melt_header,
+    deserialize_mint_header,
+    serialize_melt_header,
+    serialize_mint_header,
+)
+from hathor.verification.mint_melt_verifier import MintMeltVerifier
+from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.serialization import Deserializer, Serializer
 
 
 def _make_settings() -> HathorSettings:
@@ -52,8 +59,8 @@ def _make_settings() -> HathorSettings:
     return settings
 
 
-def _make_verifier() -> TransactionVerifier:
-    return TransactionVerifier(settings=_make_settings(), daa_factory=MagicMock(), feature_service=MagicMock())
+def _make_verifier() -> MintMeltVerifier:
+    return MintMeltVerifier(settings=_make_settings())
 
 
 def _make_mock_tx(
@@ -113,7 +120,9 @@ class TestWireFormat:
     def test_mint_header_roundtrip(self) -> None:
         entries = [MintMeltEntry(token_index=1, amount=100_000), MintMeltEntry(token_index=2, amount=50)]
         h = MintHeader(entries=entries)
-        b = h.serialize()
+        serializer = Serializer.build_bytes_serializer()
+        serialize_mint_header(serializer, h)
+        b = bytes(serializer.finalize())
         assert b[0:1] == VertexHeaderId.MINT_HEADER.value
         assert b[1] == 2
         deserializer = Deserializer.build_bytes_deserializer(b)
@@ -124,14 +133,21 @@ class TestWireFormat:
     def test_melt_header_roundtrip(self) -> None:
         entries = [MintMeltEntry(token_index=3, amount=999_999_999)]
         h = MeltHeader(entries=entries)
-        b = h.serialize()
+        serializer = Serializer.build_bytes_serializer()
+        serialize_melt_header(serializer, h)
+        b = bytes(serializer.finalize())
         assert b[0:1] == VertexHeaderId.MELT_HEADER.value
         entries2 = deserialize_melt_header(Deserializer.build_bytes_deserializer(b))
         assert entries2 == entries
 
     def test_sighash_bytes_equals_serialize(self) -> None:
         h = MintHeader(entries=[MintMeltEntry(token_index=1, amount=1)])
-        assert h.get_sighash_bytes() == h.serialize()
+        serializer = Serializer.build_bytes_serializer()
+        serialize_mint_header(serializer, h)
+        serialized = bytes(serializer.finalize())
+        # The sighash for a mint/melt header is its full serialization.
+        sighash = get_header_sighash_bytes(h, decimal_version=VertexDecimalVersion.V1)
+        assert sighash == serialized
 
     def test_distinct_header_ids(self) -> None:
         assert VertexHeaderId.MINT_HEADER.value == b'\x14'

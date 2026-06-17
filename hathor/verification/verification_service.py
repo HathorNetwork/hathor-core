@@ -275,9 +275,9 @@ class VerificationService:
         )
         # Storage-bound MintHeader/MeltHeader checks. Both are no-ops unless a
         # Mint/Melt header is present (which itself requires a shielded tx).
-        self.verifiers.tx.verify_mint_melt_authority_inputs(tx)  # Rule M2
+        self.verifiers.mint_melt.verify_mint_melt_authority_inputs(tx)  # Rule M2
         if tx.is_shielded():
-            self.verifiers.tx.verify_no_undeclared_mint_melt(tx, _token_dict)  # Rule M4
+            self.verifiers.mint_melt.verify_no_undeclared_mint_melt(tx, _token_dict)  # Rule M4
         self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
@@ -332,7 +332,7 @@ class VerificationService:
         # Header acceptance per tx version is already gated by verify_headers; this
         # is a no-op unless a Mint/Melt header is present.
         if isinstance(vertex, Transaction):
-            self.verifiers.tx.verify_mint_melt_basic(vertex)
+            self.verifiers.mint_melt.verify_mint_melt_basic(vertex)
 
     def _verify_without_storage_base_block(self, block: Block, params: VerificationParams) -> None:
         self.verifiers.block.verify_no_inputs(block)

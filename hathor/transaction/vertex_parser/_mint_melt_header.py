@@ -59,8 +59,6 @@ def _deserialize_mint_melt_header(
                 f'{header_name}: unexpected header id: expected {header_id_value!r}, got {header_id!r}'
             )
         entries = deserialize_entries(deserializer, header_name=header_name)
-    except InvalidMintMeltHeaderError:
-        raise
     except (SerializationError, ValueError) as e:
         raise InvalidMintMeltHeaderError(f'malformed {header_name}: {e}') from e
 
