@@ -18,17 +18,18 @@ env:
   HTP_PROJECT_NUMBER: '44050351828'  # hathor-testnet-playground
 
 jobs:
-  release:
-    name: Release nginx configs and image
-    runs-on: ubuntu-24.04
+  # Build job: generates the nginx configs and uploads them as an artifact.
+  # It runs the project's virtualenv (poetry/python), so it deliberately has NO
+  # cloud credentials (no id-token) — a poisoned cache or dependency here cannot
+  # reach the deploy role.
+  build:
+    name: Build nginx configs
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
-    # This environment is tied to the AWS Role assumed by this workflow.
-    # The Role will only allow to be assumed if the workflow is set with this environment.
-    # We also have additional protection rules on this environment.
-    environment: publish-nginx
     permissions:
-      id-token: write
       contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -39,18 +40,12 @@ jobs:
         name: Setup Hathor node environment
         with:
           python: '3.12'
-          os: 'ubuntu-24.04'
+          os: 'ubuntu-22.04'
 
       - name: Extract version from tag
         id: version
         # run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
         run: echo "version=test1" >> $GITHUB_OUTPUT
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
-        with:
-          role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
-          aws-region: us-east-1
 
       - name: Generate all nginx configs
         working-directory: extras/nginx_docker
@@ -58,21 +53,63 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
 
+      - name: Generate set_real_ip_from_cloudfront
+        working-directory: extras/nginx_docker
+        run: make set_real_ip_from_cloudfront
+
+      - name: Upload generated configs artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nginx-configs
+          path: |
+            extras/nginx_docker/dist/
+            extras/nginx_docker/set_real_ip_from_cloudfront
+          if-no-files-found: error
+          retention-days: 1
+
+  # Deploy job: consumes the build artifact and pushes it to S3 and the
+  # container registries. This is the only job that assumes the cloud roles
+  # (id-token: write + the publish-nginx environment). It never runs the
+  # project's virtualenv, so no build-time code executes with these credentials.
+  deploy:
+    name: Release nginx configs and image
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    # This environment is tied to the AWS Role assumed by this workflow.
+    # The Role will only allow to be assumed if the workflow is set with this environment.
+    # We also have additional protection rules on this environment.
+    environment: publish-nginx
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Download generated configs artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nginx-configs
+          path: extras/nginx_docker
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
+          aws-region: us-east-1
+
       - name: Upload configs to S3 (versioned)
         working-directory: extras/nginx_docker
         run: make upload-to-s3 VERSION="$VERSION"
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
 
       - name: Upload configs to S3 (latest)
         working-directory: extras/nginx_docker
         run: make upload-to-s3-as-latest VERSION="$VERSION"
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-
-      - name: Generate set_real_ip_from_cloudfront
-        working-directory: extras/nginx_docker
-        run: make set_real_ip_from_cloudfront
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
@@ -91,7 +128,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:${{ steps.version.outputs.version }}
+            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:${{ needs.build.outputs.version }}
 #            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
 
       # --- GCP Artifact Registries ---
@@ -114,7 +151,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:${{ needs.build.outputs.version }}
 #            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:latest
 
       # hathor-testnet
@@ -135,7 +172,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:${{ needs.build.outputs.version }}
 #            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:latest
 
       # ekvilibro
@@ -156,7 +193,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:${{ needs.build.outputs.version }}
 #            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:latest
 
       # hathor-testnet-playground
@@ -177,5 +214,5 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64/v8
           tags: |
-            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:${{ steps.version.outputs.version }}
+            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:${{ needs.build.outputs.version }}
 #            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:latest
