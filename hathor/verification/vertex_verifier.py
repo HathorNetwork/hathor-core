@@ -19,7 +19,7 @@ from typing_extensions import assert_never
 from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.reactor import ReactorProtocol as Reactor
-from hathor.transaction import BaseTransaction, TxVersion
+from hathor.transaction import BaseTransaction, Transaction, TxVersion
 from hathor.transaction.exceptions import (
     DuplicatedParents,
     HeaderNotSupported,
@@ -163,6 +163,13 @@ class VertexVerifier:
                     len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
+        if isinstance(vertex, Transaction):
+            for shielded_output in vertex.shielded_outputs:
+                if len(shielded_output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
+                    raise InvalidOutputScriptSize('shielded output script size: {} and max-size: {}'.format(
+                        len(shielded_output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
+                    ))
+
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
         """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
@@ -198,6 +205,10 @@ class VertexVerifier:
         for tx_output in vertex.outputs:
             n_txops += counter.get_sigops_count(tx_output.script)
 
+        # Count shielded output scripts too
+        for shielded_output in vertex.shielded_outputs:
+            n_txops += counter.get_sigops_count(shielded_output.script)
+
         if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
@@ -219,6 +230,8 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                # TODO (mint/melt — postponed): the mint/melt extension admits ShieldedOutputsHeader +
+                # MintHeader/MeltHeader for TCT here (shielded-TCT requires MintHeader, RFC §4.4).
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
@@ -227,6 +240,8 @@ class VertexVerifier:
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
+                    # TODO (mint/melt — postponed): the mint/melt extension also admits
+                    # MintHeader/MeltHeader (0x14/0x15) here.
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers

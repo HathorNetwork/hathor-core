@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
+from structlog import get_logger
+
 from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
@@ -60,13 +62,15 @@ if TYPE_CHECKING:
 
 cpu = get_cpu_profiler()
 
+logger = get_logger()
+
 MAX_TOKENS_LENGTH: int = 16
 MAX_WITHIN_CONFLICTS: int = 8
 MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa_factory', '_feature_service')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', 'log')
 
     def __init__(
         self,
@@ -78,6 +82,7 @@ class TransactionVerifier:
         self._settings = settings
         self._daa_factory = daa_factory
         self._feature_service = feature_service
+        self.log = logger.new()
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -150,7 +155,19 @@ class TransactionVerifier:
                 ))
 
             spent_tx = tx.get_spent_tx(input_tx)
-            assert input_tx.index < len(spent_tx.outputs)
+
+            # Handle shielded output references instead of asserting
+            if input_tx.index < len(spent_tx.outputs):
+                # Standard transparent output
+                pass
+            elif spent_tx.shielded_outputs:
+                shielded_idx = input_tx.index - len(spent_tx.outputs)
+                if shielded_idx >= len(spent_tx.shielded_outputs):
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        input_tx.tx_id.hex(), input_tx.index))
+            else:
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    input_tx.tx_id.hex(), input_tx.index))
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
@@ -256,15 +273,78 @@ class TransactionVerifier:
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     @classmethod
+    def _check_token_permissions_and_deposits(
+        cls,
+        settings: HathorSettings,
+        token_dict: TokenInfoDict,
+        *,
+        allow_nonexistent_tokens: bool = False,
+        is_shielded: bool = False,
+    ) -> tuple[int, bool]:
+        """Check token permissions and compute deposit/withdraw balance.
+
+        Shared logic between verify_transparent_balance and verify_token_rules.
+
+        For shielded transactions (is_shielded=True), the amount-based melt/mint check and
+        deposit/withdraw calculation are skipped for non-native tokens because transparent
+        deficits are expected — value moved to shielded outputs.
+
+        Returns:
+            (htr_expected_amount, has_nonexistent_tokens)
+        """
+        deposit = 0
+        withdraw = 0
+        has_nonexistent_tokens = False
+
+        for token_uid, token_info in token_dict.items():
+            cls._check_token_permissions(token_uid, token_info, is_shielded=is_shielded)
+            match token_info.version:
+                case None:
+                    if not allow_nonexistent_tokens:
+                        raise TokenNotFound(f'token uid {token_uid.hex()} not found.')
+                    has_nonexistent_tokens = True
+
+                case TokenVersion.NATIVE:
+                    continue
+
+                case TokenVersion.DEPOSIT:
+                    if not is_shielded:
+                        if token_info.has_been_melted():
+                            withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                        if token_info.has_been_minted():
+                            deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+
+                case TokenVersion.FEE:
+                    continue
+
+                case _:
+                    assert_never(token_info.version)
+
+        htr_expected_amount = withdraw - deposit
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
+        if not is_shielded and htr_info.amount > htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
+
+        return htr_expected_amount, has_nonexistent_tokens
+
+    @classmethod
     def verify_transparent_balance(
         cls,
         settings: HathorSettings,
         tx: Transaction,
         token_dict: TokenInfoDict,
         allow_nonexistent_tokens: bool = False,
+        *,
+        shielded_fee: int = 0,
     ) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
+
+        Counterpart of verify_shielded_balance: exactly one balance check runs per tx,
+        dispatched by tx.is_shielded() at the caller.
 
         When `allow_nonexistent_tokens` flag is set to `True` and a nonexistent token is provided,
         this method will skip the fee and HTR balance checks.
@@ -276,43 +356,9 @@ class TransactionVerifier:
 
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        deposit = 0
-        withdraw = 0
-        has_nonexistent_tokens = False
-
-        for token_uid, token_info in token_dict.items():
-            cls._check_token_permissions(token_uid, token_info)
-            match token_info.version:
-                case None:
-                    # When a token is not found, we can't assert the HTR value since we don't know the token version.
-                    # This is only possible for nanos, because they may create the missing token in execution-time.
-                    if not allow_nonexistent_tokens:
-                        raise TokenNotFound(f'token uid {token_uid.hex()} not found.')
-                    has_nonexistent_tokens = True
-
-                case TokenVersion.NATIVE:
-                    continue
-
-                case TokenVersion.DEPOSIT:
-                    if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
-                    if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
-
-                case TokenVersion.FEE:
-                    continue
-
-                case _:
-                    assert_never(token_info.version)
-
-        # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount > htr_expected_amount:
-            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
-                htr_info.amount,
-                htr_expected_amount,
-            ))
+        htr_expected_amount, has_nonexistent_tokens = cls._check_token_permissions_and_deposits(
+            settings, token_dict, allow_nonexistent_tokens=allow_nonexistent_tokens,
+        )
 
         if has_nonexistent_tokens:
             # In a partial verification, it's not possible to check fees and
@@ -322,11 +368,12 @@ class TransactionVerifier:
             assert tx.is_nano_contract()
             return
 
-        expected_fee = token_dict.calculate_fee(settings)
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
         if htr_info.amount < htr_expected_amount:
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
@@ -335,9 +382,48 @@ class TransactionVerifier:
 
         assert htr_info.amount == htr_expected_amount
 
+    # NOTE: this and the sibling _check_token_permissions* / verify_transparent_balance stay here —
+    # they operate on `token_dict`, a transparent-flow concept shared by both paths.
+    @classmethod
+    def verify_token_rules(
+        cls,
+        settings: HathorSettings,
+        token_dict: TokenInfoDict,
+        *,
+        shielded_fee: int = 0,
+    ) -> None:
+        """Verify token authority permissions, deposit requirements, and fee correctness.
+
+        Uses _check_token_permissions_and_deposits for shared permission/deposit logic,
+        then checks fee amounts. Used for shielded transactions where the transparent
+        balance equation is replaced by verify_shielded_balance.
+
+        :raises ForbiddenMint: if tokens were minted without authority
+        :raises ForbiddenMelt: if tokens were melted without authority
+        :raises InputOutputMismatch: if fee amounts are incorrect
+        """
+        cls._check_token_permissions_and_deposits(settings, token_dict, is_shielded=True)
+
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
+        if expected_fee != token_dict.fees_from_fee_header:
+            raise InputOutputMismatch(f"Fee amount is different than expected. "
+                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
+
     @staticmethod
-    def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
-        """Verify whether token can be minted/melted based on its authority."""
+    def _check_token_permissions(
+        token_uid: TokenUid,
+        token_info: TokenInfo,
+        *,
+        is_shielded: bool = False,
+    ) -> None:
+        """Verify whether token can be minted/melted based on its authority.
+
+        For shielded transactions (is_shielded=True), the amount-based melt/mint check is
+        skipped for non-native tokens because the transparent deficit is expected — value
+        moved to shielded outputs and balance is verified cryptographically by
+        verify_shielded_balance. Authority-based mint/melt is separately blocked by
+        verify_no_mint_melt.
+        """
         from hathorlib.conf.settings import HATHOR_TOKEN_UID
         if token_info.version == TokenVersion.NATIVE:
             assert token_uid == HATHOR_TOKEN_UID
@@ -345,6 +431,13 @@ class TransactionVerifier:
             assert not token_info.can_melt
             return
         assert token_uid != HATHOR_TOKEN_UID
+        if is_shielded:
+            # In shielded txs, transparent deficit/surplus is expected — balance is
+            # verified cryptographically. Authority-based mint/melt is separately
+            # blocked by verify_no_mint_melt.
+            # TODO (mint/melt — postponed): the extension swaps this backstop to
+            # verify_no_undeclared_mint_melt when MintHeader/MeltHeader land.
+            return
         if token_info.has_been_melted() and not token_info.can_melt:
             raise ForbiddenMelt.from_token(token_info.amount, token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
@@ -425,3 +518,4 @@ class TransactionVerifier:
 
         if between_counter > MAX_BETWEEN_CONFLICTS:
             raise TooManyBetweenConflicts
+
