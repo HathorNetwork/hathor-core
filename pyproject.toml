@@ -60,6 +60,7 @@ dependencies = [
     "zope-interface==8.2",
     "packaging==26.0",
     "htr_lib",
+    "hathor_ct_crypto",
 ]
 
 [project.urls]
@@ -146,10 +147,12 @@ cffi = "=1.17.1"
 zope-interface = "=8.2"
 packaging = "=26.0"
 htr-lib = {path = "htr-rs/crates/htr-lib", develop = true}
+hathor-ct-crypto = {path = "htr-rs/crates/hathor-ct-crypto", develop = true}
 
 [tool.uv.sources]
 hathorlib = { path = "hathorlib", editable = true }
 htr-lib = { path = "htr-rs/crates/htr-lib", editable = true }
+hathor-ct-crypto = { path = "htr-rs/crates/hathor-ct-crypto", editable = true }
 
 [tool.ruff]
 line-length = 119

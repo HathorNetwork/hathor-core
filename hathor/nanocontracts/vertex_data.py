@@ -51,10 +51,18 @@ def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
     except TransactionDoesNotExist:
         assert False, f'missing dependency: {txin.tx_id.hex()}'
 
-    assert len(vertex2.outputs) > txin.index, 'invalid output index'
+    # Use resolve_spent_output for shielded-aware lookup
+    try:
+        resolved = vertex2.resolve_spent_output(txin.index)
+    except IndexError:
+        return None
 
-    txin_output = vertex2.resolve_spent_output(txin.index)
-    return txin_output
+    from hathor.transaction import TxOutput as _TxOutput
+
+    # Only return TxOutput; shielded outputs lack value/token_data for TxOutputData
+    assert isinstance(resolved, _TxOutput), "Output must be TxOutput"
+
+    return resolved
 
 
 def create_script_info_from_script(script: P2PKH | MultiSig) -> ScriptInfo:

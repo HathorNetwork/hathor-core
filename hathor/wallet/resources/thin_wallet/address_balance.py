@@ -100,6 +100,7 @@ class AddressBalanceResource(Resource):
             })
 
         tokens_data: dict[bytes, TokenData] = defaultdict(TokenData)
+        has_shielded = False
         tx_hashes = addresses_index.get_from_address(requested_address)
         for tx_hash in tx_hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
@@ -108,6 +109,10 @@ class AddressBalanceResource(Resource):
                 # We consider the spent/received values only if is not voided by
                 for tx_input in tx.inputs:
                     tx2 = self.manager.tx_storage.get_transaction(tx_input.tx_id)
+                    # Skip shielded outputs — hidden amounts
+                    if tx2.is_shielded_output(tx_input.index):
+                        has_shielded = True
+                        continue
                     tx2_output = tx2.outputs[tx_input.index]
                     if self.has_address(tx2_output, requested_address):
                         # We just consider the address that was requested
@@ -119,6 +124,13 @@ class AddressBalanceResource(Resource):
                         # We just consider the address that was requested
                         token_uid = tx.get_token_uid(tx_output.get_token_index())
                         tokens_data[token_uid].received += tx_output.value
+
+                # Track if any shielded outputs exist for the queried address
+                for shielded_out in tx.shielded_outputs:
+                    script_type_out = parse_address_script(shielded_out.script)
+                    if script_type_out and script_type_out.address == requested_address:
+                        has_shielded = True
+                        break
 
         return_tokens_data: dict[str, dict[str, Any]] = {}
         for token_uid in tokens_data.keys():
@@ -137,11 +149,12 @@ class AddressBalanceResource(Resource):
                     tokens_data[token_uid].symbol = '- (unable to fetch token information)'
             return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict()
 
-        data = {
+        data: dict[str, Any] = {
             'success': True,
             'total_transactions': len(tx_hashes),
-            'tokens_data': return_tokens_data
+            'tokens_data': return_tokens_data,
         }
+        data['has_shielded'] = has_shielded
         return json_dumpb(data)
 
 
