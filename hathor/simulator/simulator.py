@@ -35,6 +35,7 @@ from hathor.simulator.patches import SimulatorCpuMiningService, SimulatorVertexV
 from hathor.simulator.tx_generator import RandomTransactionGenerator
 from hathor.transaction.storage import TransactionStorage
 from hathor.util import Random
+from hathor.verification.script_verification_pool import ScriptVerificationPool
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.wallet import HDWallet
 
@@ -250,6 +251,7 @@ def _build_vertex_verifiers(
     feature_service: FeatureService,
     tx_storage: TransactionStorage,
     blueprint_service: BlueprintService,
+    script_verification_pool: ScriptVerificationPool,
 ) -> VertexVerifiers:
     """
     A custom VertexVerifiers builder to be used by the simulator.
@@ -262,4 +264,5 @@ def _build_vertex_verifiers(
         feature_service=feature_service,
         tx_storage=tx_storage,
         blueprint_service=blueprint_service,
+        script_verification_pool=script_verification_pool,
     )

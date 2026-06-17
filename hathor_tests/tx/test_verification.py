@@ -14,6 +14,7 @@
 
 from unittest.mock import Mock, patch
 
+from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import get_address_from_public_key
 from hathor.manager import HathorManager
 from hathor.transaction import BitcoinAuxPow, Block, MergeMinedBlock, Transaction, TxInput, TxOutput
@@ -37,10 +38,27 @@ class VerificationTest(unittest.TestCase):
     called. This guarantee is mostly useful during the verification refactors.
     """
 
+    def get_builder(self, settings: HathorSettings | None = None) -> unittest.TestBuilder:
+        # These tests assert the *Python* dispatch call graph (each verifier method called once). The rust
+        # verification service intentionally bypasses the migrated verifier methods, so pin the python path
+        # even under HATHOR_TEST_SCRIPT_VERIFICATION=rust/shadow-rust suite runs.
+        from hathor.verification.script_verification_pool import ScriptVerificationMode
+        builder = super().get_builder(settings)
+        builder.set_script_verification_config(mode=ScriptVerificationMode.DISABLED, num_workers=0)
+        return builder
+
     def setUp(self) -> None:
         super().setUp()
         self.manager: HathorManager = self.create_peer('network')
         self.verifiers = self.manager.verification_service.verifiers
+
+    def _assert_verify_script_called_once(self, mock) -> None:
+        """Assert TransactionVerifier.verify_script ran once -- but only on the serial path. When the parallel
+        script-verification pool is enabled (HATHOR_TEST_SCRIPT_VERIFICATION), input scripts are evaluated via the
+        worker pool, which does not go through verify_script, so the call count is expected to be zero."""
+        pool = self.verifiers.tx._script_verification_pool
+        if pool is None or not pool.enabled:
+            mock.assert_called_once()
 
     def _get_valid_block(self) -> Block:
         block = Block(
@@ -650,7 +668,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        self._assert_verify_script_called_once(verify_script_wrapped)
         verify_parents_wrapped.assert_called_once()
         verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
@@ -796,7 +814,7 @@ class VerificationTest(unittest.TestCase):
         assert verify_sigops_output_wrapped.call_count == 2
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        self._assert_verify_script_called_once(verify_script_wrapped)
         verify_parents_wrapped.assert_called_once()
         verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
@@ -962,7 +980,7 @@ class VerificationTest(unittest.TestCase):
         verify_sigops_output_wrapped.assert_called_once()
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        self._assert_verify_script_called_once(verify_script_wrapped)
         verify_parents_wrapped.assert_called_once()
         verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()
@@ -1117,7 +1135,7 @@ class VerificationTest(unittest.TestCase):
         assert verify_sigops_output_wrapped.call_count == 2
         verify_sigops_input_wrapped.assert_called_once()
         verify_inputs_wrapped.assert_called_once()
-        verify_script_wrapped.assert_called_once()
+        self._assert_verify_script_called_once(verify_script_wrapped)
         verify_parents_wrapped.assert_called_once()
         verify_transparent_balance_wrapped.assert_called_once()
         verify_reward_locked_wrapped.assert_called_once()

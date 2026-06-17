@@ -111,7 +111,7 @@ class SendTokensResource(Resource):
             )
 
         try:
-            tx = self.manager.vertex_parser.deserialize(bytes.fromhex(tx_hex))
+            tx = self.manager.verification_service.verify_bytes(bytes.fromhex(tx_hex))
         except (ValueError, struct.error):
             # ValueError: invalid hex
             # struct.error: invalid transaction data

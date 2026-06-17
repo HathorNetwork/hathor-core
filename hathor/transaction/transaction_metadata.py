@@ -346,26 +346,67 @@ class TransactionMetadata:
 
     @classmethod
     def from_bytes(cls, data: bytes) -> 'TransactionMetadata':
-        """Deserialize a TransactionMetadata instance from bytes."""
-        return cls.create_from_json(json_loadb(data))
+        """Deserialize a TransactionMetadata instance from the canonical binary format
+        (defined in Rust — htr-rs/crates/htr-lib/src/metadata/mod.rs)."""
+        import htr_lib
+        core, extra = htr_lib.metadata_from_bytes(data)
+        (hash_, validation_name, accumulated_weight_be, score_be, first_block,
+         voided_by, conflict_with, twins, received_by, spent_outputs) = core
+        feature_states_raw, nc_block_root_id, nc_execution_raw, nc_calls_json, nc_events = extra
+
+        meta = cls(hash=hash_ or None)
+        for index, hashes in spent_outputs:
+            meta.spent_outputs[index] = list(hashes)
+        meta.received_by = list(received_by)
+        meta.conflict_with = list(conflict_with) if conflict_with else None
+        meta.voided_by = set(voided_by) if voided_by else None
+        meta.twins = list(twins)
+        meta.accumulated_weight = int.from_bytes(accumulated_weight_be, 'big')
+        meta.score = int.from_bytes(score_be, 'big')
+        if feature_states_raw:
+            meta.feature_states = {
+                Feature(feature): FeatureState(state) for feature, state in feature_states_raw
+            }
+        meta.first_block = first_block or None
+        meta.validation = ValidationState.from_name(validation_name)
+        meta.nc_block_root_id = nc_block_root_id
+        meta.nc_execution = NCExecutionState(nc_execution_raw) if nc_execution_raw is not None else None
+        if nc_calls_json is not None:
+            meta.nc_calls = [MetaNCCallRecord.from_json(x) for x in json_loadb(nc_calls_json)]
+        else:
+            meta.nc_calls = None
+        meta.nc_events = list(nc_events) if nc_events is not None else None
+        return meta
 
     def to_bytes(self) -> bytes:
-        """Serialize a TransactionMetadata instance to bytes. This should be used for storage."""
-        json_dict = self.to_storage_json()
+        """Serialize to the canonical binary format (see `from_bytes`). Used for storage."""
+        import htr_lib
 
-        # The `to_json()` method includes these fields for backwards compatibility with APIs, but since they're not
-        # part of metadata, they should not be serialized.
-        if 'height' in json_dict:
-            del json_dict['height']
-        if 'min_height' in json_dict:
-            del json_dict['min_height']
-        if 'feature_activation_bit_counts' in json_dict:
-            del json_dict['feature_activation_bit_counts']
-        # TODO: This one has not been migrated yet, but will be in a future PR
-        # if 'feature_states' in json_dict:
-        #     del json_dict['feature_states']
+        def int_be(value: int) -> bytes:
+            return value.to_bytes((value.bit_length() + 7) // 8 or 1, 'big')
 
-        return json_dumpb(json_dict)
+        nc_calls_json = json_dumpb([x.to_json() for x in self.nc_calls]) if self.nc_calls is not None else None
+        feature_states = (
+            [(feature.value, state.value) for feature, state in self.feature_states.items()]
+            if self.feature_states is not None else None
+        )
+        return htr_lib.metadata_to_bytes(
+            self.hash,
+            self.validation.name.lower(),
+            int_be(self.accumulated_weight),
+            int_be(self.score),
+            self.first_block,
+            sorted(self.voided_by) if self.voided_by else [],
+            sorted(set(self.conflict_with)) if self.conflict_with else [],
+            list(self.twins),
+            list(self.received_by),
+            [(index, list(hashes)) for index, hashes in self.spent_outputs.items()],
+            feature_states,
+            self.nc_block_root_id,
+            self.nc_execution.value if self.nc_execution is not None else None,
+            nc_calls_json,
+            self.nc_events if self.nc_events else None,
+        )
 
     def clone(self) -> 'TransactionMetadata':
         """Return exact copy without sharing memory.

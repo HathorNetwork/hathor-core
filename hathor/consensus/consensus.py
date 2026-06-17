@@ -155,10 +155,18 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
-        # signal a mempool tips index update for all affected transactions,
-        # because that index is used on _compute_vertices_that_became_invalid below.
-        for tx_affected in _sorted_affected_txs(context.txs_affected):
-            self.tx_storage.indexes.mempool_tips.update(tx_affected)
+        # persist the algorithms' deferred metadata saves (deduped); everything below reads
+        # the same in-memory objects, and the removal paths require saves to be written
+        # through from here on
+        context.flush_saves()
+
+        # On reorgs, the mempool tips index must be synced *before* _compute_vertices_that_became_invalid
+        # below reads it. On the common (non-reorg) path nothing in between reads or mutates consensus state,
+        # so the single update_critical_indexes pass at the end of this method (which also updates the tips)
+        # suffices — running this loop unconditionally would update every affected tx's tips twice.
+        if context.reorg_info is not None:
+            for tx_affected in _sorted_affected_txs(context.txs_affected):
+                self.tx_storage.indexes.mempool_tips.update(tx_affected)
 
         txs_to_remove: list[BaseTransaction] = []
         new_best_height, new_best_tip = self.tx_storage.indexes.height.get_height_tip()
@@ -219,7 +227,7 @@ class ConsensusAlgorithm:
                 context.transaction_algorithm.assert_valid_consensus(tx_affected)
                 if tx_affected.is_nano_contract():
                     assert_final_nc_state(tx_affected)
-            self.tx_storage.indexes.update_critical_indexes(tx_affected)
+            self.tx_storage.indexes.update_critical_indexes(tx_affected, is_new=tx_affected is base)
             with non_critical_code(self.log):
                 self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
             pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_UPDATE, kwargs=dict(tx=tx_affected)))

@@ -65,6 +65,7 @@ from hathor.transaction.vertex_parser import VertexParser
 from hathor.types import Address, VertexId
 from hathor.util import EnvironmentInfo, LogDuration, Random
 from hathor.utils.weight import calculate_min_significant_weight, weight_to_work
+from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
 from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
@@ -126,6 +127,7 @@ class HathorManager:
         environment_info: Optional[EnvironmentInfo] = None,
         enable_event_queue: bool = False,
         poa_block_producer: PoaBlockProducer | None = None,
+        script_verification_pool: ScriptVerificationPool | None = None,
         # Websocket factory
         websocket_factory: Optional['HathorAdminWebsocketFactory'] = None
     ) -> None:
@@ -236,6 +238,11 @@ class HathorManager:
         # Thread pool used to resolve pow when sending tokens
         self.pow_thread_pool = ThreadPool(minthreads=0, maxthreads=settings.MAX_POW_THREADS, name='Pow thread pool')
 
+        # Worker pool used to verify input scripts (signatures) in parallel. Disabled (serial) unless configured.
+        self.script_verification_pool = script_verification_pool or ScriptVerificationPool(
+            mode=ScriptVerificationMode.DISABLED, num_workers=0,
+        )
+
         # List of capabilities of the peer
         if capabilities is not None:
             self.capabilities = capabilities
@@ -312,6 +319,8 @@ class HathorManager:
         self.pubsub.publish(HathorEvents.MANAGER_ON_START)
         self._event_manager.load_started()
         self.pow_thread_pool.start()
+        # Pay the worker startup cost (esp. process spawn) now, at boot, rather than on the first transaction.
+        self.script_verification_pool.start()
 
         # Disable get transaction lock when initializing components
         self.tx_storage.disable_lock()
@@ -359,6 +368,7 @@ class HathorManager:
         self.pubsub.publish(HathorEvents.MANAGER_ON_STOP)
         if self.pow_thread_pool.started:
             self.pow_thread_pool.stop()
+        self.script_verification_pool.stop()
 
         # Metric stops to capture data
         self.metrics.stop()

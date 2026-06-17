@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import struct
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
@@ -30,11 +31,57 @@ class ScriptExtras:
     tx: Transaction
     version: OpcodesVersion
 
+    def get_sighash_all_data(self) -> bytes:
+        """Return the sighash_all data the signature opcodes (OP_CHECKSIG) verify against."""
+        return self.tx.get_sighash_all_data()
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class UtxoScriptExtras(ScriptExtras):
     txin: TxInput
     spent_tx: BaseTransaction
+
+    @property
+    def timestamp(self) -> int:
+        """Transaction timestamp, used by OP_GREATERTHAN_TIMESTAMP."""
+        return self.tx.timestamp
+
+    @property
+    def spent_output_value(self) -> int:
+        """Value of the output spent by this input, used by OP_FIND_P2PKH."""
+        return self.spent_tx.resolve_spent_output(self.txin.index).value
+
+    def iter_outputs(self) -> Iterator[tuple[int, bytes]]:
+        """Yield (value, script) for each output of the transaction, used by OP_FIND_P2PKH."""
+        for output in self.tx.outputs:
+            yield output.value, output.script
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class DetachedUtxoScriptExtras:
+    """A storage-free, picklable variant of :class:`UtxoScriptExtras` that carries only the primitive data the
+    opcodes actually read. It lets script evaluation run in worker threads/processes without shipping whole
+    transaction objects. It implements the same accessors used by the opcodes (``get_sighash_all_data``,
+    ``timestamp``, ``spent_output_value`` and ``iter_outputs``).
+    """
+    version: OpcodesVersion
+    sighash_all_data: bytes
+    timestamp: int
+    spent_output_value: int
+    # (value, script) for each tx output; only needed by the V1-only OP_FIND_P2PKH, empty otherwise.
+    tx_outputs: tuple[tuple[int, bytes], ...]
+
+    def get_sighash_all_data(self) -> bytes:
+        return self.sighash_all_data
+
+    def iter_outputs(self) -> Iterator[tuple[int, bytes]]:
+        yield from self.tx_outputs
+
+
+# Extras accepted by the opcode interpreter: the in-process variants or the detached one. Note that
+# DetachedUtxoScriptExtras is intentionally NOT a subclass of ScriptExtras (it carries no tx object), so a union
+# is needed to type the interpreter's `extras` argument.
+AnyScriptExtras = Union[ScriptExtras, DetachedUtxoScriptExtras]
 
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some
@@ -51,7 +98,7 @@ class OpcodePosition(NamedTuple):
     position: int
 
 
-def execute_eval(data: bytes, log: list[str], extras: ScriptExtras) -> None:
+def execute_eval(data: bytes, log: list[str], extras: AnyScriptExtras) -> None:
     """ Execute eval from data executing opcode methods
 
         :param data: data to be evaluated that contains data and opcodes
@@ -122,7 +169,7 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, versi
     )
 
 
-def raw_script_eval(*, input_data: bytes, output_script: bytes, extras: ScriptExtras) -> None:
+def raw_script_eval(*, input_data: bytes, output_script: bytes, extras: AnyScriptExtras) -> None:
     log: list[str] = []
 
     from hathor.transaction.scripts import MultiSig

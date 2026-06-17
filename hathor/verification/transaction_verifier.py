@@ -53,10 +53,12 @@ from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
+from hathor.verification.script_verification_pool import build_script_verification_job
 from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.verification.script_verification_pool import ScriptVerificationPool
 
 cpu = get_cpu_profiler()
 
@@ -66,7 +68,11 @@ MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa_factory', '_feature_service')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', '_script_verification_pool',
+                 '_verified_weights')
+
+    # FIFO cap for the verified-weights cache (a dict used as an ordered set)
+    _VERIFIED_WEIGHTS_CAP = 16384
 
     def __init__(
         self,
@@ -74,10 +80,16 @@ class TransactionVerifier:
         settings: HathorSettings,
         daa_factory: DAAFactory,
         feature_service: FeatureService,
+        script_verification_pool: ScriptVerificationPool | None = None,
     ) -> None:
         self._settings = settings
         self._daa_factory = daa_factory
         self._feature_service = feature_service
+        self._script_verification_pool = script_verification_pool
+        # hashes whose minimum-weight check already passed: the check is a pure function of the
+        # tx bytes and settings, and it runs twice per synced tx (the tx-streaming verify_basic
+        # and the one inside validate_full)
+        self._verified_weights: dict[bytes, None] = {}
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -94,6 +106,8 @@ class TransactionVerifier:
     def verify_weight(self, tx: Transaction) -> None:
         """Validate minimum tx difficulty."""
         assert self._settings.CONSENSUS_ALGORITHM.is_pow()
+        if tx._hash is not None and tx._hash in self._verified_weights:
+            return
         min_tx_weight = self._daa_factory.minimum_tx_weight(tx)
         max_tx_weight = min_tx_weight + self._settings.MAX_TX_WEIGHT_DIFF
         if tx.weight < min_tx_weight - self._settings.WEIGHT_TOL:
@@ -102,6 +116,10 @@ class TransactionVerifier:
         elif tx.weight > self._settings.MAX_TX_WEIGHT_DIFF_ACTIVATION and tx.weight > max_tx_weight:
             raise WeightError(f'Invalid new tx {tx.hash_hex}: weight ({tx.weight}) is '
                               f'greater than the maximum allowed ({max_tx_weight})')
+        if tx._hash is not None:
+            self._verified_weights[tx._hash] = None
+            while len(self._verified_weights) > self._VERIFIED_WEIGHTS_CAP:
+                self._verified_weights.pop(next(iter(self._verified_weights)))
 
     def verify_sigops_input(self, tx: Transaction, enable_checkdatasig_count: bool = True) -> None:
         """ Count sig operations on all inputs and verify that the total sum is below the limit
@@ -131,10 +149,38 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, params: VerificationParams, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        self._verify_inputs(self._settings, tx, params.features.opcodes_version, skip_script=skip_script)
+        self._verify_inputs(
+            self._settings,
+            tx,
+            params.features.opcodes_version,
+            skip_script=skip_script,
+            script_pool=self._script_verification_pool,
+        )
 
     @classmethod
     def _verify_inputs(
+        cls,
+        settings: HathorSettings,
+        tx: Transaction,
+        opcodes_version: OpcodesVersion,
+        *,
+        skip_script: bool,
+        script_pool: ScriptVerificationPool | None = None,
+    ) -> None:
+        """Verify inputs: size, existence, timestamp ordering, scripts (signatures) and non-conflict.
+
+        When a ``script_pool`` is given (and scripts are not skipped) the per-input script evaluations -- the
+        expensive ECDSA checks -- are fanned out to the pool; otherwise we run the original serial loop. Both paths
+        surface the exact same error: the lowest-index failing input, preserving the per-input check order
+        (size -> spent-tx -> timestamp -> script -> conflicting-inputs).
+        """
+        if script_pool is None or skip_script or not script_pool.enabled:
+            cls._verify_inputs_serial(settings, tx, opcodes_version, skip_script=skip_script)
+        else:
+            cls._verify_inputs_parallel(settings, tx, opcodes_version, script_pool=script_pool)
+
+    @classmethod
+    def _verify_inputs_serial(
         cls,
         settings: HathorSettings,
         tx: Transaction,
@@ -169,6 +215,113 @@ class TransactionVerifier:
                 raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'.format(
                     tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
+
+    @classmethod
+    def _verify_inputs_parallel(
+        cls,
+        settings: HathorSettings,
+        tx: Transaction,
+        opcodes_version: OpcodesVersion,
+        *,
+        script_pool: ScriptVerificationPool,
+    ) -> None:
+        """Parallel counterpart of :meth:`_verify_inputs_serial`: the cheap, storage-touching checks run serially
+        on this thread while the script evaluations are fanned out to ``script_pool``; results are merged so the
+        surfaced error matches the serial loop exactly (see the class docstring above)."""
+        # When the batched precompute already evaluated this tx's scripts, the job tuples are
+        # never used — skip building them (the sighash/spent-output extraction per input).
+        # Single-threaded reactor: nothing can evict the cache between this check and phase 2.
+        use_cache = script_pool.has_script_results(tx._hash, int(opcodes_version))
+
+        # OP_FIND_P2PKH (V1 only) is the sole opcode that reads the tx outputs; avoid building/pickling them
+        # otherwise. Shared by every input's job for this tx.
+        shared_outputs: tuple[tuple[int, bytes], ...] = (
+            tuple((output.value, output.script) for output in tx.outputs)
+            if opcodes_version == OpcodesVersion.V1 and not use_cache else ()
+        )
+
+        # Phase 1: cheap checks in input order. We stop at the first pre-script failure (size/spent-tx/timestamp)
+        # or conflicting input, exactly like the serial loop would, collecting a script job per input whose
+        # pre-script checks passed. Pre-script failures and conflicts are recorded (not raised yet) so that a
+        # lower-index script failure can still win during the merge.
+        spent_outputs: set[tuple[VertexId, int]] = set()
+        scheduled_indices: list[int] = []
+        jobs = []
+        precheck_error: tuple[int, BaseException] | None = None
+        conflict_at: tuple[int, str] | None = None
+
+        for index, input_tx in enumerate(tx.inputs):
+            if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
+                precheck_error = (index, InvalidInputDataSize('size: {} and max-size: {}'.format(
+                    len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
+                )))
+                break
+
+            try:
+                spent_tx = tx.get_spent_tx(input_tx)
+            except Exception as e:
+                # Normally unreachable: verify_sigops_input already raised InexistentInput for a missing input.
+                precheck_error = (index, e)
+                break
+            assert input_tx.index < len(spent_tx.outputs)
+
+            if tx.timestamp <= spent_tx.timestamp:
+                precheck_error = (index, TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
+                    tx.hash.hex() if tx.hash else None,
+                    tx.timestamp,
+                    spent_tx.hash.hex(),
+                    spent_tx.timestamp,
+                )))
+                break
+
+            scheduled_indices.append(index)
+            if not use_cache:
+                jobs.append(build_script_verification_job(
+                    input_index=index,
+                    tx=tx,
+                    txin=input_tx,
+                    spent_tx=spent_tx,
+                    opcodes_version=opcodes_version,
+                    shared_outputs=shared_outputs,
+                ))
+
+            # check if any other input in this tx is spending the same output
+            key = (input_tx.tx_id, input_tx.index)
+            if key in spent_outputs:
+                conflict_at = (index, 'tx {} inputs spend the same output: {} index {}'.format(
+                    tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
+                break
+            spent_outputs.add(key)
+
+        # Phase 2: run the script jobs in parallel and index the results by input. A batched
+        # sync precompute may have already evaluated this tx's scripts (one Rust call for the
+        # whole batch); that cache is consumed directly (no jobs were built). The raw _hash is
+        # used because locally-built txs are verified before being mined (no hash yet).
+        results: list[ScriptError | None] | None
+        if use_cache:
+            assert tx._hash is not None
+            results = script_pool.consume_script_results(tx._hash, int(opcodes_version), scheduled_indices)
+            assert results is not None, 'cache checked at phase 1 and the reactor is single-threaded'
+        else:
+            results = script_pool.run_jobs_with_cache(tx._hash, int(opcodes_version), jobs)
+        result_by_index = dict(zip(scheduled_indices, results))
+
+        # Phase 3: merge in input order. The first failing input wins, and for a given input the script error (if
+        # any) is surfaced before the conflicting-inputs error, mirroring the serial loop. ``horizon`` is the last
+        # input examined in Phase 1.
+        horizon = len(tx.inputs) - 1
+        if precheck_error is not None:
+            horizon = precheck_error[0]
+        elif conflict_at is not None:
+            horizon = conflict_at[0]
+        for index in range(horizon + 1):
+            if precheck_error is not None and precheck_error[0] == index:
+                raise precheck_error[1]
+            script_error = result_by_index.get(index)
+            if script_error is not None:
+                raise InvalidInputData(script_error) from script_error
+            if conflict_at is not None and conflict_at[0] == index:
+                raise ConflictingInputs(conflict_at[1])
 
     @staticmethod
     def verify_script(

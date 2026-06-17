@@ -170,7 +170,7 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return False
-        tx = self.factory.manager.vertex_parser.deserialize(
+        tx = self.factory.manager.verification_service.verify_bytes(
             bytes.fromhex(hexdata),
             storage=self.factory.manager.tx_storage
         )

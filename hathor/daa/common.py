@@ -189,7 +189,7 @@ def _minimum_tx_weight(settings: HathorSettings, tx: 'Transaction', test_mode: T
     if tx.is_genesis:
         return settings.MIN_TX_WEIGHT
 
-    tx_size = len(tx.get_struct())
+    tx_size = tx.get_serialized_size()
 
     # We need to take into consideration the decimal places because it is inside the amount.
     # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.

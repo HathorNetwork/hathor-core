@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 import datetime
-from dataclasses import replace
 from typing import Any, Generator
 
 from structlog import get_logger
@@ -41,6 +40,9 @@ cpu = get_cpu_profiler()
 
 
 class VertexHandler:
+    # during block sync, yield control back to the reactor after this many connected txs
+    CONNECT_YIELD_EVERY = 8
+
     __slots__ = (
         '_log',
         '_reactor',
@@ -99,15 +101,38 @@ class VertexHandler:
             ),
         )
 
-        for tx in deps:
-            if not self._tx_storage.transaction_exists(tx.hash):
-                if not self._old_on_new_vertex(tx, params):
-                    return False
-                yield deferLater(self._reactor, 0, lambda: None)
+        from hathor.verification.rust_verification_service import (
+            RustVerificationService,
+            defer_stateless_precompute,
+        )
 
-        if not self._tx_storage.transaction_exists(block.hash):
-            if not self._old_on_new_vertex(block, params):
-                return False
+        pending = [tx for tx in deps if not self._tx_storage.transaction_exists(tx.hash)]
+        service = self._verification_service
+        batch: list[BaseTransaction] = [*pending, block]
+        if len(pending) > 1 and isinstance(service, RustVerificationService):
+            # one Rust call pre-verifies the stateless checks of the whole list in parallel
+            # (off-reactor when the reactor supports threads, GIL released); the serial connect
+            # loop below consumes the results
+            yield defer_stateless_precompute(self._reactor, service, batch, params, include_scripts=True)
+        try:
+            connected = 0
+            for tx in pending:
+                if not self._tx_storage.transaction_exists(tx.hash):
+                    if not self._old_on_new_vertex(tx, params):
+                        return False
+                    connected += 1
+                    # yield to the reactor periodically instead of after every tx: each yield is
+                    # a full asyncio round trip (~20us), and the batched precompute already keeps
+                    # per-tx reactor blockage short
+                    if connected % self.CONNECT_YIELD_EVERY == 0:
+                        yield deferLater(self._reactor, 0, lambda: None)
+
+            if not self._tx_storage.transaction_exists(block.hash):
+                if not self._old_on_new_vertex(block, params):
+                    return False
+        finally:
+            if isinstance(service, RustVerificationService):
+                service.discard_precomputed(batch)
 
         return True
 
@@ -196,7 +221,11 @@ class VertexHandler:
         vertex.storage = self._tx_storage
 
         try:
-            metadata = vertex.get_metadata()
+            # when the vertex is not in storage (the common case for new vertices), the storage
+            # lookup inside get_metadata is a guaranteed miss — a wasted RocksDB read plus an
+            # exception per vertex — so it is skipped and a fresh metadata is created directly,
+            # which is exactly what the miss path produces
+            metadata = vertex.get_metadata(use_storage=already_exists)
         except TransactionDoesNotExist:
             raise InvalidNewTransaction('cannot get metadata')
 
@@ -242,15 +271,14 @@ class VertexHandler:
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
-        # XXX: during post consensus we don't need to verify weights again, so we can disable it
-        params = replace(params, skip_block_weight_verification=True)
-        assert self._verification_service.validate_full(
-            vertex,
-            params,
-            init_static_metadata=False,
-        )
+        # _validate_vertex already ran the full validation for this vertex, and nothing between it and this
+        # point can invalidate the vertex (consensus only writes metadata such as voided_by/spent_outputs; it
+        # never unsets the validation state). Re-running validate_full here would double the entire
+        # verification cost per vertex, so only the resulting state is asserted.
+        assert vertex.get_metadata().validation.is_fully_connected()
 
-        self._tx_storage.indexes.update_critical_indexes(vertex)
+        # the vertex was connected by this very call chain: nothing can have referenced it yet
+        self._tx_storage.indexes.update_critical_indexes(vertex, is_new=True)
         with non_critical_code(self._log):
             self._tx_storage.indexes.update_non_critical_indexes(vertex)
 

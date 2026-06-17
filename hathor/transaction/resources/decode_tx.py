@@ -52,7 +52,7 @@ class DecodeTxResource(Resource):
 
         try:
             tx_bytes = bytes.fromhex(parsed['args']['hex_tx'])
-            tx = self.manager.vertex_parser.deserialize(tx_bytes)
+            tx = self.manager.verification_service.verify_bytes(tx_bytes)
             tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
             tx.storage = self.manager.tx_storage
             data = get_tx_extra_data(tx)

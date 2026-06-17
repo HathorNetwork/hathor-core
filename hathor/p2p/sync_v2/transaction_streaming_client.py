@@ -42,6 +42,9 @@ logger = get_logger()
 
 
 class TransactionStreamingClient:
+    # how many queued transactions are pre-verified per batched Rust call
+    PROCESS_BATCH_SIZE: int = 64
+
     def __init__(self,
                  sync_agent: 'NodeBlockSync',
                  partial_blocks: list['Block'],
@@ -148,7 +151,18 @@ class TransactionStreamingClient:
 
     @inlineCallbacks
     def process_queue(self) -> Generator[Any, Any, None]:
-        """Process next transaction in the queue."""
+        """Process the next batch of transactions in the queue.
+
+        When the rust verification service is active, the stateless checks for the whole batch are
+        precomputed with a single Rust call running on a worker thread (the call releases the GIL,
+        so the reactor keeps serving while the batch is verified in parallel across transactions);
+        the serial per-tx processing below then consumes the precomputed results.
+        """
+        from hathor.verification.rust_verification_service import (
+            RustVerificationService,
+            defer_stateless_precompute,
+        )
+
         if self._deferred.called:
             return
 
@@ -160,11 +174,24 @@ class TransactionStreamingClient:
             return
 
         self._is_processing = True
+        batch: list[Transaction] = []
         try:
-            tx = self._queue.popleft()
-            self.log.debug('processing tx', tx_id=tx.hash.hex())
-            yield self._process_transaction(tx)
+            while self._queue and len(batch) < self.PROCESS_BATCH_SIZE:
+                batch.append(self._queue.popleft())
+
+            service = self.verification_service
+            if len(batch) > 1 and isinstance(service, RustVerificationService):
+                yield defer_stateless_precompute(self.reactor, service, list(batch), self.verification_params)
+
+            for tx in batch:
+                if self._deferred.called:
+                    return
+                self.log.debug('processing tx', tx_id=tx.hash.hex())
+                yield self._process_transaction(tx)
         finally:
+            service = self.verification_service
+            if isinstance(service, RustVerificationService):
+                service.discard_precomputed(batch)
             self._is_processing = False
 
         self.reactor.callLater(0, self.process_queue)

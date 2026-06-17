@@ -202,10 +202,13 @@ class IndexesManager(ABC):
         assert cache_capacity is not None
         tx_storage.set_cache_capacity(cache_capacity)
 
-    def update_critical_indexes(self, tx: BaseTransaction) -> None:
+    def update_critical_indexes(self, tx: BaseTransaction, *, is_new: bool = False) -> None:
         """ This is the new update method that indexes should use instead of add_tx/del_tx
+
+        `is_new` marks the vertex being connected by the current consensus update (it cannot
+        have children/spenders yet — see MempoolTipsIndex.update).
         """
-        self.mempool_tips.update(tx)
+        self.mempool_tips.update(tx, is_new=is_new)
 
     def update_non_critical_indexes(self, tx: BaseTransaction) -> None:
         if self.utxo:

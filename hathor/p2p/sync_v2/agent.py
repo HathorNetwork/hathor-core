@@ -109,6 +109,7 @@ class NodeBlockSync(SyncAgent):
         self.vertex_handler = vertex_handler
         self.protocol = protocol
         self.tx_storage: 'TransactionStorage' = protocol.node.tx_storage
+        self.verification_service = protocol.node.verification_service
         self.state = PeerState.UNKNOWN
 
         self.DEFAULT_STREAMING_LIMIT = DEFAULT_STREAMING_LIMIT
@@ -770,7 +771,7 @@ class NodeBlockSync(SyncAgent):
         assert self.protocol.connections is not None
 
         blk_bytes = base64.b64decode(payload)
-        blk = self.vertex_parser.deserialize(blk_bytes)
+        blk = self.verification_service.verify_bytes(blk_bytes)
         if not isinstance(blk, Block):
             # Not a block. Punish peer?
             return
@@ -1020,7 +1021,7 @@ class NodeBlockSync(SyncAgent):
 
         # tx_bytes = bytes.fromhex(payload)
         tx_bytes = base64.b64decode(payload)
-        tx = self.vertex_parser.deserialize(tx_bytes)
+        tx = self.verification_service.verify_bytes(tx_bytes)
         if not isinstance(tx, Transaction):
             self.log.warn('not a transaction', hash=tx.hash_hex)
             # Not a transaction. Punish peer?
@@ -1136,7 +1137,7 @@ class NodeBlockSync(SyncAgent):
             data = base64.b64decode(part2)
 
         try:
-            tx = self.vertex_parser.deserialize(data)
+            tx = self.verification_service.verify_bytes(data)
         except struct.error:
             # Invalid data for tx decode
             return

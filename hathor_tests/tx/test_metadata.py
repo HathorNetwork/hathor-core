@@ -37,17 +37,17 @@ class TestMetadata(unittest.TestCase):
     def test_round_trip(self) -> None:
         meta = TransactionMetadata()
         meta._tx_ref = Mock()
-        meta.hash = b'abc'
-        meta.spent_outputs = {0: [b'1', b'2'], 10: [b'3']}
-        meta.conflict_with = [b'1', b'2']
-        meta.voided_by = {b'1', b'2'}
+        meta.hash = b'a' * 32
+        meta.spent_outputs = {0: [b'1' * 32, b'2' * 32], 10: [b'3' * 32]}
+        meta.conflict_with = [b'1' * 32, b'2' * 32]
+        meta.voided_by = {b'1' * 32, b'2' * 32}
         meta.received_by = [1, 2, 3]
-        meta.twins = [b'1', b'2']
+        meta.twins = [b'1' * 32, b'2' * 32]
         meta.accumulated_weight = 123
         meta.score = 456
-        meta.first_block = b'123'
+        meta.first_block = b'1' * 32
         meta.validation = ValidationState.FULL
-        meta.nc_block_root_id = b'456'
+        meta.nc_block_root_id = b'4' * 32
         meta.nc_execution = NCExecutionState.SUCCESS
         meta.nc_calls = [
             MetaNCCallRecord(
@@ -80,8 +80,8 @@ class TestMetadata(unittest.TestCase):
             ),
         ]
         meta.nc_events = [
-            (b'a', b'b'),
-            (b'c', b'd'),
+            (b'a' * 32, b'b'),
+            (b'c' * 32, b'd'),
         ]
         meta.feature_states = {
             Feature.NOP_FEATURE_1: FeatureState.FAILED,

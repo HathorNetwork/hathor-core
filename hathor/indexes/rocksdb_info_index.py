@@ -22,9 +22,8 @@ from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
-
     from hathor.indexes.manager import IndexesManager
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 
@@ -42,6 +41,10 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
         MemoryInfoIndex.__init__(self, settings=settings)
+        # last value written per key: update_timestamps/update_counts run on every added
+        # vertex but typically change a single value — unchanged values are not rewritten
+        # (every actual change still hits RocksDB immediately, so crash semantics are intact)
+        self._stored_values: dict[bytes, int] = {}
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         self._load_all_values()
@@ -58,7 +61,9 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
     def _load_value(self, key: bytes) -> int:
         import struct
         db_value = self._db.get((self._cf, key))
+        assert db_value is not None, f'info index value missing for key {key!r}'
         value, = struct.unpack('>I', db_value)
+        self._stored_values[key] = value
         return value
 
     def _load_all_values(self) -> None:
@@ -69,8 +74,11 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
 
     def _store_value(self, key: bytes, value: int) -> None:
         import struct
+        if self._stored_values.get(key) == value:
+            return
         db_value = struct.pack('>I', value)
         self._db.put((self._cf, key), db_value)
+        self._stored_values[key] = value
 
     def _store_all_values(self) -> None:
         self._store_value(_DB_BLOCK_COUNT, self._block_count)

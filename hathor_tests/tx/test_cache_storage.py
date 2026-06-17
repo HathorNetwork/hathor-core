@@ -66,6 +66,61 @@ class CacheStorageTest(unittest.TestCase):
         self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
         self.assertEqual(0, len(self.cache_storage.cache_data.dirty_txs))
 
+    def test_metadata_only_flush_does_not_serialize_tx(self):
+        # Vertex bytes are immutable: they must be serialized and written exactly once (on the first flush after
+        # a full save); metadata-only saves must flush only the metadata column family.
+        tx = self._get_new_tx(0)
+        self.cache_storage.save_transaction(tx)
+        self.assertIn(tx.hash, self.cache_storage.cache_data.pending_tx_bytes)
+
+        serialize_spy = Mock(wraps=self.cache_storage._tx_to_bytes)
+        self.cache_storage._tx_to_bytes = serialize_spy
+        self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
+        self.assertEqual(1, serialize_spy.call_count)
+        self.assertNotIn(tx.hash, self.cache_storage.cache_data.pending_tx_bytes)
+
+        # a metadata-only save flushes the new metadata without re-serializing the vertex
+        voided_id = b'x' * 32
+        tx.get_metadata().add_voided_by(voided_id)
+        self.cache_storage.save_transaction(tx, only_metadata=True)
+        self.assertNotIn(tx.hash, self.cache_storage.cache_data.pending_tx_bytes)
+        self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
+        self.assertEqual(1, serialize_spy.call_count)
+
+        # both the metadata update and the vertex bytes are in the database
+        tx_from_db = self.cache_storage._get_transaction_from_db(tx.hash)
+        self.assertEqual({voided_id}, tx_from_db.get_metadata(use_storage=False).voided_by)
+        self.assertEqual(bytes(tx), bytes(tx_from_db))
+
+        # a new full save marks the bytes for (one) rewrite again
+        self.cache_storage.save_transaction(tx)
+        self.assertIn(tx.hash, self.cache_storage.cache_data.pending_tx_bytes)
+        self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
+        self.assertEqual(2, serialize_spy.call_count)
+
+    def test_metadata_only_eviction_does_not_serialize_tx(self):
+        # The cache-eviction write path (_cache_popitem) must also skip vertex bytes for metadata-only updates.
+        txs = [self._get_new_tx(nonce) for nonce in range(CACHE_SIZE)]
+        for tx in txs:
+            self.cache_storage.save_transaction(tx)
+        self.cache_storage._flush_to_storage(self.cache_storage.cache_data.dirty_txs.copy())
+
+        serialize_spy = Mock(wraps=self.cache_storage._tx_to_bytes)
+        self.cache_storage._tx_to_bytes = serialize_spy
+
+        # dirty the first tx with a metadata-only save, then evict it by filling the cache
+        txs[0].get_metadata().add_voided_by(b'y' * 32)
+        self.cache_storage.save_transaction(txs[0], only_metadata=True)
+        for nonce in range(CACHE_SIZE, 2 * CACHE_SIZE):
+            self.cache_storage.save_transaction(self._get_new_tx(nonce))
+        self.assertNotIn(txs[0].hash, self.cache_storage.cache_data.cache)
+
+        # evicting the metadata-dirty tx wrote its metadata but never re-serialized its bytes
+        serialized_hashes = {call.args[0].hash for call in serialize_spy.call_args_list}
+        self.assertNotIn(txs[0].hash, serialized_hashes)
+        tx_from_db = self.cache_storage._get_transaction_from_db(txs[0].hash)
+        self.assertEqual({b'y' * 32}, tx_from_db.get_metadata(use_storage=False).voided_by)
+
     def test_capacity(self):
         # cache should not grow over its capacity
         txs = [self._get_new_tx(nonce) for nonce in range(2 * CACHE_SIZE)]

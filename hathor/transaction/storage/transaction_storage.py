@@ -84,6 +84,10 @@ class CacheData:
     capacity: int
     cache: OrderedDict[bytes, BaseTransaction]
     dirty_txs: set[bytes]  # txs that have been modified but are not persisted yet
+    # txs whose vertex bytes have not been written to the tx column family yet. Vertex bytes are immutable, so
+    # each tx is written once (on the first flush after a full save); metadata-only saves never re-serialize or
+    # rewrite the vertex bytes.
+    pending_tx_bytes: set[bytes]
     flush_deferred: Deferred[None] | None = None
     hit: int = 0
     miss: int = 0
@@ -432,7 +436,11 @@ class TransactionStorage(ABC):
         """
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
-        self._save_static_metadata(tx)
+        if not only_metadata:
+            # static metadata is immutable and initialized before the first full save;
+            # metadata-only saves (several per consensus update) were rewriting the same
+            # bytes every time
+            self._save_static_metadata(tx)
 
     @abstractmethod
     def _save_static_metadata(self, vertex: BaseTransaction) -> None:
@@ -459,7 +467,16 @@ class TransactionStorage(ABC):
         A failure means there is a bug in the code that allowed the condition to reach the "get" code. This is a last
         second measure to prevent getting a transaction while using the wrong scope.
         """
+        from hathor.transaction.validation_state import ValidationState
         tx_meta = tx.get_metadata()
+        # Fast path for the overwhelmingly common case (~38 gets per added tx): default
+        # VALID scope and a fully-valid tx. Equivalent to the slow path: FULL is
+        # fully-connected and neither partial nor invalid, so is_allowed reduces to
+        # `VALID in scope`, and marker consistency reduces to the marker being absent.
+        if self._allow_scope is TxAllowScope.VALID and tx_meta.validation is ValidationState.FULL:
+            assert self._settings.PARTIALLY_VALIDATED_ID not in tx_meta.get_frozen_voided_by(), \
+                   'Inconsistent ValidationState and voided_by'
+            return
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
 

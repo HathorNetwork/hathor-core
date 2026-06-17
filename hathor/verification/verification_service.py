@@ -32,7 +32,11 @@ cpu = get_cpu_profiler()
 
 
 class VerificationService:
-    __slots__ = ('_settings', 'verifiers', '_tx_storage', '_nc_storage_factory')
+    __slots__ = ('_settings', 'verifiers', '_tx_storage', '_nc_storage_factory', '_vertex_parser',
+                 '_block_storage_cache')
+
+    # FIFO cap for the per-root NC block-storage cache (roots change once per block)
+    _BLOCK_STORAGE_CACHE_CAP = 8
 
     def __init__(
         self,
@@ -42,10 +46,31 @@ class VerificationService:
         tx_storage: TransactionStorage | None = None,
         nc_storage_factory: NCStorageFactory | None = None,
     ) -> None:
+        from hathor.transaction.vertex_parser import VertexParser
         self._settings = settings
         self.verifiers = verifiers
         self._tx_storage = tx_storage
         self._nc_storage_factory = nc_storage_factory
+        self._vertex_parser = VertexParser(settings=settings)
+        # NC block storages are read-only views at a content-addressed root: every tx of a
+        # block verifies against the same root, so rebuilding the trie storage (and re-reading
+        # the root node) per tx is pure waste
+        self._block_storage_cache: dict[bytes, NCBlockStorage] = {}
+
+    def verify_bytes(self, data: bytes, *, storage: TransactionStorage | None = None) -> BaseTransaction:
+        """The single entrypoint for turning wire bytes into a vertex: every caller that
+        receives a serialized vertex (p2p sync, APIs, mining) goes through here.
+
+        Parsing uses the Rust fast path with Python fallback; parse failures raise exactly
+        like ``VertexParser.deserialize`` (``struct.error``). Verification itself runs at the
+        canonical validation points — this method is where parse-time verification work
+        (e.g. the fused Rust parse+verify call) gets wired as it is migrated.
+        """
+        vertex = self._vertex_parser.deserialize(data, storage=storage)
+        # keep the original serialization on the vertex (guarded by hash, in case a caller
+        # mutates and re-hashes it): the batch pipeline and the storage flush reuse it
+        vertex._origin_bytes = (vertex.hash, data)
+        return vertex
 
     def validate_basic(self, vertex: BaseTransaction, params: VerificationParams) -> bool:
         """ Run basic validations (all that are possible without dependencies) and update the validation state.
@@ -260,7 +285,7 @@ class VerificationService:
             # TODO do genesis validation
             return
         self.verify_without_storage(tx, params)
-        self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
+        self._verify_sigops_input(tx, params)
         self.verifiers.tx.verify_inputs(tx, params)  # need to run verify_inputs first to check if all inputs exist
         self.verifiers.tx.verify_version(tx, params)
 
@@ -276,6 +301,10 @@ class VerificationService:
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
             self.verifiers.tx.verify_reward_locked(tx)
+
+    def _verify_sigops_input(self, tx: Transaction, params: VerificationParams) -> None:
+        """Dispatch point for the input-sigops check (overridden by the rust verification service)."""
+        self.verifiers.tx.verify_sigops_input(tx, params.features.count_checkdatasig_op)
 
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
@@ -383,4 +412,10 @@ class VerificationService:
         assert self._nc_storage_factory is not None
         if params.nc_block_root_id is None:
             return self._nc_storage_factory.get_empty_block_storage()
-        return self._nc_storage_factory.get_block_storage(params.nc_block_root_id)
+        block_storage = self._block_storage_cache.get(params.nc_block_root_id)
+        if block_storage is None:
+            block_storage = self._nc_storage_factory.get_block_storage(params.nc_block_root_id)
+            self._block_storage_cache[params.nc_block_root_id] = block_storage
+            while len(self._block_storage_cache) > self._BLOCK_STORAGE_CACHE_CAP:
+                self._block_storage_cache.pop(next(iter(self._block_storage_cache)))
+        return block_storage

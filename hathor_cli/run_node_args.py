@@ -68,6 +68,9 @@ class RunNodeArgs(BaseModel):
     procname_prefix: str
     allow_non_standard_script: bool
     max_output_script_size: Optional[int]
+    script_verification_workers: int
+    script_verification_executor: str
+    x_script_verification_min_inputs: int
     sentry_dsn: Optional[str]
     enable_debug_api: bool
     enable_crash_api: bool

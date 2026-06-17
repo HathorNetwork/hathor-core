@@ -22,7 +22,7 @@ from hathor.transaction.util import bytes_to_int, int_to_bytes
 from hathor.util import json_dumpb
 
 if TYPE_CHECKING:
-    import rocksdb
+    from hathor.storage import rocksdb_compat as rocksdb
 
 
 _CF_NAME_EVENT = b'event'
@@ -90,7 +90,7 @@ class EventRocksDBStorage(EventStorage):
             self._last_group_id = event.group_id
 
     def save_events(self, events: Iterable[BaseEvent]) -> None:
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
         batch = rocksdb.WriteBatch()
 
         for event in events:
@@ -161,7 +161,7 @@ class EventRocksDBStorage(EventStorage):
         )
 
     def get_stream_id(self) -> Optional[str]:
-        stream_id_bytes: bytes = self._db.get((self._cf_meta, _KEY_STREAM_ID))
+        stream_id_bytes: bytes | None = self._db.get((self._cf_meta, _KEY_STREAM_ID))
 
         if stream_id_bytes is None:
             return None

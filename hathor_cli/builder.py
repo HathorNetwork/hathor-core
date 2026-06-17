@@ -48,6 +48,7 @@ from hathor.transaction.storage.rocksdb_storage import CacheConfig
 from hathor.transaction.vertex_children import RocksDBVertexChildrenService
 from hathor.transaction.vertex_parser import VertexParser
 from hathor.util import Random
+from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
 from hathor.verification.verification_service import VerificationService
 from hathor.verification.vertex_verifiers import VertexVerifiers
 from hathor.vertex_handler import VertexHandler
@@ -298,6 +299,7 @@ class CliBuilder:
             test_mode=test_mode,
         )
 
+        script_verification_pool = self._create_script_verification_pool()
         vertex_verifiers = VertexVerifiers.create_defaults(
             reactor=reactor,
             settings=settings,
@@ -305,13 +307,24 @@ class CliBuilder:
             feature_service=self.feature_service,
             tx_storage=tx_storage,
             blueprint_service=blueprint_service,
+            script_verification_pool=script_verification_pool,
         )
-        verification_service = VerificationService(
-            settings=settings,
-            verifiers=vertex_verifiers,
-            tx_storage=tx_storage,
-            nc_storage_factory=self.nc_storage_factory,
-        )
+        if script_verification_pool.enabled and script_verification_pool.is_rust_mode:
+            from hathor.verification.rust_verification_service import RustVerificationService
+            verification_service: VerificationService = RustVerificationService(
+                settings=settings,
+                verifiers=vertex_verifiers,
+                tx_storage=tx_storage,
+                nc_storage_factory=self.nc_storage_factory,
+                script_verification_pool=script_verification_pool,
+            )
+        else:
+            verification_service = VerificationService(
+                settings=settings,
+                verifiers=vertex_verifiers,
+                tx_storage=tx_storage,
+                nc_storage_factory=self.nc_storage_factory,
+            )
 
         cpu_mining_service = CpuMiningService()
 
@@ -399,6 +412,7 @@ class CliBuilder:
             feature_service=self.feature_service,
             vertex_json_serializer=vertex_json_serializer,
             blueprint_service=blueprint_service,
+            script_verification_pool=script_verification_pool,
         )
 
         if self._args.x_ipython_kernel:
@@ -446,6 +460,26 @@ class CliBuilder:
             add_peer_id_blacklist(self._args.peer_id_blacklist)
 
         return self.manager
+
+    def _create_script_verification_pool(self) -> ScriptVerificationPool:
+        """Build the input-script verification worker pool from CLI args (disabled when workers == 0)."""
+        num_workers: int = self._args.script_verification_workers
+        executor_modes = {
+            'thread': ScriptVerificationMode.THREADS,
+            'process': ScriptVerificationMode.PROCESSES,
+            'rust': ScriptVerificationMode.RUST,
+            'shadow-rust': ScriptVerificationMode.SHADOW_RUST,
+        }
+        if num_workers <= 0:
+            mode = ScriptVerificationMode.DISABLED
+        else:
+            mode = executor_modes[self._args.script_verification_executor]
+        self.log.info('script verification pool', mode=mode.value, workers=num_workers)
+        return ScriptVerificationPool(
+            mode=mode,
+            num_workers=num_workers,
+            min_inputs=self._args.x_script_verification_min_inputs,
+        )
 
     def enable_wallet_index(self, indexes: IndexesManager, pubsub: PubSubManager) -> None:
         self.log.debug('enable wallet indexes')

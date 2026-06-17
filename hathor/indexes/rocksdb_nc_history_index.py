@@ -21,7 +21,7 @@ from hathor.indexes.rocksdb_tx_group_index import RocksDBTxGroupIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 
