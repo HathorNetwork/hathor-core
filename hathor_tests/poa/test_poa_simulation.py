@@ -509,7 +509,7 @@ class PoaSimulationTest(SimulatorTestCase):
             DISPLAY_DECIMAL_PLACES=0,
             VERTEX_DECIMAL_PLACES={VertexDecimalVersion.V1: 0},
             GENESIS_TOKEN_MAIN_UNITS=tokens,
-            TOKEN_DEPOSIT_PERCENTAGE=0.0000001,
+            TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=100,
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
             MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=0,

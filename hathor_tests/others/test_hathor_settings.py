@@ -103,7 +103,7 @@ def test_missing_hathor_settings_from_yaml(filepath):
     assert "validation error for HathorSettings\nNETWORK_NAME" in str(e.value)
 
 
-def test_token_deposit_percentage() -> None:
+def test_token_deposit_percentage_ppb() -> None:
     yaml_mock = Mock()
     required_settings = dict(P2PKH_VERSION_BYTE='x01', MULTISIG_VERSION_BYTE='x02', NETWORK_NAME='test')
 
@@ -111,23 +111,23 @@ def test_token_deposit_percentage() -> None:
         mock.return_value = required_settings | settings_
 
     with patch('hathorlib.utils.yaml.dict_from_extended_yaml', yaml_mock):
-        # Test default value passes (0.01 results in FEE_DIVISOR=100)
-        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE=0.01))
+        # Test default value passes (1% results in FEE_DIVISOR=100)
+        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=10**7))
         load_yaml_settings(HathorSettings, filepath='some_path')
 
-        # Test fails when TOKEN_DEPOSIT_PERCENTAGE results in non-integer FEE_DIVISOR (0.03 -> 33.333...)
-        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE=0.03))
+        # Test fails when TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR results in non-integer FEE_DIVISOR (3% -> 33.333...)
+        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=3 * 10**7))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
-        assert 'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR' in str(e.value)
-        assert 'TOKEN_DEPOSIT_PERCENTAGE=0.03' in str(e.value)
+        assert 'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR must result in an integer FEE_DIVISOR' in str(e.value)
+        assert f'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR={3 * 10**7}' in str(e.value)
 
-        # Test fails when TOKEN_DEPOSIT_PERCENTAGE results in non-integer FEE_DIVISOR (0.07 -> 14.285...)
-        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE=0.07))
+        # Test fails when TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR results in non-integer FEE_DIVISOR (7% -> 14.285...)
+        mock_settings(yaml_mock, dict(TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=7 * 10**7))
         with pytest.raises(ValidationError) as e:
             load_yaml_settings(HathorSettings, filepath='some_path')
-        assert 'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR' in str(e.value)
-        assert 'TOKEN_DEPOSIT_PERCENTAGE=0.07' in str(e.value)
+        assert 'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR must result in an integer FEE_DIVISOR' in str(e.value)
+        assert f'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR={7 * 10**7}' in str(e.value)
 
 
 def test_consensus_algorithm() -> None:
