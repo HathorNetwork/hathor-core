@@ -1,3 +1,4 @@
+# yamllint disable rule:line-length
 name: setup-hathor-env
 description: Setup Hathor node environment
 inputs:
@@ -26,12 +27,17 @@ runs:
       uses: actions/cache@v4
       with:
         path: .venv
-        # htr-lib is an editable (develop) maturin dependency: its compiled extension is built
-        # into the venv on first install, and `poetry sync` will not rebuild it when its version
-        # is unchanged. So the cache key must also cover the htr-rs Rust sources, and we must NOT
-        # provide a restore-keys prefix fallback — a partial-match restore would bring back a venv
-        # holding a stale htr_lib .so built from older sources (e.g. missing newly added classes).
-        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock', 'htr-rs/Cargo.lock', 'htr-rs/**/Cargo.toml', 'htr-rs/**/*.rs', 'htr-rs/crates/htr-lib-py/pyproject.toml') }}
+        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-py${{ inputs.python }}-
+
+    - name: Cache htr-rs build
+      uses: actions/cache@v4
+      with:
+        path: htr-rs/target
+        key: htr-rs-target-${{ runner.os }}-${{ hashFiles('htr-rs/Cargo.lock', 'htr-rs/crates/**/*.rs', 'htr-rs/**/Cargo.toml') }}
+        restore-keys: |
+          htr-rs-target-${{ runner.os }}-
 
     - name: Install Ubuntu dependencies
       if: startsWith(inputs.os, 'ubuntu')
@@ -51,4 +57,15 @@ runs:
 
     - name: Install Poetry dependencies
       run: poetry sync -n --no-root
+      shell: bash
+
+    # htr-lib is a develop (editable) maturin dependency. poetry reuses a cached prebuilt wheel
+    # for it and does not recompile when only the Rust sources change, so a `poetry sync` can leave
+    # a stale htr_lib in the venv (e.g. missing newly added classes). Force a fresh in-venv build
+    # from the current htr-rs sources; cargo reuses the cached target dir so unchanged sources relink
+    # quickly. Keep this consistent with the documented `maturin develop` workflow in CLAUDE.md.
+    - name: Build htr-lib extension from source
+      run: |
+        poetry run pip install 'maturin>=1.13,<2.0'
+        poetry run maturin develop --manifest-path htr-rs/crates/htr-lib-py/Cargo.toml
       shell: bash
