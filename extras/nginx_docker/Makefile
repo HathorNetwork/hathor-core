@@ -182,7 +182,8 @@ define generate_config
 endef
 
 # S3 Upload Settings
-S3_BUCKET := hathor-public-files
+# Private bucket — configs are pulled by fullnodes using their AWS identity, not served publicly.
+S3_BUCKET := hathor-private-files
 S3_PREFIX := nginx-configs
 
 # Config Generation & Release Targets
