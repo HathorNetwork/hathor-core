@@ -14,6 +14,7 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
 from hathor_tests.token_amount import UnsignedAmount
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class MyBlueprint(Blueprint):
@@ -546,3 +547,235 @@ if foo:
         assert set(tx1.tokens) == {token_id}
         assert 'TKA' not in artifacts.by_name
         assert tx1.get_metadata().nc_execution == NCExecutionState.FAILURE
+
+    def test_token_amount_version_basic(self) -> None:
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..13]
+            b10 < dummy
+
+            b1.out[0] <<< tx_v1
+            tx_v1.out[0] = 100 HTR
+
+            b2.out[0] <<< tx_v2
+            tx_v2.out[0] = 100 HTR
+            tx_v2.token_amount_version = V2
+
+            b11 < tx_v1
+            b12 < tx_v2
+            tx_v1 <-- tx_v2 <-- b13
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        b1, b2, b13, = artifacts.get_typed_vertices(('b1', 'b2', 'b13',), Block)
+        tx_v1, tx_v2 = artifacts.get_typed_vertices(('tx_v1', 'tx_v2'), Transaction)
+
+        assert tx_v1.get_metadata().first_block == b13.hash
+        assert tx_v1.get_metadata().voided_by is None
+
+        assert tx_v2.get_metadata().first_block == b13.hash
+        assert tx_v2.get_metadata().voided_by is None
+
+        # tx_v1 defaults to V1; tx_v2 opts into V2 through the DSL attribute.
+        assert tx_v1.get_token_amount_version() == TokenAmountVersion.V1
+        assert tx_v1.signal_bits & 1 == 0
+
+        assert tx_v2.get_token_amount_version() == TokenAmountVersion.V2
+        assert tx_v2.signal_bits & 1 == 1
+
+        # The specified output amount is interpreted in the transaction's own version.
+        factor = UnsignedAmount.get_normalization_factor()
+        assert factor == 10 ** 16
+        assert tx_v1.outputs[0].value.is_v1()
+        assert tx_v1.outputs[0].value.raw() == 100
+        assert tx_v1.outputs[0].value.normalized() == 100 * factor
+        assert str(tx_v1.outputs[0].value) == '1.0'
+
+        assert tx_v2.outputs[0].value.is_v2()
+        assert tx_v2.outputs[0].value.raw() == 100
+        assert tx_v2.outputs[0].value.normalized() == 100
+        assert str(tx_v2.outputs[0].value) == '0.0000000000000001'
+
+        # Blocks are always V1.
+        assert b1.outputs[0].value.is_v1()
+        assert b1.outputs[1].value.is_v1()
+        assert str(b1.outputs[0].value) == '0.01'
+        assert str(b1.outputs[1].value) == '63.99'
+
+        assert b2.outputs[0].value.is_v1()
+        assert b2.outputs[1].value.is_v1()
+        assert str(b2.outputs[0].value) == '0.01'
+        assert str(b2.outputs[1].value) == '63.99'
+
+    def test_token_amount_version_as_decimal_string(self) -> None:
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..10]
+            b10 < dummy
+
+            tx_v1.token_amount_version = V1
+            tx_v1.out[0] = 1.23 HTR
+
+            tx_v2.token_amount_version = V2
+            tx_v2.out[0] = 1.2345 HTR
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        tx_v1, tx_v2 = artifacts.get_typed_vertices(('tx_v1', 'tx_v2'), Transaction)
+
+        assert tx_v1.get_token_amount_version() == TokenAmountVersion.V1
+        assert tx_v2.get_token_amount_version() == TokenAmountVersion.V2
+
+        assert tx_v1.outputs[0].value.is_v1()
+        assert tx_v1.outputs[0].value.raw() == 123
+        assert tx_v1.outputs[0].value.normalized() == 1230000000000000000
+        assert str(tx_v1.outputs[0].value) == '1.23'
+
+        assert tx_v2.outputs[0].value.is_v2()
+        assert tx_v2.outputs[0].value.raw() == 1234500000000000000
+        assert tx_v2.outputs[0].value.normalized() == 1234500000000000000
+        assert str(tx_v2.outputs[0].value) == '1.2345'
+
+    def test_token_amount_version_deposit_token(self) -> None:
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..13]
+            b10 < dummy
+
+            tx_v1.out[0] = 100 TK1
+
+            tx_v2.out[0] = 100 TK2
+            tx_v2.token_amount_version = V2
+            TK2.token_amount_version = V2
+
+            b11 < tx_v1
+            b12 < tx_v2
+            tx_v1 <-- tx_v2 <-- b13
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        tk1, tk2 = artifacts.get_typed_vertices(('TK1', 'TK2'), TokenCreationTransaction)
+
+        assert tk1.get_token_amount_version() == TokenAmountVersion.V1
+        assert tk2.get_token_amount_version() == TokenAmountVersion.V2
+
+        assert tk1.outputs[1].value.is_v1()
+        assert tk1.outputs[1].token_data == 1
+        assert str(tk1.outputs[1].value) == '1.0'
+
+        assert tk2.outputs[1].value.is_v2()
+        assert tk2.outputs[1].token_data == 1
+        assert str(tk2.outputs[1].value) == '0.0000000000000001'
+
+
+    def test_token_amount_version_fee_token(self) -> None:
+        # A fee-based token-creation transaction is charged FEE_TOKEN_AMOUNT_PER_OUTPUT (0.01 HTR)
+        # per minted output, and so is a transaction that holds the resulting fee tokens. The fee
+        # is encoded in each vertex's own decimal version, so the V1 vertices spell 0.01 HTR as `1`
+        # while the V2 vertices spell the same 0.01 HTR as 10 ** 16.
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..13]
+            b10 < dummy
+
+            tx_v1.out[0] = 100 FBT1
+            tx_v1.fee = 1 HTR
+            FBT1.token_version = fee
+            FBT1.fee = 1 HTR
+
+            tx_v2.out[0] = 100 FBT2
+            tx_v2.fee = 0.01 HTR
+            tx_v2.token_amount_version = V2
+            FBT2.token_version = fee
+            FBT2.fee = 0.01 HTR
+            FBT2.token_amount_version = V2
+
+            b11 < tx_v1
+            b12 < tx_v2
+            tx_v1 <-- tx_v2 <-- b13
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        fbt1, fbt2 = artifacts.get_typed_vertices(('FBT1', 'FBT2'), TokenCreationTransaction)
+
+        assert fbt1.get_token_amount_version() == TokenAmountVersion.V1
+        assert fbt2.get_token_amount_version() == TokenAmountVersion.V2
+
+        assert fbt1.outputs[1].value.is_v1()
+        assert fbt1.outputs[1].token_data == 1
+        assert str(fbt1.outputs[1].value) == '1.0'
+
+        assert fbt2.outputs[1].value.is_v2()
+        assert fbt2.outputs[1].token_data == 1
+        assert str(fbt2.outputs[1].value) == '0.0000000000000001'
+
+    def test_token_amount_version_nano(self) -> None:
+        blueprint_id1 = b'1' * 32
+        blueprint_id2 = b'2' * 32
+        self.blueprint_service.register_blueprint(
+            blueprint_id1, MyBlueprint, token_amount_version=TokenAmountVersion.V1
+        )
+        self.blueprint_service.register_blueprint(
+            blueprint_id2, MyBlueprint, token_amount_version=TokenAmountVersion.V2
+        )
+
+        artifacts = self.dag_builder.build_from_str(f'''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            nc1.nc_id = "{blueprint_id1.hex()}"
+            nc1.nc_method = initialize(0)
+            nc1.nc_deposit = 0.1 HTR
+
+            nc2.nc_id = "{blueprint_id1.hex()}"
+            nc2.nc_method = initialize(0)
+            nc2.nc_deposit = 10 HTR
+            nc2.token_amount_version = V2
+
+            nc1 <-- b11
+            nc2 <-- b11
+        ''')
+
+        artifacts.propagate_with(self.manager)
+        nc1, nc2 = artifacts.get_typed_vertices(('nc1', 'nc2'), Transaction)
+
+        assert nc1.get_token_amount_version() == TokenAmountVersion.V1
+        assert nc2.get_token_amount_version() == TokenAmountVersion.V2
+
+        action1 = nc1.get_nano_header().nc_actions[0]
+        action2 = nc2.get_nano_header().nc_actions[0]
+
+        assert action1.amount.is_v1()
+        assert action2.amount.is_v2()
+
+        assert str(action1.amount) == '0.1'
+        assert str(action2.amount) == '0.00000000000000001'
+
+    def test_token_amount_version_dummy_funds_sub_cent_v2(self) -> None:
+        # The dummy funds a sub-cent HTR amount for a V2 vertex; that amount is not representable
+        # in V1, so the dummy itself is encoded as V2.
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            tx.out[0] = 1 HTR
+            tx.token_amount_version = V2
+
+            tx <-- b11
+        ''')
+        artifacts.propagate_with(self.manager)
+
+        dummy = artifacts.get_typed_vertex('dummy', Transaction)
+        assert dummy.get_token_amount_version() == TokenAmountVersion.V2
+
+    def test_token_amount_version_dummy_stays_v1_when_cent_aligned(self) -> None:
+        # Every amount the dummy funds here is cent-aligned and representable in V1, so the dummy
+        # uses the default V1 encoding.
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..11]
+            b10 < dummy
+
+            tx.out[0] = 100 HTR
+
+            tx <-- b11
+        ''')
+        artifacts.propagate_with(self.manager)
+
+        dummy = artifacts.get_typed_vertex('dummy', Transaction)
+        assert dummy.get_token_amount_version() == TokenAmountVersion.V1

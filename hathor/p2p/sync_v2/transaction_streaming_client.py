@@ -33,6 +33,7 @@ from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.types import VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.p2p.sync_v2.agent import NodeBlockSync
@@ -67,6 +68,7 @@ class TransactionStreamingClient:
                 restrict_dup_actions=False,
                 daa_version=DAAVersion.V1,
                 shielded_transactions=False,
+                token_amount_version=TokenAmountVersion.V1,
             )
         )
 

@@ -48,6 +48,7 @@ logger = get_logger()
 NC_DEPOSIT_KEY = 'nc_deposit'
 NC_WITHDRAWAL_KEY = 'nc_withdrawal'
 TOKEN_VERSION_KEY = 'token_version'
+TOKEN_AMOUNT_VERSION_KEY = 'token_amount_version'
 FEE_KEY = 'fee'
 
 
@@ -105,7 +106,16 @@ class DAGBuilder:
 
     def parse_tokens(self, tokens: Iterator[Token]) -> None:
         """Parse tokens and update the DAG accordingly."""
-        for parts in tokens:
+        def is_token_amount_version(token: Token) -> bool:
+            return token[0] == TokenType.ATTRIBUTE and token[1][1] == TOKEN_AMOUNT_VERSION_KEY
+
+        # A node's token_amount_version governs how every amount on it is interpreted, so apply
+        # those attributes before any amount-bearing token, regardless of DSL line order.
+        materialized = list(tokens)
+        version_attrs = [token for token in materialized if is_token_amount_version(token)]
+        other_tokens = [token for token in materialized if not is_token_amount_version(token)]
+
+        for parts in [*version_attrs, *other_tokens]:
             match parts:
                 case (TokenType.PARENT, (_from, _to)):
                     self.add_parent_edge(_from, _to)
@@ -195,7 +205,7 @@ class DAGBuilder:
         from_node.inputs.add(DAGInput(_to, _txout_index))
         return self
 
-    def set_output(self, name: str, index: int, amount: int, token: str, attrs: AttributeType) -> Self:
+    def set_output(self, name: str, index: int, amount: str, token: str, attrs: AttributeType) -> Self:
         """Set information about an output.
 
         `amount` is in the node's native decimal-version atomic units (matching what the user
@@ -204,7 +214,7 @@ class DAGBuilder:
         node = self._get_or_create_node(name)
         if len(node.outputs) <= index:
             node.outputs.extend([None] * (index - len(node.outputs) + 1))
-        token_amount = node.as_node_amount(amount)
+        token_amount = node.parse_amount(amount)
         node.outputs[index] = DAGOutput(token_amount, token, attrs)
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
@@ -238,9 +248,7 @@ class DAGBuilder:
             token, amount, args = parse_amount_token(value)
             if args:
                 raise SyntaxError(f'unexpected args in `{value}`')
-            if amount < 0:
-                raise SyntaxError(f'unexpected negative action in `{value}`')
-            token_amount = node.as_node_amount(amount)
+            token_amount = node.parse_amount(amount)
             token_balance = token_amount.to_signed()
             self.update_balance(name, token, token_balance if key == NC_WITHDRAWAL_KEY else -token_balance)
             actions = node.get_attr_list(key, default=[])
@@ -278,9 +286,7 @@ class DAGBuilder:
         token, amount, args = parse_amount_token(value)
         if args:
             raise SyntaxError(f'unexpected args in `{value}`')
-        if amount < 0:
-            raise SyntaxError(f'unexpected negative fee in `{value}`')
-        token_amount = node.as_node_amount(amount)
+        token_amount = node.parse_amount(amount)
         self.update_balance(name, token, -token_amount.to_signed())
         fees.append((token, token_amount))
         node.attrs[key] = fees
