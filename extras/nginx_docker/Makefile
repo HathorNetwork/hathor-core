@@ -3,6 +3,7 @@ all: help
 
 DEFAULT_LATEST_TAG = latest
 DEFAULT_NO_RATE_LIMIT_TAG = no-rate-limit-latest
+IMAGE_BUILD_PLATFORMS = linux/arm64/v8,linux/amd64
 
 # Build and Push Commands (DEPRECATED — use 'make release VERSION=vX.Y.Z' instead)
 # ===================================================================================
@@ -33,13 +34,13 @@ hathor-testnet-no-rate-limit: clean set_real_ip_from_cloudfront
 .PHONY: hathor-testnet-india-default
 hathor-testnet-india-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing india image for Hathor Testnet..."
-	$(call generate_nginx_conf,--override hathor-testnet-india $(HATHOR_TESTNET_TRUSTED_PROXIES))
+	$(call generate_nginx_conf,$(HATHOR_TESTNET_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(HATHOR_TESTNET_INDIA_TAG_LATEST) .
 
 .PHONY: hathor-testnet-india-no-rate-limit
 hathor-testnet-india-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit india image for Hathor Testnet..."
-	$(call generate_nginx_conf,--override hathor-testnet-india --disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES))
+	$(call generate_nginx_conf,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_REGISTRY):$(HATHOR_TESTNET_INDIA_TAG_NO_RATE_LIMIT) .
 
 # GCP / Standalone Fullnodes
@@ -93,13 +94,13 @@ hathor-testnet-playground: hathor-testnet-playground-default hathor-testnet-play
 .PHONY: hathor-testnet-playground-default
 hathor-testnet-playground-default: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing latest image for Hathor Testnet Playground..."
-	$(call generate_nginx_conf,--override hathor-testnet-playground $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
+	$(call generate_nginx_conf,$(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG) .
 
 .PHONY: hathor-testnet-playground-no-rate-limit
 hathor-testnet-playground-no-rate-limit: clean set_real_ip_from_cloudfront
 	@echo "Building and pushing no-rate-limit image for Hathor Testnet Playground..."
-	$(call generate_nginx_conf,--override hathor-testnet-playground --disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
+	$(call generate_nginx_conf,--disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
 # GCP / Hathor Testnet Shielded Outputs
@@ -127,6 +128,21 @@ AWS_MAIN_ECR_REGISTRY = 769498303037.dkr.ecr.us-east-1.amazonaws.com
 AWS_MAIN_REGISTRY = $(AWS_MAIN_ECR_REGISTRY)/webtank
 AWS_MAIN_REGION ?= us-east-1
 AWS_MAIN_PROFILE ?= hathor-network
+
+AWS_MAIN_IMAGE_TAG_ARGS = --tag $(AWS_MAIN_REGISTRY):$(VERSION)
+# AWS_MAIN_IMAGE_TAG_ARGS += --tag $(AWS_MAIN_REGISTRY):$(DEFAULT_LATEST_TAG)
+
+STANDALONE_FULLNODES_IMAGE_TAG_ARGS = --tag $(STANDALONE_FULLNODES_REGISTRY):$(VERSION)
+# STANDALONE_FULLNODES_IMAGE_TAG_ARGS += --tag $(STANDALONE_FULLNODES_REGISTRY):$(DEFAULT_LATEST_TAG)
+
+HATHOR_TESTNET_IMAGE_TAG_ARGS = --tag $(HATHOR_TESTNET_REGISTRY):$(VERSION)
+# HATHOR_TESTNET_IMAGE_TAG_ARGS += --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_LATEST_TAG)
+
+EKVILIBRO_IMAGE_TAG_ARGS = --tag $(EKVILIBRO_REGISTRY):$(VERSION)
+# EKVILIBRO_IMAGE_TAG_ARGS += --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_LATEST_TAG)
+
+HATHOR_TESTNET_PLAYGROUND_IMAGE_TAG_ARGS = --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(VERSION)
+# HATHOR_TESTNET_PLAYGROUND_IMAGE_TAG_ARGS += --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG)
 
 .INTERMEDIATE: .aws-main-login.stamp
 
@@ -181,6 +197,10 @@ define generate_config
 	poetry run python -m hathor generate_nginx_config $(1) - > dist/$(VERSION)/$(2)
 endef
 
+define build_and_push_image
+	docker buildx build --pull --push --platform $(IMAGE_BUILD_PLATFORMS) $(1) .
+endef
+
 # S3 Upload Settings
 # Private bucket — configs are pulled by fullnodes using their AWS identity, not served publicly.
 S3_BUCKET := hathor-private-files
@@ -203,17 +223,17 @@ endif
 	$(call generate_config,$(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_api_proxy.conf)
-	$(call generate_config,--override hathor-testnet-india $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india.conf)
-	$(call generate_config,--override hathor-testnet-india --disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_no_rate_limit.conf)
-	$(call generate_config,--override hathor-testnet-india --enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_api_proxy.conf)
+	$(call generate_config,$(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india.conf)
+	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_api_proxy.conf)
 	# ekvilibro
 	$(call generate_config,$(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_api_proxy.conf)
 	# hathor-testnet-playground
-	$(call generate_config,--override hathor-testnet-playground $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx.conf)
-	$(call generate_config,--override hathor-testnet-playground --disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
-	$(call generate_config,--override hathor-testnet-playground --enable-api-proxy $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_api_proxy.conf)
+	$(call generate_config,$(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx.conf)
+	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_api_proxy.conf)
 	# hathor-testnet-shielded-output
 	$(call generate_config,$(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx_no_rate_limit.conf)
@@ -247,6 +267,53 @@ endif
 .PHONY: release
 release: generate-all upload-to-s3 upload-to-s3-as-latest ## Generate and upload all nginx configs (requires VERSION)
 	@echo "Release complete for $(VERSION)."
+
+# Generic Image Publish Targets
+# ============================
+
+.PHONY: publish-images
+publish-images: publish-aws-main-image publish-standalone-fullnodes-image publish-hathor-testnet-image publish-ekvilibro-image publish-hathor-testnet-playground-image ## Build and push the generic nginx image to all workflow registries (requires VERSION and prior registry auth)
+	@echo "Published generic nginx image to all workflow registries for $(VERSION)."
+
+.PHONY: publish-aws-main-image
+publish-aws-main-image: ## Build and push the generic nginx image to AWS Main ECR (requires VERSION and prior registry auth)
+ifndef VERSION
+	$(error VERSION is required. Usage: make publish-aws-main-image VERSION=v0.69.0)
+endif
+	@echo "Building and pushing generic nginx image to AWS Main..."
+	$(call build_and_push_image,$(AWS_MAIN_IMAGE_TAG_ARGS))
+
+.PHONY: publish-standalone-fullnodes-image
+publish-standalone-fullnodes-image: ## Build and push the generic nginx image to standalone-fullnodes (requires VERSION and prior registry auth)
+ifndef VERSION
+	$(error VERSION is required. Usage: make publish-standalone-fullnodes-image VERSION=v0.69.0)
+endif
+	@echo "Building and pushing generic nginx image to Standalone Fullnodes..."
+	$(call build_and_push_image,$(STANDALONE_FULLNODES_IMAGE_TAG_ARGS))
+
+.PHONY: publish-hathor-testnet-image
+publish-hathor-testnet-image: ## Build and push the generic nginx image to hathor-testnet (requires VERSION and prior registry auth)
+ifndef VERSION
+	$(error VERSION is required. Usage: make publish-hathor-testnet-image VERSION=v0.69.0)
+endif
+	@echo "Building and pushing generic nginx image to Hathor Testnet..."
+	$(call build_and_push_image,$(HATHOR_TESTNET_IMAGE_TAG_ARGS))
+
+.PHONY: publish-ekvilibro-image
+publish-ekvilibro-image: ## Build and push the generic nginx image to ekvilibro (requires VERSION and prior registry auth)
+ifndef VERSION
+	$(error VERSION is required. Usage: make publish-ekvilibro-image VERSION=v0.69.0)
+endif
+	@echo "Building and pushing generic nginx image to Ekvilibro..."
+	$(call build_and_push_image,$(EKVILIBRO_IMAGE_TAG_ARGS))
+
+.PHONY: publish-hathor-testnet-playground-image
+publish-hathor-testnet-playground-image: ## Build and push the generic nginx image to hathor-testnet-playground (requires VERSION and prior registry auth)
+ifndef VERSION
+	$(error VERSION is required. Usage: make publish-hathor-testnet-playground-image VERSION=v0.69.0)
+endif
+	@echo "Building and pushing generic nginx image to Hathor Testnet Playground..."
+	$(call build_and_push_image,$(HATHOR_TESTNET_PLAYGROUND_IMAGE_TAG_ARGS))
 
 # Generate nginx.conf only (for testing or manual use).
 # Usage:
@@ -303,12 +370,20 @@ help:
 	@echo "  upload-to-s3-as-latest   - Copy generated configs to S3 latest path (requires VERSION)"
 	@echo "  release                  - Generate and upload all nginx configs (requires VERSION)"
 	@echo ""
+	@echo "Generic Image Publish:"
+	@echo "  publish-images                       - Build and push the generic nginx image to all workflow registries (requires VERSION and prior registry auth)"
+	@echo "  publish-aws-main-image              - Build and push the generic nginx image to AWS Main ECR"
+	@echo "  publish-standalone-fullnodes-image  - Build and push the generic nginx image to Standalone Fullnodes"
+	@echo "  publish-hathor-testnet-image        - Build and push the generic nginx image to Hathor Testnet"
+	@echo "  publish-ekvilibro-image             - Build and push the generic nginx image to Ekvilibro"
+	@echo "  publish-hathor-testnet-playground-image - Build and push the generic nginx image to Hathor Testnet Playground"
+	@echo ""
 	@echo "Utility Commands:"
 	@echo "  nginx.conf                - Generate nginx.conf only (use NGINX_ARGS for extra options)"
 	@echo "  clean                     - Remove generated files"
 	@echo "  help                      - Show this help message"
 	@echo ""
-	@echo "DEPRECATED Docker Build Commands (use 'make release VERSION=vX.Y.Z' instead):"
+	@echo "DEPRECATED Variant Image Commands (legacy image tags, do not use for new fullnodes):"
 	@echo "  hathor-testnet             - Build and push all images for GCP Project Hathor Testnet"
 	@echo "  standalone-fullnodes       - Build and push all images for GCP Project Standalone Fullnodes"
 	@echo "  ekvilibro                  - Build and push all images for GCP Project Ekvilibro"

@@ -122,14 +122,8 @@ jobs:
         uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
 
       - name: Build and push to ECR
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: extras/nginx_docker
-          push: true
-          platforms: linux/amd64,linux/arm64/v8
-          tags: |
-            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:${{ needs.build.outputs.version }}
-#            769498303037.dkr.ecr.us-east-1.amazonaws.com/webtank:latest
+        working-directory: extras/nginx_docker
+        run: make publish-aws-main-image VERSION="$VERSION"
 
       # --- GCP Artifact Registries ---
 
@@ -145,14 +139,8 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to standalone-fullnodes
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: extras/nginx_docker
-          push: true
-          platforms: linux/amd64,linux/arm64/v8
-          tags: |
-            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:${{ needs.build.outputs.version }}
-#            us-central1-docker.pkg.dev/standalone-fullnodes/fullnodes/webtank:latest
+        working-directory: extras/nginx_docker
+        run: make publish-standalone-fullnodes-image VERSION="$VERSION"
 
       # hathor-testnet
       - name: Authenticate to GCP (hathor-testnet)
@@ -166,14 +154,8 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to hathor-testnet
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: extras/nginx_docker
-          push: true
-          platforms: linux/amd64,linux/arm64/v8
-          tags: |
-            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:${{ needs.build.outputs.version }}
-#            us-central1-docker.pkg.dev/hathor-testnet/fullnodes/webtank:latest
+        working-directory: extras/nginx_docker
+        run: make publish-hathor-testnet-image VERSION="$VERSION"
 
       # ekvilibro
       - name: Authenticate to GCP (ekvilibro)
@@ -187,14 +169,8 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to ekvilibro
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: extras/nginx_docker
-          push: true
-          platforms: linux/amd64,linux/arm64/v8
-          tags: |
-            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:${{ needs.build.outputs.version }}
-#            us-central1-docker.pkg.dev/ekvilibro/fullnodes/webtank:latest
+        working-directory: extras/nginx_docker
+        run: make publish-ekvilibro-image VERSION="$VERSION"
 
       # hathor-testnet-playground
       - name: Authenticate to GCP (hathor-testnet-playground)
@@ -208,11 +184,5 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Build and push to hathor-testnet-playground
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: extras/nginx_docker
-          push: true
-          platforms: linux/amd64,linux/arm64/v8
-          tags: |
-            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:${{ needs.build.outputs.version }}
-#            us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank:latest
+        working-directory: extras/nginx_docker
+        run: make publish-hathor-testnet-playground-image VERSION="$VERSION"
