@@ -56,7 +56,7 @@ class BlueprintService:
 
         if settings.ENABLE_NANO_CONTRACTS:
             blueprints = NCBlueprintCatalog.generate_blueprints_from_settings(settings)
-            self.register_blueprints(blueprints)
+            self.nc_catalog.register_blueprints(blueprints)
 
     def get_on_chain_blueprint(self, blueprint_id: BlueprintId) -> OnChainBlueprint:
         """Return an on-chain blueprint transaction."""
@@ -86,7 +86,7 @@ class BlueprintService:
         if isinstance(blueprint, OnChainBlueprint):
             return blueprint.get_blueprint_class(), blueprint.get_token_amount_version()
         else:
-            return blueprint, TokenAmountVersion.V2
+            return blueprint
 
     def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
         """Returns the blueprint class associated with the given blueprint_id.
@@ -109,11 +109,14 @@ class BlueprintService:
         if isinstance(blueprint, OnChainBlueprint):
             return self.get_on_chain_blueprint(blueprint_id).code.text
         else:
-            module = inspect.getmodule(blueprint)
+            module = inspect.getmodule(blueprint[0])
             assert module is not None
             return inspect.getsource(module)
 
-    def _get_blueprint(self, blueprint_id: BlueprintId) -> type[Blueprint] | OnChainBlueprint:
+    def _get_blueprint(
+        self,
+        blueprint_id: BlueprintId,
+    ) -> tuple[type[Blueprint], TokenAmountVersion] | OnChainBlueprint:
         if blueprint_class := self.nc_catalog.get_blueprint_class(blueprint_id):
             return blueprint_class
 
@@ -123,10 +126,24 @@ class BlueprintService:
         )
         return self.get_on_chain_blueprint(blueprint_id)
 
-    def register_blueprint(self, blueprint_id: bytes, blueprint: type[Blueprint], *, strict: bool = False) -> None:
+    def register_blueprint(
+        self,
+        blueprint_id: bytes,
+        blueprint: type[Blueprint],
+        *,
+        strict: bool = False,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
+    ) -> None:
         """Register a single blueprint in the catalog."""
-        self.nc_catalog.register_blueprints({blueprint_id: blueprint}, strict=strict)
+        self.nc_catalog.register_blueprints({blueprint_id: (blueprint, token_amount_version)}, strict=strict)
 
-    def register_blueprints(self, blueprints: dict[bytes, type[Blueprint]], *, strict: bool = False) -> None:
+    def register_blueprints(
+        self,
+        blueprints: dict[bytes, type[Blueprint]],
+        *,
+        strict: bool = False,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
+    ) -> None:
         """Register multiple blueprints in the catalog."""
-        self.nc_catalog.register_blueprints(blueprints, strict=strict)
+        bps = {bp_id: (bp, token_amount_version) for bp_id, bp in blueprints.items()}
+        self.nc_catalog.register_blueprints(bps, strict=strict)
