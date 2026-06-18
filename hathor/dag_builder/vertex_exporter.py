@@ -336,6 +336,7 @@ class VertexExporter:
         """Add the configured headers."""
         self.add_nano_header_if_needed(node, vertex)
         self.add_fee_header_if_needed(node, vertex)
+        self.add_shielded_outputs_header_if_needed(node, vertex)
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
@@ -461,6 +462,44 @@ class VertexExporter:
             fees=entries,
         )
         vertex.headers.append(fee_header)
+
+    def add_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Attach a ShieldedOutputsHeader for any sout[] declarations on the node.
+
+        Dummy outputs on master; the header is appended before sign_all_inputs so
+        the signature covers it. Requires ENABLE_SHIELDED_TRANSACTIONS in settings
+        for the node to accept the tx.
+        """
+        from hathor.simulator.shielded import build_shielded_output
+        from hathorlib.headers.shielded_outputs_header import ShieldedOutputsHeader
+        from hathorlib.transaction.shielded_tx_output import ShieldedOutput
+
+        shielded = [s for s in node.shielded_outputs if s is not None]
+        if not shielded:
+            return
+        assert isinstance(vertex, Transaction)
+
+        outputs: list[ShieldedOutput] = []
+        for sout in shielded:
+            if sout.token == 'HTR':
+                token_uid = self._settings.HATHOR_TOKEN_UID
+                token_data = 0
+            else:
+                token_id = self._get_token_id(sout.token)
+                if token_id not in vertex.tokens:
+                    vertex.tokens.append(token_id)
+                token_data = 1 + vertex.tokens.index(token_id)
+
+            outputs.append(build_shielded_output(
+                amount=sout.amount,
+                token_uid=token_uid,
+                token_data=token_data,
+                script=self.get_next_p2pkh_script(),
+                mode=sout.mode,
+                recipient_pubkey=None,  # dummy mode; real path resolves recipient on merge
+            ))
+
+        vertex.headers.append(ShieldedOutputsHeader(shielded_outputs=outputs))
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""

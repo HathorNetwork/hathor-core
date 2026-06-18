@@ -121,7 +121,7 @@ def serialize_header(
 
 def get_header_sighash_bytes(header: AnyVertexHeader, *, token_amount_version: TokenAmountVersion) -> bytes:
     """Get sighash bytes for a header."""
-    from hathor.transaction.headers import FeeHeader, NanoHeader
+    from hathor.transaction.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader
 
     match header:
         case NanoHeader():
@@ -134,5 +134,7 @@ def get_header_sighash_bytes(header: AnyVertexHeader, *, token_amount_version: T
             serializer = Serializer.build_bytes_serializer()
             serialize_fee_header(serializer, header, token_amount_version=token_amount_version)
             return bytes(serializer.finalize())
+        case ShieldedOutputsHeader():
+            return header.get_sighash_bytes()
         case _:
             raise AssertionError('unreachable')
