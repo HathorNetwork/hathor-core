@@ -43,13 +43,13 @@ def serialize_token_creation_funds(
 ) -> None:
     """Serialize the funds fields for a TokenCreationTransaction.
 
-    Format: signal_bits(B) + version(B) + inputs_len(B) + outputs_len(B)
+    Format: flags(B) + version(B) + inputs_len(B) + outputs_len(B)
             + inputs + outputs + token_info
 
     This matches the output of TokenCreationTransaction.get_funds_struct().
     """
     serializer.write_struct(
-        (tx.signal_bits, tx.version, len(tx.inputs), len(tx.outputs)),
+        (tx.flags, tx.version, len(tx.inputs), len(tx.outputs)),
         '!BBBB',
     )
     for tx_input in tx.inputs:
@@ -70,7 +70,7 @@ def serialize_token_creation_sighash(
     This matches the output of TokenCreationTransaction.get_sighash_all().
     """
     serializer.write_struct(
-        (tx.signal_bits, tx.version, len(tx.inputs), len(tx.outputs)),
+        (tx.flags, tx.version, len(tx.inputs), len(tx.outputs)),
         '!BBBB',
     )
     for tx_input in tx.inputs:
@@ -95,17 +95,17 @@ def deserialize_token_creation_funds(
 ) -> None:
     """Deserialize funds fields for a TokenCreationTransaction.
 
-    Sets tx.signal_bits, tx.version, tx.inputs, tx.outputs, tx.token_name,
+    Sets tx.flags, tx.version, tx.inputs, tx.outputs, tx.token_name,
     tx.token_symbol, tx.token_version directly.
     """
     from hathor.transaction.base_transaction import TxInput, TxOutput
     from hathor.transaction.token_info import TokenVersion
 
-    (signal_bits, version, inputs_len, outputs_len) = deserializer.read_struct('!BBBB')
-    tx.signal_bits = signal_bits
+    (flags, version, inputs_len, outputs_len) = deserializer.read_struct('!BBBB')
+    tx.flags = flags
     tx.version = version
     if verbose:
-        verbose('signal_bits', signal_bits)
+        verbose('flags', flags)
         verbose('version', version)
         verbose('inputs_len', inputs_len)
         verbose('outputs_len', outputs_len)

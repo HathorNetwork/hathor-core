@@ -44,13 +44,13 @@ def serialize_tx_funds(
 ) -> None:
     """Serialize the funds fields for a Transaction.
 
-    Format: signal_bits(B) + version(B) + tokens_len(B) + inputs_len(B) + outputs_len(B)
+    Format: flags(B) + version(B) + tokens_len(B) + inputs_len(B) + outputs_len(B)
             + token_uids + inputs + outputs
 
     This matches the output of Transaction.get_funds_struct().
     """
     serializer.write_struct(
-        (tx.signal_bits, tx.version, len(tx.tokens), len(tx.inputs), len(tx.outputs)),
+        (tx.flags, tx.version, len(tx.tokens), len(tx.inputs), len(tx.outputs)),
         '!BBBBB',
     )
     for token_uid in tx.tokens:
@@ -73,7 +73,7 @@ def serialize_tx_sighash(
     This matches the output of Transaction.get_sighash_all().
     """
     serializer.write_struct(
-        (tx.signal_bits, tx.version, len(tx.tokens), len(tx.inputs), len(tx.outputs)),
+        (tx.flags, tx.version, len(tx.tokens), len(tx.inputs), len(tx.outputs)),
         '!BBBBB',
     )
     for token_uid in tx.tokens:
@@ -99,15 +99,15 @@ def deserialize_tx_funds(
 ) -> None:
     """Deserialize funds fields for a Transaction.
 
-    Sets tx.signal_bits, tx.version, tx.tokens, tx.inputs, tx.outputs directly.
+    Sets tx.flags, tx.version, tx.tokens, tx.inputs, tx.outputs directly.
     """
     from hathor.transaction.base_transaction import TxInput, TxOutput
 
-    (signal_bits, version, tokens_len, inputs_len, outputs_len) = deserializer.read_struct('!BBBBB')
-    tx.signal_bits = signal_bits
+    (flags, version, tokens_len, inputs_len, outputs_len) = deserializer.read_struct('!BBBBB')
+    tx.flags = flags
     tx.version = version
     if verbose:
-        verbose('signal_bits', signal_bits)
+        verbose('flags', flags)
         verbose('version', version)
         verbose('tokens_len', tokens_len)
         verbose('inputs_len', inputs_len)

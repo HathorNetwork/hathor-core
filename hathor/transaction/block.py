@@ -24,7 +24,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.serialization import Serializer
 from hathor.transaction import TxOutput, TxVersion
-from hathor.transaction.base_transaction import GenericVertex
+from hathor.transaction.base_transaction import _ONE_BYTE, GenericVertex
 from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback
@@ -40,6 +40,10 @@ if TYPE_CHECKING:
 class Block(GenericVertex[BlockStaticMetadata]):
     SERIALIZATION_NONCE_SIZE = 16
 
+    # Bits extracted from the first byte of the version field. They carry information about Feature Activation bits
+    # and also extra bits reserved for future use, depending on the configuration.
+    signal_bits: int
+
     def __init__(
         self,
         nonce: int = 0,
@@ -54,10 +58,10 @@ class Block(GenericVertex[BlockStaticMetadata]):
         storage: Optional['TransactionStorage'] = None,
         settings: HathorSettings | None = None,
     ) -> None:
+        assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         super().__init__(
             nonce=nonce,
             timestamp=timestamp,
-            signal_bits=signal_bits,
             version=version,
             weight=weight,
             outputs=outputs or [],
@@ -66,6 +70,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
             storage=storage,
             settings=settings,
         )
+        self.signal_bits = signal_bits
         self.data = data
 
     def _get_formatted_fields_dict(self, short: bool = True) -> dict[str, str]:
@@ -201,6 +206,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
     # TODO: maybe introduce convention on serialization methods names (e.g. to_json vs get_struct)
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
+        json['signal_bits'] = self.signal_bits
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
         json['token_amount_version'] = TokenAmountVersion.V1.value  # Blocks are always V1.

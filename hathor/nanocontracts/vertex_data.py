@@ -137,7 +137,7 @@ def create_vertex_data_from_vertex(vertex: BaseTransaction) -> VertexData:
         version=vertex.version,
         hash=vertex.hash,
         nonce=vertex.nonce,
-        signal_bits=vertex.signal_bits,
+        flags=vertex.flags,
         work=weight_to_work(vertex.weight),
         inputs=inputs,
         outputs=outputs,

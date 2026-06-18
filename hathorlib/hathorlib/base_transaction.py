@@ -109,7 +109,7 @@ class BaseTransaction(ABC):
     """Hathor base transaction"""
 
     __slots__ = (
-        'version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', 'hash', 'headers'
+        'version', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', 'hash', 'headers'
     )
 
     # Even though nonce is serialized with different sizes for tx and blocks
@@ -118,17 +118,10 @@ class BaseTransaction(ABC):
     HASH_NONCE_SIZE = 16
     HEX_BASE = 16
 
-    # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
-    # differently by each subclass of BaseTransaction.
-    # Currently only the Block subclass uses it, carrying information about Feature Activation bits and also extra
-    # bits reserved for future use, depending on the configuration.
-    signal_bits: int
-
     def __init__(self) -> None:
         from hathorlib.headers import VertexBaseHeader
         self.nonce: int = 0
         self.timestamp: int = 0
-        self.signal_bits: int = 0
         self.version: int = 0
         self.weight: float = 0
         self.inputs: List['TxInput'] = []

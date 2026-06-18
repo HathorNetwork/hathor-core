@@ -31,7 +31,7 @@ class TokenCreationTransaction(Transaction):
         self,
         nonce: int = 0,
         timestamp: Optional[int] = None,
-        signal_bits: int = 0,
+        flags: int = 0,
         version: TxVersion = TxVersion.TOKEN_CREATION_TRANSACTION,
         weight: float = 0,
         inputs: Optional[list[TxInput]] = None,
@@ -47,7 +47,7 @@ class TokenCreationTransaction(Transaction):
         super().__init__(
             nonce=nonce,
             timestamp=timestamp,
-            signal_bits=signal_bits,
+            flags=flags,
             version=version,
             weight=weight,
             inputs=inputs,

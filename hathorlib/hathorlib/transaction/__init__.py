@@ -41,9 +41,13 @@ TokenInfo = namedtuple('TokenInfo', 'amount can_mint can_melt')
 
 
 class Transaction(BaseTransaction):
-    __slots__ = ('tokens',)
+    __slots__ = ('tokens', 'flags')
 
     SERIALIZATION_NONCE_SIZE = 4
+
+    # Bits extracted from the first byte of the version field. They carry extra information about the transaction,
+    # such as the token amount version encoded in the least significant bit.
+    flags: int
 
     def __init__(self) -> None:
         """
@@ -51,6 +55,7 @@ class Transaction(BaseTransaction):
             Inputs: all inputs that are being used (empty in case of a block)
         """
         super().__init__()
+        self.flags: int = 0
         self.tokens: List[bytes] = []
 
     @property
@@ -159,7 +164,7 @@ class Transaction(BaseTransaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.signal_bits, self.version, tokens_len, inputs_len, outputs_len), buf = unpack(
+        (self.flags, self.version, tokens_len, inputs_len, outputs_len), buf = unpack(
             _FUNDS_FORMAT_STRING,
             buf
         )
@@ -186,7 +191,7 @@ class Transaction(BaseTransaction):
         """
         struct_bytes = pack(
             _FUNDS_FORMAT_STRING,
-            self.signal_bits,
+            self.flags,
             self.version,
             len(self.tokens),
             len(self.inputs),
@@ -213,7 +218,7 @@ class Transaction(BaseTransaction):
         struct_bytes = bytearray(
             pack(
                 _SIGHASH_ALL_FORMAT_STRING,
-                self.signal_bits,
+                self.flags,
                 self.version,
                 len(self.tokens),
                 len(self.inputs),

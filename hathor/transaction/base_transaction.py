@@ -141,7 +141,7 @@ StaticMetadataT = TypeVar('StaticMetadataT', bound=VertexStaticMetadata, covaria
 class GenericVertex(ABC, Generic[StaticMetadataT]):
     """Hathor generic vertex"""
 
-    __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
+    __slots__ = ['version', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
                  'storage', '_settings', '_metadata', '_static_metadata', 'headers', 'name', 'MAX_NUM_INPUTS',
                  'MAX_NUM_OUTPUTS', '__weakref__']
 
@@ -154,17 +154,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
     _metadata: Optional[TransactionMetadata]
     _static_metadata: StaticMetadataT | None
 
-    # Bits extracted from the first byte of the version field. They carry extra information that may be interpreted
-    # differently by each subclass of BaseTransaction.
-    # Currently only the Block subclass uses it, carrying information about Feature Activation bits and also extra
-    # bits reserved for future use, depending on the configuration.
-    signal_bits: int
-
     def __init__(
         self,
         nonce: int = 0,
         timestamp: Optional[int] = None,
-        signal_bits: int = 0,
         version: TxVersion = TxVersion.REGULAR_BLOCK,
         weight: float = 0,
         inputs: Optional[list['TxInput']] = None,
@@ -177,19 +170,16 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """
             Nonce: nonce used for the proof-of-work
             Timestamp: moment of creation
-            Signal bits: bits used to carry extra information that may be interpreted differently by each subclass
             Version: version when it was created
             Weight: different for transactions and blocks
             Outputs: all outputs that are being created
             Parents: transactions you are confirming (2 transactions and 1 block - in case of a block only)
         """
-        assert signal_bits <= _ONE_BYTE, f'signal_bits {hex(signal_bits)} must not be larger than one byte'
         assert version <= _ONE_BYTE, f'version {hex(version)} must not be larger than one byte'
 
         self._settings = settings or get_global_settings()
         self.nonce = nonce
         self.timestamp = timestamp or int(time.time())
-        self.signal_bits = signal_bits
         self.version = version
         self.weight = weight
         self.inputs = inputs or []
@@ -758,7 +748,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         data['timestamp'] = self.timestamp
         data['version'] = int(self.version)
         data['weight'] = self.weight
-        data['signal_bits'] = self.signal_bits
 
         data['parents'] = []
         for parent in self.parents:

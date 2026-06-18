@@ -68,7 +68,7 @@ class ContextTestCase(BlueprintTestCase):
 
         self.assertEqual(vertex_data.version, TxVersion.REGULAR_TRANSACTION)
         self.assertEqual(vertex_data.hash, nc2.hash)
-        self.assertEqual(vertex_data.signal_bits, 0)
+        self.assertEqual(vertex_data.flags, 0)
         self.assertEqual(vertex_data.work, 2)
         self.assertEqual(vertex_data.tokens, ())
         self.assertEqual(block_data.hash, b12.hash)
