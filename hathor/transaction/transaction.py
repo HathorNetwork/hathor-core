@@ -476,5 +476,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     @final
     def get_token_amount_version(self) -> TokenAmountVersion:
         """Return the version under which this transaction's token amounts are interpreted."""
-        # Transactions are always V1. This will be updated in the future.
-        return TokenAmountVersion.V1
+        # Token amount version is interpreted from the least significant bit of the tx's signal bits.
+        raw_version = self.signal_bits & 1
+        return TokenAmountVersion(raw_version + 1)  # versions are 1-indexed.
