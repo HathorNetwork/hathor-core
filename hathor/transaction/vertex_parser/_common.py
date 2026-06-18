@@ -22,8 +22,8 @@ from hathor.serialization import Deserializer, Serializer
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import SerializedSizeError
 from hathor.transaction.util import VerboseCallback, int_to_bytes
-from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.serialization.encoding.output_value import decode_output_value, encode_output_value
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -66,9 +66,14 @@ def serialize_tx_input_sighash(serializer: Serializer, tx_input: TxInput) -> Non
     serializer.write_bytes(int_to_bytes(0, 2))
 
 
-def serialize_tx_output(serializer: Serializer, tx_output: TxOutput, *, decimal_version: VertexDecimalVersion) -> None:
+def serialize_tx_output(
+    serializer: Serializer,
+    tx_output: TxOutput,
+    *,
+    token_amount_version: TokenAmountVersion,
+) -> None:
     """Serialize a TxOutput. Matches bytes(TxOutput)."""
-    encode_output_value(serializer, tx_output.value, decimal_version=decimal_version)
+    encode_output_value(serializer, tx_output.value, token_amount_version=token_amount_version)
     serializer.write_bytes(int_to_bytes(tx_output.token_data, 1))
     serializer.write_bytes(int_to_bytes(len(tx_output.script), 2))
     serializer.write_bytes(tx_output.script)
@@ -143,7 +148,7 @@ def _deserialize_tx_input(
 def _deserialize_tx_output(
     deserializer: Deserializer,
     *,
-    decimal_version: VertexDecimalVersion,
+    token_amount_version: TokenAmountVersion,
     verbose: VerboseCallback = None,
 ) -> 'TxOutput':
     """Deserialize a single TxOutput. Matches TxOutput.create_from_bytes()."""
@@ -152,7 +157,7 @@ def _deserialize_tx_output(
     from hathor.transaction.exceptions import InvalidOutputValue
 
     try:
-        value = decode_output_value(deserializer, decimal_version=decimal_version)
+        value = decode_output_value(deserializer, token_amount_version=token_amount_version)
     except BadDataError as e:
         raise InvalidOutputValue(*e.args) from e
     if verbose:

@@ -16,13 +16,13 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder
 
 def _serialize_nano_header(header: NanoHeader) -> bytes:
     serializer = Serializer.build_bytes_serializer()
-    serialize_nano_header(serializer, header, decimal_version=header.tx.get_decimal_version())
+    serialize_nano_header(serializer, header, token_amount_version=header.tx.get_token_amount_version())
     return bytes(serializer.finalize())
 
 
 def _deserialize_nano_header(tx: Transaction, buf: bytes) -> tuple[NanoHeader, bytes]:
     deserializer = Deserializer.build_bytes_deserializer(buf)
-    data = deserialize_nano_header(deserializer, decimal_version=tx.get_decimal_version())
+    data = deserialize_nano_header(deserializer, token_amount_version=tx.get_token_amount_version())
     header = NanoHeader.create_from_data(tx, data)
     return header, bytes(deserializer.read_all())
 

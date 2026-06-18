@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING, List, TypeVar, final
 
 from hathorlib.base_transaction import TX_HASH_SIZE, BaseTransaction, TxInput, TxOutput
 from hathorlib.conf import HathorSettings
-from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.exceptions import InvalidOutputValue, InvalidToken
 from hathorlib.headers import VertexBaseHeader
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.utils import unpack, unpack_len
 
 if TYPE_CHECKING:
@@ -281,9 +281,7 @@ class Transaction(BaseTransaction):
                     output.value, index))
 
     @final
-    def get_decimal_version(self) -> VertexDecimalVersion:
-        """
-        Return the decimal-places version under which this transaction's token amounts are interpreted.
-        """
+    def get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which this transaction's token amounts are interpreted."""
         # Transactions are always V1. This will be updated in the future.
-        return VertexDecimalVersion.V1
+        return TokenAmountVersion.V1
