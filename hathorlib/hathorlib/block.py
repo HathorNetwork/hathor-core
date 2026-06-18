@@ -28,6 +28,14 @@ _SIGHASH_ALL_FORMAT_STRING = '!BBBB'
 class Block(BaseTransaction):
     SERIALIZATION_NONCE_SIZE = 16
 
+    # Bits extracted from the first byte of the version field. They carry information about Feature Activation bits
+    # and also extra bits reserved for future use, depending on the configuration.
+    signal_bits: int
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.signal_bits: int = 0
+
     @property
     def is_block(self) -> bool:
         """Returns true if this is a block"""

@@ -59,7 +59,7 @@ class ContextFactory:
             version=_NC_TX_VERSION,
             hash=self._id_gen.create_vertex_id('tx'),
             nonce=0,
-            signal_bits=0,
+            flags=0,
             work=1,
             inputs=(),
             outputs=(),

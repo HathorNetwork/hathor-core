@@ -26,7 +26,7 @@ class VertexData:
     version: TxVersion
     hash: bytes
     nonce: int
-    signal_bits: int
+    flags: int
     work: int
     inputs: tuple[TxInputData, ...]
     outputs: tuple[TxOutputData, ...]

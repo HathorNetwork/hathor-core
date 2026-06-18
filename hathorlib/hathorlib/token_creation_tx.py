@@ -69,7 +69,7 @@ class TokenCreationTransaction(Transaction):
 
         :raises ValueError: when the sequence of bytes is incorect
         """
-        (self.signal_bits, self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
+        (self.flags, self.version, inputs_len, outputs_len), buf = unpack(_FUNDS_FORMAT_STRING, buf)
 
         for _ in range(inputs_len):
             txin, buf = TxInput.create_from_bytes(buf)
@@ -97,7 +97,7 @@ class TokenCreationTransaction(Transaction):
         """
         struct_bytes = pack(
             _FUNDS_FORMAT_STRING,
-            self.signal_bits,
+            self.flags,
             self.version,
             len(self.inputs),
             len(self.outputs)
@@ -125,7 +125,7 @@ class TokenCreationTransaction(Transaction):
         """
         struct_bytes = pack(
             _SIGHASH_ALL_FORMAT_STRING,
-            self.signal_bits,
+            self.flags,
             self.version,
             len(self.inputs),
             len(self.outputs)

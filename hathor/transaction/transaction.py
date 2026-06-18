@@ -23,7 +23,7 @@ from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.exception import InvalidNewTransaction
 from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
-from hathor.transaction.base_transaction import GenericVertex
+from hathor.transaction.base_transaction import _ONE_BYTE, GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import (
     AnyVertexHeader,
@@ -53,15 +53,19 @@ class RewardLockedInfo(NamedTuple):
 
 
 class Transaction(GenericVertex[TransactionStaticMetadata]):
-    __slots__ = ['tokens', '_sighash_cache', '_sighash_data_cache']
+    __slots__ = ['tokens', 'flags', '_sighash_cache', '_sighash_data_cache']
 
     SERIALIZATION_NONCE_SIZE = 4
+
+    # Bits extracted from the first byte of the version field. They carry extra information about the transaction,
+    # such as the token amount version encoded in the least significant bit.
+    flags: int
 
     def __init__(
         self,
         nonce: int = 0,
         timestamp: Optional[int] = None,
-        signal_bits: int = 0,
+        flags: int = 0,
         version: TxVersion = TxVersion.REGULAR_TRANSACTION,
         weight: float = 0,
         inputs: Optional[list[TxInput]] = None,
@@ -76,10 +80,10 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             Creating new init just to make sure inputs will always be empty array
             Inputs: all inputs that are being used (empty in case of a block)
         """
+        assert flags <= _ONE_BYTE, f'flags {hex(flags)} must not be larger than one byte'
         super().__init__(
             nonce=nonce,
             timestamp=timestamp,
-            signal_bits=signal_bits,
             version=version,
             weight=weight,
             inputs=inputs or [],
@@ -89,6 +93,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             storage=storage,
             settings=settings
         )
+        self.flags = flags
         self.tokens = tokens or []
         self._sighash_cache: Optional[bytes] = None
         self._sighash_data_cache: Optional[bytes] = None
@@ -266,6 +271,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
+        json['signal_bits'] = self.flags
         json['tokens'] = [h.hex() for h in self.tokens]
         json['token_amount_version'] = self.get_token_amount_version().value
 
@@ -476,6 +482,6 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     @final
     def get_token_amount_version(self) -> TokenAmountVersion:
         """Return the version under which this transaction's token amounts are interpreted."""
-        # Token amount version is interpreted from the least significant bit of the tx's signal bits.
-        raw_version = self.signal_bits & 1
+        # Token amount version is interpreted from the least significant bit of the tx's flags.
+        raw_version = self.flags & 1
         return TokenAmountVersion(raw_version + 1)  # versions are 1-indexed.
