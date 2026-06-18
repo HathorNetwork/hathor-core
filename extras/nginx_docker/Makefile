@@ -217,6 +217,10 @@ endif
 	$(call generate_config,--override hathor-testnet-playground $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx.conf)
 	$(call generate_config,--override hathor-testnet-playground --disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
 	$(call generate_config,--override hathor-testnet-playground --enable-api-proxy $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_api_proxy.conf)
+	# hathor-testnet-shielded-output
+	$(call generate_config,$(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx.conf)
+	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx_no_rate_limit.conf)
+	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx_api_proxy.conf)
 	# aws-main
 	$(call generate_config,,aws-main/nginx.conf)
 	$(call generate_config,--disable-rate-limits,aws-main/nginx_no_rate_limit.conf)
