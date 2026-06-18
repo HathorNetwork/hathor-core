@@ -78,7 +78,7 @@ jobs:
     timeout-minutes: 30
     # This environment is tied to the AWS Role assumed by this workflow.
     # The Role will only allow to be assumed if the workflow is set with this environment.
-    # We also have additional protection rules on this environment.
+    # We also have additional protection rules on this environment to require a review before running.
     environment: publish-nginx
     permissions:
       id-token: write
