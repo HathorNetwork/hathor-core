@@ -91,6 +91,8 @@ def deserialize_token_creation_funds(
     from hathor.transaction.token_info import TokenVersion
 
     (signal_bits, version, inputs_len, outputs_len) = deserializer.read_struct('!BBBB')
+    tx.signal_bits = signal_bits
+    tx.version = version
     if verbose:
         verbose('signal_bits', signal_bits)
         verbose('version', version)
@@ -137,8 +139,6 @@ def deserialize_token_creation_funds(
     decoded_name = decode_string_utf8(name, 'Token name')
     decoded_symbol = decode_string_utf8(symbol, 'Token symbol')
 
-    tx.signal_bits = signal_bits
-    tx.version = version
     tx.inputs = inputs
     tx.outputs = outputs
     tx.token_name = decoded_name
