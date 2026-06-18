@@ -488,6 +488,7 @@ class VertexExporter:
                 token_id = self._get_token_id(sout.token)
                 if token_id not in vertex.tokens:
                     vertex.tokens.append(token_id)
+                token_uid = token_id
                 token_data = 1 + vertex.tokens.index(token_id)
 
             outputs.append(build_shielded_output(

@@ -72,3 +72,27 @@ class DAGBuilderShieldedTestCase(unittest.TestCase):
         assert isinstance(loaded, Transaction)
         assert loaded.has_shielded_outputs()
         assert len(loaded.shielded_outputs) == 2
+
+    def test_shielded_output_with_custom_token(self) -> None:
+        # Exercises the custom-token branch (token_data != 0), where token_uid
+        # must be resolved from the token id rather than the HTR uid.
+        artifacts = self.dag_builder.build_from_str("""
+            blockchain genesis b[1..50]
+            b1.out[0] <<< tx1
+            b30 < tx1
+            b30 < dummy
+
+            tx1.out[0] = 100 HTR [wallet1]
+            tx1.out[1] = 50 TKA [wallet1]
+            tx1.sout[0] = 30 TKA [wallet2]
+        """)
+        artifacts.propagate_with(self.manager)
+
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+        assert tx1.has_shielded_outputs()
+        souts = tx1.shielded_outputs
+        assert len(souts) == 1
+        assert isinstance(souts[0], AmountShieldedOutput)
+        # custom token -> token_data is a 1-based index into tx.tokens (not 0/HTR)
+        assert souts[0].token_data != 0
+        assert not tx1.get_metadata().voided_by
