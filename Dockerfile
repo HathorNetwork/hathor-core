@@ -28,8 +28,8 @@ COPY README.md ./
 RUN poetry build -f wheel
 RUN poetry run pip install dist/hathor-*.whl
 # poetry installs path deps editably (.pth -> /app/...), which breaks once the venv is copied to stage-1.
-# Reinstall hathorlib and htr-lib non-editably so the venv is portable.
-RUN poetry run pip install --no-deps --force-reinstall ./hathorlib ./htr-rs/crates/htr-lib
+# Reinstall hathorlib and htr-lib-py non-editably so the venv is portable.
+RUN poetry run pip install --no-deps --force-reinstall ./hathorlib ./htr-rs/crates/htr-lib-py
 
 # finally: use production .venv from before
 # lean and mean: this image should be about ~50MB, would be about ~470MB if using the whole stage-1

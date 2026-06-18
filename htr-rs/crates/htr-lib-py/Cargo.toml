@@ -1,11 +1,11 @@
 [package]
-name = "htr-lib"
+name = "htr-lib-py"
 version = "0.1.0"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "htr_lib"
+name = "htr_lib_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

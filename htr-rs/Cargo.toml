@@ -9,7 +9,7 @@ members = ["crates/*"]
 elided_lifetimes_in_paths = "deny"
 
 [workspace.dependencies]
-pyo3 = "0.28.3"
+pyo3 = "0.29.0"
 
 # Overflows must always panic.
 [profile.release]

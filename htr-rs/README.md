@@ -6,7 +6,7 @@ Crates are organized as described in [Large Rust Workspaces](https://matklad.git
 
 ## Crates
 
-- [`htr-lib`](crates/htr-lib) — Python extension module (via [PyO3](https://pyo3.rs/)) exposing Rust implementations to `hathor-core`.
+- [`htr-lib-py`](crates/htr-lib-py) — Python extension module (via [PyO3](https://pyo3.rs/)) exposing Rust implementations to `hathor-core`.
 
 ## Development
 
