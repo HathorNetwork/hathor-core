@@ -45,6 +45,7 @@ from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.exceptions import TxValidationError
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -362,6 +363,11 @@ class TransactionVerifier:
 
         if tx.version not in allowed_tx_versions:
             raise InvalidVersionError(f'invalid vertex version: {tx.version}')
+
+    def verify_token_amount_version(self, tx: Transaction, params: VerificationParams) -> None:
+        token_amount_version = tx.get_token_amount_version()
+        if token_amount_version > params.features.token_amount_version:
+            raise TxValidationError(f'invalid token amount version: {token_amount_version.name}')
 
     def verify_tokens(self, tx: Transaction, params: VerificationParams) -> None:
         """Verify that all tokens are used and unique."""
