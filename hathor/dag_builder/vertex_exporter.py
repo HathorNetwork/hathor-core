@@ -612,7 +612,7 @@ class VertexExporter:
     def _get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
         """Get a blueprint class from the catalog or from our own on-chain blueprints."""
         if blueprint_class := self._nc_catalog.get_blueprint_class(blueprint_id):
-            return blueprint_class
+            return blueprint_class[0]
         ocb = self._vertice_per_id.get(blueprint_id)
         if ocb is None or not isinstance(ocb, OnChainBlueprint):
             raise SyntaxError(f'{blueprint_id.hex()} is not a valid blueprint id')
