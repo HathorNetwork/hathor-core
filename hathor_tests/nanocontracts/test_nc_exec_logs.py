@@ -91,7 +91,7 @@ class BaseNCExecLogs(unittest.TestCase):
             ),
             NCLogEntry.model_construct(
                 level=NCLogLevel.INFO,
-                message=f'initialize() called on {blueprint_class.__name__}',
+                message=f'initialize() called on {blueprint_class[0].__name__}',
                 timestamp=ANY,
             ),
             NCCallEndEntry.model_construct(timestamp=ANY),
