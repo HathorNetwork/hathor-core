@@ -48,6 +48,7 @@ logger = get_logger()
 NC_DEPOSIT_KEY = 'nc_deposit'
 NC_WITHDRAWAL_KEY = 'nc_withdrawal'
 TOKEN_VERSION_KEY = 'token_version'
+TOKEN_AMOUNT_VERSION_KEY = 'token_amount_version'
 FEE_KEY = 'fee'
 
 
@@ -105,7 +106,16 @@ class DAGBuilder:
 
     def parse_tokens(self, tokens: Iterator[Token]) -> None:
         """Parse tokens and update the DAG accordingly."""
-        for parts in tokens:
+        def is_token_amount_version(token: Token) -> bool:
+            return token[0] == TokenType.ATTRIBUTE and token[1][1] == TOKEN_AMOUNT_VERSION_KEY
+
+        # A node's token_amount_version governs how every amount on it is interpreted, so apply
+        # those attributes before any amount-bearing token, regardless of DSL line order.
+        materialized = list(tokens)
+        version_attrs = [token for token in materialized if is_token_amount_version(token)]
+        other_tokens = [token for token in materialized if not is_token_amount_version(token)]
+
+        for parts in [*version_attrs, *other_tokens]:
             match parts:
                 case (TokenType.PARENT, (_from, _to)):
                     self.add_parent_edge(_from, _to)

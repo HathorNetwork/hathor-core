@@ -14,6 +14,7 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
 from hathor_tests.token_amount import UnsignedAmount
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class MyBlueprint(Blueprint):
@@ -81,6 +82,39 @@ class DAGBuilderTestCase(unittest.TestCase):
 
         # b40 --> tx1
         self.assertEqual(tx1.get_metadata().first_block, b40.hash)
+
+    def test_token_amount_version(self) -> None:
+        artifacts = self.dag_builder.build_from_str("""
+            blockchain genesis b[1..50]
+
+            b1.out[0] <<< tx_v1
+            b30 < tx_v1
+            b40 --> tx_v1
+
+            b2.out[0] <<< tx_v2
+            b31 < tx_v2
+            b41 --> tx_v2
+            tx_v2.out[0] = 100 HTR
+            tx_v2.token_amount_version = V2
+        """)
+
+        artifacts.propagate_with(self.manager)
+
+        tx_v1 = artifacts.get_typed_vertex('tx_v1', Transaction)
+        tx_v2 = artifacts.get_typed_vertex('tx_v2', Transaction)
+
+        # tx_v1 defaults to V1; tx_v2 opts into V2 through the DSL attribute.
+        self.assertEqual(tx_v1.get_token_amount_version(), TokenAmountVersion.V1)
+        self.assertEqual(tx_v1.signal_bits & 1, 0)
+        self.assertEqual(tx_v2.get_token_amount_version(), TokenAmountVersion.V2)
+        self.assertEqual(tx_v2.signal_bits & 1, 1)
+
+        # The specified output amount is interpreted in the transaction's own version.
+        self.assertEqual(tx_v2.outputs[0].value, UnsignedAmount.from_version(100, version=TokenAmountVersion.V2))
+
+        for tx in (tx_v1, tx_v2):
+            self.assertTrue(tx.get_metadata().validation.is_valid())
+            self.assertIsNone(tx.get_metadata().voided_by)
 
     def test_weight(self) -> None:
         artifacts = self.dag_builder.build_from_str("""
