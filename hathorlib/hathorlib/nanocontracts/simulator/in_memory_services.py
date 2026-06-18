@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
 from hathorlib.nanocontracts.exception import BlueprintDoesNotExist
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 if TYPE_CHECKING:
@@ -44,9 +45,16 @@ class InMemoryBlueprintService:
     """
 
     def __init__(self) -> None:
-        self._blueprints: dict[BlueprintId, type[Blueprint]] = {}
+        self._blueprints: dict[BlueprintId, tuple[type[Blueprint], TokenAmountVersion]] = {}
 
     def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        blueprint_class, _ = self.get_blueprint_class_and_token_amount_version(blueprint_id)
+        return blueprint_class
+
+    def get_blueprint_class_and_token_amount_version(
+        self,
+        blueprint_id: BlueprintId,
+    ) -> tuple[type[Blueprint], TokenAmountVersion]:
         try:
             return self._blueprints[blueprint_id]
         except KeyError:
@@ -57,19 +65,28 @@ class InMemoryBlueprintService:
         return inspect.getsource(bp)
 
     def register_blueprint(
-        self, blueprint_id: bytes, blueprint: type[Blueprint], *, strict: bool = False
+        self,
+        blueprint_id: bytes,
+        blueprint: type[Blueprint],
+        *,
+        strict: bool = False,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
     ) -> None:
         from hathorlib.nanocontracts.types import BlueprintId as BId
         bid = BId(blueprint_id)
         if strict and bid in self._blueprints:
             raise ValueError(f'Blueprint {bid.hex()} already registered')
-        self._blueprints[bid] = blueprint
+        self._blueprints[bid] = (blueprint, token_amount_version)
 
     def register_blueprints(
-        self, blueprints: dict[bytes, type[Blueprint]], *, strict: bool = False
+        self,
+        blueprints: dict[bytes, type[Blueprint]],
+        *,
+        strict: bool = False,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
     ) -> None:
         for bid, bp in blueprints.items():
-            self.register_blueprint(bid, bp, strict=strict)
+            self.register_blueprint(bid, bp, strict=strict, token_amount_version=token_amount_version)
 
 
 class InMemoryTxStorage:
