@@ -10,6 +10,7 @@ from structlog import get_logger
 from twisted.web import server
 from twisted.web.resource import Resource
 
+from hathor.api_util import APIVersion
 from hathor.event.resources.event import EventResource
 from hathor.exception import BuilderError
 from hathor.feature_activation.feature_service import FeatureService
@@ -171,10 +172,16 @@ class ResourcesBuilder:
 
         # TODO get this from a file. How should we do with the factory?
         root = Resource()
+        root_v2 = Resource()
+
         wallet_resource = Resource()
+        wallet_resource_v2 = Resource()
         root.putChild(b'wallet', wallet_resource)
+        root_v2.putChild(b'wallet', wallet_resource_v2)
         thin_wallet_resource = Resource()
+        thin_wallet_resource_v2 = Resource()
         root.putChild(b'thin_wallet', thin_wallet_resource)
+        root_v2.putChild(b'thin_wallet', thin_wallet_resource_v2)
         contracts_resource = Resource()
         wallet_resource.putChild(b'nano-contract', contracts_resource)
         p2p_resource = Resource()
@@ -190,7 +197,8 @@ class ResourcesBuilder:
         resources = [
             (b'status', StatusResource(self.manager), root),
             (b'version', VersionResource(self.manager, self._feature_service), root),
-            (b'create_tx', CreateTxResource(self.manager), root),
+            (b'create_tx', CreateTxResource(self.manager, APIVersion.V1A), root),
+            (b'create_tx', CreateTxResource(self.manager, APIVersion.V2), root_v2),
             (b'decode_tx', DecodeTxResource(self.manager), root),
             (b'validate_address', ValidateAddressResource(self.manager), root),
             (b'push_tx',
@@ -213,10 +221,12 @@ class ResourcesBuilder:
             (b'tx_parents', TxParentsResource(self.manager), root),
             # /thin_wallet
             (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
-            (b'address_balance', AddressBalanceResource(self.manager), thin_wallet_resource),
+            (b'address_balance', AddressBalanceResource(self.manager, APIVersion.V1A), thin_wallet_resource),
+            (b'address_balance', AddressBalanceResource(self.manager, APIVersion.V2), thin_wallet_resource_v2),
             (b'address_search', AddressSearchResource(self.manager), thin_wallet_resource),
             (b'send_tokens', SendTokensThinResource(self.manager), thin_wallet_resource),
-            (b'token', TokenResource(self.manager), thin_wallet_resource),
+            (b'token', TokenResource(self.manager, APIVersion.V1A), thin_wallet_resource),
+            (b'token', TokenResource(self.manager, APIVersion.V2), thin_wallet_resource_v2),
             (b'token_history', TokenHistoryResource(self.manager), thin_wallet_resource),
             # /wallet/nano-contract
             (b'match-value', NanoContractMatchValueResource(self.manager), contracts_resource),
@@ -240,7 +250,8 @@ class ResourcesBuilder:
         # XXX: only enable UTXO search API if the index is enabled
         if self._args.utxo_index:
             resources.extend([
-                (b'utxo_search', UtxoSearchResource(self.manager), root),
+                (b'utxo_search', UtxoSearchResource(self.manager, APIVersion.V1A), root),
+                (b'utxo_search', UtxoSearchResource(self.manager, APIVersion.V2), root_v2),
             ])
 
         if settings.ENABLE_NANO_CONTRACTS:
@@ -252,7 +263,10 @@ class ResourcesBuilder:
                 NCDryRunResource,
             )
             nc_resource = Resource()
+            nc_resource_v2 = Resource()
             root.putChild(b'nano_contract', nc_resource)
+            root_v2.putChild(b'nano_contract', nc_resource_v2)
+
             blueprint_resource = Resource()
             nc_resource.putChild(b'blueprint', blueprint_resource)
             blueprint_resource.putChild(b'info', BlueprintInfoResource(self.manager))
@@ -260,7 +274,8 @@ class ResourcesBuilder:
             blueprint_resource.putChild(b'on_chain', BlueprintOnChainResource(self.manager))
             blueprint_resource.putChild(b'source', BlueprintSourceCodeResource(self.manager))
             nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
-            nc_resource.putChild(b'state', NanoContractStateResource(self.manager))
+            nc_resource.putChild(b'state', NanoContractStateResource(self.manager, APIVersion.V1A))
+            nc_resource_v2.putChild(b'state', NanoContractStateResource(self.manager, APIVersion.V2))
             nc_resource.putChild(b'creation', NCCreationResource(self.manager))
             nc_resource.putChild(b'logs', NCExecLogsResource(self.manager))
             nc_resource.putChild(b'dry_run', NCDryRunResource(
@@ -295,10 +310,12 @@ class ResourcesBuilder:
         if with_wallet_api:
             wallet_resources = (
                 # /wallet
-                (b'balance', BalanceResource(self.manager), wallet_resource),
+                (b'balance', BalanceResource(self.manager, APIVersion.V1A), wallet_resource),
+                (b'balance', BalanceResource(self.manager, APIVersion.V2), wallet_resource_v2),
                 (b'history', HistoryResource(self.manager), wallet_resource),
                 (b'address', AddressResource(self.manager), wallet_resource),
-                (b'send_tokens', SendTokensResource(self.manager, settings), wallet_resource),
+                (b'send_tokens', SendTokensResource(self.manager, settings, APIVersion.V1A), wallet_resource),
+                (b'send_tokens', SendTokensResource(self.manager, settings, APIVersion.V2), wallet_resource_v2),
                 (b'sign_tx', SignTxResource(self.manager), wallet_resource),
                 (b'unlock', UnlockWalletResource(self.manager), wallet_resource),
                 (b'lock', LockWalletResource(self.manager), wallet_resource),
@@ -332,7 +349,8 @@ class ResourcesBuilder:
         root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
 
         real_root = Resource()
-        real_root.putChild(settings.API_VERSION_PREFIX.encode('ascii'), root)
+        real_root.putChild(APIVersion.V1A.encode('ascii'), root)
+        real_root.putChild(APIVersion.V2.encode('ascii'), root_v2)
 
         from hathor.profiler.site import SiteProfiler
         status_server = SiteProfiler(real_root)

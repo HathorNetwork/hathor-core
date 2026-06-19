@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from twisted.web.http import Request
 
 from hathor.api.schemas.base import ErrorResponse, ResponseModel
+from hathor.api_util import APIVersion
 
 logger = structlog.get_logger()
 
@@ -49,6 +50,12 @@ class EndpointMetadata:
     path_params_descriptions: dict[str, str]
     catch_hathor_exceptions: bool
     max_body_size: int
+    # API versions this endpoint is served under (None → the default, v1a only).
+    api_versions: list[APIVersion] | None = None
+    # Per-version request/response models. A version present here documents a different schema than
+    # the base `request_model`/`response_model`; versions absent here reuse the base schema.
+    request_models: dict[APIVersion, type[BaseModel]] | None = None
+    response_models: dict[APIVersion, Any] | None = None
 
 
 # Global registry of endpoint metadata
@@ -168,6 +175,9 @@ def api_endpoint(
     query_params_model: type[BaseModel] | None = None,
     request_model: type[BaseModel] | None = None,
     response_model: Any = None,
+    api_versions: list[APIVersion] | None = None,
+    request_models: dict[APIVersion, type[BaseModel]] | None = None,
+    response_models: dict[APIVersion, Any] | None = None,
     deprecated: bool = False,
     path_params_regex: dict[str, str] | None = None,
     path_params_descriptions: dict[str, str] | None = None,
@@ -205,6 +215,9 @@ def api_endpoint(
         query_params_model: Pydantic model for query parameters (GET)
         request_model: Pydantic model for request body (POST/PUT)
         response_model: Pydantic model(s) for response (single or Union)
+        api_versions: API versions this endpoint is served under (defaults to v1a only)
+        request_models: Per-version request models overriding request_model for those versions
+        response_models: Per-version response models overriding response_model for those versions
         deprecated: Whether this endpoint is deprecated
         path_params_regex: Regex patterns for path parameters
         path_params_descriptions: Descriptions for path parameters
@@ -215,6 +228,17 @@ def api_endpoint(
         # Parse rate limit configs
         global_limits = [_parse_rate_limit(rl) for rl in (rate_limit_global or [])]
         per_ip_limits = [_parse_rate_limit(rl) for rl in (rate_limit_per_ip or [])]
+
+        # Per-version models only make sense for versions this endpoint declares it serves.
+        override_versions = {*(request_models or {}), *(response_models or {})}
+        if override_versions:
+            declared = set(api_versions or [])
+            unserved = override_versions - declared
+            if unserved:
+                unserved_str = ', '.join(sorted(version.value for version in unserved))
+                raise ValueError(
+                    f'{method} {path}: per-version models target versions not in api_versions: {unserved_str}'
+                )
 
         metadata = EndpointMetadata(
             path=path,
@@ -229,6 +253,9 @@ def api_endpoint(
             query_params_model=query_params_model,
             request_model=request_model,
             response_model=response_model,
+            api_versions=api_versions,
+            request_models=request_models,
+            response_models=response_models,
             deprecated=deprecated,
             path_params_regex=path_params_regex or {},
             path_params_descriptions=path_params_descriptions or {},

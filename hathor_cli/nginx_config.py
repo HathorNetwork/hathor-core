@@ -1,12 +1,17 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 import os
 from collections.abc import Iterator
 from enum import Enum
 from json import dumps as json_dumps
-from typing import Any, NamedTuple, Optional, TextIO
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TextIO
+
+if TYPE_CHECKING:
+    from hathor.api_util import APIVersion
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
@@ -102,7 +107,15 @@ def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str)
 
 
 _HTTP_METHODS = ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace')
-_OPENAPI_EXTENSIONS = ('x-visibility', 'x-visibility-override', 'x-rate-limit', 'x-path-params-regex', 'x-proxy-buffers')
+_OPENAPI_EXTENSIONS = (
+    'x-visibility',
+    'x-visibility-override',
+    'x-rate-limit',
+    'x-path-params-regex',
+    'x-proxy-buffers',
+    'x-api-versions',
+    'x-api-version-overrides',
+)
 
 
 def _iter_operation_params(params: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
@@ -158,6 +171,23 @@ def _resolve_path_operation_extension(
         raise ValueError(f'Path `{path}` has conflicting {ext} values across relevant methods: {methods_str}')
 
     return next(iter(values_by_method.values()))
+
+
+def _resolve_path_api_versions(
+    path: str,
+    params: dict[str, Any],
+    *,
+    methods: list[str] | None = None,
+) -> list[APIVersion]:
+    """Resolve the API versions a path is served under from its `x-api-versions` extension.
+
+    Resolution is delegated to `hathor.api.openapi.versioning`, the single source of truth shared
+    with the docs. nginx emits one location per listed version, so any version a path does not
+    declare falls through to that version's `403` block. `methods` limits the operation-level lookup
+    to this path's public methods.
+    """
+    from hathor.api.openapi.versioning import resolve_api_versions
+    return resolve_api_versions(path, params, methods=methods)
 
 
 def _get_public_methods(params: dict[str, Any], *, override: str) -> list[str]:
@@ -218,10 +248,7 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     """
     from datetime import datetime
 
-    from hathor.conf.get_settings import get_global_settings
-
-    settings = get_global_settings()
-    api_prefix = settings.API_VERSION_PREFIX
+    from hathor.api_util import DEFAULT_API_VERSIONS, APIVersion
 
     locations: dict[str, dict[str, Any]] = {}
     limit_rate_zones: list[RateLimitZone] = []
@@ -242,6 +269,11 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
 
         location_params: dict[str, Any] = {
             'rate_limits': [],
+            'api_versions': _resolve_path_api_versions(
+                path,
+                params,
+                methods=public_methods,
+            ),
             'path_vars_re': _resolve_path_operation_extension(
                 path,
                 params,
@@ -415,7 +447,27 @@ server {{
     location @429 {{
         include cors_params;
         try_files /path/doesnt/matter =429;
-    }}
+    }}'''
+
+    server_close = '''
+    location / {
+        return 404;
+    }
+}
+'''
+
+    out_file.write(header)
+
+    # http level settings
+    for zone in sorted(limit_rate_zones):
+        out_file.write(zone.to_nginx_config())
+
+    out_file.write(server_open)
+
+    # server level settings, emitted once per supported API version
+    for api_prefix in APIVersion:
+        if api_prefix in DEFAULT_API_VERSIONS:
+            out_file.write(f'''
     location ~ ^/{api_prefix}/ws/?$ {{
         limit_conn global__ws {websocket_max_conn_global};
         limit_conn per_ip__ws {websocket_max_conn_per_ip};
@@ -445,45 +497,36 @@ server {{
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_pass http://backend;
-    }}'''
-    # TODO: maybe return 403 instead?
-    server_close = f'''
-    location /{api_prefix} {{
-        return 403;
-    }}
-    location / {{
-        return 404;
-    }}
-}}
-'''
+    }}''')
 
-    out_file.write(header)
-
-    # http level settings
-    for zone in sorted(limit_rate_zones):
-        out_file.write(zone.to_nginx_config())
-
-    out_file.write(server_open)
-    # server level settings
-    for location_path, location_params in locations.items():
-        location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
-        location_open = f'''
+        for location_path, location_params in locations.items():
+            if api_prefix not in location_params['api_versions']:
+                continue
+            location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
+            location_open = f'''
     location ~ ^/{api_prefix}/{location_path}/?$ {{
         include cors_params;
         include proxy_params;
 '''
-        location_close = '''\
+            location_close = '''\
         proxy_pass http://backend;
     }'''
-        out_file.write(location_open)
-        methods = ' '.join(location_params['allowed_methods'])
-        out_file.write(' ' * 8 + f'limit_except {methods} {{ deny all; }}\n')
-        for rate_limit in location_params.get('rate_limits', []):
-            out_file.write(' ' * 8 + rate_limit.to_nginx_config())
-        proxy_buffers = location_params.get('proxy_buffers')
-        if proxy_buffers:
-            out_file.write(' ' * 8 + f'proxy_buffers {proxy_buffers};\n')
-        out_file.write(location_close)
+            out_file.write(location_open)
+            methods = ' '.join(location_params['allowed_methods'])
+            out_file.write(' ' * 8 + f'limit_except {methods} {{ deny all; }}\n')
+            for rate_limit in location_params.get('rate_limits', []):
+                out_file.write(' ' * 8 + rate_limit.to_nginx_config())
+            proxy_buffers = location_params.get('proxy_buffers')
+            if proxy_buffers:
+                out_file.write(' ' * 8 + f'proxy_buffers {proxy_buffers};\n')
+            out_file.write(location_close)
+
+        # TODO: maybe return 403 instead?
+        out_file.write(f'''
+    location /{api_prefix} {{
+        return 403;
+    }}''')
+
     out_file.write(server_close)
 
 

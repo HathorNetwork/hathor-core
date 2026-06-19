@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import (
+    APIVersion,
     Resource,
     get_arg_default,
     get_args,
@@ -32,8 +33,8 @@ class UtxoSearchResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: 'HathorManager'):
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: 'HathorManager', api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self._settings = get_global_settings()
         self.manager = manager
 
@@ -126,6 +127,12 @@ class UtxoSearchResource(Resource):
 UtxoSearchResource.openapi = {
     '/utxo_search': {
         'x-visibility': 'public',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'x-rate-limit': {
             'global': [
                 {

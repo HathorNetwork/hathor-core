@@ -7,13 +7,15 @@ from typing import TYPE_CHECKING, Any
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
+from hathor.api_util import APIVersion, Resource, get_args, get_missing_params_msg, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address_strict
+from hathor.manager import HathorManager
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
 from hathorlib.token_amount import UnsignedAmount
+from hathorlib.utils import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction import TxOutput
@@ -25,7 +27,7 @@ class TokenData:
     name: str = ''
     symbol: str = ''
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             'received': self.received,
             'spent': self.spent,
@@ -42,7 +44,8 @@ class AddressBalanceResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self._settings = get_global_settings()
         self.manager = manager
 
@@ -130,8 +133,8 @@ class AddressBalanceResource(Resource):
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid].name = token_info.get_name()
-                    tokens_data[token_uid].symbol = token_info.get_symbol()
+                    tokens_data[token_uid].name = not_none(token_info.get_name())
+                    tokens_data[token_uid].symbol = not_none(token_info.get_symbol())
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error
@@ -151,6 +154,12 @@ class AddressBalanceResource(Resource):
 AddressBalanceResource.openapi = {
     '/thin_wallet/address_balance': {
         'x-visibility': 'public',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'x-rate-limit': {
             'global': [
                 {

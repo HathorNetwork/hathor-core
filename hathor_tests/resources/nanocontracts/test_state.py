@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes, get_public_key_bytes_compressed
 from hathor.nanocontracts import Blueprint, Context, public, view
@@ -155,7 +156,8 @@ class BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
 
         *_, self.last_block = add_blocks_unlock_reward(self.manager)
 
-        self.web = StubSite(NanoContractStateResource(self.manager))
+        # TODO(decimals): test v2
+        self.web = StubSite(NanoContractStateResource(self.manager, APIVersion.V1A))
 
         self.bet_id = bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595')
         self.manager.blueprint_service.register_blueprint(self.bet_id, MyBlueprint)

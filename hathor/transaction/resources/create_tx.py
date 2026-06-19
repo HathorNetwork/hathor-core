@@ -4,7 +4,7 @@
 import base64
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import APIVersion, Resource, set_cors
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.utils import Features
@@ -41,8 +41,8 @@ class CreateTxResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: HathorManager) -> None:
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self.manager = manager
 
     @api_catch_exceptions
@@ -120,6 +120,12 @@ class CreateTxResource(Resource):
 CreateTxResource.openapi = {
     '/create_tx': {
         'x-visibility': 'public',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'x-rate-limit': {
             'global': [
                 {
