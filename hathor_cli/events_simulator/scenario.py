@@ -33,6 +33,7 @@ class Scenario(Enum):
     CUSTOM_SCRIPT = 'CUSTOM_SCRIPT'
     NC_EVENTS = 'NC_EVENTS'
     NC_EVENTS_REORG = 'NC_EVENTS_REORG'
+    SHIELDED_OUTPUTS = 'SHIELDED_OUTPUTS'
 
     def simulate(self, simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
         simulate_fns = {
@@ -46,6 +47,7 @@ class Scenario(Enum):
             Scenario.CUSTOM_SCRIPT: simulate_custom_script,
             Scenario.NC_EVENTS: simulate_nc_events,
             Scenario.NC_EVENTS_REORG: simulate_nc_events_reorg,
+            Scenario.SHIELDED_OUTPUTS: simulate_shielded_outputs,
         }
 
         simulate_fn = simulate_fns[self]
@@ -385,5 +387,31 @@ def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -
 
     artifacts.propagate_with(manager)
     simulator.run(1)
+
+    return artifacts
+
+
+def simulate_shielded_outputs(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
+    """Create a transaction carrying shielded outputs and emit it.
+
+    Requires ENABLE_SHIELDED_TRANSACTIONS (set by execute() / the test harness).
+    On master the shielded outputs are dummy placeholders, sufficient to exercise
+    serialization and the event stream.
+    """
+    from hathor.simulator.utils import create_dag_builder
+
+    dag_builder = create_dag_builder(manager)
+    artifacts = dag_builder.build_from_str('''
+        blockchain genesis b[1..50]
+        b1.out[0] <<< tx1
+        b30 < tx1
+        b30 < dummy
+
+        tx1.out[0] = 100 HTR [wallet1]
+        tx1.sout[0] = 30 HTR [wallet2]
+        tx1.sout[1] = 20 HTR [wallet3] [full-shielded]
+    ''')
+    artifacts.propagate_with(manager)
+    simulator.run(60)
 
     return artifacts

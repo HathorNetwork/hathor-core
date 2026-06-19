@@ -104,3 +104,53 @@ def test_execute_rejects_function_without_file() -> None:
     reactor = TestMemoryReactorClock()
     with pytest.raises(ValueError, match='--function can only be used together with --file'):
         execute(args, reactor)
+
+
+def test_events_simulator_shielded_outputs_scenario_smoke() -> None:
+    """execute() runs the built-in SHIELDED_OUTPUTS scenario end-to-end."""
+    parser = create_parser()
+    args = parser.parse_args(['--scenario', 'SHIELDED_OUTPUTS'])
+    reactor = TestMemoryReactorClock()
+
+    execute(args, reactor)
+    reactor.advance(1)
+
+    factory = EventForwardingWebsocketFactory(
+        simulator=Mock(),
+        peer_id='test_peer_id',
+        settings=get_global_settings(),
+        reactor=reactor,
+        event_storage=Mock(),
+    )
+    assert factory.buildProtocol(Mock()) is not None
+
+
+def test_shielded_outputs_scenario_produces_accepted_shielded_tx() -> None:
+    """The scenario produces a shielded tx that the node accepts."""
+    from hathor.conf.settings import FeatureSetting
+    from hathor.simulator import Simulator
+    from hathor.transaction import Transaction
+    from hathor_cli.events_simulator.scenario import Scenario, simulate_shielded_outputs
+
+    settings = get_global_settings().model_copy(update={
+        'ENABLE_SHIELDED_TRANSACTIONS': FeatureSetting.ENABLED,
+        'REWARD_SPEND_MIN_BLOCKS': Scenario.SHIELDED_OUTPUTS.get_reward_spend_min_blocks(),
+    })
+    simulator = Simulator(12345)
+    simulator.start()
+    try:
+        builder = simulator.get_default_builder().set_settings(settings)
+        manager = simulator.create_peer(builder)
+        artifacts = simulate_shielded_outputs(simulator, manager)
+
+        assert artifacts is not None
+        shielded = [
+            v for _, v in artifacts.list
+            if isinstance(v, Transaction) and v.has_shielded_outputs()
+        ]
+        assert shielded, 'scenario produced no shielded tx'
+        tx = shielded[0]
+        assert not tx.get_metadata().voided_by
+        assert len(tx.shielded_outputs) >= 2
+    finally:
+        simulator.stop()
