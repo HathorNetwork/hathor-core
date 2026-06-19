@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository context
 
-`htr-rs/` is the Rust workspace nested inside the parent `hathor-core` repository (at `../`, a Python project). Its output is consumed from Python: the `htr-lib` crate compiles to a `cdylib` and is packaged as a Python extension module via [PyO3](https://pyo3.rs/) + [maturin](https://www.maturin.rs/).
+`htr-rs/` is the Rust workspace nested inside the parent `hathor-core` repository (at `../`, a Python project). Its output is consumed from Python: the `htr-lib-py` crate compiles to a `cdylib` and is packaged as a Python extension module via [PyO3](https://pyo3.rs/) + [maturin](https://www.maturin.rs/).
 
 CI for this workspace lives in the parent repo at `../.github/workflows/htr-rs.yml`. Jobs mirror the `just` recipes — `check`, `fmt`, `clippy`, `test` (`cargo nextest run --workspace`), `sort` (runs `cargo sort --workspace --check` — verify-only, does not rewrite), and `audit`. When changing the local `justfile`, keep it consistent with the workflow so local `just all` matches what CI runs.
 
@@ -21,7 +21,7 @@ All commands are `just` recipes (see `justfile`) and assume you've run `just ins
 - `just sort` — `cargo sort --workspace` (rewrites `Cargo.toml` in place; run when adding or reordering deps).
 - `just audit` — RustSec advisory scan.
 
-Single test: `cargo nextest run -p <crate> <test_name_substring>` (e.g. `cargo nextest run -p htr-lib test_sum_as_string`).
+Single test: `cargo nextest run -p <crate> <test_name_substring>` (e.g. `cargo nextest run -p htr-lib-py test_sum_as_string`).
 
 `RUSTFLAGS="-D warnings"` is set by the justfile, so warnings fail every recipe. Fix them; do not `#[allow(...)]` to silence them.
 
@@ -30,8 +30,8 @@ Single test: `cargo nextest run -p <crate> <test_name_substring>` (e.g. `cargo n
 - **Workspace layout.** `Cargo.toml` at the workspace root declares `members = ["crates/*"]`, `resolver = "3"`, and pins shared dependencies (e.g. `pyo3`) under `[workspace.dependencies]`. Crate `Cargo.toml`s inherit pins via `{ workspace = true }` and inherit lints via `[lints] workspace = true` — keep it that way when adding crates.
 - **Overflow checks are on in every profile**, including `release` and `bench`. This is deliberate: integer overflow must panic, never wrap. Do not disable `overflow-checks` or reach for `wrapping_*` / `as` casts to work around a panic — fix the arithmetic.
 - **`elided_lifetimes_in_paths = "deny"`** at the workspace level. Write explicit lifetimes on paths (e.g. `Bound<'_, PyModule>`, not `Bound<PyModule>`).
-- **64-bit only.** `crates/htr-lib/src/lib.rs` emits `compile_error!` on non-64-bit targets so `usize` semantics stay consistent across platforms. Code may assume `usize` is 64 bits.
-- **`htr-lib` is built as both `cdylib` and `rlib`.** The `cdylib` is what maturin packages for Python; the `rlib` lets future Rust crates in this workspace depend on `htr-lib` directly. Keep both `crate-type` entries.
+- **64-bit only.** `crates/htr-lib-py/src/lib.rs` emits `compile_error!` on non-64-bit targets so `usize` semantics stay consistent across platforms. Code may assume `usize` is 64 bits.
+- **`htr-lib-py` is built as both `cdylib` and `rlib`.** The `cdylib` is what maturin packages for Python; the `rlib` lets future Rust crates in this workspace depend on `htr-lib-py` directly. Keep both `crate-type` entries.
 - **Python surface.** `htr_lib.pyi` is the hand-maintained type stub for the extension module. When you add or change a `#[pyfunction]` / `#[pymodule]` item, update `htr_lib.pyi` to match — Python type checkers consume it, not the Rust source.
 - **`maturin-generate-ci` is kept for reference only.** Wheel building/uploading is not currently wired into CI; don't assume it runs.
 

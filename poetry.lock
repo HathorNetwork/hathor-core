@@ -754,18 +754,19 @@ name = "hathorlib"
 version = "0.15.0"
 description = "Hathor Network base objects library"
 optional = false
-python-versions = ">=3.9,<4"
+python-versions = ">=3.11,<4"
 groups = ["main"]
 files = []
 develop = true
 
 [package.dependencies]
-base58 = "~2.1.1"
-cryptography = "~42.0.5"
-pycoin = "~0.92"
-pydantic = "^2.0"
-pyyaml = "^6.0.1"
-structlog = "~22.3.0"
+base58 = ">=2.1.1,<2.2.0"
+cryptography = ">=42.0.5,<42.1.0"
+htr-lib = "*"
+pycoin = ">=0.92,<0.93"
+pydantic = ">=2.0,<3.0"
+pyyaml = ">=6.0.1,<7.0.0"
+structlog = ">=22.3.0,<22.4.0"
 
 [package.extras]
 client = ["aiohttp (>=3.9.3,<3.10.0)"]
@@ -786,7 +787,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "htr-rs/crates/htr-lib"
+url = "htr-rs/crates/htr-lib-py"
 
 [[package]]
 name = "hyperlink"
@@ -2815,4 +2816,4 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "56bc512c583a6d4d208d5485ae6a0e987fee28d6966e21f7a0405d7db10af982"
+content-hash = "34c319a066b95764cda7b9082ff3e757750b925a6499b3aded5907ad57671994"

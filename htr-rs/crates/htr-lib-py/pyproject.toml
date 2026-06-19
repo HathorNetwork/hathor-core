@@ -10,3 +10,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 dynamic = ["version"]
+
+[tool.maturin]
+module-name = "htr_lib"
