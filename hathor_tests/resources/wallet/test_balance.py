@@ -2,6 +2,7 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.mining.cpu_mining_service import CpuMiningService
 from hathor.p2p.resources import MiningResource
 from hathor.wallet.resources import BalanceResource
@@ -12,7 +13,8 @@ from hathor_tests.utils import resolve_block_bytes
 class BalanceTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(BalanceResource(self.manager))
+        # TODO(decimals): test v2
+        self.web = StubSite(BalanceResource(self.manager, APIVersion.V1A))
         self.web_mining = StubSite(MiningResource(self.manager))
 
     @inlineCallbacks

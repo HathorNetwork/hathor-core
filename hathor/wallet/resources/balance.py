@@ -13,8 +13,9 @@
 # limitations under the License.
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import APIVersion, Resource, set_cors
 from hathor.conf.get_settings import get_global_settings
+from hathor.manager import HathorManager
 from hathor.util import json_dumpb
 
 
@@ -26,8 +27,8 @@ class BalanceResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self._settings = get_global_settings()
         self.manager = manager
 
@@ -50,6 +51,12 @@ class BalanceResource(Resource):
 BalanceResource.openapi = {
     '/wallet/balance': {
         'x-visibility': 'private',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'get': {
             'tags': ['private_wallet'],
             'operationId': 'wallet_address',

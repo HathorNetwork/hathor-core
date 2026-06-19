@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import re
+from enum import StrEnum, unique
 from typing import Any, Optional, TypeVar, Union, cast
 
 from twisted.web.http import Request
@@ -117,8 +118,25 @@ def validate_tx_hash(hash_hex: str, tx_storage: TransactionStorage) -> tuple[boo
     return success, message
 
 
+@unique
+class APIVersion(StrEnum):
+    V1A = 'v1a'
+    V2 = 'v2'
+
+
+# API versions a path is served under when it does not declare `x-api-versions`. Paths without an
+# explicit declaration are exposed only under v1a.
+DEFAULT_API_VERSIONS: tuple[APIVersion, ...] = (APIVersion.V1A,)
+
+
 class Resource(TwistedResource):
+    __slots__ = ('api_version',)
+
     openapi: dict[str, Any] = {}
+
+    def __init__(self, api_version: APIVersion = APIVersion.V1A) -> None:
+        super().__init__()
+        self.api_version = api_version
 
 
 def get_args(request: Request) -> dict[bytes, list[bytes]]:

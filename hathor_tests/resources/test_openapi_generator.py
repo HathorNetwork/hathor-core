@@ -6,7 +6,9 @@ from pydantic import Field
 
 from hathor.api.openapi.decorators import api_endpoint, clear_endpoint_registry
 from hathor.api.openapi.generator import OpenAPIGenerator
+from hathor.api.openapi.versioning import expand_openapi_versions
 from hathor.api.schemas import ErrorResponse, ResponseModel, SuccessResponse
+from hathor.api_util import APIVersion
 from hathor.utils.api import QueryParams
 from hathor.utils.pydantic import BaseModel
 
@@ -505,3 +507,191 @@ class TestOpenAPIGenerator(unittest.TestCase):
         }
         # Should not raise since schemas are identical
         gen._flatten_schemas()
+
+
+class TestPerVersionModels(unittest.TestCase):
+    def setUp(self) -> None:
+        clear_endpoint_registry()
+
+    def tearDown(self) -> None:
+        clear_endpoint_registry()
+
+    def test_api_versions_emitted_without_overrides(self) -> None:
+        """api_versions alone declares the path's versions and emits no override block."""
+        class Resp(ResponseModel):
+            value: str
+
+        class _Dummy:
+            @api_endpoint(
+                path='/x', method='GET', operation_id='x',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+            )
+            def render_GET(self, request):
+                ...
+
+        spec = OpenAPIGenerator().generate()
+        path_item = spec['paths']['/x']
+        self.assertEqual(path_item['x-api-versions'], ['v1a', 'v2'])
+        self.assertNotIn('x-api-version-overrides', path_item)
+
+    def test_response_models_emit_override(self) -> None:
+        """A per-version response model becomes an x-api-version-overrides entry for that version."""
+        class Resp(ResponseModel):
+            value: str
+
+        class RespV2(ResponseModel):
+            value: str
+            decimals: int
+
+        class _Dummy:
+            @api_endpoint(
+                path='/x', method='GET', operation_id='x',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+                response_models={APIVersion.V2: RespV2},
+            )
+            def render_GET(self, request):
+                ...
+
+        spec = OpenAPIGenerator().generate()
+        entries = spec['paths']['/x']['x-api-version-overrides']['v2']
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['path'], ['get', 'responses'])
+        v2_schema = entries[0]['value']['200']['content']['application/json']['schema']
+        self.assertEqual(v2_schema, {'$ref': '#/components/schemas/RespV2'})
+        # both schemas are registered as components
+        self.assertIn('Resp', spec['components']['schemas'])
+        self.assertIn('RespV2', spec['components']['schemas'])
+
+    def test_request_models_emit_override_request_body(self) -> None:
+        """A per-version request model becomes a requestBody override for that version."""
+        class Req(BaseModel):
+            value: str
+
+        class ReqV2(BaseModel):
+            value: str
+            decimals: int
+
+        class _Dummy:
+            @api_endpoint(
+                path='/x', method='POST', operation_id='x',
+                summary='x', request_model=Req,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+                request_models={APIVersion.V2: ReqV2},
+            )
+            def render_POST(self, request):
+                ...
+
+        spec = OpenAPIGenerator().generate()
+        entries = spec['paths']['/x']['x-api-version-overrides']['v2']
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]['path'], ['post', 'requestBody'])
+        schema = entries[0]['value']['content']['application/json']['schema']
+        self.assertEqual(schema, {'$ref': '#/components/schemas/ReqV2'})
+
+    def test_end_to_end_distinct_v2_schema_after_expansion(self) -> None:
+        """Generating then expanding yields a distinct v2 response schema."""
+        class Resp(ResponseModel):
+            value: str
+
+        class RespV2(ResponseModel):
+            value: str
+            decimals: int
+
+        class _Dummy:
+            @api_endpoint(
+                path='/x', method='GET', operation_id='x',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+                response_models={APIVersion.V2: RespV2},
+            )
+            def render_GET(self, request):
+                ...
+
+        spec = expand_openapi_versions(OpenAPIGenerator().generate())
+        v1a = spec['paths']['/v1a/x']['get']['responses']['200']['content']['application/json']['schema']
+        v2 = spec['paths']['/v2/x']['get']['responses']['200']['content']['application/json']['schema']
+        self.assertEqual(v1a, {'$ref': '#/components/schemas/Resp'})
+        self.assertEqual(v2, {'$ref': '#/components/schemas/RespV2'})
+        # control extensions are consumed by the expansion
+        self.assertNotIn('x-api-version-overrides', spec['paths']['/v2/x'])
+
+    def test_multiple_methods_keep_both_overrides(self) -> None:
+        """Two methods on one path each contribute overrides without clobbering each other."""
+        class Resp(ResponseModel):
+            value: str
+
+        class GetV2(ResponseModel):
+            via: str
+
+        class PostV2(ResponseModel):
+            via: str
+
+        class _Dummy:
+            @api_endpoint(
+                path='/x', method='GET', operation_id='x_get',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+                response_models={APIVersion.V2: GetV2},
+            )
+            def render_GET(self, request):
+                ...
+
+            @api_endpoint(
+                path='/x', method='POST', operation_id='x_post',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+                response_models={APIVersion.V2: PostV2},
+            )
+            def render_POST(self, request):
+                ...
+
+        overrides = OpenAPIGenerator().generate()['paths']['/x']['x-api-version-overrides']
+        overridden_methods = {entry['path'][0] for entry in overrides['v2']}
+        self.assertEqual(overridden_methods, {'get', 'post'})
+
+    def test_per_version_model_for_undeclared_version_raises(self) -> None:
+        """Targeting a version not listed in api_versions fails at decoration time."""
+        class Resp(ResponseModel):
+            value: str
+
+        with self.assertRaises(ValueError) as ctx:
+            class _Dummy:
+                @api_endpoint(
+                    path='/x', method='GET', operation_id='x',
+                    summary='x', response_model=Resp,
+                    api_versions=[APIVersion.V1A],
+                    response_models={APIVersion.V2: Resp},
+                )
+                def render_GET(self, request):
+                    ...
+
+        self.assertIn('not in api_versions', str(ctx.exception))
+
+    def test_conflicting_api_versions_across_methods_raises(self) -> None:
+        """Two methods on one path declaring different api_versions fail at generation time."""
+        class Resp(ResponseModel):
+            value: str
+
+        class _Dummy:
+            @api_endpoint(
+                path='/x', method='GET', operation_id='x_get',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A, APIVersion.V2],
+            )
+            def render_GET(self, request):
+                ...
+
+            @api_endpoint(
+                path='/x', method='POST', operation_id='x_post',
+                summary='x', response_model=Resp,
+                api_versions=[APIVersion.V1A],
+            )
+            def render_POST(self, request):
+                ...
+
+        with self.assertRaises(ValueError) as ctx:
+            OpenAPIGenerator().generate()
+
+        self.assertIn('conflicting x-api-versions', str(ctx.exception))
