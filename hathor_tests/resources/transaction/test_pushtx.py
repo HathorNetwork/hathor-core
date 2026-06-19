@@ -5,6 +5,7 @@ from typing import Any, Generator, Optional
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput
@@ -24,7 +25,8 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(PushTxResource(self.manager))
-        self.web_tokens = StubSite(SendTokensResource(self.manager, self._settings))
+        # TODO(decimals): test v2
+        self.web_tokens = StubSite(SendTokensResource(self.manager, self._settings, APIVersion.V1A))
 
     def get_tx(
         self,
