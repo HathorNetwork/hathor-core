@@ -1,5 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.resources import UtxoSearchResource
@@ -10,7 +11,8 @@ from hathor_tests.utils import add_blocks_unlock_reward
 class UtxoSearchTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp(utxo_index=True)
-        self.web = StubSite(UtxoSearchResource(self.manager))
+        # TODO(decimals): test v2
+        self.web = StubSite(UtxoSearchResource(self.manager, APIVersion.V1A))
         self.manager.wallet.unlock(b'MYPASS')
 
     @inlineCallbacks

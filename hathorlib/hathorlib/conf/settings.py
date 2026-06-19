@@ -329,9 +329,6 @@ class HathorSettings(BaseModel):
     # Maximum number of txs or blocks returned by the '/transaction' endpoint
     MAX_TX_COUNT: int = 15
 
-    # URL prefix where API is served, for instance: /v1a/status
-    API_VERSION_PREFIX: str = 'v1a'
-
     # If should use stratum to resolve pow of transactions in send tokens resource
     SEND_TOKENS_STRATUM: bool = True
 

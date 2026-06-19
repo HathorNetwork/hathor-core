@@ -97,5 +97,7 @@ def main():
                         nargs='?', help='Output file where OpenAPI json will be written')
     args = parser.parse_args()
 
-    openapi = get_openapi_dict()
+    from hathor.api.openapi.versioning import expand_openapi_versions
+
+    openapi = expand_openapi_versions(get_openapi_dict())
     json.dump(openapi, args.out, indent=args.indent)
