@@ -49,4 +49,6 @@ def test_parse_tokens_dispatches_shielded_output() -> None:
     builder.parse_tokens(iter(tokens))
 
     node = builder._nodes['tx1']
-    assert node.shielded_outputs[0].mode == OutputMode.AMOUNT_ONLY
+    sout = node.shielded_outputs[0]
+    assert sout is not None
+    assert sout.mode == OutputMode.AMOUNT_ONLY

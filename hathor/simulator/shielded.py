@@ -42,11 +42,11 @@ from hathorlib.transaction.shielded_tx_output import (
 _DUMMY_RANGE_PROOF_SIZE = 675
 _DUMMY_SURJECTION_PROOF_SIZE = 132
 
-try:
-    # Native CT crypto only exists on feat/shielded-outputs.
-    from hathor.crypto.shielded import SHIELDED_CRYPTO_AVAILABLE
-except ImportError:
-    SHIELDED_CRYPTO_AVAILABLE = False
+# The native CT crypto (hathor.crypto.shielded) does not exist yet, so the real,
+# rewindable path is unavailable for now. Flip this to a real availability check
+# when that package is integrated; the real construction/rewind stubs below are
+# then implemented and the skipped rewind round-trip test activates.
+SHIELDED_CRYPTO_AVAILABLE = False
 
 
 def build_shielded_output(
@@ -130,33 +130,40 @@ def _build_real_shielded_output(
     ephemeral ECDH keypair, rewind nonce, Pedersen commitment + Bulletproof
     range proof bound to that nonce so the recipient can rewind_range_proof().
     """
-    import os
-
-    from hathor.crypto.shielded import create_commitment, create_range_proof, derive_asset_tag
-    from hathor.crypto.shielded.ecdh import (
-        derive_ecdh_shared_secret,
-        derive_rewind_nonce,
-        generate_ephemeral_keypair,
+    # The native CT crypto (hathor.crypto.shielded) does not exist on this branch
+    # yet. The real construction is preserved below as comments — when that package
+    # is integrated, remove this raise and uncomment the block.
+    raise NotImplementedError(
+        'real shielded output construction requires the native CT crypto '
+        '(hathor.crypto.shielded), which does not exist on this branch yet'
     )
-
-    generator = derive_asset_tag(token_uid)
-    blinding = os.urandom(32)
-    ephemeral_privkey, ephemeral_pubkey = generate_ephemeral_keypair()
-    shared_secret = derive_ecdh_shared_secret(ephemeral_privkey, recipient_pubkey)
-    nonce = derive_rewind_nonce(shared_secret)
-    commitment = create_commitment(amount, blinding, generator)
-    range_proof = create_range_proof(amount, blinding, commitment, generator, nonce=nonce)
-
-    if mode == OutputMode.AMOUNT_ONLY:
-        return AmountShieldedOutput(
-            commitment=commitment,
-            range_proof=range_proof,
-            script=script,
-            token_data=token_data,
-            ephemeral_pubkey=ephemeral_pubkey,
-        )
-    # FULLY_SHIELDED needs asset commitment + surjection proof; lands with the crypto merge.
-    raise NotImplementedError('real FULLY_SHIELDED construction lands with the crypto merge')
+    # import os
+    #
+    # from hathor.crypto.shielded import create_commitment, create_range_proof, derive_asset_tag
+    # from hathor.crypto.shielded.ecdh import (
+    #     derive_ecdh_shared_secret,
+    #     derive_rewind_nonce,
+    #     generate_ephemeral_keypair,
+    # )
+    #
+    # generator = derive_asset_tag(token_uid)
+    # blinding = os.urandom(32)
+    # ephemeral_privkey, ephemeral_pubkey = generate_ephemeral_keypair()
+    # shared_secret = derive_ecdh_shared_secret(ephemeral_privkey, recipient_pubkey)
+    # nonce = derive_rewind_nonce(shared_secret)
+    # commitment = create_commitment(amount, blinding, generator)
+    # range_proof = create_range_proof(amount, blinding, commitment, generator, nonce=nonce)
+    #
+    # if mode == OutputMode.AMOUNT_ONLY:
+    #     return AmountShieldedOutput(
+    #         commitment=commitment,
+    #         range_proof=range_proof,
+    #         script=script,
+    #         token_data=token_data,
+    #         ephemeral_pubkey=ephemeral_pubkey,
+    #     )
+    # # FULLY_SHIELDED needs asset commitment + surjection proof; lands with the crypto merge.
+    # raise NotImplementedError('real FULLY_SHIELDED construction lands with the crypto merge')
 
 
 def rewind_shielded_output(
@@ -169,20 +176,21 @@ def rewind_shielded_output(
     Requires the native CT crypto. Raises RuntimeError when unavailable (master).
     This is the wallet-service balance path.
     """
-    if not SHIELDED_CRYPTO_AVAILABLE:
-        raise RuntimeError('native CT crypto not available; cannot rewind on this branch')
-
-    from hathor.crypto.shielded import derive_asset_tag, rewind_range_proof
-    from hathor.crypto.shielded.ecdh import derive_ecdh_shared_secret, derive_rewind_nonce
-
-    assert output.ephemeral_pubkey is not None, 'output has no ephemeral pubkey; not rewindable'
-    shared_secret = derive_ecdh_shared_secret(privkey_bytes, output.ephemeral_pubkey)
-    nonce = derive_rewind_nonce(shared_secret)
-    generator = derive_asset_tag(token_uid)
-    value, blinding, message = rewind_range_proof(output.range_proof, output.commitment, nonce, generator)
-    return ShieldedOutputSecrets(
-        value=value,
-        blinding_factor=blinding,
-        message=message,
-        token_uid=token_uid,
-    )
+    # The native CT crypto (hathor.crypto.shielded) does not exist on this branch
+    # yet, so rewinding is unavailable. When that package is integrated, restore the
+    # `if not SHIELDED_CRYPTO_AVAILABLE` guard and uncomment the block below.
+    raise RuntimeError('native CT crypto not available; cannot rewind on this branch')
+    # from hathor.crypto.shielded import derive_asset_tag, rewind_range_proof
+    # from hathor.crypto.shielded.ecdh import derive_ecdh_shared_secret, derive_rewind_nonce
+    #
+    # assert output.ephemeral_pubkey is not None, 'output has no ephemeral pubkey; not rewindable'
+    # shared_secret = derive_ecdh_shared_secret(privkey_bytes, output.ephemeral_pubkey)
+    # nonce = derive_rewind_nonce(shared_secret)
+    # generator = derive_asset_tag(token_uid)
+    # value, blinding, message = rewind_range_proof(output.range_proof, output.commitment, nonce, generator)
+    # return ShieldedOutputSecrets(
+    #     value=value,
+    #     blinding_factor=blinding,
+    #     message=message,
+    #     token_uid=token_uid,
+    # )
