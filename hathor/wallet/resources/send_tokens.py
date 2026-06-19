@@ -18,7 +18,7 @@ from twisted.internet import threads
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, render_options, set_cors
+from hathor.api_util import APIVersion, Resource, render_options, set_cors
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
@@ -40,8 +40,8 @@ class SendTokensResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: HathorManager, settings: HathorSettings) -> None:
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: HathorManager, settings: HathorSettings, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self.manager = manager
         self._settings = settings
 
@@ -190,6 +190,12 @@ class SendTokensResource(Resource):
 SendTokensResource.openapi = {
     '/wallet/send_tokens': {
         'x-visibility': 'private',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'post': {
             'tags': ['private_wallet'],
             'operationId': 'wallet_send_tokens',

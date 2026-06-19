@@ -17,9 +17,11 @@ from typing import Any
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, get_args, set_cors
+from hathor.api_util import APIVersion, Resource, get_args, set_cors
 from hathor.conf.get_settings import get_global_settings
+from hathor.manager import HathorManager
 from hathor.util import is_token_uid_valid, json_dumpb
+from hathorlib.utils import not_none
 
 _MAX_UTXO_LIST_LENGTH: int = 100
 
@@ -32,13 +34,15 @@ class TokenResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self._settings = get_global_settings()
         self.manager = manager
 
     def get_one_token_data(self, token_uid: bytes) -> dict[str, Any]:
         # Get one token data specified in id
         tokens_index = self.manager.tx_storage.indexes.tokens
+        assert tokens_index is not None
         try:
             token_info = tokens_index.get_token_info(token_uid)
         except KeyError:
@@ -88,7 +92,7 @@ class TokenResource(Resource):
         # XXX For now we only set a fixed limit of 200 tokens to return
 
         # Get all tokens
-        all_tokens = self.manager.tx_storage.indexes.tokens.iter_all_tokens()
+        all_tokens = not_none(self.manager.tx_storage.indexes.tokens).iter_all_tokens()
 
         tokens = []
         count = 0
@@ -155,6 +159,12 @@ class TokenResource(Resource):
 TokenResource.openapi = {
     '/thin_wallet/token': {
         'x-visibility': 'public',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'x-rate-limit': {
             'global': [
                 {

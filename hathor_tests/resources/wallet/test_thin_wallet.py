@@ -3,6 +3,7 @@ from typing import Any, Generator
 
 from twisted.internet.defer import Deferred, inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
@@ -329,7 +330,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_token(self):
         self.manager.wallet.unlock(b'MYPASS')
-        resource = StubSite(TokenResource(self.manager))
+        # TODO(decimals): test v2
+        resource = StubSite(TokenResource(self.manager, APIVersion.V1A))
 
         # test list of tokens empty
         response_list1 = yield resource.get('thin_wallet/token')
@@ -428,7 +430,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # test no wallet index
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        resource2 = StubSite(TokenResource(manager2))
+        resource2 = StubSite(TokenResource(manager2, APIVersion.V1A))
         response2 = yield resource2.get('thin_wallet/token')
         data2 = response2.json_value()
         self.assertEqual(response2.responseCode, 503)
@@ -437,7 +439,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
     @inlineCallbacks
     def test_fee_token(self) -> Generator[Deferred[Any], Any, None]:
         self.manager.wallet.unlock(b'MYPASS')
-        resource = StubSite(TokenResource(self.manager))
+        resource = StubSite(TokenResource(self.manager, APIVersion.V1A))
 
         # test success case
         add_new_blocks(self.manager, 1, advance_clock=1)

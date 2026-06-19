@@ -12,6 +12,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
 from twisted.internet.task import Clock
 
+from hathor.api_util import APIVersion
 from hathor.conf import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_public_key
 from hathor.event.model.base_event import BaseEvent
@@ -320,7 +321,7 @@ def request_server(
     host: str = 'http://localhost',
     port: int = 8085,
     data: dict[str, Any] | None = None,
-    prefix: str = settings.API_VERSION_PREFIX
+    prefix: APIVersion = APIVersion.V1A,
 ) -> dict[str, Any]:
     """ Execute a request for status server
 
@@ -362,7 +363,7 @@ def execute_mining(
     count: int,
     host: str = 'http://localhost',
     port: int = 8085,
-    prefix: str = settings.API_VERSION_PREFIX
+    prefix: APIVersion = APIVersion.V1A,
 ) -> None:
     """Execute a mining on a given server"""
     from hathor_cli.mining import create_parser, execute
@@ -381,7 +382,7 @@ def execute_tx_gen(
     timestamp: str | None = None,
     host: str = 'http://localhost',
     port: int = 8085,
-    prefix: str = settings.API_VERSION_PREFIX
+    prefix: APIVersion = APIVersion.V1A,
 ) -> None:
     """Execute a tx generator on a given server"""
     from hathor_cli.tx_generator import create_parser, execute
