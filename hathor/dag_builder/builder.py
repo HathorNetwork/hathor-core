@@ -37,11 +37,11 @@ from hathor.dag_builder.types import (
     WalletFactoryType,
 )
 from hathor.dag_builder.utils import is_literal, parse_amount_token
-from hathorlib.transaction.shielded_tx_output import OutputMode
 from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
+from hathorlib.transaction.shielded_tx_output import OutputMode
 
 logger = get_logger()
 

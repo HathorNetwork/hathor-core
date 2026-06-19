@@ -14,7 +14,6 @@
 
 import pytest
 
-
 from hathor.simulator.shielded import SHIELDED_CRYPTO_AVAILABLE, build_shielded_output, rewind_shielded_output
 from hathor.util import Random
 from hathorlib.transaction.shielded_tx_output import (

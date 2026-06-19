@@ -27,7 +27,6 @@ module is importable and a recipient pubkey is supplied.
 from __future__ import annotations
 
 from hathor.util import Random
-
 from hathorlib.transaction.shielded_tx_output import (
     ASSET_COMMITMENT_SIZE,
     COMMITMENT_SIZE,
