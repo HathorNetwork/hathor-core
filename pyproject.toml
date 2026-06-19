@@ -224,6 +224,18 @@ module = [
 ]
 ignore_missing_imports = true
 
+# The native CT crypto package (hathor.crypto.shielded.*) only exists on the
+# feat/shielded-outputs branch. hathor/simulator/shielded.py references it behind
+# a runtime availability guard (SHIELDED_CRYPTO_AVAILABLE), so ignore its missing
+# import here until that branch merges (this override becomes a no-op once the
+# typed module is present).
+[[tool.mypy.overrides]]
+module = [
+    'hathor.crypto.shielded',
+    'hathor.crypto.shielded.*',
+]
+ignore_missing_imports = true
+
 # This override enables stricter rules for some specific modules.
 # Currently, we have only two options from strict-mode that are disabled, but we have to opt-in instead of opt-out
 # because setting strict=true doesn't work for module-level settings.
