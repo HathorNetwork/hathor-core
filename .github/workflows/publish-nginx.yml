@@ -4,8 +4,6 @@ on: # yamllint disable-line rule:truthy
   push:
     tags:
       - v*
-    branches:
-      - feat/nginx-config-as-artifact
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,8 +42,7 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        # run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
-        run: echo "version=test1" >> $GITHUB_OUTPUT
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
 
       - name: Generate all nginx configs
         working-directory: extras/nginx_docker
