@@ -26,7 +26,7 @@ module is importable and a recipient pubkey is supplied.
 
 from __future__ import annotations
 
-import random
+from hathor.util import Random
 
 from hathorlib.transaction.shielded_tx_output import (
     ASSET_COMMITMENT_SIZE,
@@ -58,7 +58,7 @@ def build_shielded_output(
     script: bytes,
     mode: OutputMode,
     recipient_pubkey: bytes | None = None,
-    rng: random.Random | None = None,
+    rng: Random | None = None,
     force_dummy: bool = False,
 ) -> ShieldedOutput:
     """Build one shielded output.
@@ -67,7 +67,7 @@ def build_shielded_output(
     recipient_pubkey is given, and force_dummy is False; otherwise a DUMMY one.
     """
     if rng is None:
-        rng = random.Random()
+        rng = Random()
     if not force_dummy and SHIELDED_CRYPTO_AVAILABLE and recipient_pubkey is not None:
         return _build_real_shielded_output(
             amount=amount,
@@ -80,7 +80,7 @@ def build_shielded_output(
     return _build_dummy_shielded_output(token_data=token_data, script=script, mode=mode, rng=rng)
 
 
-def _dummy_ephemeral_pubkey(rng: random.Random) -> bytes:
+def _dummy_ephemeral_pubkey(rng: Random) -> bytes:
     """33-byte compressed-pubkey-shaped bytes; non-zero so it decodes as 'present'."""
     return b'\x02' + rng.randbytes(EPHEMERAL_PUBKEY_SIZE - 1)
 
@@ -90,7 +90,7 @@ def _build_dummy_shielded_output(
     token_data: int,
     script: bytes,
     mode: OutputMode,
-    rng: random.Random,
+    rng: Random,
 ) -> ShieldedOutput:
     commitment = rng.randbytes(COMMITMENT_SIZE)
     range_proof = rng.randbytes(_DUMMY_RANGE_PROOF_SIZE)

@@ -12,11 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import random
-
 import pytest
 
+
 from hathor.simulator.shielded import SHIELDED_CRYPTO_AVAILABLE, build_shielded_output, rewind_shielded_output
+from hathor.util import Random
 from hathorlib.transaction.shielded_tx_output import (
     ASSET_COMMITMENT_SIZE,
     COMMITMENT_SIZE,
@@ -37,7 +37,7 @@ def test_dummy_amount_only_shape() -> None:
         token_data=0,
         script=SCRIPT,
         mode=OutputMode.AMOUNT_ONLY,
-        rng=random.Random(0),
+        rng=Random(0),
     )
     assert isinstance(out, AmountShieldedOutput)
     assert out.mode() == OutputMode.AMOUNT_ONLY
@@ -57,7 +57,7 @@ def test_dummy_fully_shielded_shape() -> None:
         token_data=0,
         script=SCRIPT,
         mode=OutputMode.FULLY_SHIELDED,
-        rng=random.Random(0),
+        rng=Random(0),
     )
     assert isinstance(out, FullShieldedOutput)
     assert out.mode() == OutputMode.FULLY_SHIELDED
@@ -68,9 +68,9 @@ def test_dummy_fully_shielded_shape() -> None:
 
 def test_dummy_is_deterministic_with_seeded_rng() -> None:
     a = build_shielded_output(amount=1, token_uid=HTR_UID, token_data=0, script=SCRIPT,
-                              mode=OutputMode.AMOUNT_ONLY, rng=random.Random(42))
+                              mode=OutputMode.AMOUNT_ONLY, rng=Random(42))
     b = build_shielded_output(amount=1, token_uid=HTR_UID, token_data=0, script=SCRIPT,
-                              mode=OutputMode.AMOUNT_ONLY, rng=random.Random(42))
+                              mode=OutputMode.AMOUNT_ONLY, rng=Random(42))
     assert a == b
 
 
@@ -78,6 +78,6 @@ def test_rewind_unavailable_on_master() -> None:
     if SHIELDED_CRYPTO_AVAILABLE:
         pytest.skip('native CT crypto present; rewind is exercised by the round-trip test')
     out = build_shielded_output(amount=1, token_uid=HTR_UID, token_data=0, script=SCRIPT,
-                                mode=OutputMode.AMOUNT_ONLY, rng=random.Random(0))
+                                mode=OutputMode.AMOUNT_ONLY, rng=Random(0))
     with pytest.raises(RuntimeError, match='native CT crypto not available'):
         rewind_shielded_output(out, b'\x01' * 32, HTR_UID)
