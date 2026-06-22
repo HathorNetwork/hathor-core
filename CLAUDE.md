@@ -82,6 +82,7 @@ See `.claude/rules/` for detailed, scoped rules on Python style, testing, API en
 
 - **License**: Apache 2.0, Hathor Labs header on all new Python files (template below).
 - **Settings**: Prefer injecting `HathorSettings` as a dependency; avoid `get_global_settings()` singleton.
+- **Docstrings**: Wrap inline code (names, literals, expressions) in single backticks — `code` — not reStructuredText double backticks or `:role:` markup. Docstrings are read as Markdown in editor hovers, so single backticks render as code spans there; this includes `.pyi` stubs.
 
 ## License
 
