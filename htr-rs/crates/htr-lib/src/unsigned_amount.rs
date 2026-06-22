@@ -1,22 +1,22 @@
-//! Versioned, non-negative token amount type.
+//! Versioned, unsigned token amount type.
 //!
-//! [`TokenAmount`] carries the decimal-places version (V1 or V2) under which the value was
+//! [`UnsignedAmount`] carries the decimal-places version (V1 or V2) under which the value was
 //! encoded on a vertex. Every variant also stores a `normalized` form scaled to the V2 unit,
 //! so ordering, equality, and arithmetic can mix V1 and V2 operands without loss of precision.
 //! Multiplication and division are deliberately not implemented.
 
-use crate::token_balance::TokenBalance;
+use crate::signed_amount::SignedAmount;
 use num_bigint::{BigUint, ToBigInt};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::sync::OnceLock;
 
 /// Factor used to scale a V1 value into the V2-normalized value. Set once at
-/// startup via [`TokenAmount::set_normalization_factor`] before any V1 amount is
+/// startup via [`UnsignedAmount::set_normalization_factor`] before any V1 amount is
 /// constructed or queried.
 static V1_V2_NORMALIZATION_FACTOR: OnceLock<BigUint> = OnceLock::new();
 
-/// Decimal-places version under which a token amount is encoded.
+/// Token amount version under which a token amount is encoded.
 ///
 /// The discriminant matches the on-wire version byte and is part of the serialization
 /// contract: variants are added, never renumbered.
@@ -27,7 +27,7 @@ pub enum TokenAmountVersion {
     V2 = 2,
 }
 
-/// Non-negative token amount tagged with its decimal-places version.
+/// Unsigned token amount tagged with its decimal-places version.
 ///
 /// `V1` keeps both the original `raw` value and its V2-scaled `normalized` form so a V1
 /// vertex round-trips through this type without loss. `V2` only needs `normalized` because
@@ -35,12 +35,12 @@ pub enum TokenAmountVersion {
 /// so V1 and V2 can be mixed in those operations; arithmetic always returns a V2 result.
 // TODO: In the future we may profile and optimize with a variant for small ints as u64.
 #[derive(Debug, Clone)]
-pub enum TokenAmount {
+pub enum UnsignedAmount {
     V1 { raw: BigUint, normalized: BigUint },
     V2 { normalized: BigUint },
 }
 
-impl TokenAmount {
+impl UnsignedAmount {
     pub const ZERO: Self = Self::V2 {
         normalized: BigUint::ZERO,
     };
@@ -48,7 +48,7 @@ impl TokenAmount {
     /// Set the global factor used to scale a V1 value into the V2-normalized value.
     ///
     /// The factor is `10^(v2_decimal_places - v1_decimal_places)` and must be set before any V1
-    /// [`TokenAmount`] is constructed or queried. Idempotent: a repeated call whose decimal places
+    /// [`UnsignedAmount`] is constructed or queried. Idempotent: a repeated call whose decimal places
     /// yield the same factor is a no-op, so independent initializers can each set it without
     /// coordinating. Panics when `v2_decimal_places < v1_decimal_places`, or when a later call
     /// would change an already-set factor.
@@ -72,7 +72,6 @@ impl TokenAmount {
 
     /// Build a V1 amount, computing and storing the V2-scaled `normalized` form alongside
     /// the original V1 `raw` value.
-    // TODO: Move max value validation into constructors here.
     pub fn from_v1(amount: BigUint) -> Self {
         let factor = Self::get_normalization_factor();
         Self::V1 {
@@ -86,7 +85,7 @@ impl TokenAmount {
         Self::V2 { normalized: amount }
     }
 
-    /// Build a [`TokenAmount`] from a raw value and a runtime-known version.
+    /// Build a [`UnsignedAmount`] from a raw value and a runtime-known version.
     pub fn from_version(amount: BigUint, version: TokenAmountVersion) -> Self {
         match version {
             TokenAmountVersion::V1 => Self::from_v1(amount),
@@ -99,8 +98,8 @@ impl TokenAmount {
     /// vertex in its original encoding, for example.
     pub fn normalized(&self) -> &BigUint {
         match self {
-            TokenAmount::V1 { normalized, .. } => normalized,
-            TokenAmount::V2 { normalized } => normalized,
+            UnsignedAmount::V1 { normalized, .. } => normalized,
+            UnsignedAmount::V2 { normalized } => normalized,
         }
     }
 
@@ -108,8 +107,8 @@ impl TokenAmount {
     /// the same as [`normalized`](Self::normalized) for `V2`.
     pub fn raw(&self) -> &BigUint {
         match self {
-            TokenAmount::V1 { raw, .. } => raw,
-            TokenAmount::V2 { normalized } => normalized,
+            UnsignedAmount::V1 { raw, .. } => raw,
+            UnsignedAmount::V2 { normalized } => normalized,
         }
     }
 
@@ -117,21 +116,21 @@ impl TokenAmount {
         self.raw() != &BigUint::ZERO
     }
 
-    /// Lift to a [`TokenBalance`] (which is signed) holding the normalized value.
-    pub fn to_balance(&self) -> TokenBalance {
+    /// Lift to a [`SignedAmount`] holding the normalized value.
+    pub fn to_signed(&self) -> SignedAmount {
         let normalized = self
             .normalized()
             .to_bigint()
             .expect("converting BigUint to BigInt always succeeds");
-        TokenBalance::new(normalized)
+        SignedAmount::new(normalized)
     }
 
-    /// TokenAmount converted to V1, regardless of variant; returns `None` when a V2 value
+    /// UnsignedAmount converted to V1, regardless of variant; returns `None` when a V2 value
     /// would truncate, since it's not representable as V1. Mostly just for tests.
     pub fn to_v1(&self) -> Option<Cow<'_, Self>> {
         match self {
-            TokenAmount::V1 { .. } => Some(Cow::Borrowed(self)),
-            TokenAmount::V2 { normalized } => {
+            UnsignedAmount::V1 { .. } => Some(Cow::Borrowed(self)),
+            UnsignedAmount::V2 { normalized } => {
                 let factor = Self::get_normalization_factor();
                 if normalized % factor == BigUint::ZERO {
                     Some(Cow::Owned(Self::V1 {
@@ -145,17 +144,17 @@ impl TokenAmount {
         }
     }
 
-    /// TokenAmount converted to V2, regardless of variant. This is infallible.
+    /// UnsignedAmount converted to V2, regardless of variant. This is infallible.
     pub fn to_v2(&self) -> Cow<'_, Self> {
         match self {
-            TokenAmount::V1 { normalized, .. } => Cow::Owned(Self::V2 {
+            UnsignedAmount::V1 { normalized, .. } => Cow::Owned(Self::V2 {
                 normalized: normalized.clone(),
             }),
-            TokenAmount::V2 { .. } => Cow::Borrowed(self),
+            UnsignedAmount::V2 { .. } => Cow::Borrowed(self),
         }
     }
 
-    /// TokenAmount converted to a runtime-known version; returns `None` when a V2 value
+    /// UnsignedAmount converted to a runtime-known version; returns `None` when a V2 value
     /// would truncate, since it's not representable as V1.
     pub fn to_version(&self, version: TokenAmountVersion) -> Option<Cow<'_, Self>> {
         match version {
@@ -165,47 +164,47 @@ impl TokenAmount {
     }
 
     pub fn is_v1(&self) -> bool {
-        matches!(self, TokenAmount::V1 { .. })
+        matches!(self, UnsignedAmount::V1 { .. })
     }
 
     pub fn is_v2(&self) -> bool {
-        matches!(self, TokenAmount::V2 { .. })
+        matches!(self, UnsignedAmount::V2 { .. })
     }
 }
 
-impl Ord for TokenAmount {
+impl Ord for UnsignedAmount {
     fn cmp(&self, other: &Self) -> Ordering {
         self.normalized().cmp(other.normalized())
     }
 }
 
-impl PartialOrd for TokenAmount {
+impl PartialOrd for UnsignedAmount {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for TokenAmount {
+impl PartialEq for UnsignedAmount {
     fn eq(&self, other: &Self) -> bool {
         self.normalized() == other.normalized()
     }
 }
 
-impl Eq for TokenAmount {}
+impl Eq for UnsignedAmount {}
 
-impl std::ops::Add for &TokenAmount {
-    type Output = TokenAmount;
+impl std::ops::Add for &UnsignedAmount {
+    type Output = UnsignedAmount;
 
     fn add(self, rhs: Self) -> Self::Output {
-        TokenAmount::from_v2(self.normalized() + rhs.normalized())
+        UnsignedAmount::from_v2(self.normalized() + rhs.normalized())
     }
 }
 
-impl std::ops::Sub for &TokenAmount {
-    type Output = TokenAmount;
+impl std::ops::Sub for &UnsignedAmount {
+    type Output = UnsignedAmount;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        TokenAmount::from_v2(self.normalized() - rhs.normalized())
+        UnsignedAmount::from_v2(self.normalized() - rhs.normalized())
     }
 }
 
@@ -218,7 +217,7 @@ mod tests {
     const TEN_TO_THE_SIXTEENTH: u64 = 10u64.pow(16);
 
     fn init() {
-        TokenAmount::set_normalization_factor(2, 18)
+        UnsignedAmount::set_normalization_factor(2, 18)
     }
 
     fn big(n: u64) -> BigUint {
@@ -236,17 +235,17 @@ mod tests {
     #[test]
     #[should_panic(expected = "normalization factor already set to a different value")]
     fn set_normalization_factor_conflicting_second_call_panics() {
-        TokenAmount::set_normalization_factor(2, 18);
-        TokenAmount::set_normalization_factor(0, 4);
+        UnsignedAmount::set_normalization_factor(2, 18);
+        UnsignedAmount::set_normalization_factor(0, 4);
     }
 
     // A second call whose decimal places yield the same factor is a no-op, letting independent
     // initializers each set it without coordinating.
     #[test]
     fn set_normalization_factor_equal_second_call_is_noop() {
-        TokenAmount::set_normalization_factor(2, 18);
-        TokenAmount::set_normalization_factor(2, 18);
-        let amount = TokenAmount::from_v1(big(3));
+        UnsignedAmount::set_normalization_factor(2, 18);
+        UnsignedAmount::set_normalization_factor(2, 18);
+        let amount = UnsignedAmount::from_v1(big(3));
         assert_eq!(amount.raw(), &big(3));
         assert_eq!(amount.normalized(), &big(3 * TEN_TO_THE_SIXTEENTH));
     }
@@ -254,7 +253,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn set_normalization_factor_panics_when_v2_smaller_than_v1() {
-        TokenAmount::set_normalization_factor(18, 2);
+        UnsignedAmount::set_normalization_factor(18, 2);
     }
 
     // Equal decimal places yield a factor of `10^0 = 1`, so a V1 amount and its
@@ -262,8 +261,8 @@ mod tests {
     // when the two encodings carry identical precision.
     #[test]
     fn set_normalization_factor_equal_decimal_places_yields_identity_factor() {
-        TokenAmount::set_normalization_factor(8, 8);
-        let amount = TokenAmount::from_v1(big(7));
+        UnsignedAmount::set_normalization_factor(8, 8);
+        let amount = UnsignedAmount::from_v1(big(7));
         assert_eq!(amount.raw(), &big(7));
         assert_eq!(amount.normalized(), &big(7));
     }
@@ -298,7 +297,7 @@ mod tests {
     #[test]
     fn from_v1_scales_normalized_by_ten_to_the_sixteenth() {
         init();
-        let amount = TokenAmount::from_v1(big(5));
+        let amount = UnsignedAmount::from_v1(big(5));
         assert!(amount.is_v1());
         assert_eq!(amount.raw(), &big(5));
         assert_eq!(amount.normalized(), &big(5 * TEN_TO_THE_SIXTEENTH));
@@ -307,7 +306,7 @@ mod tests {
     #[test]
     fn from_v2_raw_equals_normalized() {
         init();
-        let amount = TokenAmount::from_v2(big(7));
+        let amount = UnsignedAmount::from_v2(big(7));
         assert!(amount.is_v2());
         assert_eq!(amount.raw(), &big(7));
         assert_eq!(amount.normalized(), &big(7));
@@ -316,11 +315,11 @@ mod tests {
     #[test]
     fn from_version_dispatches_by_version() {
         init();
-        let v1 = TokenAmount::from_version(big(3), TokenAmountVersion::V1);
+        let v1 = UnsignedAmount::from_version(big(3), TokenAmountVersion::V1);
         assert!(v1.is_v1());
         assert_eq!(v1.normalized(), &big(3 * TEN_TO_THE_SIXTEENTH));
 
-        let v2 = TokenAmount::from_version(big(3), TokenAmountVersion::V2);
+        let v2 = UnsignedAmount::from_version(big(3), TokenAmountVersion::V2);
         assert!(v2.is_v2());
         assert_eq!(v2.normalized(), &big(3));
     }
@@ -328,9 +327,9 @@ mod tests {
     #[test]
     fn zero_is_v2_zero() {
         init();
-        assert!(TokenAmount::ZERO.is_v2());
-        assert_eq!(TokenAmount::ZERO.raw(), &big(0));
-        assert_eq!(TokenAmount::ZERO.normalized(), &big(0));
+        assert!(UnsignedAmount::ZERO.is_v2());
+        assert_eq!(UnsignedAmount::ZERO.raw(), &big(0));
+        assert_eq!(UnsignedAmount::ZERO.normalized(), &big(0));
     }
 
     // ---- as_bool ----
@@ -338,23 +337,23 @@ mod tests {
     #[test]
     fn as_bool() {
         init();
-        assert!(!TokenAmount::ZERO.as_bool());
-        assert!(TokenAmount::from_v1(big(1)).as_bool());
-        assert!(TokenAmount::from_v2(big(1)).as_bool());
+        assert!(!UnsignedAmount::ZERO.as_bool());
+        assert!(UnsignedAmount::from_v1(big(1)).as_bool());
+        assert!(UnsignedAmount::from_v2(big(1)).as_bool());
     }
 
-    // ---- to_balance ----
+    // ---- to_signed ----
 
     #[test]
-    fn to_balance_carries_normalized_value() {
+    fn to_signed_carries_normalized_value() {
         init();
-        let from_v1 = TokenAmount::from_v1(big(5)).to_balance();
+        let from_v1 = UnsignedAmount::from_v1(big(5)).to_signed();
         assert_eq!(from_v1.raw(), &BigInt::from(5 * TEN_TO_THE_SIXTEENTH));
 
-        let from_v2 = TokenAmount::from_v2(big(5)).to_balance();
+        let from_v2 = UnsignedAmount::from_v2(big(5)).to_signed();
         assert_eq!(from_v2.raw(), &BigInt::from(5));
 
-        let from_zero = TokenAmount::ZERO.to_balance();
+        let from_zero = UnsignedAmount::ZERO.to_signed();
         assert_eq!(from_zero.raw(), &BigInt::from(0));
     }
 
@@ -365,7 +364,7 @@ mod tests {
     #[test]
     fn to_v1_on_v1_borrows_self() {
         init();
-        let original = TokenAmount::from_v1(big(5));
+        let original = UnsignedAmount::from_v1(big(5));
         let converted = original.to_v1().expect("V1 always converts to V1");
         assert!(matches!(converted, Cow::Borrowed(_)));
         assert!(converted.is_v1());
@@ -379,7 +378,7 @@ mod tests {
     #[test]
     fn to_v1_on_v2_multiple_of_factor_returns_owned_v1() {
         init();
-        let source = TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH));
+        let source = UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH));
         let v1 = source.to_v1().expect("multiple of factor converts");
         assert!(matches!(v1, Cow::Owned(_)));
         assert!(v1.is_v1());
@@ -393,7 +392,7 @@ mod tests {
     #[test]
     fn to_v1_on_v2_non_multiple_returns_none() {
         init();
-        let amount = TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1));
+        let amount = UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1));
         assert!(amount.to_v1().is_none());
     }
 
@@ -402,7 +401,7 @@ mod tests {
     #[test]
     fn to_v1_on_zero_returns_v1_zero() {
         init();
-        let zero = TokenAmount::ZERO;
+        let zero = UnsignedAmount::ZERO;
         let v1 = zero.to_v1().expect("zero is a multiple of every factor");
         assert!(v1.is_v1());
         assert_eq!(v1.raw(), &big(0));
@@ -414,8 +413,8 @@ mod tests {
     #[test]
     fn to_v1_roundtrips_from_v1_through_v2() {
         init();
-        let original = TokenAmount::from_v1(big(42));
-        let as_v2 = TokenAmount::from_v2(original.normalized().clone());
+        let original = UnsignedAmount::from_v1(big(42));
+        let as_v2 = UnsignedAmount::from_v2(original.normalized().clone());
         let back = as_v2
             .to_v1()
             .expect("V1-derived normalized always converts");
@@ -430,7 +429,7 @@ mod tests {
     #[test]
     fn to_v2_on_v2_borrows_self() {
         init();
-        let original = TokenAmount::from_v2(big(7));
+        let original = UnsignedAmount::from_v2(big(7));
         let converted = original.to_v2();
         assert!(matches!(converted, Cow::Borrowed(_)));
         assert!(converted.is_v2());
@@ -444,7 +443,7 @@ mod tests {
     #[test]
     fn to_v2_on_v1_returns_owned_v2() {
         init();
-        let source = TokenAmount::from_v1(big(5));
+        let source = UnsignedAmount::from_v1(big(5));
         let v2 = source.to_v2();
         assert!(matches!(v2, Cow::Owned(_)));
         assert!(v2.is_v2());
@@ -460,14 +459,14 @@ mod tests {
     #[test]
     fn to_version_dispatches_by_version() {
         init();
-        let v2_multiple = TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH));
+        let v2_multiple = UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH));
         let to_v1 = v2_multiple
             .to_version(TokenAmountVersion::V1)
             .expect("multiple of factor converts");
         assert!(to_v1.is_v1());
         assert_eq!(to_v1.raw(), &big(5));
 
-        let v1 = TokenAmount::from_v1(big(3));
+        let v1 = UnsignedAmount::from_v1(big(3));
         let to_v2 = v1
             .to_version(TokenAmountVersion::V2)
             .expect("V2 conversion always succeeds");
@@ -480,7 +479,7 @@ mod tests {
     #[test]
     fn to_version_to_v1_non_multiple_returns_none() {
         init();
-        let amount = TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1));
+        let amount = UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1));
         assert!(amount.to_version(TokenAmountVersion::V1).is_none());
     }
 
@@ -491,8 +490,8 @@ mod tests {
         init();
         // V1(5).normalized = 5*10^16, matches V2(5*10^16).
         assert_eq!(
-            TokenAmount::from_v1(big(5)),
-            TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH))
+            UnsignedAmount::from_v1(big(5)),
+            UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH))
         );
     }
 
@@ -500,16 +499,19 @@ mod tests {
     fn equality_fails_when_normalized_differs() {
         init();
         // V1(5).normalized = 5*10^16, V2(5).normalized = 5.
-        assert_ne!(TokenAmount::from_v1(big(5)), TokenAmount::from_v2(big(5)));
+        assert_ne!(
+            UnsignedAmount::from_v1(big(5)),
+            UnsignedAmount::from_v2(big(5))
+        );
     }
 
     #[test]
     fn ord_compares_normalized_across_versions() {
         init();
-        let v1 = TokenAmount::from_v1(big(5)); // normalized = 5*10^16
-        let v2_smaller = TokenAmount::from_v2(big(1));
-        let v2_equal = TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH));
-        let v2_bigger = TokenAmount::from_v2(big(6 * TEN_TO_THE_SIXTEENTH));
+        let v1 = UnsignedAmount::from_v1(big(5)); // normalized = 5*10^16
+        let v2_smaller = UnsignedAmount::from_v2(big(1));
+        let v2_equal = UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH));
+        let v2_bigger = UnsignedAmount::from_v2(big(6 * TEN_TO_THE_SIXTEENTH));
 
         assert_eq!(v1.cmp(&v2_smaller), Ordering::Greater);
         assert_eq!(v1.cmp(&v2_equal), Ordering::Equal);
@@ -521,7 +523,7 @@ mod tests {
     #[test]
     fn add_v1_v1_returns_v2() {
         init();
-        let result = &TokenAmount::from_v1(big(2)) + &TokenAmount::from_v1(big(3));
+        let result = &UnsignedAmount::from_v1(big(2)) + &UnsignedAmount::from_v1(big(3));
         assert!(result.is_v2());
         assert_eq!(result.normalized(), &big(5 * TEN_TO_THE_SIXTEENTH));
     }
@@ -529,7 +531,7 @@ mod tests {
     #[test]
     fn add_v2_v2() {
         init();
-        let result = &TokenAmount::from_v2(big(2)) + &TokenAmount::from_v2(big(3));
+        let result = &UnsignedAmount::from_v2(big(2)) + &UnsignedAmount::from_v2(big(3));
         assert!(result.is_v2());
         assert_eq!(result.normalized(), &big(5));
     }
@@ -540,8 +542,8 @@ mod tests {
     #[test]
     fn add_mixed_versions_returns_v2_in_either_order() {
         init();
-        let v1 = TokenAmount::from_v1(big(2)); // normalized = 2*10^16
-        let v2 = TokenAmount::from_v2(big(3 * TEN_TO_THE_SIXTEENTH));
+        let v1 = UnsignedAmount::from_v1(big(2)); // normalized = 2*10^16
+        let v2 = UnsignedAmount::from_v2(big(3 * TEN_TO_THE_SIXTEENTH));
         let expected = big(5 * TEN_TO_THE_SIXTEENTH);
 
         let v1_plus_v2 = &v1 + &v2;
@@ -556,7 +558,7 @@ mod tests {
     #[test]
     fn sub_v1_v1_returns_v2() {
         init();
-        let result = &TokenAmount::from_v1(big(5)) - &TokenAmount::from_v1(big(2));
+        let result = &UnsignedAmount::from_v1(big(5)) - &UnsignedAmount::from_v1(big(2));
         assert!(result.is_v2());
         assert_eq!(result.normalized(), &big(3 * TEN_TO_THE_SIXTEENTH));
     }
@@ -564,7 +566,7 @@ mod tests {
     #[test]
     fn sub_v2_v2() {
         init();
-        let result = &TokenAmount::from_v2(big(10)) - &TokenAmount::from_v2(big(3));
+        let result = &UnsignedAmount::from_v2(big(10)) - &UnsignedAmount::from_v2(big(3));
         assert!(result.is_v2());
         assert_eq!(result.normalized(), &big(7));
     }
@@ -572,9 +574,9 @@ mod tests {
     #[test]
     fn sub_mixed_versions_returns_v2_in_either_order() {
         init();
-        let v1 = TokenAmount::from_v1(big(5)); // normalized = 5*10^16
-        let v2_small = TokenAmount::from_v2(big(2 * TEN_TO_THE_SIXTEENTH));
-        let v2_big = TokenAmount::from_v2(big(8 * TEN_TO_THE_SIXTEENTH));
+        let v1 = UnsignedAmount::from_v1(big(5)); // normalized = 5*10^16
+        let v2_small = UnsignedAmount::from_v2(big(2 * TEN_TO_THE_SIXTEENTH));
+        let v2_big = UnsignedAmount::from_v2(big(8 * TEN_TO_THE_SIXTEENTH));
         let expected = big(3 * TEN_TO_THE_SIXTEENTH);
 
         let v1_minus_v2 = &v1 - &v2_small;
@@ -591,6 +593,6 @@ mod tests {
     fn sub_underflow_panics() {
         init();
         // BigUint cannot represent negative values, so an underflow on subtraction panics.
-        let _ = &TokenAmount::from_v2(big(3)) - &TokenAmount::from_v2(big(5));
+        let _ = &UnsignedAmount::from_v2(big(3)) - &UnsignedAmount::from_v2(big(5));
     }
 }

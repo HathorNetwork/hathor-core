@@ -10,8 +10,8 @@ compile_error!("compilation is only allowed for 64-bit targets");
 #[macro_use]
 extern crate num_derive;
 
-mod token_amount;
-mod token_balance;
+mod signed_amount;
+mod unsigned_amount;
 
-pub use token_amount::{TokenAmount, TokenAmountVersion};
-pub use token_balance::TokenBalance;
+pub use signed_amount::SignedAmount;
+pub use unsigned_amount::{TokenAmountVersion, UnsignedAmount};

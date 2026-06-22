@@ -1,10 +1,10 @@
 //! Python extension module exposing Hathor's Rust implementations via PyO3.
 
-mod token_amount;
-mod token_balance;
+mod signed_amount;
+mod unsigned_amount;
 
-use crate::token_amount::PyTokenAmount;
-use crate::token_balance::PyTokenBalance;
+use crate::signed_amount::PySignedAmount;
+use crate::unsigned_amount::PyUnsignedAmount;
 use pyo3::prelude::*;
 
 /// Formats the sum of two numbers as string.
@@ -17,8 +17,8 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
-    m.add_class::<PyTokenAmount>()?;
-    m.add_class::<PyTokenBalance>()?;
+    m.add_class::<PyUnsignedAmount>()?;
+    m.add_class::<PySignedAmount>()?;
     Ok(())
 }
 

@@ -1,47 +1,47 @@
-//! TokenAmount Python wrapper.
+//! UnsignedAmount Python wrapper.
 
-use crate::token_balance::PyTokenBalance;
-use htr_lib::{TokenAmount, TokenAmountVersion};
+use crate::signed_amount::PySignedAmount;
+use htr_lib::{TokenAmountVersion, UnsignedAmount};
 use num_bigint::BigUint;
 use num_traits::FromPrimitive;
 use pyo3::exceptions::{PyAssertionError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyInt;
 
-/// Python-facing wrapper around [`TokenAmount`].
+/// Python-facing wrapper around [`UnsignedAmount`].
 ///
 /// `frozen` + `immutable_type` make both instances and the class itself unmodifiable from
 /// Python, so amounts have value semantics like `int`.
-#[pyclass(name = "TokenAmount", frozen, immutable_type)]
-pub struct PyTokenAmount(TokenAmount);
+#[pyclass(name = "UnsignedAmount", frozen, immutable_type)]
+pub struct PyUnsignedAmount(UnsignedAmount);
 
-impl PyTokenAmount {
-    pub(crate) fn new(amount: TokenAmount) -> Self {
+impl PyUnsignedAmount {
+    pub(crate) fn new(amount: UnsignedAmount) -> Self {
         Self(amount)
     }
 }
 
 #[pymethods]
-impl PyTokenAmount {
+impl PyUnsignedAmount {
     #[staticmethod]
     #[pyo3(signature = (*, v1_decimal_places, v2_decimal_places))]
     fn set_normalization_factor(v1_decimal_places: u32, v2_decimal_places: u32) {
-        TokenAmount::set_normalization_factor(v1_decimal_places, v2_decimal_places)
+        UnsignedAmount::set_normalization_factor(v1_decimal_places, v2_decimal_places)
     }
 
     #[staticmethod]
     fn get_normalization_factor() -> &'static BigUint {
-        TokenAmount::get_normalization_factor()
+        UnsignedAmount::get_normalization_factor()
     }
 
     #[staticmethod]
     fn from_v1(amount: BigUint) -> Self {
-        Self(TokenAmount::from_v1(amount))
+        Self(UnsignedAmount::from_v1(amount))
     }
 
     #[staticmethod]
     fn from_v2(amount: BigUint) -> Self {
-        Self(TokenAmount::from_v2(amount))
+        Self(UnsignedAmount::from_v2(amount))
     }
 
     #[staticmethod]
@@ -49,12 +49,12 @@ impl PyTokenAmount {
     fn from_version(amount: BigUint, version: &Bound<'_, PyInt>) -> PyResult<Self> {
         let version = TokenAmountVersion::from_u8(version.extract()?)
             .ok_or_else(|| PyValueError::new_err(format!("unknown version: {version}")))?;
-        Ok(Self(TokenAmount::from_version(amount, version)))
+        Ok(Self(UnsignedAmount::from_version(amount, version)))
     }
 
     #[staticmethod]
     fn zero() -> Self {
-        Self(TokenAmount::ZERO)
+        Self(UnsignedAmount::ZERO)
     }
 
     fn is_v1(&self) -> bool {
@@ -73,8 +73,8 @@ impl PyTokenAmount {
         self.0.raw()
     }
 
-    fn to_balance(&self) -> PyTokenBalance {
-        PyTokenBalance::new(self.0.to_balance())
+    fn to_signed(&self) -> PySignedAmount {
+        PySignedAmount::new(self.0.to_signed())
     }
 
     fn to_v1(&self) -> PyResult<Self> {
@@ -128,10 +128,10 @@ impl PyTokenAmount {
     }
 
     fn __richcmp__(&self, other: &Bound<'_, PyAny>, op: pyo3::basic::CompareOp) -> PyResult<bool> {
-        // Accept any object and raise `TypeError` on a non-`TokenAmount` operand so that
+        // Accept any object and raise `TypeError` on a non-`UnsignedAmount` operand so that
         // `==`/`!=` against a foreign type fail loudly. PyO3 returns `NotImplemented` automatically
         // which would let Python fall back to object identity and silently yield a wrong boolean.
-        if let Ok(other) = other.cast_exact::<PyTokenAmount>() {
+        if let Ok(other) = other.cast_exact::<PyUnsignedAmount>() {
             Ok(op.matches(self.0.cmp(&other.get().0)))
         } else {
             let type_name = other
@@ -140,7 +140,7 @@ impl PyTokenAmount {
                 .map(|n| n.to_string())
                 .unwrap_or_else(|_| "<unknown type>".to_owned());
             Err(PyTypeError::new_err(format!(
-                "comparison not supported between instances of 'TokenAmount' and '{type_name}'",
+                "comparison not supported between instances of 'UnsignedAmount' and '{type_name}'",
             )))
         }
     }
@@ -149,13 +149,13 @@ impl PyTokenAmount {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use htr_lib::TokenBalance;
+    use htr_lib::SignedAmount;
     use num_bigint::BigInt;
 
     const TEN_TO_THE_SIXTEENTH: u64 = 10u64.pow(16);
 
     fn init() {
-        TokenAmount::set_normalization_factor(2, 18)
+        UnsignedAmount::set_normalization_factor(2, 18)
     }
 
     fn big(n: u64) -> BigUint {
@@ -168,7 +168,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let version = 3i32.into_pyobject(py).unwrap();
-            let Err(err) = PyTokenAmount::from_version(big(5), &version) else {
+            let Err(err) = PyUnsignedAmount::from_version(big(5), &version) else {
                 panic!("expected ValueError on unknown version");
             };
             assert!(err.is_instance_of::<PyValueError>(py));
@@ -182,7 +182,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let version = 1i32.into_pyobject(py).unwrap();
-            let amount = PyTokenAmount::from_version(big(5), &version).unwrap();
+            let amount = PyUnsignedAmount::from_version(big(5), &version).unwrap();
             assert!(amount.is_v1());
             assert_eq!(amount.normalized(), &big(5 * TEN_TO_THE_SIXTEENTH));
         });
@@ -194,7 +194,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let version = 2i32.into_pyobject(py).unwrap();
-            let amount = PyTokenAmount::from_version(big(5), &version).unwrap();
+            let amount = PyUnsignedAmount::from_version(big(5), &version).unwrap();
             assert!(amount.is_v2());
             assert_eq!(amount.normalized(), &big(5));
         });
@@ -208,10 +208,10 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|py| {
-            let a = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(2)))).unwrap();
-            let b = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(3)))).unwrap();
+            let a = Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(2)))).unwrap();
+            let b = Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(3)))).unwrap();
             let result = a.call_method1("__add__", (b,)).unwrap();
-            let result: PyRef<'_, PyTokenAmount> = result.extract().unwrap();
+            let result: PyRef<'_, PyUnsignedAmount> = result.extract().unwrap();
             assert!(result.is_v2());
             assert_eq!(result.normalized(), &big(5));
         });
@@ -222,10 +222,11 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|py| {
-            let a = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(10)))).unwrap();
-            let b = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(3)))).unwrap();
+            let a =
+                Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(10)))).unwrap();
+            let b = Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(3)))).unwrap();
             let result = a.call_method1("__sub__", (b,)).unwrap();
-            let result: PyRef<'_, PyTokenAmount> = result.extract().unwrap();
+            let result: PyRef<'_, PyUnsignedAmount> = result.extract().unwrap();
             assert!(result.is_v2());
             assert_eq!(result.normalized(), &big(7));
         });
@@ -236,9 +237,9 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|py| {
-            let a = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(5)))).unwrap();
-            let b = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(5)))).unwrap();
-            let c = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(6)))).unwrap();
+            let a = Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5)))).unwrap();
+            let b = Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5)))).unwrap();
+            let c = Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(6)))).unwrap();
             let a_any = a.as_any();
             let b_any = b.as_any();
             let c_any = c.as_any();
@@ -260,12 +261,13 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|py| {
-            let amount = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(5)))).unwrap();
+            let amount =
+                Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5)))).unwrap();
             let other = 5i32.into_pyobject(py).unwrap();
             let amount_any = amount.as_any();
             let other_any = other.as_any();
             let expected_msg =
-                "comparison not supported between instances of 'TokenAmount' and 'int'";
+                "comparison not supported between instances of 'UnsignedAmount' and 'int'";
 
             for (op, result) in [
                 ("==", amount_any.eq(other_any)),
@@ -285,24 +287,25 @@ mod tests {
     }
 
     // The sibling PyClass is the realistic confusion case in this codebase. Pinning the
-    // type-name in the error confirms `cast_exact::<PyTokenAmount>` rejects `PyTokenBalance`
+    // type-name in the error confirms `cast_exact::<PyUnsignedAmount>` rejects `PySignedAmount`
     // and surfaces it as the foreign type, not the catch-all `"unknown type"` fallback.
     #[test]
-    fn py_comparison_with_token_balance_raises_type_error() {
+    fn py_comparison_with_signed_amount_raises_type_error() {
         init();
         Python::initialize();
         Python::attach(|py| {
-            let amount = Bound::new(py, PyTokenAmount::new(TokenAmount::from_v2(big(5)))).unwrap();
-            let balance =
-                Bound::new(py, PyTokenBalance::new(TokenBalance::new(BigInt::from(5)))).unwrap();
+            let amount =
+                Bound::new(py, PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5)))).unwrap();
+            let signed =
+                Bound::new(py, PySignedAmount::new(SignedAmount::new(BigInt::from(5)))).unwrap();
             let err = amount
                 .as_any()
-                .eq(balance.as_any())
-                .expect_err("expected TypeError when comparing TokenAmount with TokenBalance");
+                .eq(signed.as_any())
+                .expect_err("expected TypeError when comparing UnsignedAmount with SignedAmount");
             assert!(err.is_instance_of::<PyTypeError>(py));
             assert_eq!(
                 err.value(py).to_string(),
-                "comparison not supported between instances of 'TokenAmount' and 'TokenBalance'"
+                "comparison not supported between instances of 'UnsignedAmount' and 'SignedAmount'"
             );
         });
     }
@@ -312,7 +315,8 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|_py| {
-            let amount = PyTokenAmount::new(TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH)));
+            let amount =
+                PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH)));
             let v1 = amount.to_v1().expect("multiple of factor converts");
             assert!(v1.is_v1());
             assert_eq!(v1.raw(), &big(5));
@@ -331,7 +335,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let amount =
-                PyTokenAmount::new(TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1)));
+                PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1)));
             let Err(err) = amount.to_v1() else {
                 panic!("expected AssertionError on non-divisible to_v1");
             };
@@ -350,7 +354,8 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|_py| {
-            let amount = PyTokenAmount::new(TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH)));
+            let amount =
+                PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH)));
             let v1 = amount.maybe_to_v1().expect("multiple of factor converts");
             assert!(v1.is_v1());
             assert_eq!(v1.raw(), &big(5));
@@ -366,7 +371,7 @@ mod tests {
         Python::initialize();
         Python::attach(|_py| {
             let amount =
-                PyTokenAmount::new(TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1)));
+                PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1)));
             assert!(amount.maybe_to_v1().is_none());
         });
     }
@@ -376,7 +381,7 @@ mod tests {
         init();
         Python::initialize();
         Python::attach(|_py| {
-            let amount = PyTokenAmount::new(TokenAmount::from_v1(big(5)));
+            let amount = PyUnsignedAmount::new(UnsignedAmount::from_v1(big(5)));
             let v2 = amount.to_v2();
             assert!(v2.is_v2());
             assert_eq!(v2.raw(), &big(5 * TEN_TO_THE_SIXTEENTH));
@@ -390,7 +395,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let version = 3i32.into_pyobject(py).unwrap();
-            let amount = PyTokenAmount::new(TokenAmount::from_v2(big(5)));
+            let amount = PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5)));
             let Err(err) = amount.to_version(&version) else {
                 panic!("expected ValueError on unknown version");
             };
@@ -405,7 +410,8 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let version = 1i32.into_pyobject(py).unwrap();
-            let amount = PyTokenAmount::new(TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH)));
+            let amount =
+                PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH)));
             let v1 = amount.to_version(&version).unwrap();
             assert!(v1.is_v1());
             assert_eq!(v1.raw(), &big(5));
@@ -419,7 +425,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let version = 2i32.into_pyobject(py).unwrap();
-            let amount = PyTokenAmount::new(TokenAmount::from_v1(big(5)));
+            let amount = PyUnsignedAmount::new(UnsignedAmount::from_v1(big(5)));
             let v2 = amount.to_version(&version).unwrap();
             assert!(v2.is_v2());
             assert_eq!(v2.normalized(), &big(5 * TEN_TO_THE_SIXTEENTH));
@@ -437,7 +443,7 @@ mod tests {
         Python::attach(|py| {
             let version = 1i32.into_pyobject(py).unwrap();
             let amount =
-                PyTokenAmount::new(TokenAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1)));
+                PyUnsignedAmount::new(UnsignedAmount::from_v2(big(5 * TEN_TO_THE_SIXTEENTH + 1)));
             let Err(err) = amount.to_version(&version) else {
                 panic!("expected AssertionError on non-divisible to_version");
             };
