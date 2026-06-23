@@ -1,10 +1,11 @@
-//! Python extension module exposing Hathor's Rust implementations to `hathor-core` via PyO3.
+//! Python extension module exposing Hathor's Rust implementations via PyO3.
 
+mod signed_amount;
+mod unsigned_amount;
+
+use crate::signed_amount::PySignedAmount;
+use crate::unsigned_amount::PyUnsignedAmount;
 use pyo3::prelude::*;
-
-// Prohibit compilation for non-64-bit targets to ensure consistent use of `usize`.
-#[cfg(not(target_pointer_width = "64"))]
-compile_error!("compilation is only allowed for 64-bit targets");
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
@@ -16,6 +17,8 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_class::<PyUnsignedAmount>()?;
+    m.add_class::<PySignedAmount>()?;
     Ok(())
 }
 
