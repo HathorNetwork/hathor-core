@@ -9,7 +9,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.validation_state import ValidationState
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions, create_fee_tokens
-from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class TransactionTest(_BaseResourceTest._ResourceTest):
@@ -184,10 +184,10 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['meta']['first_block'], None)
         self.assertEqual(data['meta']['first_block_height'], None)
 
-        # Decimal version
-        decimal_version = VertexDecimalVersion.V1
-        assert tx.get_decimal_version() == decimal_version
-        assert data['tx']['decimal_version'] == decimal_version
+        # Token amount version
+        token_amount_version = TokenAmountVersion.V1
+        assert tx.get_token_amount_version() == token_amount_version
+        assert data['tx']['token_amount_version'] == token_amount_version
 
     @inlineCallbacks
     def test_get_one_known_tx_with_authority(self):
@@ -560,7 +560,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         # The fee is paid in HTR (token_index=0)
         self.assertEqual(fee_entry['token_uid'], self._settings.HATHOR_TOKEN_UID.hex())
-        self.assertEqual(fee_entry['amount'], self._settings.FEE_PER_OUTPUT)
+        self.assertEqual(fee_entry['amount'], self._settings.FEE_PER_OUTPUT_V1)
 
     @inlineCallbacks
     def test_get_transaction_without_fee_header(self):

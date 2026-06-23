@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from hathor.serialization import Serializer
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.vertex_parser._vertex_parser import VertexParser
-from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -49,14 +49,14 @@ def deserialize_headers(
                 from hathor.transaction.headers import NanoHeader
                 from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header
                 assert isinstance(vertex, Transaction)
-                data = deserialize_nano_header(deserializer, decimal_version=vertex.get_decimal_version())
+                data = deserialize_nano_header(deserializer, token_amount_version=vertex.get_token_amount_version())
                 header = NanoHeader.create_from_data(vertex, data)
             case VertexHeaderId.FEE_HEADER:
                 from hathor.transaction import Transaction
                 from hathor.transaction.headers import FeeHeader
                 from hathor.transaction.vertex_parser._fee_header import deserialize_fee_header
                 assert isinstance(vertex, Transaction)
-                fees = deserialize_fee_header(deserializer, decimal_version=vertex.get_decimal_version())
+                fees = deserialize_fee_header(deserializer, token_amount_version=vertex.get_token_amount_version())
                 header = FeeHeader(settings=settings, tx=vertex, fees=fees)
             case VertexHeaderId.SHIELDED_OUTPUTS_HEADER:
                 from hathor.transaction import Transaction
@@ -88,7 +88,7 @@ def serialize_header(
     serializer: Serializer,
     header: AnyVertexHeader,
     *,
-    decimal_version: VertexDecimalVersion,
+    token_amount_version: TokenAmountVersion,
 ) -> None:
     """Serialize a single header into the serializer."""
     from hathor.transaction.headers import (
@@ -101,10 +101,10 @@ def serialize_header(
     match header:
         case NanoHeader():
             from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
-            serialize_nano_header(serializer, header, decimal_version=decimal_version)
+            serialize_nano_header(serializer, header, token_amount_version=token_amount_version)
         case FeeHeader():
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
-            serialize_fee_header(serializer, header, decimal_version=decimal_version)
+            serialize_fee_header(serializer, header, token_amount_version=token_amount_version)
         case ShieldedOutputsHeader():
             from hathor.transaction.vertex_parser._shielded_outputs_header import (
                 serialize_shielded_outputs_header,
@@ -119,7 +119,7 @@ def serialize_header(
             raise AssertionError('unreachable')
 
 
-def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: VertexDecimalVersion) -> bytes:
+def get_header_sighash_bytes(header: AnyVertexHeader, *, token_amount_version: TokenAmountVersion) -> bytes:
     """Get sighash bytes for a header."""
     from hathor.transaction.headers import FeeHeader, NanoHeader
 
@@ -127,12 +127,12 @@ def get_header_sighash_bytes(header: AnyVertexHeader, *, decimal_version: Vertex
         case NanoHeader():
             from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
             serializer = Serializer.build_bytes_serializer()
-            serialize_nano_header(serializer, header, skip_signature=True, decimal_version=decimal_version)
+            serialize_nano_header(serializer, header, skip_signature=True, token_amount_version=token_amount_version)
             return bytes(serializer.finalize())
         case FeeHeader():
             from hathor.transaction.vertex_parser._fee_header import serialize_fee_header
             serializer = Serializer.build_bytes_serializer()
-            serialize_fee_header(serializer, header, decimal_version=decimal_version)
+            serialize_fee_header(serializer, header, token_amount_version=token_amount_version)
             return bytes(serializer.finalize())
         case _:
             raise AssertionError('unreachable')

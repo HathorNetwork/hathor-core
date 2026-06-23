@@ -108,9 +108,9 @@ import struct
 
 from typing_extensions import assert_never
 
-from hathorlib.decimal_places import VertexDecimalVersion
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.exceptions import BadDataError
+from hathorlib.token_amount_version import TokenAmountVersion
 
 MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2_147_483_647
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
@@ -119,14 +119,14 @@ MAX_OUTPUT_VALUE_V2: int = MAX_OUTPUT_VALUE_64 * 10**16
 MAX_OUTPUT_VALUE_V2_LENGTH: int = (MAX_OUTPUT_VALUE_V2.bit_length() + 7) // 8
 
 
-def encode_output_value(serializer: Serializer, value: int, *, decimal_version: VertexDecimalVersion) -> None:
-    match decimal_version:
-        case VertexDecimalVersion.V1:
+def encode_output_value(serializer: Serializer, value: int, *, token_amount_version: TokenAmountVersion) -> None:
+    match token_amount_version:
+        case TokenAmountVersion.V1:
             encode_output_value_v1(serializer, value)
-        case VertexDecimalVersion.V2:
+        case TokenAmountVersion.V2:
             encode_output_value_v2(serializer, value)
         case _:
-            assert_never(decimal_version)
+            assert_never(token_amount_version)
 
 
 def encode_output_value_v1(serializer: Serializer, number: int, *, strict: bool = True) -> None:
@@ -212,14 +212,14 @@ def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool =
     serializer.write_bytes(payload)
 
 
-def decode_output_value(deserializer: Deserializer, *, decimal_version: VertexDecimalVersion) -> int:
-    match decimal_version:
-        case VertexDecimalVersion.V1:
+def decode_output_value(deserializer: Deserializer, *, token_amount_version: TokenAmountVersion) -> int:
+    match token_amount_version:
+        case TokenAmountVersion.V1:
             return decode_output_value_v1(deserializer)
-        case VertexDecimalVersion.V2:
+        case TokenAmountVersion.V2:
             return decode_output_value_v2(deserializer)
         case _:
-            assert_never(decimal_version)
+            assert_never(token_amount_version)
 
 
 def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -> int:

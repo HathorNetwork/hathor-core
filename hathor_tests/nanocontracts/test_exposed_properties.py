@@ -89,7 +89,6 @@ KNOWN_CASES = [
     'hathor.NCFail.some_new_attribute',
     'hathor.NCFail.with_traceback',
     'hathor.NCFee.amount',
-    'hathor.NCFee.get_htr_value',
     'hathor.NCFee.some_new_attribute',
     'hathor.NCFee.token_uid',
     'hathor.NCGrantAuthorityAction.melt',

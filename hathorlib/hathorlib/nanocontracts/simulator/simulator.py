@@ -59,6 +59,7 @@ from hathorlib.nanocontracts.types import (
 )
 from hathorlib.nanocontracts.vertex_data import BlockData
 from hathorlib.scripts import P2PKH
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 
@@ -404,6 +405,7 @@ class NanoSimulator:
 
         return self._runner_factory.create(
             runtime_version=self._runtime_version,
+            token_amount_version=TokenAmountVersion.V1,
             block_storage=self._current_block_storage,
             seed=rng_seed,
         )

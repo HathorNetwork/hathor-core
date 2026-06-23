@@ -392,7 +392,7 @@ def create_tx_from_dict(data: dict[str, Any], update_hash: bool = False,
 
     cls = get_cls_from_tx_version(TxVersion(data['version']))
     metadata = data.pop('metadata', None)
-    data.pop('decimal_version')
+    data.pop('token_amount_version')
     tx = cls(**data)
     if update_hash:
         tx.update_hash()

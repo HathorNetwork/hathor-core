@@ -26,7 +26,7 @@ from hathor.transaction.vertex_parser._common import (
     serialize_graph_fields,
     serialize_tx_output,
 )
-from hathorlib.decimal_places import VertexDecimalVersion
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import TxOutput
@@ -51,7 +51,7 @@ def serialize_block_funds(
     """
     serializer.write_struct((block.signal_bits, block.version, len(block.outputs)), '!BBB')
     for tx_output in block.outputs:
-        serialize_tx_output(serializer, tx_output, decimal_version=VertexDecimalVersion.V1)  # Blocks are always V1.
+        serialize_tx_output(serializer, tx_output, token_amount_version=TokenAmountVersion.V1)  # Blocks are always V1.
 
 
 def serialize_block_graph_fields(
@@ -106,7 +106,7 @@ def deserialize_block_funds(
     for _ in range(outputs_len):
         txout = _deserialize_tx_output(
             deserializer,
-            decimal_version=VertexDecimalVersion.V1,  # Blocks are always V1.
+            token_amount_version=TokenAmountVersion.V1,  # Blocks are always V1.
             verbose=verbose,
         )
         outputs.append(txout)

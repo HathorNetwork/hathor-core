@@ -298,6 +298,7 @@ class NCBlockExecutor:
 
         runner = self._runner_factory.create(
             runtime_version=runtime_version,
+            token_amount_version=tx.get_token_amount_version(),
             block_storage=block_storage,
             seed=rng_seed,
         )
