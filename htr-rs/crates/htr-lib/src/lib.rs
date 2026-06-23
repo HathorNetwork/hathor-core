@@ -10,6 +10,7 @@ compile_error!("compilation is only allowed for 64-bit targets");
 #[macro_use]
 extern crate num_derive;
 
+mod decimal;
 mod signed_amount;
 mod unsigned_amount;
 

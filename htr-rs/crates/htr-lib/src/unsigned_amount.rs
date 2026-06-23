@@ -5,16 +5,17 @@
 //! so ordering, equality, and arithmetic can mix V1 and V2 operands without loss of precision.
 //! Multiplication and division are deliberately not implemented.
 
+use crate::decimal::{ParseDecimalError, format_fixed_point, parse_fixed_point};
 use crate::signed_amount::SignedAmount;
 use num_bigint::{BigUint, ToBigInt};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::sync::OnceLock;
 
-/// Factor used to scale a V1 value into the V2-normalized value. Set once at
-/// startup via [`UnsignedAmount::set_normalization_factor`] before any V1 amount is
-/// constructed or queried.
-static V1_V2_NORMALIZATION_FACTOR: OnceLock<BigUint> = OnceLock::new();
+/// Fractional-digit counts of the V1 and V2 encodings, as `(v1, v2)`. The V2 count also applies
+/// to every [`SignedAmount`]. Set once at startup via [`UnsignedAmount::set_decimal_places`]
+/// before any amount is constructed, rendered, or parsed.
+static DECIMAL_PLACES: OnceLock<(u32, u32)> = OnceLock::new();
 
 /// Token amount version under which a token amount is encoded.
 ///
@@ -45,29 +46,46 @@ impl UnsignedAmount {
         normalized: BigUint::ZERO,
     };
 
-    /// Set the global factor used to scale a V1 value into the V2-normalized value.
+    /// Set the fractional-digit counts of the V1 and V2 encodings, the source of truth for
+    /// rendering, parsing, and the V1-to-V2 normalization factor.
     ///
-    /// The factor is `10^(v2_decimal_places - v1_decimal_places)` and must be set before any V1
-    /// [`UnsignedAmount`] is constructed or queried. Idempotent: a repeated call whose decimal places
-    /// yield the same factor is a no-op, so independent initializers can each set it without
-    /// coordinating. Panics when `v2_decimal_places < v1_decimal_places`, or when a later call
-    /// would change an already-set factor.
-    pub fn set_normalization_factor(v1_decimal_places: u32, v2_decimal_places: u32) {
+    /// Must be set before any [`UnsignedAmount`] is constructed, rendered, or parsed. Idempotent:
+    /// a repeated call with the same decimal places is a no-op, so independent initializers can
+    /// each set it without coordinating. Panics when `v2_decimal_places < v1_decimal_places`, or
+    /// when a later call would change the already-set counts.
+    pub fn set_decimal_places(v1_decimal_places: u32, v2_decimal_places: u32) {
         assert!(v2_decimal_places >= v1_decimal_places);
-        let factor = BigUint::from(10u8).pow(v2_decimal_places - v1_decimal_places);
-        let stored = V1_V2_NORMALIZATION_FACTOR.get_or_init(|| factor.clone());
+        let stored = DECIMAL_PLACES.get_or_init(|| (v1_decimal_places, v2_decimal_places));
         assert_eq!(
-            stored, &factor,
-            "normalization factor already set to a different value"
+            stored,
+            &(v1_decimal_places, v2_decimal_places),
+            "decimal places already set to different values"
         );
     }
 
-    /// Get the global factor used to scale a V1 value into the V2-normalized value.
-    /// Panics when it's not set.
+    /// Fractional-digit counts of the V1 and V2 encodings, as `(v1, v2)`. Panics when not set.
+    fn decimal_places() -> (u32, u32) {
+        *DECIMAL_PLACES.get().expect("decimal places must be set")
+    }
+
+    /// Fractional digits in the V1 encoding. Panics when not set.
+    pub(crate) fn v1_decimal_places() -> u32 {
+        Self::decimal_places().0
+    }
+
+    /// Fractional digits in the V2 encoding. Panics when not set.
+    pub(crate) fn v2_decimal_places() -> u32 {
+        Self::decimal_places().1
+    }
+
+    /// The V1-to-V2 scaling factor, `10^(v2_decimal_places - v1_decimal_places)`, computed once
+    /// from the configured decimal places and cached. Panics when they have not been set.
     pub fn get_normalization_factor() -> &'static BigUint {
-        V1_V2_NORMALIZATION_FACTOR
-            .get()
-            .expect("normalization factor must be set")
+        static NORMALIZATION_FACTOR: OnceLock<BigUint> = OnceLock::new();
+        NORMALIZATION_FACTOR.get_or_init(|| {
+            let (v1, v2) = Self::decimal_places();
+            BigUint::from(10u8).pow(v2 - v1)
+        })
     }
 
     /// Build a V1 amount, computing and storing the V2-scaled `normalized` form alongside
@@ -91,6 +109,12 @@ impl UnsignedAmount {
             TokenAmountVersion::V1 => Self::from_v1(amount),
             TokenAmountVersion::V2 => Self::from_v2(amount),
         }
+    }
+
+    /// Parse a decimal string into a V2 amount, the inverse of the V2 [`Display`](std::fmt::Display)
+    /// form. Rejects more fractional digits than the V2 unit can hold.
+    pub fn parse(s: &str) -> Result<Self, ParseDecimalError> {
+        parse_fixed_point(s, Self::v2_decimal_places()).map(Self::from_v2)
     }
 
     /// Value scaled to the V2 unit, regardless of variant. This is the form used for
@@ -172,6 +196,18 @@ impl UnsignedAmount {
     }
 }
 
+/// Renders the value's native encoding as a fixed-point decimal: the `raw` V1 value with the
+/// configured V1 decimal places, or the `normalized` V2 value with the V2 decimal places.
+impl std::fmt::Display for UnsignedAmount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (magnitude, decimal_places) = match self {
+            UnsignedAmount::V1 { raw, .. } => (raw, Self::v1_decimal_places()),
+            UnsignedAmount::V2 { normalized } => (normalized, Self::v2_decimal_places()),
+        };
+        f.write_str(&format_fixed_point(magnitude, decimal_places))
+    }
+}
+
 impl Ord for UnsignedAmount {
     fn cmp(&self, other: &Self) -> Ordering {
         self.normalized().cmp(other.normalized())
@@ -217,34 +253,33 @@ mod tests {
     const TEN_TO_THE_SIXTEENTH: u64 = 10u64.pow(16);
 
     fn init() {
-        UnsignedAmount::set_normalization_factor(2, 18)
+        UnsignedAmount::set_decimal_places(2, 18)
     }
 
     fn big(n: u64) -> BigUint {
         BigUint::from(n)
     }
 
-    // ---- set_normalization_factor ----
+    // ---- set_decimal_places ----
     //
-    // These tests rely on nextest's process-per-test isolation so the global
+    // These tests rely on nextest's process-per-test isolation so the decimal-place
     // `OnceLock` is fresh for each one. They deliberately do not call `init()`,
     // since they exercise the setter directly.
 
-    // A second call whose factor differs from the one already set panics; the global factor is
-    // fixed once chosen.
+    // A second call with different decimal places panics; the counts are fixed once chosen.
     #[test]
-    #[should_panic(expected = "normalization factor already set to a different value")]
-    fn set_normalization_factor_conflicting_second_call_panics() {
-        UnsignedAmount::set_normalization_factor(2, 18);
-        UnsignedAmount::set_normalization_factor(0, 4);
+    #[should_panic(expected = "decimal places already set to different values")]
+    fn set_decimal_places_conflicting_second_call_panics() {
+        UnsignedAmount::set_decimal_places(2, 18);
+        UnsignedAmount::set_decimal_places(0, 4);
     }
 
-    // A second call whose decimal places yield the same factor is a no-op, letting independent
-    // initializers each set it without coordinating.
+    // A second call with the same decimal places is a no-op, letting independent initializers
+    // each set it without coordinating.
     #[test]
-    fn set_normalization_factor_equal_second_call_is_noop() {
-        UnsignedAmount::set_normalization_factor(2, 18);
-        UnsignedAmount::set_normalization_factor(2, 18);
+    fn set_decimal_places_equal_second_call_is_noop() {
+        UnsignedAmount::set_decimal_places(2, 18);
+        UnsignedAmount::set_decimal_places(2, 18);
         let amount = UnsignedAmount::from_v1(big(3));
         assert_eq!(amount.raw(), &big(3));
         assert_eq!(amount.normalized(), &big(3 * TEN_TO_THE_SIXTEENTH));
@@ -252,16 +287,16 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn set_normalization_factor_panics_when_v2_smaller_than_v1() {
-        UnsignedAmount::set_normalization_factor(18, 2);
+    fn set_decimal_places_panics_when_v2_smaller_than_v1() {
+        UnsignedAmount::set_decimal_places(18, 2);
     }
 
     // Equal decimal places yield a factor of `10^0 = 1`, so a V1 amount and its
     // normalized form coincide — the V2-only arithmetic path is still correct
     // when the two encodings carry identical precision.
     #[test]
-    fn set_normalization_factor_equal_decimal_places_yields_identity_factor() {
-        UnsignedAmount::set_normalization_factor(8, 8);
+    fn set_decimal_places_equal_v1_v2_yields_identity_factor() {
+        UnsignedAmount::set_decimal_places(8, 8);
         let amount = UnsignedAmount::from_v1(big(7));
         assert_eq!(amount.raw(), &big(7));
         assert_eq!(amount.normalized(), &big(7));
@@ -355,6 +390,72 @@ mod tests {
 
         let from_zero = UnsignedAmount::ZERO.to_signed();
         assert_eq!(from_zero.raw(), &BigInt::from(0));
+    }
+
+    // ---- Display ----
+
+    // V1 renders its `raw` value with two fractional digits; V2 renders its `normalized`
+    // value with eighteen. Equal logical amounts therefore print at different precisions.
+    #[test]
+    fn display_v1_uses_two_decimal_places() {
+        init();
+        assert_eq!(UnsignedAmount::from_v1(big(0)).to_string(), "0.00");
+        assert_eq!(UnsignedAmount::from_v1(big(5)).to_string(), "0.05");
+        assert_eq!(UnsignedAmount::from_v1(big(100)).to_string(), "1.00");
+        assert_eq!(UnsignedAmount::from_v1(big(12345)).to_string(), "123.45");
+    }
+
+    #[test]
+    fn display_v2_uses_eighteen_decimal_places() {
+        init();
+        assert_eq!(
+            UnsignedAmount::from_v2(big(0)).to_string(),
+            "0.000000000000000000"
+        );
+        assert_eq!(
+            UnsignedAmount::from_v2(big(5)).to_string(),
+            "0.000000000000000005"
+        );
+        assert_eq!(
+            UnsignedAmount::from_v2(big(10u64.pow(18))).to_string(),
+            "1.000000000000000000"
+        );
+        assert_eq!(UnsignedAmount::ZERO.to_string(), "0.000000000000000000");
+    }
+
+    // ---- parse ----
+
+    // A decimal string parses into a V2 amount whose normalized value is scaled to eighteen
+    // places; the result is always V2 regardless of the input's precision.
+    #[test]
+    fn parse_creates_v2_amount() {
+        init();
+        let amount = UnsignedAmount::parse("1.5").unwrap();
+        assert!(amount.is_v2());
+        assert_eq!(amount.normalized(), &big(1_500_000_000_000_000_000));
+
+        let full_precision = UnsignedAmount::parse("0.000000000000000001").unwrap();
+        assert!(full_precision.is_v2());
+        assert_eq!(full_precision.normalized(), &big(1));
+    }
+
+    // Parsing rejects a fractional part longer than the V2 unit can represent.
+    #[test]
+    fn parse_rejects_more_than_eighteen_decimal_places() {
+        init();
+        assert_eq!(
+            UnsignedAmount::parse("0.0000000000000000001"),
+            Err(ParseDecimalError::TooManyDecimalPlaces { found: 19, max: 18 })
+        );
+    }
+
+    // Parsing inverts the V2 `Display` form: rendering an amount and parsing it back yields the
+    // original value.
+    #[test]
+    fn parse_inverts_v2_display() {
+        init();
+        let amount = UnsignedAmount::from_v2(big(1_500_000_000_000_000_000));
+        assert_eq!(UnsignedAmount::parse(&amount.to_string()).unwrap(), amount);
     }
 
     // ---- to_v1 ----

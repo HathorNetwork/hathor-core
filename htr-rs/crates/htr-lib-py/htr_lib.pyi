@@ -35,6 +35,7 @@ class SignedAmount:
         ...
 
     def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
     def __bool__(self) -> bool: ...
 
     def __add__(self, other: SignedAmount) -> SignedAmount: ...
@@ -60,14 +61,15 @@ class UnsignedAmount:
     """
 
     @staticmethod
-    def set_normalization_factor(*, v1_decimal_places: int, v2_decimal_places: int) -> None:
-        """Set the global factor used to scale a V1 value into the V2-normalized value.
+    def set_decimal_places(*, v1_decimal_places: int, v2_decimal_places: int) -> None:
+        """Set the fractional-digit counts of the V1 and V2 encodings.
 
-        The factor is `10 ** (v2_decimal_places - v1_decimal_places)` and must be set before any
-        V1 amount is constructed or queried. Idempotent: a repeated call yielding the same factor
+        The source of truth for rendering, parsing, and the V1-to-V2 normalization factor
+        (`10 ** (v2_decimal_places - v1_decimal_places)`). Must be set before any amount is
+        constructed, rendered, or parsed. Idempotent: a repeated call with the same decimal places
         is a no-op, so independent initializers can each set it without coordinating. Raises when
-        `v2_decimal_places < v1_decimal_places`, or when a later call would change an already-set
-        factor.
+        `v2_decimal_places < v1_decimal_places`, or when a later call would change the already-set
+        counts.
         """
         ...
 
@@ -97,6 +99,14 @@ class UnsignedAmount:
     @staticmethod
     def zero() -> UnsignedAmount:
         """Return the canonical zero, a V2 amount."""
+        ...
+
+    @staticmethod
+    def parse(s: str) -> UnsignedAmount:
+        """Parse a decimal string into a V2 amount, the inverse of `str(amount)`.
+
+        Raises `ValueError` on a malformed string.
+        """
         ...
 
     def is_v1(self) -> bool:
@@ -146,6 +156,7 @@ class UnsignedAmount:
         ...
 
     def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...
     def __bool__(self) -> bool: ...
 
     def __add__(self, other: UnsignedAmount) -> UnsignedAmount: ...
