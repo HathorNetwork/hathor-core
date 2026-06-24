@@ -23,8 +23,8 @@ from hathor.wallet import HDWallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason, set_nano_header
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.nanocontracts.verification import MAX_ACTIONS_LEN
-from hathorlib.token_amount import SignedAmount
 
 
 class MyBlueprint(Blueprint):
@@ -166,14 +166,14 @@ class TestActions(unittest.TestCase):
             assert tx.get_token_uid(out.get_token_index()) == HATHOR_TOKEN_UID, (
                 'expected HTR in output index 0'
             )
-            out.value += update_htr_output
+            out.value = (out.value + update_htr_output).to_unsigned().to_v1()
 
         if update_tka_output is not None:
             out = tx.outputs[1]
             assert tx.get_token_uid(out.get_token_index()) == self.tka.hash, (
                 'expected TKA in output index 1'
             )
-            out.value += update_tka_output
+            out.value = (out.value + update_tka_output).to_unsigned().to_v1()
 
         if add_inputs:
             tx.inputs.extend(add_inputs)
@@ -207,14 +207,16 @@ class TestActions(unittest.TestCase):
         return TxInput(tx_id=self.tka.hash, index=melt_index, data=b'')
 
     def _assert_token_index(self, *, htr_total: int, tka_total: int) -> None:
-        assert self.tokens_index.get_token_info(HATHOR_TOKEN_UID).get_total() == htr_total
-        assert self.tokens_index.get_token_info(self.tka.hash).get_total() == tka_total
+        actual_htr = self.tokens_index.get_token_info(HATHOR_TOKEN_UID).get_total()
+        actual_tka = self.tokens_index.get_token_info(self.tka.hash).get_total()
+        assert actual_htr == UnsignedAmount.from_v1(htr_total)
+        assert actual_tka == UnsignedAmount.from_v1(tka_total)
 
     def test_deposit_success(self) -> None:
         # Add a DEPOSIT action and remove tokens from the HTR output accordingly.
-        self._change_tx_balance(tx=self.tx1, update_htr_output=-123)
+        self._change_tx_balance(tx=self.tx1, update_htr_output=-UnsignedAmount.from_v1(123).to_signed())
         self._set_nano_header(tx=self.tx1, nc_actions=[
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(123)),
         ])
 
         # Execute tx1
@@ -225,8 +227,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the added tokens.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1123, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1123).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
         }
 
         # Check the token index.
@@ -237,9 +243,9 @@ class TestActions(unittest.TestCase):
 
     def test_withdrawal_success(self) -> None:
         # Add a WITHDRAWAL action and add tokens to the HTR output accordingly.
-        self._change_tx_balance(tx=self.tx1, update_htr_output=123)
+        self._change_tx_balance(tx=self.tx1, update_htr_output=UnsignedAmount.from_v1(123).to_signed())
         self._set_nano_header(tx=self.tx1, nc_actions=[
-            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=123),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=UnsignedAmount.from_v1(123)),
         ])
 
         # Execute tx1
@@ -250,8 +256,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the removed tokens.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=877, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(877).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
         }
 
         # Check the token index.
@@ -265,7 +275,9 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(tx=self.tx1, add_inputs=[self._create_tka_mint_input()])
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
+                type=NCActionType.GRANT_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
             ),
         ])
 
@@ -277,8 +289,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the mint authority.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
     def test_grant_authority_melt_success(self) -> None:
@@ -286,7 +302,9 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(tx=self.tx1, add_inputs=[self._create_tka_melt_input()])
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
+                type=NCActionType.GRANT_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK),
             ),
         ])
 
@@ -298,8 +316,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the melt authority.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
     def test_grant_authority_all_success(self) -> None:
@@ -313,7 +335,9 @@ class TestActions(unittest.TestCase):
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.ALL_AUTHORITIES
+                type=NCActionType.GRANT_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.ALL_AUTHORITIES),
             ),
         ])
 
@@ -325,8 +349,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with both mint and melt authorities.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True
+            ),
         }
 
     def _test_acquire_authority_to_create_output(self, authority: int) -> None:
@@ -337,12 +365,16 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(
             tx=self.tx2,
             add_outputs=[
-                TxOutput(value=authority, script=b'', token_data=TxOutput.TOKEN_AUTHORITY_MASK | token_index)
+                TxOutput(
+                    value=UnsignedAmount.from_v1(authority),
+                    script=b'',
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | token_index,
+                )
             ]
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=authority
+                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=UnsignedAmount.from_v1(authority)
             ),
         ])
 
@@ -421,12 +453,14 @@ class TestActions(unittest.TestCase):
         # Add an ACQUIRE_AUTHORITY action for TKA, minting new TKA, and updating the HTR balance accordingly.
         self._change_tx_balance(
             tx=self.tx2,
-            update_htr_output=-10,
-            update_tka_output=1000,
+            update_htr_output=-UnsignedAmount.from_v1(10).to_signed(),
+            update_tka_output=UnsignedAmount.from_v1(1000).to_signed(),
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
             ),
         ])
 
@@ -445,12 +479,14 @@ class TestActions(unittest.TestCase):
         # Add an ACQUIRE_AUTHORITY action for TKA, melting TKA, and updating the HTR balance accordingly.
         self._change_tx_balance(
             tx=self.tx2,
-            update_htr_output=5,
-            update_tka_output=-500,
+            update_htr_output=UnsignedAmount.from_v1(5).to_signed(),
+            update_tka_output=-UnsignedAmount.from_v1(500).to_signed(),
         )
         self._set_nano_header(tx=self.tx2, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK),
             ),
         ])
 
@@ -466,15 +502,23 @@ class TestActions(unittest.TestCase):
         # Grant a TKA mint authority to the nano contract and then use it to mint tokens.
         self.test_grant_authority_mint_success()
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
         # Add actions so both minted tokens and htr used to mint tokens are in/from the tx outputs/inputs.
-        self._change_tx_balance(tx=self.tx2, update_htr_output=-200, update_tka_output=20000)
+        self._change_tx_balance(
+            tx=self.tx2,
+            update_htr_output=-UnsignedAmount.from_v1(200).to_signed(),
+            update_tka_output=UnsignedAmount.from_v1(20000).to_signed(),
+        )
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=20000),
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(20000)),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(200)),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -494,8 +538,12 @@ class TestActions(unittest.TestCase):
         # Check that the nano contract balance is unchanged because both
         # minted tokens and HTR used to mint in/were from tx outputs/inputs.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
         # Check the token index.
@@ -517,7 +565,11 @@ class TestActions(unittest.TestCase):
         self._set_nano_header(
             tx=self.tx1,
             nc_actions=[
-                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+                NanoHeaderAction(
+                    type=NCActionType.GRANT_AUTHORITY,
+                    token_index=1,
+                    amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
+                ),
             ],
             nc_method='mint',
             nc_args=(self.tka.hash, 200)
@@ -531,23 +583,33 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the mint authority.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=998, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1200, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(998).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1200).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
     def test_mint_tokens_keep_in_contract_success(self) -> None:
         # Grant a TKA mint authority to the nano contract and then use it to mint tokens.
         self.test_grant_authority_mint_success()
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
         # Add a deposit action, paying for HTR with the input and keeping the minted token in the contract.
-        self._change_tx_balance(tx=self.tx2, update_htr_output=-200)
+        self._change_tx_balance(tx=self.tx2, update_htr_output=-UnsignedAmount.from_v1(200).to_signed())
         self._set_nano_header(
             tx=self.tx2,
-            nc_actions=[NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200)],
+            nc_actions=[
+                NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(200))
+            ],
             nc_method='mint',
             nc_args=(self.tka.hash, 20000)
         )
@@ -560,8 +622,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=21000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(21000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
         # Check the token index.
@@ -574,15 +640,23 @@ class TestActions(unittest.TestCase):
         # Grant a TKA mint authority to the nano contract and then use it to mint tokens.
         self.test_grant_authority_mint_success()
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
         # Add actions paying for HTR with the input and withdrawing part of the minted token from the contract.
-        self._change_tx_balance(tx=self.tx2, update_htr_output=-200, update_tka_output=10000)
+        self._change_tx_balance(
+            tx=self.tx2,
+            update_htr_output=-UnsignedAmount.from_v1(200).to_signed(),
+            update_tka_output=UnsignedAmount.from_v1(10000).to_signed(),
+        )
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=10000),
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=200),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=1, amount=UnsignedAmount.from_v1(10000)),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(200)),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -601,8 +675,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=11000, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(11000).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
         # Check the token index.
@@ -621,15 +699,23 @@ class TestActions(unittest.TestCase):
         # Grant a TKA melt authority to the nano contract and then use it to melt tokens.
         self.test_grant_authority_melt_success()
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
         # Add actions so both melted tokens and htr received from melt are from/in the tx inputs/outputs.
-        self._change_tx_balance(tx=self.tx2, update_htr_output=5, update_tka_output=-500)
+        self._change_tx_balance(
+            tx=self.tx2,
+            update_htr_output=UnsignedAmount.from_v1(5).to_signed(),
+            update_tka_output=-UnsignedAmount.from_v1(500).to_signed(),
+        )
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=500),
-            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=UnsignedAmount.from_v1(500)),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=UnsignedAmount.from_v1(5)),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -649,8 +735,12 @@ class TestActions(unittest.TestCase):
         # Check that the nano contract balance is unchanged because both
         # melted tokens and HTR received are from/in the tx inputs/outputs.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
         # Check the token index.
@@ -669,15 +759,21 @@ class TestActions(unittest.TestCase):
         # Grant a TKA melt authority to the nano contract and then use it to melt tokens.
         self.test_grant_authority_melt_success()
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
         # Add a withdrawal action receiving the HTR from the melt in the output and melting the tokens in the contract.
-        self._change_tx_balance(tx=self.tx2, update_htr_output=5)
+        self._change_tx_balance(tx=self.tx2, update_htr_output=UnsignedAmount.from_v1(5).to_signed())
         self._set_nano_header(
             tx=self.tx2,
-            nc_actions=[NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5)],
+            nc_actions=[
+                NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=UnsignedAmount.from_v1(5))
+            ],
             nc_method='melt',
             nc_args=(self.tka.hash, 500)
         )
@@ -690,8 +786,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=500, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(500).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
         # Check the token index.
@@ -704,15 +804,23 @@ class TestActions(unittest.TestCase):
         # Grant a TKA melt authority to the nano contract and then use it to melt tokens.
         self.test_grant_authority_melt_success()
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1000, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
         # Add actions so part of the tokens are melted from inputs and part from the contract.
-        self._change_tx_balance(tx=self.tx2, update_htr_output=5, update_tka_output=-250)
+        self._change_tx_balance(
+            tx=self.tx2,
+            update_htr_output=UnsignedAmount.from_v1(5).to_signed(),
+            update_tka_output=-UnsignedAmount.from_v1(250).to_signed(),
+        )
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=250),
-            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=5),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=UnsignedAmount.from_v1(250)),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=UnsignedAmount.from_v1(5)),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -731,8 +839,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=750, can_mint=False, can_melt=True),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(750).to_signed(), can_mint=False, can_melt=True
+            ),
         }
 
         # Check the token index.
@@ -749,8 +861,16 @@ class TestActions(unittest.TestCase):
 
     def _test_acquire_and_grant_same_token_not_allowed(self, *, invert_actions_order: bool) -> None:
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-            NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
+            NanoHeaderAction(
+                type=NCActionType.ACQUIRE_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
+            ),
+            NanoHeaderAction(
+                type=NCActionType.GRANT_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
+            ),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -772,8 +892,8 @@ class TestActions(unittest.TestCase):
     def _test_conflicting_actions(self, *, invert_actions_order: bool) -> None:
         # Add 2 conflicting actions for the same token.
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=1),
-            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=2),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(1)),
+            NanoHeaderAction(type=NCActionType.WITHDRAWAL, token_index=0, amount=UnsignedAmount.from_v1(2)),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -793,10 +913,14 @@ class TestActions(unittest.TestCase):
         # Add a GRANT_AUTHORITY action to mint TKA, and add a mint authority input accordingly.
         # Also add a DEPOSIT action with the same token and update the tx output accordingly.
         self._change_tx_balance(tx=self.tx1, add_inputs=[self._create_tka_mint_input()])
-        self._change_tx_balance(tx=self.tx1, update_tka_output=-100)
+        self._change_tx_balance(tx=self.tx1, update_tka_output=-UnsignedAmount.from_v1(100).to_signed())
         nc_actions = [
-            NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK),
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=100),
+            NanoHeaderAction(
+                type=NCActionType.GRANT_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
+            ),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=1, amount=UnsignedAmount.from_v1(100)),
         ]
         if invert_actions_order:
             nc_actions.reverse()
@@ -813,8 +937,12 @@ class TestActions(unittest.TestCase):
 
         # Check that the nano contract balance is updated with the mint authority.
         assert self._get_all_balances() == {
-            self.htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            self.tka_balance_key: Balance(value=1100, can_mint=True, can_melt=False),
+            self.htr_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+            ),
+            self.tka_balance_key: Balance(
+                value=UnsignedAmount.from_v1(1100).to_signed(), can_mint=True, can_melt=False
+            ),
         }
 
     def test_non_conflicting_actions_success(self) -> None:
@@ -826,7 +954,7 @@ class TestActions(unittest.TestCase):
     def test_token_index_not_found(self) -> None:
         # Add an action with a token index out of bounds.
         self._set_nano_header(tx=self.tx1, nc_actions=[
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=2, amount=1),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=2, amount=UnsignedAmount.from_v1(1)),
         ])
 
         params = dataclasses.replace(self.verification_params, harden_token_restrictions=False)
@@ -836,7 +964,7 @@ class TestActions(unittest.TestCase):
 
     def test_token_uid_not_in_list(self) -> None:
         self._set_nano_header(tx=self.tx1, nc_actions=[
-            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=1),
+            NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(1)),
         ])
 
         nano_header = self.tx1.get_nano_header()
@@ -857,7 +985,11 @@ class TestActions(unittest.TestCase):
     def _test_invalid_unknown_authority(self, action_type: NCActionType) -> None:
         # Create an authority action with an unknown authority.
         self._set_nano_header(tx=self.tx1, nc_actions=[
-            NanoHeaderAction(type=action_type, token_index=1, amount=TxOutput.ALL_AUTHORITIES + 1),
+            NanoHeaderAction(
+                type=action_type,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.ALL_AUTHORITIES + 1),
+            ),
         ])
 
         with pytest.raises(NCInvalidAction) as e:
@@ -867,7 +999,7 @@ class TestActions(unittest.TestCase):
     def _test_invalid_htr_authority(self, action_type: NCActionType) -> None:
         # Create an authority action for HTR.
         self._set_nano_header(tx=self.tx1, nc_actions=[
-            NanoHeaderAction(type=action_type, token_index=0, amount=TxOutput.TOKEN_MINT_MASK),
+            NanoHeaderAction(type=action_type, token_index=0, amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK)),
         ])
 
         with pytest.raises(NCInvalidAction) as e:
@@ -892,7 +1024,7 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(
                 type=NCActionType.GRANT_AUTHORITY,
                 token_index=1,
-                amount=TxOutput.TOKEN_MINT_MASK
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK)
             ),
         ])
 
@@ -906,7 +1038,7 @@ class TestActions(unittest.TestCase):
             NanoHeaderAction(
                 type=NCActionType.GRANT_AUTHORITY,
                 token_index=1,
-                amount=TxOutput.TOKEN_MELT_MASK
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK)
             ),
         ])
 
@@ -919,12 +1051,18 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(
             tx=self.tx1,
             add_outputs=[
-                TxOutput(value=TxOutput.TOKEN_MINT_MASK, script=b'', token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1)
+                TxOutput(
+                    value=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
+                    script=b'',
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                )
             ]
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MELT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK),
             ),
         ])
 
@@ -936,12 +1074,18 @@ class TestActions(unittest.TestCase):
         self._change_tx_balance(
             tx=self.tx1,
             add_outputs=[
-                TxOutput(value=TxOutput.TOKEN_MELT_MASK, script=b'', token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1)
+                TxOutput(
+                    value=UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK),
+                    script=b'',
+                    token_data=TxOutput.TOKEN_AUTHORITY_MASK | 1,
+                )
             ]
         )
         self._set_nano_header(tx=self.tx1, nc_actions=[
             NanoHeaderAction(
-                type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=TxOutput.TOKEN_MINT_MASK
+                type=NCActionType.ACQUIRE_AUTHORITY,
+                token_index=1,
+                amount=UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK),
             ),
         ])
 
@@ -950,7 +1094,7 @@ class TestActions(unittest.TestCase):
 
     def test_actions_max_len_fail(self) -> None:
         # Try to create too many actions.
-        action = NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=1)
+        action = NanoHeaderAction(type=NCActionType.ACQUIRE_AUTHORITY, token_index=1, amount=UnsignedAmount.from_v1(1))
         actions = [action] * (MAX_ACTIONS_LEN + 1)
 
         self._set_nano_header(tx=self.tx1, nc_actions=actions)
