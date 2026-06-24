@@ -3,10 +3,10 @@
 export * from './index.js'
 
 declare module './index.js' {
-  interface TokenAmount {
+  interface UnsignedAmount {
     [Symbol.toPrimitive](hint: string): bigint
   }
-  interface TokenBalance {
+  interface SignedAmount {
     [Symbol.toPrimitive](hint: string): bigint
   }
 }

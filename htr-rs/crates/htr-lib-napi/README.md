@@ -1,7 +1,7 @@
 # @hathor/htr-lib
 
 TypeScript/JavaScript binding for the Hathor `htr-lib` Rust library, built with
-[napi-rs](https://napi.rs). Exposes `TokenAmount`, `TokenBalance`, and
+[napi-rs](https://napi.rs). Exposes `UnsignedAmount`, `SignedAmount`, and
 `TokenAmountVersion`.
 
 ## Install
@@ -17,18 +17,18 @@ matching native binary fall back to the `wasm32-wasi` package
 ## Usage
 
 ```ts
-import { TokenAmount, TokenBalance, TokenAmountVersion } from '@hathor/htr-lib'
+import { UnsignedAmount, SignedAmount, TokenAmountVersion } from '@hathor/htr-lib'
 
 // Configure the V1->V2 normalization factor once, before constructing any V1 amount.
-TokenAmount.setNormalizationFactor(2, 18)
+UnsignedAmount.setNormalizationFactor(2, 18)
 
-const a = TokenAmount.fromV2(5n)
-const b = TokenAmount.fromV1(1n)        // normalized to 10^16
-const sum = a.add(b)                     // TokenAmount (always V2)
+const a = UnsignedAmount.fromV2(5n)
+const b = UnsignedAmount.fromV1(1n)        // normalized to 10^16
+const sum = a.add(b)                     // UnsignedAmount (always V2)
 console.log(sum.normalized())            // bigint
 
-const bal = new TokenBalance(-3n)
-const amount = new TokenBalance(5n).toAmount()  // throws if negative
+const bal = new SignedAmount(-3n)
+const amount = new SignedAmount(5n).toUnsigned()  // throws if negative
 ```
 
 ### Operators
@@ -36,7 +36,7 @@ const amount = new TokenBalance(5n).toAmount()  // throws if negative
 Arbitrary-precision values cross the boundary as JS `bigint`.
 
 - **Ordering** works with native operators: `a < b`, `a > b`, `a <= b`, `a >= b`
-  (for two `TokenAmount`s or two `TokenBalance`s). These also type-check in TypeScript.
+  (for two `UnsignedAmount`s or two `SignedAmount`s). These also type-check in TypeScript.
 - **Equality and arithmetic must use methods** — JavaScript cannot overload them:
   - Use `a.eq(b)` / `a.ne(b)`, **not** `a == b` / `a === b` (those are reference
     identity at runtime, and silently wrong).
@@ -44,12 +44,12 @@ Arbitrary-precision values cross the boundary as JS `bigint`.
     coerce to `bigint` and drop the wrapper type).
 - **Mixed comparisons** like `amount < 5n` do not type-check; compare two wrapper
   values, or use `a.lt(b)` / `a.compare(b)` (`-1 | 0 | 1`).
-- **Balance ± amount** — `TokenBalance.add` / `.sub` also accept a `TokenAmount`
+- **Balance ± amount** — `SignedAmount.add` / `.sub` also accept an `UnsignedAmount`
   (`balance.add(amount)`), normalizing it to the V2 unit first and returning a
-  `TokenBalance` (which may be negative after `.sub`).
+  `SignedAmount` (which may be negative after `.sub`).
 
 `String(x)` / template literals return the Rust `Debug` form (e.g.
-`V2 { normalized: 5 }`, `TokenBalance(-3)`).
+`V2 { normalized: 5 }`, `SignedAmount(-3)`).
 
 ## Develop
 
