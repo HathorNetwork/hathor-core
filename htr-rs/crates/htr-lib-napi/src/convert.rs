@@ -39,19 +39,17 @@ pub fn try_napi_to_biguint(value: &BigInt) -> napi::Result<BigUint> {
 
 /// signed `BigInt` -> napi `BigInt`.
 pub fn rsbigint_to_napi(value: &RsBigInt) -> BigInt {
-    let (sign, magnitude) = value.clone().into_parts();
+    let (sign, words) = value.to_u64_digits();
     BigInt {
         sign_bit: sign == Sign::Minus,
-        words: magnitude.to_u64_digits(),
+        words,
     }
 }
 
 /// napi `BigInt` -> signed `BigInt`.
 pub fn napi_to_rsbigint(value: &BigInt) -> RsBigInt {
-    let magnitude = napi_to_biguint(&BigInt {
-        sign_bit: false,
-        words: value.words.clone(),
-    });
+    // `napi_to_biguint` reads only the magnitude (`words`) and ignores `sign_bit`.
+    let magnitude = napi_to_biguint(value);
     let is_zero = value.words.iter().all(|w| *w == 0);
     let sign = if is_zero {
         Sign::NoSign

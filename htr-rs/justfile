@@ -5,8 +5,8 @@ export RUSTFLAGS := "-D warnings"
 help:
   @just --list
 
-# Run the full local check suite: check, fmt-check, clippy, test, sort, audit.
-all: check fmt-check clippy test sort audit
+# Run the full local check suite: check, fmt-check, clippy, test, sort, audit, node-test.
+all: check fmt-check clippy test sort audit node-test
 
 # Type-check all workspace crates, including tests/benches/examples, with every feature enabled.
 check:
@@ -27,6 +27,10 @@ clippy:
 # Run the test suite for all workspace crates.
 test:
   cargo nextest run --workspace
+
+# Build the htr-lib-napi Node addon and run its ava integration tests (requires Node/npm).
+node-test:
+  cd crates/htr-lib-napi && npm ci && npm test
 
 # Sort every workspace Cargo.toml in place.
 sort:

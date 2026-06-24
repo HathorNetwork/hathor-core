@@ -36,6 +36,13 @@ test('fromVersion dispatches by version enum', (t) => {
   t.true(UnsignedAmount.fromVersion(3n, TokenAmountVersion.V2).isV2())
 })
 
+test('fromVersion/toVersion reject an out-of-range version', (t) => {
+  // The enum argument rejects unknown discriminants at the napi boundary (a thrown error),
+  // unlike Python's ValueError("unknown version: N"). Pins that it throws rather than misbehaves.
+  t.throws(() => UnsignedAmount.fromVersion(3n, 3 as unknown as TokenAmountVersion))
+  t.throws(() => UnsignedAmount.fromV2(5n).toVersion(99 as unknown as TokenAmountVersion))
+})
+
 test('zero is V2 zero', (t) => {
   const z = UnsignedAmount.zero()
   t.true(z.isV2())

@@ -4,14 +4,16 @@
   "description": "TypeScript binding for the Hathor htr-lib Rust library",
   "main": "wrapper.js",
   "types": "wrapper.d.ts",
-  "browser": "browser.js",
-  "license": "MIT",
+  "browser": "browser-wrapper.mjs",
+  "license": "Apache-2.0",
   "files": [
     "index.js",
     "index.d.ts",
     "wrapper.js",
     "wrapper.d.ts",
-    "browser.js"
+    "apply-operators.cjs",
+    "browser.js",
+    "browser-wrapper.mjs"
   ],
   "napi": {
     "binaryName": "htr-lib-napi",
@@ -40,9 +42,9 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^3",
-    "@oxc-node/core": "*",
-    "@types/node": "*",
-    "ava": "*",
+    "@oxc-node/core": "^0.1.0",
+    "@types/node": "^25",
+    "ava": "^8",
     "typescript": "^5"
   },
   "ava": {

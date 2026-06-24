@@ -61,7 +61,10 @@ impl UnsignedAmount {
         biguint_to_napi(InnerUnsignedAmount::get_normalization_factor())
     }
 
-    #[napi]
+    /// Build a V1 amount from a raw value. `catch_unwind` because reading the global
+    /// normalization factor panics in `htr-lib` when it was never set — surface a thrown
+    /// JS error rather than aborting Node.
+    #[napi(catch_unwind)]
     pub fn from_v1(amount: BigInt) -> napi::Result<UnsignedAmount> {
         Ok(UnsignedAmount::from_inner(InnerUnsignedAmount::from_v1(
             try_napi_to_biguint(&amount)?,
@@ -75,7 +78,9 @@ impl UnsignedAmount {
         )))
     }
 
-    #[napi]
+    /// Build an amount under a runtime-known version. `catch_unwind` because the V1 path reads
+    /// the normalization factor, which panics in `htr-lib` when it was never set.
+    #[napi(catch_unwind)]
     pub fn from_version(
         amount: BigInt,
         version: TokenAmountVersion,
@@ -125,7 +130,9 @@ impl UnsignedAmount {
         SignedAmount::from_inner(self.inner.to_signed())
     }
 
-    #[napi]
+    /// Convert to V1. `catch_unwind` because a V2 input reads the normalization factor, which
+    /// panics in `htr-lib` when it was never set (a thrown JS error, not a Node abort).
+    #[napi(catch_unwind)]
     pub fn to_v1(&self) -> napi::Result<UnsignedAmount> {
         self.inner
             .to_v1()
@@ -138,7 +145,10 @@ impl UnsignedAmount {
             })
     }
 
-    #[napi]
+    /// Convert to V1, or `null` when the value would truncate. `catch_unwind` because a V2 input
+    /// reads the normalization factor, which panics in `htr-lib` when it was never set — an unset
+    /// factor is a programming error and must throw, not return `null`.
+    #[napi(catch_unwind)]
     pub fn maybe_to_v1(&self) -> Option<UnsignedAmount> {
         self.inner
             .to_v1()
@@ -150,7 +160,9 @@ impl UnsignedAmount {
         UnsignedAmount::from_inner(self.inner.to_v2().into_owned())
     }
 
-    #[napi]
+    /// Convert to a runtime-known version. `catch_unwind` because the V1 target reads the
+    /// normalization factor, which panics in `htr-lib` when it was never set.
+    #[napi(catch_unwind)]
     pub fn to_version(&self, version: TokenAmountVersion) -> napi::Result<UnsignedAmount> {
         self.inner
             .to_version(version.into_inner())

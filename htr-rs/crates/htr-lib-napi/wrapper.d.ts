@@ -4,9 +4,11 @@ export * from './index.js'
 
 declare module './index.js' {
   interface UnsignedAmount {
-    [Symbol.toPrimitive](hint: string): bigint
+    // Returns a string for the 'string' hint (toString), a bigint otherwise (normalized()).
+    [Symbol.toPrimitive](hint: string): bigint | string
   }
   interface SignedAmount {
-    [Symbol.toPrimitive](hint: string): bigint
+    // Returns a string for the 'string' hint (toString), a bigint otherwise (raw()).
+    [Symbol.toPrimitive](hint: string): bigint | string
   }
 }

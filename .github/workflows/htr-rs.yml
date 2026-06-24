@@ -151,3 +151,32 @@ jobs:
           files: htr-rs/lcov.info
           flags: htr-rs
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Builds the htr-lib-napi Node addon and runs its ava integration suite — the only tests that
+  # cross the real JS<->Rust boundary (the catch_unwind abort-safety contract, the operator
+  # marshalling). The Rust jobs above never exercise this.
+  node-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: htr-rs/crates/htr-lib-napi
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            htr-rs/target
+          key: ${{ runner.os }}-node-test-${{ hashFiles('htr-rs/**/Cargo.lock') }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: htr-rs/crates/htr-lib-napi/package-lock.json
+      - name: Install JS dependencies
+        run: npm ci
+      - name: Build addon and run ava tests
+        run: npm test

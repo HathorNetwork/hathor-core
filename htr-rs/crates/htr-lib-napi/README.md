@@ -38,18 +38,36 @@ Arbitrary-precision values cross the boundary as JS `bigint`.
 - **Ordering** works with native operators: `a < b`, `a > b`, `a <= b`, `a >= b`
   (for two `UnsignedAmount`s or two `SignedAmount`s). These also type-check in TypeScript.
 - **Equality and arithmetic must use methods** — JavaScript cannot overload them:
-  - Use `a.eq(b)` / `a.ne(b)`, **not** `a == b` / `a === b` (those are reference
-    identity at runtime, and silently wrong).
+  - Use `a.eq(b)` / `a.ne(b)`, **not** `a == b` / `a === b`. Between two wrappers, `==` / `===`
+    are reference identity (silently wrong for equal-but-distinct values). Against a `bigint`,
+    `a == 5n` instead coerces `a` to its `bigint` and compares numerically — also not what `.eq`
+    means. Always use `.eq` / `.ne`.
   - Use `a.add(b)` / `a.sub(b)` / `b.neg()`, **not** `a + b` / `a - b` (those
     coerce to `bigint` and drop the wrapper type).
 - **Mixed comparisons** like `amount < 5n` do not type-check; compare two wrapper
   values, or use `a.lt(b)` / `a.compare(b)` (`-1 | 0 | 1`).
 - **Balance ± amount** — `SignedAmount.add` / `.sub` also accept an `UnsignedAmount`
   (`balance.add(amount)`), normalizing it to the V2 unit first and returning a
-  `SignedAmount` (which may be negative after `.sub`).
+  `SignedAmount` (which may be negative after `.sub`). The comparison methods
+  (`eq` / `lt` / `compare` / …) are **not** mixed-type, however: they accept only the same
+  wrapper type, so compare a `SignedAmount` against an `UnsignedAmount` via `amount.toSigned()`.
 
 `String(x)` / template literals return the Rust `Debug` form (e.g.
 `V2 { normalized: 5 }`, `SignedAmount(-3)`).
+
+### Versions
+
+`fromVersion(amount, version)` and `toVersion(version)` take a `TokenAmountVersion` enum value
+(`TokenAmountVersion.V1` / `.V2`), not a raw number. An out-of-range value throws (a napi
+`InvalidArg` error). This differs from the Python binding, which takes an `int` and raises
+`ValueError("unknown version: N")`.
+
+### Notes
+
+- `asBool()` / `isZero()` stand in for truthiness: JavaScript has no `__bool__` equivalent for
+  objects (so `if (amount)` is always truthy). Use `amount.asBool()` / `amount.isZero()`.
+- Unlike the Python binding's frozen classes, these are ordinary JS objects. Treat instances as
+  immutable by convention — do not reassign their methods or fields.
 
 ## Develop
 
