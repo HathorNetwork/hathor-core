@@ -98,14 +98,25 @@ class _MixedTxSource(OneTipTransparentTxSource):
                 lines.append(f"fund{f}.out[{k}] = {per} HTR")
             if f + 1 < n_t_funds:
                 lines.append(f"fund{f}.out[{size}] <<< fund{f + 1}")
-            if f >= 1:
+            # chain with TWO explicit parents so the filler adds no genesis parent (else genesis's
+            # 1-byte children count overflows past ~253 funds). Mirrors transparent.py.
+            if f >= 2:
                 lines.append(f"fund{f} --> fund{f - 1}")
+                lines.append(f"fund{f} --> fund{f - 2}")
+            elif f == 1:
+                lines.append("fund1 --> fund0")
             lines.append(f"b{lock} < fund{f}")
 
-        # shielded sources: each mints `size` shielded UTXOs of value `per` (filler funds from dummy)
+        # shielded sources: each mints `size` shielded UTXOs of value `per` (filler funds from dummy).
+        # Chain with two parents (same reason) so sources don't overflow genesis's children either.
         for j, size in enumerate(s_sizes):
             for k in range(size):
                 lines.append(f"ssrc{j}.out[{k}] = {per} HTR{suffix}")
+            if j >= 2:
+                lines.append(f"ssrc{j} --> ssrc{j - 1}")
+                lines.append(f"ssrc{j} --> ssrc{j - 2}")
+            elif j == 1:
+                lines.append("ssrc1 --> ssrc0")
             lines.append(f"b{lock} < ssrc{j}")
 
         # flat lists of available (fund, idx) transparent UTXOs and (src, idx) shielded UTXOs

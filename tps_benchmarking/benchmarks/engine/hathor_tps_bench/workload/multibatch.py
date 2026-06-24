@@ -58,8 +58,8 @@ def _chunks(total: int, size: int, *, min_each: int = 1) -> list[int]:
     while rem > 0:
         c = min(size, rem)
         if 0 < c < min_each:
-            c = min(min_each, total)
-        out.append(c)
+            c = min_each          # mint the minimum (e.g. a lone shielded UTXO -> a 2-output source;
+        out.append(c)             # the spare is just unconsumed). Don't clamp back down to `total`.
         rem -= c
     return out
 
@@ -68,7 +68,7 @@ def render_multibatch_dsl(segments: list[Segment], fee_amount: int, fee_full: in
     """Return (dsl, segment_start_indices, target_names_in_stream_order)."""
     fee = {"amount": fee_amount, "full": fee_full}
 
-    def fpo(seg: Segment) -> int:
+    def fee_per_output(seg: Segment) -> int:
         return fee.get(seg.mode, 0) if seg.s_o else 0
 
     for seg in segments:
@@ -79,7 +79,7 @@ def render_multibatch_dsl(segments: list[Segment], fee_amount: int, fee_full: in
         if (seg.s_i or seg.s_o) and seg.mode not in ("amount", "full"):
             raise ValueError("a shielded slice needs a mode (--shielded/--full-shielded or --amount-shielded)")
 
-    per = max(max(1, math.ceil((s.n_out() + s.s_o * fpo(s)) / s.n_in())) for s in segments)
+    per = max(max(1, math.ceil((s.n_out() + s.s_o * fee_per_output(s)) / s.n_in())) for s in segments)
 
     total_t = sum(s.n * s.t_i for s in segments)
     total_sa = sum(s.n * s.s_i for s in segments if s.mode == "amount")
@@ -88,10 +88,10 @@ def render_multibatch_dsl(segments: list[Segment], fee_amount: int, fee_full: in
     t_sizes = _chunks(total_t, FUND_CHUNK)
     sa_sizes = _chunks(total_sa, SRC_CHUNK, min_each=2)
     sf_sizes = _chunks(total_sf, SRC_CHUNK, min_each=2)
-    n_coin = max(1, math.ceil((total_t * per) / COINBASE_VALUE) + 1) if total_t else 1
-    lock = n_coin + 12
-    tx_anchor = lock + 5
-    total_blocks = tx_anchor + 3
+    n_coin = max(1, math.ceil((total_t * per) / COINBASE_VALUE) + 1) if total_t else 1 # What if I start solely with shielded inputs?
+    lock = n_coin + 12 # What
+    tx_anchor = lock + 5 # What
+    total_blocks = tx_anchor + 3 # What
 
     lines = [f"blockchain genesis b[1..{total_blocks}]", f"b{lock} < dummy"]
 
@@ -137,7 +137,7 @@ def render_multibatch_dsl(segments: list[Segment], fee_amount: int, fee_full: in
     for k, seg in enumerate(segments):
         starts.append(len(target_names))
         suffix = _SUFFIX.get(seg.mode, "")
-        base, rem = divmod(seg.n_in() * per - seg.s_o * fpo(seg), seg.n_out())
+        base, rem = divmod(seg.n_in() * per - seg.s_o * fee_per_output(seg), seg.n_out())
         for t in range(seg.n):
             name = f"s{k}_tx{t}"
             target_names.append(name)

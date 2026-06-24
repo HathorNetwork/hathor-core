@@ -1,11 +1,13 @@
 """Command-line entry point: `python -m hathor_tps_bench <command>`.
 
 Commands:
-  list                       — show registered tx types and benchmarks
+  list                       — show registered tx types, benchmarks, and scripts
   validate --config X.yaml   — load + structurally validate a scenario, print resolved config
-  run      --config X.yaml   — run the scenario (wired up in CP-4/CP-5; stub for now)
+  run [--config X] [flags]   — single run; a sweep with --sweep-*; or a stream with --mult-batches
+  sweep                      — (back-compat) sweep via --axis io|n --values …
+  script NAME                — run a named scripts/<name>.py
 
-Uses stdlib argparse only (no click/typer). CP-2 is intentionally hathor-free.
+Uses stdlib argparse only (no click/typer). `list`/`validate` stay hathor-free.
 """
 from __future__ import annotations
 
@@ -445,7 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shielded_flags(pr)
     pr.add_argument("--mult-batches", nargs=argparse.REMAINDER, dest="mult_batches",
                     help="run a SEQUENCE of segments as one timed stream (TPS-over-time). Each segment: "
-                         "--n N [-i I -o O] [--shielded|--amount-shielded -i Is -o Os]. "
+                         "--n N [-i I -o O] [--shielded|--full-shielded|--amount-shielded -i Is -o Os]. "
                          "Example: --mult-batches --n 2000 -i 5 -o 2 --n 2000 -i 5 -o 2 --shielded -i 2 -o 2")
     pr.set_defaults(fn=_cmd_run)
 
