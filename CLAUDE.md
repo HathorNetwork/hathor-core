@@ -78,11 +78,12 @@ hathorlib/               # Lightweight shared library
 
 ## Key Conventions
 
-See `.claude/rules/` for detailed, scoped rules on Python style, testing, API endpoints, pydantic, nano contracts, and verification. Key highlights:
+See `.claude/rules/` for detailed, scoped rules on Python style, testing, API endpoints, pydantic, nano contracts, verification, and pull requests. Key highlights:
 
 - **License**: Apache 2.0, Hathor Labs header on all new Python files (template below).
 - **Settings**: Prefer injecting `HathorSettings` as a dependency; avoid `get_global_settings()` singleton.
 - **Docstrings**: Wrap inline code (names, literals, expressions) in single backticks — `code` — not reStructuredText double backticks or `:role:` markup. Docstrings are read as Markdown in editor hovers, so single backticks render as code spans there; this includes `.pyi` stubs.
+- **PR descriptions**: Match the `.github/PULL_REQUEST_TEMPLATE/` template exactly — only `Motivation`, `Acceptance Criteria`, and `Checklist`, as a flat bullet list with no `####` subsections.
 
 ## License
 
