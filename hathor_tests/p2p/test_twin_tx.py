@@ -7,6 +7,7 @@ from hathor.transaction import Transaction
 from hathor.util import not_none
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending
 
 
@@ -26,13 +27,21 @@ class TwinTransactionTestCase(unittest.TestCase):
         value3 = 102
 
         outputs = [
-            WalletOutputInfo(address=decode_address(address), value=int(value1), timelock=None),
-            WalletOutputInfo(address=decode_address(address), value=int(value2), timelock=None)
+            WalletOutputInfo(
+                address=decode_address(address), value=UnsignedAmount.from_v1(int(value1)), timelock=None
+            ),
+            WalletOutputInfo(
+                address=decode_address(address), value=UnsignedAmount.from_v1(int(value2)), timelock=None
+            ),
         ]
 
         outputs2 = [
-            WalletOutputInfo(address=decode_address(address), value=int(value1), timelock=None),
-            WalletOutputInfo(address=decode_address(address), value=int(value3), timelock=None)
+            WalletOutputInfo(
+                address=decode_address(address), value=UnsignedAmount.from_v1(int(value1)), timelock=None
+            ),
+            WalletOutputInfo(
+                address=decode_address(address), value=UnsignedAmount.from_v1(int(value3)), timelock=None
+            ),
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)

@@ -13,6 +13,7 @@ from hathor.wallet.base_wallet import SpentTx, UnspentTx, WalletBalance
 from hathor.websocket import WebsocketStatsResource
 from hathor.websocket.factory import HathorAdminWebsocketFactory, HathorAdminWebsocketProtocol
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
+from hathor_tests.token_amount import UnsignedAmount
 
 
 class WebsocketTest(_BaseResourceTest._ResourceTest):
@@ -99,7 +100,8 @@ class WebsocketTest(_BaseResourceTest._ResourceTest):
         self.factory.connections.add(self.protocol)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         gen_tx = self.genesis[0]
-        output = UnspentTx(gen_tx.hash, 0, 10, gen_tx.timestamp, '', gen_tx.outputs[0].token_data)
+        output = UnspentTx(gen_tx.hash, 0, UnsignedAmount.from_v1(10), gen_tx.timestamp, '',
+                           gen_tx.outputs[0].token_data)
         self.manager.pubsub.publish(HathorEvents.WALLET_OUTPUT_RECEIVED, total=10, output=output)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
@@ -112,7 +114,7 @@ class WebsocketTest(_BaseResourceTest._ResourceTest):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         gen_tx = self.genesis[0]
         gen_tx2 = self.genesis[1]
-        spent = SpentTx(gen_tx2.hash, gen_tx.hash, 0, 10, gen_tx.timestamp + 1)
+        spent = SpentTx(gen_tx2.hash, gen_tx.hash, 0, UnsignedAmount.from_v1(10), gen_tx.timestamp + 1)
         self.manager.pubsub.publish(HathorEvents.WALLET_INPUT_SPENT, output_spent=spent)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())

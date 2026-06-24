@@ -10,6 +10,7 @@ from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Block
 from hathor.types import VertexId
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_custom_tx
 
 
@@ -88,7 +89,7 @@ class SoftVoidedTestCase(SimulatorTestCase):
 
         assert manager2.wallet is not None
         address = manager2.wallet.get_unused_address(mark_as_used=False)
-        value = 1
+        value = UnsignedAmount.from_v1(1)
         simulator.run_to_completion()
         txC = gen_new_tx(manager2, address, value)
         txC.parents[0] = txA.hash

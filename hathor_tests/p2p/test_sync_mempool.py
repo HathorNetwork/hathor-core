@@ -10,6 +10,7 @@ from hathor.simulator import FakeConnection
 from hathor.transaction import Block, Transaction
 from hathor.util import json_loadb, not_none
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
@@ -30,7 +31,7 @@ class SyncMempoolTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None))
+            WalletOutputInfo(address=decode_address(address), value=UnsignedAmount.from_v1(int(value)), timelock=None))
 
         tx: Transaction = self.manager1.wallet.prepare_transaction_compute_inputs(
             Transaction, outputs, self.manager1.tx_storage

@@ -23,6 +23,7 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathor_tests.token_amount import UnsignedAmount
 from hathorlib.token_amount_version import TokenAmountVersion
 
 INT_NC_TYPE = make_nc_type(int)
@@ -114,7 +115,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
 
         nc_id = nc1_id
         expected = counter
-        remainder = deposit
+        remainder = UnsignedAmount.from_v1(deposit).to_signed()
         while True:
             nc_storage = self.runner.get_storage(nc_id)
             counter = nc_storage.get_obj(b'counter', INT_NC_TYPE)
@@ -124,7 +125,9 @@ class NCBlueprintTestCase(BlueprintTestCase):
             if new_nc_id is not None:
                 expected_nc_id = derive_child_contract_id(nc_id, b'x', self.blueprint1_id)
                 assert new_nc_id == expected_nc_id
-                assert balance == Balance(value=expected, can_mint=False, can_melt=False)
+                assert balance == Balance(
+                    value=UnsignedAmount.from_v1(expected).to_signed(), can_mint=False, can_melt=False
+                )
                 remainder -= balance.value
             else:
                 assert balance.value == remainder
@@ -212,7 +215,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         grant_action = NanoHeaderAction(
             type=NCActionType.GRANT_AUTHORITY,
             token_index=1,
-            amount=TxOutput.ALL_AUTHORITIES,
+            amount=UnsignedAmount.from_v1(TxOutput.ALL_AUTHORITIES),
         )
         nc1_header.nc_actions.append(grant_action)
         # XXX: Dirty hack, by purposefully not clearing the cache, we don't have to re-sign the nano header.
@@ -290,7 +293,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # -2 from the TKA mint in nc1.out[0]
         # -5 from the mint in nc5.nc_method
         # +1 from the melt in nc6.nc_method
-        assert htr_total == (
+        assert htr_total == UnsignedAmount.from_v1(
             self._settings.GENESIS_TOKEN_ATOMIC_UNITS
             + 34 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
             - 2 - 5 + 1
@@ -298,7 +301,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         # 200 from nc1.out[0]
         # +456 from nc5.nc_method
         # -123 from nc6.nc_method
-        assert tka_total == 200 + 456 - 123
+        assert tka_total == UnsignedAmount.from_v1(200 + 456 - 123)
 
         # nc_history
         expected_list = [
@@ -344,11 +347,11 @@ class NCBlueprintTestCase(BlueprintTestCase):
         assert self.manager.tx_storage.get_height_best_block() == 50
         # TODO: Is there a bug in the token index? It should be 50, not 52 blocks
         # genesis + 50 blocks - 2 from the TKA mint in nc1.out[0]
-        assert htr_total == (
+        assert htr_total == UnsignedAmount.from_v1(
             self._settings.GENESIS_TOKEN_ATOMIC_UNITS + 52 * self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 2
         )
         # 200 from nc1.out[0]
-        assert tka_total == 200
+        assert tka_total == UnsignedAmount.from_v1(200)
 
         # nc_history
         expected_list = [
