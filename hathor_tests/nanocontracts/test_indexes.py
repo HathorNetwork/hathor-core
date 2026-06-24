@@ -14,6 +14,7 @@ from hathor.types import AddressB58
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathor_tests.token_amount import UnsignedAmount
 
 settings = HathorSettings()
 
@@ -52,7 +53,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         self.miner.start()
 
         self.token_uid = b'\0'
-        trigger = StopAfterMinimumBalance(self.wallet, self.token_uid, 1)
+        trigger = StopAfterMinimumBalance(self.wallet, self.token_uid, UnsignedAmount.from_v1(1))
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
         self.assertTrue(self.simulator.run(120))
 
@@ -105,7 +106,9 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         new_blocks = 0
 
         # Deposits 1 HTR
-        _inputs, deposit_amount = self.wallet.get_inputs_from_amount(1, self.manager.tx_storage)
+        _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
+            UnsignedAmount.from_v1(1), self.manager.tx_storage
+        )
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
         self.fill_nc_tx(tx, self.myblueprint_id, 'initialize', [], nc_actions=[
             NanoHeaderAction(
@@ -122,22 +125,28 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         nc_id = tx.hash
 
         token_info1 = self.manager.tx_storage.indexes.tokens.get_token_info(self._settings.HATHOR_TOKEN_UID)
-        self.assertEqual(token_info0.get_total() + 64_00 * new_blocks, token_info1.get_total())
+        self.assertEqual(
+            token_info0.get_total() + UnsignedAmount.from_v1(64_00 * new_blocks),
+            token_info1.get_total(),
+        )
 
         # Withdrawals 1 HTR
-        tx2 = Transaction(outputs=[TxOutput(1, b'', 0)])
+        tx2 = Transaction(outputs=[TxOutput(UnsignedAmount.from_v1(1), b'', 0)])
         self.fill_nc_tx(tx2, nc_id, 'nop', [], nc_actions=[
             NanoHeaderAction(
                 type=NCActionType.WITHDRAWAL,
                 token_index=0,
-                amount=1,
+                amount=UnsignedAmount.from_v1(1),
             )
         ])
         self.finish_and_broadcast_tx(tx2, confirmations=2)
         new_blocks += 2
 
         token_info1 = self.manager.tx_storage.indexes.tokens.get_token_info(self._settings.HATHOR_TOKEN_UID)
-        self.assertEqual(token_info0.get_total() + 64_00 * new_blocks, token_info1.get_total())
+        self.assertEqual(
+            token_info0.get_total() + UnsignedAmount.from_v1(64_00 * new_blocks),
+            token_info1.get_total(),
+        )
 
     def test_remove_voided_nano_tx_from_parents_1(self):
         vertices = self._run_test_remove_voided_nano_tx_from_parents('tx3 < b35')
