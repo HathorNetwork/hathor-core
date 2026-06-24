@@ -5,6 +5,7 @@ from hathor.simulator import FakeConnection, Simulator
 from hathor.simulator.trigger import StopAfterMinimumBalance, StopAfterNMinedBlocks, StopWhenSendLineMatch
 from hathor.util import not_none
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 
 
 class TriggerTestCase(unittest.TestCase):
@@ -55,7 +56,7 @@ class TriggerTestCase(unittest.TestCase):
         wallet = not_none(self.manager1.wallet)
         settings = self.simulator.settings
 
-        minimum_balance = 1000_00   # 16 blocks
+        minimum_balance = UnsignedAmount.from_v1(1000_00)   # 16 blocks
         token_uid = settings.HATHOR_TOKEN_UID
 
         trigger = StopAfterMinimumBalance(wallet, token_uid, minimum_balance)

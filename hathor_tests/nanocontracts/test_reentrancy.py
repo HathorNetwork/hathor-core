@@ -2,7 +2,7 @@ from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.exception import NCForbiddenReentrancy
 from hathor.nanocontracts.types import Amount, CallerId, ContractId, NCAction, NCDepositAction, TokenUid
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
-from hathorlib.token_amount import SignedAmount
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 
 HTR_TOKEN_UID = TokenUid(b'\0')
 
@@ -167,7 +167,7 @@ class NCReentrancyTestCase(BlueprintTestCase):
         self.target_storage = self.runner.get_storage(self.nc_target_id)
         self.attacker_storage = self.runner.get_storage(self.nc_attacker_id)
 
-        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
+        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(10_150).to_signed()
         assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == SignedAmount(0)
 
     def test_basics(self) -> None:
@@ -182,8 +182,8 @@ class NCReentrancyTestCase(BlueprintTestCase):
             method='nop',
         )
 
-        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150 - 30
-        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == 0 + 30
+        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(10_150 - 30).to_signed()
+        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(0 + 30).to_signed()
 
         # Address1 tries to send 0.80 HTR but it fails due to insufficient balance.
         # This misleads developers into thinking the safety mechanism is working.
@@ -198,8 +198,8 @@ class NCReentrancyTestCase(BlueprintTestCase):
                 method='nop',
             )
 
-        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150 - 30
-        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == 0 + 30
+        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(10_150 - 30).to_signed()
+        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(0 + 30).to_signed()
 
     def test_attack_succeed(self) -> None:
         # Attacker contract has a balance of 0.50 HTR in the target contract.
@@ -211,8 +211,10 @@ class NCReentrancyTestCase(BlueprintTestCase):
             ctx,
         )
 
-        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150 - self.n_calls * 50
-        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == self.n_calls * 50
+        actual_target = self.target_storage.get_balance(HTR_TOKEN_UID).value
+        actual_attacker = self.attacker_storage.get_balance(HTR_TOKEN_UID).value
+        assert actual_target == UnsignedAmount.from_v1(10_150 - self.n_calls * 50).to_signed()
+        assert actual_attacker == UnsignedAmount.from_v1(self.n_calls * 50).to_signed()
 
     def test_attack_fail_fixed(self) -> None:
         # Attacker contract has a balance of 0.50 HTR in the target contract.
@@ -225,7 +227,7 @@ class NCReentrancyTestCase(BlueprintTestCase):
                 ctx,
             )
 
-        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
+        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(10_150).to_signed()
         assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == SignedAmount(0)
 
     def test_attack_fail_protected(self) -> None:
@@ -239,5 +241,5 @@ class NCReentrancyTestCase(BlueprintTestCase):
                 ctx,
             )
 
-        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
+        assert self.target_storage.get_balance(HTR_TOKEN_UID).value == UnsignedAmount.from_v1(10_150).to_signed()
         assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == SignedAmount(0)

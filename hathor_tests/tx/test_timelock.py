@@ -5,6 +5,7 @@ from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
@@ -16,21 +17,24 @@ class TimelockTransactionTestCase(unittest.TestCase):
 
     def test_timelock(self):
         blocks = add_new_blocks(self.manager, 5, advance_clock=15)
-        blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
+        blocks_tokens = [sum((txout.value for txout in blk.outputs), start=UnsignedAmount.zero()) for blk in blocks]
         add_blocks_unlock_reward(self.manager)
 
         address = self.manager.wallet.get_unused_address()
         outside_address = self.get_address(0)
 
+        value_500 = UnsignedAmount.from_v1(500)
+        value_700 = UnsignedAmount.from_v1(700)
         outputs = [
             WalletOutputInfo(
-                address=decode_address(address), value=500,
+                address=decode_address(address), value=value_500,
                 timelock=int(self.clock.seconds()) + 10),
             WalletOutputInfo(
-                address=decode_address(address), value=700,
+                address=decode_address(address), value=value_700,
                 timelock=int(self.clock.seconds()) - 10),
             WalletOutputInfo(
-                address=decode_address(address), value=sum(blocks_tokens[:2]) - 500 - 700,
+                address=decode_address(address),
+                value=sum(blocks_tokens[:2], start=UnsignedAmount.zero()) - value_500 - value_700,
                 timelock=None)
         ]
 
@@ -42,13 +46,15 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(1)
 
+        all_blocks_sum = sum(blocks_tokens, start=UnsignedAmount.zero())
+        first_three_blocks_sum = sum(blocks_tokens[:3], start=UnsignedAmount.zero())
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(500, sum(blocks_tokens) - 500))
+                         WalletBalance(value_500, all_blocks_sum - value_500))
 
         self.clock.advance(1)
 
         outputs1 = [
-            WalletOutputInfo(address=decode_address(outside_address), value=500, timelock=None)
+            WalletOutputInfo(address=decode_address(outside_address), value=value_500, timelock=None)
         ]
 
         inputs1 = [WalletInputInfo(tx_id=tx1.hash, index=0, private_key=None)]
@@ -63,12 +69,12 @@ class TimelockTransactionTestCase(unittest.TestCase):
             self.manager.propagate_tx(tx2)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(500, sum(blocks_tokens) - 500))
+                         WalletBalance(value_500, all_blocks_sum - value_500))
 
         self.clock.advance(1)
 
         outputs2 = [
-            WalletOutputInfo(address=decode_address(outside_address), value=700, timelock=None)
+            WalletOutputInfo(address=decode_address(outside_address), value=value_700, timelock=None)
         ]
 
         inputs2 = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=None)]
@@ -82,13 +88,14 @@ class TimelockTransactionTestCase(unittest.TestCase):
         propagated = self.manager.propagate_tx(tx3)
         self.clock.advance(1)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(500, sum(blocks_tokens) - 500 - 700))
+                         WalletBalance(value_500, all_blocks_sum - value_500 - value_700))
         self.assertTrue(propagated)
         self.clock.advance(1)
 
         outputs3 = [
             WalletOutputInfo(
-                address=decode_address(outside_address), value=sum(blocks_tokens[:2]) - 500 - 700,
+                address=decode_address(outside_address),
+                value=sum(blocks_tokens[:2], start=UnsignedAmount.zero()) - value_500 - value_700,
                 timelock=None)
         ]
 
@@ -103,7 +110,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         propagated = self.manager.propagate_tx(tx4)
         self.clock.advance(1)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(500, sum(blocks_tokens[:3])))
+                         WalletBalance(value_500, first_three_blocks_sum))
         self.assertTrue(propagated)
 
         self.clock.advance(8)
@@ -112,12 +119,12 @@ class TimelockTransactionTestCase(unittest.TestCase):
         propagated = self.manager.propagate_tx(tx2)
         self.clock.advance(1)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, sum(blocks_tokens[:3])))
+                         WalletBalance(UnsignedAmount.zero(), first_three_blocks_sum))
         self.assertTrue(propagated)
 
     def test_choose_inputs(self):
         blocks = add_new_blocks(self.manager, 1, advance_clock=15)
-        blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
+        blocks_tokens = [sum((txout.value for txout in blk.outputs), start=UnsignedAmount.zero()) for blk in blocks]
         add_blocks_unlock_reward(self.manager)
 
         address = self.manager.wallet.get_unused_address(mark_as_used=False)
@@ -137,7 +144,7 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.clock.advance(1)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(blocks_tokens[0], 0))
+                         WalletBalance(blocks_tokens[0], UnsignedAmount.zero()))
 
         outputs = [WalletOutputInfo(address=decode_address(address), value=blocks_tokens[0], timelock=None)]
 
@@ -154,4 +161,4 @@ class TimelockTransactionTestCase(unittest.TestCase):
         self.manager.propagate_tx(tx2)
 
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-                         WalletBalance(0, blocks_tokens[0]))
+                         WalletBalance(UnsignedAmount.zero(), blocks_tokens[0]))

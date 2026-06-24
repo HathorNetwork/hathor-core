@@ -5,6 +5,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block
 from hathor.utils.weight import weight_to_work
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 
 
 class MiningTest(unittest.TestCase):
@@ -40,7 +41,7 @@ class MiningTest(unittest.TestCase):
 
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=self._settings.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * 100,
+            reward=UnsignedAmount.from_v1(self._settings.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * 100),
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=self._settings.GENESIS_BLOCK_TIMESTAMP + 3,
@@ -69,7 +70,7 @@ class MiningTest(unittest.TestCase):
 
         self.assertEqual(block_templates[0], BlockTemplate(
             versions={0, 3},
-            reward=self._settings.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * 100,
+            reward=UnsignedAmount.from_v1(self._settings.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * 100),
             weight=1.0,
             timestamp_now=int(manager.reactor.seconds()),
             timestamp_min=blocks[-1].timestamp + 1,
@@ -87,7 +88,7 @@ class MiningTest(unittest.TestCase):
     def test_minimally_valid_block(self) -> None:
         template = BlockTemplate(
             versions={0},
-            reward=6400,
+            reward=UnsignedAmount.from_v1(6400),
             weight=60,
             timestamp_now=12345,
             timestamp_min=12344,
