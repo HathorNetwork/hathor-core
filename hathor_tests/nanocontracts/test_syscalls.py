@@ -24,6 +24,7 @@ from hathor.nanocontracts.types import (
 )
 from hathor.transaction.token_info import TokenVersion
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 
 CONTRACT_NC_TYPE = make_nc_type(ContractId)
 BLUEPRINT_NC_TYPE = make_nc_type(BlueprintId)
@@ -219,36 +220,36 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Starting state
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=1000, can_mint=False, can_melt=False),
-            dbt_balance_key: Balance(value=1000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True),
         }
 
         # After mint
         self.runner.call_public_method(nc_id, 'mint', ctx, dbt_token_uid, 123)
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=998, can_mint=False, can_melt=False),
-            dbt_balance_key: Balance(value=1123, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(998).to_signed(), can_mint=False, can_melt=False),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(1123).to_signed(), can_mint=True, can_melt=True),
         }
 
         # After melt
         self.runner.call_public_method(nc_id, 'melt', ctx, dbt_token_uid, 456)
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=1002, can_mint=False, can_melt=False),
-            dbt_balance_key: Balance(value=667, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(1002).to_signed(), can_mint=False, can_melt=False),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(667).to_signed(), can_mint=True, can_melt=True),
         }
 
         # After revoke mint
         self.runner.call_public_method(nc_id, 'revoke', ctx, dbt_token_uid, True, False)
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=1002, can_mint=False, can_melt=False),
-            dbt_balance_key: Balance(value=667, can_mint=False, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(1002).to_signed(), can_mint=False, can_melt=False),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(667).to_signed(), can_mint=False, can_melt=True),
         }
 
         # After revoke melt
         self.runner.call_public_method(nc_id, 'revoke', ctx, dbt_token_uid, False, True)
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=1002, can_mint=False, can_melt=False),
-            dbt_balance_key: Balance(value=667, can_mint=False, can_melt=False),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(1002).to_signed(), can_mint=False, can_melt=False),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(667).to_signed(), can_mint=False, can_melt=False),
         }
 
         # Try revoke mint without having the authority
@@ -285,8 +286,8 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Final state
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=1002, can_mint=False, can_melt=False),
-            dbt_balance_key: Balance(value=667, can_mint=False, can_melt=False),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(1002).to_signed(), can_mint=False, can_melt=False),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(667).to_signed(), can_mint=False, can_melt=False),
         }
 
     def test_deposit_token_creation(self) -> None:
@@ -348,8 +349,8 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # fee token creation charging 1 HTR
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=1, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(1).to_signed(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
         }
 
         ctx_create_deposit_token = self.create_context()
@@ -361,9 +362,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # deposit token creation charging 1 HTR
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=100, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=True, can_melt=True),
         }
 
         fbt_token2_uid = self.runner.call_public_method(
@@ -373,10 +374,10 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # created fee token paying with deposit token
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
-            fbt2_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=SignedAmount(), can_mint=True, can_melt=True),
+            fbt2_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
         }
 
         # Try to create fee tokens without enough dbt balance
@@ -419,10 +420,10 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should remain unchanged after failed melt attempt
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
-            fbt2_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=SignedAmount(), can_mint=True, can_melt=True),
+            fbt2_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
         }
 
     def test_fee_token_melt(self) -> None:
@@ -458,9 +459,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # fee token creation charging 1 HTR, creating 1000000 tokens
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=100, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=True, can_melt=True),
         }
 
         # Successfully melt some tokens - don't deposit, melt from existing balance using deposit token
@@ -468,9 +469,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should decrease by melted amount, DBT consumed for fee
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=500000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(500000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=SignedAmount(), can_mint=True, can_melt=True),
         }
 
         # Try to melt more tokens - should fail due to insufficient HTR for fee payment
@@ -487,9 +488,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should remain unchanged after failed melt attempt
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=500000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(500000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=SignedAmount(), can_mint=True, can_melt=True),
         }
 
         # Try to melt a deposit token paying with another deposit token
@@ -553,9 +554,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # After token creation: HTR consumed by token creation fees and deposit amounts
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=500, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(500).to_signed(), can_mint=True, can_melt=True),
         }
 
         # Successfully mint tokens using deposit token as fee payment (no HTR left)
@@ -563,9 +564,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should increase by minted amount, deposit token consumed for fee
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1100000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=400, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1100000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(400).to_signed(), can_mint=True, can_melt=True),
         }
 
         # Successfully mint more tokens using deposit token as fee payment
@@ -573,9 +574,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should increase, deposit token consumed for fee
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1300000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=300, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1300000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=UnsignedAmount.from_v1(300).to_signed(), can_mint=True, can_melt=True),
         }
 
         # Drain remaining deposit tokens
@@ -585,9 +586,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # All deposit tokens should be consumed
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1450000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1450000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=SignedAmount(), can_mint=True, can_melt=True),
         }
 
         # Try to mint with insufficient deposit tokens for fee payment - should fail
@@ -608,9 +609,9 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should remain unchanged after failed mint attempts
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=0, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=1450000, can_mint=True, can_melt=True),
-            dbt_balance_key: Balance(value=0, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(1450000).to_signed(), can_mint=True, can_melt=True),
+            dbt_balance_key: Balance(value=SignedAmount(), can_mint=True, can_melt=True),
         }
 
         # Try to mint a deposit token paying with another deposit token
@@ -666,8 +667,8 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # After first fee token creation
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
-            ft1_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(9).to_signed(), can_mint=False, can_melt=False),
+            ft1_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
         }
 
         # Try to create another fee token using the first fee token as payment - should be rejected
@@ -692,8 +693,8 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Balance should remain unchanged after failed attempts
         assert storage.get_all_balances() == {
-            htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
-            ft1_balance_key: Balance(value=1000000, can_mint=True, can_melt=True),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(9).to_signed(), can_mint=False, can_melt=False),
+            ft1_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
         }
 
     def test_proxy_call_public_method_nc_args(self) -> None:
@@ -717,7 +718,7 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Initial state: 10 HTR, no fee tokens
         assert target_storage.get_all_balances() == {
-            htr_balance_key: Balance(value=10, can_mint=False, can_melt=False),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(10).to_signed(), can_mint=False, can_melt=False),
         }
 
         # Proxy call with fee-based token deposit
@@ -732,6 +733,6 @@ class NCNanoContractTestCase(BlueprintTestCase):
 
         # Verify: 20 FBT deposited, 1 HTR charged as fee
         assert target_storage.get_all_balances() == {
-            htr_balance_key: Balance(value=9, can_mint=False, can_melt=False),
-            fbt_balance_key: Balance(value=20, can_mint=False, can_melt=False),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(9).to_signed(), can_mint=False, can_melt=False),
+            fbt_balance_key: Balance(value=UnsignedAmount.from_v1(20).to_signed(), can_mint=False, can_melt=False),
         }

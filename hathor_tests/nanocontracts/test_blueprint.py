@@ -17,6 +17,7 @@ from hathor.nanocontracts.types import (
     view,
 )
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 
 STR_NC_TYPE = make_nc_type(str)
 BYTES_NC_TYPE = make_nc_type(bytes)
@@ -205,7 +206,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self._create_my_blueprint_contract()
         nc_id = self.my_blueprint_id
         storage = self.runner.get_storage(nc_id)
-        self.assertEqual(Balance(value=0, can_mint=False, can_melt=False), storage.get_balance(MOCK_ADDRESS))
+        self.assertEqual(
+            Balance(value=SignedAmount(), can_mint=False, can_melt=False),
+            storage.get_balance(MOCK_ADDRESS),
+        )
 
     def test_nop(self) -> None:
         self._create_my_blueprint_contract()
@@ -238,7 +242,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid),
+        )
 
         ctx = self.create_context(
             [NCWithdrawalAction(token_uid=token_uid, amount=1)],
@@ -247,7 +254,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=99, can_mint=False, can_melt=False), storage.get_balance(token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(99).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid),
+        )
 
         ctx = self.create_context(
             [NCWithdrawalAction(token_uid=token_uid, amount=50)],
@@ -256,7 +266,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=49, can_mint=False, can_melt=False), storage.get_balance(token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(49).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid),
+        )
 
         ctx = self.create_context(
             [NCWithdrawalAction(token_uid=token_uid, amount=50)],
@@ -282,7 +295,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid),
+        )
 
         ctx = self.create_context(
             [NCWithdrawalAction(token_uid=wrong_token_uid, amount=1)],
@@ -292,7 +308,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
         )
         with self.assertRaises(NCInsufficientFunds):
             self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid),
+        )
 
     def test_invalid_field(self) -> None:
         with self.assertRaises(BlueprintSyntaxError):
@@ -316,7 +335,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=100, can_mint=False, can_melt=False), storage.get_balance(token_uid))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid),
+        )
 
         token_uid2 = TokenUid(b'\0' + b'\1' * 31)
         ctx = self.create_context(
@@ -326,7 +348,10 @@ class NCBlueprintTestCase(BlueprintTestCase):
             timestamp=0,
         )
         self.runner.call_public_method(nc_id, 'nop', ctx)
-        self.assertEqual(Balance(value=200, can_mint=False, can_melt=False), storage.get_balance(token_uid2))
+        self.assertEqual(
+            Balance(value=UnsignedAmount.from_v1(200).to_signed(), can_mint=False, can_melt=False),
+            storage.get_balance(token_uid2),
+        )
 
         all_balances = storage.get_all_balances()
         key1 = BalanceKey(nc_id, token_uid)
@@ -335,7 +360,7 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.assertEqual(
             all_balances,
             {
-                key1: Balance(value=100, can_mint=False, can_melt=False),
-                key2: Balance(value=200, can_mint=False, can_melt=False),
+                key1: Balance(value=UnsignedAmount.from_v1(100).to_signed(), can_mint=False, can_melt=False),
+                key2: Balance(value=UnsignedAmount.from_v1(200).to_signed(), can_mint=False, can_melt=False),
             }
         )
