@@ -15,16 +15,16 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import NamedTuple, Optional
+from typing import Iterator, NamedTuple, Optional
 
-from hathorlib.headers.nano_header import ADDRESS_SEQNUM_SIZE
+from hathorlib.headers.nano_header import ADDRESS_LEN_BYTES, ADDRESS_SEQNUM_SIZE
 from hathorlib.nanocontracts.exception import NanoContractDoesNotExist
 from hathorlib.nanocontracts.nc_types.dataclass_nc_type import make_dataclass_nc_type
 from hathorlib.nanocontracts.nc_types.token_version_nc_type import TokenVersionNCType
 from hathorlib.nanocontracts.storage.contract_storage import NCContractStorage
 from hathorlib.nanocontracts.storage.patricia_trie import NodeId, PatriciaTrie
 from hathorlib.nanocontracts.storage.token_proxy import TokenProxy
-from hathorlib.nanocontracts.types import Address, ContractId, TokenUid
+from hathorlib.nanocontracts.types import Address, Amount, ContractId, TokenUid
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import leb128
 
@@ -32,7 +32,8 @@ from hathorlib.utils import leb128
 class BlockTrieTag(Enum):
     CONTRACT = b'\0'
     TOKEN = b'\1'
-    ADDRESS = b'\2'
+    ADDRESS_SEQNUM = b'\2'
+    ADDRESS_BALANCE = b'\3'
 
 
 class ContractKey(NamedTuple):
@@ -53,7 +54,15 @@ class AddressKey(NamedTuple):
     address: Address
 
     def __bytes__(self):
-        return BlockTrieTag.ADDRESS.value + self.address
+        return BlockTrieTag.ADDRESS_SEQNUM.value + self.address
+
+
+class AddressBalanceKey(NamedTuple):
+    address: Address
+    token_id: TokenUid
+
+    def __bytes__(self):
+        return BlockTrieTag.ADDRESS_BALANCE.value + self.address + self.token_id
 
 
 class NCBlockStorage:
@@ -158,6 +167,56 @@ class NCBlockStorage:
         )
         token_description_bytes = self._TOKEN_DESCRIPTION_NC_TYPE.to_bytes(token_description)
         self._block_trie.update(bytes(key), token_description_bytes)
+
+    def get_address_balance(self, address: Address, token_id: TokenUid) -> Amount:
+        key = AddressBalanceKey(address, token_id)
+        try:
+            balance_bytes = self._block_trie.get(bytes(key))
+        except KeyError:
+            return Amount(0)
+        else:
+            balance, buf = leb128.decode_unsigned(balance_bytes)
+            assert len(buf) == 0
+            return Amount(balance)
+
+    def add_address_balance(self, address: Address, amount: Amount, token_id: TokenUid) -> None:
+        if not isinstance(address, Address) or len(address) != ADDRESS_LEN_BYTES:
+            raise ValueError(f'address must be Address with {ADDRESS_LEN_BYTES} bytes')
+
+        key = AddressBalanceKey(address, token_id)
+        balance = Amount(self.get_address_balance(address, token_id) + amount)
+        assert balance >= 0
+        balance_bytes = leb128.encode_unsigned(balance)
+        self._block_trie.update(bytes(key), balance_bytes)
+
+    def iter_address_balances(self, address: Address) -> Iterator[tuple[TokenUid, Amount]]:
+        """Yield (token_id, balance) pairs for every token with a nonzero balance for the given address."""
+        if not isinstance(address, Address) or len(address) != ADDRESS_LEN_BYTES:
+            raise ValueError(f'address must be Address with {ADDRESS_LEN_BYTES} bytes')
+
+        prefix = self._block_trie._encode_key(BlockTrieTag.ADDRESS_BALANCE.value + address)
+        node = self._block_trie._find_nearest_node(prefix)
+        if node.key.startswith(prefix):
+            subtree_root = node
+        else:
+            for _child_suffix, child_id in node.children.items():
+                child = self._block_trie.get_node(child_id)
+                if child.key.startswith(prefix):
+                    subtree_root = child
+                    break
+            else:
+                return
+
+        for dfs_node in self._block_trie.iter_dfs(node=subtree_root):
+            if dfs_node.node.content is None:
+                continue
+            decoded = self._block_trie._decode_key(dfs_node.node.key)
+            token_id = TokenUid(decoded[1 + ADDRESS_LEN_BYTES:])
+            balance, buf = leb128.decode_unsigned(dfs_node.node.content)
+            assert len(buf) == 0
+            if balance == 0:
+                continue
+            yield token_id, Amount(balance)
 
     def get_address_seqnum(self, address: Address) -> int:
         """Get the latest seqnum for an address.
