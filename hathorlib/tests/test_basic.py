@@ -294,6 +294,62 @@ class HathorCommonsTestCase(unittest.TestCase):
         self.assertTrue(tx.has_unshield_balance())
         self.assertIs(tx.get_unshield_balance_header(), header)
 
+    def test_tx_with_mint_melt_headers(self):
+        """MintHeader / MeltHeader: serialization round-trip, parser dispatch,
+        leftover handling and entry validation."""
+        from hathorlib.headers import MeltHeader, MintHeader, MintMeltEntry, VertexHeaderId
+        from hathorlib.vertex_parser import VertexParser
+
+        tx = Transaction()
+        cases = [
+            (MintHeader, VertexHeaderId.MINT_HEADER.value, b'\x14'),
+            (MeltHeader, VertexHeaderId.MELT_HEADER.value, b'\x15'),
+        ]
+        for header_cls, id_value, id_byte in cases:
+            entries = [MintMeltEntry(token_index=1, amount=1000), MintMeltEntry(token_index=3, amount=2 ** 63)]
+            header = header_cls(entries=entries)
+
+            # Wire format: header_id(1) | num_entries(1) | (token_index(1) | amount(8 BE))...
+            wire = header.serialize()
+            self.assertEqual(wire[:1], id_value)
+            self.assertEqual(wire[:1], id_byte)
+            self.assertEqual(wire[1], len(entries))
+            self.assertEqual(len(wire), 1 + 1 + len(entries) * 9)
+
+            # Parser registry dispatches the correct class by header id.
+            parser_cls = VertexParser.get_header_parser(id_byte)
+            self.assertIs(parser_cls, header_cls)
+
+            # Deserialization recovers the header with no leftover bytes.
+            parsed, leftover = parser_cls.deserialize(tx, wire)
+            self.assertEqual(leftover, b'')
+            self.assertEqual(parsed.entries, entries)
+
+            # Extra bytes after the header are returned as leftover.
+            trailing = b'\xde\xad\xbe\xef'
+            parsed2, leftover2 = parser_cls.deserialize(tx, wire + trailing)
+            self.assertEqual(leftover2, trailing)
+            self.assertEqual(parsed2.entries, entries)
+
+            # sighash bytes equal the full serialization (signature-bound).
+            self.assertEqual(header.get_sighash_bytes(), wire)
+
+            # Wrong header id byte is rejected.
+            with self.assertRaises(ValueError):
+                parser_cls.deserialize(tx, b'\x99' + wire[1:])
+
+            # Truncated buffer is rejected at deserialization time.
+            with self.assertRaises(ValueError):
+                parser_cls.deserialize(tx, wire[:3])
+
+        # Entry validation at construction time: token_index in [1, 16], amount in [1, 2**64).
+        with self.assertRaises(ValueError):
+            MintMeltEntry(token_index=0, amount=1)
+        with self.assertRaises(ValueError):
+            MintMeltEntry(token_index=1, amount=0)
+        with self.assertRaises(ValueError):
+            MintMeltEntry(token_index=17, amount=1)
+
     def test_shielded_output_serialization_roundtrip(self):
         """serialize/deserialize round-trip for both output modes, incl. ephemeral present/absent.
 

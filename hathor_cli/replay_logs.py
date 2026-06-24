@@ -19,8 +19,8 @@ def main():
     import argparse
     import sys
 
-    from hathor_cli.util import ConsoleRenderer, create_parser
     from hathor.util import json_loads
+    from hathor_cli.util import ConsoleRenderer, create_parser
 
     parser = create_parser()
     parser.add_argument('input', type=argparse.FileType('r', encoding='UTF-8'), default=sys.stdin, nargs='?',

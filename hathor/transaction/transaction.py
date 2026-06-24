@@ -27,6 +27,8 @@ from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
 from hathor.transaction.headers import (
     AnyVertexHeader,
+    MeltHeader,
+    MintHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
@@ -221,6 +223,32 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             return self.get_unshield_balance_header().excess_blinding_factor
         return None
 
+    def has_mint_header(self) -> bool:
+        """Returns true if this transaction carries a MintHeader."""
+        try:
+            self.get_mint_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_mint_header(self) -> MintHeader:
+        """Return the MintHeader or raise ValueError."""
+        return self._get_header(MintHeader)
+
+    def has_melt_header(self) -> bool:
+        """Returns true if this transaction carries a MeltHeader."""
+        try:
+            self.get_melt_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_melt_header(self) -> MeltHeader:
+        """Return the MeltHeader or raise ValueError."""
+        return self._get_header(MeltHeader)
+
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
         for header in self.headers:
@@ -293,6 +321,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
     def to_json_extended(self) -> dict[str, Any]:
         json_extended = super().to_json_extended()
+        json_extended['tokens'] = [h.hex() for h in self.tokens]
         if self.is_nano_contract():
             json = self.to_json()
             return {**json, **json_extended}
@@ -318,7 +347,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         token_dict = self._get_token_info_from_inputs(nc_block_storage)
         self._update_token_info_from_nano_actions(token_dict=token_dict, nc_block_storage=nc_block_storage)
         # These must be called last so token_dict already contains all tokens in inputs and nano actions.
-        self._update_token_info_from_outputs(token_dict=token_dict)
+        self._update_token_info_from_outputs(token_dict=token_dict, nc_block_storage=nc_block_storage)
         self._update_token_info_from_fees(token_dict=token_dict)
 
         return token_dict
@@ -390,20 +419,19 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
 
+            # Shielded inputs are skipped for token accounting — their amounts
+            # are verified by the homomorphic balance equation instead.
             try:
                 resolved = spent_tx.resolve_spent_output(tx_input.index)
             except IndexError:
                 # Out of bounds — will be caught by _verify_inputs
                 continue
 
-            # NOTE (PR-5 scope): the SEMANTIC "skip shielded inputs (amount hidden — verified
-            # by the homomorphic balance equation)" decision for token accounting belongs to
-            # PR-5's token-info work. While ENABLE_SHIELDED_TRANSACTIONS is DISABLED (the only
-            # state that ships), tx.shielded_outputs is always empty so this assert cannot fire.
-            # When PR-5 lands, replace this assert with the proper shielded-skip:
-            #     from hathorlib.transaction.shielded_tx_output import OutputMode
-            #     if resolved.mode() != OutputMode.TRANSPARENT:
-            #         continue  # Shielded input: skip for token info (amount is hidden)
+            from hathorlib.transaction.shielded_tx_output import OutputMode
+            if resolved.mode() != OutputMode.TRANSPARENT:
+                # Shielded input: skip for token info (amount is hidden)
+                continue
+
             assert isinstance(resolved, TxOutput)
             spent_output = resolved
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
@@ -423,19 +451,35 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
             token_dict[token_uid] = token_info
         return token_dict
 
-    def _update_token_info_from_outputs(self, *, token_dict: TokenInfoDict) -> None:
+    def _update_token_info_from_outputs(
+        self,
+        *,
+        token_dict: TokenInfoDict,
+        nc_block_storage: NCBlockStorage,
+    ) -> None:
         """Iterate over the outputs and add values to token info dict. Updates the dict in-place.
 
         Also, checks if no token has authorities on the outputs not present on the inputs
 
         :raises InvalidToken: when there's an error in token operations
         """
+        assert self.storage is not None
         # iterate over outputs and add values to token_dict
         for index, tx_output in enumerate(self.outputs):
             token_uid = self.get_token_uid(tx_output.get_token_index())
             token_info = token_dict.get(token_uid)
             if token_info is None:
-                raise InvalidToken('no inputs for token {}'.format(token_uid.hex()))
+                # Seed a default entry when the token isn't in inputs/nano-actions. This is
+                # needed for unshielding: shielded inputs contribute nothing to token_dict
+                # (amount hidden, and FullShielded also hides token_uid), so a transparent
+                # output of a custom token would otherwise be rejected here. Integrity is
+                # enforced downstream: non-shielded txs that truly mint without authority
+                # will be caught by ForbiddenMint in _check_token_permissions; shielded txs
+                # are verified cryptographically by verify_shielded_balance.
+                token_info = TokenInfo(
+                    version=get_token_version(self.storage, nc_block_storage, token_uid)
+                )
+                token_dict[token_uid] = token_info
 
             # for authority outputs, make sure the same capability (mint/melt) was present in the inputs
             if tx_output.can_mint_token() and not token_info.can_mint:

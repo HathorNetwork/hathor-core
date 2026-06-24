@@ -20,8 +20,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 
 def main():
-    from hathor_cli.util import create_parser
     from hathor.crypto.util import get_private_key_from_bytes
+    from hathor_cli.util import create_parser
 
     parser = create_parser()
 

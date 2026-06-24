@@ -13,6 +13,7 @@ htr-lib = { path = "../htr-lib" }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
 pyo3 = { workspace = true }
+secp256k1-zkp = { version = "0.11", features = ["global-context", "rand-std", "std"] }
 
 [lints]
 workspace = true

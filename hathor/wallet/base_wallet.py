@@ -687,9 +687,9 @@ class BaseWallet:
 
         Raises ValueError if the token UID is inconsistent.
         """
-        from hathor_ct_crypto import create_asset_commitment, derive_tag
+        from hathorlib.crypto.shielded.asset_tag import create_asset_commitment, derive_tag
         expected_tag = derive_tag(token_id)
-        expected_commitment = create_asset_commitment(tag_bytes=expected_tag, r_asset=asset_bf)
+        expected_commitment = create_asset_commitment(expected_tag, asset_bf)
         if expected_commitment != asset_commitment:
             raise ValueError(
                 'recovered token UID does not match asset_commitment — '
@@ -701,7 +701,8 @@ class BaseWallet:
 
         Returns True if any shielded output was recovered.
         """
-        from hathor.crypto.shielded.recovery import recover_shielded_secrets
+        from hathorlib.crypto.shielded import recover_shielded_secrets
+        from hathorlib.crypto.shielded.ecdh import extract_key_bytes
         from hathorlib.transaction.shielded_tx_output import FullShieldedOutput
 
         if not get_global_settings().ENABLE_SHIELDED_TRANSACTIONS:

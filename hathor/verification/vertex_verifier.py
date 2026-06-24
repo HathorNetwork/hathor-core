@@ -38,6 +38,8 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.headers import (
     AnyVertexHeader,
     FeeHeader,
+    MeltHeader,
+    MintHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
@@ -163,6 +165,13 @@ class VertexVerifier:
                     len(output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
                 ))
 
+        if hasattr(vertex, 'shielded_outputs'):
+            for shielded_output in vertex.shielded_outputs:
+                if len(shielded_output.script) > self._settings.MAX_OUTPUT_SCRIPT_SIZE:
+                    raise InvalidOutputScriptSize('shielded output script size: {} and max-size: {}'.format(
+                        len(shielded_output.script), self._settings.MAX_OUTPUT_SCRIPT_SIZE
+                    ))
+
     def verify_number_of_outputs(self, vertex: BaseTransaction) -> None:
         """Verify number of outputs does not exceed the limit"""
         if len(vertex.outputs) > self._settings.MAX_NUM_OUTPUTS:
@@ -198,6 +207,10 @@ class VertexVerifier:
         for tx_output in vertex.outputs:
             n_txops += counter.get_sigops_count(tx_output.script)
 
+        # Count shielded output scripts too
+        for shielded_output in vertex.shielded_outputs:
+            n_txops += counter.get_sigops_count(shielded_output.script)
+
         if n_txops > settings.MAX_TX_SIGOPS_OUTPUT:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
@@ -219,6 +232,13 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                # A shielded TCT carries shielded outputs of the new token plus a
+                # MintHeader declaring its initial supply. A MeltHeader is not
+                # admitted: a creation tx mints, it does not melt.
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
@@ -227,6 +247,8 @@ class VertexVerifier:
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers

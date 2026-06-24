@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
+from structlog import get_logger
+
 from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
@@ -34,10 +36,17 @@ from hathor.transaction.exceptions import (
     InputVoidedAndConfirmed,
     InvalidInputData,
     InvalidInputDataSize,
+    InvalidMintMeltHeaderError,
+    InvalidRangeProofError,
+    InvalidShieldedOutputError,
+    InvalidSurjectionProofError,
     InvalidToken,
     InvalidVersionError,
     RewardLocked,
     ScriptError,
+    ShieldedAuthorityError,
+    ShieldedBalanceMismatchError,
+    ShieldedMintMeltForbiddenError,
     TimestampError,
     TokenNotFound,
     TooFewInputs,
@@ -46,19 +55,26 @@ from hathor.transaction.exceptions import (
     TooManySigOps,
     TooManyTokens,
     TooManyWithinConflicts,
+    TrivialCommitmentError,
     UnusedTokensError,
     WeightError,
 )
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.conf.settings import HATHOR_TOKEN_UID
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
+    from hathor.nanocontracts.storage import NCBlockStorage
+    from hathor.transaction.headers import MintMeltEntry
 
 cpu = get_cpu_profiler()
+
+logger = get_logger()
 
 MAX_TOKENS_LENGTH: int = 16
 MAX_WITHIN_CONFLICTS: int = 8
@@ -66,7 +82,7 @@ MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa_factory', '_feature_service')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', 'log')
 
     def __init__(
         self,
@@ -78,6 +94,7 @@ class TransactionVerifier:
         self._settings = settings
         self._daa_factory = daa_factory
         self._feature_service = feature_service
+        self.log = logger.new()
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -151,13 +168,19 @@ class TransactionVerifier:
                     len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
                 ))
 
-            from hathor.transaction import TxOutput
-            from hathorlib.transaction.shielded_tx_output import ShieldedOutput
-
             spent_tx = tx.get_spent_tx(input_tx)
-            resolved = spent_tx.resolve_spent_output(input_tx.index)
-            assert isinstance(resolved, (TxOutput, ShieldedOutput)), \
-                'resolve_spent_output must return TxOutput or ShieldedOutput'
+            # Handle shielded output references instead of asserting
+            if input_tx.index < len(spent_tx.outputs):
+                # Standard transparent output
+                pass
+            elif spent_tx.shielded_outputs:
+                shielded_idx = input_tx.index - len(spent_tx.outputs)
+                if shielded_idx >= len(spent_tx.shielded_outputs):
+                    raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                        input_tx.tx_id.hex(), input_tx.index))
+            else:
+                raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
+                    input_tx.tx_id.hex(), input_tx.index))
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
@@ -263,15 +286,78 @@ class TransactionVerifier:
                 raise InvalidToken('token uid index not available: index {}'.format(output.get_token_index()))
 
     @classmethod
+    def _check_token_permissions_and_deposits(
+        cls,
+        settings: HathorSettings,
+        token_dict: TokenInfoDict,
+        *,
+        allow_nonexistent_tokens: bool = False,
+        is_shielded: bool = False,
+    ) -> tuple[int, bool]:
+        """Check token permissions and compute deposit/withdraw balance.
+
+        Shared logic between verify_transparent_balance and verify_token_rules.
+
+        For shielded transactions (is_shielded=True), the amount-based melt/mint check and
+        deposit/withdraw calculation are skipped for non-native tokens because transparent
+        deficits are expected — value moved to shielded outputs.
+
+        Returns:
+            (htr_expected_amount, has_nonexistent_tokens)
+        """
+        deposit = 0
+        withdraw = 0
+        has_nonexistent_tokens = False
+
+        for token_uid, token_info in token_dict.items():
+            cls._check_token_permissions(token_uid, token_info, is_shielded=is_shielded)
+            match token_info.version:
+                case None:
+                    if not allow_nonexistent_tokens:
+                        raise TokenNotFound(f'token uid {token_uid.hex()} not found.')
+                    has_nonexistent_tokens = True
+
+                case TokenVersion.NATIVE:
+                    continue
+
+                case TokenVersion.DEPOSIT:
+                    if not is_shielded:
+                        if token_info.has_been_melted():
+                            withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                        if token_info.has_been_minted():
+                            deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+
+                case TokenVersion.FEE:
+                    continue
+
+                case _:
+                    assert_never(token_info.version)
+
+        htr_expected_amount = withdraw - deposit
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
+        if not is_shielded and htr_info.amount > htr_expected_amount:
+            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
+                htr_info.amount,
+                htr_expected_amount,
+            ))
+
+        return htr_expected_amount, has_nonexistent_tokens
+
+    @classmethod
     def verify_transparent_balance(
         cls,
         settings: HathorSettings,
         tx: Transaction,
         token_dict: TokenInfoDict,
         allow_nonexistent_tokens: bool = False,
+        *,
+        shielded_fee: int = 0,
     ) -> None:
         """Verify that the sum of outputs is equal of the sum of inputs, for each token. If sum of inputs
         and outputs is not 0, make sure inputs have mint/melt authority.
+
+        Counterpart of verify_shielded_balance: exactly one balance check runs per tx,
+        dispatched by tx.is_shielded() at the caller.
 
         When `allow_nonexistent_tokens` flag is set to `True` and a nonexistent token is provided,
         this method will skip the fee and HTR balance checks.
@@ -283,43 +369,9 @@ class TransactionVerifier:
 
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        deposit = 0
-        withdraw = 0
-        has_nonexistent_tokens = False
-
-        for token_uid, token_info in token_dict.items():
-            cls._check_token_permissions(token_uid, token_info)
-            match token_info.version:
-                case None:
-                    # When a token is not found, we can't assert the HTR value since we don't know the token version.
-                    # This is only possible for nanos, because they may create the missing token in execution-time.
-                    if not allow_nonexistent_tokens:
-                        raise TokenNotFound(f'token uid {token_uid.hex()} not found.')
-                    has_nonexistent_tokens = True
-
-                case TokenVersion.NATIVE:
-                    continue
-
-                case TokenVersion.DEPOSIT:
-                    if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
-                    if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
-
-                case TokenVersion.FEE:
-                    continue
-
-                case _:
-                    assert_never(token_info.version)
-
-        # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit
-        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount > htr_expected_amount:
-            raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
-                htr_info.amount,
-                htr_expected_amount,
-            ))
+        htr_expected_amount, has_nonexistent_tokens = cls._check_token_permissions_and_deposits(
+            settings, token_dict, allow_nonexistent_tokens=allow_nonexistent_tokens,
+        )
 
         if has_nonexistent_tokens:
             # In a partial verification, it's not possible to check fees and
@@ -329,11 +381,12 @@ class TransactionVerifier:
             assert tx.is_nano_contract()
             return
 
-        expected_fee = token_dict.calculate_fee(settings)
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
         if expected_fee != token_dict.fees_from_fee_header:
             raise InputOutputMismatch(f"Fee amount is different than expected. "
                                       f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
 
+        htr_info = token_dict[settings.HATHOR_TOKEN_UID]
         if htr_info.amount < htr_expected_amount:
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
@@ -342,16 +395,57 @@ class TransactionVerifier:
 
         assert htr_info.amount == htr_expected_amount
 
+    @classmethod
+    def verify_token_rules(
+        cls,
+        settings: HathorSettings,
+        token_dict: TokenInfoDict,
+        *,
+        shielded_fee: int = 0,
+    ) -> None:
+        """Verify token authority permissions, deposit requirements, and fee correctness.
+
+        Uses _check_token_permissions_and_deposits for shared permission/deposit logic,
+        then checks fee amounts. Used for shielded transactions where the transparent
+        balance equation is replaced by verify_shielded_balance.
+
+        :raises ForbiddenMint: if tokens were minted without authority
+        :raises ForbiddenMelt: if tokens were melted without authority
+        :raises InputOutputMismatch: if fee amounts are incorrect
+        """
+        cls._check_token_permissions_and_deposits(settings, token_dict, is_shielded=True)
+
+        expected_fee = token_dict.calculate_fee(settings, shielded_fee=shielded_fee)
+        if expected_fee != token_dict.fees_from_fee_header:
+            raise InputOutputMismatch(f"Fee amount is different than expected. "
+                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
+
     @staticmethod
-    def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
-        """Verify whether token can be minted/melted based on its authority."""
-        from hathorlib.conf.settings import HATHOR_TOKEN_UID
+    def _check_token_permissions(
+        token_uid: TokenUid,
+        token_info: TokenInfo,
+        *,
+        is_shielded: bool = False,
+    ) -> None:
+        """Verify whether token can be minted/melted based on its authority.
+
+        For shielded transactions (is_shielded=True), the amount-based melt/mint check is
+        skipped for non-native tokens because the transparent deficit is expected — value
+        moved to shielded outputs and balance is verified cryptographically by
+        verify_shielded_balance. Undeclared authority-based mint/melt is separately
+        blocked by verify_no_undeclared_mint_melt.
+        """
         if token_info.version == TokenVersion.NATIVE:
             assert token_uid == HATHOR_TOKEN_UID
             assert not token_info.can_mint
             assert not token_info.can_melt
             return
         assert token_uid != HATHOR_TOKEN_UID
+        if is_shielded:
+            # In shielded txs, transparent deficit/surplus is expected — balance is
+            # verified cryptographically. Undeclared authority-based mint/melt is
+            # separately blocked by verify_no_undeclared_mint_melt.
+            return
         if token_info.has_been_melted() and not token_info.can_melt:
             raise ForbiddenMelt.from_token(token_info.amount, token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
@@ -384,6 +478,12 @@ class TransactionVerifier:
         seen_token_indexes = set()
         for txout in tx.outputs:
             seen_token_indexes.add(txout.get_token_index())
+
+        # Consider shielded output token indexes
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput
+        for shielded_out in tx.shielded_outputs:
+            if isinstance(shielded_out, AmountShieldedOutput):
+                seen_token_indexes.add(shielded_out.token_data & 0x7F)
 
         if tx.is_nano_contract():
             nano_header = tx.get_nano_header()
@@ -432,3 +532,665 @@ class TransactionVerifier:
 
         if between_counter > MAX_BETWEEN_CONFLICTS:
             raise TooManyBetweenConflicts
+
+    # --- Shielded transaction verification methods ---
+
+    @staticmethod
+    def _normalize_token_uid(token_uid: bytes) -> bytes:
+        """Normalize a token UID to 32 bytes for the crypto library."""
+        from hathorlib.crypto.shielded.asset_tag import normalize_token_uid
+        try:
+            return normalize_token_uid(token_uid)
+        except ValueError as e:
+            raise InvalidShieldedOutputError(str(e)) from e
+
+    @staticmethod
+    def calculate_shielded_fee(settings: HathorSettings, tx: Transaction) -> int:
+        """Calculate the total fee required for shielded outputs."""
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+        fee = 0
+        for output in tx.shielded_outputs:
+            if isinstance(output, AmountShieldedOutput):
+                fee += settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT
+            elif isinstance(output, FullShieldedOutput):
+                fee += settings.FEE_PER_FULL_SHIELDED_OUTPUT
+        return fee
+
+    def verify_shielded_fee(self, tx: Transaction) -> None:
+        """Verify the transaction declares sufficient fees for its shielded outputs."""
+        if not tx.has_fees():
+            raise InvalidShieldedOutputError('shielded transactions require a fee header')
+        fee_header = tx.get_fee_header()
+        expected_shielded_fee = self.calculate_shielded_fee(self._settings, tx)
+        total_declared_fee = fee_header.total_fee_amount()
+        if total_declared_fee < expected_shielded_fee:
+            raise InvalidShieldedOutputError(
+                f'insufficient fee for shielded outputs: declared {total_declared_fee}, '
+                f'minimum shielded fee is {expected_shielded_fee}'
+            )
+
+    def verify_no_undeclared_mint_melt(self, tx: Transaction, token_dict: TokenInfoDict) -> None:
+        """Reject mint/melt that is not declared via MintHeader/MeltHeader.
+
+        Shielded txs hide non-HTR amounts, so transparent token_dict surplus/deficit
+        on a non-NATIVE token is only legitimate when covered by a corresponding
+        Mint/Melt header entry. Without the header, there is no public scalar to
+        feed the augmented balance equation (Rule M4) and the prover could mint
+        from nothing.
+        """
+        mint_token_uids: set[bytes] = set()
+        melt_token_uids: set[bytes] = set()
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                mint_token_uids.add(tx.get_token_uid(entry.token_index))
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                melt_token_uids.add(tx.get_token_uid(entry.token_index))
+
+        for token_uid, token_info in token_dict.items():
+            if token_info.version == TokenVersion.NATIVE:
+                continue
+            if token_info.can_mint and token_info.has_been_minted() and token_uid not in mint_token_uids:
+                raise ShieldedMintMeltForbiddenError(
+                    f'token {token_uid.hex()}: undeclared mint in shielded tx '
+                    f'(transparent surplus: {token_info.amount}); declare via MintHeader'
+                )
+            if token_info.can_melt and token_info.has_been_melted() and token_uid not in melt_token_uids:
+                raise ShieldedMintMeltForbiddenError(
+                    f'token {token_uid.hex()}: undeclared melt in shielded tx '
+                    f'(transparent deficit: {token_info.amount}); declare via MeltHeader'
+                )
+
+    def verify_shielded_outputs(self, tx: Transaction) -> None:
+        """Top-level: calls all basic shielded checks."""
+        self.verify_commitments_valid(tx)
+        self.verify_authority_restriction(tx)
+        self.verify_range_proofs(tx)
+        self.verify_trivial_commitment_protection(tx)
+        self.verify_shielded_fee(tx)
+
+    def verify_mint_melt_basic(self, tx: Transaction) -> None:
+        """Top-level: basic (no-storage) verification for MintHeader/MeltHeader.
+
+        Fires whenever either header is present. Performs Rules M1, M3, the
+        well-formedness checks against tx.tokens length, and the NanoHeader
+        same-token guard.
+        """
+        if not tx.has_mint_header() and not tx.has_melt_header():
+            return
+        self.verify_mint_melt_headers_well_formed(tx)
+        self.verify_mint_melt_requires_shielded(tx)
+        self.verify_mint_melt_nano_compatibility(tx)
+
+    def verify_mint_melt_headers_well_formed(self, tx: Transaction) -> None:
+        """Per-entry shape and Rule M3 (a token may not appear in both headers).
+
+        Wire-format constraints (count bounds, per-entry token_index in [1, 16],
+        amount >= 1, uniqueness within a header) are enforced at deserialize-time.
+        Here we additionally bound token_index against tx.tokens length and
+        cross-check that no token appears in both MintHeader and MeltHeader.
+        """
+        mint_indexes: set[int] = set()
+        melt_indexes: set[int] = set()
+        n_tokens = len(tx.tokens)
+
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                if entry.token_index > n_tokens:
+                    raise InvalidMintMeltHeaderError(
+                        f'MintHeader: token_index {entry.token_index} exceeds '
+                        f'tx.tokens length {n_tokens}'
+                    )
+                mint_indexes.add(entry.token_index)
+
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                if entry.token_index > n_tokens:
+                    raise InvalidMintMeltHeaderError(
+                        f'MeltHeader: token_index {entry.token_index} exceeds '
+                        f'tx.tokens length {n_tokens}'
+                    )
+                melt_indexes.add(entry.token_index)
+
+        # Rule M3: a token cannot appear in both headers.
+        overlap = mint_indexes & melt_indexes
+        if overlap:
+            raise InvalidMintMeltHeaderError(
+                f'MintHeader and MeltHeader share token_index(es) {sorted(overlap)}; '
+                f'a token cannot be both minted and melted in the same transaction'
+            )
+
+    def verify_mint_melt_requires_shielded(self, tx: Transaction) -> None:
+        """Rule M1: MintHeader/MeltHeader is valid only on shielded transactions.
+
+        Phase 1 (no storage): "shielded" is detected via header presence —
+        ShieldedOutputsHeader covers the mixed/partial-unshield case, and
+        UnshieldBalanceHeader covers the full-unshield case (RFC unresolved Q6).
+        A tx that carries shielded inputs with neither header would also fail
+        here (no shielded marker found), and is independently rejected by the
+        parent shielded RFC's mutual-exclusion invariant inside
+        verify_shielded_balance — so the storage-bound case is already covered
+        upstream and downstream.
+        """
+        if not tx.has_mint_header() and not tx.has_melt_header():
+            return
+        if tx.has_shielded_outputs() or tx.has_unshield_balance_header():
+            return
+        raise ShieldedMintMeltForbiddenError(
+            'MintHeader/MeltHeader requires the transaction to carry a '
+            'ShieldedOutputsHeader or UnshieldBalanceHeader (Rule M1)'
+        )
+
+    def verify_mint_melt_nano_compatibility(self, tx: Transaction) -> None:
+        """Reject same-token mint/melt declared via both NanoHeader actions and Mint/Melt headers.
+
+        Per the user's choice on RFC unresolved Q3, a NanoHeader may coexist with
+        Mint/Melt headers in the same tx. Cross-token combinations are fine, but
+        a single token cannot be minted (or melted) through both channels at once
+        because the amount would be ambiguous and the augmented balance equation
+        would double-count.
+        """
+        if not tx.is_nano_contract():
+            return
+        if not tx.has_mint_header() and not tx.has_melt_header():
+            return
+
+        nano_header = tx.get_nano_header()
+        nano_action_token_uids: set[bytes] = set()
+        for action in nano_header.get_actions():
+            nano_action_token_uids.add(action.token_uid)
+
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                if token_uid in nano_action_token_uids:
+                    raise InvalidMintMeltHeaderError(
+                        f'token {token_uid.hex()}: declared in both MintHeader and a '
+                        f'NanoHeader action; supply changes must use a single channel per token'
+                    )
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                if token_uid in nano_action_token_uids:
+                    raise InvalidMintMeltHeaderError(
+                        f'token {token_uid.hex()}: declared in both MeltHeader and a '
+                        f'NanoHeader action; supply changes must use a single channel per token'
+                    )
+
+    def verify_shielded_outputs_with_storage(self, tx: Transaction) -> None:
+        """Outputs-only shielded checks that need storage (surjection proofs).
+
+        Gated on has_shielded_outputs() — surjection proves each shielded output's
+        asset came from some input, so it only runs when there are shielded outputs.
+
+        Whole-tx balance (verify_shielded_balance) is NOT called here — it's
+        dispatched from _verify_tx as the counterpart to verify_transparent_balance,
+        so every tx gets exactly one balance check regardless of shape.
+        """
+        assert tx.storage is not None
+
+        spent_txs: dict[bytes, BaseTransaction] = {}
+        for tx_input in tx.inputs:
+            if tx_input.tx_id not in spent_txs:
+                spent_txs[tx_input.tx_id] = tx.storage.get_transaction(tx_input.tx_id)
+
+        asset_tag_cache: dict[bytes, bytes] = {}
+
+        self.verify_surjection_proofs(tx, spent_txs=spent_txs, asset_tag_cache=asset_tag_cache)
+
+    def verify_commitments_valid(self, tx: Transaction) -> None:
+        """Validate all commitments are exactly 33 bytes, valid curve points, and count is within limits."""
+        from hathor.crypto.util import get_public_key_from_bytes_compressed
+        from hathorlib.crypto.shielded import validate_commitment, validate_generator
+        from hathorlib.transaction.shielded_tx_output import (
+            ASSET_COMMITMENT_SIZE,
+            COMMITMENT_SIZE,
+            EPHEMERAL_PUBKEY_SIZE,
+            MAX_SHIELDED_OUTPUTS,
+            FullShieldedOutput,
+        )
+
+        if len(tx.shielded_outputs) > MAX_SHIELDED_OUTPUTS:
+            raise InvalidShieldedOutputError(
+                f'too many shielded outputs: {len(tx.shielded_outputs)} exceeds maximum {MAX_SHIELDED_OUTPUTS}'
+            )
+        for i, output in enumerate(tx.shielded_outputs):
+            if len(output.commitment) != COMMITMENT_SIZE:
+                raise InvalidShieldedOutputError(
+                    f'shielded output {i}: commitment must be {COMMITMENT_SIZE} bytes, '
+                    f'got {len(output.commitment)}'
+                )
+            if not validate_commitment(output.commitment):
+                raise InvalidShieldedOutputError(
+                    f'shielded output {i}: invalid commitment (not a valid curve point)'
+                )
+            if isinstance(output, FullShieldedOutput):
+                if len(output.asset_commitment) != ASSET_COMMITMENT_SIZE:
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: asset_commitment must be {ASSET_COMMITMENT_SIZE} bytes, '
+                        f'got {len(output.asset_commitment)}'
+                    )
+                if not validate_generator(output.asset_commitment):
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: invalid asset_commitment (not a valid curve point)'
+                    )
+
+            if output.ephemeral_pubkey:
+                if len(output.ephemeral_pubkey) != EPHEMERAL_PUBKEY_SIZE:
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: ephemeral_pubkey must be {EPHEMERAL_PUBKEY_SIZE} bytes, '
+                        f'got {len(output.ephemeral_pubkey)}'
+                    )
+                try:
+                    get_public_key_from_bytes_compressed(output.ephemeral_pubkey)
+                except (ValueError, TypeError):
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: invalid ephemeral_pubkey (not a valid secp256k1 point)'
+                    )
+
+    def verify_range_proofs(self, tx: Transaction) -> None:
+        """Every shielded output must have valid Bulletproof range proof."""
+        from hathorlib.crypto.shielded import verify_range_proof
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+        asset_tag_cache: dict[bytes, bytes] = {}
+        for i, output in enumerate(tx.shielded_outputs):
+            if isinstance(output, AmountShieldedOutput):
+                token_index = output.token_data & 0x7F
+                if token_index > len(tx.tokens):
+                    raise InvalidShieldedOutputError(
+                        f'shielded output {i}: token_data index {token_index} '
+                        f'exceeds token list length {len(tx.tokens)}'
+                    )
+                token_uid = tx.get_token_uid(token_index)
+                generator = self._get_or_derive_asset_tag(token_uid, asset_tag_cache)
+            elif isinstance(output, FullShieldedOutput):
+                generator = output.asset_commitment
+            else:
+                raise InvalidShieldedOutputError(f'shielded output {i}: unknown type')
+
+            try:
+                if not verify_range_proof(output.range_proof, output.commitment, generator):
+                    raise InvalidRangeProofError(
+                        f'shielded output {i}: range proof verification failed'
+                    )
+            except ValueError as e:
+                raise InvalidRangeProofError(f'shielded output {i}: {e}') from e
+
+    def _get_or_derive_asset_tag(
+        self,
+        token_uid: bytes,
+        asset_tag_cache: dict[bytes, bytes] | None,
+    ) -> bytes:
+        """Derive an asset tag, using the cache if available."""
+        from hathorlib.crypto.shielded import derive_asset_tag
+        normalized = self._normalize_token_uid(token_uid)
+        if asset_tag_cache is not None:
+            if normalized not in asset_tag_cache:
+                asset_tag_cache[normalized] = derive_asset_tag(normalized)
+            return asset_tag_cache[normalized]
+        return derive_asset_tag(normalized)
+
+    def verify_surjection_proofs(
+        self,
+        tx: Transaction,
+        *,
+        spent_txs: dict[bytes, BaseTransaction] | None = None,
+        asset_tag_cache: dict[bytes, bytes] | None = None,
+    ) -> None:
+        """Only FullShieldedOutput instances require surjection proofs.
+
+        For minted tokens (RFC 0000-shielded-outputs-mint-melt §4.3), the asset
+        tag of each MintHeader entry is added to the surjection-proof domain so
+        a FullShieldedOutput can prove its asset is one of (transparent inputs ∪
+        shielded inputs ∪ minted tokens). MeltHeader does not extend the domain
+        because melt produces no new outputs of the melted token.
+        """
+        from hathorlib.crypto.shielded import verify_surjection_proof
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+        assert tx.storage is not None
+        domain_generators: list[bytes] = []
+        for tx_input in tx.inputs:
+            spent_tx = spent_txs[tx_input.tx_id] if spent_txs else tx.storage.get_transaction(tx_input.tx_id)
+            spent_index = tx_input.index
+            if spent_index < len(spent_tx.outputs):
+                spent_output = spent_tx.outputs[spent_index]
+                if spent_output.is_token_authority():
+                    continue
+                token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+                domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
+            else:
+                shielded_index = spent_index - len(spent_tx.outputs)
+                if shielded_index >= len(spent_tx.shielded_outputs):
+                    raise InvalidShieldedOutputError(
+                        f'input references non-existent shielded output index {spent_index}'
+                    )
+                shielded_out = spent_tx.shielded_outputs[shielded_index]
+                if isinstance(shielded_out, FullShieldedOutput):
+                    domain_generators.append(shielded_out.asset_commitment)
+                elif isinstance(shielded_out, AmountShieldedOutput):
+                    token_index = shielded_out.token_data & 0x7F
+                    try:
+                        token_uid = spent_tx.get_token_uid(token_index)
+                    except (IndexError, NotImplementedError) as e:
+                        raise InvalidShieldedOutputError(
+                            f'spent shielded output token_data index {token_index} '
+                            f'is invalid for the spent transaction'
+                        ) from e
+                    domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
+
+        # Extend the surjection-proof domain with one generator per MintHeader
+        # entry so a FullShieldedOutput can claim a freshly-minted asset.
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                domain_generators.append(self._get_or_derive_asset_tag(token_uid, asset_tag_cache))
+
+        has_full_shielded = any(isinstance(o, FullShieldedOutput) for o in tx.shielded_outputs)
+        if has_full_shielded and not domain_generators:
+            raise InvalidSurjectionProofError(
+                'FullShieldedOutput requires at least one input to form a surjection proof domain'
+            )
+
+        for i, output in enumerate(tx.shielded_outputs):
+            if isinstance(output, FullShieldedOutput):
+                if not output.surjection_proof:
+                    raise InvalidSurjectionProofError(
+                        f'shielded output {i}: FullShieldedOutput requires surjection proof'
+                    )
+                try:
+                    if not verify_surjection_proof(
+                        output.surjection_proof,
+                        output.asset_commitment,
+                        domain_generators,
+                    ):
+                        raise InvalidSurjectionProofError(
+                            f'shielded output {i}: surjection proof verification failed'
+                        )
+                except ValueError as e:
+                    raise InvalidSurjectionProofError(f'shielded output {i}: {e}') from e
+
+    def verify_shielded_balance(
+        self,
+        tx: Transaction,
+        *,
+        spent_txs: dict[bytes, BaseTransaction] | None = None,
+        asset_tag_cache: dict[bytes, bytes] | None = None,
+        nc_block_storage: 'NCBlockStorage | None' = None,
+    ) -> None:
+        """Homomorphic balance verification.
+
+        For mixed and partial-unshield txs (at least one shielded output):
+          sum(C_in) == sum(C_out) + fee*H_HTR
+        For full-unshield txs (shielded inputs, no shielded outputs): the tx
+        carries an UnshieldBalanceHeader with `excess = sum(r_in) − sum(r_out)`
+        and verification checks:
+          sum(C_in) == sum(C_out) + excess*G + fee*H_HTR
+
+        With Mint/Melt headers (RFC 0000-shielded-outputs-mint-melt §4.4 Rule M4),
+        the equation is augmented:
+          sum(C_in) + sum_T(mint_T*H_T) + withdraw*H_HTR
+            == sum(C_out) + sum_T(melt_T*H_T) + deposit*H_HTR + fee*H_HTR + excess*G
+        Each MintHeader entry adds (amount, token_uid) to the input side; each
+        MeltHeader entry adds (amount, token_uid) to the output side. For
+        DEPOSIT-version tokens, deposit/withdraw are folded onto HTR.
+
+        Mutual-exclusion invariant: a shielded tx must carry either a
+        ShieldedOutputsHeader or an UnshieldBalanceHeader, not both and not
+        neither.
+        """
+        from hathorlib.crypto.shielded import verify_balance
+
+        assert tx.storage is not None
+        transparent_inputs: list[tuple[int, bytes]] = []
+        shielded_inputs: list[bytes] = []
+
+        for tx_input in tx.inputs:
+            spent_tx = spent_txs[tx_input.tx_id] if spent_txs else tx.storage.get_transaction(tx_input.tx_id)
+            spent_index = tx_input.index
+            if spent_index < len(spent_tx.outputs):
+                spent_output = spent_tx.outputs[spent_index]
+                if not spent_output.is_token_authority():
+                    token_uid = self._normalize_token_uid(spent_tx.get_token_uid(spent_output.get_token_index()))
+                    transparent_inputs.append((spent_output.value, token_uid))
+            else:
+                shielded_index = spent_index - len(spent_tx.outputs)
+                if shielded_index >= len(spent_tx.shielded_outputs):
+                    raise InvalidShieldedOutputError(
+                        f'input references non-existent shielded output index {spent_index}'
+                    )
+                shielded_out = spent_tx.shielded_outputs[shielded_index]
+                shielded_inputs.append(shielded_out.commitment)
+
+        transparent_outputs: list[tuple[int, bytes]] = []
+        shielded_outputs: list[bytes] = []
+
+        for output in tx.outputs:
+            if output.is_token_authority():
+                continue
+            token_uid = self._normalize_token_uid(tx.get_token_uid(output.get_token_index()))
+            transparent_outputs.append((output.value, token_uid))
+
+        for shielded_output in tx.shielded_outputs:
+            shielded_outputs.append(shielded_output.commitment)
+
+        if tx.has_fees():
+            for fee_entry in tx.get_fee_header().get_fees():
+                token_uid = self._normalize_token_uid(fee_entry.token_uid)
+                transparent_outputs.append((fee_entry.amount, token_uid))
+
+        # Rule M4: fold MintHeader/MeltHeader entries into the augmented balance
+        # equation. Mint amounts enter the input side; melt amounts enter the
+        # output side. For DEPOSIT-version tokens the 1% deposit moves HTR from
+        # the input side (deposit -> HTR output) on mint and the reverse on melt.
+        # For FEE-version tokens the per-entry FEE_PER_OUTPUT charge is added to
+        # the output side (paid by the user from HTR inputs).
+        if tx.has_mint_header() or tx.has_melt_header():
+            htr_uid = self._normalize_token_uid(HATHOR_TOKEN_UID)
+            if tx.has_mint_header():
+                for entry in tx.get_mint_header().entries:
+                    self._fold_mint_melt_entry(
+                        tx, entry,
+                        is_mint=True,
+                        transparent_inputs=transparent_inputs,
+                        transparent_outputs=transparent_outputs,
+                        htr_uid=htr_uid,
+                        nc_block_storage=nc_block_storage,
+                    )
+            if tx.has_melt_header():
+                for entry in tx.get_melt_header().entries:
+                    self._fold_mint_melt_entry(
+                        tx, entry,
+                        is_mint=False,
+                        transparent_inputs=transparent_inputs,
+                        transparent_outputs=transparent_outputs,
+                        htr_uid=htr_uid,
+                        nc_block_storage=nc_block_storage,
+                    )
+
+        # Mutual-exclusion invariants on the excess blinding factor:
+        #   1) excess and shielded outputs cannot coexist.
+        #   2) a tx with shielded inputs and no shielded outputs must carry excess
+        #      (otherwise sum(r_in)*G has no counterpart and the equation cannot hold).
+        #   3) excess is only meaningful for txs with shielded inputs.
+        #
+        # Invariant (1) is keyed on ShieldedOutputsHeader *presence*, not on
+        # whether the header happens to carry a non-empty commitment list, so
+        # a malformed empty-list header can't evade the check.
+        has_shielded_outputs_ = tx.has_shielded_outputs()
+        has_shielded_inputs_ = bool(shielded_inputs)
+        excess_bf = tx.excess_blinding_factor
+        has_excess = excess_bf is not None
+        if has_shielded_outputs_ and has_excess:
+            raise ShieldedBalanceMismatchError(
+                'a shielded tx cannot carry both shielded outputs and an unshield balance header'
+            )
+        if has_shielded_inputs_ and not has_shielded_outputs_ and not has_excess:
+            raise ShieldedBalanceMismatchError(
+                'a full-unshield tx (shielded inputs, no shielded outputs) must carry an '
+                'unshield balance header'
+            )
+        if has_excess and not has_shielded_inputs_:
+            raise ShieldedBalanceMismatchError(
+                'unshield balance header requires at least one shielded input'
+            )
+
+        try:
+            if not verify_balance(
+                transparent_inputs,
+                shielded_inputs,
+                transparent_outputs,
+                shielded_outputs,
+                excess_bf,
+            ):
+                raise ShieldedBalanceMismatchError(
+                    'shielded balance equation does not hold'
+                )
+        except ValueError as e:
+            raise ShieldedBalanceMismatchError(f'balance verification error: {e}') from e
+
+    def _fold_mint_melt_entry(
+        self,
+        tx: Transaction,
+        entry: 'MintMeltEntry',
+        *,
+        is_mint: bool,
+        transparent_inputs: list[tuple[int, bytes]],
+        transparent_outputs: list[tuple[int, bytes]],
+        htr_uid: bytes,
+        nc_block_storage: 'NCBlockStorage | None',
+    ) -> None:
+        """Fold one MintHeader/MeltHeader entry into the augmented balance equation.
+
+        - The primary ``(amount, token_uid)`` term lands on the input side for
+          mint and on the output side for melt.
+        - DEPOSIT-version tokens add a 1% HTR offset: deposit on the output
+          side for mint (paid by the user from HTR inputs), withdraw on the
+          input side for melt (returned to the user).
+        - FEE-version tokens add ``FEE_PER_OUTPUT`` HTR on the output side for
+          BOTH mint and melt — the per-entry fee is always paid by the user.
+        """
+        token_uid = self._normalize_token_uid(tx.get_token_uid(entry.token_index))
+        primary_side = transparent_inputs if is_mint else transparent_outputs
+        primary_side.append((entry.amount, token_uid))
+        version = self._resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
+        if version == TokenVersion.DEPOSIT:
+            if is_mint:
+                htr_amount = get_deposit_token_deposit_amount(self._settings, entry.amount)
+                deposit_side = transparent_outputs
+            else:
+                htr_amount = get_deposit_token_withdraw_amount(self._settings, entry.amount)
+                deposit_side = transparent_inputs
+            if htr_amount > 0:
+                deposit_side.append((htr_amount, htr_uid))
+        elif version == TokenVersion.FEE:
+            # Match transparent semantics: each declared mint/melt action pays
+            # one FEE_PER_OUTPUT, regardless of how many shielded recipients
+            # the entry's amount is split across. FullShieldedOutput hides the
+            # asset, so a per-recipient charge would either leak the asset or
+            # require an asset-blind shielded_fee bump — keeping the charge on
+            # the header entry preserves both the FEE-token-specific knob and
+            # the privacy of the recipient set.
+            transparent_outputs.append((self._settings.FEE_PER_OUTPUT, htr_uid))
+
+    def _resolve_token_version_for_mint_melt(
+        self,
+        tx: Transaction,
+        token_uid: bytes,
+        nc_block_storage: 'NCBlockStorage | None',
+    ) -> TokenVersion:
+        """Thin wrapper around the shared ``resolve_token_version_for_mint_melt``.
+
+        Kept as an instance method so existing tests that monkeypatch this on
+        the verifier class keep working. The shared helper lives in
+        ``token_info`` so the tokens index can call the same logic without
+        depending on the verifier.
+        """
+        from hathor.transaction.token_info import resolve_token_version_for_mint_melt
+        return resolve_token_version_for_mint_melt(tx, token_uid, nc_block_storage)
+
+    def verify_mint_melt_authority_inputs(
+        self,
+        tx: Transaction,
+        *,
+        spent_txs: dict[bytes, BaseTransaction] | None = None,
+    ) -> None:
+        """Rule M2: every MintHeader/MeltHeader entry needs the matching authority input.
+
+        For each (token_index, amount) in MintHeader, the tx MUST consume at
+        least one mint authority input for tx.tokens[token_index - 1]. Symmetric
+        for MeltHeader. Authority inputs/outputs remain transparent (parent
+        Rule 7), so this check walks `tx.inputs` and inspects each spent
+        transparent output.
+
+        TokenCreationTransaction is exempt for token_index=1 (the new token):
+        the TCT itself grants both authorities to the issuer, so the MintHeader
+        entry for the new token does not require a pre-existing authority input.
+        """
+        if not tx.has_mint_header() and not tx.has_melt_header():
+            return
+
+        assert tx.storage is not None
+
+        # Collect authority sets per token from transparent inputs.
+        mint_authorities: set[bytes] = set()
+        melt_authorities: set[bytes] = set()
+        for tx_input in tx.inputs:
+            spent_tx = spent_txs[tx_input.tx_id] if spent_txs else tx.storage.get_transaction(tx_input.tx_id)
+            spent_index = tx_input.index
+            if spent_index >= len(spent_tx.outputs):
+                # Shielded inputs cannot be authority outputs (parent Rule 7).
+                continue
+            spent_output = spent_tx.outputs[spent_index]
+            if not spent_output.is_token_authority():
+                continue
+            token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
+            if spent_output.can_mint_token():
+                mint_authorities.add(token_uid)
+            if spent_output.can_melt_token():
+                melt_authorities.add(token_uid)
+
+        is_tct = isinstance(tx, TokenCreationTransaction)
+
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                if is_tct and entry.token_index == 1:
+                    # The new token's authority is granted by the TCT itself.
+                    continue
+                if token_uid not in mint_authorities:
+                    raise ForbiddenMint(entry.amount, token_uid)
+
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                token_uid = tx.get_token_uid(entry.token_index)
+                if is_tct and entry.token_index == 1:
+                    continue
+                if token_uid not in melt_authorities:
+                    raise ForbiddenMelt.from_token(entry.amount, token_uid)
+
+    def verify_authority_restriction(self, tx: Transaction) -> None:
+        """Shielded outputs cannot be authority (mint/melt) outputs."""
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+        for i, output in enumerate(tx.shielded_outputs):
+            if isinstance(output, AmountShieldedOutput):
+                from hathor.transaction import TxOutput
+                if output.token_data & TxOutput.TOKEN_AUTHORITY_MASK:
+                    raise ShieldedAuthorityError(
+                        f'shielded output {i}: authority outputs cannot be shielded'
+                    )
+            elif isinstance(output, FullShieldedOutput):
+                pass  # FullShieldedOutput has no token_data field, so no authority risk
+            else:
+                raise InvalidShieldedOutputError(f'shielded output {i}: unknown output type')
+
+    def verify_trivial_commitment_protection(self, tx: Transaction) -> None:
+        """Without storage, conservatively require >= 2 shielded outputs always."""
+        if not tx.shielded_outputs:
+            return
+        if len(tx.shielded_outputs) < 2:
+            raise TrivialCommitmentError(
+                'at least 2 shielded outputs are required '
+                f'to prevent trivial commitment matching (got {len(tx.shielded_outputs)})'
+            )

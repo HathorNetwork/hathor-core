@@ -461,10 +461,8 @@ class ConsensusAlgorithm:
                     # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
                     pass
                 case Feature.SHIELDED_TRANSACTIONS:
-                    # Shielded verification — including the reorg activation rule — lands
-                    # in PR 5. The feature ships gated OFF, so this case is unreachable
-                    # today; raise loudly if it is ever hit before PR 5 wires the real rule.
-                    raise NotImplementedError('shielded transaction activation rule not implemented yet')
+                    if not self._shielded_activation_rule(tx, is_active):
+                        return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.FAILED_FEE_TOKENS
@@ -513,6 +511,26 @@ class ConsensusAlgorithm:
             return False
 
         if tx.has_fees():
+            return False
+
+        return True
+
+    def _shielded_activation_rule(self, tx: Transaction, is_active: bool) -> bool:
+        """Check whether a tx became invalid because the reorg changed the shielded feature activation state.
+
+        When the feature deactivates, any tx carrying a header gated by
+        shielded transactions (ShieldedOutputsHeader, UnshieldBalanceHeader,
+        MintHeader, MeltHeader) is now invalid.
+        """
+        if is_active:
+            return True
+
+        if (
+            tx.has_shielded_outputs()
+            or tx.has_unshield_balance_header()
+            or tx.has_mint_header()
+            or tx.has_melt_header()
+        ):
             return False
 
         return True

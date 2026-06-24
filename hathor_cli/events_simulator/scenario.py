@@ -286,7 +286,6 @@ def simulate_custom_script(simulator: 'Simulator', manager: 'HathorManager') -> 
 def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.simulator.utils import create_dag_builder
     from hathor.nanocontracts import Blueprint, NCFail, public
-    from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.types import ContractId
 
@@ -357,7 +356,6 @@ def simulate_nc_events(simulator: 'Simulator', manager: 'HathorManager') -> Opti
 def simulate_nc_events_reorg(simulator: 'Simulator', manager: 'HathorManager') -> Optional['DAGArtifacts']:
     from hathor.simulator.utils import create_dag_builder
     from hathor.nanocontracts import Blueprint, public
-    from hathor.nanocontracts.catalog import NCBlueprintCatalog
     from hathor.nanocontracts.context import Context
 
     class TestEventsBlueprint1(Blueprint):

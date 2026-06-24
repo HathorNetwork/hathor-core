@@ -15,13 +15,14 @@ RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
 ENV PATH="/root/.cargo/bin:${PATH}"
 # install all deps in a virtualenv so we can just copy it over to the final image
-RUN pip --no-input --no-cache-dir install --upgrade pip wheel poetry
+RUN pip --no-input --no-cache-dir install --upgrade pip wheel poetry maturin
 ENV POETRY_VIRTUALENVS_IN_PROJECT=true
 WORKDIR /app/
 COPY pyproject.toml poetry.lock  ./
 COPY hathorlib ./hathorlib
 COPY htr-rs ./htr-rs
 RUN poetry install -n -E sentry --no-root --only=main
+ENV VIRTUAL_ENV=/app/.venv
 COPY hathor ./hathor
 COPY hathor_cli ./hathor_cli
 COPY README.md ./

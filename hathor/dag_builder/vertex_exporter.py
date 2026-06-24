@@ -18,6 +18,7 @@ from collections import defaultdict
 from types import ModuleType
 from typing import Iterator, cast
 
+from structlog import get_logger
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
@@ -49,6 +50,8 @@ from hathorlib.token_amount import UnsignedAmount
 
 _TEMPLATE_PATTERN = re.compile(r'`(\w+)`')
 
+logger = get_logger()
+
 
 class VertexExporter:
     """Transform a complete DAG into vertices.
@@ -71,6 +74,7 @@ class VertexExporter:
         self._vertice_per_id: dict[bytes, BaseTransaction] = {}
         self._block_height: dict[bytes, int] = {}
 
+        self.log = logger.new()
         self._settings = settings
         self._daa_factory = daa_factory
         self._wallet_factory = wallet_factory
@@ -82,6 +86,11 @@ class VertexExporter:
         self._wallets['main'] = self._wallet_factory()
 
         self._next_nc_seqnum: defaultdict[bytes, int] = defaultdict(int)
+
+        # Track blinding factors of shielded outputs so later txs spending them
+        # can compute the excess scalar required by UnshieldBalanceHeader on
+        # full-unshield txs. Keyed by (node_name, dsl_output_index) → 32-byte vbf.
+        self._shielded_blinding_factors: dict[tuple[str, int], bytes] = {}
 
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
@@ -143,13 +152,18 @@ class VertexExporter:
         *,
         token_creation: bool = False
     ) -> tuple[list[bytes], list[TxOutput]]:
-        """Create TxOutput objects for a node."""
+        """Create TxOutput objects for a node. Shielded outputs are skipped here."""
         tokens: list[bytes] = []
         outputs: list[TxOutput] = []
 
         for txout in node.outputs:
             assert txout is not None
             amount, token_name, attrs = txout
+
+            # Skip shielded outputs — they are handled by add_shielded_outputs_header_if_needed
+            if attrs.get('shielded') or attrs.get('full-shielded'):
+                continue
+
             if token_name == 'HTR':
                 index = 0
             elif token_creation:
@@ -215,7 +229,7 @@ class VertexExporter:
         data_to_sign = vertex.get_sighash_all()
         for txin in vertex.inputs:
             pi = self._vertice_per_id[txin.tx_id]
-            txout = pi.outputs[txin.index]
+            txout = pi.resolve_spent_output(txin.index)
             p2pkh = P2PKH.parse_script(txout.script)
             assert p2pkh is not None
 
@@ -337,6 +351,9 @@ class VertexExporter:
         """Add the configured headers."""
         self.add_nano_header_if_needed(node, vertex)
         self.add_fee_header_if_needed(node, vertex)
+        self.add_shielded_outputs_header_if_needed(node, vertex)
+        self._add_or_augment_shielded_fee(node, vertex)
+        self.add_unshield_balance_header_if_needed(node, vertex)
 
     def add_nano_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         if 'nc_id' not in node.attrs:
@@ -462,6 +479,262 @@ class VertexExporter:
             fees=entries,
         )
         vertex.headers.append(fee_header)
+
+    def _add_or_augment_shielded_fee(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Add or augment a FeeHeader with the shielded output fee."""
+        if not isinstance(vertex, Transaction):
+            return
+
+        from hathor.verification.transaction_verifier import TransactionVerifier
+        shielded_fee = TransactionVerifier.calculate_shielded_fee(self._settings, vertex)
+        if shielded_fee == 0:
+            return
+
+        # Look for an existing FeeHeader
+        existing_fee_header: FeeHeader | None = None
+        for header in vertex.headers:
+            if isinstance(header, FeeHeader):
+                existing_fee_header = header
+                break
+
+        if existing_fee_header is not None:
+            # Augment the existing FeeHeader: find HTR entry and add shielded fee
+            new_fees: list[FeeHeaderEntry] = []
+            found_htr = False
+            for entry in existing_fee_header.fees:
+                if entry.token_index == 0 and not found_htr:
+                    # Augment the HTR fee entry
+                    new_fees.append(FeeHeaderEntry(token_index=0, amount=entry.amount + shielded_fee))
+                    found_htr = True
+                else:
+                    new_fees.append(entry)
+            if not found_htr:
+                new_fees.append(FeeHeaderEntry(token_index=0, amount=shielded_fee))
+            existing_fee_header.fees = new_fees
+        else:
+            # Create a new FeeHeader with just the shielded fee
+            fee_header = FeeHeader(
+                settings=vertex._settings,
+                tx=vertex,
+                fees=[FeeHeaderEntry(token_index=0, amount=shielded_fee)],
+            )
+            vertex.headers.append(fee_header)
+
+    def add_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Collect outputs with [shielded] or [full-shielded] attrs into a ShieldedOutputsHeader."""
+        import os
+
+        from hathor.transaction.headers import ShieldedOutputsHeader
+        from hathorlib.crypto.shielded import (
+            create_asset_commitment,
+            create_commitment,
+            create_range_proof,
+            create_surjection_proof,
+            derive_asset_tag,
+            derive_tag,
+        )
+        from hathorlib.crypto.shielded.ecdh import (
+            derive_ecdh_shared_secret,
+            derive_rewind_nonce,
+            generate_ephemeral_keypair,
+        )
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput, ShieldedOutput
+
+        shielded_outputs: list[ShieldedOutput] = []
+
+        for dsl_index, txout in enumerate(node.outputs):
+            if txout is None:
+                continue
+            amount, token_name, attrs = txout
+
+            if not attrs.get('shielded') and not attrs.get('full-shielded'):
+                continue
+
+            assert isinstance(vertex, Transaction)
+
+            token_uid = self._settings.HATHOR_TOKEN_UID if token_name == 'HTR' else self._get_token_id(token_name)
+            # Normalize token UID to 32 bytes for the crypto library
+            if len(token_uid) < 32:
+                token_uid = token_uid.ljust(32, b'\x00')
+            script = self.get_next_p2pkh_script()
+            blinding = os.urandom(32)
+            # Record the value blinding factor keyed by (node_name, DSL output index)
+            # so a later unshielding tx can compute the excess scalar.
+            self._shielded_blinding_factors[(node.name, dsl_index)] = blinding
+
+            # Generate ephemeral keypair for ECDH-based recovery
+            ephemeral_privkey, ephemeral_pubkey = generate_ephemeral_keypair()
+
+            # Get recipient's public key from the script (P2PKH)
+            # In the DAG builder, we own the recipient wallet, so we can get the pubkey
+            recipient_pubkey = self._get_recipient_pubkey_from_script(script)
+            if recipient_pubkey is not None:
+                shared_secret = derive_ecdh_shared_secret(ephemeral_privkey, recipient_pubkey)
+                nonce = derive_rewind_nonce(shared_secret)
+            else:
+                nonce = None
+                ephemeral_pubkey = b''  # No ECDH possible without recipient pubkey
+
+            if attrs.get('full-shielded'):
+                # FullShieldedOutput: both amount and token hidden
+                raw_tag = derive_tag(token_uid)
+                asset_blinding = os.urandom(32)
+                asset_comm = create_asset_commitment(raw_tag, asset_blinding)
+                commitment = create_commitment(amount, blinding, asset_comm)
+
+                # Embed token_uid(32B) + asset_blinding(32B) in range proof message
+                message = token_uid + asset_blinding
+                range_proof = create_range_proof(
+                    amount, blinding, commitment, asset_comm,
+                    message=message, nonce=nonce,
+                )
+
+                # Build domain for surjection proof from inputs
+                domain: list[tuple[bytes, bytes, bytes]] = []
+                # For DAG builder, create a trivial surjection (input is same token, zero blinding)
+                input_asset_blinding = bytes(32)  # zero blinding = unblinded
+                input_gen = derive_asset_tag(token_uid)
+                domain.append((input_gen, raw_tag, input_asset_blinding))
+
+                surjection_proof = create_surjection_proof(raw_tag, asset_blinding, domain)
+
+                output: ShieldedOutput = FullShieldedOutput(
+                    commitment=commitment,
+                    range_proof=range_proof,
+                    script=script,
+                    asset_commitment=asset_comm,
+                    surjection_proof=surjection_proof,
+                    ephemeral_pubkey=ephemeral_pubkey,
+                )
+            else:
+                # AmountShieldedOutput: amount hidden, token visible
+                asset_tag = derive_asset_tag(token_uid)
+                commitment = create_commitment(amount, blinding, asset_tag)
+                range_proof = create_range_proof(
+                    amount, blinding, commitment, asset_tag,
+                    nonce=nonce,
+                )
+
+                # Resolve token_data index
+                if token_name == 'HTR':
+                    token_data = 0
+                else:
+                    token_id = self._get_token_id(token_name)
+                    if token_id in vertex.tokens:
+                        token_data = 1 + vertex.tokens.index(token_id)
+                    else:
+                        vertex.tokens.append(token_id)
+                        token_data = len(vertex.tokens)
+
+                output = AmountShieldedOutput(
+                    commitment=commitment,
+                    range_proof=range_proof,
+                    script=script,
+                    token_data=token_data,
+                    ephemeral_pubkey=ephemeral_pubkey,
+                )
+
+            shielded_outputs.append(output)
+
+        if not shielded_outputs:
+            return
+
+        assert isinstance(vertex, Transaction)
+        header = ShieldedOutputsHeader(shielded_outputs=shielded_outputs)
+        vertex.headers.append(header)
+
+    def add_unshield_balance_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Attach an UnshieldBalanceHeader when this is a full unshield.
+
+        A full unshield is a tx with at least one shielded input and no
+        shielded outputs. The scalar we compute is
+        `excess = sum(r_in) − sum(r_out) = sum(r_in)` (transparent outputs
+        have blinding factor 0), so the verifier can synthesise the
+        missing `excess*G` on the output side of the balance equation.
+        """
+        from hathor.transaction.headers import UnshieldBalanceHeader
+        from hathorlib.crypto.shielded import compute_balancing_blinding_factor
+
+        if not isinstance(vertex, Transaction):
+            return
+
+        # Gather shielded input blinding factors.
+        input_entries: list[tuple[int, bytes, bytes]] = []
+        for tx_name, out_idx in node.inputs:
+            bf = self._shielded_blinding_factors.get((tx_name, out_idx))
+            if bf is None:
+                continue  # transparent input (vbf = 0, no contribution)
+            spent_node = self._get_node(tx_name)
+            spent_output = spent_node.outputs[out_idx]
+            assert spent_output is not None
+            input_entries.append((spent_output.amount, bf, bytes(32)))
+
+        if not input_entries:
+            # No shielded inputs — no excess needed. Verifier invariant (3)
+            # would reject a stray excess here, so we simply don't attach one.
+            return
+
+        # If there are shielded outputs, the ShieldedOutputsHeader path
+        # balances blinding factors through compute_balancing_blinding_factor
+        # on the last shielded output — no excess is needed (and attaching
+        # both headers would violate the mutual-exclusion invariant).
+        has_shielded_output = any(
+            txout is not None and (txout.attrs.get('shielded') or txout.attrs.get('full-shielded'))
+            for txout in node.outputs
+        )
+        if has_shielded_output:
+            return
+
+        # Build the "other outputs" set for the balancing computation. All
+        # outputs (and any transparent fees) are unblinded, so only the
+        # structure matters; exact values drop out when gbf = 0.
+        other_outputs: list[tuple[int, bytes, bytes]] = []
+        for txout in node.outputs:
+            if txout is None:
+                continue
+            other_outputs.append((txout.amount, bytes(32), bytes(32)))
+        fees = node.get_attr_list(FEE_KEY, default=[])
+        for _token_name, fee_amount in fees:
+            assert isinstance(fee_amount, int)
+            other_outputs.append((fee_amount, bytes(32), bytes(32)))
+
+        excess = compute_balancing_blinding_factor(
+            0,
+            bytes(32),
+            input_entries,
+            other_outputs,
+        )
+
+        header = UnshieldBalanceHeader(excess_blinding_factor=excess)
+        vertex.headers.append(header)
+
+    def _get_recipient_pubkey_from_script(self, script: bytes) -> bytes | None:
+        """Extract the recipient's compressed public key from a P2PKH script.
+
+        Looks up the address in all wallets to find the corresponding public key.
+        Returns None if the public key cannot be determined.
+        """
+        from hathor.transaction.scripts.p2pkh import P2PKH as P2PKHScript
+
+        p2pkh = P2PKHScript.parse_script(script)
+        if p2pkh is None:
+            return None
+
+        for wallet_name, wallet in self._wallets.items():
+            if p2pkh.address in wallet.keys:
+                try:
+                    from hathorlib.crypto.shielded.ecdh import extract_key_bytes
+                    private_key = wallet.get_private_key(p2pkh.address)
+                    _, pubkey_bytes = extract_key_bytes(private_key)
+                    return pubkey_bytes
+                except TypeError:
+                    self.log.warning(
+                        'failed to extract pubkey from wallet key',
+                        wallet=wallet_name,
+                        address=p2pkh.address,
+                    )
+                    continue
+        return None
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""

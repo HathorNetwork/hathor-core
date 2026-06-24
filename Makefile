@@ -59,8 +59,17 @@ tests-ci:
 tests-custom:
 	bash ./extras/custom_tests.sh
 
+.PHONY: build-shielded-crypto
+build-shielded-crypto:
+	poetry run maturin develop --release --manifest-path htr-rs/crates/htr-lib-py/Cargo.toml
+
+.PHONY: tests-shielded
+tests-shielded:
+	cd htr-rs && cargo nextest run --workspace
+	pytest hathor_tests/crypto/test_shielded_bindings.py -v
+
 .PHONY: tests
-tests: tests-cli tests-lib tests-genesis tests-custom tests-ci
+tests: tests-cli tests-lib tests-genesis tests-custom tests-ci tests-shielded
 
 .PHONY: tests-full
 tests-full:

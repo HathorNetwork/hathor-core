@@ -267,7 +267,14 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         return False
 
     def get_maximum_number_of_headers(self) -> int:
-        """Return the maximum number of headers for this vertex."""
+        """Return the maximum number of headers for this vertex.
+
+        Bumped to 5 when shielded transactions are enabled so a single tx can
+        carry FeeHeader + (ShieldedOutputs|UnshieldBalance) + MintHeader +
+        MeltHeader, with one slot of margin for NanoHeader coexistence.
+        """
+        if self._settings.ENABLE_SHIELDED_TRANSACTIONS:
+            return 5
         return 3
 
     @classmethod
@@ -333,10 +340,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return the list of shielded outputs. Empty for non-Transaction vertices."""
         return []
 
-    def is_shielded_output(self, index: int) -> bool:
-        """Return True if `index` refers to a shielded output (i.e. index >= len(self.outputs))."""
-        return index >= len(self.outputs) and index < len(self.outputs) + len(self.shielded_outputs)
-
     def resolve_spent_output(self, index: int) -> 'TxOutput | ShieldedOutput':
         """Resolve an output by index, checking both transparent and shielded outputs.
 
@@ -350,6 +353,15 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return shielded[shielded_idx]
         raise IndexError(f'output index {index} out of range (transparent={len(self.outputs)}, '
                          f'shielded={len(shielded)})')
+
+    def is_shielded_output(self, index: int) -> bool:
+        """Return True if `index` refers to a shielded output (i.e. index >= len(self.outputs))."""
+        return index >= len(self.outputs) and index < len(self.outputs) + len(self.shielded_outputs)
+
+    @property
+    def sum_outputs(self) -> int:
+        """Sum of the value of the outputs"""
+        return sum(output.value for output in self.outputs if not output.is_token_authority())
 
     def get_target(self, override_weight: Optional[float] = None) -> int:
         """Target to be achieved in the mining process"""
@@ -487,6 +499,11 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for txout in self.outputs:
             add_address_from_output(txout)
+
+        for shielded_out in self.shielded_outputs:
+            script_type_out = parse_address_script(shielded_out.script)
+            if script_type_out:
+                addresses.add(script_type_out.address)
 
         return addresses
 
@@ -789,6 +806,13 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         for output in self.outputs:
             data['outputs'].append(output.to_json(decode_script=decode_script))
 
+        shielded = self.shielded_outputs
+        if shielded:
+            data['shielded_outputs'] = [
+                _shielded_output_to_json(s_out, decode_script=decode_script)
+                for s_out in shielded
+            ]
+
         if include_metadata:
             data['metadata'] = self.get_metadata().to_json()
 
@@ -829,6 +853,8 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert isinstance(ret['inputs'], list)
         assert isinstance(ret['outputs'], list)
 
+        from hathorlib.transaction.shielded_tx_output import ShieldedOutput
+
         for index, tx_in in enumerate(self.inputs):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
             # Shielded inputs need a different serialization shape than transparent ones,
@@ -854,6 +880,16 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             output = serialize_output(self, tx_out)
             output['spent_by'] = spent_by.hex() if spent_by else None
             ret['outputs'].append(output)
+
+        for s_index, shielded_out in enumerate(self.shielded_outputs):
+            output_index = len(self.outputs) + s_index
+            spent_by = meta.get_output_spent_by(output_index)
+            s_data = _shielded_output_to_json(shielded_out, decode_script=True)
+            s_data['spent_by'] = spent_by.hex() if spent_by else None
+            from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput
+            if isinstance(shielded_out, AmountShieldedOutput):
+                s_data['token'] = self.get_token_uid(shielded_out.token_data & TxOutput.TOKEN_INDEX_MASK).hex()
+            ret['outputs'].append(s_data)
 
         return ret
 

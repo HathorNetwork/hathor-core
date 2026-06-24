@@ -1,3 +1,10 @@
+from types import ModuleType
+
+# Native submodule exposing the confidential-transaction crypto (Pedersen commitments,
+# range proofs, surjection proofs, homomorphic balance and ECDH). A precise stub would
+# require a maturin mixed-project layout, so it is typed as an opaque module here.
+shielded: ModuleType
+
 def sum_as_string(a: int, b: int) -> str:
     ...
 

@@ -13,5 +13,17 @@ extern crate num_derive;
 mod signed_amount;
 mod unsigned_amount;
 
+// Confidential-transactions crypto (Pedersen commitments, range proofs, surjection
+// proofs, homomorphic balance, ECDH). Exposed to other languages by the binding crates.
+pub mod balance;
+pub mod ecdh;
+pub mod error;
+pub mod generators;
+pub mod pedersen;
+pub mod rangeproof;
+pub mod surjection;
+pub mod types;
+
+pub use error::{HathorCtError, Result};
 pub use signed_amount::SignedAmount;
 pub use unsigned_amount::{TokenAmountVersion, UnsignedAmount};

@@ -34,3 +34,12 @@ keys.json
 # Claude Code personal overrides
 CLAUDE.local.md
 .claude/settings.local.json
+
+# Local scratch / working notes (not for commit)
+/CLAUDE.md
+/_audit/
+/_audit2/
+/_audit3/
+/_designs
+/dump_vertex.py
+/tx1.hex

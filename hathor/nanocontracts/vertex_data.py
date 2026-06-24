@@ -40,7 +40,11 @@ if TYPE_CHECKING:
 
 
 def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
-    """Return the output that txin points to."""
+    """Return the output that txin points to.
+
+    Returns None for shielded outputs (they don't have TxOutput fields)
+    or when storage is unavailable.
+    """
     from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 
     if vertex.storage is None:
@@ -57,10 +61,10 @@ def _get_txin_output(vertex: BaseTransaction, txin: TxInput) -> TxOutput | None:
     except IndexError:
         return None
 
-    from hathor.transaction import TxOutput as _TxOutput
-
     # Only return TxOutput; shielded outputs lack value/token_data for TxOutputData
-    assert isinstance(resolved, _TxOutput), "Output must be TxOutput"
+    from hathor.transaction import TxOutput as _TxOutput
+    if not isinstance(resolved, _TxOutput):
+        return None
 
     return resolved
 

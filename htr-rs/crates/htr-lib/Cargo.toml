@@ -4,9 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+hex = "0.4"
 num-bigint = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
+rand = "0.8"
+secp256k1-zkp = { version = "0.11", features = ["global-context", "rand-std", "std"] }
+sha2 = "0.10"
+thiserror = "1"
+
+[dev-dependencies]
+proptest = "1"
 
 [lints]
 workspace = true

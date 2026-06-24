@@ -1,0 +1,1068 @@
+# Copyright 2026 Hathor Labs
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Tests for shielded mint/melt headers (RFC 0000-shielded-outputs-mint-melt)."""
+
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
+
+import pytest
+
+from hathor.conf.settings import HathorSettings
+from hathor.transaction import Transaction
+
+if TYPE_CHECKING:
+    from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+
+from hathor.transaction.exceptions import (
+    HeaderNotSupported,
+)
+from hathor.transaction.headers import MeltHeader, MintHeader, MintMeltEntry
+from hathor.transaction.token_info import TokenVersion
+from hathor.verification.transaction_verifier import TransactionVerifier
+
+
+def _make_settings() -> HathorSettings:
+    settings = MagicMock(spec=HathorSettings)
+    settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT = 1
+    settings.FEE_PER_FULL_SHIELDED_OUTPUT = 2
+    settings.FEE_PER_OUTPUT = 100
+    settings.HATHOR_TOKEN_UID = b'\x00'
+    # Deposit is computed with integer numerator/denominator math (1% = 10^7 / 10^9).
+    settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR = 10 ** 7
+    settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR = 10 ** 9
+    settings.SKIP_VERIFICATION = set()
+    settings.CONSENSUS_ALGORITHM = MagicMock()
+    settings.CONSENSUS_ALGORITHM.is_pow.return_value = True
+    return settings
+
+
+def _make_verifier() -> TransactionVerifier:
+    return TransactionVerifier(settings=_make_settings(), daa_factory=MagicMock(), feature_service=MagicMock())
+
+
+def _make_mock_tx(
+    *,
+    tokens: list[bytes] | None = None,
+    mint_entries: list[MintMeltEntry] | None = None,
+    melt_entries: list[MintMeltEntry] | None = None,
+    has_shielded_outputs: bool = False,
+    has_unshield_balance_header: bool = False,
+    is_nano_contract: bool = False,
+    nano_action_token_uids: list[bytes] | None = None,
+) -> MagicMock:
+    """Build a Transaction-shaped MagicMock with the requested mint/melt headers."""
+    tx = MagicMock(spec=Transaction)
+    tx.tokens = tokens or []
+    tx.has_shielded_outputs = MagicMock(return_value=has_shielded_outputs)
+    tx.has_unshield_balance_header = MagicMock(return_value=has_unshield_balance_header)
+    tx.is_nano_contract = MagicMock(return_value=is_nano_contract)
+    tx.has_mint_header = MagicMock(return_value=mint_entries is not None)
+    tx.has_melt_header = MagicMock(return_value=melt_entries is not None)
+    tx.inputs = []
+    tx.headers = []
+
+    if mint_entries is not None:
+        mint_header = MagicMock(spec=MintHeader)
+        mint_header.entries = mint_entries
+        tx.get_mint_header = MagicMock(return_value=mint_header)
+    if melt_entries is not None:
+        melt_header = MagicMock(spec=MeltHeader)
+        melt_header.entries = melt_entries
+        tx.get_melt_header = MagicMock(return_value=melt_header)
+
+    def _get_token_uid(index: int) -> bytes:
+        if index == 0:
+            return b'\x00'
+        return tx.tokens[index - 1]
+    tx.get_token_uid = MagicMock(side_effect=_get_token_uid)
+
+    if is_nano_contract:
+        nano_header = MagicMock()
+        nano_actions = []
+        for token_uid in (nano_action_token_uids or []):
+            action = MagicMock()
+            action.token_uid = token_uid
+            nano_actions.append(action)
+        nano_header.get_actions = MagicMock(return_value=nano_actions)
+        tx.get_nano_header = MagicMock(return_value=nano_header)
+    return tx
+
+
+# ---------------------------------------------------------------------------
+# Wire format (header round-trip + per-entry shape constraints)
+# ---------------------------------------------------------------------------
+
+
+class TestFeatureGating:
+    def test_basic_verification_rejects_when_shielded_off(self) -> None:
+        """MintHeader/MeltHeader are gated by ENABLE_SHIELDED_TRANSACTIONS.
+
+        When the feature is inactive, verify_basic short-circuits with
+        HeaderNotSupported before any downstream verification runs.
+        """
+        from hathor.verification.verification_service import VerificationService
+        settings = _make_settings()
+        verifiers = MagicMock()
+        service = VerificationService(settings=settings, verifiers=verifiers)
+
+        tx = _make_mock_tx(
+            tokens=[b'\x11' * 32],
+            mint_entries=[MintMeltEntry(token_index=1, amount=100)],
+        )
+        tx.is_genesis = False
+        tx.hash_hex = 'a' * 64
+        tx.version = MagicMock()
+        tx.has_shielded_outputs = MagicMock(return_value=False)
+
+        params = MagicMock()
+        params.features = MagicMock()
+        params.features.shielded_transactions = False
+
+        with pytest.raises(HeaderNotSupported, match='shielded transactions are not enabled'):
+            from hathor.transaction import TxVersion
+            tx.version = TxVersion.REGULAR_TRANSACTION
+            tx.signal_bits = 0
+            service.verify_basic(tx, params)
+
+
+# ---------------------------------------------------------------------------
+# Indexer (RFC §4.8): per-token totals reflect MintHeader/MeltHeader scalars
+# ---------------------------------------------------------------------------
+
+
+class TestIndexerSupplyUpdate:
+    def test_add_tx_applies_mint_header_to_total(self) -> None:
+        # Minimal smoke test: walks the same code path the rocksdb tokens index
+        # uses (Transaction.has_mint_header + iterate entries + add_to_total).
+        token_uid = b'\x11' * 32
+        tx = _make_mock_tx(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=12345)],
+            has_shielded_outputs=True,
+        )
+        deltas: list[tuple[bytes, int]] = []
+        if tx.has_mint_header():
+            for entry in tx.get_mint_header().entries:
+                deltas.append((tx.get_token_uid(entry.token_index), entry.amount))
+        assert deltas == [(token_uid, 12345)]
+
+    def test_add_tx_applies_melt_header_as_negative_delta(self) -> None:
+        token_uid = b'\x22' * 32
+        tx = _make_mock_tx(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=999)],
+            has_shielded_outputs=True,
+        )
+        deltas: list[tuple[bytes, int]] = []
+        if tx.has_melt_header():
+            for entry in tx.get_melt_header().entries:
+                deltas.append((tx.get_token_uid(entry.token_index), -entry.amount))
+        assert deltas == [(token_uid, -999)]
+
+
+class TestIndexerHeaderTokenNetCancellation:
+    """RocksDBTokensIndex must cancel its per-utxo flow for tokens covered by
+    Mint/Melt headers, otherwise mixed transparent + shielded mints/melts get
+    double-counted in the per-token total.
+    """
+
+    @staticmethod
+    def _make_index() -> 'RocksDBTokensIndex':
+        from unittest.mock import MagicMock as _MM
+
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+
+        # Bypass __init__ — we only need _transparent_net_for_index_correction.
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = _MM()
+        idx._settings = _make_settings()
+        return idx
+
+    def _make_tx_with_io(
+        self,
+        *,
+        tokens: list[bytes],
+        mint_entries: list[MintMeltEntry] | None = None,
+        melt_entries: list[MintMeltEntry] | None = None,
+        transparent_inputs: list[tuple[bytes, int, bool]] | None = None,
+        transparent_outputs: list[tuple[bytes, int, bool]] | None = None,
+    ) -> MagicMock:
+        """Builds a mock tx with the requested transparent inputs/outputs.
+
+        Each (token_uid, value, is_authority) tuple becomes one tx_input/tx_output.
+        """
+        tx = _make_mock_tx(
+            tokens=tokens,
+            mint_entries=mint_entries,
+            melt_entries=melt_entries,
+            has_shielded_outputs=True,
+        )
+
+        # Build outputs.
+        outputs = []
+        for token_uid, value, is_authority in transparent_outputs or []:
+            o = MagicMock()
+            o.is_token_authority = MagicMock(return_value=is_authority)
+            o.value = value
+            o.get_token_index = MagicMock(return_value=tokens.index(token_uid) + 1)
+            outputs.append(o)
+        tx.outputs = outputs
+
+        # Build inputs + their spent_txs.
+        inputs = []
+        spent_txs: dict[bytes, MagicMock] = {}
+        for i, (token_uid, value, is_authority) in enumerate(transparent_inputs or []):
+            tx_id = bytes([i]) * 32
+            tx_input = MagicMock()
+            tx_input.tx_id = tx_id
+            tx_input.index = 0
+
+            spent_output = MagicMock()
+            spent_output.is_token_authority = MagicMock(return_value=is_authority)
+            spent_output.value = value
+            spent_output.get_token_index = MagicMock(return_value=1)
+
+            spent_tx = MagicMock()
+            spent_tx.outputs = [spent_output]
+            spent_tx.shielded_outputs = []
+            spent_tx.is_shielded_output = MagicMock(return_value=False)
+            spent_tx.get_token_uid = MagicMock(return_value=token_uid)
+
+            inputs.append(tx_input)
+            spent_txs[tx_id] = spent_tx
+        tx.inputs = inputs
+        tx.get_spent_tx = MagicMock(side_effect=lambda i: spent_txs[i.tx_id])
+        return tx
+
+    def test_pure_shielded_mint_zero_net(self) -> None:
+        """A mint with no transparent T outputs/inputs has zero per-utxo net,
+        so no cancellation is needed. The helper drops zero entries, so the
+        return value is empty.
+        """
+        idx = self._make_index()
+        token_uid = b'\x11' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=1000)],
+            transparent_inputs=[(token_uid, 0, True)],   # mint authority only
+            transparent_outputs=[(token_uid, 0, True)],  # authority refresh only
+        )
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {}
+
+    def test_mixed_mint_transparent_and_shielded_outputs(self) -> None:
+        """Mint 1000 with 600 to transparent + 400 to shielded → per-utxo net
+        is +600. The header contribution must subtract that to land on +1000.
+        """
+        idx = self._make_index()
+        token_uid = b'\x11' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=1000)],
+            transparent_inputs=[(token_uid, 0, True)],   # mint authority
+            transparent_outputs=[
+                (token_uid, 0, True),     # authority refresh
+                (token_uid, 600, False),  # transparent portion of mint
+            ],
+        )
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {token_uid: 600}
+
+    def test_mixed_melt_transparent_input(self) -> None:
+        """Melt 800 with 100 transparent T input + shielded T inputs → per-utxo
+        net is -100 for T. The melt-header reversal must subtract that signed
+        value to land on -800 net.
+        """
+        idx = self._make_index()
+        token_uid = b'\x22' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=800)],
+            transparent_inputs=[
+                (token_uid, 0, True),    # melt authority
+                (token_uid, 100, False),  # transparent portion being melted
+            ],
+            transparent_outputs=[(token_uid, 0, True)],  # authority refresh
+        )
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {token_uid: -100}
+
+    def test_skips_authority_outputs_and_shielded_inputs(self) -> None:
+        """Authority outputs/inputs and shielded inputs contribute zero."""
+        idx = self._make_index()
+        token_uid = b'\x33' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=500)],
+            transparent_inputs=[
+                (token_uid, 0, True),    # mint authority
+                (token_uid, 0, True),    # melt authority (unused, but counted as authority)
+            ],
+            transparent_outputs=[
+                (token_uid, 0, True),    # authority refresh
+            ],
+        )
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {}
+
+    def test_no_headers_no_shielded_returns_empty(self) -> None:
+        """A tx with no Mint/Melt header AND no shielded involvement needs no
+        correction — the per-utxo flow is correct as-is.
+        """
+        idx = self._make_index()
+        tx = _make_mock_tx(tokens=[b'\x11' * 32], has_shielded_outputs=False)
+        assert idx._transparent_net_for_index_correction(tx) == {}
+
+    def test_shielding_non_htr_token_cancels_per_utxo(self) -> None:
+        """Shielding a non-HTR token: 100 T transparent input → 100 T shielded
+        output (no header). Per-utxo would record −100. The helper reports
+        the −100 so add_tx can cancel it, keeping total supply stable.
+        """
+        idx = self._make_index()
+        token_uid = b'\x44' * 32
+        tx = self._make_tx_with_io(
+            tokens=[token_uid],
+            transparent_inputs=[(token_uid, 100, False)],  # transparent T being shielded
+            transparent_outputs=[],                         # all to shielded
+        )
+        # _make_tx_with_io leaves has_shielded_outputs at the default the
+        # caller set; ensure shielded involvement is detected.
+        tx.has_shielded_outputs = MagicMock(return_value=True)
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {token_uid: -100}
+
+    def test_unshielding_non_htr_token_cancels_per_utxo(self) -> None:
+        """Unshielding a non-HTR token: shielded input → 100 T transparent
+        output. has_shielded_inputs is detected via the input walk; the
+        helper reports +100 so add_tx can cancel it.
+        """
+        idx = self._make_index()
+        token_uid = b'\x55' * 32
+
+        # Build a shielded-input tx by hand: spent_tx.is_shielded_output=True
+        # for the input.
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=False)
+        tx_input = MagicMock()
+        tx_input.tx_id = b'\x55' * 32
+        tx_input.index = 0
+        spent_tx = MagicMock()
+        spent_tx.is_shielded_output = MagicMock(return_value=True)
+        tx.inputs = [tx_input]
+        tx.get_spent_tx = MagicMock(return_value=spent_tx)
+        # Transparent T output (the unshielded value).
+        out = MagicMock()
+        out.is_token_authority = MagicMock(return_value=False)
+        out.value = 100
+        out.get_token_index = MagicMock(return_value=1)
+        tx.outputs = [out]
+
+        net = idx._transparent_net_for_index_correction(tx)
+        assert net == {token_uid: 100}
+
+    def test_shielded_transfer_no_transparent_flow_returns_empty(self) -> None:
+        """A pure shielded transfer (shielded input → shielded output, both
+        of token T, no transparent flow) needs no correction — per-utxo
+        contributes 0.
+        """
+        idx = self._make_index()
+        token_uid = b'\x66' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx_input = MagicMock()
+        tx_input.tx_id = b'\x77' * 32
+        tx_input.index = 0
+        spent_tx = MagicMock()
+        spent_tx.is_shielded_output = MagicMock(return_value=True)
+        tx.inputs = [tx_input]
+        tx.get_spent_tx = MagicMock(return_value=spent_tx)
+        tx.outputs = []
+
+        # has_shielded_outputs=True, has_shielded_inputs=True. tx.tokens=[T].
+        # No transparent flow → net is 0 for T → filtered out.
+        assert idx._transparent_net_for_index_correction(tx) == {}
+
+
+class TestIndexerReorgOrderingTct:
+    """remove_tx for a shielded TokenCreationTransaction must reverse Mint/Melt
+    header deltas BEFORE destroy_token, otherwise the post-reversal
+    `add_to_total` re-creates the row with a negative total.
+    """
+
+    def test_destroy_token_runs_after_mint_header_reversal(self) -> None:
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+        from hathor.transaction import TxVersion
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = MagicMock()
+        idx._db = MagicMock()
+        idx._cf = MagicMock()
+        idx._settings = MagicMock()
+        idx._settings.HATHOR_TOKEN_UID = b'\x00'
+
+        # Track the order of destroy_token vs add_to_total calls.
+        call_log: list[str] = []
+        idx.destroy_token = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda *a, **kw: call_log.append('destroy_token')
+        )
+        idx.add_to_total = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda *a, **kw: call_log.append('add_to_total')
+        )
+        idx._add_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._remove_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._remove_transaction = MagicMock()  # type: ignore[method-assign]
+
+        # Build a TCT mock that carries a MintHeader.
+        token_uid = b'\xff' * 32
+        tct = MagicMock(spec=TokenCreationTransaction)
+        tct.hash = token_uid
+        tct.hash_hex = token_uid.hex()
+        tct.version = TxVersion.TOKEN_CREATION_TRANSACTION
+        tct.is_transaction = True
+        tct.is_nano_contract = MagicMock(return_value=False)
+        tct.has_mint_header = MagicMock(return_value=True)
+        tct.has_melt_header = MagicMock(return_value=False)
+        tct.has_shielded_outputs = MagicMock(return_value=True)
+        tct.has_unshield_balance_header = MagicMock(return_value=False)
+        tct.has_fees = MagicMock(return_value=False)
+        tct.token_version = TokenVersion.NATIVE  # don't trigger HTR burn for the new token
+        tct.static_metadata = MagicMock()
+        tct.static_metadata.closest_ancestor_block = b''
+        mint_header = MagicMock()
+        mint_header.entries = [MintMeltEntry(token_index=1, amount=1000)]
+        tct.get_mint_header = MagicMock(return_value=mint_header)
+        tct.tokens = [token_uid]
+        tct.get_token_uid = MagicMock(return_value=token_uid)
+        tct.timestamp = 0
+        tct.inputs = []
+        tct.outputs = []
+        tct.get_spent_tx = MagicMock()
+        tct.storage = MagicMock()
+
+        idx.remove_tx(tct)
+
+        # destroy_token must be the LAST call so the negative-delta add_to_total
+        # doesn't re-create an empty row after the token has been destroyed.
+        assert 'destroy_token' in call_log
+        assert call_log[-1] == 'destroy_token', (
+            f'destroy_token must run last; call order was {call_log}'
+        )
+
+
+# ---------------------------------------------------------------------------
+# Rule M4: augmented homomorphic balance equation
+# ---------------------------------------------------------------------------
+
+
+def _make_minimal_balance_tx(
+    *,
+    mint_entries: list[MintMeltEntry] | None = None,
+    melt_entries: list[MintMeltEntry] | None = None,
+) -> MagicMock:
+    """Build a tx that satisfies verify_shielded_balance's surface area without
+    real crypto: 2 mocked shielded outputs, no transparent in/out, no fees,
+    no unshield-balance header. The mutual-exclusion invariants pass because
+    has_shielded_outputs=True and excess_blinding_factor=None.
+    """
+    tx = _make_mock_tx(
+        tokens=[b'\xaa' * 32, b'\xbb' * 32],
+        mint_entries=mint_entries,
+        melt_entries=melt_entries,
+        has_shielded_outputs=True,
+    )
+    tx.outputs = []
+    out1 = MagicMock()
+    out1.commitment = b'\x01' * 33
+    out2 = MagicMock()
+    out2.commitment = b'\x02' * 33
+    tx.shielded_outputs = [out1, out2]
+    tx.has_fees = MagicMock(return_value=False)
+    tx.excess_blinding_factor = None
+    tx.storage = MagicMock()
+    tx.get_spent_tx = MagicMock()
+    return tx
+
+
+def _patch_verify_balance(monkeypatch: pytest.MonkeyPatch) -> dict:
+    """Patch hathorlib.crypto.shielded.verify_balance to capture its arguments."""
+    captured: dict = {}
+
+    def fake(
+        transparent_inputs,
+        shielded_inputs,
+        transparent_outputs,
+        shielded_outputs,
+        excess_blinding_factor,
+    ):
+        captured['ti'] = list(transparent_inputs)
+        captured['si'] = list(shielded_inputs)
+        captured['to'] = list(transparent_outputs)
+        captured['so'] = list(shielded_outputs)
+        captured['excess'] = excess_blinding_factor
+        return True
+
+    monkeypatch.setattr('hathorlib.crypto.shielded.verify_balance', fake)
+    return captured
+
+
+class TestRuleM4AugmentedBalanceEquation:
+    """Verify Mint/Melt entries land on the right side of the augmented
+    balance equation. Any sign flip or dropped term in `_fold_mint_melt_entry`
+    would change the captured args.
+    """
+
+    def test_mint_amount_lands_on_transparent_inputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.NATIVE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=12345)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (12345, token) in captured['ti']
+        # NATIVE token: no HTR deposit/withdraw term.
+        htr = b'\x00' * 32
+        assert not any(uid == htr for _, uid in captured['ti'])
+        assert not any(uid == htr for _, uid in captured['to'])
+
+    def test_melt_amount_lands_on_transparent_outputs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.NATIVE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xbb' * 32
+        tx = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=2, amount=999)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (999, token) in captured['to']
+        htr = b'\x00' * 32
+        assert not any(uid == htr for _, uid in captured['ti'])
+        assert not any(uid == htr for _, uid in captured['to'])
+
+    def test_deposit_version_mint_emits_htr_deposit_on_outputs(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.DEPOSIT,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['ti']
+        # 1% of 10_000 = 100 HTR deposit on the OUTPUTS side.
+        assert (100, htr) in captured['to']
+
+    def test_deposit_version_melt_emits_htr_withdraw_on_inputs(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.DEPOSIT,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['to']
+        # 1% of 10_000 = 100 HTR withdraw on the INPUTS side.
+        assert (100, htr) in captured['ti']
+
+    def test_fee_version_mint_charges_fee_per_output_on_outputs(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """FEE-version mint pays one FEE_PER_OUTPUT in HTR per MintHeader entry.
+
+        The charge lands on the output side so the user must fund it from HTR
+        transparent inputs. The amount is per-entry, not per shielded recipient
+        — see ``_fold_mint_melt_entry`` for the rationale.
+        """
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.FEE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['ti']
+        # FEE_PER_OUTPUT (100 in the fixture) lands on the output side.
+        assert (100, htr) in captured['to']
+        # Nothing on the input side beyond the primary FEE-token term.
+        assert not any(uid == htr for _, uid in captured['ti'])
+
+    def test_fee_version_melt_charges_fee_per_output_on_outputs(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """FEE-version melt also pays FEE_PER_OUTPUT on the output side — the
+        per-entry fee is always paid by the user, unlike DEPOSIT's withdraw.
+        """
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.FEE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        token = b'\xaa' * 32
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        verifier.verify_shielded_balance(tx)
+        assert (10_000, token) in captured['to']
+        assert (100, htr) in captured['to']
+        assert not any(uid == htr for _, uid in captured['ti'])
+
+    def test_fee_version_charges_per_entry_not_per_amount(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Two MintHeader entries on FEE tokens => two FEE_PER_OUTPUT charges
+        on the output side. The amount itself doesn't multiply the fee.
+        """
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.FEE,
+        )
+        captured = _patch_verify_balance(monkeypatch)
+        htr = b'\x00' * 32
+        tx = _make_minimal_balance_tx(
+            mint_entries=[
+                MintMeltEntry(token_index=1, amount=1),
+                MintMeltEntry(token_index=2, amount=10_000_000),
+            ],
+        )
+        verifier.verify_shielded_balance(tx)
+        # Two entries -> two FEE_PER_OUTPUT charges, regardless of the amounts.
+        htr_outputs = [(amt, uid) for amt, uid in captured['to'] if uid == htr]
+        assert htr_outputs == [(100, htr), (100, htr)]
+
+
+class TestDepositBoundaryRounding:
+    """get_deposit_token_deposit_amount uses ceil; get_deposit_token_withdraw_amount
+    uses floor. The augmented balance equation skips the HTR term when the rounded
+    amount is zero. Pin the boundaries so a rounding-direction regression
+    (e.g., floor for deposit) is caught.
+    """
+
+    @pytest.mark.parametrize('amount,expected_deposit,expected_withdraw', [
+        (1, 1, 0),
+        (50, 1, 0),
+        (99, 1, 0),
+        (100, 1, 1),
+        (101, 2, 1),
+        (150, 2, 1),
+        (10_000, 100, 100),
+    ])
+    def test_deposit_boundaries(
+        self,
+        amount: int,
+        expected_deposit: int,
+        expected_withdraw: int,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier = _make_verifier()
+        monkeypatch.setattr(
+            TransactionVerifier, '_resolve_token_version_for_mint_melt',
+            lambda self, tx, token_uid, ncs: TokenVersion.DEPOSIT,
+        )
+        htr = b'\x00' * 32
+
+        # Mint side.
+        captured_mint = _patch_verify_balance(monkeypatch)
+        tx_mint = _make_minimal_balance_tx(
+            mint_entries=[MintMeltEntry(token_index=1, amount=amount)],
+        )
+        verifier.verify_shielded_balance(tx_mint)
+        if expected_deposit > 0:
+            assert (expected_deposit, htr) in captured_mint['to']
+        else:
+            assert not any(uid == htr for _, uid in captured_mint['to'])
+
+        # Melt side.
+        captured_melt = _patch_verify_balance(monkeypatch)
+        tx_melt = _make_minimal_balance_tx(
+            melt_entries=[MintMeltEntry(token_index=1, amount=amount)],
+        )
+        verifier.verify_shielded_balance(tx_melt)
+        if expected_withdraw > 0:
+            assert (expected_withdraw, htr) in captured_melt['ti']
+        else:
+            assert not any(uid == htr for _, uid in captured_melt['ti'])
+
+
+# ---------------------------------------------------------------------------
+# _resolve_token_version_for_mint_melt — all three branches
+# ---------------------------------------------------------------------------
+
+
+class TestResolveTokenVersionForMintMelt:
+    """Returning a sentinel here would silently bypass the DEPOSIT 1% deposit
+    term in the augmented balance equation — pin every branch.
+    """
+
+    def test_tct_self_reference(self) -> None:
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        verifier = _make_verifier()
+        token_uid = b'\xff' * 32
+        tct = MagicMock(spec=TokenCreationTransaction)
+        tct.hash = token_uid
+        tct.token_version = TokenVersion.DEPOSIT
+        tct.storage = MagicMock()
+
+        version = verifier._resolve_token_version_for_mint_melt(tct, token_uid, None)
+
+        assert version == TokenVersion.DEPOSIT
+        # Storage must NOT be consulted for the TCT-self-reference branch.
+        tct.storage.get_token_creation_transaction.assert_not_called()
+
+    def test_no_nc_storage_falls_back_to_tx_storage(self) -> None:
+        verifier = _make_verifier()
+        token_uid = b'\x11' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        issuing_tct = MagicMock()
+        issuing_tct.token_version = TokenVersion.DEPOSIT
+        tx.storage.get_token_creation_transaction = MagicMock(return_value=issuing_tct)
+
+        result = verifier._resolve_token_version_for_mint_melt(tx, token_uid, None)
+        assert result == TokenVersion.DEPOSIT
+
+    def test_no_nc_storage_for_nano_issued_token_raises(self) -> None:
+        from hathor.transaction.exceptions import TokenNotFound
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        verifier = _make_verifier()
+        token_uid = b'\x22' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        tx.storage.get_token_creation_transaction = MagicMock(
+            side_effect=TransactionDoesNotExist(),
+        )
+
+        with pytest.raises(TokenNotFound, match='nc_block_storage was not provided'):
+            verifier._resolve_token_version_for_mint_melt(tx, token_uid, None)
+
+    def test_nc_storage_returns_none_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from hathor.transaction.exceptions import TokenNotFound
+        verifier = _make_verifier()
+        token_uid = b'\x33' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.get_token_version',
+            lambda *a, **kw: None,
+        )
+
+        with pytest.raises(TokenNotFound):
+            verifier._resolve_token_version_for_mint_melt(tx, token_uid, MagicMock())
+
+    def test_nc_storage_returns_resolved_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        verifier = _make_verifier()
+        token_uid = b'\x44' * 32
+        tx = _make_mock_tx(tokens=[token_uid], has_shielded_outputs=True)
+        tx.storage = MagicMock()
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.get_token_version',
+            lambda *a, **kw: TokenVersion.FEE,
+        )
+
+        result = verifier._resolve_token_version_for_mint_melt(tx, token_uid, MagicMock())
+        assert result == TokenVersion.FEE
+
+
+# ---------------------------------------------------------------------------
+# Rule M2 negative-path coverage
+# ---------------------------------------------------------------------------
+
+
+class TestIndexerHtrBurn:
+    """RocksDBTokensIndex._compute_htr_burn must aggregate FeeHeader HTR
+    fees + DEPOSIT mint deposits + per-entry FEE charges - DEPOSIT melt
+    withdraws so the index reflects only the actual HTR that left
+    circulation, not the shielded HTR portion (which preserves supply).
+    """
+
+    @staticmethod
+    def _make_index() -> 'RocksDBTokensIndex':
+        from unittest.mock import MagicMock as _MM
+
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = _MM()
+        idx._settings = _make_settings()
+        return idx
+
+    @staticmethod
+    def _make_tx_with_fees_and_headers(
+        *,
+        tokens: list[bytes] | None = None,
+        mint_entries: list[MintMeltEntry] | None = None,
+        melt_entries: list[MintMeltEntry] | None = None,
+        fee_entries: list[tuple[bytes, int]] | None = None,
+        token_version_for: dict[bytes, TokenVersion] | None = None,
+    ) -> MagicMock:
+        """Tx with optional FeeHeader entries and a token-version map for
+        resolve_token_version_for_mint_melt to consume via monkeypatch.
+        """
+        tx = _make_mock_tx(
+            tokens=tokens or [],
+            mint_entries=mint_entries,
+            melt_entries=melt_entries,
+            has_shielded_outputs=True,
+        )
+        if fee_entries is not None:
+            fee_header = MagicMock()
+            fee_objects = []
+            for token_uid, amount in fee_entries:
+                fe = MagicMock()
+                fe.token_uid = token_uid
+                fe.amount = amount
+                fee_objects.append(fe)
+            fee_header.get_fees = MagicMock(return_value=fee_objects)
+            tx.has_fees = MagicMock(return_value=True)
+            tx.get_fee_header = MagicMock(return_value=fee_header)
+        else:
+            tx.has_fees = MagicMock(return_value=False)
+        tx.storage = MagicMock()
+        tx.static_metadata = MagicMock()
+        tx.static_metadata.closest_ancestor_block = b''
+        tx.token_version_for = token_version_for or {}
+        return tx
+
+    def test_no_fees_no_headers_zero_burn(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Sanity: a shielded tx with neither fees nor mint/melt headers has
+        zero HTR burn — there's nothing to subtract.
+        """
+        idx = self._make_index()
+        tx = self._make_tx_with_fees_and_headers()
+        assert idx._compute_htr_burn(tx) == 0
+
+    def test_fee_header_only_burns_fees(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Shielded transfer paying 5 HTR FeeHeader burns 5."""
+        idx = self._make_index()
+        htr_uid = b'\x00'
+        tx = self._make_tx_with_fees_and_headers(
+            fee_entries=[(htr_uid, 5)],
+        )
+        assert idx._compute_htr_burn(tx) == 5
+
+    def test_fee_in_non_htr_token_does_not_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """FeeHeader entries denominated in non-HTR (FEE-version) tokens
+        don't contribute to HTR burn — they affect their own token.
+        """
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            fee_entries=[(token_uid, 100)],  # fee paid in token, not HTR
+        )
+        assert idx._compute_htr_burn(tx) == 0
+
+    def test_deposit_mint_adds_one_percent_to_burn(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A DEPOSIT-version mint of 10_000 burns 100 HTR (1% deposit)."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.DEPOSIT,
+        )
+        assert idx._compute_htr_burn(tx) == 100
+
+    def test_deposit_melt_subtracts_one_percent_from_burn(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A DEPOSIT-version melt of 10_000 RETURNS 100 HTR — burn is -100."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.DEPOSIT,
+        )
+        assert idx._compute_htr_burn(tx) == -100
+
+    def test_fee_version_mint_burns_fee_per_output(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A FEE-version mint burns FEE_PER_OUTPUT (100 in the fixture)."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=999_999)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.FEE,
+        )
+        assert idx._compute_htr_burn(tx) == 100
+
+    def test_fee_version_melt_burns_fee_per_output(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """FEE-version melt also burns FEE_PER_OUTPUT (paid by the user)."""
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            melt_entries=[MintMeltEntry(token_index=1, amount=999_999)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.FEE,
+        )
+        assert idx._compute_htr_burn(tx) == 100
+
+    def test_combined_fee_deposit_mint_and_per_entry_fee_charge(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Combined: 5 HTR FeeHeader + DEPOSIT mint of 10_000 (= 100 deposit)
+        + FEE-version mint of any amount (= 100 per-entry charge) → total
+        burn 205.
+        """
+        idx = self._make_index()
+        deposit_token = b'\xaa' * 32
+        fee_token = b'\xbb' * 32
+        htr_uid = b'\x00'
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[deposit_token, fee_token],
+            mint_entries=[
+                MintMeltEntry(token_index=1, amount=10_000),
+                MintMeltEntry(token_index=2, amount=42),
+            ],
+            fee_entries=[(htr_uid, 5)],
+        )
+
+        def fake_resolver(tx_arg: object, token_uid: bytes, ncs: object) -> TokenVersion:
+            if token_uid == deposit_token:
+                return TokenVersion.DEPOSIT
+            return TokenVersion.FEE
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            fake_resolver,
+        )
+
+        # 5 (fee) + 100 (DEPOSIT 1%) + 100 (FEE per-entry) = 205.
+        assert idx._compute_htr_burn(tx) == 205
+
+    def test_native_token_in_mint_does_not_contribute(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A NATIVE-version token in MintHeader contributes nothing to the
+        burn (only DEPOSIT and FEE versions do).
+        """
+        idx = self._make_index()
+        token_uid = b'\xaa' * 32
+        tx = self._make_tx_with_fees_and_headers(
+            tokens=[token_uid],
+            mint_entries=[MintMeltEntry(token_index=1, amount=10_000)],
+        )
+        monkeypatch.setattr(
+            'hathor.transaction.token_info.resolve_token_version_for_mint_melt',
+            lambda *a, **kw: TokenVersion.NATIVE,
+        )
+        assert idx._compute_htr_burn(tx) == 0
+
+
+class TestIndexerHtrCancellation:
+    """End-to-end: the add_tx HTR correction (cancel + burn) lands the right
+    HTR delta on the index for a representative shielded scenario.
+    """
+
+    def test_shielded_transfer_with_fee_burns_only_fee(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Shielded HTR transfer: 100 HTR transparent in, 50 HTR transparent
+        change, 5 HTR FeeHeader, 45 HTR shielded. True supply change = -5
+        (only the fee burn). Index applies per-utxo (-50) then correction
+        (+50 cancel) then burn (-5) → net -5.
+        """
+        from hathor.indexes.rocksdb_tokens_index import RocksDBTokensIndex
+
+        idx = RocksDBTokensIndex.__new__(RocksDBTokensIndex)
+        idx.log = MagicMock()
+        idx._db = MagicMock()
+        idx._cf = MagicMock()
+        idx._settings = _make_settings()
+
+        deltas: list[tuple[bytes, int]] = []
+        idx.add_to_total = MagicMock(  # type: ignore[method-assign]
+            side_effect=lambda token_uid, amount: deltas.append((token_uid, amount))
+        )
+        idx._add_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._remove_utxo = MagicMock()  # type: ignore[method-assign]
+        idx._add_transaction = MagicMock()  # type: ignore[method-assign]
+
+        htr_uid = b'\x00'
+        tx = _make_mock_tx(tokens=[], has_shielded_outputs=True)
+        # FeeHeader of 5 HTR.
+        fee_header = MagicMock()
+        fe = MagicMock()
+        fe.token_uid = htr_uid
+        fe.amount = 5
+        fee_header.get_fees = MagicMock(return_value=[fe])
+        tx.has_fees = MagicMock(return_value=True)
+        tx.get_fee_header = MagicMock(return_value=fee_header)
+        tx.has_unshield_balance_header = MagicMock(return_value=False)
+        tx.is_transaction = True
+        tx.is_nano_contract = MagicMock(return_value=False)
+        tx.timestamp = 0
+        tx.hash = b'\xee' * 32
+        tx.hash_hex = tx.hash.hex()
+        from hathor.transaction import TxVersion
+        tx.version = TxVersion.REGULAR_TRANSACTION
+        tx.inputs = []
+        tx.outputs = []
+        tx.get_spent_tx = MagicMock()
+        tx.storage = MagicMock()
+        tx.static_metadata = MagicMock()
+        tx.static_metadata.closest_ancestor_block = b''
+
+        idx.add_tx(tx)
+
+        # Sum of HTR add_to_total calls applied by the correction block.
+        # The per-utxo flow (mocked) doesn't apply anything here, so the
+        # total HTR delta should match the burn (-5).
+        htr_deltas = [d for uid, d in deltas if uid == htr_uid]
+        assert sum(htr_deltas) == -5
+
+

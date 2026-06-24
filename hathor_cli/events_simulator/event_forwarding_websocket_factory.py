@@ -19,8 +19,8 @@ from twisted.internet.interfaces import IAddress
 from hathor.event.websocket import EventWebsocketFactory  # skip-cli-import-custom-check
 
 if TYPE_CHECKING:
-    from hathor_cli.events_simulator.event_forwarding_websocket_protocol import EventForwardingWebsocketProtocol
     from hathor.simulator import Simulator
+    from hathor_cli.events_simulator.event_forwarding_websocket_protocol import EventForwardingWebsocketProtocol
 
 
 class EventForwardingWebsocketFactory(EventWebsocketFactory):

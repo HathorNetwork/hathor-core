@@ -26,8 +26,8 @@ class GenerateGenesisArgs(BaseModel):
 
 
 def main() -> None:
-    from hathor_cli.util import create_parser
     from hathor.transaction.genesis import generate_new_genesis
+    from hathor_cli.util import create_parser
 
     parser = create_parser()
     parser.add_argument('--tokens', type=int, help='Amount of genesis tokens, including decimals', required=True)

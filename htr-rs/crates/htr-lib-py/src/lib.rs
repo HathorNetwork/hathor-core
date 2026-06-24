@@ -1,5 +1,6 @@
 //! Python extension module exposing Hathor's Rust implementations via PyO3.
 
+mod shielded;
 mod signed_amount;
 mod unsigned_amount;
 
@@ -19,6 +20,7 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
     m.add_class::<PyUnsignedAmount>()?;
     m.add_class::<PySignedAmount>()?;
+    shielded::register(m)?;
     Ok(())
 }
 

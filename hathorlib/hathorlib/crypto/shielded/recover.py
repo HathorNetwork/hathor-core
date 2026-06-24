@@ -12,21 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ECDH-based recovery of a shielded output's hidden secrets.
+"""Recover hidden values from shielded outputs (ECDH + range-proof rewind).
 
-A recipient's wallet uses this to detect and decrypt its own shielded outputs: derive the ECDH
-shared secret from the recipient's private key + the output's ephemeral pubkey, derive the rewind
-nonce, and rewind the range proof to recover the hidden value/blinding-factor/message (and, for a
-FullShieldedOutput, the hidden token uid + asset blinding factor carried in the message).
-
-This bridges the (hathorlib) data model and the (hathor-core) crypto layer, so it lives here in
-hathor.crypto.shielded rather than with the data model — it depends on the native crypto wrappers.
+This lives in the crypto package (not next to the output data model) so that
+plain vertex parsing, which imports ``hathorlib.transaction.shielded_tx_output``,
+does not pull in the native crypto library.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from hathorlib.crypto.shielded.asset_tag import derive_asset_tag
+from hathorlib.crypto.shielded.ecdh import derive_ecdh_shared_secret, derive_rewind_nonce
+from hathorlib.crypto.shielded.range_proof import rewind_range_proof
 from hathorlib.transaction.shielded_tx_output import (
     AmountShieldedOutput,
     FullShieldedOutput,
@@ -41,7 +40,7 @@ if TYPE_CHECKING:
 def recover_shielded_secrets(
     output: ShieldedOutput,
     private_key_bytes: bytes,
-    get_token_uid: Callable[[int], bytes],
+    get_token_uid: 'Callable[[int], bytes]',
 ) -> ShieldedOutputSecrets:
     """Recover hidden values from a shielded output using ECDH + range proof rewind.
 
@@ -56,38 +55,23 @@ def recover_shielded_secrets(
     Raises:
         ValueError: If ECDH recovery fails or the output has no ephemeral pubkey.
     """
-    from hathor_ct_crypto import (
-        derive_asset_tag,
-        derive_ecdh_shared_secret,
-        derive_rewind_nonce,
-        rewind_range_proof,
-    )
-
     if not output.ephemeral_pubkey:
         raise ValueError('output has no ephemeral_pubkey for ECDH recovery')
 
-    shared_secret = derive_ecdh_shared_secret(
-        private_key_bytes=private_key_bytes,
-        peer_pubkey_bytes=output.ephemeral_pubkey,
-    )
+    shared_secret = derive_ecdh_shared_secret(private_key_bytes, output.ephemeral_pubkey)
     nonce = derive_rewind_nonce(shared_secret)
 
-    token_uid: bytes
     if isinstance(output, AmountShieldedOutput):
-        from hathor.transaction import TxOutput
-        token_uid = get_token_uid(output.token_data & TxOutput.TOKEN_INDEX_MASK)
+        token_uid = get_token_uid(output.token_data & 0x7F)
         generator = derive_asset_tag(token_uid)
     elif isinstance(output, FullShieldedOutput):
         generator = output.asset_commitment
-        # token_uid is bound below from the rewound message bytes.
+        token_uid = b''  # Will be recovered from message
     else:
         raise ValueError(f'unknown shielded output type: {type(output).__name__}')
 
     value, blinding_factor, message = rewind_range_proof(
-        proof=output.range_proof,
-        commitment=output.commitment,
-        nonce=nonce,
-        generator=generator,
+        output.range_proof, output.commitment, nonce, generator
     )
 
     asset_blinding_factor: bytes | None = None
