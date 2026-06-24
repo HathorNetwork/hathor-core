@@ -4,6 +4,7 @@ from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import Transaction
 from hathor.util import not_none
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_custom_tx
 
 
@@ -76,7 +77,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
 
         assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
-        value = 10
+        value = UnsignedAmount.from_v1(10)
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()
@@ -112,7 +113,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
 
         assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
-        value = 10
+        value = UnsignedAmount.from_v1(10)
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()

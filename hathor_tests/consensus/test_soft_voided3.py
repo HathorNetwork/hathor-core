@@ -7,6 +7,7 @@ from hathor.simulator.utils import gen_new_tx
 from hathor.transaction import BaseTransaction
 from hathor.types import VertexId
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_custom_tx, gen_custom_tx
 
 
@@ -92,7 +93,7 @@ class SoftVoidedTestCase(SimulatorTestCase):
         simulator.run(10)
         assert manager2.wallet is not None
         address = manager2.wallet.get_unused_address(mark_as_used=True)
-        txC = gen_new_tx(manager2, address, 6400)
+        txC = gen_new_tx(manager2, address, UnsignedAmount.from_v1(6400))
         if txD1.hash not in txC.parents:
             txC.parents[1] = txD1.hash
         txC.weight = 25

@@ -3,6 +3,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
@@ -21,10 +22,10 @@ class BaseSerializationTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
 
         address = self.get_address(0)
-        value = 100
+        value = UnsignedAmount.from_v1(100)
 
         outputs = [
-            WalletOutputInfo(address=decode_address(address), value=int(value), timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=value, timelock=None)
         ]
 
         self.tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.tx_storage)

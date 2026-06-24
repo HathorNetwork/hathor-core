@@ -3,6 +3,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.wallet.base_wallet import WalletOutputInfo
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
@@ -18,12 +19,12 @@ class WalletIndexTest(unittest.TestCase):
         add_blocks_unlock_reward(self.manager)
 
         address = self.get_address(0)
-        value1 = 100
-        value2 = 101
+        value1 = UnsignedAmount.from_v1(100)
+        value2 = UnsignedAmount.from_v1(101)
 
         outputs = [
-            WalletOutputInfo(address=decode_address(address), value=int(value1), timelock=None),
-            WalletOutputInfo(address=decode_address(address), value=int(value2), timelock=None)
+            WalletOutputInfo(address=decode_address(address), value=value1, timelock=None),
+            WalletOutputInfo(address=decode_address(address), value=value2, timelock=None)
         ]
 
         tx1 = self.manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager.tx_storage)
