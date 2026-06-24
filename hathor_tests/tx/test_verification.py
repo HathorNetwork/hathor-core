@@ -27,6 +27,7 @@ from hathor.verification.token_creation_transaction_verifier import TokenCreatio
 from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens, get_genesis_key
 
 
@@ -47,7 +48,7 @@ class VerificationTest(unittest.TestCase):
             hash=b'some_hash',
             storage=self.manager.tx_storage,
             weight=1,
-            outputs=[TxOutput(value=6400, script=b'')],
+            outputs=[TxOutput(value=UnsignedAmount.from_v1(6400), script=b'')],
             parents=[
                 self._settings.GENESIS_BLOCK_HASH,
                 self._settings.GENESIS_TX1_HASH,
@@ -62,7 +63,7 @@ class VerificationTest(unittest.TestCase):
             hash=b'some_hash',
             storage=self.manager.tx_storage,
             weight=1,
-            outputs=[TxOutput(value=6400, script=b'')],
+            outputs=[TxOutput(value=UnsignedAmount.from_v1(6400), script=b'')],
             aux_pow=BitcoinAuxPow.dummy(),
             parents=[
                 self._settings.GENESIS_BLOCK_HASH,

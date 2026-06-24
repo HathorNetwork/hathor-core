@@ -42,6 +42,7 @@ from hathor.transaction.validation_state import ValidationState
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import Wallet
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import (
     add_blocks_unlock_reward,
     add_new_transactions,
@@ -81,7 +82,7 @@ class TransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         # spend less than what was generated
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
@@ -104,7 +105,7 @@ class TransactionTest(unittest.TestCase):
         _input = TxInput(genesis_block.hash, 0, b'')
 
         # spend more than what was generated
-        value = genesis_block.outputs[0].value + 1
+        value = (genesis_block.outputs[0].value + UnsignedAmount.from_v1(1))
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         output = TxOutput(value, script)
@@ -181,7 +182,7 @@ class TransactionTest(unittest.TestCase):
     def test_too_many_outputs(self):
         random_bytes = bytes.fromhex('0000184e64683b966b4268f387c269915cc61f6af5329823a93e3696cb0fe902')
 
-        output = TxOutput(1, random_bytes)
+        output = TxOutput(UnsignedAmount.from_v1(1), random_bytes)
         outputs = [output] * (self._settings.MAX_NUM_OUTPUTS + 1)
 
         tx = Transaction(outputs=outputs, storage=self.tx_storage)
@@ -242,7 +243,7 @@ class TransactionTest(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [TxOutput(100, output_script)]
+        tx_outputs = [TxOutput(UnsignedAmount.from_v1(100), output_script)]
 
         block = Block(
             nonce=100,
@@ -268,7 +269,7 @@ class TransactionTest(unittest.TestCase):
         parent_txs = [tx.hash for tx in self.genesis_txs]
         parents = [parent_block, *parent_txs]
         address = decode_address(self.get_address(1))
-        outputs = [TxOutput(100, P2PKH.create_output_script(address))]
+        outputs = [TxOutput(UnsignedAmount.from_v1(100), P2PKH.create_output_script(address))]
 
         b = MergeMinedBlock(
             hash=b'some_hash',
@@ -306,8 +307,8 @@ class TransactionTest(unittest.TestCase):
         address1 = decode_address(self.get_address(1))
         address2 = decode_address(self.get_address(2))
         assert address1 != address2
-        outputs1 = [TxOutput(100, P2PKH.create_output_script(address1))]
-        outputs2 = [TxOutput(100, P2PKH.create_output_script(address2))]
+        outputs1 = [TxOutput(UnsignedAmount.from_v1(100), P2PKH.create_output_script(address1))]
+        outputs2 = [TxOutput(UnsignedAmount.from_v1(100), P2PKH.create_output_script(address2))]
 
         b1 = MergeMinedBlock(
             hash=b'some_hash1',
@@ -374,7 +375,7 @@ class TransactionTest(unittest.TestCase):
 
         parents = [tx.hash for tx in self.genesis]
         address = decode_address(self.get_address(1))
-        outputs = [TxOutput(100, P2PKH.create_output_script(address))]
+        outputs = [TxOutput(UnsignedAmount.from_v1(100), P2PKH.create_output_script(address))]
 
         patch_path = 'hathor.feature_activation.feature_service.FeatureService.is_feature_active'
 
@@ -440,7 +441,7 @@ class TransactionTest(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [TxOutput(100, output_script)] * (self._settings.MAX_NUM_OUTPUTS + 1)
+        tx_outputs = [TxOutput(UnsignedAmount.from_v1(100), output_script)] * (self._settings.MAX_NUM_OUTPUTS + 1)
 
         block = Block(
             nonce=100,
@@ -493,7 +494,7 @@ class TransactionTest(unittest.TestCase):
     def test_block_unknown_parent(self):
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [TxOutput(100, output_script)]
+        tx_outputs = [TxOutput(UnsignedAmount.from_v1(100), output_script)]
 
         # Random unknown parent
         parents = [hashlib.sha256().digest()]
@@ -512,7 +513,7 @@ class TransactionTest(unittest.TestCase):
     def test_block_number_parents(self):
         address = get_address_from_public_key(self.genesis_public_key)
         output_script = P2PKH.create_output_script(address)
-        tx_outputs = [TxOutput(100, output_script)]
+        tx_outputs = [TxOutput(UnsignedAmount.from_v1(100), output_script)]
 
         parents = [tx.hash for tx in self.genesis_txs]
 
@@ -613,7 +614,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_tx_weight_too_high(self):
         parents = [tx.hash for tx in self.genesis_txs]
-        outputs = [TxOutput(1, b'')]
+        outputs = [TxOutput(UnsignedAmount.from_v1(1), b'')]
         inputs = [TxInput(b'', 0, b'')]
         tx = Transaction(weight=1, inputs=inputs, outputs=outputs, parents=parents,
                          storage=self.tx_storage, timestamp=self.last_block.timestamp + 1)
@@ -637,7 +638,7 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(
             weight=33.0,
             inputs=[TxInput(b'', 0, b'')],
-            outputs=[TxOutput(1, b'')],
+            outputs=[TxOutput(UnsignedAmount.from_v1(1), b'')],
             parents=[tx.hash for tx in self.genesis_txs],
         )
 
@@ -658,7 +659,7 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(
             weight=32.0,
             inputs=[TxInput(b'', 0, b'')],
-            outputs=[TxOutput(1, b'')],
+            outputs=[TxOutput(UnsignedAmount.from_v1(1), b'')],
             parents=[tx.hash for tx in self.genesis_txs],
         )
 
@@ -668,11 +669,11 @@ class TransactionTest(unittest.TestCase):
         tx = Transaction(
             weight=1.0,
             inputs=[TxInput(b'', 0, b'')],
-            outputs=[TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
+            outputs=[TxOutput(UnsignedAmount.from_v1(1), b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
             parents=[tx.hash for tx in self.genesis_txs],
         )
         while len(tx.get_struct()) <= self._settings.MAX_SERIALIZED_VERTEX_SIZE:
-            tx.outputs.append(TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
+            tx.outputs.append(TxOutput(UnsignedAmount.from_v1(1), b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
 
         tx.update_hash()
         tx_bytes = tx.get_struct()
@@ -683,7 +684,7 @@ class TransactionTest(unittest.TestCase):
     def test_block_serialized_size_too_high(self):
         block = Block(
             weight=1.0,
-            outputs=[TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
+            outputs=[TxOutput(UnsignedAmount.from_v1(1), b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE)],
             parents=[
                 self._settings.GENESIS_BLOCK_HASH,
                 self._settings.GENESIS_TX1_HASH,
@@ -692,7 +693,7 @@ class TransactionTest(unittest.TestCase):
             data=b'',
         )
         while len(block.get_struct()) <= self._settings.MAX_SERIALIZED_VERTEX_SIZE:
-            block.outputs.append(TxOutput(1, b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
+            block.outputs.append(TxOutput(UnsignedAmount.from_v1(1), b'x' * self._settings.MAX_OUTPUT_SCRIPT_SIZE))
 
         block.update_hash()
         block_bytes = block.get_struct()
@@ -812,7 +813,7 @@ class TransactionTest(unittest.TestCase):
 
         # 3. propagate block with wrong amount of tokens
         block = manager.generate_mining_block()
-        output = TxOutput(1, block.outputs[0].script)
+        output = TxOutput(UnsignedAmount.from_v1(1), block.outputs[0].script)
         block.outputs = [output]
         self.manager.cpu_mining_service.resolve(block)
         with self.assertRaises(InvalidNewTransaction):
@@ -912,33 +913,33 @@ class TransactionTest(unittest.TestCase):
         from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
         from hathor.transaction.base_transaction import MAX_OUTPUT_VALUE
         serializer = Serializer.build_bytes_serializer()
-        encode_output_value_v1(serializer, MAX_OUTPUT_VALUE_32)
+        encode_output_value_v1(serializer, UnsignedAmount.from_v1(MAX_OUTPUT_VALUE_32))
         max_32 = serializer.finalize()
         self.assertEqual(len(max_32), 4)
         deserializer = Deserializer.build_bytes_deserializer(max_32)
         value = decode_output_value_v1(deserializer)
-        self.assertEqual(value, MAX_OUTPUT_VALUE_32)
+        self.assertEqual(value, UnsignedAmount.from_v1(MAX_OUTPUT_VALUE_32))
 
         serializer = Serializer.build_bytes_serializer()
-        encode_output_value_v1(serializer, MAX_OUTPUT_VALUE_32 + 1)
+        encode_output_value_v1(serializer, UnsignedAmount.from_v1(MAX_OUTPUT_VALUE_32 + 1))
         over_32 = serializer.finalize()
         self.assertEqual(len(over_32), 8)
         deserializer = Deserializer.build_bytes_deserializer(over_32)
         value = decode_output_value_v1(deserializer)
-        self.assertEqual(value, MAX_OUTPUT_VALUE_32 + 1)
+        self.assertEqual(value, UnsignedAmount.from_v1(MAX_OUTPUT_VALUE_32 + 1))
 
         serializer = Serializer.build_bytes_serializer()
-        encode_output_value_v1(serializer, MAX_OUTPUT_VALUE)
+        encode_output_value_v1(serializer, UnsignedAmount.from_v1(MAX_OUTPUT_VALUE))
         max_64 = serializer.finalize()
         self.assertEqual(len(max_64), 8)
         deserializer = Deserializer.build_bytes_deserializer(max_64)
         value = decode_output_value_v1(deserializer)
-        self.assertEqual(value, MAX_OUTPUT_VALUE)
+        self.assertEqual(value, UnsignedAmount.from_v1(MAX_OUTPUT_VALUE))
 
     def test_output_value(self):
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
-        outputs = [TxOutput(1, b'')]
+        outputs = [TxOutput(UnsignedAmount.from_v1(1), b'')]
         tx = Transaction(outputs=outputs, parents=parents)
         original_struct = tx.get_struct()
         struct_bytes = tx.get_funds_struct()
@@ -959,7 +960,7 @@ class TransactionTest(unittest.TestCase):
             Transaction.create_from_struct(struct_bytes)
 
         # now use 8 bytes and make sure it's working
-        outputs = [TxOutput(MAX_OUTPUT_VALUE, b'')]
+        outputs = [TxOutput(UnsignedAmount.from_v1(MAX_OUTPUT_VALUE), b'')]
         tx = Transaction(outputs=outputs, parents=parents)
         tx.update_hash()
         original_struct = tx.get_struct()
@@ -1049,12 +1050,12 @@ class TransactionTest(unittest.TestCase):
         # sum of tx outputs should ignore authority outputs
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        output1 = TxOutput(5, script)   # regular utxo
-        output2 = TxOutput(30, script, 0b10000001)   # authority utxo
-        output3 = TxOutput(3, script)   # regular utxo
+        output1 = TxOutput(UnsignedAmount.from_v1(5), script)   # regular utxo
+        output2 = TxOutput(UnsignedAmount.from_v1(30), script, 0b10000001)   # authority utxo
+        output3 = TxOutput(UnsignedAmount.from_v1(3), script)   # regular utxo
         tx = Transaction(outputs=[output1, output2, output3], storage=self.tx_storage)
 
-        self.assertEqual(8, tx.sum_outputs)
+        self.assertEqual(UnsignedAmount.from_v1(8), tx.sum_outputs)
 
     def _test_txout_script_limit(self, offset):
         genesis_block = self.genesis_blocks[0]
@@ -1135,9 +1136,9 @@ class TransactionTest(unittest.TestCase):
         new_address_b58 = self.get_address(0)
         new_address = decode_address(new_address_b58)
 
-        output1 = TxOutput(value - 100, script)
+        output1 = TxOutput((value - UnsignedAmount.from_v1(100)), script)
         script2 = P2PKH.create_output_script(new_address)
-        output2 = TxOutput(100, script2)
+        output2 = TxOutput(UnsignedAmount.from_v1(100), script2)
 
         input1 = TxInput(tx.hash, 0, b'')
         tx2 = Transaction(weight=1, inputs=[input1], outputs=[output1, output2], parents=parents,
@@ -1160,7 +1161,7 @@ class TransactionTest(unittest.TestCase):
         output3_address_b58 = self.get_address(1)
         output3_address = decode_address(output3_address_b58)
         script3 = P2PKH.create_output_script(output3_address)
-        output3 = TxOutput(value-100, script3)
+        output3 = TxOutput((value - UnsignedAmount.from_v1(100)), script3)
 
         input2 = TxInput(tx2.hash, 0, b'')
         tx3 = Transaction(weight=1, inputs=[input2], outputs=[output3], parents=parents,
@@ -1187,7 +1188,7 @@ class TransactionTest(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        output = TxOutput(5, script)
+        output = TxOutput(UnsignedAmount.from_v1(5), script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
         original = _transaction.serialize_tx_sighash
@@ -1202,7 +1203,7 @@ class TransactionTest(unittest.TestCase):
 
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
-        output = TxOutput(5, script)
+        output = TxOutput(UnsignedAmount.from_v1(5), script)
         tx = Transaction(outputs=[output], storage=self.tx_storage)
 
         with mock.patch('hathor.transaction.vertex_parser.vertex_serializer.hashlib') as mocked:
@@ -1214,7 +1215,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         _input = TxInput(genesis_block.hash, 0, b'')
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT + 1)
@@ -1227,7 +1228,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         _input = TxInput(genesis_block.hash, 0, b'')
         num_outputs = 5
 
@@ -1240,7 +1241,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         _input = TxInput(genesis_block.hash, 0, b'')
 
         hscript = create_script_with_sigops(self._settings.MAX_TX_SIGOPS_OUTPUT - 1)
@@ -1251,7 +1252,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_output_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         _input = TxInput(genesis_block.hash, 0, b'')
         num_outputs = 5
 
@@ -1263,7 +1264,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_single_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
@@ -1277,7 +1278,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_multi_above_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
@@ -1292,7 +1293,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_single_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)
@@ -1305,7 +1306,7 @@ class TransactionTest(unittest.TestCase):
 
     def test_sigops_input_multi_below_limit(self) -> None:
         genesis_block = self.genesis_blocks[0]
-        value = genesis_block.outputs[0].value - 1
+        value = (genesis_block.outputs[0].value - UnsignedAmount.from_v1(1))
         address = get_address_from_public_key(self.genesis_public_key)
         script = P2PKH.create_output_script(address)
         _output = TxOutput(value, script)

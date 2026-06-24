@@ -9,6 +9,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.resources import CreateTxResource
 from hathor.transaction.scripts import P2PKH, create_base_script
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
@@ -114,7 +115,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx.inputs[0].index, 0)
         self.assertEqual(tx.inputs[0].data, b'')
         self.assertEqual(len(tx.outputs), 1)
-        self.assertEqual(tx.outputs[0].value, 6400)
+        self.assertEqual(tx.outputs[0].value, UnsignedAmount.from_v1(6400))
         self.assertEqual(tx.outputs[0].token_data, 0)
         self.assertEqual(tx.outputs[0].script, script)
 
@@ -151,7 +152,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx.inputs[0].index, 1)
         self.assertEqual(tx.inputs[0].data, b'')
         self.assertEqual(len(tx.outputs), 1)
-        self.assertEqual(tx.outputs[0].value, 100)
+        self.assertEqual(tx.outputs[0].value, UnsignedAmount.from_v1(100))
         self.assertEqual(tx.outputs[0].token_data, 0)
         self.assertEqual(tx.outputs[0].script, script)
 
@@ -189,7 +190,7 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(tx.inputs[0].index, 1)
         self.assertEqual(tx.inputs[0].data, b'')
         self.assertEqual(len(tx.outputs), 1)
-        self.assertEqual(tx.outputs[0].value, 100)
+        self.assertEqual(tx.outputs[0].value, UnsignedAmount.from_v1(100))
         self.assertEqual(tx.outputs[0].token_data, 0)
         self.assertEqual(tx.outputs[0].script, script)
 

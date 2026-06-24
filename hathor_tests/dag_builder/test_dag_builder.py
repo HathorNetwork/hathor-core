@@ -12,6 +12,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
+from hathor_tests.token_amount import UnsignedAmount
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
 
 
@@ -451,8 +452,8 @@ if foo:
         assert isinstance(fee_header, FeeHeader)
         assert fee_header.tx == tx1
         assert fee_header.get_fees() == [
-            FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1),
-            FeeEntry(token_uid=dbt.hash, amount=100),
+            FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=UnsignedAmount.from_v1(1)),
+            FeeEntry(token_uid=dbt.hash, amount=UnsignedAmount.from_v1(100)),
         ]
 
         assert len(fbt1.headers) == 1
@@ -460,14 +461,14 @@ if foo:
 
         assert isinstance(fee_header, FeeHeader)
         assert fee_header.tx == fbt1
-        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1)]
+        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=UnsignedAmount.from_v1(1))]
 
         assert len(fbt2.headers) == 1
         fee_header = fbt2.headers[0]
 
         assert isinstance(fee_header, FeeHeader)
         assert fee_header.tx == fbt2
-        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=1)]
+        assert fee_header.get_fees() == [FeeEntry(token_uid=HATHOR_TOKEN_UID, amount=UnsignedAmount.from_v1(1))]
 
         artifacts.propagate_with(self.manager)
 
