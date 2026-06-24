@@ -8,6 +8,7 @@ set -euo pipefail
 
 poetry run python extras/benchmarking/tps/bench_tps.py \
   --inputs "$INPUTS" \
+  --outputs "${OUTPUTS:-}" \
   --txs "$N_TXS" \
   --blocks "$N_BLOCKS" \
   --runs "$N_RUNS" \
