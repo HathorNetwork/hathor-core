@@ -24,6 +24,7 @@ from hathor.dag_builder.utils import get_literal
 from hathor.transaction import BaseTransaction
 from hathor.transaction.token_info import TokenVersion
 from hathor.wallet import BaseWallet
+from hathorlib.transaction.shielded_tx_output import OutputMode
 
 AttributeType: TypeAlias = dict[str, str | int]
 VertexResolverType: TypeAlias = Callable[[BaseTransaction], Any]
@@ -47,6 +48,7 @@ class DAGNode:
     attrs: dict[str, Any] = field(default_factory=dict)
     inputs: set[DAGInput] = field(default_factory=set)
     outputs: list[DAGOutput | None] = field(default_factory=list)
+    shielded_outputs: list[DAGShieldedOutput | None] = field(default_factory=list)
     parents: set[str] = field(default_factory=set)
     deps: set[str] = field(default_factory=set)
 
@@ -105,3 +107,9 @@ class DAGOutput(NamedTuple):
     amount: int
     token: str
     attrs: AttributeType
+
+
+class DAGShieldedOutput(NamedTuple):
+    amount: int
+    token: str
+    mode: OutputMode

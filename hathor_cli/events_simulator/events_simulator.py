@@ -75,8 +75,14 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
             possible_scenarios = [s.name for s in Scenario]
             raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
+    from hathor.conf.settings import FeatureSetting
     settings = get_global_settings().model_copy(
-        update={"REWARD_SPEND_MIN_BLOCKS": scenario.get_reward_spend_min_blocks()}
+        update={
+            "REWARD_SPEND_MIN_BLOCKS": scenario.get_reward_spend_min_blocks(),
+            # The events simulator is a dev/test tool; enabling shielded transactions
+            # is harmless for non-shielded scenarios and required for SHIELDED_OUTPUTS.
+            "ENABLE_SHIELDED_TRANSACTIONS": FeatureSetting.ENABLED,
+        }
     )
     log = logger.new()
     simulator = Simulator(args.seed)

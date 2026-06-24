@@ -32,6 +32,7 @@ from hathor.dag_builder.types import (
     DAGNode,
     DAGNodeType,
     DAGOutput,
+    DAGShieldedOutput,
     VertexResolverType,
     WalletFactoryType,
 )
@@ -40,6 +41,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
+from hathorlib.transaction.shielded_tx_output import OutputMode
 
 logger = get_logger()
 
@@ -47,6 +49,7 @@ NC_DEPOSIT_KEY = 'nc_deposit'
 NC_WITHDRAWAL_KEY = 'nc_withdrawal'
 TOKEN_VERSION_KEY = 'token_version'
 FEE_KEY = 'fee'
+FULL_SHIELDED_ATTR = '[full-shielded]'
 
 
 class DAGBuilder:
@@ -119,6 +122,9 @@ class DAGBuilder:
 
                 case (TokenType.OUTPUT, (name, index, amount, token, attrs)):
                     self.set_output(name, index, amount, token, attrs)
+
+                case (TokenType.SHIELDED_OUTPUT, (name, index, amount, token, attrs)):
+                    self.set_shielded_output(name, index, amount, token, attrs)
 
                 case (TokenType.BLOCKCHAIN, (name, first_parent, begin_index, end_index)):
                     self.add_blockchain(name, first_parent, begin_index, end_index)
@@ -199,6 +205,31 @@ class DAGBuilder:
         if len(node.outputs) <= index:
             node.outputs.extend([None] * (index - len(node.outputs) + 1))
         node.outputs[index] = DAGOutput(amount, token, attrs)
+        if token != 'HTR':
+            self._get_or_create_node(token, default_type=DAGNodeType.Token)
+            node.deps.add(token)
+        return self
+
+    def set_shielded_output(
+        self,
+        name: str,
+        index: int,
+        amount: int,
+        token: str,
+        attrs: list[str],
+    ) -> Self:
+        """Declare a shielded output `sout[index]` on a node.
+
+        Shielded outputs are stored separately from transparent outputs; the
+        filler does not balance them (master's verifier ignores shielded outputs
+        in the input/output sum). Mode defaults to AMOUNT_ONLY; `[full-shielded]`
+        selects FULLY_SHIELDED.
+        """
+        node = self._get_or_create_node(name)
+        mode = OutputMode.FULLY_SHIELDED if FULL_SHIELDED_ATTR in attrs else OutputMode.AMOUNT_ONLY
+        if len(node.shielded_outputs) <= index:
+            node.shielded_outputs.extend([None] * (index - len(node.shielded_outputs) + 1))
+        node.shielded_outputs[index] = DAGShieldedOutput(amount, token, mode)
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             node.deps.add(token)
