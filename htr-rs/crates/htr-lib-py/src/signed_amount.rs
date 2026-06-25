@@ -56,6 +56,10 @@ impl PySignedAmount {
         format!("{:?}", self.0)
     }
 
+    fn __str__(&self) -> String {
+        self.0.to_string()
+    }
+
     fn __bool__(&self) -> bool {
         self.0.as_bool()
     }
@@ -142,6 +146,46 @@ mod tests {
                     .unwrap();
                 let repr: String = result.repr().unwrap().extract().unwrap();
                 assert_eq!(repr, expected_repr);
+            }
+        });
+    }
+
+    // Goes through Python's `repr()` so the `tp_repr` slot is exercised: `__repr__` exposes
+    // the inner tuple struct's Debug form, signed `BigInt` included.
+    #[test]
+    fn py_repr_pins_debug_form() {
+        Python::initialize();
+        Python::attach(|py| {
+            for (input, expected) in [
+                (0_i64, "SignedAmount(0)"),
+                (5, "SignedAmount(5)"),
+                (-5, "SignedAmount(-5)"),
+            ] {
+                let bound = Bound::new(py, PySignedAmount::new(signed(input))).unwrap();
+                let repr: String = bound.as_any().repr().unwrap().extract().unwrap();
+                assert_eq!(repr, expected);
+            }
+        });
+    }
+
+    // Goes through Python's `str()` so the `tp_str` slot is exercised: `__str__` renders the
+    // V2-normalized value at eighteen fractional digits, always with the point and at least one
+    // fractional digit, prefixing `-` for negatives and rendering zero as `0.0`.
+    #[test]
+    fn py_str_renders_trimmed_decimal_with_sign() {
+        UnsignedAmount::set_decimal_places(2, 18);
+        Python::initialize();
+        Python::attach(|py| {
+            for (input, expected) in [
+                (0_i64, "0.0"),
+                (5, "0.000000000000000005"),
+                (-5, "-0.000000000000000005"),
+                (1_500_000_000_000_000_000, "1.5"),
+                (-1_500_000_000_000_000_000, "-1.5"),
+            ] {
+                let bound = Bound::new(py, PySignedAmount::new(signed(input))).unwrap();
+                let rendered: String = bound.as_any().str().unwrap().extract().unwrap();
+                assert_eq!(rendered, expected);
             }
         });
     }
