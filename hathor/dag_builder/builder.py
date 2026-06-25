@@ -40,6 +40,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
+from hathorlib.token_amount import SignedAmount
 
 logger = get_logger()
 
@@ -151,7 +152,7 @@ class DAGBuilder:
         from_node.deps.add(_to)
         return self
 
-    def update_balance(self, name: str, token: str, value: int) -> Self:
+    def update_balance(self, name: str, token: str, value: SignedAmount) -> Self:
         """Update the expected balance for a given token, where balance = sum(outputs) - sum(inputs).
 
         =0 means sum(txouts) = sum(txins)
@@ -159,7 +160,7 @@ class DAGBuilder:
         <0 means sum(txouts) < sum(txins), e.g., deposit
         """
         node = self._get_or_create_node(name)
-        node.balances[token] = node.balances.get(token, 0) + value
+        node.balances[token] = node.balances.get(token, SignedAmount(0)) + value
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             self.add_deps(name, token)

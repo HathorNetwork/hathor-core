@@ -35,6 +35,7 @@ from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason, set_nano_header
 from hathorlib.nanocontracts.verification import MAX_ACTIONS_LEN
+from hathorlib.token_amount import SignedAmount
 
 
 class MyBlueprint(Blueprint):
@@ -162,8 +163,8 @@ class TestActions(unittest.TestCase):
         self,
         *,
         tx: Transaction,
-        update_htr_output: int | None = None,
-        update_tka_output: int | None = None,
+        update_htr_output: SignedAmount | None = None,
+        update_tka_output: SignedAmount | None = None,
         add_inputs: list[TxInput] | None = None,
         add_outputs: list[TxOutput] | None = None,
     ) -> None:

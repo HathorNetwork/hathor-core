@@ -19,6 +19,7 @@ from typing import Any, Self, TypeAlias
 from typing_extensions import Literal, assert_never
 
 from hathorlib.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.token_info import TokenVersion
 
 
@@ -61,7 +62,7 @@ class CreateTokenRecord:
     """Record for token creation."""
     type: Literal[IndexRecordType.CREATE_TOKEN] = field(default=IndexRecordType.CREATE_TOKEN, init=False)
     token_uid: TokenUid
-    amount: int
+    amount: UnsignedAmount
     token_symbol: str
     token_name: str
     token_version: Literal[TokenVersion.DEPOSIT] | Literal[TokenVersion.FEE]
@@ -102,7 +103,7 @@ class UpdateTokenBalanceRecord:
         init=False,
     )
     token_uid: TokenUid
-    amount: int
+    amount: SignedAmount
 
     def __post_init__(self) -> None:
         assert self.type == IndexRecordType.UPDATE_TOKEN_BALANCE
@@ -114,7 +115,7 @@ class UpdateTokenBalanceRecord:
     def from_json(cls, json_dict: dict[str, Any]) -> Self:
         return cls(
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            amount=json_dict['amount'],
+            amount=SignedAmount(json_dict['amount']),
         )
 
 

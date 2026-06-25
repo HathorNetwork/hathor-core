@@ -58,7 +58,7 @@ JSON_RPC_INTERNAL_ERROR = JsonRpcError(-32603, 'Internal error', fatal=True)
 
 class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
     """Small JSONRPC 2.0 abstraction over WebSocket, will forward method calls to do_<method>"""
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.info: dict[str, Any] = {}
 

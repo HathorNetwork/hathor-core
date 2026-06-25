@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import assert_never
 
 from hathor.types import VertexId
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.context import Context
@@ -37,7 +38,7 @@ _NC_SCRIPT_LEN_MAX_BYTES: int = 2
 class NanoHeaderAction:
     type: NCActionType
     token_index: int
-    amount: int
+    amount: UnsignedAmount
 
     def to_nc_action(self, tx: Transaction) -> NCAction:
         """Create a NCAction from this NanoHeaderAction"""

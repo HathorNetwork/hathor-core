@@ -19,9 +19,10 @@ from hathor.dag_builder import DAGBuilder
 from hathor.manager import HathorManager
 from hathor.transaction import Block, Transaction
 from hathor.types import Address, VertexId
+from hathorlib.token_amount import UnsignedAmount
 
 
-def gen_new_tx(manager: HathorManager, address: str, value: int) -> Transaction:
+def gen_new_tx(manager: HathorManager, address: str, value: UnsignedAmount) -> Transaction:
     """
     Generate and return a new transaction.
 
