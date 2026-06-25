@@ -344,6 +344,7 @@ class VerificationService:
     def _verify_without_storage_tx(self, tx: Transaction, params: VerificationParams) -> None:
         """ Run all verifications that do not need a storage.
         """
+        self.verifiers.tx.verify_token_amount_version(tx, params)
         if self._settings.CONSENSUS_ALGORITHM.is_pow():
             self.verifiers.vertex.verify_pow(tx)
         self.verifiers.tx.verify_number_of_inputs(tx)
