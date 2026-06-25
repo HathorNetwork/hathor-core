@@ -25,8 +25,8 @@ impl PyUnsignedAmount {
 impl PyUnsignedAmount {
     #[staticmethod]
     #[pyo3(signature = (*, v1_decimal_places, v2_decimal_places))]
-    fn set_normalization_factor(v1_decimal_places: u32, v2_decimal_places: u32) {
-        UnsignedAmount::set_normalization_factor(v1_decimal_places, v2_decimal_places)
+    fn set_decimal_places(v1_decimal_places: u32, v2_decimal_places: u32) {
+        UnsignedAmount::set_decimal_places(v1_decimal_places, v2_decimal_places)
     }
 
     #[staticmethod]
@@ -55,6 +55,13 @@ impl PyUnsignedAmount {
     #[staticmethod]
     fn zero() -> Self {
         Self(UnsignedAmount::ZERO)
+    }
+
+    #[staticmethod]
+    fn parse(s: &str) -> PyResult<Self> {
+        UnsignedAmount::parse(s)
+            .map(Self::new)
+            .map_err(|err| PyValueError::new_err(err.to_string()))
     }
 
     fn is_v1(&self) -> bool {
@@ -115,6 +122,10 @@ impl PyUnsignedAmount {
         format!("{:?}", self.0)
     }
 
+    fn __str__(&self) -> String {
+        self.0.to_string()
+    }
+
     fn __bool__(&self) -> bool {
         self.0.as_bool()
     }
@@ -155,7 +166,7 @@ mod tests {
     const TEN_TO_THE_SIXTEENTH: u64 = 10u64.pow(16);
 
     fn init() {
-        UnsignedAmount::set_normalization_factor(2, 18)
+        UnsignedAmount::set_decimal_places(2, 18)
     }
 
     fn big(n: u64) -> BigUint {
@@ -197,6 +208,79 @@ mod tests {
             let amount = PyUnsignedAmount::from_version(big(5), &version).unwrap();
             assert!(amount.is_v2());
             assert_eq!(amount.normalized(), &big(5));
+        });
+    }
+
+    #[test]
+    fn py_parse_creates_v2_value() {
+        init();
+        let amount = PyUnsignedAmount::parse("1.5").unwrap();
+        assert!(amount.is_v2());
+        assert_eq!(amount.normalized(), &big(1_500_000_000_000_000_000));
+    }
+
+    // A fractional part exceeding the V2 precision surfaces as a Python `ValueError` carrying
+    // the parse error's message.
+    #[test]
+    fn py_parse_too_many_decimal_places_raises_value_error() {
+        init();
+        Python::initialize();
+        Python::attach(|py| {
+            let Err(err) = PyUnsignedAmount::parse("0.0000000000000000001") else {
+                panic!("expected ValueError on excess precision");
+            };
+            assert!(err.is_instance_of::<PyValueError>(py));
+            assert_eq!(
+                err.value(py).to_string(),
+                "too many decimal places: 19 (at most 18)"
+            );
+        });
+    }
+
+    // Goes through Python's `repr()` so the `tp_repr` slot is exercised: `__repr__` exposes
+    // the inner enum's Debug form — variant tag plus `BigUint` fields. V1 carries both `raw`
+    // and its V2-scaled `normalized`; V2 carries only `normalized`.
+    #[test]
+    fn py_repr_pins_debug_form_per_variant() {
+        init();
+        Python::initialize();
+        Python::attach(|py| {
+            let v1 = Bound::new(py, PyUnsignedAmount::from_v1(big(5))).unwrap();
+            let repr: String = v1.as_any().repr().unwrap().extract().unwrap();
+            assert_eq!(repr, "V1 { raw: 5, normalized: 50000000000000000 }");
+
+            let v2 = Bound::new(py, PyUnsignedAmount::from_v2(big(5))).unwrap();
+            let repr: String = v2.as_any().repr().unwrap().extract().unwrap();
+            assert_eq!(repr, "V2 { normalized: 5 }");
+        });
+    }
+
+    // Goes through Python's `str()` so the `tp_str` slot is exercised: `__str__` renders the
+    // native encoding as a decimal — V1's `raw` at two fractional digits, V2's `normalized` at
+    // eighteen — always with the point and at least one fractional digit, so whole amounts end in
+    // `.0` and zero renders as `0.0`.
+    #[test]
+    fn py_str_renders_trimmed_decimal_per_variant() {
+        init();
+        Python::initialize();
+        Python::attach(|py| {
+            for (amount, expected) in [
+                (PyUnsignedAmount::from_v1(big(0)), "0.0"),
+                (PyUnsignedAmount::from_v1(big(5)), "0.05"),
+                (PyUnsignedAmount::from_v1(big(100)), "1.0"),
+                (PyUnsignedAmount::from_v1(big(12345)), "123.45"),
+                (PyUnsignedAmount::from_v2(big(0)), "0.0"),
+                (PyUnsignedAmount::from_v2(big(5)), "0.000000000000000005"),
+                (
+                    PyUnsignedAmount::from_v2(big(1_200_000_000_000_000_000)),
+                    "1.2",
+                ),
+                (PyUnsignedAmount::from_v2(big(10u64.pow(18))), "1.0"),
+            ] {
+                let bound = Bound::new(py, amount).unwrap();
+                let rendered: String = bound.as_any().str().unwrap().extract().unwrap();
+                assert_eq!(rendered, expected);
+            }
         });
     }
 
