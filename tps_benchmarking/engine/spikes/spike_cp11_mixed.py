@@ -9,7 +9,7 @@ Recipe (from test_unshield_balance_dag_builder.py): a source with only shielded 
 exposes shielded output i at DSL out[i] (on-chain index len(outputs)+i = i here), so
 `ssrc.out[0] <<< mix` spends a shielded output as a shielded INPUT.
 
-Run:  cd tps_benchmarking/benchmarks/engine
+Run:  cd tps_benchmarking/engine
       PYTHONPATH="<repo>:$PWD" <venv-python> spikes/spike_cp11_mixed.py
 """
 from hathor.exception import InvalidNewTransaction

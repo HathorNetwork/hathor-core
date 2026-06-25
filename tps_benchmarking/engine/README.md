@@ -17,7 +17,7 @@ Editable-install the package into the hathor-core poetry env so it resolves from
 editors/Pylance resolve `hathor_tps_bench.*`). Run from the **hathor-core repo root**:
 
 ```bash
-poetry run pip install -e tps_benchmarking/benchmarks/engine
+poetry run pip install -e tps_benchmarking/engine
 ```
 
 In VS Code, select the poetry interpreter (`Python: Select Interpreter` → the `hathor-…-py3.11` env) so
@@ -88,7 +88,7 @@ hathor-tps-bench run -i 2 -o 2 --sweep-txs 100 500 2500
 hathor-tps-bench script demo_experiments all
 
 # Optional config as a base; flags still override it:
-hathor-tps-bench run --config tps_benchmarking/benchmarks/engine/scenarios/basic.yaml -n 500
+hathor-tps-bench run --config tps_benchmarking/engine/scenarios/basic.yaml -n 500
 ```
 
 ---
@@ -96,7 +96,7 @@ hathor-tps-bench run --config tps_benchmarking/benchmarks/engine/scenarios/basic
 ## Output — where results and plots land
 
 Everything is written under `results/` **inside the engine** (gitignored):
-`tps_benchmarking/benchmarks/engine/results/`.
+`tps_benchmarking/engine/results/`.
 
 ```
 results/

@@ -7,7 +7,7 @@ outputs. Confirms, under REAL verifiers, that all N are accepted with exact I/O 
 disjoint inputs. De-risks: (1) the 255-output cap, (2) parents-at-scale (all parented
 to genesis), (3) input disjointness.
 
-Run:  poetry run python tps_benchmarking/benchmarks/engine/spikes/spike_cp3_batch.py
+Run:  poetry run python tps_benchmarking/engine/spikes/spike_cp3_batch.py
 """
 import os
 

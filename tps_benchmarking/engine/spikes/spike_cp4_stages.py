@@ -6,7 +6,7 @@ timing each stage with perf_counter_ns (wall) + process_time_ns (CPU). Confirms 
 tx is accepted and that the per-stage split is sane (S3+S4 verify and S6's second
 validate_full should dominate).
 
-Run:  poetry run python tps_benchmarking/benchmarks/engine/spikes/spike_cp4_stages.py
+Run:  poetry run python tps_benchmarking/engine/spikes/spike_cp4_stages.py
 """
 import os
 

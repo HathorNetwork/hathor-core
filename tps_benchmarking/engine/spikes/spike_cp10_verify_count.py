@@ -8,7 +8,7 @@ the verifier, so the patch is picked up per call) with counters, build one full-
 tx via the engine's workload, and drive it stage-by-stage like the driver does — tallying
 verify_range_proof / verify_surjection_proof / verify_balance in S3S4 vs S6.
 
-Run:  cd tps_benchmarking/benchmarks/engine
+Run:  cd tps_benchmarking/engine
       PYTHONPATH="<repo-root>:$PWD" <venv-python> spikes/spike_cp10_verify_count.py
 """
 import collections

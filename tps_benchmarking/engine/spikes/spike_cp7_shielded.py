@@ -18,7 +18,7 @@ Manager setup mirrors hathor_tests/dag_builder/test_shielded_dag_builder.py (the
 cpu-mining service + simulator vertex verifiers + the feature flag), combined with our
 NodeHarness import-order discipline (init the reactor before importing test helpers).
 
-Run:  cd tps_benchmarking/benchmarks/engine && poetry run python spikes/spike_cp7_shielded.py
+Run:  cd tps_benchmarking/engine && poetry run python spikes/spike_cp7_shielded.py
 """
 import os
 import time

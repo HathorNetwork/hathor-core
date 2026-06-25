@@ -7,7 +7,7 @@ blocks + a single transparent tx with a chosen #inputs/#outputs, then feed that 
 through the node's real processing path and confirm it is ACCEPTED under real
 verification. Also confirm S1 (deserialize from bytes) round-trips.
 
-Run:  poetry run python tps_benchmarking/benchmarks/engine/spikes/spike_cp1.py
+Run:  poetry run python tps_benchmarking/engine/spikes/spike_cp1.py
 """
 import os
 

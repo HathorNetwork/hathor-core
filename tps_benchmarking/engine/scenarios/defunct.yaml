@@ -7,7 +7,8 @@ name: defunct-demo
 benchmarks:
   - stage-latency
 
-results_root: tps_benchmarking/benchmarks/engine/results   # run from the hathor-core repo root
+# results_root defaults to <engine>/results (absolute, anchored to the engine dir).
+# results_root: /some/abs/path
 
 workload:
   tx_type: defunct

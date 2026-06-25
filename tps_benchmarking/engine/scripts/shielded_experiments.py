@@ -8,7 +8,7 @@ Each row builds a FRESH funded node (no state carryover), drives W warm-up + K m
 through S1..S6, and reports per-stage mean wall (us), processing TPS, and mean serialized
 tx size. Writes a markdown table to docs/shielded-results.md.
 
-Run:  cd tps_benchmarking/benchmarks/engine
+Run:  cd tps_benchmarking/engine
       PYTHONPATH="<repo-root>:$PWD" <venv-python> -m hathor_tps_bench script shielded_experiments
   (or invoke this file directly with the same PYTHONPATH)
 """

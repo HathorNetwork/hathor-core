@@ -10,7 +10,9 @@ benchmarks:
 # Optional batch-size sweep (throughput-vs-N). Omit for a single run.
 # n_sweep: [100, 500, 1000, 5000]
 
-results_root: tps_benchmarking/benchmarks/engine/results   # run from the hathor-core repo root
+# results_root defaults to <engine>/results (absolute, anchored to the engine dir, so it
+# never depends on the cwd). Uncomment to override, or pass --results-root on the CLI.
+# results_root: /some/abs/path
 
 workload:
   tx_type: 1-tip-transparent

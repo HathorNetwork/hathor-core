@@ -7,7 +7,7 @@ their clean-slate values. This validates the M/Tb sustainable-throughput model:
   - if S5 resets -> growth is unconfirmed-mempool-driven, Tb bounds it (model holds);
   - if S6 does NOT reset -> part of it is permanent (storage), a separate bottleneck.
 
-Run:  poetry run python tps_benchmarking/benchmarks/engine/spikes/spike_cp4_reset.py
+Run:  poetry run python tps_benchmarking/engine/spikes/spike_cp4_reset.py
 """
 import os
 

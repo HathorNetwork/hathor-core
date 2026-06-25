@@ -11,7 +11,7 @@ Each variant is a FRESH funded node. Robust: per-variant try/except + incrementa
 Raw per-tx totals (µs) are also saved to demo_data.json so plots can be regenerated
 WITHOUT re-running the nodes. Plots + data → results/demo/.
 
-Run:  poetry run python tps_benchmarking/benchmarks/engine/scripts/demo_experiments.py [all|1|2|3]
+Run:  poetry run python tps_benchmarking/engine/scripts/demo_experiments.py [all|1|2|3]
 """
 import json
 import os
@@ -35,7 +35,7 @@ from hathor_tps_bench.driver import run_batch
 from hathor_tps_bench.node import NodeHarness
 from hathor_tps_bench.workload import get_txtype
 
-OUT = Path("tps_benchmarking/benchmarks/engine/results/demo")
+OUT = Path("tps_benchmarking/engine/results/demo")
 OUT.mkdir(parents=True, exist_ok=True)
 TXTYPE = "1-tip-transparent"
 DATA = {}   # {plot: {variant_label: [per-tx total µs]}} — saved for free re-plots

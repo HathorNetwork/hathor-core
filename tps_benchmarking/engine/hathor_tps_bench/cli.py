@@ -21,6 +21,21 @@ from hathor_tps_bench.config import RootConfig
 from hathor_tps_bench.workload import list_txtypes
 
 
+def _new_run_dir(results_root: str, label: str):
+    """Create and return a fresh, timestamped run directory under `results_root`.
+
+    The timestamp (down to the second) guarantees consecutive runs never overwrite each
+    other and that they sort chronologically. `results_root` is absolute (anchored to the
+    engine dir by default) so the directory always lands in the same place regardless of
+    the current working directory."""
+    from datetime import datetime
+    from pathlib import Path
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_dir = Path(results_root) / f"{label}_{stamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
 def _cmd_list(args: argparse.Namespace) -> int:
     txtypes = list_txtypes()
     benches = list_benchmarks()
@@ -69,6 +84,8 @@ def _apply_overrides(cfg: RootConfig, args: argparse.Namespace) -> None:
         cfg.reporting.window = args.window
     if getattr(args, "seed", None) is not None:
         cfg.env.seed = args.seed
+    if getattr(args, "results_root", None) is not None:
+        cfg.results_root = args.results_root
 
 
 def _load_config(args: argparse.Namespace) -> tuple[RootConfig | None, list[str]]:
@@ -115,7 +132,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return _run_sweep(cfg, args)
 
     from dataclasses import asdict
-    from pathlib import Path
 
     from hathor_tps_bench.analysis import compute, persist, plots, report
     from hathor_tps_bench.driver import run_batch
@@ -148,8 +164,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     rows = compute.stage_table(result)
     # M/Tb sustainable-rate table (flat ⇒ Tb-independent for 1-tip-transparent; see RFC).
     mtb = compute.mtb_table(compute.cumulative_curve(result), [7.5, 15, 30, 60, 90])
-    run_dir = Path(cfg.results_root) / f"{cfg.name}_{w.tx_type}_N{K}_I{w.num_inputs}_O{w.num_outputs}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = _new_run_dir(cfg.results_root, f"{cfg.name}_{w.tx_type}_N{K}_I{w.num_inputs}_O{w.num_outputs}")
     fmts = cfg.reporting.formats
     if "csv" in fmts:
         persist.write_per_tx_csv(run_dir / "per_tx_stages.csv", result)
@@ -189,11 +204,8 @@ def _print_run_summary(result, cfg) -> None:
 
 
 def _emit_sweep(cfg, points, axis: str, x_label: str) -> int:
-    from pathlib import Path
-
     from hathor_tps_bench.analysis import plots
-    run_dir = Path(cfg.results_root) / f"sweep_{cfg.name}_{cfg.workload.tx_type}_{axis}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = _new_run_dir(cfg.results_root, f"sweep_{cfg.name}_{cfg.workload.tx_type}_{axis}")
     plot_names = (plots.sweep_plots(run_dir / "plots", points, x_label=x_label,
                                     window=cfg.reporting.window)
                   if "plots" in cfg.reporting.formats else [])
@@ -329,7 +341,6 @@ def _parse_segments(tokens: list[str]):
 
 def _run_multibatch(cfg: RootConfig, args: argparse.Namespace) -> int:
     """Drive a sequence of segments (per-segment mode) as one continuous timed stream; per-segment TPS."""
-    from pathlib import Path
     try:
         segments = _parse_segments(args.mult_batches)
     except (ValueError, IndexError) as e:
@@ -372,8 +383,7 @@ def _run_multibatch(cfg: RootConfig, args: argparse.Namespace) -> int:
         seg_rows.append((k, shape, len(sl), tps, starts_m[k]))
     print(f"  overall processing throughput: {result.processing_tps():.0f} tx/s")
 
-    run_dir = Path(cfg.results_root) / f"multibatch_{len(segments)}seg_{total}tx"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = _new_run_dir(cfg.results_root, f"multibatch_{len(segments)}seg_{total}tx")
     if "csv" in cfg.reporting.formats:
         persist.write_per_tx_csv(run_dir / "per_tx_stages.csv", result)
     plot_names = (plots.generate(run_dir / "plots", result, window=cfg.reporting.window)
@@ -438,6 +448,8 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("-w", "--warmup", type=int, dest="warmup", help="warm-up txs W (discarded)")
     pr.add_argument("--window", type=int, help="rolling-curve window (default: adaptive)")
     pr.add_argument("--seed", type=int, help="RNG seed")
+    pr.add_argument("--results-root", dest="results_root", metavar="DIR",
+                    help="where run dirs are written (default: <engine>/results, absolute)")
     pr.add_argument("--sweep-inputs", nargs=2, type=int, metavar=("MIN", "MAX"),
                     help="sweep I over [MIN..MAX] (O, N fixed)")
     pr.add_argument("--sweep-outputs", nargs=2, type=int, metavar=("MIN", "MAX"),
@@ -457,6 +469,8 @@ def build_parser() -> argparse.ArgumentParser:
     psw.add_argument("--values", help="io: '1:2,2:2,3:2'   n: '50,100,500,1000'")
     psw.add_argument("-n", "--num-txs", type=int, dest="num_txs")
     psw.add_argument("-w", "--warmup", type=int, dest="warmup")
+    psw.add_argument("--results-root", dest="results_root", metavar="DIR",
+                     help="where run dirs are written (default: <engine>/results, absolute)")
     _add_shielded_flags(psw)
     psw.set_defaults(fn=_cmd_sweep)
 

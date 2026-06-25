@@ -16,6 +16,12 @@ import yaml
 # Canonical pipeline-stage keys (see RFC §"The pipeline and its anchor functions").
 STAGES: tuple[str, ...] = ("S1", "S2", "S3S4", "S5", "S6")
 
+# Default results location, anchored to the engine package (parents[1] == the engine dir),
+# NOT the current working directory. Runs therefore always land in the same place no matter
+# where the CLI is launched from — this is what prevents stray nested results/ trees when a
+# command is run from the wrong cwd. Override per-run with --results-root or the config key.
+DEFAULT_RESULTS_ROOT: str = str(Path(__file__).resolve().parents[1] / "results")
+
 
 @dataclass
 class WorkloadConfig:
@@ -101,7 +107,7 @@ class RootConfig:
     name: str = "baseline"
     benchmarks: list[str] = field(default_factory=lambda: ["stage-latency"])
     n_sweep: list[int] | None = None              # batch-size sweep; None = single run
-    results_root: str = "tps_benchmarking/benchmarks/engine/results"  # from hathor-core root; gitignored
+    results_root: str = DEFAULT_RESULTS_ROOT  # absolute, anchored to the engine dir; gitignored
     workload: WorkloadConfig = field(default_factory=WorkloadConfig)
     env: EnvConfig = field(default_factory=EnvConfig)
     measure: MeasureConfig = field(default_factory=MeasureConfig)
