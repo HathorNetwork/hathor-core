@@ -531,7 +531,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 if version == TokenVersion.DEPOSIT:
                     burn += get_deposit_token_deposit_amount(self._settings, entry.amount)
                 elif version == TokenVersion.FEE:
-                    burn += self._settings.FEE_PER_OUTPUT
+                    burn += self._settings.FEE_PER_OUTPUT_V1
         if tx.has_melt_header():
             for entry in tx.get_melt_header().entries:
                 token_uid = tx.get_token_uid(entry.token_index)
@@ -539,7 +539,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
                 if version == TokenVersion.DEPOSIT:
                     burn -= get_deposit_token_withdraw_amount(self._settings, entry.amount)
                 elif version == TokenVersion.FEE:
-                    burn += self._settings.FEE_PER_OUTPUT
+                    burn += self._settings.FEE_PER_OUTPUT_V1
         return burn
 
     def _tx_has_shielded_involvement(self, tx: 'Transaction') -> bool:

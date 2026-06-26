@@ -17,7 +17,6 @@
 import os
 
 import pytest
-
 from htr_lib import shielded as lib
 
 from hathor.transaction.scripts import P2PKH

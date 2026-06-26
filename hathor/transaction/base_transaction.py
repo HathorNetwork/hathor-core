@@ -367,11 +367,6 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return True if `index` refers to a shielded output (i.e. index >= len(self.outputs))."""
         return index >= len(self.outputs) and index < len(self.outputs) + len(self.shielded_outputs)
 
-    @property
-    def sum_outputs(self) -> int:
-        """Sum of the value of the outputs"""
-        return sum(output.value for output in self.outputs if not output.is_token_authority())
-
     def get_target(self, override_weight: Optional[float] = None) -> int:
         """Target to be achieved in the mining process"""
         if not isfinite(self.weight):
@@ -890,15 +885,21 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             output['spent_by'] = spent_by.hex() if spent_by else None
             ret['outputs'].append(output)
 
-        for s_index, shielded_out in enumerate(self.shielded_outputs):
-            output_index = len(self.outputs) + s_index
-            spent_by = meta.get_output_spent_by(output_index)
-            s_data = _shielded_output_to_json(shielded_out, decode_script=True)
-            s_data['spent_by'] = spent_by.hex() if spent_by else None
+        # Shielded outputs go into their own `shielded_outputs` array (mirroring `to_json`), but
+        # keep `spent_by` like transparent outputs do. Their spend index continues the transparent
+        # range, so `spent_by` is looked up at `len(self.outputs) + s_index`.
+        if self.shielded_outputs:
             from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput
-            if isinstance(shielded_out, AmountShieldedOutput):
-                s_data['token'] = self.get_token_uid(shielded_out.token_data & TxOutput.TOKEN_INDEX_MASK).hex()
-            ret['outputs'].append(s_data)
+            shielded_outputs: list[dict[str, Any]] = []
+            for s_index, shielded_out in enumerate(self.shielded_outputs):
+                output_index = len(self.outputs) + s_index
+                spent_by = meta.get_output_spent_by(output_index)
+                s_data = _shielded_output_to_json(shielded_out, decode_script=True)
+                s_data['spent_by'] = spent_by.hex() if spent_by else None
+                if isinstance(shielded_out, AmountShieldedOutput):
+                    s_data['token'] = self.get_token_uid(shielded_out.token_data & TxOutput.TOKEN_INDEX_MASK).hex()
+                shielded_outputs.append(s_data)
+            ret['shielded_outputs'] = shielded_outputs
 
         return ret
 

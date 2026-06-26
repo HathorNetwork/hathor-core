@@ -1092,7 +1092,7 @@ class TransactionVerifier:
             # require an asset-blind shielded_fee bump — keeping the charge on
             # the header entry preserves both the FEE-token-specific knob and
             # the privacy of the recipient set.
-            transparent_outputs.append((self._settings.FEE_PER_OUTPUT, htr_uid))
+            transparent_outputs.append((self._settings.FEE_PER_OUTPUT_V1, htr_uid))
 
     def _resolve_token_version_for_mint_melt(
         self,

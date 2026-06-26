@@ -37,7 +37,7 @@ def _make_settings() -> HathorSettings:
     settings = MagicMock(spec=HathorSettings)
     settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT = 1
     settings.FEE_PER_FULL_SHIELDED_OUTPUT = 2
-    settings.FEE_PER_OUTPUT = 100
+    settings.FEE_PER_OUTPUT_V1 = 100
     settings.HATHOR_TOKEN_UID = b'\x00'
     # Deposit is computed with integer numerator/denominator math (1% = 10^7 / 10^9).
     settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR = 10 ** 7

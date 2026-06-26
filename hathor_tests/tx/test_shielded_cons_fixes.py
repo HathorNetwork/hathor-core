@@ -83,7 +83,6 @@ def _make_service_and_mocks():
     settings.HATHOR_TOKEN_UID = b'\x00'
     settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR = 10 ** 7
     settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR = 10 ** 9
-    settings.FEE_PER_OUTPUT = 100
     settings.FEE_PER_OUTPUT_V1 = 100
 
     verifiers = MagicMock()
@@ -258,7 +257,7 @@ class TestVerifySumBypass:
         from hathor.transaction import Transaction
 
         service, settings, verifiers, params = _make_service_and_mocks()
-        settings.FEE_PER_OUTPUT = 100
+        settings.FEE_PER_OUTPUT_V1 = 100
 
         tx = MagicMock(spec=Transaction)
         tx.is_genesis = False
@@ -381,7 +380,7 @@ class TestVerifySumBypass:
             chargeable_inputs=1,
         )
         # Fee = chargeable_outputs * FEE_PER_OUTPUT + shielded_fee
-        # With settings.FEE_PER_OUTPUT=100 and 2 chargeable outputs: 200
+        # With settings.FEE_PER_OUTPUT_V1=100 and 2 chargeable outputs: 200
         # shielded_fee is calculated from tx.shielded_outputs, which is a MagicMock
         # so calculate_shielded_fee returns 0. Total expected fee = 200.
         token_dict.fees_from_fee_header = 200
