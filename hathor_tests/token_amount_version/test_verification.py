@@ -44,15 +44,7 @@ from hathorlib.token_amount_version import TokenAmountVersion
 class TestTokenAmountVersionVerification(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
-
-        from hathor.simulator.patches import SimulatorCpuMiningService
-        from hathor.simulator.simulator import _build_vertex_verifiers
-
-        builder = self.get_builder() \
-            .set_vertex_verifiers_builder(_build_vertex_verifiers) \
-            .set_cpu_mining_service(SimulatorCpuMiningService())
-
-        self.manager = self.create_peer_from_builder(builder)
+        self.manager = self.create_peer('unittests')
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
         self.tx_verifier = self.manager.verification_service.verifiers.tx
 
