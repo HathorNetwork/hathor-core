@@ -352,6 +352,7 @@ class VertexExporter:
         self.add_nano_header_if_needed(node, vertex)
         self.add_fee_header_if_needed(node, vertex)
         self.add_shielded_outputs_header_if_needed(node, vertex)
+        self.add_sout_shielded_outputs_header_if_needed(node, vertex)
         self._add_or_augment_shielded_fee(node, vertex)
         self.add_unshield_balance_header_if_needed(node, vertex)
 
@@ -735,6 +736,110 @@ class VertexExporter:
                     )
                     continue
         return None
+
+    def _build_surjection_domain(self, vertex: Transaction) -> list[tuple[bytes, bytes, bytes]]:
+        """Reconstruct the surjection-proof domain the verifier derives from the tx inputs.
+
+        One `(generator, raw_tag, blinding)` entry per non-authority input, in input order
+        (matching `verify_surjection_proofs`): transparent inputs contribute the unblinded
+        per-token asset tag; shielded inputs contribute their own generator. `generator` is
+        what the verifier checks; `raw_tag`/`blinding` let `create_surjection_proof` prove
+        membership for the matching entry.
+        """
+        from hathorlib.crypto.shielded import derive_asset_tag, derive_tag, normalize_token_uid
+        from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+        domain: list[tuple[bytes, bytes, bytes]] = []
+        for tx_input in vertex.inputs:
+            spent = self._vertice_per_id.get(tx_input.tx_id)
+            assert spent is not None, 'spent vertex must be built before its spender'
+            if tx_input.index < len(spent.outputs):
+                spent_output = spent.outputs[tx_input.index]
+                if spent_output.is_token_authority():
+                    continue
+                token_uid = normalize_token_uid(spent.get_token_uid(spent_output.get_token_index()))
+                domain.append((derive_asset_tag(token_uid), derive_tag(token_uid), bytes(32)))
+            else:
+                # Shielded input (not exercised by current simulator scenarios, which spend
+                # transparent outputs): mirror the verifier's domain generator so the lengths
+                # and order still match.
+                shielded_out = spent.shielded_outputs[tx_input.index - len(spent.outputs)]
+                if isinstance(shielded_out, FullShieldedOutput):
+                    domain.append((shielded_out.asset_commitment, b'', bytes(32)))
+                elif isinstance(shielded_out, AmountShieldedOutput):
+                    token_uid = normalize_token_uid(spent.get_token_uid(shielded_out.token_data & 0x7F))
+                    domain.append((derive_asset_tag(token_uid), derive_tag(token_uid), bytes(32)))
+        return domain
+
+    def add_sout_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
+        """Attach a ShieldedOutputsHeader for any `sout[]` declarations on the node.
+
+        This is the simulator/`sout[]` DSL path (see `set_shielded_output`), kept
+        separate from the `[shielded]`/`[full-shielded]` attribute path in
+        `add_shielded_outputs_header_if_needed`. The header is appended before
+        `sign_all_inputs` so the signature covers it. Requires
+        `ENABLE_SHIELDED_TRANSACTIONS` in settings for the node to accept the tx.
+        """
+        import os
+
+        from hathor.simulator.shielded import build_shielded_output
+        from hathorlib.crypto.shielded import compute_balancing_blinding_factor
+        from hathorlib.headers.shielded_outputs_header import ShieldedOutputsHeader
+        from hathorlib.transaction.shielded_tx_output import OutputMode, ShieldedOutput
+
+        shielded = [s for s in node.shielded_outputs if s is not None]
+        if not shielded:
+            return
+        assert isinstance(vertex, Transaction)
+
+        # Resolve per-output token + script, and pick the generator blinding factor (gbf):
+        # random for FULLY_SHIELDED (its commitment uses a blinded asset generator), zero for
+        # AMOUNT_ONLY (unblinded per-token generator).
+        specs: list[tuple[int, bytes, int, bytes, OutputMode, bytes]] = []
+        for sout in shielded:
+            if sout.token == 'HTR':
+                token_uid = self._settings.HATHOR_TOKEN_UID
+                token_data = 0
+            else:
+                token_id = self._get_token_id(sout.token)
+                if token_id not in vertex.tokens:
+                    vertex.tokens.append(token_id)
+                token_uid = token_id
+                token_data = 1 + vertex.tokens.index(token_id)
+            gbf = os.urandom(32) if sout.mode == OutputMode.FULLY_SHIELDED else bytes(32)
+            specs.append((sout.amount, token_uid, token_data, self.get_next_p2pkh_script(), sout.mode, gbf))
+
+        # Balance the value blinding factors so the homomorphic balance equation holds.
+        # Transparent inputs/outputs and the HTR fee contribute 0 to the G component
+        # (vbf = gbf = 0), so only the shielded outputs need to balance among themselves:
+        # the last output's vbf is solved from the others (commitment G-coefficient is
+        # `amount*gbf + vbf`, which must sum to zero across the shielded set).
+        vbfs: list[bytes] = [os.urandom(32) for _ in specs[:-1]]
+        other_outputs = [(specs[i][0], vbfs[i], specs[i][5]) for i in range(len(specs) - 1)]
+        last_amount, _, _, _, _, last_gbf = specs[-1]
+        vbfs.append(compute_balancing_blinding_factor(last_amount, last_gbf, [], other_outputs))
+
+        # FULLY_SHIELDED outputs need a surjection proof over the tx's input asset domain.
+        surjection_domain = self._build_surjection_domain(vertex) \
+            if any(mode == OutputMode.FULLY_SHIELDED for *_, mode, _ in specs) else None
+
+        outputs: list[ShieldedOutput] = []
+        for (amount, token_uid, token_data, script, mode, gbf), vbf in zip(specs, vbfs):
+            outputs.append(build_shielded_output(
+                amount=amount,
+                token_uid=token_uid,
+                token_data=token_data,
+                script=script,
+                mode=mode,
+                # Resolve the recipient pubkey from the (owned) wallet so the output
+                # is rewindable; falls back to a valid non-rewindable output if absent.
+                recipient_pubkey=self._get_recipient_pubkey_from_script(script),
+                value_blinding=vbf,
+                asset_blinding=gbf if mode == OutputMode.FULLY_SHIELDED else None,
+                surjection_domain=surjection_domain if mode == OutputMode.FULLY_SHIELDED else None,
+            ))
+
+        vertex.headers.append(ShieldedOutputsHeader(shielded_outputs=outputs))
 
     def create_vertex_on_chain_blueprint(self, node: DAGNode) -> OnChainBlueprint:
         """Create an OnChainBlueprint given a node."""

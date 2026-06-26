@@ -48,6 +48,8 @@ Special attributes:
     a.out[i] = 100 HTR          # set that the i-th output of a holds 100 HTR
     a.out[i] = 100 TOKEN        # set that the i-th output of a holds 100 TOKEN where TOKEN is a custom token
     a.weight = 50               # set vertex weight
+    a.sout[j] = 30 HTR [w]      # shielded output j (AMOUNT_ONLY); wire index = len(transparent)+j
+    a.sout[j] = 10 HTR [w] [full-shielded]   # FULLY_SHIELDED output
 
 Nano Contracts:
 
@@ -137,6 +139,7 @@ class TokenType(Enum):
     PARENT = auto()
     SPEND = auto()
     OUTPUT = auto()
+    SHIELDED_OUTPUT = auto()
     ORDER_BEFORE = auto()
 
 
@@ -210,7 +213,13 @@ def tokenize(content: str) -> Iterator[Token]:
 
         elif parts[1] == '=':
             name, key = parts[0].split('.', 1)
-            if key.startswith('out[') and key[-1] == ']':
+            if key.startswith('sout[') and key[-1] == ']':
+                index = int(key[5:-1])
+                amount = int(parts[2])
+                token = parts[3]
+                shielded_attrs = parts[4:]
+                yield (TokenType.SHIELDED_OUTPUT, (name, index, amount, token, shielded_attrs))
+            elif key.startswith('out[') and key[-1] == ']':
                 index = int(key[4:-1])
                 amount = int(parts[2])
                 token = parts[3]

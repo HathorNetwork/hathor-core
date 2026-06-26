@@ -22,6 +22,7 @@ from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeTyp
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathorlib.token_amount import SignedAmount, UnsignedAmount
+from hathorlib.transaction.shielded_tx_output import OutputMode
 
 
 class DefaultFiller:
@@ -122,6 +123,13 @@ class DefaultFiller:
             assert txout is not None
             outs[txout.token] += txout.amount
 
+        # Shielded outputs (`sout[]`) are not transparent outputs, but the input side must
+        # still cover their value for the homomorphic balance equation to hold.
+        for sout in node.shielded_outputs:
+            if sout is None:
+                continue
+            outs[sout.token] += sout.amount
+
         keys = set(ins.keys()) | set(outs.keys()) | set(node.balances.keys())
         balance = {}
         for key in keys:
@@ -139,6 +147,14 @@ class DefaultFiller:
             if attrs.get('full-shielded'):
                 fee += self._settings.FEE_PER_FULL_SHIELDED_OUTPUT
             elif attrs.get('shielded'):
+                fee += self._settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT
+        # Same per-output fees apply to the `sout[]` shielded outputs.
+        for sout in node.shielded_outputs:
+            if sout is None:
+                continue
+            if sout.mode == OutputMode.FULLY_SHIELDED:
+                fee += self._settings.FEE_PER_FULL_SHIELDED_OUTPUT
+            else:
                 fee += self._settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT
         if fee > 0:
             node.balances['HTR'] = node.balances.get('HTR', 0) - fee
