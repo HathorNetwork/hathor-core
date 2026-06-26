@@ -63,9 +63,13 @@ tests-custom:
 build-shielded-crypto:
 	poetry run maturin develop --release --manifest-path htr-rs/crates/htr-lib-py/Cargo.toml
 
+# pyo3 test binaries link libpython at runtime, but pyenv's lib dir is not on the
+# loader path and no RPATH is baked in, so the shared lib must be located explicitly.
+PYTHON_LIBDIR := $(shell python3 -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')
+
 .PHONY: tests-shielded
 tests-shielded:
-	cd htr-rs && cargo nextest run --workspace
+	cd htr-rs && LD_LIBRARY_PATH="$(PYTHON_LIBDIR):$$LD_LIBRARY_PATH" cargo nextest run --workspace
 	pytest hathor_tests/crypto/test_shielded_bindings.py -v
 
 .PHONY: tests
