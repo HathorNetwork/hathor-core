@@ -439,7 +439,6 @@ dependencies = [
     { name = "configargparse" },
     { name = "cryptography" },
     { name = "graphviz" },
-    { name = "hathor-ct-crypto" },
     { name = "hathorlib" },
     { name = "htr-lib" },
     { name = "idna" },
@@ -496,7 +495,6 @@ requires-dist = [
     { name = "configargparse", specifier = ">=1.7.1,<1.8.0" },
     { name = "cryptography", specifier = ">=42.0.5,<42.1.0" },
     { name = "graphviz", specifier = ">=0.20.1,<0.21.0" },
-    { name = "hathor-ct-crypto", editable = "htr-rs/crates/hathor-ct-crypto" },
     { name = "hathorlib", editable = "hathorlib" },
     { name = "htr-lib", editable = "htr-rs/crates/htr-lib-py" },
     { name = "idna", specifier = ">=3.4,<3.5" },
@@ -539,10 +537,6 @@ dev = [
     { name = "types-requests", specifier = "==2.28.11.4" },
     { name = "yamllint", specifier = ">=1.35.1,<1.36.0" },
 ]
-
-[[package]]
-name = "hathor-ct-crypto"
-source = { editable = "htr-rs/crates/hathor-ct-crypto" }
 
 [[package]]
 name = "hathorlib"
