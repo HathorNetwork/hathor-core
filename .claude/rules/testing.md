@@ -4,6 +4,15 @@ globs: ["hathor_tests/**/*.py"]
 
 # Testing Conventions
 
+## Assertions
+Use pytest primitives, even inside `unittest.TestCase` subclasses (pytest runs them):
+- Use bare `assert` — `assert x == y`, `assert x is None`, `assert x in y` — not `self.assertEqual`,
+  `self.assertIsNone`, `self.assertIn`, `self.assertTrue`, etc.
+- Use `pytest.raises` (optionally with `match=...`) — not `self.assertRaises`.
+- Prefer exact-value assertions: exact exception types, exact messages (`match=re.escape('...')` pins the
+  whole message), and exact rendered output. Avoid `contains`-style checks that pass when surrounding text
+  drifts.
+
 ## Base Classes
 - `TestCase` — general tests (from `hathor_tests.unittest`)
 - `SimulatorTestCase` — DAG/consensus simulation tests

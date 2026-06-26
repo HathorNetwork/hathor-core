@@ -49,66 +49,21 @@ Implementation notes (per class, when these are turned into real tests):
   already covers the runner cross-version matrix; the nano cases here intentionally overlap at the action/balance
   level per the request to include even covered behavior).
 - Amount-model cases are pure-Python contract tests against `htr_lib.UnsignedAmount` / `SignedAmount`.
+
+Test conventions:
+- Use pytest primitives: `pytest.raises` (not `self.assertRaises`) and bare `assert` (not `self.assertEqual`,
+  `self.assertIsNone`, etc.).
+- If a test fails because of a bug in the production code (not a bug in the test), do NOT fix the production
+  code as part of writing the test. Keep the assertion pinned to the correct, specified behavior, add a comment
+  explaining the production defect that makes it fail, and leave the test failing. A failure of this kind is a
+  signal to surface, not something to silence.
+
+Implemented classes live in their own modules:
+- `TestTokenAmountVersionDerivation` -> `test_derivation.py`
+- `TestTokenAmountVersionVerification` -> `test_verification.py`
 """
 
 from __future__ import annotations
-
-
-class TestTokenAmountVersionDerivation:
-    """How a vertex's token amount version is derived from `signal_bits`, and which vertices are exempt.
-    use dag builder to build a simple tx and check accordingly. Manipulate it after the dag is built if necessary."""
-
-    def test_version_reads_only_signal_bits_lsb(self) -> None:
-        """Build txs with `signal_bits` 0b0, 0b1, 0b10, 0b11, 0b100, 0b101 and assert `get_token_amount_version()`
-        is V1 for an even LSB and V2 for an odd LSB regardless of the higher bits. Pins that only bit 0 selects the
-        version and the other (feature-signaling) bits are independent."""
-        raise NotImplementedError
-
-    def test_version_is_one_indexed(self) -> None:
-        """Assert `int(TokenAmountVersion.V1) == 1` and `int(TokenAmountVersion.V2) == 2`, and that LSB 0 maps to V1
-        (not V0). Pins the 1-indexed mapping that is encoded on-chain and must never drift."""
-        raise NotImplementedError
-
-    def test_block_token_amount_version_is_always_v1(self) -> None:
-        """For a regular/merge-mined/PoA block with arbitrary `signal_bits` (including LSB set, and even with the
-        feature active), assert its reported token amount version is V1 and its reward outputs encode as V1. Pins
-        that block feature-signaling bits never make a block V2."""
-        raise NotImplementedError
-
-    def test_genesis_is_v1(self) -> None:
-        """Assert genesis vertices, including genesis transactions, report V1.
-        Pins genesis is unaffected by the feature."""
-        raise NotImplementedError
-
-    def test_token_creation_tx_version_round_trips(self) -> None:
-        """Build a V2 `TokenCreationTransaction` (LSB 1), serialize and re-parse, and assert
-        `get_token_amount_version() == V2` survives and its outputs decode under V2. Pins the version as part of the
-        serialization contract for token-creation txs."""
-        raise NotImplementedError
-
-
-class TestTokenAmountVersionVerification:
-    """The feature gate `TransactionVerifier.verify_token_amount_version` (runs in storage-less basic verify)."""
-
-    def test_v1_tx_accepted_when_feature_inactive(self) -> None:
-        """With `ENABLE_TOKEN_AMOUNT_V2` disabled (features.token_amount_version == V1), a V1 tx passes the gate and
-        full verification. Pins that the gate never rejects V1 (1 > 1 is false)."""
-        raise NotImplementedError
-
-    def test_v1_tx_accepted_when_feature_active(self) -> None:
-        """With the feature active (features == V2), a V1 tx is still accepted (1 > 2 false). Pins backward
-        compatibility: activation never forces V2."""
-        raise NotImplementedError
-
-    def test_v2_tx_rejected_when_feature_inactive(self) -> None:
-        """With the feature disabled, a V2 tx (LSB 1) is rejected. Assert the exact exception is
-        `TxValidationError` with message `invalid token amount version: V2`. This is the core gating case."""
-        raise NotImplementedError
-
-    def test_v2_tx_accepted_when_feature_active(self) -> None:
-        """With the feature active, a V2 tx passes the gate and full verification (2 > 2 false). Pins the boundary
-        equality accepts."""
-        raise NotImplementedError
 
 
 class TestCrossVersionBalance:
@@ -358,12 +313,14 @@ class TestNanoContractsTokenAmountVersion:
 
     def test_call_method_cross_version_raises_ncfail(self) -> None:
         """Calling a public or view method on a contract whose blueprint version differs from the tx's runtime
-        version raises the same `NCFail`; same-version calls succeed. (overlaps existing nano test file). Use dag builder"""
+        version raises the same `NCFail`; same-version calls succeed. (overlaps existing nano test file). Use dag
+        builder"""
         raise NotImplementedError
 
     def test_inter_contract_call_cross_version_raises_ncfail(self) -> None:
         """A V1 contract calling/depositing into a V2 contract (via get_contract/proxy/setup_new_contract) raises
-        `NCFail` before any balance mutation; assert balances are unchanged. (overlaps existing nano test file). Use dag builder."""
+        `NCFail` before any balance mutation; assert balances are unchanged. (overlaps existing nano test file). Use
+        dag builder."""
         raise NotImplementedError
 
     def test_block_executor_runs_v2_nano_tx(self) -> None:
