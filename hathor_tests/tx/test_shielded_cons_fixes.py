@@ -1313,7 +1313,7 @@ class TestToJsonExtended:
         tx.get_token_uid = MagicMock(return_value=custom_token_uid)
 
         result = GenericVertex.to_json_extended(tx)
-        shielded_output = result['outputs'][0]
+        shielded_output = result['shielded_outputs'][0]
         assert shielded_output.get('type') == 'shielded'
         assert 'token' in shielded_output, 'AmountShielded output must have resolved token field'
         assert shielded_output['token'] == custom_token_uid.hex()
@@ -1346,7 +1346,7 @@ class TestToJsonExtended:
         tx.get_metadata = MagicMock(return_value=meta)
 
         result = GenericVertex.to_json_extended(tx)
-        shielded_output = result['outputs'][0]
+        shielded_output = result['shielded_outputs'][0]
         assert shielded_output.get('type') == 'shielded'
         assert 'token' not in shielded_output, 'FullShielded output must not have token field'
 
