@@ -22,7 +22,6 @@ from hathor.api_util import Resource, render_options, set_cors
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
-from hathor.feature_activation.utils import Features
 from hathor.manager import HathorManager
 from hathor.transaction import Transaction
 from hathor.transaction.exceptions import TxValidationError
@@ -134,8 +133,7 @@ class SendTokensResource(Resource):
         tx.weight = weight
         self.manager.cpu_mining_service.resolve(tx)
         tx.init_static_metadata_from_storage(self._settings, self.manager.tx_storage)
-        best_block = self.manager.tx_storage.get_best_block()
-        params = VerificationParams.for_mempool(best_block=best_block, features=Features.all_enabled())
+        params = VerificationParams.for_apis(self.manager.tx_storage)
         self.manager.verification_service.verify(tx, params)
         return tx
 

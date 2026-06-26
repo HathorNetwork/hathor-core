@@ -127,10 +127,7 @@ class NanoHeaderVerifier:
                     f'{action.name} action requires token {action.token_uid.hex()} in tokens list'
                 )
 
-    def verify_method_call(self, tx: BaseTransaction, params: VerificationParams) -> None:
-        if not params.harden_nano_restrictions:
-            return
-
+    def verify_method_call(self, tx: BaseTransaction) -> None:
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
 
@@ -182,10 +179,7 @@ class NanoHeaderVerifier:
                 exception = NCForbiddenAction(f'action {action.type} is forbidden on method `{method_name}`')
                 raise NCTxValidationError from exception
 
-    def verify_seqnum(self, tx: BaseTransaction, params: VerificationParams) -> None:
-        if not params.harden_nano_restrictions:
-            return
-
+    def verify_seqnum(self, tx: BaseTransaction) -> None:
         assert tx.is_nano_contract()
         assert isinstance(tx, Transaction)
 

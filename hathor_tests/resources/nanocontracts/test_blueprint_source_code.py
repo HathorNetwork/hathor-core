@@ -125,6 +125,6 @@ class TestBlueprint(Blueprint):
         from hathor_tests.resources import nanocontracts
         nc_code = load_builtin_blueprint_for_ocb('dummy_blueprint.py', 'TestBlueprint', nanocontracts)
         blueprint = self.create_on_chain_blueprint(self.manager, nc_code)
-        self.manager.vertex_handler.on_new_relayed_vertex(blueprint)
+        self.manager.vertex_handler.on_new_mempool_transaction(blueprint)
         add_new_blocks(self.manager, 1, advance_clock=30)  # confirm the on-chain blueprint vertex
         self.blueprint_id = BlueprintId(blueprint.hash)

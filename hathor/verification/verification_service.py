@@ -109,7 +109,7 @@ class VerificationService:
             return
 
         self.verifiers.vertex.verify_version_basic(vertex)
-        self.verifiers.vertex.verify_old_timestamp(vertex, params)
+        self.verifiers.vertex.verify_old_timestamp(vertex)
 
         # We assert with type() instead of isinstance() because each subclass has a specific branch.
         match vertex.version:
@@ -203,8 +203,8 @@ class VerificationService:
 
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
-            self.verifiers.nano_header.verify_method_call(vertex, params)
-            self.verifiers.nano_header.verify_seqnum(vertex, params)
+            self.verifiers.nano_header.verify_method_call(vertex)
+            self.verifiers.nano_header.verify_seqnum(vertex)
 
     @cpu.profiler(key=lambda _, block: 'block-verify!{}'.format(block.hash.hex()))
     def _verify_block(self, block: Block, params: VerificationParams) -> None:
@@ -273,9 +273,8 @@ class VerificationService:
             allow_nonexistent_tokens=tx.is_nano_contract()
         )
         self.verifiers.vertex.verify_parents(tx)
-        self.verifiers.tx.verify_conflict(tx, params)
-        if params.reject_locked_reward:
-            self.verifiers.tx.verify_reward_locked(tx)
+        self.verifiers.tx.verify_conflict(tx)
+        self.verifiers.tx.verify_reward_locked(tx)
 
     def _verify_token_creation_tx(self, tx: TokenCreationTransaction, params: VerificationParams) -> None:
         """ Run all validations as regular transactions plus validation on token info.
@@ -350,7 +349,7 @@ class VerificationService:
         self.verifiers.vertex.verify_outputs(tx)
         self.verifiers.tx.verify_output_token_indexes(tx)
         self.verifiers.vertex.verify_sigops_output(tx, params.features.count_checkdatasig_op)
-        self.verifiers.tx.verify_tokens(tx, params)
+        self.verifiers.tx.verify_tokens(tx)
 
     def _verify_without_storage_token_creation_tx(
         self,

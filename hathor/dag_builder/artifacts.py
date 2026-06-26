@@ -75,6 +75,7 @@ class DAGArtifacts:
         Propagations are performed using `VertexHandler._old_on_new_vertex()`, which bypasses mempool rules by default.
         Set `new_relayed_vertex` to True to apply these rules during propagation.
         """
+        from hathor.transaction import Block, Transaction
         found_begin = self._last_propagated is None
         found_end = False
 
@@ -85,7 +86,13 @@ class DAGArtifacts:
 
             if found_begin:
                 try:
-                    assert manager.vertex_handler.on_new_relayed_vertex(vertex)
+                    match vertex:
+                        case Transaction():
+                            assert manager.vertex_handler.on_new_mempool_transaction(vertex)
+                        case Block():
+                            assert manager.vertex_handler.on_new_relayed_block(vertex)
+                        case _:
+                            raise AssertionError('unreachable')
                 except Exception as e:
                     raise Exception(f'failed on_new_tx({node.name})') from e
                 for step_fn in self._step_fns:
