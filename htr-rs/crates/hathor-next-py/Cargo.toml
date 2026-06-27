@@ -1,0 +1,16 @@
+[package]
+name = "hathor-next-py"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "hathor_next_py"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+hathor-next = { path = "../hathor-next" }
+pyo3 = { workspace = true }
+
+[lints]
+workspace = true
