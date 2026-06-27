@@ -936,6 +936,8 @@ class TransactionTest(unittest.TestCase):
         self.assertEqual(value, MAX_OUTPUT_VALUE)
 
     def test_output_value(self):
+        from hathor.serialization.encoding.output_value import MAX_OUTPUT_VALUE_32
+
         # first test using a small output value with 8 bytes. It should fail
         parents = [tx.hash for tx in self.genesis_txs]
         outputs = [TxOutput(1, b'')]
@@ -957,6 +959,31 @@ class TransactionTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             Transaction.create_from_struct(struct_bytes)
+
+        # boundary value MAX_OUTPUT_VALUE_32 (2**31 - 1) encoded as 8 bytes must also be rejected,
+        # otherwise it's a malleability hole: the canonical form fits in 4 bytes
+        outputs = [TxOutput(MAX_OUTPUT_VALUE_32, b'')]
+        tx = Transaction(outputs=outputs, parents=parents)
+        original_struct = tx.get_struct()
+        struct_bytes = tx.get_funds_struct()
+        struct_bytes = struct_bytes[:-7]
+        struct_bytes += (-MAX_OUTPUT_VALUE_32).to_bytes(8, byteorder='big', signed=True)
+        struct_bytes += int_to_bytes(0, 1)
+        struct_bytes += int_to_bytes(0, 2)
+        struct_bytes += tx.get_graph_struct()
+        struct_bytes += int_to_bytes(tx.nonce, tx.SERIALIZATION_NONCE_SIZE)
+        len_difference = len(struct_bytes) - len(original_struct)
+        assert len_difference == 4, 'new struct is incorrect, len difference={}'.format(len_difference)
+        with self.assertRaises(ValueError):
+            Transaction.create_from_struct(struct_bytes)
+
+        # the canonical 8-byte form just above the boundary must still round-trip
+        outputs = [TxOutput(MAX_OUTPUT_VALUE_32 + 1, b'')]
+        tx = Transaction(outputs=outputs, parents=parents)
+        tx.update_hash()
+        tx2 = Transaction.create_from_struct(tx.get_struct())
+        tx2.update_hash()
+        assert tx == tx2
 
         # now use 8 bytes and make sure it's working
         outputs = [TxOutput(MAX_OUTPUT_VALUE, b'')]

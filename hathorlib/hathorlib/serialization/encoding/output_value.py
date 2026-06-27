@@ -76,6 +76,23 @@ Number must be strictly positive
 b'test'
 >>> de.finalize()
 
+Non-canonical 8-byte encodings of values that fit in 4 bytes must be rejected
+(otherwise the same logical value would have two valid byte representations):
+
+>>> de = Deserializer.build_bytes_deserializer(bytes.fromhex('ffffffffffffffff'))  # value = 1 in 8 bytes
+>>> try:
+...     decode_output_value_v1(de)
+... except ValueError as e:
+...     print(*e.args)
+Value fits in 4 bytes but is using 8 bytes
+
+>>> de = Deserializer.build_bytes_deserializer(bytes.fromhex('ffffffff80000001'))  # value = 2**31 - 1 in 8 bytes
+>>> try:
+...     decode_output_value_v1(de)
+... except ValueError as e:
+...     print(*e.args)
+Value fits in 4 bytes but is using 8 bytes
+
 V2 roundtrips:
 
 >>> def roundtrip_v2(value, **kwargs):
