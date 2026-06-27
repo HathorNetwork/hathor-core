@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import base58
 
 from hathor.crypto.util import decode_address, get_private_key_from_bytes, get_public_key_bytes_compressed

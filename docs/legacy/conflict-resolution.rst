@@ -1,3 +1,6 @@
+.. SPDX-FileCopyrightText: Hathor Labs
+.. SPDX-License-Identifier: Apache-2.0
+
 Conflict Resolution
 ===================
 Conflict resolution deals with two situations: (i) blocks out of the longest chain, and (ii) two or more transactions trying to spend the same output.

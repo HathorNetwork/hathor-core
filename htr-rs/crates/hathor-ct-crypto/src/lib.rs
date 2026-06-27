@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Python extension module exposing Hathor's confidential-transactions crypto to `hathor-core` via PyO3.
 //!
 //! This crate is intentionally empty for now: the Python type surface lives in

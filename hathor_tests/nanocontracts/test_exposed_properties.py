@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from collections.abc import Iterator
 from sys import version_info
 from types import MethodType

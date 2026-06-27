@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 P2PKH_VERSION_BYTE: x28
 MULTISIG_VERSION_BYTE: x64
 NETWORK_NAME: mainnet

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor_tests.unittest import TestCase
 

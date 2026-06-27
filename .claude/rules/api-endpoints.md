@@ -64,10 +64,8 @@ class MyResource(Resource):
 When creating a new resource file in a `hathor/**/resources/` directory, use this template:
 
 ```python
-#  Copyright <YEAR> Hathor Labs  # Use the current year
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  ...full Apache 2.0 header...
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 

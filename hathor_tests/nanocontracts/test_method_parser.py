@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 from collections.abc import Callable
 from typing import Any, Optional, TypeVar

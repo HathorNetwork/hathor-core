@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Shielded transaction cryptographic primitives.
 
 The cryptographic primitives themselves (Pedersen commitments, range proofs,

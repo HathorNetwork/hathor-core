@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from ipaddress import ip_network
 
 from twisted.internet.address import HostnameAddress, IPv4Address, IPv6Address, UNIXAddress

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.internet.protocol import Protocol
 
 from hathor.indexes.height_index import HeightInfo

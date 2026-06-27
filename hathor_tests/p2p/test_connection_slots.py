@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.python.failure import Failure
 
 from hathor.p2p.connection_slot import SlotsManager, SlotsManagerSettings

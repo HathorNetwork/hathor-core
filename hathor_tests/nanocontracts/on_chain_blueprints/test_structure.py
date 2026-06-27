@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.conf.get_settings import get_global_settings
 from hathor.nanocontracts import OnChainBlueprint
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb

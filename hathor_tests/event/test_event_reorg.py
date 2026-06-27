@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.event.model.event_type import EventType
 from hathor.event.storage import EventRocksDBStorage
 from hathor.simulator.utils import add_new_blocks
