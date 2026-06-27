@@ -90,6 +90,8 @@ class Hash:
 
     def __init__(self, inner: bytes | str) -> None:
         if isinstance(inner, str):
+            if len(inner) % 2 != 0:
+                raise ValueError(f'non-hexadecimal number found in fromhex() arg at position {len(inner)}')
             inner = bytes.fromhex(inner)
         if not isinstance(inner, bytes):
             raise TypeError(f'expected a bytes or str instance, got a {repr(type(inner))} instead')

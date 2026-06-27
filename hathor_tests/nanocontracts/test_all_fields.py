@@ -116,6 +116,8 @@ class TestAllFields(unittest.TestCase):
     def test_no_typing_union(self) -> None:
         from typing import Union
 
+        union_type = str(Union[str, int])
+
         with self.assertRaises(BlueprintSyntaxError) as cm:
             class MyInvalidBlueprint(Blueprint):
                 invalid_attribute: Union[str, int]
@@ -124,10 +126,10 @@ class TestAllFields(unittest.TestCase):
                 def initialize(self, ctx: Context) -> None:
                     pass
 
-        assert cm.exception.args[0] == 'unsupported field type: `invalid_attribute: typing.Union[str, int]`'
+        assert cm.exception.args[0] == f'unsupported field type: `invalid_attribute: {union_type}`'
         context_exception = cm.exception.__context__
         assert isinstance(context_exception, TypeError)
-        assert context_exception.args[0] == r"type typing.Union[str, int] is not supported by any NCType class"
+        assert context_exception.args[0] == f'type {union_type} is not supported by any NCType class'
 
     def test_no_union_type(self) -> None:
         with self.assertRaises(BlueprintSyntaxError) as cm:

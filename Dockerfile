@@ -6,9 +6,14 @@ ARG DEBIAN=bullseye
 # stage-0: copy pyproject.toml/poetry.lock and install the production set of dependencies
 FROM python:$PYTHON-slim-$DEBIAN AS stage-0
 ARG PYTHON
+ARG DEBIAN
 # install runtime first deps to speedup the dev deps and because layers will be reused on stage-1
 RUN apt-get -qy update
-RUN apt-get -qy install libssl1.1 graphviz librocksdb6.11
+RUN if [ "$DEBIAN" = "bullseye" ]; then \
+      apt-get -qy install libssl1.1 graphviz librocksdb6.11; \
+    else \
+      apt-get -qy install libssl3 graphviz librocksdb-dev; \
+    fi
 # dev deps for this build start here
 RUN apt-get -qy install libssl-dev libffi-dev build-essential zlib1g-dev libbz2-dev libsnappy-dev liblz4-dev librocksdb-dev git pkg-config curl
 # Bullseye's apt cargo is too old for htr-rs (edition 2024 / resolver 3 require Rust 1.85+), so install via rustup
@@ -35,8 +40,13 @@ RUN poetry run pip install --no-deps --force-reinstall ./hathorlib ./htr-rs/crat
 # lean and mean: this image should be about ~50MB, would be about ~470MB if using the whole stage-1
 FROM python:$PYTHON-slim-$DEBIAN
 ARG PYTHON
+ARG DEBIAN
 RUN apt-get -qy update
-RUN apt-get -qy install libssl1.1 graphviz librocksdb6.11
+RUN if [ "$DEBIAN" = "bullseye" ]; then \
+      apt-get -qy install libssl1.1 graphviz librocksdb6.11; \
+    else \
+      apt-get -qy install libssl3 graphviz librocksdb-dev; \
+    fi
 COPY --from=stage-0 /app/.venv/lib/python${PYTHON}/site-packages/ /usr/local/lib/python${PYTHON}/site-packages/
 # XXX: copy optional BUILD_VERSION file using ...VERSIO[N] instead of ...VERSION* to ensure only one file will be copied
 # XXX: also copying the README.md because we need at least one existing file

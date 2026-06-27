@@ -26,8 +26,9 @@ requires-python = ">=3.11,<4"
 classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
     "base58>=2.1.1,<2.2.0",
@@ -61,7 +62,7 @@ pydantic = "^2.0"
 pyyaml = "^6.0.1"
 htr-lib = {path = "../htr-rs/crates/htr-lib-py", develop = true}
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 isort = {version = "~5.13.2", extras = ["colors"]}
 mypy = {version = "^1.9.0", markers = "implementation_name == 'cpython'"}
 pytest = "~8.1.1"

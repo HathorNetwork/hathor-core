@@ -137,8 +137,6 @@ KNOWN_CASES = [
     'typing.Optional._name',
     'typing.TypeAlias._getitem',
     'typing.TypeAlias._name',
-    'typing.Union._getitem',
-    'typing.Union._name',
 ]
 
 # XXX: these only appear in Python 3.11
@@ -148,8 +146,16 @@ if version_info[1] == 11:
     ])
 
 
-# XXX: these only appear in Python 3.13
-if version_info[1] == 13:
+# XXX: these only appear before Python 3.14
+if version_info[1] < 14:
+    KNOWN_CASES.extend([
+        'typing.Union._getitem',
+        'typing.Union._name',
+    ])
+
+
+# XXX: these appear in Python 3.13+
+if version_info[1] >= 13:
     KNOWN_CASES.extend([
         'hathor.NCActionType._hashable_values_',
         'hathor.NCActionType._unhashable_values_map_',
