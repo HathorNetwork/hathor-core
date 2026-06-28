@@ -750,12 +750,13 @@ class NodeBlockSync(SyncAgent):
         self.receiving_stream = False
         assert self.protocol.connections is not None
 
-        if self.state is not PeerState.SYNCING_BLOCKS:
-            self.log.error('unexpected BLOCKS-END', state=self.state, response_code=response_code.name)
-            self.protocol.send_error_and_close_connection('Not expecting to receive BLOCKS-END message')
+        if self.state is not PeerState.SYNCING_BLOCKS or self._blk_streaming_client is None:
+            # A stale BLOCKS-END can arrive after we already finished or aborted this stream and
+            # moved on (e.g. after a reorg-driven retry). It is harmless, so we ignore it instead
+            # of closing the connection, which would trigger a needless reconnect.
+            self.log.debug('ignoring unexpected BLOCKS-END', state=self.state, response_code=response_code.name)
             return
 
-        assert self._blk_streaming_client is not None
         self._blk_streaming_client.handle_blocks_end(response_code)
         self.log.debug('block streaming ended', reason=str(response_code))
 
@@ -1004,12 +1005,14 @@ class NodeBlockSync(SyncAgent):
         self.receiving_stream = False
         assert self.protocol.connections is not None
 
-        if self.state is not PeerState.SYNCING_TRANSACTIONS:
-            self.log.error('unexpected TRANSACTIONS-END', state=self.state, response_code=response_code.name)
-            self.protocol.send_error_and_close_connection('Not expecting to receive TRANSACTIONS-END message')
+        if self.state is not PeerState.SYNCING_TRANSACTIONS or self._tx_streaming_client is None:
+            # A stale TRANSACTIONS-END can arrive after we already finished or aborted this stream
+            # and moved on (e.g. after a reorg-driven retry). It is harmless, so we ignore it
+            # instead of closing the connection, which would trigger a needless reconnect.
+            self.log.debug('ignoring unexpected TRANSACTIONS-END', state=self.state,
+                           response_code=response_code.name)
             return
 
-        assert self._tx_streaming_client is not None
         self._tx_streaming_client.handle_transactions_end(response_code)
         self.log.debug('transaction streaming ended', reason=str(response_code))
 
