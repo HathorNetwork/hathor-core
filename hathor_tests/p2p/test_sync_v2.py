@@ -6,15 +6,18 @@ import re
 from typing import cast
 from unittest.mock import patch
 
+from structlog import get_logger
 from twisted.internet.defer import Deferred, succeed
 from twisted.python.failure import Failure
 
 from hathor.p2p.messages import ProtocolMessages
 from hathor.p2p.peer import PrivatePeer
 from hathor.p2p.states import ReadyState
-from hathor.p2p.sync_v2.agent import NodeBlockSync, _HeightInfo
+from hathor.p2p.sync_v2.agent import NodeBlockSync, PeerState, _HeightInfo
 from hathor.p2p.sync_v2.blockchain_streaming_client import BlockchainStreamingClient
 from hathor.p2p.sync_v2.exception import StreamingError
+from hathor.p2p.sync_v2.streamers import StreamEnd, TransactionsStreamingServer
+from hathor.p2p.sync_v2.transaction_streaming_client import TransactionStreamingClient
 from hathor.simulator import FakeConnection
 from hathor.simulator.trigger import (
     StopAfterNMinedBlocks,
@@ -23,13 +26,41 @@ from hathor.simulator.trigger import (
     StopWhenTrue,
     Trigger,
 )
-from hathor.transaction import Block
+from hathor.transaction import Block, Transaction
 from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.transaction.storage.transaction_storage import TransactionStorage
+from hathor.transaction.storage.traversal import BFSOrderWalk
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.simulation.base import SimulatorTestCase
+
+
+def _make_tx_streaming_server(
+    sync_agent: object,
+    *,
+    first_block: Block,
+    last_block: Block,
+) -> TransactionsStreamingServer:
+    """Build a `TransactionsStreamingServer` driven directly, bypassing `__init__` (which is
+    otherwise coupled to a live connection). Streaming starts at `first_block`."""
+    server = object.__new__(TransactionsStreamingServer)
+    server.sync_agent = cast(NodeBlockSync, sync_agent)
+    server.tx_storage = server.sync_agent.tx_storage
+    server.log = get_logger()
+    server.first_block = first_block
+    server.last_block = last_block
+    server.start_from = []
+    server.current_block = first_block
+    server.counter = 0
+    server.limit = 10_000
+    server.is_running = True
+    server.is_producing = True
+    server.bfs = BFSOrderWalk(
+        server.tx_storage, is_dag_verifications=True, is_dag_funds=True, is_left_to_right=False
+    )
+    server.iter = server.get_iter()
+    return server
 
 
 class RandomSimulatorTestCase(SimulatorTestCase):
@@ -344,6 +375,313 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         self.assertTrue(manager.tx_storage.transaction_exists(win12.hash))
         best_block = manager.tx_storage.get_best_block()
         self.assertEqual(best_block.hash, win12.hash)
+
+    def test_sync_v2_tx_streaming_advances_past_satisfied_blocks(self) -> None:
+        """Regression test for a transaction-streaming livelock during concurrent multi-peer sync.
+
+        A block is added to the streaming `partial_blocks` list while its dependencies are still
+        missing. If those dependencies are then downloaded from another peer before this peer
+        streams the block's transactions, the block becomes fully satisfied with no pending
+        dependencies. The client must advance past such already-satisfied leading blocks; otherwise
+        it stays stuck on the first one and rejects the transactions the server legitimately sends
+        for later blocks as `UnexpectedVertex`, which (with autoreconnect) loops forever.
+        """
+        source = self.create_peer()
+        dag_builder = TestDAGBuilder.from_manager(source)
+        artifacts = dag_builder.build_from_str('''
+            blockchain genesis b[1..45]
+            b30 < dummy
+            b40 --> txA
+            b45 --> txB
+        ''')
+        artifacts.propagate_with(source)
+
+        tx_a = artifacts.get_typed_vertex('txA', Transaction)
+        tx_b = artifacts.get_typed_vertex('txB', Transaction)
+        partial_blocks = list(artifacts.get_typed_vertices([f'b{i}' for i in range(40, 46)], Block))
+
+        # Simulate a client that already has every vertex EXCEPT the blocks being streamed — in
+        # particular it already has txA and txB, as if downloaded from another peer during
+        # concurrent sync. So b40..b45 all have their dependencies satisfied even though they are
+        # streamed as partial blocks. `existing` models the client's storage existence checks.
+        existing: set[VertexId] = {tx.hash for tx in source.tx_storage.get_all_transactions()}
+        existing -= {blk.hash for blk in partial_blocks}
+
+        completed: list[VertexId] = []
+
+        class FakeStorage:
+            def transaction_exists(self, vertex_id: VertexId) -> bool:
+                return vertex_id in existing
+
+        class DummyProtocol:
+            def __init__(self) -> None:
+                self.node = source
+
+            def get_short_peer_id(self) -> str:
+                return 'dummy'
+
+        class DummySync:
+            def __init__(self) -> None:
+                self.protocol = DummyProtocol()
+                self.tx_storage = FakeStorage()
+                self.reactor = source.reactor
+
+            def on_block_complete(self, blk: Block, vertex_list: list[Transaction]) -> Deferred[None]:
+                # Completing a block makes it available for the following block's dependencies.
+                completed.append(blk.hash)
+                existing.add(blk.hash)
+                return succeed(None)
+
+        client = TransactionStreamingClient(cast(NodeBlockSync, DummySync()), partial_blocks, limit=1000)
+        errors: list[StreamingError] = []
+        client.wait().addErrback(lambda failure: errors.append(failure.value))
+
+        # The server streams transactions in block order: txA (confirmed by b40), then txB
+        # (confirmed by b45). Both are already present, so neither is in the waiting list.
+        client.handle_transaction(tx_a)
+        client.handle_transaction(tx_b)
+        # Pump the reactor so the queued transactions are processed.
+        self.simulator.run(5)
+
+        self.assertFalse(errors, 'should stream without rejecting already-satisfied transactions')
+        # The client must advance through and complete every block, in order.
+        self.assertEqual(completed, [blk.hash for blk in partial_blocks])
+
+    def test_sync_v2_tx_streaming_advances_then_processes_tx_for_later_block(self) -> None:
+        """Regression test for the advance-then-process path of the transaction-streaming client.
+
+        This complements `test_sync_v2_tx_streaming_advances_past_satisfied_blocks`: there every
+        streamed transaction already exists in storage (the `transaction_exists` branch). Here the
+        client is positioned on an early block whose dependencies are already satisfied, and the
+        first transaction it receives is one it genuinely still needs — but for a *later* block,
+        because the server moved ahead while other peers satisfied the blocks in between. The client
+        must advance past the satisfied leading blocks until the transaction becomes one it is
+        waiting for, then process it normally instead of rejecting it as `UnexpectedVertex`.
+        """
+        source = self.create_peer()
+        dag_builder = TestDAGBuilder.from_manager(source)
+        artifacts = dag_builder.build_from_str('''
+            blockchain genesis b[1..45]
+            b30 < dummy
+            b40 --> txA
+            b45 --> txB
+        ''')
+        artifacts.propagate_with(source)
+
+        tx_b = artifacts.get_typed_vertex('txB', Transaction)
+        partial_blocks = list(artifacts.get_typed_vertices([f'b{i}' for i in range(40, 46)], Block))
+
+        # The client has every vertex EXCEPT the blocks being streamed and `txB`. So b40..b44 have
+        # their dependencies satisfied, but b45 still needs `txB` — which the server will stream.
+        existing: set[VertexId] = {tx.hash for tx in source.tx_storage.get_all_transactions()}
+        existing -= {blk.hash for blk in partial_blocks}
+        existing.discard(tx_b.hash)
+
+        completed: list[VertexId] = []
+
+        class FakeStorage:
+            def transaction_exists(self, vertex_id: VertexId) -> bool:
+                return vertex_id in existing
+
+        class DummyProtocol:
+            def __init__(self) -> None:
+                self.node = source
+
+            def get_short_peer_id(self) -> str:
+                return 'dummy'
+
+        class DummySync:
+            def __init__(self) -> None:
+                self.protocol = DummyProtocol()
+                self.tx_storage = FakeStorage()
+                self.reactor = source.reactor
+
+            def on_block_complete(self, blk: Block, vertex_list: list[Transaction]) -> Deferred[None]:
+                completed.append(blk.hash)
+                existing.add(blk.hash)
+                return succeed(None)
+
+        client = TransactionStreamingClient(cast(NodeBlockSync, DummySync()), partial_blocks, limit=1000)
+        errors: list[StreamingError] = []
+        client.wait().addErrback(lambda failure: errors.append(failure.value))
+
+        # The client starts positioned on b40. The first (and only) transaction it receives is txB,
+        # which is confirmed by the last block b45 and is still genuinely missing. The client must
+        # advance past b40..b44 until txB becomes a pending dependency, then process it.
+        client.handle_transaction(tx_b)
+        self.simulator.run(5)
+
+        self.assertFalse(errors, 'should advance to the later block and process the needed tx')
+        self.assertEqual(completed, [blk.hash for blk in partial_blocks])
+
+    def test_sync_v2_tx_streaming_stops_when_last_block_is_voided(self) -> None:
+        """The transaction-streaming server must stop when the requested `last_block` is voided.
+
+        A reorg during streaming can move `last_block` off the best chain. Since the server walks
+        the best chain, it would otherwise stream transactions confirmed by the replacement block at
+        the same height, followed by later blocks. The peer did not request these transactions and
+        rejects them as unexpected, which can deadlock concurrent multi-peer sync.
+        """
+        manager = self.create_peer()
+        dag_builder = TestDAGBuilder.from_manager(manager)
+        # A long main chain plus a one-block losing fork at b38. The fork block `lose1` is at the
+        # same height as `b39` but is voided (off the best chain). `tx_same` is confirmed by the
+        # same-height replacement, while `tx_over` is confirmed one height above `lose1`.
+        artifacts = dag_builder.build_from_str('''
+            blockchain genesis b[1..40]
+            b30 < dummy
+            b39 --> tx_same
+            b40 --> tx_over
+            blockchain b38 lose[1..1]
+        ''')
+        artifacts.propagate_with(manager)
+
+        first_block = artifacts.get_typed_vertex('b35', Block)
+        last_block = artifacts.get_typed_vertex('lose1', Block)
+        b39 = artifacts.get_typed_vertex('b39', Block)
+        b40 = artifacts.get_typed_vertex('b40', Block)
+        tx_same = artifacts.get_typed_vertex('tx_same', Transaction)
+        tx_over = artifacts.get_typed_vertex('tx_over', Transaction)
+
+        # Sanity check the scenario: `last_block` is reorged out, and the two transactions are
+        # confirmed respectively at the same height and one height above it.
+        self.assertTrue(last_block.get_metadata().voided_by)
+        self.assertEqual(not_none(tx_same.get_metadata().first_block), b39.hash)
+        self.assertEqual(not_none(tx_over.get_metadata().first_block), b40.hash)
+        self.assertEqual(
+            not_none(b39.static_metadata.height), not_none(last_block.static_metadata.height)
+        )
+        self.assertGreater(
+            not_none(b40.static_metadata.height), not_none(last_block.static_metadata.height)
+        )
+
+        sent: list[Transaction] = []
+
+        class DummySync:
+            def __init__(self) -> None:
+                self.tx_storage = manager.tx_storage
+                self.stopped: StreamEnd | None = None
+                self.server: TransactionsStreamingServer | None = None
+
+            def send_transaction(self, tx: Transaction) -> None:
+                sent.append(tx)
+
+            def stop_tx_streaming_server(self, response_code: StreamEnd) -> None:
+                assert self.server is not None
+                self.server.is_running = False
+                self.stopped = response_code
+
+        sync_agent = DummySync()
+        server = _make_tx_streaming_server(sync_agent, first_block=first_block, last_block=last_block)
+        sync_agent.server = server
+
+        for _ in range(server.limit):
+            if sync_agent.stopped is not None:
+                break
+            server.send_next()
+
+        # The server must report the reorg without streaming transactions from either the
+        # same-height replacement or later blocks.
+        self.assertEqual(sync_agent.stopped, StreamEnd.STREAM_BECAME_VOIDED)
+        sent_hashes = {tx.hash for tx in sent}
+        self.assertNotIn(tx_same.hash, sent_hashes)
+        self.assertNotIn(tx_over.hash, sent_hashes)
+
+    def test_sync_v2_tx_streaming_voided_block_stops_once(self) -> None:
+        """The transaction-streaming server must stop exactly once when a streamed block becomes
+        voided.
+
+        When `get_iter` reaches a block that is voided (e.g. reorged out mid-stream), it stops the
+        server and ends the iterator. That makes the next `next(self.iter)` in `send_next` raise
+        `StopIteration`, whose handler would stop the server a second time — crashing on the
+        `assert self._tx_streaming_server is not None` in the agent. Reorgs make this happen in
+        practice, so the handler must not stop an already-stopped server.
+        """
+        manager = self.create_peer()
+        dag_builder = TestDAGBuilder.from_manager(manager)
+        artifacts = dag_builder.build_from_str('''
+            blockchain genesis b[1..40]
+            b30 < dummy
+            b40 --> tx_over
+            blockchain b38 lose[1..1]
+        ''')
+        artifacts.propagate_with(manager)
+
+        voided_block = artifacts.get_typed_vertex('lose1', Block)
+        last_block = artifacts.get_typed_vertex('b40', Block)
+        self.assertTrue(voided_block.get_metadata().voided_by)
+
+        class DummySync:
+            def __init__(self) -> None:
+                self.tx_storage = manager.tx_storage
+                # Mirrors the agent attribute the real `stop_tx_streaming_server` asserts on.
+                self._tx_streaming_server: TransactionsStreamingServer | None = None
+                self.stop_calls: list[StreamEnd] = []
+
+            def send_transaction(self, tx: Transaction) -> None:
+                pass
+
+            def stop_tx_streaming_server(self, response_code: StreamEnd) -> None:
+                # Same assertion the real agent makes — a double-stop would trip it.
+                assert self._tx_streaming_server is not None
+                self._tx_streaming_server.is_running = False
+                self._tx_streaming_server = None
+                self.stop_calls.append(response_code)
+
+        sync_agent = DummySync()
+        # Streaming starts at the voided block to reproduce the mid-stream void.
+        server = _make_tx_streaming_server(sync_agent, first_block=voided_block, last_block=last_block)
+        sync_agent._tx_streaming_server = server
+
+        for _ in range(server.limit):
+            if not server.is_running:
+                break
+            server.send_next()
+
+        # The server must have stopped exactly once, reporting that the stream became voided.
+        self.assertEqual(sync_agent.stop_calls, [StreamEnd.STREAM_BECAME_VOIDED])
+
+    def _check_ignores_stale_end(self, *, state: PeerState, client_attr: str, handler: str) -> None:
+        """A stale BLOCKS-END/TRANSACTIONS-END must be ignored, not punished by closing the
+        connection.
+
+        During concurrent multi-peer sync (especially around reorgs) a peer can finish or abort a
+        stream and move on before the peer's *-END arrives. Closing the connection on such a stale
+        message causes a needless reconnect that adds churn and can keep the network from
+        converging.
+        """
+        manager1 = self.create_peer()
+        manager2 = self.create_peer()
+        conn = FakeConnection(manager1, manager2, latency=0.05)
+        self.simulator.add_connection(conn)
+        self.simulator.run(10)
+
+        assert isinstance(conn.proto2.state, ReadyState)
+        sync_agent = conn.proto2.state.sync_agent
+        assert isinstance(sync_agent, NodeBlockSync)
+
+        # Simulate having already moved on from this stream.
+        sync_agent.state = state
+        setattr(sync_agent, client_attr, None)
+
+        self.assertFalse(conn.proto2.aborting)
+        getattr(sync_agent, handler)(str(int(StreamEnd.END_HASH_REACHED)))
+        # The stale *-END must be ignored, leaving the connection open.
+        self.assertFalse(conn.proto2.aborting)
+
+    def test_sync_v2_ignores_stale_transactions_end(self) -> None:
+        self._check_ignores_stale_end(
+            state=PeerState.SYNCING_BLOCKS,
+            client_attr='_tx_streaming_client',
+            handler='handle_transactions_end',
+        )
+
+    def test_sync_v2_ignores_stale_blocks_end(self) -> None:
+        self._check_ignores_stale_end(
+            state=PeerState.SYNCING_TRANSACTIONS,
+            client_attr='_blk_streaming_client',
+            handler='handle_blocks_end',
+        )
 
     def _prepare_sync_v2_find_best_common_block_reorg(self) -> FakeConnection:
         manager1 = self.create_peer()
