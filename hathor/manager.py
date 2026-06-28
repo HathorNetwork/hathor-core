@@ -221,6 +221,7 @@ class HathorManager:
             tx_storage=self.tx_storage,
             reactor=self.reactor,
             websocket_factory=self.websocket_factory,
+            daa_factory=self.daa_factory,
         )
 
         self.wallet = wallet
