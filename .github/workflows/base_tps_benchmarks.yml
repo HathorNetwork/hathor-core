@@ -1,0 +1,46 @@
+# yamllint disable rule:line-length
+name: tps-benchmarking
+on: # yamllint disable-line rule:truthy
+  push:
+    branches:
+      - master
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark_tps_base_branch:
+    name: Continuous TPS Benchmarking base branch
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bencherdev/bencher@main
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: 3.12
+          os: ubuntu-22.04
+      - name: Set env vars
+        run: cat ./extras/benchmarking/tps/.env >> $GITHUB_ENV
+      - name: Record benchmark environment
+        run: |
+          echo "::group::Benchmark environment"
+          echo "cores (nproc): $(nproc)"
+          lscpu | grep -E 'Model name|^CPU\(s\):|^Thread|^Core' || true
+          free -h || true
+          echo "::endgroup::"
+          cores="$(nproc)"
+          if [ -n "${EXPECTED_NPROC:-}" ] && [ "$cores" != "${EXPECTED_NPROC}" ]; then
+            echo "::warning title=Benchmark environment changed::Runner reports ${cores} CPU(s) but the TPS baseline was recorded on ${EXPECTED_NPROC}; comparisons against the stored baseline may reflect a hardware change, not code."
+          fi
+      - name: Track base branch TPS benchmarks with Bencher
+        run: |
+          bencher run \
+            --project hathor-core \
+            --token '${{ secrets.BENCHER_API_TOKEN }}' \
+            --branch master \
+            --testbed ubuntu-22.04 \
+            --adapter json \
+            --err \
+            --file $BENCH_FILE \
+            './extras/benchmarking/tps/benchmark_tps.sh'
