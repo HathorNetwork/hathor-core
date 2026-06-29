@@ -22,6 +22,44 @@ STAGES: tuple[str, ...] = ("S1", "S2", "S3S4", "S5", "S6")
 # command is run from the wrong cwd. Override per-run with --results-root or the config key.
 DEFAULT_RESULTS_ROOT: str = str(Path(__file__).resolve().parents[1] / "results")
 
+# ---- optimization gating (Phase-3 merge of PR #1729) --------------------------------------
+# The optimized code paths are the DEFAULT (ON). Two mutually-exclusive master flags select
+# per-section: --opt (opt-IN) and --no-opt (opt-OUT). Section keys mirror the measured
+# pipeline stages S1..S6.
+OPT_SECTIONS: tuple[str, ...] = ("s1", "s2", "s3s4", "s5", "s6")
+
+
+def resolve_opt(opt: list[str] | None, no_opt: list[str] | None) -> dict[str, bool]:
+    """Resolve the --opt / --no-opt selectors into a per-section ON/OFF map.
+
+    Semantics (LOCKED 2026-06-26):
+      - neither flag            -> all sections optimized (default)
+      - --opt    (no sections)  -> all optimized
+      - --no-opt (no sections)  -> all baseline
+      - --opt    S [S...]       -> ONLY S optimized, the rest baseline   (opt-in)
+      - --no-opt S [S...]       -> ONLY S baseline, the rest optimized   (opt-out)
+
+    `opt`/`no_opt` are None when the flag is absent, else a (possibly empty) list of section
+    keys. Section names are arguments OF a master flag, so a section can never be passed
+    standalone (argparse enforces this). Raises ValueError if both masters are given (argparse
+    already guards this via a mutually-exclusive group; the check is belt-and-suspenders).
+
+    FUTURE (TODO): these section flags are COARSE — one boolean per section. Per-optimization
+    sub-flags are planned (e.g. --mem-tips / --save-dedup / --write-batch / --binary-metadata /
+    --rust-storage / --reorg-gate for S5; --rust-scripts vs --parallel-scripts for S3S4). Until
+    then a section flag toggles ALL optimizations in that section together. See the
+    tps_benchmarking optimizations-workstream notes and the TODO markers at each gating site.
+    """
+    if opt is not None and no_opt is not None:
+        raise ValueError("--opt and --no-opt are mutually exclusive")
+    if opt is None and no_opt is None:
+        return {s: True for s in OPT_SECTIONS}
+    if opt is not None:
+        given = set(opt)
+        return {s: (s in given) if given else True for s in OPT_SECTIONS}
+    given = set(no_opt)
+    return {s: (s not in given) if given else False for s in OPT_SECTIONS}
+
 
 @dataclass
 class WorkloadConfig:
@@ -108,6 +146,9 @@ class RootConfig:
     benchmarks: list[str] = field(default_factory=lambda: ["stage-latency"])
     n_sweep: list[int] | None = None              # batch-size sweep; None = single run
     results_root: str = DEFAULT_RESULTS_ROOT  # absolute, anchored to the engine dir; gitignored
+    # Per-section optimization gating (default: all ON). Set from --opt/--no-opt via the CLI;
+    # threaded into the harness/builder to select optimized-vs-baseline code paths per section.
+    opt: dict[str, bool] = field(default_factory=lambda: {s: True for s in OPT_SECTIONS})
     workload: WorkloadConfig = field(default_factory=WorkloadConfig)
     env: EnvConfig = field(default_factory=EnvConfig)
     measure: MeasureConfig = field(default_factory=MeasureConfig)

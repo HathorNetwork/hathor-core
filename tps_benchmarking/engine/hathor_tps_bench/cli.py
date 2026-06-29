@@ -17,7 +17,7 @@ import sys
 
 from hathor_tps_bench import __version__
 from hathor_tps_bench.benchmarks import list_benchmarks
-from hathor_tps_bench.config import RootConfig
+from hathor_tps_bench.config import OPT_SECTIONS, RootConfig, resolve_opt
 from hathor_tps_bench.workload import list_txtypes
 
 
@@ -86,6 +86,8 @@ def _apply_overrides(cfg: RootConfig, args: argparse.Namespace) -> None:
         cfg.env.seed = args.seed
     if getattr(args, "results_root", None) is not None:
         cfg.results_root = args.results_root
+    # Resolve --opt/--no-opt into the per-section ON/OFF map (defaults to all-ON when absent).
+    cfg.opt = resolve_opt(getattr(args, "opt", None), getattr(args, "no_opt", None))
 
 
 def _load_config(args: argparse.Namespace) -> tuple[RootConfig | None, list[str]]:
@@ -142,6 +144,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     K, W = w.num_txs, w.warmup_txs
     print(f"[run] {w.tx_type} I={w.num_inputs} O={w.num_outputs}, "
           f"K={K} measured (+{W} warm-up) on an in-process node...")
+    print("[opt] " + " ".join(f"{s}={'on' if cfg.opt[s] else 'off'}" for s in OPT_SECTIONS))
 
     source_cls = get_txtype(w.tx_type)
     source = source_cls()
@@ -149,7 +152,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         source.shielded_inputs = w.shielded_inputs
         source.shielded_outputs = w.shielded_outputs
     harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow,
-                          shielded=source_cls.shielded).start()
+                          shielded=source_cls.shielded, opt=cfg.opt).start()
     try:
         prepared = source.build(harness, W + K, w.num_inputs, w.num_outputs)  # build W+K
         print(f"[run] built {len(prepared)} txs; warming {W}, measuring {K} through S1..S6...")
@@ -427,6 +430,20 @@ def _add_shielded_flags(parser: argparse.ArgumentParser) -> None:
                              "sets HATHOR_MAX_SHIELDED_OUTPUTS")
 
 
+def _add_opt_flags(parser: argparse.ArgumentParser) -> None:
+    """Per-section optimization gating, shared by `run` and `sweep`. Optimized code is the
+    DEFAULT (all sections ON). The two masters are mutually exclusive; section names are
+    ARGUMENTS to a master (so a section can never be passed standalone). Semantics:
+      --opt                -> all ON (same as default)        --no-opt            -> all OFF
+      --opt s1 s5          -> ONLY s1,s5 ON (rest baseline)   --no-opt s3s4       -> ONLY s3s4 OFF
+    Sections: s1 s2 s3s4 s5 s6.  (TODO future: per-optimization sub-flags, esp. for S5/S3S4.)"""
+    grp = parser.add_mutually_exclusive_group()
+    grp.add_argument("--opt", nargs="*", choices=OPT_SECTIONS, metavar="SECTION", dest="opt",
+                     help="optimizations ON (default); with section args, ONLY those ON (opt-in)")
+    grp.add_argument("--no-opt", nargs="*", choices=OPT_SECTIONS, metavar="SECTION", dest="no_opt",
+                     help="optimizations OFF; with section args, ONLY those OFF (opt-out)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hathor_tps_bench", description=__doc__)
     p.add_argument("--version", action="version", version=f"hathor_tps_bench {__version__}")
@@ -457,6 +474,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--sweep-txs", nargs="+", type=int, metavar="N",
                     help="sweep batch size over the given list")
     _add_shielded_flags(pr)
+    _add_opt_flags(pr)
     pr.add_argument("--mult-batches", nargs=argparse.REMAINDER, dest="mult_batches",
                     help="run a SEQUENCE of segments as one timed stream (TPS-over-time). Each segment: "
                          "--n N [-i I -o O] [--shielded|--full-shielded|--amount-shielded -i Is -o Os]. "
@@ -472,6 +490,7 @@ def build_parser() -> argparse.ArgumentParser:
     psw.add_argument("--results-root", dest="results_root", metavar="DIR",
                      help="where run dirs are written (default: <engine>/results, absolute)")
     _add_shielded_flags(psw)
+    _add_opt_flags(psw)
     psw.set_defaults(fn=_cmd_sweep)
 
     psc = sub.add_parser("script", help="run a named script from scripts/ (e.g. demo_experiments)")

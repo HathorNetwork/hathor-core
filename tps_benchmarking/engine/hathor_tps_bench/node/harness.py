@@ -32,10 +32,14 @@ class NodeHarness:
     """Builds a real in-process node: RocksDB temp-dir storage, REAL verifiers, and
     trivial (weight-1) PoW. Reproducible via `seed`. See RFC §"Standing up the node"."""
 
-    def __init__(self, seed: int = 1234, trivial_pow: bool = True, shielded: bool = False) -> None:
+    def __init__(self, seed: int = 1234, trivial_pow: bool = True, shielded: bool = False,
+                 opt: dict[str, bool] | None = None) -> None:
         self.seed = seed
         self.trivial_pow = trivial_pow
         self.shielded = shielded
+        # Per-section optimization gating (PR #1729 merge). Keys s1,s2,s3s4,s5,s6 → True=optimized
+        # (default), False=baseline. Resolved from --opt/--no-opt in the CLI. Default = all ON.
+        self.opt = opt if opt is not None else {s: True for s in ("s1", "s2", "s3s4", "s5", "s6")}
         self.clock: TestMemoryReactorClock | None = None
         self.manager = None
         self._artifacts = None
@@ -67,6 +71,22 @@ class NodeHarness:
             builder = TestBuilder(settings)
         else:
             builder = TestBuilder()
+
+        # ---- OPTIMIZATION GATING WIRING (PR #1729 merge) -------------------------------------
+        # TODO(opt-merge step 4): translate self.opt[...] into builder/settings choices, per section:
+        #   s3s4 -> builder.set_script_verification_config(mode=RUST if opt else PROCESS/serial, ...)
+        #           (reuse the upstream executor switch under our naming; picks RustVerificationService
+        #            vs the pure-Python VerificationService at builder.py:600-621)
+        #   s5   -> select storage backend (Rust htr_lib.RocksDb vs python-rocksdb) + binary-vs-JSON
+        #           metadata serde + the mempool-tips / save-dedup / WriteBatch consensus toggles.
+        #           Fresh temp-dir per run, so the on-disk format choice is safe to flip per run.
+        #   s1   -> gate the Rust vertex-parser fast path (_vertex_parser.deserialize dispatcher).
+        #   s2   -> gate the get_transaction read fast-paths (LRU/scope-fusion/miss-probe).
+        #   s6   -> gate drop-2nd-validate_full + info-index write-on-change + reactor-yield batching.
+        # TODO(opt-merge future): add per-optimization SUB-FLAGS (esp. S5: --mem-tips/--save-dedup/
+        #   --write-batch/--binary-metadata/--rust-storage/--reorg-gate; S3S4: --rust-scripts vs
+        #   --parallel-scripts). For now a section flag toggles ALL of its optimizations together.
+        # No behavior is gated yet — self.opt is threaded and ready for step-4 wiring.
         builder.set_rng(Random(self.seed)).set_reactor(self.clock)
         self._artifacts = builder.build()  # default storage = RocksDBStorage.create_temp()
         self.manager = self._artifacts.manager
