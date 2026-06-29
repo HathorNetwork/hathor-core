@@ -206,6 +206,10 @@ endef
 S3_BUCKET := hathor-private-files
 S3_PREFIX := nginx-configs
 
+# AWS profile for local S3 uploads. CI overrides this to empty (AWS_PROFILE_ARGS="")
+# since it authenticates via OIDC env credentials, which have no named profile.
+AWS_PROFILE_ARGS ?= --profile $(AWS_MAIN_PROFILE)
+
 # Config Generation & Release Targets
 # ====================================
 
@@ -223,9 +227,6 @@ endif
 	$(call generate_config,$(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_api_proxy.conf)
-	$(call generate_config,$(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india.conf)
-	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_no_rate_limit.conf)
-	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_TRUSTED_PROXIES),hathor-testnet/nginx_india_api_proxy.conf)
 	# ekvilibro
 	$(call generate_config,$(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_no_rate_limit.conf)
@@ -250,7 +251,7 @@ ifndef VERSION
 	$(error VERSION is required. Usage: make upload-to-s3 VERSION=v0.69.0)
 endif
 	@echo "Uploading configs to s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/..."
-	aws s3 cp --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/ \
+	aws s3 cp $(AWS_PROFILE_ARGS) --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/$(VERSION)/ \
 		--metadata hathor-core-version=$(VERSION)
 	@echo "Upload complete."
 
@@ -260,7 +261,7 @@ ifndef VERSION
 	$(error VERSION is required. Usage: make upload-to-s3-as-latest VERSION=v0.69.0)
 endif
 	@echo "Copying configs to s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/..."
-	aws s3 cp --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/ \
+	aws s3 cp $(AWS_PROFILE_ARGS) --recursive dist/$(VERSION)/ s3://$(S3_BUCKET)/$(S3_PREFIX)/latest/ \
 		--metadata hathor-core-version=$(VERSION)
 	@echo "Upload complete."
 

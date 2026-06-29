@@ -102,11 +102,11 @@ jobs:
 
       - name: Upload configs to S3 (versioned)
         working-directory: extras/nginx_docker
-        run: make upload-to-s3 VERSION="$VERSION"
+        run: make upload-to-s3 VERSION="$VERSION" AWS_PROFILE_ARGS=""
 
       - name: Upload configs to S3 (latest)
         working-directory: extras/nginx_docker
-        run: make upload-to-s3-as-latest VERSION="$VERSION"
+        run: make upload-to-s3-as-latest VERSION="$VERSION" AWS_PROFILE_ARGS=""
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
