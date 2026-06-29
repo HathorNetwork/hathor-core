@@ -29,6 +29,7 @@ from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.nanocontracts.storage import get_block_storage_from_block
+from hathor.opt_flags import opt_enabled
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
@@ -460,6 +461,16 @@ class TransactionStorage(ABC):
         second measure to prevent getting a transaction while using the wrong scope.
         """
         tx_meta = tx.get_metadata()
+        if opt_enabled("s2"):
+            from hathor.transaction.validation_state import ValidationState
+            # S2 OPTIMIZATION (PR #1729): fast path for the overwhelmingly common case (~38 gets per
+            # added tx) — default VALID scope and a fully-valid tx. Provably equivalent to the slow
+            # path: FULL is fully-connected and neither partial nor invalid, so is_allowed reduces to
+            # `VALID in scope` and marker consistency reduces to the partial marker being absent.
+            if self._allow_scope is TxAllowScope.VALID and tx_meta.validation is ValidationState.FULL:
+                assert self._settings.PARTIALLY_VALIDATED_ID not in tx_meta.get_frozen_voided_by(), \
+                       'Inconsistent ValidationState and voided_by'
+                return
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
 

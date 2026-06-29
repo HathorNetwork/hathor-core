@@ -27,6 +27,7 @@ from hathor.exception import HathorError, InvalidNewTransaction
 from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.feature_activation.utils import Features
+from hathor.opt_flags import opt_enabled
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol
@@ -41,6 +42,10 @@ cpu = get_cpu_profiler()
 
 
 class VertexHandler:
+    # S6 OPTIMIZATION (PR #1729): during block sync, yield control back to the reactor after this
+    # many connected txs instead of after every one (gated by opt_enabled("s6")).
+    CONNECT_YIELD_EVERY = 8
+
     __slots__ = (
         '_log',
         '_reactor',
@@ -99,11 +104,18 @@ class VertexHandler:
             ),
         )
 
+        # S6: yield to the reactor every CONNECT_YIELD_EVERY txs instead of after every tx — each
+        # yield is a full asyncio round trip (~20us). Baseline (--no-opt s6) keeps yield-per-tx.
+        # NOTE: the s3s4 batch stateless-precompute wraps this loop and is added when s3s4 is wired.
+        every = self.CONNECT_YIELD_EVERY if opt_enabled("s6") else 1
+        connected = 0
         for tx in deps:
             if not self._tx_storage.transaction_exists(tx.hash):
                 if not self._old_on_new_vertex(tx, params):
                     return False
-                yield deferLater(self._reactor, 0, lambda: None)
+                connected += 1
+                if connected % every == 0:
+                    yield deferLater(self._reactor, 0, lambda: None)
 
         if not self._tx_storage.transaction_exists(block.hash):
             if not self._old_on_new_vertex(block, params):
@@ -196,7 +208,12 @@ class VertexHandler:
         vertex.storage = self._tx_storage
 
         try:
-            metadata = vertex.get_metadata()
+            # S2 OPTIMIZATION (PR #1729): for a not-yet-stored vertex (already_exists False) the
+            # storage lookup inside get_metadata is a guaranteed miss — a wasted RocksDB read plus a
+            # caught exception per vertex — so it is skipped and fresh metadata is built directly,
+            # exactly what the miss path produced. Baseline (--no-opt s2) keeps the storage lookup.
+            metadata = vertex.get_metadata(use_storage=already_exists) if opt_enabled("s2") \
+                else vertex.get_metadata()
         except TransactionDoesNotExist:
             raise InvalidNewTransaction('cannot get metadata')
 
@@ -242,14 +259,26 @@ class VertexHandler:
         This might happen immediately after we receive the tx, if we have all dependencies
         already. Or it might happen later.
         """
-        # XXX: during post consensus we don't need to verify weights again, so we can disable it
-        params = replace(params, skip_block_weight_verification=True)
-        assert self._verification_service.validate_full(
-            vertex,
-            params,
-            init_static_metadata=False,
-        )
+        if opt_enabled("s6"):
+            # S6 OPTIMIZATION (PR #1729): _validate_vertex already ran the full validation for this
+            # vertex, and nothing between it and here can invalidate it (consensus only writes
+            # metadata such as voided_by/spent_outputs; it never unsets the validation state).
+            # Re-running validate_full would DOUBLE the entire per-vertex verification cost, so only
+            # the resulting state is asserted. (This is the redundant 2nd validate_full our Phase-1
+            # study flagged as the top single-thread win.)
+            assert vertex.get_metadata().validation.is_fully_connected()
+        else:
+            # baseline: re-run full validation (the original behavior).
+            # XXX: during post consensus we don't need to verify weights again, so we can disable it
+            params = replace(params, skip_block_weight_verification=True)
+            assert self._verification_service.validate_full(
+                vertex,
+                params,
+                init_static_metadata=False,
+            )
 
+        # NOTE: the s5 mempool-tips opt will switch this to update_critical_indexes(vertex, is_new=True)
+        # when s5 is wired; kept baseline (no is_new) here so s6 stays independent of s5.
         self._tx_storage.indexes.update_critical_indexes(vertex)
         with non_critical_code(self._log):
             self._tx_storage.indexes.update_non_critical_indexes(vertex)

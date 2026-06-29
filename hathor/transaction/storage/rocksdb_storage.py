@@ -22,6 +22,7 @@ from twisted.internet import threads
 from typing_extensions import override
 
 from hathor.indexes import IndexesManager
+from hathor.opt_flags import opt_enabled
 from hathor.reactor import ReactorProtocol
 from hathor.storage import RocksDBStorage
 from hathor.transaction.static_metadata import VertexStaticMetadata
@@ -237,6 +238,21 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
             return False
         tx_exists = self._db.get((self._cf_tx, hash_bytes)) is not None
         return tx_exists
+
+    @override
+    def get_transaction(self, hash_bytes: bytes) -> 'BaseTransaction':
+        # S2 OPTIMIZATION (PR #1729): lock-free LRU-hit path. A cache hit needs neither the per-hash
+        # load lock (it only dedups concurrent *loads*; a hit never loads) nor weakref
+        # re-registration (everything in the cache was registered when inserted, and the cache's
+        # strong ref keeps it alive). dict get/move_to_end are GIL-atomic, so this is safe from the
+        # precompute worker threads too. Baseline (--no-opt s2) goes straight through super().
+        if opt_enabled("s2"):
+            if tx := self.cache_data.cache.get(hash_bytes):
+                self.cache_data.cache.move_to_end(hash_bytes, last=True)
+                self.cache_data.hit += 1
+                self.post_get_validation(tx)
+                return tx
+        return super().get_transaction(hash_bytes)
 
     def _get_transaction(self, hash_bytes: bytes) -> BaseTransaction:
         if tx := self.cache_data.cache.get(hash_bytes):

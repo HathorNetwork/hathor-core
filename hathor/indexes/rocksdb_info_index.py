@@ -19,6 +19,7 @@ from structlog import get_logger
 from hathor.conf.settings import HathorSettings
 from hathor.indexes.memory_info_index import MemoryInfoIndex
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
+from hathor.opt_flags import opt_enabled
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -42,6 +43,11 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
         self.log = logger.new()
         RocksDBIndexUtils.__init__(self, db, cf_name or _CF_NAME_ADDRESS_INDEX)
         MemoryInfoIndex.__init__(self, settings=settings)
+        # S6 OPTIMIZATION (PR #1729): mirror of the last value written per key. update_timestamps/
+        # update_counts run on every added vertex but typically change a single value; with s6 on,
+        # unchanged values are not rewritten (every real change still hits RocksDB immediately, so
+        # crash semantics are intact). See hathor.opt_flags.
+        self._stored_values: dict[bytes, int] = {}
 
     def init_start(self, indexes_manager: 'IndexesManager') -> None:
         self._load_all_values()
@@ -59,6 +65,7 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
         import struct
         db_value = self._db.get((self._cf, key))
         value, = struct.unpack('>I', db_value)
+        self._stored_values[key] = value  # seed the write-on-change mirror (S6)
         return value
 
     def _load_all_values(self) -> None:
@@ -69,8 +76,12 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
 
     def _store_value(self, key: bytes, value: int) -> None:
         import struct
+        # S6: skip the RocksDB put when the value is unchanged (baseline always writes).
+        if opt_enabled("s6") and self._stored_values.get(key) == value:
+            return
         db_value = struct.pack('>I', value)
         self._db.put((self._cf, key), db_value)
+        self._stored_values[key] = value
 
     def _store_all_values(self) -> None:
         self._store_value(_DB_BLOCK_COUNT, self._block_count)

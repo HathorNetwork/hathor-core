@@ -45,6 +45,14 @@ class NodeHarness:
         self._artifacts = None
 
     def start(self) -> "NodeHarness":
+        # Export the per-section optimization gating to env BEFORE building the node, so the gated
+        # hathor-core sites (read via hathor.opt_flags.opt_enabled) pick it up. HATHOR_OPT_<S>=1
+        # optimized / 0 baseline. cache_clear() handles multiple harnesses in one process.
+        for _s, _on in self.opt.items():
+            os.environ[f"HATHOR_OPT_{_s.upper()}"] = "1" if _on else "0"
+        from hathor.opt_flags import opt_enabled
+        opt_enabled.cache_clear()
+
         self.clock = TestMemoryReactorClock()
         # Anchor the virtual clock at a realistic wall time once (timestamps), then let
         # startup settle. NOTE: measurements use time.perf_counter(), not this clock.
