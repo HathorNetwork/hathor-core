@@ -1,0 +1,185 @@
+# yamllint disable rule:line-length
+name: publish-nginx
+on: # yamllint disable-line rule:truthy
+  push:
+    tags:
+      - v*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SF_PROJECT_NUMBER: '840538782933'   # standalone-fullnodes
+  HT_PROJECT_NUMBER: '479738554605'   # hathor-testnet
+  EKV_PROJECT_NUMBER: '292005442741'  # ekvilibro
+  HTP_PROJECT_NUMBER: '44050351828'  # hathor-testnet-playground
+
+jobs:
+  # Build job: generates the nginx configs and uploads them as an artifact.
+  # It runs the project's virtualenv (poetry/python), so it deliberately has NO
+  # cloud credentials (no id-token) — a poisoned cache or dependency here cannot
+  # reach the deploy role.
+  build:
+    name: Build nginx configs
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-hathor-env
+        name: Setup Hathor node environment
+        with:
+          python: '3.12'
+          os: 'ubuntu-22.04'
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Generate all nginx configs
+        working-directory: extras/nginx_docker
+        run: poetry run make generate-all VERSION="$VERSION"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Generate set_real_ip_from_cloudfront
+        working-directory: extras/nginx_docker
+        run: make set_real_ip_from_cloudfront
+
+      - name: Upload generated configs artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nginx-configs
+          path: |
+            extras/nginx_docker/dist/
+            extras/nginx_docker/set_real_ip_from_cloudfront
+          if-no-files-found: error
+          retention-days: 1
+
+  # Deploy job: consumes the build artifact and pushes it to S3 and the
+  # container registries. This is the only job that assumes the cloud roles
+  # (id-token: write + the publish-nginx environment). It never runs the
+  # project's virtualenv, so no build-time code executes with these credentials.
+  deploy:
+    name: Release nginx configs and image
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    # This environment is tied to the AWS Role assumed by this workflow.
+    # The Role will only allow to be assumed if the workflow is set with this environment.
+    # We also have additional protection rules on this environment to require a review before running.
+    environment: publish-nginx
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Download generated configs artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nginx-configs
+          path: extras/nginx_docker
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
+        with:
+          role-to-assume: arn:aws:iam::769498303037:role/GitHubActionsNginxConfigUploadRole
+          aws-region: us-east-1
+
+      - name: Upload configs to S3 (versioned)
+        working-directory: extras/nginx_docker
+        run: make upload-to-s3 VERSION="$VERSION" AWS_PROFILE_ARGS=""
+
+      - name: Upload configs to S3 (latest)
+        working-directory: extras/nginx_docker
+        run: make upload-to-s3-as-latest VERSION="$VERSION" AWS_PROFILE_ARGS=""
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      # --- AWS ECR ---
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
+
+      - name: Build and push to ECR
+        working-directory: extras/nginx_docker
+        run: make publish-aws-main-image VERSION="$VERSION"
+
+      # --- GCP Artifact Registries ---
+
+      # standalone-fullnodes
+      - name: Authenticate to GCP (standalone-fullnodes)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.SF_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-sf
+
+      - name: Configure Docker for Artifact Registry (standalone-fullnodes)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to standalone-fullnodes
+        working-directory: extras/nginx_docker
+        run: make publish-standalone-fullnodes-image VERSION="$VERSION"
+
+      # hathor-testnet
+      - name: Authenticate to GCP (hathor-testnet)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.HT_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-ht
+
+      - name: Configure Docker for Artifact Registry (hathor-testnet)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to hathor-testnet
+        working-directory: extras/nginx_docker
+        run: make publish-hathor-testnet-image VERSION="$VERSION"
+
+      # ekvilibro
+      - name: Authenticate to GCP (ekvilibro)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.EKV_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-ekv
+
+      - name: Configure Docker for Artifact Registry (ekvilibro)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to ekvilibro
+        working-directory: extras/nginx_docker
+        run: make publish-ekvilibro-image VERSION="$VERSION"
+
+      # hathor-testnet-playground
+      - name: Authenticate to GCP (hathor-testnet-playground)
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: projects/${{ env.HTP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github-oidc
+          service_account: ''
+        id: gcp-auth-htp
+
+      - name: Configure Docker for Artifact Registry (hathor-testnet-playground)
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and push to hathor-testnet-playground
+        working-directory: extras/nginx_docker
+        run: make publish-hathor-testnet-playground-image VERSION="$VERSION"

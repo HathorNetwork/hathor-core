@@ -26,9 +26,9 @@ runs:
       uses: actions/cache@v4
       with:
         path: .venv
-        key: venv-${{ runner.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock') }}
+        key: venv-${{ inputs.os }}-py${{ inputs.python }}-${{ hashFiles('poetry.lock') }}
         restore-keys: |
-          venv-${{ runner.os }}-py${{ inputs.python }}-
+          venv-${{ inputs.os }}-py${{ inputs.python }}-
 
     - name: Install Ubuntu dependencies
       if: startsWith(inputs.os, 'ubuntu')
