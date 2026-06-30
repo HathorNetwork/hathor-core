@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod, abstractproperty
 from collections import OrderedDict, deque
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
 from weakref import WeakValueDictionary
@@ -85,6 +85,10 @@ class CacheData:
     capacity: int
     cache: OrderedDict[bytes, BaseTransaction]
     dirty_txs: set[bytes]  # txs that have been modified but are not persisted yet
+    # S5 OPTIMIZATION (PR #1729): hashes whose immutable vertex bytes still need to be written
+    # (set on a full save, cleared on the first flush after). Lets metadata-only saves skip
+    # re-serializing/re-writing the vertex bytes. Only populated when s5 is on.
+    pending_tx_bytes: set[bytes] = field(default_factory=set)
     flush_deferred: Deferred[None] | None = None
     hit: int = 0
     miss: int = 0
