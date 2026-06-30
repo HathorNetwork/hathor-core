@@ -43,6 +43,7 @@ class NodeHarness:
         self.clock: TestMemoryReactorClock | None = None
         self.manager = None
         self._artifacts = None
+        self._script_pool = None  # S3S4: Rust script-verification pool, attached when opt['s3s4']
 
     def start(self) -> "NodeHarness":
         # Export the per-section optimization gating to env BEFORE building the node, so the gated
@@ -104,6 +105,18 @@ class NodeHarness:
             self.manager.daa_factory.TEST_MODE = TestMode.TEST_ALL_WEIGHT
 
         self.manager.start()
+
+        # S3S4 OPTIMIZATION (PR #1729): when enabled, attach a Rust script-verification pool to the tx
+        # verifier so per-input script (ECDSA) checks run in Rust (htr_lib, GIL released). Transparent
+        # txs use it; shielded txs fall back to the serial shielded path via the dispatcher. The per-tx
+        # driver does not use the batch stateless-precompute (that helps block sync), so the pool alone
+        # delivers the s3s4 win here. Baseline (--no-opt s3s4): no pool -> serial Python verification.
+        if self.opt.get("s3s4", True):
+            from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
+            self._script_pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=4, min_inputs=4)
+            self._script_pool.start()
+            self.manager.verification_service.verifiers.tx._script_verification_pool = self._script_pool
+
         self.clock.run()
         self.clock.advance(5)
         return self
@@ -121,6 +134,8 @@ class NodeHarness:
         return self.manager.tx_storage
 
     def stop(self) -> None:
+        if self._script_pool is not None:
+            self._script_pool.stop()
         if self.manager is not None:
             self.manager.stop()
         rocksdb = getattr(self._artifacts, "rocksdb_storage", None)

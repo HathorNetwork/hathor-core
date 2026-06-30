@@ -136,9 +136,14 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
     def update(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
         """S5 OPTIMIZATION GATE (PR #1729): the optimized path syncs the index incrementally
         (O(dependencies)); the baseline rescans every tip per call (O(mempool), quadratic under
-        load). Both produce the identical tip set. See hathor.opt_flags."""
-        if opt_enabled("s5"):
-            self._update_incremental(tx, force_remove=force_remove, is_new=is_new)
+        load). Both produce the identical tip set. See hathor.opt_flags.
+
+        `force_remove` (test-only, via IndexesManager.del_from_critical_indexes — never on the
+        consensus connect path) is ALWAYS routed through the baseline full-scan: it is the one case
+        where incremental and full-scan would behave differently (full-scan keeps a clean
+        force-removed tip; incremental would discard it), so we keep behavior identical on/off."""
+        if opt_enabled("s5") and not force_remove:
+            self._update_incremental(tx, is_new=is_new)
         else:
             self._update_fullscan(tx, force_remove=force_remove)
 

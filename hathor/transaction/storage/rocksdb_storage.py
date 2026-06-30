@@ -216,12 +216,14 @@ class TransactionRocksDBStorage(BaseTransactionStorage):
         self._save_to_weakref(tx)
 
     def _save_transaction(self, tx: 'BaseTransaction', *, only_metadata: bool = False) -> None:
-        # Mark dirtiness before touching the cache: _update_cache may evict (and flush) other dirty entries.
-        self.cache_data.dirty_txs.add(tx.hash)
-        # S5: a full save means the vertex bytes need (re)writing on the next flush.
+        # S5: a full save means the vertex bytes need (re)writing on the next flush. Set before
+        # _update_cache so an eviction-triggered flush of THIS tx (capacity 0) still writes its bytes.
         if opt_enabled("s5") and not only_metadata:
             self.cache_data.pending_tx_bytes.add(tx.hash)
+        # Baseline ordering preserved (update cache, then mark dirty) — the only added line above is
+        # the gated pending_tx_bytes; no ungated reorder of the original two statements.
         self._update_cache(tx)
+        self.cache_data.dirty_txs.add(tx.hash)
 
     def _save_transaction_to_db(self, tx: 'BaseTransaction',
                                 batch: 'rocksdb.WriteBatch | None' = None) -> None:
