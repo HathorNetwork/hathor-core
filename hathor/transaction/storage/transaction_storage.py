@@ -433,7 +433,11 @@ class TransactionStorage(ABC):
         """
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
-        self._save_static_metadata(tx)
+        # S5 OPTIMIZATION (PR #1729): static metadata is immutable and written before the first full
+        # save, so metadata-only saves (several per consensus update) need not rewrite it. Baseline
+        # (--no-opt s5) always rewrites it.
+        if not (opt_enabled("s5") and only_metadata):
+            self._save_static_metadata(tx)
 
     @abstractmethod
     def _save_static_metadata(self, vertex: BaseTransaction) -> None:

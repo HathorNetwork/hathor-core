@@ -27,6 +27,7 @@ from hathor.execution_manager import non_critical_code
 from hathor.feature_activation.feature import Feature
 from hathor.nanocontracts.exception import NCInvalidSignature
 from hathor.nanocontracts.execution import NCBlockExecutor, NCConsensusBlockExecutor
+from hathor.opt_flags import opt_enabled
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import HathorEvents
 from hathor.transaction import BaseTransaction, Block, Transaction
@@ -154,10 +155,21 @@ class ConsensusAlgorithm:
         else:
             raise NotImplementedError
 
-        # signal a mempool tips index update for all affected transactions,
-        # because that index is used on _compute_vertices_that_became_invalid below.
-        for tx_affected in _sorted_affected_txs(context.txs_affected):
-            self.tx_storage.indexes.mempool_tips.update(tx_affected)
+        # S5 OPTIMIZATION (PR #1729) — save-dedup: persist the algorithms' deferred metadata saves
+        # (each affected tx exactly once) now, before the removal paths below, which require saves to
+        # be written through from here on. No-op under --no-opt s5.
+        context.flush_saves()
+
+        # signal a mempool tips index update for all affected transactions, because that index is used
+        # on _compute_vertices_that_became_invalid below.
+        # S5 — reorg-gate: this early sync is only needed on reorgs (where the step below reads the tips
+        # index). On the common path nothing in between reads/mutates the tips, and the single
+        # update_critical_indexes pass at the end of this method already updates them — so running this
+        # loop unconditionally would update every affected tx's tips twice. Baseline (--no-opt s5) keeps
+        # the original unconditional behavior.
+        if not opt_enabled("s5") or context.reorg_info is not None:
+            for tx_affected in _sorted_affected_txs(context.txs_affected):
+                self.tx_storage.indexes.mempool_tips.update(tx_affected)
 
         txs_to_remove: list[BaseTransaction] = []
         new_best_height, new_best_tip = self.tx_storage.indexes.height.get_height_tip()
@@ -214,7 +226,9 @@ class ConsensusAlgorithm:
 
         # finally signal an index update for all affected transactions
         for tx_affected in _sorted_affected_txs(context.txs_affected):
-            self.tx_storage.indexes.update_critical_indexes(tx_affected)
+            # S5: `base` is the vertex being connected by this very call — it provably has no
+            # children/spenders yet, so the tips index can skip the dependency scan for it.
+            self.tx_storage.indexes.update_critical_indexes(tx_affected, is_new=tx_affected is base)
             with non_critical_code(self.log):
                 self.tx_storage.indexes.update_non_critical_indexes(tx_affected)
             pubsub_events.append(ConsensusEvent(event=HathorEvents.CONSENSUS_TX_UPDATE, kwargs=dict(tx=tx_affected)))

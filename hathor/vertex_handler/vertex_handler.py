@@ -277,9 +277,10 @@ class VertexHandler:
                 init_static_metadata=False,
             )
 
-        # NOTE: the s5 mempool-tips opt will switch this to update_critical_indexes(vertex, is_new=True)
-        # when s5 is wired; kept baseline (no is_new) here so s6 stays independent of s5.
-        self._tx_storage.indexes.update_critical_indexes(vertex)
+        # S5: the vertex was connected by this very call chain — nothing can have referenced it yet,
+        # so the tips index can skip its dependency scan (is_new). Harmless when s5 is off (the
+        # baseline full-scan path ignores is_new).
+        self._tx_storage.indexes.update_critical_indexes(vertex, is_new=True)
         with non_critical_code(self._log):
             self._tx_storage.indexes.update_non_critical_indexes(vertex)
 

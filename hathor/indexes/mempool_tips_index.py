@@ -21,6 +21,7 @@ import structlog
 
 from hathor.indexes.base_index import BaseIndex
 from hathor.indexes.scope import Scope
+from hathor.opt_flags import opt_enabled
 from hathor.transaction import BaseTransaction, Transaction
 from hathor.util import not_none
 
@@ -56,11 +57,13 @@ class MempoolTipsIndex(BaseIndex):
         return SCOPE
 
     @abstractmethod
-    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
         """
         This should be called when a new `tx/block` is added to the best chain.
 
-        `remove` will be implied from the tx state but can be set explicitly.
+        `remove` will be implied from the tx state but can be set explicitly. `is_new` marks the
+        vertex being connected by the current consensus update (see the concrete implementation);
+        it is only used by the S5-optimized incremental path.
         """
         raise NotImplementedError
 
@@ -130,7 +133,87 @@ class ByteCollectionMempoolTipsIndex(MempoolTipsIndex):
 
     # PROVIDES:
 
-    def update(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+    def update(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
+        """S5 OPTIMIZATION GATE (PR #1729): the optimized path syncs the index incrementally
+        (O(dependencies)); the baseline rescans every tip per call (O(mempool), quadratic under
+        load). Both produce the identical tip set. See hathor.opt_flags."""
+        if opt_enabled("s5"):
+            self._update_incremental(tx, force_remove=force_remove, is_new=is_new)
+        else:
+            self._update_fullscan(tx, force_remove=force_remove)
+
+    def _is_tip(self, tx_storage: 'TransactionStorage', tx: BaseTransaction) -> bool:
+        """Whether `tx` currently satisfies the mempool-tip predicate (same rules as `init_loop_step`):
+        an unconfirmed, non-voided transaction with no non-voided child or spender."""
+        if not tx.is_transaction:
+            return False
+        meta = tx.get_metadata()
+        if meta.voided_by or meta.validation.is_invalid():
+            return False
+        if meta.first_block is not None:
+            return False
+        # spenders first: they come straight from the metadata (cache-fast gets), while
+        # get_children() opens a RocksDB iterator over the children CF — in spend-chain
+        # mempools the spender check short-circuits and the scan never happens. The predicate
+        # is a pure conjunction, so the order is free.
+        if any_non_voided(tx_storage, chain(*meta.spent_outputs.values())):
+            return False
+        if any_non_voided(tx_storage, tx.get_children()):
+            return False
+        return True
+
+    def _update_incremental(self, tx: BaseTransaction, *, force_remove: bool = False, is_new: bool = False) -> None:
+        """Incrementally sync the index for one affected tx (O(dependencies)).
+
+        Consensus calls this for *every* vertex whose metadata changed (the new vertex, its parents and
+        spent txs, conflict winners/losers, newly confirmed txs), so only `tx` itself and its direct
+        dependencies can change tip-ness here — tip-ness depends solely on a tx's own state and its
+        children/spenders, and any tx whose children/spenders changed is itself in the affected set.
+
+        ``is_new`` marks the vertex being connected by the current consensus update: such a vertex
+        provably has no children and no spenders yet (dependents can only be saved after it), so its
+        tip-ness reduces to its own state — no dependency loads, no children-CF scan."""
+        assert tx.storage is not None
+        tx_storage = tx.storage
+        tx_meta = tx.get_metadata()
+        voided_or_invalid = bool(tx_meta.voided_by) or tx_meta.validation.is_invalid()
+        if force_remove and not voided_or_invalid:
+            self.log.warn('removing tx even though it isn\'t voided or invalid, some tests can do this')
+
+        if is_new:
+            is_tip = tx.is_transaction and not voided_or_invalid and tx_meta.first_block is None
+        else:
+            is_tip = self._is_tip(tx_storage, tx)
+        if not force_remove and is_tip:
+            self._add(tx.hash)
+            # its dependencies now have a non-voided child/spender (this tx), so they cannot be tips
+            self._discard_many(tx.get_all_dependencies())
+            return
+
+        self._discard(tx.hash)
+        if not tx.is_transaction and not voided_or_invalid:
+            # a connected block: its tx parents (and everything below) just got confirmed
+            self._discard_many(tx.get_all_dependencies())
+            return
+
+        # `tx` left the mempool view (voided/invalid/confirmed/removed): each of its dependencies may
+        # have just lost its only non-voided child/spender and become a tip again — or may have ceased
+        # being one. Re-evaluate exactly them.
+        from hathor.transaction.storage.exceptions import TransactionDoesNotExist
+        for dep_hash in tx.get_all_dependencies():
+            try:
+                dep = tx_storage.get_transaction(dep_hash)
+            except TransactionDoesNotExist:
+                # the dependency itself was removed from storage (e.g. a removal cascade during a reorg)
+                self._discard(dep_hash)
+                continue
+            if self._is_tip(tx_storage, dep):
+                self._add(dep_hash)
+            else:
+                self._discard(dep_hash)
+
+    def _update_fullscan(self, tx: BaseTransaction, *, force_remove: bool = False) -> None:
+        """Baseline: rescan every current tip on each call (the original, pre-optimization behavior)."""
         assert tx.storage is not None
         tx_meta = tx.get_metadata()
         to_remove: set[bytes] = set()
