@@ -261,7 +261,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
             # Check if this block is still in the best blockchain.
             if self.current_block.get_metadata().voided_by:
-                self.sync_agent.stop_tx_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
+                self._stop_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
                 return
 
             self.current_block = self.current_block.get_next_block_best_chain()
@@ -272,12 +272,22 @@ class TransactionsStreamingServer(_StreamingServerBase):
         assert self.is_running
         assert self.is_producing
 
+        # A reorg can move the requested last block off the best chain while this stream is
+        # running. Stop before advancing through its same-height replacement, whose transactions
+        # were not requested by the peer.
+        if self.last_block.get_metadata().voided_by:
+            self._stop_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
+            return
+
         try:
             cur = next(self.iter)
         except StopIteration:
-            # nothing more to send
+            # Nothing more to send. The iterator may have already stopped the server itself (for
+            # example when the current block became voided mid-stream), so only stop it if it is
+            # still running — otherwise we would stop it a second time and crash.
             self.log.debug('no more transactions, stopping streaming')
-            self.sync_agent.stop_tx_streaming_server(StreamEnd.END_HASH_REACHED)
+            if self.is_running:
+                self._stop_streaming_server(StreamEnd.END_HASH_REACHED)
             return
 
         # Skip blocks.
