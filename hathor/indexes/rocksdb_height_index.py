@@ -21,7 +21,7 @@ from hathor.indexes.height_index import HeightIndex, HeightInfo, IndexEntry
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 
@@ -94,7 +94,7 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
 
     def _del_from_height(self, height: int) -> None:
         """ Delete all entries starting from the given height up."""
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
         batch = rocksdb.WriteBatch()
         it = self._db.iterkeys(self._cf)
         it.seek(self._to_key(height))
@@ -144,8 +144,9 @@ class RocksDBHeightIndex(HeightIndex, RocksDBIndexUtils):
     def get_height_tip(self) -> HeightInfo:
         it = self._db.iteritems(self._cf)
         it.seek_to_last()
-        (_, key), value = it.get()
-        assert key is not None and value is not None  # must never be empty, at least genesis has been added
+        item = it.get()
+        assert item is not None  # must never be empty, at least genesis has been added
+        (_, key), value = item
         height = self._from_key(key)
         entry = self._from_value(value)
         return HeightInfo(height, entry.hash)

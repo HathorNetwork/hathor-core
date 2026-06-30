@@ -11,6 +11,7 @@ compile_error!("compilation is only allowed for 64-bit targets");
 extern crate num_derive;
 
 mod signed_amount;
+pub mod storage;
 mod unsigned_amount;
 
 pub use signed_amount::SignedAmount;

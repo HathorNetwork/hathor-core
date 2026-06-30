@@ -16,12 +16,12 @@ import struct
 from abc import ABC
 from typing import Any, Iterator, final
 
-import rocksdb
 from structlog import get_logger
 from typing_extensions import override
 
 from hathor.indexes.rocksdb_utils import RocksDBIndexUtils, incr_key
 from hathor.indexes.vertex_timestamp_index import VertexTimestampIndex
+from hathor.storage import rocksdb_compat as rocksdb
 from hathor.transaction import BaseTransaction, Vertex
 
 logger = get_logger()

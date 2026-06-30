@@ -22,9 +22,8 @@ from hathor.indexes.rocksdb_utils import RocksDBIndexUtils
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
-
     from hathor.indexes.manager import IndexesManager
+    from hathor.storage import rocksdb_compat as rocksdb
 
 logger = get_logger()
 
@@ -58,6 +57,7 @@ class RocksDBInfoIndex(MemoryInfoIndex, RocksDBIndexUtils):
     def _load_value(self, key: bytes) -> int:
         import struct
         db_value = self._db.get((self._cf, key))
+        assert db_value is not None, f'info index value missing for key {key!r}'
         value, = struct.unpack('>I', db_value)
         return value
 

@@ -18,8 +18,9 @@ from typing import TYPE_CHECKING, Iterable, Iterator, NewType
 from hathor.conf.get_settings import get_global_settings
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
     import structlog
+
+    from hathor.storage import rocksdb_compat as rocksdb
 
 
 # the following type is used to help a little bit to distinguish when we're using a byte sequence that should only be
@@ -94,12 +95,14 @@ class RocksDBIndexUtils:
 
     def _ensure_cf_exists(self, cf_name: bytes) -> None:
         """Ensure we have a working and column family, loading the previous one if it exists"""
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
 
-        self._cf = self._db.get_column_family(cf_name)
-        if self._cf is None:
+        cf = self._db.get_column_family(cf_name)
+        if cf is None:
             self._cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
             self._init_db()
+        else:
+            self._cf = cf
         self._log.debug('got column family', is_valid=self._cf.is_valid, id=self._cf.id)
 
     def clear(self) -> None:
@@ -172,7 +175,7 @@ class RocksDBSimpleSet(Collection[bytes], RocksDBIndexUtils):
         self._db.put((self._cf, elem), b'')
 
     def update(self, it_elem: Iterable[bytes]) -> None:
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
         batch = rocksdb.WriteBatch()
         for elem in it_elem:
             batch.put((self._cf, elem), b'')
@@ -182,7 +185,7 @@ class RocksDBSimpleSet(Collection[bytes], RocksDBIndexUtils):
         self._db.delete((self._cf, elem))
 
     def discard_many(self, it_elem: Iterable[bytes]) -> None:
-        import rocksdb
+        from hathor.storage import rocksdb_compat as rocksdb
         batch = rocksdb.WriteBatch()
         for elem in it_elem:
             batch.delete((self._cf, elem))

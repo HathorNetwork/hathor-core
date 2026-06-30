@@ -1,6 +1,7 @@
 //! Python extension module exposing Hathor's Rust implementations via PyO3.
 
 mod signed_amount;
+pub mod storage;
 mod unsigned_amount;
 
 use crate::signed_amount::PySignedAmount;
@@ -19,6 +20,9 @@ fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
     m.add_class::<PyUnsignedAmount>()?;
     m.add_class::<PySignedAmount>()?;
+    m.add_class::<storage::PyRocksDb>()?;
+    m.add_class::<storage::PyRocksDbWriteBatch>()?;
+    m.add_class::<storage::PyRocksDbIterator>()?;
     Ok(())
 }
 

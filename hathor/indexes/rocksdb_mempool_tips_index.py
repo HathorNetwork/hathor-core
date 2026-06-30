@@ -23,9 +23,7 @@ from hathor.indexes.rocksdb_utils import RocksDBSimpleSet
 from hathor.transaction import BaseTransaction
 
 if TYPE_CHECKING:  # pragma: no cover
-    import rocksdb
-
-    from hathor.storage import RocksDBStorage
+    from hathor.storage import RocksDBStorage, rocksdb_compat as rocksdb
     from hathor.transaction.storage import TransactionStorage
 
 logger = get_logger()
