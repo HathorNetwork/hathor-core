@@ -22,6 +22,7 @@ from hathor.reactor import ReactorProtocol as Reactor
 from hathor.transaction.storage import TransactionStorage
 from hathor.verification.block_verifier import BlockVerifier
 from hathor.verification.merge_mined_block_verifier import MergeMinedBlockVerifier
+from hathor.verification.mint_melt_verifier import MintMeltVerifier
 from hathor.verification.nano_header_verifier import NanoHeaderVerifier
 from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVerifier
 from hathor.verification.poa_block_verifier import PoaBlockVerifier
@@ -39,6 +40,7 @@ class VertexVerifiers(NamedTuple):
     tx: TransactionVerifier
     token_creation_tx: TokenCreationTransactionVerifier
     nano_header: NanoHeaderVerifier
+    mint_melt: MintMeltVerifier
     on_chain_blueprint: OnChainBlueprintVerifier
 
     @classmethod
@@ -98,6 +100,7 @@ class VertexVerifiers(NamedTuple):
             tx_storage=tx_storage,
             blueprint_service=blueprint_service,
         )
+        mint_melt_verifier = MintMeltVerifier(settings=settings)
         on_chain_blueprint_verifier = OnChainBlueprintVerifier(settings=settings)
 
         return VertexVerifiers(
@@ -108,5 +111,6 @@ class VertexVerifiers(NamedTuple):
             tx=tx_verifier,
             token_creation_tx=token_creation_tx_verifier,
             nano_header=nano_header_verifier,
+            mint_melt=mint_melt_verifier,
             on_chain_blueprint=on_chain_blueprint_verifier,
         )

@@ -265,13 +265,19 @@ class VerificationService:
         self.verifiers.tx.verify_version(tx, params)
 
         block_storage = self._get_block_storage(params)
+        _token_dict = token_dict or tx.get_complete_token_info(block_storage)
         self.verifiers.tx.verify_transparent_balance(
             self._settings,
             tx,
-            token_dict or tx.get_complete_token_info(block_storage),
+            _token_dict,
             # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
             allow_nonexistent_tokens=tx.is_nano_contract()
         )
+        # Storage-bound MintHeader/MeltHeader checks. Both are no-ops unless a
+        # Mint/Melt header is present (which itself requires a shielded tx).
+        self.verifiers.mint_melt.verify_mint_melt_authority_inputs(tx)  # Rule M2
+        if tx.is_shielded():
+            self.verifiers.mint_melt.verify_no_undeclared_mint_melt(tx, _token_dict)  # Rule M4
         self.verifiers.vertex.verify_parents(tx)
         self.verifiers.tx.verify_conflict(tx, params)
         if params.reject_locked_reward:
@@ -321,6 +327,12 @@ class VerificationService:
         if vertex.is_nano_contract():
             assert self._settings.ENABLE_NANO_CONTRACTS
             self._verify_without_storage_nano_header(vertex, params)
+
+        # Storage-free MintHeader/MeltHeader checks (Rules M1, M3, well-formedness).
+        # Header acceptance per tx version is already gated by verify_headers; this
+        # is a no-op unless a Mint/Melt header is present.
+        if isinstance(vertex, Transaction):
+            self.verifiers.mint_melt.verify_mint_melt_basic(vertex)
 
     def _verify_without_storage_base_block(self, block: Block, params: VerificationParams) -> None:
         self.verifiers.block.verify_no_inputs(block)
