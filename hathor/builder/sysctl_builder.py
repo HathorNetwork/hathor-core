@@ -17,6 +17,7 @@ from hathor.sysctl import (
     ConnectionsManagerSysctl,
     FeatureActivationSysctl,
     HathorManagerSysctl,
+    MiningManagerSysctl,
     Sysctl,
     WebsocketManagerSysctl,
 )
@@ -35,6 +36,7 @@ class SysctlBuilder:
 
         core = HathorManagerSysctl(self.artifacts.manager)
         core.put_child('features', FeatureActivationSysctl(self.artifacts.bit_signaling_service))
+        core.put_child('mining', MiningManagerSysctl(self.artifacts.manager))
 
         root.put_child('core', core)
         root.put_child('p2p', ConnectionsManagerSysctl(self.artifacts.p2p_manager))

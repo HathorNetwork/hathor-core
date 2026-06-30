@@ -15,6 +15,10 @@
 import enum
 
 from structlog import get_logger
+from twisted.internet.defer import ensureDeferred
+from twisted.python.failure import Failure
+from twisted.web.http import Request
+from twisted.web.server import NOT_DONE_YET
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, set_cors
@@ -130,9 +134,32 @@ class SubmitBlockResource(Resource):
             self.log.debug('cannot propagate Block, node syncing', data=data)
             raise APIError('Node syncing')
 
+        if self.manager.has_mining_submission_controls:
+            # ignore switch and/or submission delay are active: process asynchronously
+            deferred = ensureDeferred(self.manager.asubmit_block(tx))
+            deferred.addCallback(self._cb_submit, request)
+            deferred.addErrback(self._err_submit, request)
+            return NOT_DONE_YET
+
         res = self.manager.submit_block(tx)
 
         return json_dumpb({'result': res})
+
+    def _cb_submit(self, res: bool, request: Request) -> None:
+        """Called when an async block submission finishes successfully."""
+        request.write(json_dumpb({'result': res}))
+        request.finish()
+
+    def _err_submit(self, reason: Failure, request: Request) -> None:
+        """Called when an async block submission raises during processing."""
+        if reason.check(HathorError):
+            request.setResponseCode(getattr(reason.value, 'status_code', 500))
+            request.write(json_dumpb({'error': str(reason.value)}))
+        else:
+            self.log.error('submit_block failed', reason=reason)
+            request.setResponseCode(500)
+            request.write(json_dumpb({'error': 'Internal error'}))
+        request.finish()
 
 
 GetBlockTemplateResource.openapi = {

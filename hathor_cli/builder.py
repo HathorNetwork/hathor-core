@@ -421,6 +421,9 @@ class CliBuilder:
         if self._args.allow_mining_without_peers:
             self.manager.allow_mining_without_peers()
 
+        self.manager.mining_submission_delay = self._args.mining_submission_delay
+        self.manager.ignore_mining_submissions = self._args.ignore_mining_submissions
+
         if self._args.x_localhost_only:
             self.manager.connections.localhost_only = True
 

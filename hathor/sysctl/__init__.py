@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from hathor.sysctl.core.manager import HathorManagerSysctl
+from hathor.sysctl.core.mining import MiningManagerSysctl
 from hathor.sysctl.feature_activation.manager import FeatureActivationSysctl
 from hathor.sysctl.p2p.manager import ConnectionsManagerSysctl
 from hathor.sysctl.storage.manager import StorageSysctl
@@ -23,6 +24,7 @@ __all__ = [
     'Sysctl',
     'ConnectionsManagerSysctl',
     'HathorManagerSysctl',
+    'MiningManagerSysctl',
     'StorageSysctl',
     'WebsocketManagerSysctl',
     'FeatureActivationSysctl',
