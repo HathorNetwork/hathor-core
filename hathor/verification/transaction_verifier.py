@@ -65,6 +65,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
+from hathor.verification.script_verification_pool import ScriptVerificationPool, build_script_verification_job
 from hathor.verification.verification_params import VerificationParams
 
 if TYPE_CHECKING:
@@ -82,7 +83,7 @@ MAX_BETWEEN_CONFLICTS: int = 8
 
 
 class TransactionVerifier:
-    __slots__ = ('_settings', '_daa_factory', '_feature_service', 'log')
+    __slots__ = ('_settings', '_daa_factory', '_feature_service', 'log', '_script_verification_pool')
 
     def __init__(
         self,
@@ -90,11 +91,16 @@ class TransactionVerifier:
         settings: HathorSettings,
         daa_factory: DAAFactory,
         feature_service: FeatureService,
+        script_verification_pool: ScriptVerificationPool | None = None,
     ) -> None:
         self._settings = settings
         self._daa_factory = daa_factory
         self._feature_service = feature_service
         self.log = logger.new()
+        # S3S4 OPTIMIZATION (PR #1729): when wired (by the builder under opt_enabled("s3s4")), the
+        # per-input script evaluations are fanned out to this pool (rust/process/thread). None ->
+        # the original serial loop. Shielded txs always take the serial path. See hathor.opt_flags.
+        self._script_verification_pool = script_verification_pool
 
     def verify_parents_basic(self, tx: Transaction) -> None:
         """Verify number and non-duplicity of parents."""
@@ -150,7 +156,8 @@ class TransactionVerifier:
 
     def verify_inputs(self, tx: Transaction, params: VerificationParams, *, skip_script: bool = False) -> None:
         """Verify inputs signatures and ownership and all inputs actually exist"""
-        self._verify_inputs(self._settings, tx, params.features.opcodes_version, skip_script=skip_script)
+        self._verify_inputs(self._settings, tx, params.features.opcodes_version,
+                            skip_script=skip_script, script_pool=self._script_verification_pool)
 
     @classmethod
     def _verify_inputs(
@@ -160,7 +167,28 @@ class TransactionVerifier:
         opcodes_version: OpcodesVersion,
         *,
         skip_script: bool,
+        script_pool: ScriptVerificationPool | None = None,
     ) -> None:
+        """S3S4 OPTIMIZATION GATE (PR #1729): dispatch to the parallel script path (transparent txs,
+        when a pool is enabled) or the shielded-aware serial path (the baseline, skip_script, or any
+        shielded tx — see the parallel path's shielded fallback). Both surface the same error: the
+        lowest-index failing input."""
+        if script_pool is None or skip_script or not script_pool.enabled:
+            cls._verify_inputs_serial(settings, tx, opcodes_version, skip_script=skip_script)
+        else:
+            cls._verify_inputs_parallel(settings, tx, opcodes_version, script_pool=script_pool)
+
+    @classmethod
+    def _verify_inputs_serial(
+        cls,
+        settings: HathorSettings,
+        tx: Transaction,
+        opcodes_version: OpcodesVersion,
+        *,
+        skip_script: bool,
+    ) -> None:
+        """Serial, shielded-aware input verification (the original path; handles spending shielded
+        outputs, where input.index >= len(spent_tx.outputs))."""
         spent_outputs: set[tuple[VertexId, int]] = set()
         for input_tx in tx.inputs:
             if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
@@ -200,6 +228,108 @@ class TransactionVerifier:
                 raise ConflictingInputs('tx {} inputs spend the same output: {} index {}'.format(
                     tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
             spent_outputs.add(key)
+
+    @classmethod
+    def _verify_inputs_parallel(
+        cls,
+        settings: HathorSettings,
+        tx: Transaction,
+        opcodes_version: OpcodesVersion,
+        *,
+        script_pool: ScriptVerificationPool,
+    ) -> None:
+        """S3S4 (PR #1729): parallel counterpart of _verify_inputs_serial — the cheap, storage-touching
+        checks run serially here while the script evaluations fan out to script_pool; results are merged
+        so the surfaced error matches the serial loop exactly (lowest-index failing input). Transparent
+        only: a shielded spent output makes the whole tx fall back to the shielded-aware serial path."""
+        # When the batched sync precompute already evaluated this tx's scripts, the job tuples are
+        # never used — skip building them. Single-threaded reactor: nothing evicts between here and phase 2.
+        use_cache = script_pool.has_script_results(tx._hash, int(opcodes_version))
+        # OP_FIND_P2PKH (V1 only) is the sole opcode reading tx outputs; avoid building them otherwise.
+        shared_outputs: tuple[tuple[int, bytes], ...] = (
+            tuple((output.value, output.script) for output in tx.outputs)
+            if opcodes_version == OpcodesVersion.V1 and not use_cache else ()
+        )
+
+        # Phase 1: cheap checks in input order (stop at the first pre-script failure / conflict, recorded
+        # not raised so a lower-index script failure can still win), collecting a script job per input.
+        spent_outputs: set[tuple[VertexId, int]] = set()
+        scheduled_indices: list[int] = []
+        jobs = []
+        precheck_error: tuple[int, BaseException] | None = None
+        conflict_at: tuple[int, str] | None = None
+
+        for index, input_tx in enumerate(tx.inputs):
+            if len(input_tx.data) > settings.MAX_INPUT_DATA_SIZE:
+                precheck_error = (index, InvalidInputDataSize('size: {} and max-size: {}'.format(
+                    len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
+                )))
+                break
+
+            try:
+                spent_tx = tx.get_spent_tx(input_tx)
+            except Exception as e:
+                precheck_error = (index, e)
+                break
+
+            if input_tx.index >= len(spent_tx.outputs):
+                # Shielded spent output: the parallel job model assumes transparent outputs. Fall back
+                # to the shielded-aware serial path for the whole tx — phase 1 has no side effects
+                # beyond the local job list, so re-running serially is safe.
+                cls._verify_inputs_serial(settings, tx, opcodes_version, skip_script=False)
+                return
+
+            if tx.timestamp <= spent_tx.timestamp:
+                precheck_error = (index, TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
+                    tx.hash.hex() if tx.hash else None,
+                    tx.timestamp,
+                    spent_tx.hash.hex(),
+                    spent_tx.timestamp,
+                )))
+                break
+
+            scheduled_indices.append(index)
+            if not use_cache:
+                jobs.append(build_script_verification_job(
+                    input_index=index,
+                    tx=tx,
+                    txin=input_tx,
+                    spent_tx=spent_tx,
+                    opcodes_version=opcodes_version,
+                    shared_outputs=shared_outputs,
+                ))
+
+            key = (input_tx.tx_id, input_tx.index)
+            if key in spent_outputs:
+                conflict_at = (index, 'tx {} inputs spend the same output: {} index {}'.format(
+                    tx.hash_hex, input_tx.tx_id.hex(), input_tx.index))
+                break
+            spent_outputs.add(key)
+
+        # Phase 2: run/consume the script jobs and index results by input.
+        if use_cache:
+            assert tx._hash is not None
+            results = script_pool.consume_script_results(tx._hash, int(opcodes_version), scheduled_indices)
+            assert results is not None, 'cache checked at phase 1 and the reactor is single-threaded'
+        else:
+            results = script_pool.run_jobs_with_cache(tx._hash, int(opcodes_version), jobs)
+        result_by_index = dict(zip(scheduled_indices, results))
+
+        # Phase 3: merge in input order — first failing input wins; for an input, the script error is
+        # surfaced before the conflicting-inputs error, mirroring the serial loop.
+        horizon = len(tx.inputs) - 1
+        if precheck_error is not None:
+            horizon = precheck_error[0]
+        elif conflict_at is not None:
+            horizon = conflict_at[0]
+        for index in range(horizon + 1):
+            if precheck_error is not None and precheck_error[0] == index:
+                raise precheck_error[1]
+            script_error = result_by_index.get(index)
+            if script_error is not None:
+                raise InvalidInputData(script_error) from script_error
+            if conflict_at is not None and conflict_at[0] == index:
+                raise ConflictingInputs(conflict_at[1])
 
     @staticmethod
     def verify_script(
