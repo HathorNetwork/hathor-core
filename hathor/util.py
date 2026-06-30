@@ -138,19 +138,6 @@ def iwindows(iterable: Iterable[T], window_size: int) -> Iterator[tuple[T, ...]]
         yield tuple(res_item)
 
 
-class classproperty:
-    """ This function is used to make a property that can be accessed from the class. Only getter is supported.
-
-    See: https://stackoverflow.com/a/5192374/947511
-    """
-
-    def __init__(self, f):
-        self.f = f
-
-    def __get__(self, obj, owner):
-        return self.f(owner)
-
-
 class MaxSizeOrderedDict(OrderedDict):
     """ And OrderedDict that has a maximum size, if new elements are added, the oldest elements are silently deleted.
 

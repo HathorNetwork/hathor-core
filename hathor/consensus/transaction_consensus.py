@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any, Iterable, cast
+from typing import TYPE_CHECKING, Iterable, cast
 
 from structlog import get_logger
 
@@ -20,7 +20,6 @@ from hathor.conf.get_settings import get_global_settings
 from hathor.execution_manager import non_critical_code
 from hathor.transaction import BaseTransaction, Block, Transaction, TxInput
 from hathor.types import VertexId
-from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 
 if TYPE_CHECKING:
@@ -28,23 +27,14 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-_base_transaction_log = logger.new()
-
 
 class TransactionConsensusAlgorithm:
     """Implement the consensus algorithm for transactions."""
 
     def __init__(self, context: 'ConsensusAlgorithmContext') -> None:
+        self.log = logger.new()
         self._settings = get_global_settings()
         self.context = context
-
-    @classproperty
-    def log(cls) -> Any:
-        """ This is a workaround because of a bug on structlog (or abc).
-
-        See: https://github.com/hynek/structlog/issues/229
-        """
-        return _base_transaction_log
 
     def update_consensus(self, tx: Transaction) -> None:
         self.mark_inputs_as_used(tx)
