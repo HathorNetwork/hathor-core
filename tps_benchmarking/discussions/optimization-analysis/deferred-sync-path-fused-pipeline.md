@@ -70,7 +70,34 @@ natively in the pipeline, and dependency-cache pre-warming. None of this shows u
 - The fused pipeline preserves consensus semantics by construction (Python remains authoritative;
   differential + shadow tests gate it) — same discipline as the rest of the s3s4 work.
 
-## TODO pointer
+## Implemented + measured (2026-06-30)
 
-When a sync/batch load module exists (or when we want to benchmark block-sync throughput), revisit
-this. Until then it stays out of the tree to keep the per-tx benchmark clean and the merge minimal.
+We *did* wire it (opt-in, so the default per-tx path is untouched):
+- `rust_verification_service.py` brought in (subclasses our shielded `VerificationService`); `verify_bytes`
+  skipped (it's the p2p wire entrypoint; the in-process driver works on vertex objects).
+- `NodeHarness(sync_precompute=True)` swaps in `RustVerificationService` when s3s4 is on.
+- `scripts/sync_precompute_experiment.py` calls `precompute_stateless_batch([tx…], params,
+  include_scripts=True)` over the batch, then drives the per-tx pipeline (which consumes the stash).
+
+**Result (N=300, I=3, all opts on, median of 3):** standard per-tx ≈ 589 tx/s, sync-precompute ≈ 583 tx/s
+→ **~0.99× (a wash)**. Correctness: the fused Rust call ran (stash populated) and the stored state is
+**identical** to the standard path.
+
+**Why no gain here (all consistent with the deferral rationale):**
+1. **No off-thread overlap.** The fused pipeline's headline win is that the GIL-released batch call
+   runs on the reactor's *thread pool*, overlapping reactor I/O. Our harness uses a simulated-clock
+   test reactor with no thread pool, so `defer_stateless_precompute` runs the batch **synchronously**
+   — the main benefit can't appear.
+2. **Verification is already ~2%.** The per-tx path already uses the Rust script pool, and verification
+   is a tiny slice of the per-tx budget (S5 consensus/save dominate). Amortizing the FFI of an already
+   small, already-Rust operation over a batch saves a fraction of ~2%.
+3. **Double-parse in this measurement.** On a real node the precompute's parse is reused by the
+   connect loop; our per-tx driver re-deserializes each tx at S1 independently, so the batch's parse
+   work is *additional* here, not reused — slightly working against the precompute.
+
+**Conclusion:** the optimization is correct and consensus-safe, but its benefit is structurally a
+**real-reactor, block-sync** phenomenon (off-thread overlap + verification as a larger share) that the
+in-process per-tx latency harness cannot capture. To actually measure its upside we'd need a
+**real-reactor threaded sync benchmark** (feed batches through `on_new_block` on a live reactor) — a
+future load module, not the current driver. The wiring stays opt-in (`sync_precompute=False` default),
+so it costs nothing on the existing benchmark.

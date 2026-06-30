@@ -33,10 +33,14 @@ class NodeHarness:
     trivial (weight-1) PoW. Reproducible via `seed`. See RFC §"Standing up the node"."""
 
     def __init__(self, seed: int = 1234, trivial_pow: bool = True, shielded: bool = False,
-                 opt: dict[str, bool] | None = None) -> None:
+                 opt: dict[str, bool] | None = None, sync_precompute: bool = False) -> None:
         self.seed = seed
         self.trivial_pow = trivial_pow
         self.shielded = shielded
+        # Opt-in sync-path mode: when set (and s3s4 on), swap in RustVerificationService so a batch
+        # driver can call precompute_stateless_batch (the fused Rust pipeline). Off by default — the
+        # standard --opt path keeps the bare script-pool (verified). See deferred-sync-path doc.
+        self.sync_precompute = sync_precompute
         # Per-section optimization gating (PR #1729 merge). Keys s1,s2,s3s4,s5,s6 → True=optimized
         # (default), False=baseline. Resolved from --opt/--no-opt in the CLI. Default = all ON.
         self.opt = opt if opt is not None else {s: True for s in ("s1", "s2", "s3s4", "s5", "s6")}
@@ -44,6 +48,7 @@ class NodeHarness:
         self.manager = None
         self._artifacts = None
         self._script_pool = None  # S3S4: Rust script-verification pool, attached when opt['s3s4']
+        self.rust_service = None  # sync-path: RustVerificationService, set when sync_precompute
 
     def start(self) -> "NodeHarness":
         # Export the per-section optimization gating to env BEFORE building the node, so the gated
@@ -116,6 +121,20 @@ class NodeHarness:
             self._script_pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=4, min_inputs=4)
             self._script_pool.start()
             self.manager.verification_service.verifiers.tx._script_verification_pool = self._script_pool
+
+            # Sync-path mode (opt-in): swap in RustVerificationService, which can precompute a whole
+            # batch's stateless+script verification in one GIL-released Rust call. validate_full
+            # delegates to super when no precompute ran, so per-tx behavior is unchanged otherwise.
+            if self.sync_precompute:
+                from hathor.verification.rust_verification_service import RustVerificationService
+                base = self.manager.verification_service
+                self.rust_service = RustVerificationService(
+                    settings=base._settings, verifiers=base.verifiers,
+                    tx_storage=self.manager.tx_storage, nc_storage_factory=base._nc_storage_factory,
+                    script_verification_pool=self._script_pool,
+                )
+                self.manager.verification_service = self.rust_service
+                self.manager.vertex_handler._verification_service = self.rust_service
 
         self.clock.run()
         self.clock.advance(5)
