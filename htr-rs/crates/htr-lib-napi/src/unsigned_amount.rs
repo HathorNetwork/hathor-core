@@ -71,6 +71,8 @@ impl UnsignedAmount {
         )))
     }
 
+    /// Build a V2 amount; raw and normalized coincide. No `catch_unwind`: unlike `from_v1`, this
+    /// never reads the normalization factor, so it cannot panic.
     #[napi]
     pub fn from_v2(amount: BigInt) -> napi::Result<UnsignedAmount> {
         Ok(UnsignedAmount::from_inner(InnerUnsignedAmount::from_v2(
@@ -175,49 +177,49 @@ impl UnsignedAmount {
             })
     }
 
-    #[napi(js_name = "add")]
+    #[napi(js_name = "add", strict)]
     pub fn op_add(&self, other: &UnsignedAmount) -> UnsignedAmount {
         UnsignedAmount::from_inner(&self.inner + &other.inner)
     }
 
     /// Subtraction. Underflow panics in `htr-lib` (the amount is unsigned);
     /// `catch_unwind` turns that into a thrown JS error rather than aborting Node.
-    #[napi(catch_unwind, js_name = "sub")]
+    #[napi(catch_unwind, js_name = "sub", strict)]
     pub fn op_sub(&self, other: &UnsignedAmount) -> UnsignedAmount {
         UnsignedAmount::from_inner(&self.inner - &other.inner)
     }
 
-    #[napi(js_name = "eq")]
+    #[napi(js_name = "eq", strict)]
     pub fn op_eq(&self, other: &UnsignedAmount) -> bool {
         self.inner == other.inner
     }
 
-    #[napi(js_name = "ne")]
+    #[napi(js_name = "ne", strict)]
     pub fn op_ne(&self, other: &UnsignedAmount) -> bool {
         self.inner != other.inner
     }
 
-    #[napi(js_name = "lt")]
+    #[napi(js_name = "lt", strict)]
     pub fn op_lt(&self, other: &UnsignedAmount) -> bool {
         self.inner < other.inner
     }
 
-    #[napi(js_name = "le")]
+    #[napi(js_name = "le", strict)]
     pub fn op_le(&self, other: &UnsignedAmount) -> bool {
         self.inner <= other.inner
     }
 
-    #[napi(js_name = "gt")]
+    #[napi(js_name = "gt", strict)]
     pub fn op_gt(&self, other: &UnsignedAmount) -> bool {
         self.inner > other.inner
     }
 
-    #[napi(js_name = "ge")]
+    #[napi(js_name = "ge", strict)]
     pub fn op_ge(&self, other: &UnsignedAmount) -> bool {
         self.inner >= other.inner
     }
 
-    #[napi]
+    #[napi(strict)]
     pub fn compare(&self, other: &UnsignedAmount) -> i32 {
         match self.inner.cmp(&other.inner) {
             Ordering::Less => -1,

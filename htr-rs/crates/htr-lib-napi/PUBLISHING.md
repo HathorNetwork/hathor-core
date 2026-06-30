@@ -47,8 +47,8 @@ npm version <patch|minor|major>   # the `version` script runs `napi version`, wh
                                   # per-platform npm/<target> package versions in sync
 ```
 
-Then commit, and tag as `htr-lib-napi-v<version>` (e.g. `htr-lib-napi-v0.1.0`) to trigger the CI
-publish (see below).
+Commit that bump. Publishing is triggered **manually** — the CI workflow is `workflow_dispatch`-only
+(see the **CI publish** section below); pass the same version as its `version` input.
 
 ## Manual publish (all platforms)
 

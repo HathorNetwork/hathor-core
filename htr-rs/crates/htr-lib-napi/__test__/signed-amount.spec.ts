@@ -38,8 +38,15 @@ test('comparisons', (t) => {
   t.is(a.compare(c), 1)
 })
 
-test('toSigned returns an equal signed amount', (t) => {
-  t.is(new SignedAmount(7n).toSigned().raw(), 7n)
+test('toSigned returns the same object (identity)', (t) => {
+  const a = new SignedAmount(7n)
+  t.is(a.toSigned(), a) // same JS object, mirroring Python's identity
+  t.is(a.toSigned().raw(), 7n)
+})
+
+test('pos returns the same object (identity)', (t) => {
+  const a = new SignedAmount(5n)
+  t.is(a.pos(), a)
 })
 
 test('toString matches Rust Debug', (t) => {

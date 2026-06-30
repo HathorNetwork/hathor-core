@@ -48,3 +48,14 @@ test('SignedAmount.add/sub normalize a V1 UnsignedAmount before combining', (t) 
   t.is(bal.add(UnsignedAmount.fromV1(1n)).raw(), 2n * normalized)
   t.is(bal.sub(UnsignedAmount.fromV1(1n)).raw(), 0n)
 })
+
+test('a method rejects the wrong wrapper class (#[napi(strict)])', (t) => {
+  // Passing a real wrapped object of the OTHER class must throw, not reinterpret its memory as the
+  // expected type (which would be UB). napi's bare `&T` recovery only checks for *some* native wrap.
+  const s = new SignedAmount(5n)
+  const u = UnsignedAmount.fromV2(5n)
+  // @ts-expect-error intentionally passing the wrong wrapper class
+  t.throws(() => s.eq(u))
+  // @ts-expect-error intentionally passing the wrong wrapper class
+  t.throws(() => u.eq(s))
+})

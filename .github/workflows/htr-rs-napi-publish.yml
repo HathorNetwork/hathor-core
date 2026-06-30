@@ -20,8 +20,10 @@ on:  # yamllint disable-line rule:truthy
         default: true
 
 concurrency:
+  # Never cancel an in-progress publish: a half-cancelled run could leave some per-platform
+  # packages published and the main package not.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   APP_NAME: htr-lib-napi

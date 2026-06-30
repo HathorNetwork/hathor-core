@@ -45,12 +45,12 @@ impl SignedAmount {
         !self.inner.as_bool()
     }
 
-    /// Identity, mirroring Python's `SignedAmount.to_signed`. Returns an equal
-    /// `SignedAmount` (value semantics); unlike Python it is not guaranteed to be
-    /// the same reference.
+    /// Identity, mirroring Python's `SignedAmount.to_signed`: returns `self` (the same JS object),
+    /// so a value of unknown type (signed or unsigned) can be converted to a signed amount through
+    /// a uniform method.
     #[napi]
-    pub fn to_signed(&self) -> SignedAmount {
-        SignedAmount::from_inner(InnerSignedAmount::new(self.inner.raw().clone()))
+    pub fn to_signed(&self) -> &Self {
+        self
     }
 
     /// Convert to an [`UnsignedAmount`]. Returns an error when the value is negative.
@@ -69,7 +69,7 @@ impl SignedAmount {
 
     /// Add another signed amount or an [`UnsignedAmount`]. An unsigned amount is
     /// lifted to the V2-normalized signed unit (via its `to_signed`) before combining.
-    #[napi(js_name = "add")]
+    #[napi(js_name = "add", strict)]
     pub fn op_add(&self, other: Either<&SignedAmount, &UnsignedAmount>) -> SignedAmount {
         let result = match other {
             Either::A(signed) => &self.inner + &signed.inner,
@@ -80,7 +80,7 @@ impl SignedAmount {
 
     /// Subtract another signed amount or an [`UnsignedAmount`]. The result is signed
     /// and may be negative; an unsigned amount is lifted to the V2 unit before combining.
-    #[napi(js_name = "sub")]
+    #[napi(js_name = "sub", strict)]
     pub fn op_sub(&self, other: Either<&SignedAmount, &UnsignedAmount>) -> SignedAmount {
         let result = match other {
             Either::A(signed) => &self.inner - &signed.inner,
@@ -94,44 +94,43 @@ impl SignedAmount {
         SignedAmount::from_inner(-&self.inner)
     }
 
-    /// Identity, mirroring Python's `SignedAmount.__pos__`. Returns an equal
-    /// `SignedAmount` (value semantics); not guaranteed to be the same reference.
+    /// Identity, mirroring Python's `SignedAmount.__pos__`: returns `self` (the same JS object).
     #[napi(js_name = "pos")]
-    pub fn op_pos(&self) -> SignedAmount {
-        SignedAmount::from_inner(InnerSignedAmount::new(self.inner.raw().clone()))
+    pub fn op_pos(&self) -> &Self {
+        self
     }
 
-    #[napi(js_name = "eq")]
+    #[napi(js_name = "eq", strict)]
     pub fn op_eq(&self, other: &SignedAmount) -> bool {
         self.inner == other.inner
     }
 
-    #[napi(js_name = "ne")]
+    #[napi(js_name = "ne", strict)]
     pub fn op_ne(&self, other: &SignedAmount) -> bool {
         self.inner != other.inner
     }
 
-    #[napi(js_name = "lt")]
+    #[napi(js_name = "lt", strict)]
     pub fn op_lt(&self, other: &SignedAmount) -> bool {
         self.inner < other.inner
     }
 
-    #[napi(js_name = "le")]
+    #[napi(js_name = "le", strict)]
     pub fn op_le(&self, other: &SignedAmount) -> bool {
         self.inner <= other.inner
     }
 
-    #[napi(js_name = "gt")]
+    #[napi(js_name = "gt", strict)]
     pub fn op_gt(&self, other: &SignedAmount) -> bool {
         self.inner > other.inner
     }
 
-    #[napi(js_name = "ge")]
+    #[napi(js_name = "ge", strict)]
     pub fn op_ge(&self, other: &SignedAmount) -> bool {
         self.inner >= other.inner
     }
 
-    #[napi]
+    #[napi(strict)]
     pub fn compare(&self, other: &SignedAmount) -> i32 {
         match self.inner.cmp(&other.inner) {
             Ordering::Less => -1,
