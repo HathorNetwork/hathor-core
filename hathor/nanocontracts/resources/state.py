@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from pydantic import Field
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import APIVersion, Resource, set_cors
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
@@ -45,8 +45,8 @@ class NanoContractStateResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: 'HathorManager') -> None:
-        super().__init__()
+    def __init__(self, manager: 'HathorManager', api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self.manager = manager
         self.nc_storage_factory = manager.consensus_algorithm.nc_storage_factory
 
@@ -317,6 +317,12 @@ _openapi_success_value = {
 NanoContractStateResource.openapi = {
     '/nano_contract/state': {
         'x-visibility': 'public',
+        'x-api-versions': ['v1a', 'v2'],
+        'x-api-version-overrides': {
+            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
+            # delta (decimal token amounts) when the v2 shape is finalized.
+            'v2': {},
+        },
         'x-rate-limit': {
             'global': [
                 {

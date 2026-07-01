@@ -1,5 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.crypto.util import decode_address
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction.scripts import parse_address_script
@@ -91,7 +92,8 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
 
     @inlineCallbacks
     def test_address_balance(self):
-        resource = StubSite(AddressBalanceResource(self.manager))
+        # TODO(decimals): test v2
+        resource = StubSite(AddressBalanceResource(self.manager, APIVersion.V1A))
 
         # Invalid address
         response_error = yield resource.get('thin_wallet/address_search', {b'address': 'vvvv'.encode(), b'count': 3})
