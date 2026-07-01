@@ -4,18 +4,6 @@
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
 #
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
 #  Unless required by applicable law or agreed to in writing, software
@@ -61,145 +49,11 @@ Test conventions:
 Implemented classes live in their own modules:
 - `TestTokenAmountVersionDerivation` -> `test_derivation.py`
 - `TestTokenAmountVersionVerification` -> `test_verification.py`
+- `TestCrossVersionBalance` -> `test_cross_version_balance.py`
+- `TestTokenCreationEconomicsV2` -> `test_token_creation_economics.py`
 """
 
 from __future__ import annotations
-
-
-class TestCrossVersionBalance:
-    """Sum-of-inputs == sum-of-outputs balance verification when mixing V1 and V2 amounts. The heart of the project.
-    use dag builder."""
-
-    def test_v1_input_v1_output_balances(self) -> None:
-        """Baseline control: a V1 tx spends a V1 HTR utxo with V1 outputs summing equal; assert it verifies."""
-        raise NotImplementedError
-
-    def test_v2_input_v2_output_balances(self) -> None:
-        """Baseline control: a V2 tx spends a V2 HTR utxo with V2 outputs summing equal; assert it verifies."""
-        raise NotImplementedError
-
-    def test_v1_input_v2_output_balances(self) -> None:
-        """User example #1: a V2 tx spends a V1-created HTR utxo and emits V2 output(s) of equal NORMALIZED value;
-        assert verification passes. Proves inputs/outputs are compared in normalized form across versions, not by
-        raw value."""
-        raise NotImplementedError
-
-    def test_v2_input_v1_output_balances(self) -> None:
-        """User example #2: a V1 tx spends a cent-aligned V2-created HTR utxo and emits an equal V1 output; assert
-        it balances and verifies. Confirms a V1 spending tx normalizes a V2 input correctly."""
-        raise NotImplementedError
-
-    def test_balance_compares_normalized_not_raw(self) -> None:
-        """A V1 input (raw 100) and a single V2 output whose raw differs wildly but whose normalized value is equal;
-        assert balance passes. Guards against any regression to raw-integer comparison."""
-        raise NotImplementedError
-
-    def test_mixed_v1_and_v2_inputs_same_token_summed(self) -> None:
-        """A tx spends two HTR utxos of the same token, one created by a V1 tx and one by a V2 tx, and outputs their
-        combined normalized total; assert balance passes. Confirms per-token aggregation across input versions."""
-        raise NotImplementedError
-
-    def test_cross_version_surplus_rejected(self) -> None:
-        """A V2 tx spends a `1.00` V1 HTR utxo but emits V2 outputs summing to one V2 raw unit too much; assert
-        `InputOutputMismatch` ('invalid surplus of HTR'). Off-by-one at the finest V2 unit across versions."""
-        raise NotImplementedError
-
-    def test_cross_version_deficit_rejected(self) -> None:
-        """Same setup but outputs sum to one V2 raw unit too little; assert `InputOutputMismatch`
-        ('invalid deficit of HTR'). Pins deficit detection at normalized granularity."""
-        raise NotImplementedError
-
-    def test_v2_tx_splits_htr_into_sub_cent_outputs(self) -> None:
-        """A V2 tx spends a `1.00` V1 HTR input and emits two V2 outputs `0.005` + `0.995` (one sub-cent, not
-        V1-representable); assert balance passes. Establishes that sub-cent V2 utxos can be created from V1 funds."""
-        raise NotImplementedError
-
-    def test_v1_tx_cannot_spend_single_sub_cent_v2_utxo(self) -> None:
-        """A V1 tx spends only a `0.005` sub-cent V2 HTR utxo; since V1 outputs are cent-granular no valid output
-        set exists, so assert `InputOutputMismatch`. Core mixing edge: a V2 input not expressible in V1 outputs."""
-        raise NotImplementedError
-
-    def test_v1_tx_combining_two_sub_cent_v2_utxos_balances(self) -> None:
-        """A V1 tx spends two `0.005` V2 HTR utxos (total `0.01`, cent-aligned) into a single V1 `0.01` output;
-        assert it balances. Pins that sub-cent V2 dust consolidates into a V1 tx when the total is cent-aligned."""
-        raise NotImplementedError
-
-    def test_multi_token_mixed_versions_each_balanced_independently(self) -> None:
-        """A tx moves HTR and a custom token, spending a V1 utxo of one and a V2 utxo of the other; assert each
-        token's normalized sum balances in its own `TokenInfo` entry and the tx verifies."""
-        raise NotImplementedError
-
-    def test_zero_value_output_rejected_in_both_versions(self) -> None:
-        """A V1 output of raw 0 and a V2 output of normalized 0 each raise `InvalidOutputValue`. Pins the
-        positivity guard is version-agnostic (compares against `UnsignedAmount.zero()`)."""
-        raise NotImplementedError
-
-    def test_v2_max_output_value_boundary(self) -> None:
-        """A V2 output at `get_max_output_value_v2()` (== 2**63 * normalization factor) is accepted, while one unit
-        beyond cannot be constructed/deserialized (`ValueError: value is too big`). Pins the V2 ceiling, distinct
-        from V1's 2**63."""
-        raise NotImplementedError
-
-
-class TestTokenCreationEconomicsV2:
-    """HTR deposit/withdraw economics for minting/melting deposit tokens under V2, incl. the integer-math fix."""
-
-    def test_v1_deposit_token_creation_baseline(self) -> None:
-        """A V1 deposit-token-creation tx locks exactly `get_deposit_token_deposit_amount(...)` HTR and verifies.
-        Control for the deposit path."""
-        raise NotImplementedError
-
-    def test_v2_deposit_token_creation_locks_normalized_deposit(self) -> None:
-        """A V2 deposit-token-creation tx mints a V2 amount; assert the required HTR deposit is computed from the
-        NORMALIZED mint amount (deposit percentage applied to `normalized()`) and the tx verifies."""
-        raise NotImplementedError
-
-    def test_v2_mint_requires_ceil_to_cent_deposit(self) -> None:
-        """A V2 mint whose raw deposit lands between cents forces the deposit UP to the next whole cent;
-        under-depositing by less than a cent raises `InputOutputMismatch`. Pins ceil rounding on the deposit."""
-        raise NotImplementedError
-
-    def test_v2_melt_withdraws_floor_to_cent(self) -> None:
-        """A V2 melt returns HTR FLOORED to the whole cent; over-withdrawing by a sub-cent raises
-        `InputOutputMismatch`. Pins floor rounding on melt and the deliberate deposit/withdraw asymmetry."""
-        raise NotImplementedError
-
-    def test_v2_deposit_insufficient_htr_rejected(self) -> None:
-        """A V2 deposit-token mint supplying less HTR than required raises `InputOutputMismatch('invalid surplus of
-        HTR')` (consuming too little manifests as surplus). Pins the under-deposit path/exception."""
-        raise NotImplementedError
-
-    def test_v2_deposit_excess_htr_rejected(self) -> None:
-        """A V2 mint supplying more HTR than required raises `InputOutputMismatch('invalid deficit of HTR')`. Pins
-        the over-deposit path/exception."""
-        raise NotImplementedError
-
-    def test_deposit_token_mint_with_v1_htr_input_and_v2_token_output(self) -> None:
-        """A V2 token-creation tx funds its HTR deposit from a V1-created HTR utxo while minting the new token as V2;
-        assert the normalized deposit balances against the V1 input and the tx verifies. Cross-version in one tx."""
-        raise NotImplementedError
-
-    def test_minimum_deposit_is_nonzero_for_any_positive_mint(self) -> None:
-        """Minting the smallest positive amount still requires a nonzero HTR deposit (ceil); minting it with zero
-        deposit is rejected. Pins the implicit minimum-deposit at the boundary for both versions."""
-        raise NotImplementedError
-
-    def test_deposit_math_backward_compatible_for_v1(self) -> None:
-        """Across a range of V1 amounts, the integer deposit/withdraw math equals the legacy float-based results.
-        Pins that the integer-math refactor is byte-for-byte backward compatible at V1 scale."""
-        raise NotImplementedError
-
-    def test_deposit_math_no_float_precision_loss_at_v2_scale(self) -> None:
-        """At a large amount reachable only at V2 (18-decimal) scale, assert the integer deposit (ceil) and
-        withdraw (floor) results are exact to the unit. Pins that deposit math stays integer-exact at the
-        magnitudes V2 amounts reach, where 64-bit float would lose precision."""
-        raise NotImplementedError
-
-    def test_mint_then_melt_dust_asymmetry(self) -> None:
-        """Mint then melt the same non-cent-multiple amount: deposit (ceil) exceeds withdraw (floor) by one HTR
-        unit, permanently retained by the protocol; for an exact cent-multiple the round-trip is neutral. Pins the
-        deliberate asymmetry."""
-        raise NotImplementedError
 
 
 class TestAuthoritiesV2:
