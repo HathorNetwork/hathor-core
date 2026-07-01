@@ -1152,7 +1152,16 @@ class Runner:
         """Create a new blueprint instance."""
         assert self._call_info is not None
         env = BlueprintEnvironment(self, self._call_info.nc_logger, changes_tracker)
-        blueprint_class = self.blueprint_service.get_blueprint_class(blueprint_id)
+        blueprint_class, token_amount_version = (
+            self.blueprint_service.get_blueprint_class_and_token_amount_version(blueprint_id)
+        )
+
+        if token_amount_version != self.token_amount_version:
+            raise NCFail(
+                f'cannot call blueprints across token amount versions '
+                f'(tx = {self.token_amount_version}, blueprint = {token_amount_version})'
+            )
+
         return blueprint_class(env)
 
     @_forbid_syscall_from_view('create_deposit_token')
@@ -1277,7 +1286,13 @@ class Runner:
 
         # The blueprint must exist. If an unknown blueprint is provided, it will raise an BlueprintDoesNotExist
         # exception.
-        self.blueprint_service.get_blueprint_class(blueprint_id)
+        _, token_amount_version = self.blueprint_service.get_blueprint_class_and_token_amount_version(blueprint_id)
+
+        if token_amount_version < self.token_amount_version:
+            raise NCFail(
+                f'cannot change blueprint to an older token amount version '
+                f'(current = {self.token_amount_version}, new = {token_amount_version})'
+            )
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
