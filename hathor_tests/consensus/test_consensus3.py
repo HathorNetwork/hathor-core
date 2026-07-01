@@ -82,7 +82,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             outputs = []
             outputs.append(WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(1), None))
             outputs.append(
-                WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(2*tx_fund.outputs[1].value), None)
+                WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(2*tx_fund.outputs[1].value.raw()), None)
             )
             tx5: Transaction = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx2.timestamp+1)
             tx5.weight = tx3.weight - tx1.weight + 0.1
@@ -183,7 +183,7 @@ class DoubleSpendingTestCase(unittest.TestCase):
             outputs.append(WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(1), None))
             outputs.append(WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(1), None))
             outputs.append(
-                WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(2*tx_fund.outputs[2].value), None)
+                WalletOutputInfo(decode_address(addr), UnsignedAmount.from_v1(2*tx_fund.outputs[2].value.raw()), None)
             )
             tx5: Transaction = manager.wallet.prepare_transaction(Transaction, inputs, outputs, tx4.timestamp+1)
             tx5.weight = 1

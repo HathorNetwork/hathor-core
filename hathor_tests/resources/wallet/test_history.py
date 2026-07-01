@@ -32,3 +32,6 @@ class HistoryTest(_BaseResourceTest._ResourceTest):
         data = response.json_value()
         self.assertEqual(len(data['history']), 1)
         self.assertEqual(data['total_pages'], 1)
+        value = self.manager.get_tokens_issued_per_block(1)
+        self.assertEqual(data['history'][0]['value'], value.to_v1().raw())
+        self.assertEqual(data['history'][0]['value_str'], str(value))

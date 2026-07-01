@@ -1,5 +1,6 @@
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.nc_exec_logs import NCLogConfig
@@ -39,7 +40,7 @@ class TransactionNanoContractTest(_BaseResourceTest._ResourceTest):
             nc_log_config=NCLogConfig.ALL,
         )
         self.manager.blueprint_service.register_blueprint(self.blueprint_id, LogEmitBlueprint)
-        self.web_transaction = StubSite(TransactionResource(self.manager))
+        self.web_transaction = StubSite(TransactionResource(self.manager, APIVersion.V1A))
         self.web_history = StubSite(NanoContractHistoryResource(self.manager))
 
     @inlineCallbacks

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.utils import int_to_bytes
 
 if TYPE_CHECKING:
@@ -72,7 +73,7 @@ class FullShieldedOutput:
 @dataclass(slots=True, frozen=True)
 class ShieldedOutputSecrets:
     """Recovered secrets from a shielded output via ECDH rewind."""
-    value: int
+    value: UnsignedAmount
     blinding_factor: bytes
     message: bytes
     token_uid: bytes  # Recovered or derived token UID

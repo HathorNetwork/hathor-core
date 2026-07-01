@@ -80,7 +80,7 @@ class TokenResource(Resource):
             'melt': melt,
             'can_mint': token_info.can_mint(),
             'can_melt': token_info.can_melt(),
-            'total': token_info.get_total(),
+            'total': self.api_version.unsigned_amount_to_response(token_info.get_total()),
             'transactions_count': transactions_count,
         }
         return data
@@ -161,9 +161,15 @@ TokenResource.openapi = {
         'x-visibility': 'public',
         'x-api-versions': ['v1a', 'v2'],
         'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
+            'v2': [
+                {
+                    'path': [
+                        'get', 'responses', '200', 'content', 'application/json', 'examples', 'success', 'value',
+                        'total',
+                    ],
+                    'value': '1.0',
+                },
+            ],
         },
         'x-rate-limit': {
             'global': [

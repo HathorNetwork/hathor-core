@@ -116,7 +116,7 @@ class TokenTest(unittest.TestCase):
         self.manager.verification_service.verify(tx2, self.get_verification_params(self.manager))
 
         # missing tokens
-        token_output = TxOutput((utxo.value - UnsignedAmount.from_v1(1)), script, 1)
+        token_output = TxOutput((utxo.value - UnsignedAmount.from_v1(1)).to_v1(), script, 1)
         tx3 = Transaction(weight=1, inputs=[_input1], outputs=[token_output], parents=parents, tokens=[token_uid],
                           storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx3.get_sighash_all()
@@ -142,7 +142,7 @@ class TokenTest(unittest.TestCase):
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(UnsignedAmount.from_v1(mint_amount), script, 1)
         token_output2 = TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
-        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount), script, 0)
+        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount).to_v1(), script, 0)
         tx2 = Transaction(
             weight=1,
             inputs=[_input1, _input2],
@@ -205,7 +205,7 @@ class TokenTest(unittest.TestCase):
         _input2 = TxInput(tx.hash, 3, b'')
         token_output1 = TxOutput(UnsignedAmount.from_v1(mint_amount), script, 1)
         token_output2 = TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
-        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount), script, 0)
+        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount).to_v1(), script, 0)
         tx4 = Transaction(
             weight=1,
             inputs=[_input1, _input2],
@@ -245,10 +245,10 @@ class TokenTest(unittest.TestCase):
 
         # melt tokens and transfer melt authority
         melt_amount = 100
-        new_amount = (tx.outputs[0].value - UnsignedAmount.from_v1(melt_amount))
+        new_amount = (tx.outputs[0].value - UnsignedAmount.from_v1(melt_amount)).to_v1()
         withdraw_amount = get_deposit_token_withdraw_amount(
             self._settings, UnsignedAmount.from_v1(melt_amount)
-        )
+        ).to_v1()
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
         token_output1 = TxOutput(new_amount, script, 1)
@@ -289,9 +289,9 @@ class TokenTest(unittest.TestCase):
         withdraw_amount = get_deposit_token_withdraw_amount(self._settings, UnsignedAmount.from_v1(melt_amount))
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 2, b'')
-        token_output1 = TxOutput((tx.outputs[0].value - UnsignedAmount.from_v1(melt_amount)), script, 1)
+        token_output1 = TxOutput((tx.outputs[0].value - UnsignedAmount.from_v1(melt_amount)).to_v1(), script, 1)
         token_output2 = TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001)
-        withdraw_output = TxOutput((withdraw_amount + UnsignedAmount.from_v1(1)), script, 0)
+        withdraw_output = TxOutput((withdraw_amount + UnsignedAmount.from_v1(1)).to_v1(), script, 0)
         tx3 = Transaction(
             weight=1,
             inputs=[_input1, _input2],
@@ -313,7 +313,7 @@ class TokenTest(unittest.TestCase):
         # try to melt using mint authority UTXO
         _input1 = TxInput(tx.hash, 0, b'')
         _input2 = TxInput(tx.hash, 1, b'')
-        token_output = TxOutput((tx.outputs[0].value - UnsignedAmount.from_v1(1)), script, 1)
+        token_output = TxOutput((tx.outputs[0].value - UnsignedAmount.from_v1(1)).to_v1(), script, 1)
         tx4 = Transaction(weight=1, inputs=[_input1, _input2], outputs=[token_output], parents=parents,
                           tokens=[token_uid], storage=self.manager.tx_storage, timestamp=int(self.clock.seconds()))
         data_to_sign = tx4.get_sighash_all()
@@ -389,7 +389,7 @@ class TokenTest(unittest.TestCase):
         mint_output = TxOutput(UnsignedAmount.from_v1(mint_amount), script, 1)
         authority_output1 = TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001)
         authority_output2 = TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001)
-        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount), script, 0)
+        deposit_output = TxOutput((tx.outputs[3].value - deposit_amount).to_v1(), script, 0)
         tx2 = Transaction(
             weight=1,
             inputs=[mint_input, melt_input, deposit_input],

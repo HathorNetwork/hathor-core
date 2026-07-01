@@ -24,31 +24,27 @@ When decoding, we peek at the first byte to determine the sign and whether read 
 
 Examples:
 
+>>> from htr_lib import UnsignedAmount
+>>> UnsignedAmount.set_decimal_places(v1_decimal_places=2, v2_decimal_places=18)
 >>> se = Serializer.build_bytes_serializer()
 >>> try:
-...     encode_output_value_v1(se, 0)
+...     encode_output_value_v1(se, UnsignedAmount.from_v1(0))
 ... except ValueError as e:
 ...     print(*e.args)
 Number must be strictly positive
 
->>> try:
-...     encode_output_value_v1(se, -1)
-... except ValueError as e:
-...     print(*e.args)
-Number must not be negative
-
 >>> se = Serializer.build_bytes_serializer()
->>> encode_output_value_v1(se, 0, strict=False)  # writes 00000000
->>> encode_output_value_v1(se, 100)  # writes 00000064
->>> encode_output_value_v1(se, 2 ** 31 - 1)  # writes 7fffffff
->>> encode_output_value_v1(se, 2 ** 31)  # writes ffffffff80000000
->>> encode_output_value_v1(se, 2 ** 63)  # writes 8000000000000000
+>>> encode_output_value_v1(se, UnsignedAmount.from_v1(0), strict=False)  # writes 00000000
+>>> encode_output_value_v1(se, UnsignedAmount.from_v1(100))  # writes 00000064
+>>> encode_output_value_v1(se, UnsignedAmount.from_v1(2 ** 31 - 1))  # writes 7fffffff
+>>> encode_output_value_v1(se, UnsignedAmount.from_v1(2 ** 31))  # writes ffffffff80000000
+>>> encode_output_value_v1(se, UnsignedAmount.from_v1(2 ** 63))  # writes 8000000000000000
 >>> bytes(se.finalize()).hex()
 '00000000000000647fffffffffffffff800000008000000000000000'
 
 >>> se = Serializer.build_bytes_serializer()
 >>> try:
-...     encode_output_value_v1(se, 2 ** 63 + 1)
+...     encode_output_value_v1(se, UnsignedAmount.from_v1((2 ** 63 + 1)))
 ... except ValueError as e:
 ...     print(*e.args)
 Number is too big; max possible value is 2**63, got: 9223372036854775809
@@ -63,15 +59,15 @@ Number must be strictly positive
 >>> data = bytes.fromhex('00000000000000647fffffffffffffff800000008000000000000000') + b'test'
 >>> de = Deserializer.build_bytes_deserializer(data)
 >>> decode_output_value_v1(de, strict=False)  # reads 00000000
-0
+V1 { raw: 0, normalized: 0 }
 >>> decode_output_value_v1(de)  # reads 00000064
-100
+V1 { raw: 100, normalized: 1000000000000000000 }
 >>> decode_output_value_v1(de)  # reads 7fffffff
-2147483647
+V1 { raw: 2147483647, normalized: 21474836470000000000000000 }
 >>> decode_output_value_v1(de)  # reads ffffffff80000000
-2147483648
+V1 { raw: 2147483648, normalized: 21474836480000000000000000 }
 >>> decode_output_value_v1(de)  # reads 8000000000000000
-9223372036854775808
+V1 { raw: 9223372036854775808, normalized: 92233720368547758080000000000000000 }
 >>> bytes(de.read_all())
 b'test'
 >>> de.finalize()
@@ -97,12 +93,12 @@ V2 roundtrips:
 
 >>> def roundtrip_v2(value, **kwargs):
 ...     se = Serializer.build_bytes_serializer()
-...     encode_output_value_v2(se, value, **kwargs)
+...     encode_output_value_v2(se, UnsignedAmount.from_v2(value), **kwargs)
 ...     data = bytes(se.finalize())
 ...     de = Deserializer.build_bytes_deserializer(data)
 ...     result = decode_output_value_v2(de, **kwargs)
 ...     de.finalize()
-...     return data.hex(), result
+...     return data.hex(), result.raw()
 >>> roundtrip_v2(1) == ('0101', 1)
 True
 >>> roundtrip_v2(0xff) == ('01ff', 0xff)
@@ -115,7 +111,7 @@ True
 True
 >>> roundtrip_v2(2 ** 113) == ('0f020000000000000000000000000000', 2 ** 113)
 True
->>> roundtrip_v2(MAX_OUTPUT_VALUE_V2) == ('0f11c37937e080000000000000000000', MAX_OUTPUT_VALUE_V2)
+>>> roundtrip_v2(get_max_output_value_v2()) == ('0f11c37937e080000000000000000000', get_max_output_value_v2())
 True
 >>> roundtrip_v2(0, strict=False) == ('00', 0)
 True
@@ -133,10 +129,16 @@ from hathorlib.token_amount_version import TokenAmountVersion
 MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2_147_483_647
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
 
-MAX_OUTPUT_VALUE_V2: int = MAX_OUTPUT_VALUE_64 * 10**16
+def get_max_output_value_v2() -> int:
+    return MAX_OUTPUT_VALUE_64 * UnsignedAmount.get_normalization_factor()
 
 
-def encode_output_value(serializer: Serializer, value: int, *, token_amount_version: TokenAmountVersion) -> None:
+def encode_output_value(
+    serializer: Serializer,
+    value: UnsignedAmount,
+    *,
+    token_amount_version: TokenAmountVersion,
+) -> None:
     match token_amount_version:
         case TokenAmountVersion.V1:
             encode_output_value_v1(serializer, value)
@@ -146,14 +148,14 @@ def encode_output_value(serializer: Serializer, value: int, *, token_amount_vers
             assert_never(token_amount_version)
 
 
-def encode_output_value_v1(serializer: Serializer, number: int, *, strict: bool = True) -> None:
+def encode_output_value_v1(serializer: Serializer, amount: UnsignedAmount, *, strict: bool = True) -> None:
     """ Encodes either 4 or 8 bytes using our output-value format.
 
     This modules's docstring has more details and examples.
     """
-    assert isinstance(number, int)
-    if number < 0:
-        raise ValueError('Number must not be negative')
+    assert isinstance(amount, UnsignedAmount)
+    assert amount.is_v1()
+    number = amount.raw()
     if strict and number == 0:
         raise ValueError('Number must be strictly positive')
     if number > MAX_OUTPUT_VALUE_64:
@@ -165,29 +167,25 @@ def encode_output_value_v1(serializer: Serializer, number: int, *, strict: bool 
         serializer.write_bytes(number.to_bytes(4, byteorder='big', signed=True))
 
 
-def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool = True) -> None:
+def encode_output_value_v2(serializer: Serializer, amount: UnsignedAmount, *, strict: bool = True) -> None:
     """
     Encode an output value for decimal version V2, using length-prefix encoding.
 
     >>> def encode(value, *, strict=True):
     ...     se = Serializer.build_bytes_serializer()
-    ...     encode_output_value_v2(se, value, strict=strict)
+    ...     encode_output_value_v2(se, UnsignedAmount.from_v2(value), strict=strict)
     ...     return bytes(se.finalize()).hex()
-    >>> encode(-1)
-    Traceback (most recent call last):
-    ...
-    ValueError: value must be not be negative
     >>> encode(0)
     Traceback (most recent call last):
     ...
     ValueError: value must not be zero
     >>> encode(0, strict=False)
     '00'
-    >>> encode(MAX_OUTPUT_VALUE_V2 + 1)
+    >>> encode(get_max_output_value_v2() + 1)
     Traceback (most recent call last):
     ...
     ValueError: value is too big; max is 92233720368547758080000000000000000, got: 92233720368547758080000000000000001
-    >>> encode(MAX_OUTPUT_VALUE_V2)
+    >>> encode(get_max_output_value_v2())
     '0f11c37937e080000000000000000000'
     >>> encode(2 ** 113)
     '0f020000000000000000000000000000'
@@ -206,7 +204,9 @@ def encode_output_value_v2(serializer: Serializer, value: int, *, strict: bool =
     >>> encode(0xc0ffee)
     '03c0ffee'
     """
-    encode_length_prefix_varint(serializer, value, strict=strict, max_value=MAX_OUTPUT_VALUE_V2)
+    assert amount.is_v2()
+    value = amount.raw()
+    encode_length_prefix_varint(serializer, value, strict=strict, max_value=get_max_output_value_v2())
 
 
 def encode_length_prefix_varint(
@@ -216,6 +216,13 @@ def encode_length_prefix_varint(
     strict: bool,
     max_value: int | None = None,
 ) -> int:
+    """
+    >>> se = Serializer.build_bytes_serializer()
+    >>> encode_length_prefix_varint(se, -1, strict=False)
+    Traceback (most recent call last):
+    ...
+    ValueError: value must be not be negative
+    """
     if value < 0:
         raise ValueError('value must be not be negative')
 
@@ -269,7 +276,7 @@ def decode_output_value_v1(deserializer: Deserializer, *, strict: bool = True) -
         raise ValueError('Number must be strictly positive')
     if value <= MAX_OUTPUT_VALUE_32 and value_high_byte < 0:
         raise ValueError('Value fits in 4 bytes but is using 8 bytes')
-    return value
+    return UnsignedAmount.from_v1(value)
 
 
 def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -> UnsignedAmount:
@@ -285,21 +292,22 @@ def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -
     Traceback (most recent call last):
     ...
     ValueError: value must not be zero
-    >>> decode_output_value_v2(build('00'), strict=False)
-    0
+    >>> decode_output_value_v2(build('00'), strict=False) == UnsignedAmount.from_v2(0)
+    True
     >>> decode_output_value_v2(build('10'))
     Traceback (most recent call last):
     ...
     ValueError: length is too big; max is 15, got: 16
-    >>> decode_output_value_v2(build('0f 020000000000000000000000000000')) == 2 ** 113
+    >>> decode_output_value_v2(build('0f 020000000000000000000000000000')) == UnsignedAmount.from_v2(2 ** 113)
     True
     >>> decode_output_value_v2(build('0f 11c37937e080000000000000000001'))
     Traceback (most recent call last):
     ...
     ValueError: value is too big; max is 92233720368547758080000000000000000, got: 92233720368547758080000000000000001
-    >>> decode_output_value_v2(build('0f 11c37937e080000000000000000000')) == MAX_OUTPUT_VALUE_V2
+    >>> v = build('0f 11c37937e080000000000000000000')
+    >>> decode_output_value_v2(v) == UnsignedAmount.from_v2(get_max_output_value_v2())
     True
-    >>> decode_output_value_v2(build('0f 010000000000000000000000000000')) == 256 ** 14
+    >>> decode_output_value_v2(build('0f 010000000000000000000000000000')) == UnsignedAmount.from_v2(256 ** 14)
     True
     >>> decode_output_value_v2(build('01'))
     Traceback (most recent call last):
@@ -313,24 +321,25 @@ def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -
     Traceback (most recent call last):
     ...
     ValueError: non-canonical encoding, leading zero byte: 00
-    >>> decode_output_value_v2(build('01 ff')) == 0xff
+    >>> decode_output_value_v2(build('01 ff')) == UnsignedAmount.from_v2(0xff)
     True
     >>> decode_output_value_v2(build('02 00ff'))
     Traceback (most recent call last):
     ...
     ValueError: non-canonical encoding, leading zero byte: 00ff
-    >>> decode_output_value_v2(build('02 ff00')) == 0xff00
+    >>> decode_output_value_v2(build('02 ff00')) == UnsignedAmount.from_v2(0xff00)
     True
-    >>> decode_output_value_v2(build('01 01'))
-    1
-    >>> decode_output_value_v2(build('01 02'))
-    2
-    >>> decode_output_value_v2(build('01 03'))
-    3
-    >>> decode_output_value_v2(build('03 c0ffee')) == 0xc0ffee
+    >>> decode_output_value_v2(build('01 01')) == UnsignedAmount.from_v2(1)
+    True
+    >>> decode_output_value_v2(build('01 02')) == UnsignedAmount.from_v2(2)
+    True
+    >>> decode_output_value_v2(build('01 03')) == UnsignedAmount.from_v2(3)
+    True
+    >>> decode_output_value_v2(build('03 c0ffee')) == UnsignedAmount.from_v2(0xc0ffee)
     True
     """
-    return decode_length_prefix_varint(deserializer, strict=strict, max_value=MAX_OUTPUT_VALUE_V2)
+    value = decode_length_prefix_varint(deserializer, strict=strict, max_value=get_max_output_value_v2())
+    return UnsignedAmount.from_v2(value)
 
 
 def decode_length_prefix_varint(deserializer: Deserializer, *, strict: bool, max_value: int | None = None) -> int:

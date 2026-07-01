@@ -80,7 +80,7 @@ class Balance:
 
     def to_mutable(self) -> 'MutableBalance':
         return MutableBalance(
-            value=self.value,
+            value=self.value.raw(),
             can_mint=self.can_mint,
             can_melt=self.can_melt,
         )
@@ -345,7 +345,7 @@ class NCContractStorage:
             balances[key] = balance.to_immutable()
         return balances
 
-    def add_balance(self, token_uid: bytes, amount: int) -> None:
+    def add_balance(self, token_uid: bytes, amount: SignedAmount) -> None:
         """Change the contract balance value for a token. The amount will be added to the previous balance value.
 
         Note that the provided `amount` might be negative, but not the result."""
@@ -353,7 +353,7 @@ class NCContractStorage:
         balance_key = BalanceKey(self.nc_id, TokenUid(token_uid))
         balance = self._trie_get_obj(balance_key, _BALANCE_NC_TYPE, default=MutableBalance.get_default())
         assert isinstance(balance, MutableBalance)
-        balance.value += amount
+        balance.value += amount.raw()
         assert balance.value >= 0, f'balance cannot be negative: {balance.value}'
         self._trie_update(balance_key, _BALANCE_NC_TYPE, balance)
 

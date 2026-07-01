@@ -109,6 +109,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
         _inputs, deposit_amount = self.wallet.get_inputs_from_amount(
             UnsignedAmount.from_v1(1), self.manager.tx_storage
         )
+        deposit_amount = deposit_amount.to_v1()
         tx = self.wallet.prepare_transaction(Transaction, _inputs, [])
         self.fill_nc_tx(tx, self.myblueprint_id, 'initialize', [], nc_actions=[
             NanoHeaderAction(
