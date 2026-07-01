@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import ast
+import os
 import re
 from collections import defaultdict
 from types import ModuleType
@@ -94,6 +95,14 @@ class VertexExporter:
         # HTR asset tag), the asset_blinding for full-shielded. Needed so a tx that SPENDS a
         # full-shielded output (whose commitment is on a BLINDED generator) balances correctly.
         self._shielded_asset_blinding_factors: dict[tuple[str, int], bytes] = {}
+        # BENCHMARK-ONLY build optimization (gated by HATHOR_BENCH_CACHE_RANGE_PROOFS=1): range-proof
+        # generation dominates the build wall-clock when minting many shielded UTXOs. When enabled,
+        # the build uses FIXED blindings/nonce (below) so outputs of the same value yield byte-
+        # identical commitments+proofs, and the proof is generated once per (value, …) then COPIED.
+        # This deliberately breaks confidentiality (fixed blindings) — fine for timing — and touches
+        # ONLY generation; verification is unchanged and re-verifies every proof (audited: no dedup).
+        self._cache_rp: bool = os.environ.get('HATHOR_BENCH_CACHE_RANGE_PROOFS') == '1'
+        self._rp_cache: dict = {}
 
     def _get_node(self, name: str) -> DAGNode:
         """Get node."""
@@ -526,6 +535,17 @@ class VertexExporter:
             )
             vertex.headers.append(fee_header)
 
+    def _range_proof(self, key: tuple, gen_fn) -> bytes:
+        """BENCHMARK-ONLY: return the cached range proof for `key`, generating+caching it on a miss.
+        When caching is off, always generate fresh (key unused). Generation only — never verification."""
+        if not self._cache_rp:
+            return gen_fn()
+        rp = self._rp_cache.get(key)
+        if rp is None:
+            rp = gen_fn()
+            self._rp_cache[key] = rp
+        return rp
+
     def add_shielded_outputs_header_if_needed(self, node: DAGNode, vertex: BaseTransaction) -> None:
         """Collect outputs with [shielded] or [full-shielded] attrs into a ShieldedOutputsHeader.
 
@@ -569,6 +589,18 @@ class VertexExporter:
 
         ZERO = bytes(32)  # zero scalar (transparent entries carry blinding == 0)
 
+        # A FULL-shielded output whose tx also SPENDS a full-shielded input cannot use the fixed
+        # asset-blinding: it would share its inputs' (equally-fixed) asset generator, making the
+        # surjection re-blind difference ZERO — which secp256k1-zkp refuses to prove. Such txs
+        # (the few MEASURED txs) fall back to random blindings; the bulk SOURCE minting (transparent-
+        # funded, so no full-shielded input) keeps the fixed blindings and stays cacheable.
+        # A non-ZERO recorded asset-blinding == a full-shielded input; amount-shielded/transparent
+        # inputs record ZERO (unblinded generator) and never collide, so they don't force a fallback.
+        spends_full_shielded = self._cache_rp and any(
+            self._shielded_asset_blinding_factors.get((tx_name, out_idx), ZERO) != ZERO
+            for (tx_name, out_idx) in node.inputs
+        )
+
         # ---- PASS 1: collect one spec per shielded output + assign blindings -------------
         specs: list[dict] = []
         for dsl_index, txout in enumerate(node.outputs):
@@ -593,6 +625,17 @@ class VertexExporter:
                 ephemeral_pubkey = b''  # No ECDH possible without recipient pubkey
 
             is_full = bool(attrs.get('full-shielded'))
+            if self._cache_rp and not (is_full and spends_full_shielded):
+                # BENCHMARK build cache (see __init__): FIXED value-blinding, asset-blinding and
+                # rewind-nonce so outputs of the same value yield identical commitments → cacheable
+                # proofs. The last output is still reconciled to the balance residual below.
+                out_blinding = b'\x11' * 32
+                out_asset_blinding = (b'\x22' * 32) if is_full else ZERO
+                out_nonce = b'\x33' * 32
+            else:
+                out_blinding = os.urandom(32)                    # value blinding (last is reconciled below)
+                out_asset_blinding = os.urandom(32) if is_full else ZERO  # generator blinding (full only)
+                out_nonce = nonce
             specs.append({
                 'dsl_index': dsl_index,
                 'amount': amount,
@@ -600,10 +643,10 @@ class VertexExporter:
                 'token_uid': token_uid,
                 'script': script,
                 'ephemeral_pubkey': ephemeral_pubkey,
-                'nonce': nonce,
+                'nonce': out_nonce,
                 'is_full': is_full,
-                'blinding': os.urandom(32),                       # value blinding (last is reconciled below)
-                'asset_blinding': os.urandom(32) if is_full else ZERO,  # generator blinding (full-shielded only)
+                'blinding': out_blinding,
+                'asset_blinding': out_asset_blinding,
             })
 
         if not specs:
@@ -682,9 +725,10 @@ class VertexExporter:
 
                 # Embed token_uid(32B) + asset_blinding(32B) in range proof message
                 message = token_uid + asset_blinding
-                range_proof = create_range_proof(
-                    amount, blinding, commitment, asset_comm,
-                    message=message, nonce=nonce,
+                range_proof = self._range_proof(
+                    (True, amount, blinding, asset_blinding, nonce, token_uid),
+                    lambda: create_range_proof(amount, blinding, commitment, asset_comm,
+                                               message=message, nonce=nonce),
                 )
 
                 # Surjection over the REAL input domain (bug #3 fix; built above as surj_domain).
@@ -702,7 +746,10 @@ class VertexExporter:
                 # AmountShieldedOutput: amount hidden, token visible
                 asset_tag = derive_asset_tag(token_uid)
                 commitment = create_commitment(amount, blinding, asset_tag)
-                range_proof = create_range_proof(amount, blinding, commitment, asset_tag, nonce=nonce)
+                range_proof = self._range_proof(
+                    (False, amount, blinding, ZERO, nonce, token_uid),
+                    lambda: create_range_proof(amount, blinding, commitment, asset_tag, nonce=nonce),
+                )
 
                 # Resolve token_data index
                 if s['token_name'] == 'HTR':

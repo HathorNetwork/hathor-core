@@ -142,7 +142,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
     __slots__ = ['version', 'signal_bits', 'weight', 'timestamp', 'nonce', 'inputs', 'outputs', 'parents', '_hash',
                  'storage', '_settings', '_metadata', '_static_metadata', 'headers', 'name', 'MAX_NUM_INPUTS',
-                 'MAX_NUM_OUTPUTS', '__weakref__']
+                 'MAX_NUM_OUTPUTS', '_origin_bytes', '__weakref__']
 
     # Even though nonce is serialized with different sizes for tx and blocks
     # the same size is used for hashes to enable mining algorithm compatibility
@@ -205,6 +205,18 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         self.MAX_NUM_INPUTS = self._settings.MAX_NUM_INPUTS
         self.MAX_NUM_OUTPUTS = self._settings.MAX_NUM_OUTPUTS
+        # S3S4/S5 OPTIMIZATION (PR #1729): when a vertex is parsed from the network, its original wire
+        # bytes are stashed here (hash-guarded) so downstream code can reuse them instead of
+        # re-serializing. Set by RustVerificationService.verify_bytes; None otherwise.
+        self._origin_bytes: tuple[VertexId, bytes] | None = None
+
+    def get_serialized_size(self) -> int:
+        """Size in bytes of this vertex's serialization, reusing the original wire bytes when
+        available (vertices parsed from the network keep them, hash-guarded) instead of
+        re-serializing."""
+        if self._origin_bytes is not None and self._origin_bytes[0] == self._hash:
+            return len(self._origin_bytes[1])
+        return len(self.get_struct())
 
     @classproperty
     def log(cls):

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from hathor.conf.get_settings import get_global_settings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
+from hathor.opt_flags import opt_enabled
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor.transaction.types import MetaNCCallRecord
 from hathor.transaction.validation_state import ValidationState
@@ -346,11 +347,83 @@ class TransactionMetadata:
 
     @classmethod
     def from_bytes(cls, data: bytes) -> 'TransactionMetadata':
-        """Deserialize a TransactionMetadata instance from bytes."""
+        """Deserialize a TransactionMetadata instance from bytes.
+
+        S5 OPTIMIZATION (PR #1729): the optimized path uses the canonical Rust binary format
+        (~3x faster decode, ~2.7x smaller); baseline (--no-opt s5) uses JSON. The on-disk format
+        must match what wrote it — safe here because the benchmark uses a fresh temp-dir per run."""
+        if opt_enabled("s5"):
+            return cls._from_bytes_rust(data)
         return cls.create_from_json(json_loadb(data))
 
+    @classmethod
+    def _from_bytes_rust(cls, data: bytes) -> 'TransactionMetadata':
+        """Deserialize from the canonical binary format (htr-rs/crates/htr-lib/src/metadata/mod.rs)."""
+        import htr_lib
+        core, extra = htr_lib.metadata_from_bytes(data)
+        (hash_, validation_name, accumulated_weight_be, score_be, first_block,
+         voided_by, conflict_with, twins, received_by, spent_outputs) = core
+        feature_states_raw, nc_block_root_id, nc_execution_raw, nc_calls_json, nc_events = extra
+
+        meta = cls(hash=hash_ or None)
+        for index, hashes in spent_outputs:
+            meta.spent_outputs[index] = list(hashes)
+        meta.received_by = list(received_by)
+        meta.conflict_with = list(conflict_with) if conflict_with else None
+        meta.voided_by = set(voided_by) if voided_by else None
+        meta.twins = list(twins)
+        meta.accumulated_weight = int.from_bytes(accumulated_weight_be, 'big')
+        meta.score = int.from_bytes(score_be, 'big')
+        if feature_states_raw:
+            meta.feature_states = {
+                Feature(feature): FeatureState(state) for feature, state in feature_states_raw
+            }
+        meta.first_block = first_block or None
+        meta.validation = ValidationState.from_name(validation_name)
+        meta.nc_block_root_id = nc_block_root_id
+        meta.nc_execution = NCExecutionState(nc_execution_raw) if nc_execution_raw is not None else None
+        if nc_calls_json is not None:
+            meta.nc_calls = [MetaNCCallRecord.from_json(x) for x in json_loadb(nc_calls_json)]
+        else:
+            meta.nc_calls = None
+        meta.nc_events = list(nc_events) if nc_events is not None else None
+        return meta
+
+    def _to_bytes_rust(self) -> bytes:
+        """Serialize to the canonical binary format (see `_from_bytes_rust`)."""
+        import htr_lib
+
+        def int_be(value: int) -> bytes:
+            return value.to_bytes((value.bit_length() + 7) // 8 or 1, 'big')
+
+        nc_calls_json = json_dumpb([x.to_json() for x in self.nc_calls]) if self.nc_calls is not None else None
+        feature_states = (
+            [(feature.value, state.value) for feature, state in self.feature_states.items()]
+            if self.feature_states is not None else None
+        )
+        return htr_lib.metadata_to_bytes(
+            self.hash,
+            self.validation.name.lower(),
+            int_be(self.accumulated_weight),
+            int_be(self.score),
+            self.first_block,
+            sorted(self.voided_by) if self.voided_by else [],
+            sorted(set(self.conflict_with)) if self.conflict_with else [],
+            list(self.twins),
+            list(self.received_by),
+            [(index, list(hashes)) for index, hashes in self.spent_outputs.items()],
+            feature_states,
+            self.nc_block_root_id,
+            self.nc_execution.value if self.nc_execution is not None else None,
+            nc_calls_json,
+            self.nc_events if self.nc_events else None,
+        )
+
     def to_bytes(self) -> bytes:
-        """Serialize a TransactionMetadata instance to bytes. This should be used for storage."""
+        """Serialize a TransactionMetadata instance to bytes. This should be used for storage.
+        S5: binary (optimized) vs JSON (baseline) — see `from_bytes`."""
+        if opt_enabled("s5"):
+            return self._to_bytes_rust()
         json_dict = self.to_storage_json()
 
         # The `to_json()` method includes these fields for backwards compatibility with APIs, but since they're not

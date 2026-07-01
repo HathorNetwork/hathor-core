@@ -17,6 +17,7 @@ from __future__ import annotations
 from struct import error as StructError
 from typing import TYPE_CHECKING, Type
 
+from hathor.opt_flags import opt_enabled
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.base_transaction import get_cls_from_tx_version
 from hathor.transaction.headers import (
@@ -68,7 +69,20 @@ class VertexParser:
         return supported_headers[header_id]
 
     def deserialize(self, data: bytes, storage: TransactionStorage | None = None) -> BaseTransaction:
-        """Creates the correct tx subclass from a sequence of bytes."""
+        """Creates the correct tx subclass from a sequence of bytes.
+
+        S1 OPTIMIZATION GATE (PR #1729): when section ``s1`` is enabled (default) try the Rust
+        fast path first; it declines (returns None) for header-carrying vertices (nano/fee/
+        shielded) and anything non-canonical, so those — and the whole `--no-opt s1` baseline —
+        fall through to the authoritative Python parser. See hathor.opt_flags."""
+        if opt_enabled("s1"):
+            vertex = self._deserialize_rust(data, storage)
+            if vertex is not None:
+                return vertex
+        return self._deserialize_python(data, storage)
+
+    def _deserialize_python(self, data: bytes, storage: TransactionStorage | None = None) -> BaseTransaction:
+        """The authoritative Python parser (consensus reference)."""
         # version field takes up the second byte only
         from hathor.transaction import TxVersion
         version = data[1]
@@ -87,3 +101,60 @@ class VertexParser:
             return cls.create_from_struct(data, storage=storage)
         except (ValueError, SerializationError) as e:
             raise StructError('Invalid bytes to create transaction subclass.') from e
+
+    def _deserialize_rust(self, data: bytes, storage: TransactionStorage | None) -> BaseTransaction | None:
+        """Rust fast path with conservative acceptance: htr_lib.parse_vertex returns fields only for a fully
+        valid serialization of a supported vertex (regular block/tx/token-creation, no headers) — anything else
+        returns None here and the Python parser keeps its exact accept/reject semantics. The differential
+        round-trip suite guarantees Rust-accepted bytes reconstruct the identical vertex."""
+        import htr_lib
+
+        from hathor.transaction import Block, Transaction, TxInput, TxOutput, TxVersion
+        from hathor.transaction.token_creation_tx import TokenCreationTransaction
+        from hathor.transaction.token_info import TokenVersion
+
+        if len(data) < 2:
+            return None
+        try:
+            tx_version = TxVersion(data[1])
+        except ValueError:
+            return None
+        if not self._settings.CONSENSUS_ALGORITHM.is_vertex_version_valid(
+            tx_version, include_genesis=True, settings=self._settings,
+        ):
+            return None
+        parsed = htr_lib.parse_vertex(data, self._settings.MAX_SERIALIZED_VERTEX_SIZE)
+        if parsed is None:
+            return None
+        (version, signal_bits, weight, timestamp, nonce, vertex_hash, parents, tokens,
+         inputs, outputs, block_data, token_info) = parsed
+
+        tx_inputs = [TxInput(tx_id, index, input_data) for tx_id, index, input_data in inputs]
+        tx_outputs = [TxOutput(value, script, token_data) for value, script, token_data in outputs]
+        vertex: BaseTransaction
+        # the hash must go through the constructors: TokenCreationTransaction derives its tokens
+        # list from it (update_hash keeps them in sync on the Python parse path)
+        match tx_version:
+            case TxVersion.REGULAR_BLOCK:
+                vertex = Block(
+                    signal_bits=signal_bits, weight=weight, timestamp=timestamp, nonce=nonce,
+                    parents=parents, outputs=tx_outputs, data=block_data, storage=storage, hash=vertex_hash,
+                )
+            case TxVersion.REGULAR_TRANSACTION:
+                vertex = Transaction(
+                    signal_bits=signal_bits, weight=weight, timestamp=timestamp, nonce=nonce,
+                    parents=parents, tokens=tokens, inputs=tx_inputs, outputs=tx_outputs, storage=storage,
+                    hash=vertex_hash,
+                )
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
+                assert token_info is not None
+                raw_token_version, token_name, token_symbol = token_info
+                vertex = TokenCreationTransaction(
+                    signal_bits=signal_bits, weight=weight, timestamp=timestamp, nonce=nonce,
+                    parents=parents, inputs=tx_inputs, outputs=tx_outputs, storage=storage,
+                    token_name=token_name, token_symbol=token_symbol, hash=vertex_hash,
+                )
+                vertex.token_version = TokenVersion(raw_token_version)
+            case _:  # pragma: no cover - parse_vertex only accepts the versions above
+                return None
+        return vertex
