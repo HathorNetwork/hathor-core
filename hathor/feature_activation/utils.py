@@ -22,6 +22,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -42,6 +43,7 @@ class Features:
     restrict_dup_actions: bool
     daa_version: DAAVersion
     shielded_transactions: bool
+    token_amount_version: TokenAmountVersion
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -58,6 +60,7 @@ class Features:
             Feature.RESTRICT_DUP_ACTIONS: settings.RESTRICT_DUP_ACTIONS,
             Feature.REDUCE_DAA_TARGET: settings.ENABLE_DAA_V2,
             Feature.SHIELDED_TRANSACTIONS: settings.ENABLE_SHIELDED_TRANSACTIONS,
+            Feature.TOKEN_AMOUNT_V2: settings.ENABLE_TOKEN_AMOUNT_V2,
         }
 
     @staticmethod
@@ -79,6 +82,10 @@ class Features:
             DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
         )
 
+        token_amount_version = (
+            TokenAmountVersion.V2 if feature_is_active[Feature.TOKEN_AMOUNT_V2] else TokenAmountVersion.V1
+        )
+
         return Features(
             count_checkdatasig_op=feature_is_active[Feature.COUNT_CHECKDATASIG_OP],
             nanocontracts=feature_is_active[Feature.NANO_CONTRACTS],
@@ -88,6 +95,7 @@ class Features:
             restrict_dup_actions=feature_is_active[Feature.RESTRICT_DUP_ACTIONS],
             daa_version=daa_version,
             shielded_transactions=feature_is_active[Feature.SHIELDED_TRANSACTIONS],
+            token_amount_version=token_amount_version,
         )
 
     @staticmethod
@@ -113,6 +121,7 @@ class Features:
             nanocontracts=features.nanocontracts,
             fee_tokens=features.fee_tokens,
             shielded_transactions=features.shielded_transactions,
+            token_amount_version=features.token_amount_version,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
             daa_version=features.daa_version,
@@ -140,6 +149,7 @@ class Features:
             restrict_dup_actions=True,
             daa_version=DAAVersion.V2,
             shielded_transactions=True,
+            token_amount_version=TokenAmountVersion.V2,
         )
 
 

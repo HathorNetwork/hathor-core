@@ -35,6 +35,7 @@ from hathor.transaction.exceptions import InvalidInputData, RewardLocked, TooMan
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import not_none
 from hathorlib.nanocontracts.exception import NCInvalidAction
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -465,6 +466,9 @@ class ConsensusAlgorithm:
                     # in PR 5. The feature ships gated OFF, so this case is unreachable
                     # today; raise loudly if it is ever hit before PR 5 wires the real rule.
                     raise NotImplementedError('shielded transaction activation rule not implemented yet')
+                case Feature.TOKEN_AMOUNT_V2:
+                    if not self._token_amount_v2_rule(tx, is_active):
+                        return False
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.FAILED_FEE_TOKENS
@@ -581,6 +585,17 @@ class ConsensusAlgorithm:
             if not isinstance(e, NCInvalidAction):
                 self.log.exception('unexpected exception in mempool-reverification')
             return False
+        return True
+
+    def _token_amount_v2_rule(self, tx: Transaction, is_active: bool) -> bool:
+        """Check whether a tx became invalid because the reorg changed the token amount V2 feature activation state."""
+        if is_active:
+            # When token amount V2 is active, this rule has no effect.
+            return True
+
+        if tx.get_token_amount_version() >= TokenAmountVersion.V2:
+            return False
+
         return True
 
 

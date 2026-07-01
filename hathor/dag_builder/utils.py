@@ -39,10 +39,10 @@ def _get_literal_delimiter(value: str) -> str | None:
     return None
 
 
-def parse_amount_token(value: str) -> tuple[str, int, list[str]]:
+def parse_amount_token(value: str) -> tuple[str, str, list[str]]:
     """Parse the format "[amount] [token_symbol] [args]"."""
     parts = value.split()
     token = parts[1]
-    amount = int(parts[0])
+    amount = parts[0]
     args = parts[2:]
     return (token, amount, args)

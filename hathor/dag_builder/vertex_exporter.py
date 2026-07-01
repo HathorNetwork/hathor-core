@@ -231,6 +231,13 @@ class VertexExporter:
             public_key_bytes, signature = wallet.get_input_aux_data(data_to_sign, private_key)
             txin.data = P2PKH.create_input_data(public_key_bytes, signature)
 
+    def _encode_token_amount_version(self, vertex: Transaction, node: DAGNode) -> None:
+        """Encode the node's token amount version into the least significant bit of signal_bits.
+
+        This is the inverse of Transaction.get_token_amount_version().
+        """
+        vertex.signal_bits |= node.get_token_amount_version().value - 1
+
     def create_vertex_token(self, node: DAGNode) -> TokenCreationTransaction | None:
         """Create a token given a node."""
         if 'token_id' in node.attrs:
@@ -248,6 +255,7 @@ class VertexExporter:
         assert node.name != 'HTR'
 
         vertex = TokenCreationTransaction(parents=txs_parents, inputs=inputs, outputs=outputs)
+        self._encode_token_amount_version(vertex, node)
         vertex.token_name = node.name
         vertex.token_symbol = node.name
         vertex.token_version = node.get_attr_token_version()
@@ -518,6 +526,7 @@ class VertexExporter:
 
         assert len(block_parents) == 0
         tx = cls(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        self._encode_token_amount_version(tx, node)
         tx.timestamp = self.get_min_timestamp(node)
         self.add_headers_if_needed(node, tx)
         self.sign_all_inputs(tx, node=node)

@@ -18,10 +18,18 @@ from collections import defaultdict
 
 from hathor.conf.settings import HathorSettings
 from hathor.daa import DAAFactory
-from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
+from hathor.dag_builder.builder import (
+    TOKEN_AMOUNT_VERSION_KEY,
+    DAGBuilder,
+    DAGInput,
+    DAGNode,
+    DAGNodeType,
+    DAGOutput,
+)
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathorlib.token_amount import SignedAmount, UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class DefaultFiller:
@@ -220,7 +228,8 @@ class DefaultFiller:
                     assert diff <= target
 
                     if diff < target:
-                        node.outputs.append(DAGOutput((target - diff).to_unsigned(), 'HTR', {'_origin': 'f7'}))
+                        amount = node.denormalize_amount((target - diff).to_unsigned())
+                        node.outputs.append(DAGOutput(amount, 'HTR', {'_origin': 'f7'}))
 
                 case DAGNodeType.Transaction:
                     if node.name == 'dummy':
@@ -292,6 +301,17 @@ class DefaultFiller:
                 if diff < SignedAmount(0):
                     index = self.get_next_index(node.outputs)
                     node.outputs[index] = DAGOutput((-diff).to_unsigned(), 'HTR', {})
+
+                # The dummy funds HTR for every other vertex, so its outputs hold whatever amounts
+                # those vertices request — including sub-cent values that a V1 vertex cannot encode.
+                # A single non-V1-representable output forces the whole dummy to V2.
+                needs_v2 = any(
+                    txout.amount.maybe_to_v1() is None
+                    for txout in node.outputs
+                    if txout is not None
+                )
+                if needs_v2:
+                    node.attrs[TOKEN_AMOUNT_VERSION_KEY] = TokenAmountVersion.V2.name
 
                 for node in self._builder._nodes.values():
                     if node.type == DAGNodeType.Block:
