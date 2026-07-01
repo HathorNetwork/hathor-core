@@ -7,6 +7,7 @@ from hathor.transaction.scripts import P2PKH, NanoContractMatchValues, script_ev
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.util import json_dumpb
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 
 
 class NanoContracts(unittest.TestCase):
@@ -37,6 +38,6 @@ class NanoContracts(unittest.TestCase):
         input_data = NanoContractMatchValues.create_input_data(
             base64.b64decode(oracle_data), base64.b64decode(oracle_signature), base64.b64decode(pubkey))
         txin = TxInput(b'aa', 0, input_data)
-        spent_tx = Transaction(outputs=[TxOutput(20, script)])
-        tx = Transaction(outputs=[TxOutput(20, P2PKH.create_output_script(address))])
+        spent_tx = Transaction(outputs=[TxOutput(UnsignedAmount.from_v1(20), script)])
+        tx = Transaction(outputs=[TxOutput(UnsignedAmount.from_v1(20), P2PKH.create_output_script(address))])
         script_eval(tx, txin, spent_tx, OpcodesVersion.V1)

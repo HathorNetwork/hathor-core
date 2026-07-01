@@ -6,6 +6,7 @@ from hathor.wallet import HDWallet
 from hathor.wallet.base_wallet import WalletBalance, WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InsufficientFunds
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
@@ -31,7 +32,10 @@ class WalletHDTest(unittest.TestCase):
         self.manager.verification_service.verify(block, self.get_verification_params(self.manager))
         utxo = self.wallet.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((block.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(self.wallet.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, self.BLOCK_TOKENS))
+        self.assertEqual(
+            self.wallet.balance[self._settings.HATHOR_TOKEN_UID],
+            WalletBalance(UnsignedAmount.zero(),self.BLOCK_TOKENS),
+        )
 
         # create transaction spending this value, but sending to same wallet
         add_blocks_unlock_reward(self.manager)
@@ -49,7 +53,10 @@ class WalletHDTest(unittest.TestCase):
         self.assertEqual(len(self.wallet.spent_txs), 1)
         utxo = self.wallet.unspent_txs[self._settings.HATHOR_TOKEN_UID].get((tx1.hash, 0))
         self.assertIsNotNone(utxo)
-        self.assertEqual(self.wallet.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, self.TOKENS))
+        self.assertEqual(
+            self.wallet.balance[self._settings.HATHOR_TOKEN_UID],
+            WalletBalance(UnsignedAmount.zero(),self.TOKENS),
+        )
 
         # pass inputs and outputs to prepare_transaction, but not the input keys
         # spend output last transaction
@@ -67,7 +74,10 @@ class WalletHDTest(unittest.TestCase):
         self.tx_storage.save_transaction(tx2)
         self.wallet.on_new_tx(tx2)
         self.assertEqual(len(self.wallet.spent_txs), 2)
-        self.assertEqual(self.wallet.balance[self._settings.HATHOR_TOKEN_UID], WalletBalance(0, self.TOKENS))
+        self.assertEqual(
+            self.wallet.balance[self._settings.HATHOR_TOKEN_UID],
+            WalletBalance(UnsignedAmount.zero(),self.TOKENS),
+        )
 
         # Test getting more unused addresses than the gap limit
         for i in range(3):

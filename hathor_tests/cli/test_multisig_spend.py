@@ -11,6 +11,7 @@ from hathor.wallet.base_wallet import WalletBalance, WalletOutputInfo
 from hathor.wallet.util import generate_multisig_address, generate_multisig_redeem_script, generate_signature
 from hathor_cli.multisig_spend import create_parser, execute
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward
 
 
@@ -58,11 +59,11 @@ class MultiSigSpendTest(unittest.TestCase):
         block_count = 3  # 3 * 8.00 -> 24.00 HTR is enough
         blocks = add_new_blocks(self.manager, block_count, advance_clock=15)
         add_blocks_unlock_reward(self.manager)
-        blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
-        available_tokens = sum(blocks_tokens)
+        blocks_tokens = [sum((txout.value for txout in blk.outputs), start=UnsignedAmount.zero()) for blk in blocks]
+        available_tokens = sum(blocks_tokens, start=UnsignedAmount.zero())
         self.assertEqual(
             self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID],
-            WalletBalance(0, available_tokens)
+            WalletBalance(UnsignedAmount.zero(), available_tokens)
         )
 
         # First we send tokens to a multisig address
@@ -77,7 +78,7 @@ class MultiSigSpendTest(unittest.TestCase):
         self.manager.propagate_tx(tx1)
         self.clock.advance(10)
 
-        wallet_balance = WalletBalance(0, available_tokens - block_reward)
+        wallet_balance = WalletBalance(UnsignedAmount.zero(), available_tokens - block_reward)
         self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID], wallet_balance)
 
         # Then we create a new tx that spends this tokens from multisig wallet
@@ -88,9 +89,11 @@ class MultiSigSpendTest(unittest.TestCase):
 
         multisig_script = create_output_script(self.multisig_address)
 
-        multisig_output = TxOutput(200, multisig_script)
-        wallet_output = TxOutput(300, create_output_script(self.address))
-        outside_output = TxOutput(block_reward - 200 - 300, create_output_script(self.outside_address))
+        multisig_output = TxOutput(UnsignedAmount.from_v1(200), multisig_script)
+        wallet_output = TxOutput(UnsignedAmount.from_v1(300), create_output_script(self.address))
+        # The remaining change is encoded in V1, matching its sibling outputs and the tx encoding.
+        change = (block_reward - UnsignedAmount.from_v1(200) - UnsignedAmount.from_v1(300)).to_v1()
+        outside_output = TxOutput(change, create_output_script(self.outside_address))
 
         tx.outputs = [multisig_output, wallet_output, outside_output]
 

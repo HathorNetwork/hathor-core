@@ -8,6 +8,7 @@ from hathor.transaction import Block, Transaction
 from hathor.types import VertexId
 from hathor.wallet import HDWallet
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import BURN_ADDRESS, add_custom_tx
 
 
@@ -120,7 +121,7 @@ class ConsensusSimulatorTestCase(SimulatorTestCase):
 
         assert manager1.wallet is not None
         address = manager1.wallet.get_unused_address(mark_as_used=False)
-        value = 10
+        value = UnsignedAmount.from_v1(10)
         initial = gen_new_tx(manager1, address, value)
         initial.weight = 25
         initial.update_hash()

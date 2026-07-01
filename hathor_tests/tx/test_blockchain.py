@@ -4,6 +4,7 @@ from hathor.daa import DAAFactory, TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.utils.weight import weight_to_work
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_new_transactions
 
 
@@ -357,14 +358,14 @@ class BlockchainTestCase(unittest.TestCase):
         for _i_halving in range(0, self._settings.MAXIMUM_NUMBER_OF_HALVINGS):
             for _i_block in range(0, self._settings.BLOCKS_PER_HALVING):
                 reward = manager.get_tokens_issued_per_block(height)
-                self.assertEqual(reward, expected_reward, f'reward at height {height}')
+                self.assertEqual(reward, UnsignedAmount.from_v1(expected_reward), f'reward at height {height}')
                 height += 1
-            expected_reward /= 2
+            expected_reward //= 2
         self.assertEqual(expected_reward, final_reward)
         # check that halving stops, for at least two "halving rounds"
         for _i_block in range(0, 2 * self._settings.BLOCKS_PER_HALVING):
             reward = manager.get_tokens_issued_per_block(height)
-            self.assertEqual(reward, expected_reward, f'reward at height {height}')
+            self.assertEqual(reward, UnsignedAmount.from_v1(expected_reward), f'reward at height {height}')
             height += 1
 
     def test_block_rewards(self):
