@@ -34,7 +34,7 @@ from hathorlib.nanocontracts.nc_types.str_nc_type import StrNCType
 from hathorlib.nanocontracts.nc_types.token_uid_nc_type import TokenUidNCType
 from hathorlib.nanocontracts.nc_types.tuple_nc_type import TupleNCType
 from hathorlib.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
-from hathorlib.nanocontracts.nc_types.varint_nc_type import VarInt32NCType, VarUint32NCType
+from hathorlib.nanocontracts.nc_types.varint_nc_type import AmountNCType, VarInt32NCType, VarUint32NCType
 from hathorlib.nanocontracts.types import (
     Address,
     Amount,
@@ -54,6 +54,7 @@ __all__ = [
     'FIELD_TYPE_TO_NC_TYPE_MAP',
     'RETURN_TYPE_TO_NC_TYPE_MAP',
     'AddressNCType',
+    'AmountNCType',
     'BoolNCType',
     'BytesLikeNCType',
     'BytesNCType',
@@ -117,7 +118,7 @@ FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     NamedTuple: NamedTupleNCType,
     # hathor types:
     Address: AddressNCType,
-    Amount: VarUint32NCType,
+    Amount: AmountNCType,
     BlueprintId: Bytes32NCType,
     ContractId: Bytes32NCType,
     Timestamp: Uint32NCType,
