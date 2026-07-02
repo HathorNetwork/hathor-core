@@ -143,11 +143,47 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov,cargo-nextest
+      # The napi UnsignedAmount/SignedAmount wrappers are exercised by the ava suite (the
+      # node-test job), not by cargo nextest, so exclude them from the Rust lcov instead of
+      # letting them read as ~0%. convert.rs keeps its real Rust coverage; a future htr-rs-napi
+      # codecov flag can measure these from an ava-driven instrumented run.
       - name: Generate coverage
-        run: cargo llvm-cov nextest --workspace --lcov --output-path lcov.info
+        run: >-
+          cargo llvm-cov nextest --workspace
+          --ignore-filename-regex 'htr-lib-napi/src/(signed_amount|unsigned_amount)\.rs'
+          --lcov --output-path lcov.info
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
           files: htr-rs/lcov.info
           flags: htr-rs
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Builds the htr-lib-napi Node addon and runs its ava integration suite — the only tests that
+  # cross the real JS<->Rust boundary (the catch_unwind abort-safety contract, the operator
+  # marshalling). The Rust jobs above never exercise this.
+  node-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: htr-rs/crates/htr-lib-napi
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            htr-rs/target
+          key: ${{ runner.os }}-node-test-${{ hashFiles('htr-rs/**/Cargo.lock') }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: htr-rs/crates/htr-lib-napi/package-lock.json
+      - name: Install JS dependencies
+        run: npm ci
+      - name: Build addon and run ava tests
+        run: npm test

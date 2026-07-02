@@ -1,0 +1,58 @@
+{
+  "name": "@hathor/htr-lib",
+  "version": "0.1.0",
+  "description": "TypeScript binding for the Hathor htr-lib Rust library",
+  "main": "wrapper.js",
+  "types": "wrapper.d.ts",
+  "browser": "browser-wrapper.mjs",
+  "license": "Apache-2.0",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "wrapper.js",
+    "wrapper.d.ts",
+    "apply-operators.cjs",
+    "browser.js",
+    "browser-wrapper.mjs"
+  ],
+  "napi": {
+    "binaryName": "htr-lib-napi",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "wasm32-wasip1-threads"
+    ]
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "artifacts": "napi artifacts",
+    "prepublishOnly": "napi prepublish -t npm",
+    "version": "napi version",
+    "pretest": "napi build --platform",
+    "test": "ava"
+  },
+  "dependencies": {
+    "@napi-rs/wasm-runtime": "^1"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3",
+    "@oxc-node/core": "^0.1.0",
+    "@types/node": "^25",
+    "ava": "^8",
+    "typescript": "^5"
+  },
+  "ava": {
+    "extensions": ["ts"],
+    "timeout": "2m",
+    "workerThreads": false,
+    "environmentVariables": { "OXC_TSCONFIG_PATH": "./__test__/tsconfig.json" },
+    "nodeArguments": ["--import", "@oxc-node/core/register"]
+  },
+  "engines": { "node": ">=18" }
+}

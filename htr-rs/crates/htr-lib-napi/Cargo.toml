@@ -1,0 +1,25 @@
+[package]
+name = "htr-lib-napi"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[lib]
+# cdylib for the Node addon; rlib so `cargo test` can run the pure-Rust unit tests.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+htr-lib = { path = "../htr-lib" }
+# napi6 enables the BigInt type.
+napi = { version = "3", features = ["napi6"] }
+napi-derive = "3"
+num-bigint = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"
+
+[dev-dependencies]
+num-traits = { workspace = true }
+
+[lints]
+workspace = true

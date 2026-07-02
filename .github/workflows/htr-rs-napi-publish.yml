@@ -1,0 +1,164 @@
+name: htr-rs-napi-publish
+
+# Builds the @hathor/htr-lib napi addon for every napi.targets platform and publishes it to npm.
+# Manual only (workflow_dispatch), with `version` and `dry-run` inputs. The publish job uses the
+# `npm-publish` environment: in the repo Settings, add the allowed publishers as Required reviewers
+# and NPM_TOKEN as an environment secret, so a publish only proceeds after one of them approves.
+# Modeled on the napi-rs v3 reference pipeline, adapted for the nested path
+# htr-rs/crates/htr-lib-napi; validate with a dry run first.
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish (e.g. 0.2.0, or a bump keyword like patch/minor/major)
+        type: string
+        required: true
+      dry-run:
+        description: Build and assemble without publishing
+        type: boolean
+        default: true
+
+env:
+  APP_NAME: htr-lib-napi
+  PACKAGE_DIR: htr-rs/crates/htr-lib-napi
+
+defaults:
+  run:
+    working-directory: htr-rs/crates/htr-lib-napi
+
+jobs:
+  build:
+    name: Build ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            build: npm run build -- --target x86_64-apple-darwin
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            build: npm run build -- --target aarch64-apple-darwin
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: npm run build -- --target x86_64-pc-windows-msvc
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            build: npm run build -- --target x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
+            build: npm run build -- --target aarch64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+            build: npm run build -- --target x86_64-unknown-linux-musl
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+            build: npm run build -- --target aarch64-unknown-linux-musl
+          - host: ubuntu-latest
+            target: wasm32-wasip1-threads
+            build: npm run build -- --target wasm32-wasip1-threads
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        if: ${{ !matrix.settings.docker }}
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        if: ${{ !matrix.settings.docker }}
+        with:
+          targets: ${{ matrix.settings.target }}
+      - name: Install JS dependencies
+        if: ${{ !matrix.settings.docker }}
+        run: npm ci
+      - name: Build (native host)
+        if: ${{ !matrix.settings.docker }}
+        run: ${{ matrix.settings.build }}
+      - name: Build (docker)
+        if: ${{ matrix.settings.docker }}
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ matrix.settings.docker }}
+          options: --user 0:0 -v ${{ github.workspace }}:/build -w /build/${{ env.PACKAGE_DIR }}
+          run: npm ci && ${{ matrix.settings.build }}
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: |
+            ${{ env.PACKAGE_DIR }}/*.node
+            ${{ env.PACKAGE_DIR }}/*.wasm
+          if-no-files-found: error
+      # The wasm build also emits the JS glue (index.js, browser.js, wasi shims) that the MAIN
+      # package ships; upload it once, from this row, for the publish job to pick up.
+      - name: Upload JS glue (wasm build only)
+        if: ${{ matrix.settings.target == 'wasm32-wasip1-threads' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-glue
+          path: |
+            ${{ env.PACKAGE_DIR }}/index.js
+            ${{ env.PACKAGE_DIR }}/index.d.ts
+            ${{ env.PACKAGE_DIR }}/browser.js
+            ${{ env.PACKAGE_DIR }}/*.wasi.cjs
+            ${{ env.PACKAGE_DIR }}/*.wasi-browser.js
+            ${{ env.PACKAGE_DIR }}/wasi-worker*.mjs
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
+    # This job runs in the `npm-publish` environment, which must be configured in the repo Settings
+    # with the allowed publishers as Required reviewers and NPM_TOKEN as an environment secret. The
+    # job (dry run or real) waits for one of those reviewers to approve before it starts.
+    environment: npm-publish
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install JS dependencies
+        run: npm ci
+      - name: Create per-platform package dirs
+        run: npx napi create-npm-dirs
+      - name: Set the version to publish
+        # Sets the main package.json version and, via the `version` script (napi version), the
+        # per-platform npm/<target> versions. Ephemeral — not committed back to the repo.
+        run: npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
+      - name: Download platform binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.PACKAGE_DIR }}/artifacts
+          pattern: bindings-*
+          merge-multiple: true
+      - name: Download JS glue
+        uses: actions/download-artifact@v4
+        with:
+          name: js-glue
+          path: ${{ env.PACKAGE_DIR }}
+      - name: Move binaries into npm/<target>
+        run: npx napi artifacts --dir artifacts
+      - name: Publish to npm
+        # prepublishOnly (napi prepublish -t npm) publishes the per-platform packages and wires the
+        # main package's optionalDependencies; npm then publishes the main package. The dry-run path
+        # uses --ignore-scripts so it does NOT trigger a real platform publish.
+        run: |
+          if [ "${{ inputs.dry-run }}" = "false" ]; then
+            npm publish --access public
+          else
+            echo "Dry run — validating the main package tarball without publishing."
+            npm publish --access public --dry-run --ignore-scripts
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
