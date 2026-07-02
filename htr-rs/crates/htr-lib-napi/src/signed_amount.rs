@@ -20,9 +20,13 @@ impl SignedAmount {
     }
 }
 
+// Every method below uses `#[napi(catch_unwind)]` so a Rust panic surfaces as a thrown JS error
+// rather than aborting the Node process (matching the PyO3 binding, which catches panics by
+// default). This relies on the workspace using `panic = "unwind"` (see the `[profile.*]` blocks in
+// the workspace `Cargo.toml`).
 #[napi]
 impl SignedAmount {
-    #[napi(constructor)]
+    #[napi(constructor, catch_unwind)]
     pub fn new(amount: Option<BigInt>) -> Self {
         let value = amount.map(|b| napi_to_rsbigint(&b)).unwrap_or_default();
         Self {
@@ -30,17 +34,17 @@ impl SignedAmount {
         }
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn raw(&self) -> BigInt {
         rsbigint_to_napi(self.inner.raw())
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn as_bool(&self) -> bool {
         self.inner.as_bool()
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn is_zero(&self) -> bool {
         !self.inner.as_bool()
     }
@@ -48,13 +52,13 @@ impl SignedAmount {
     /// Identity, mirroring Python's `SignedAmount.to_signed`: returns `self` (the same JS object),
     /// so a value of unknown type (signed or unsigned) can be converted to a signed amount through
     /// a uniform method.
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn to_signed(&self) -> &Self {
         self
     }
 
     /// Convert to an [`UnsignedAmount`]. Returns an error when the value is negative.
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn to_unsigned(&self) -> napi::Result<UnsignedAmount> {
         self.inner
             .to_unsigned()
@@ -69,7 +73,7 @@ impl SignedAmount {
 
     /// Add another signed amount or an [`UnsignedAmount`]. An unsigned amount is
     /// lifted to the V2-normalized signed unit (via its `to_signed`) before combining.
-    #[napi(js_name = "add", strict)]
+    #[napi(catch_unwind, js_name = "add", strict)]
     pub fn op_add(&self, other: Either<&SignedAmount, &UnsignedAmount>) -> SignedAmount {
         let result = match other {
             Either::A(signed) => &self.inner + &signed.inner,
@@ -80,7 +84,7 @@ impl SignedAmount {
 
     /// Subtract another signed amount or an [`UnsignedAmount`]. The result is signed
     /// and may be negative; an unsigned amount is lifted to the V2 unit before combining.
-    #[napi(js_name = "sub", strict)]
+    #[napi(catch_unwind, js_name = "sub", strict)]
     pub fn op_sub(&self, other: Either<&SignedAmount, &UnsignedAmount>) -> SignedAmount {
         let result = match other {
             Either::A(signed) => &self.inner - &signed.inner,
@@ -89,48 +93,48 @@ impl SignedAmount {
         SignedAmount::from_inner(result)
     }
 
-    #[napi(js_name = "neg")]
+    #[napi(catch_unwind, js_name = "neg")]
     pub fn op_neg(&self) -> SignedAmount {
         SignedAmount::from_inner(-&self.inner)
     }
 
     /// Identity, mirroring Python's `SignedAmount.__pos__`: returns `self` (the same JS object).
-    #[napi(js_name = "pos")]
+    #[napi(catch_unwind, js_name = "pos")]
     pub fn op_pos(&self) -> &Self {
         self
     }
 
-    #[napi(js_name = "eq", strict)]
+    #[napi(catch_unwind, js_name = "eq", strict)]
     pub fn op_eq(&self, other: &SignedAmount) -> bool {
         self.inner == other.inner
     }
 
-    #[napi(js_name = "ne", strict)]
+    #[napi(catch_unwind, js_name = "ne", strict)]
     pub fn op_ne(&self, other: &SignedAmount) -> bool {
         self.inner != other.inner
     }
 
-    #[napi(js_name = "lt", strict)]
+    #[napi(catch_unwind, js_name = "lt", strict)]
     pub fn op_lt(&self, other: &SignedAmount) -> bool {
         self.inner < other.inner
     }
 
-    #[napi(js_name = "le", strict)]
+    #[napi(catch_unwind, js_name = "le", strict)]
     pub fn op_le(&self, other: &SignedAmount) -> bool {
         self.inner <= other.inner
     }
 
-    #[napi(js_name = "gt", strict)]
+    #[napi(catch_unwind, js_name = "gt", strict)]
     pub fn op_gt(&self, other: &SignedAmount) -> bool {
         self.inner > other.inner
     }
 
-    #[napi(js_name = "ge", strict)]
+    #[napi(catch_unwind, js_name = "ge", strict)]
     pub fn op_ge(&self, other: &SignedAmount) -> bool {
         self.inner >= other.inner
     }
 
-    #[napi(strict)]
+    #[napi(catch_unwind, strict)]
     pub fn compare(&self, other: &SignedAmount) -> i32 {
         match self.inner.cmp(&other.inner) {
             Ordering::Less => -1,
@@ -139,7 +143,7 @@ impl SignedAmount {
         }
     }
 
-    #[napi(js_name = "toString")]
+    #[napi(catch_unwind, js_name = "toString")]
     pub fn to_string_js(&self) -> String {
         format!("{:?}", self.inner)
     }

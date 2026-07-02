@@ -46,6 +46,10 @@ impl UnsignedAmount {
     }
 }
 
+// Every method below uses `#[napi(catch_unwind)]` so a Rust panic surfaces as a thrown JS error
+// rather than aborting the Node process (matching the PyO3 binding, which catches panics by
+// default). This relies on the workspace using `panic = "unwind"` (see the `[profile.*]` blocks in
+// the workspace `Cargo.toml`). The comments below call out the methods with a *known* panic path.
 #[napi]
 impl UnsignedAmount {
     /// Set the global V1->V2 normalization factor. Panics (-> thrown error) on a
@@ -71,9 +75,8 @@ impl UnsignedAmount {
         )))
     }
 
-    /// Build a V2 amount; raw and normalized coincide. No `catch_unwind`: unlike `from_v1`, this
-    /// never reads the normalization factor, so it cannot panic.
-    #[napi]
+    /// Build a V2 amount; raw and normalized coincide.
+    #[napi(catch_unwind)]
     pub fn from_v2(amount: BigInt) -> napi::Result<UnsignedAmount> {
         Ok(UnsignedAmount::from_inner(InnerUnsignedAmount::from_v2(
             try_napi_to_biguint(&amount)?,
@@ -92,42 +95,42 @@ impl UnsignedAmount {
         ))
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn zero() -> UnsignedAmount {
         UnsignedAmount::from_inner(InnerUnsignedAmount::ZERO)
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn is_v1(&self) -> bool {
         self.inner.is_v1()
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn is_v2(&self) -> bool {
         self.inner.is_v2()
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn normalized(&self) -> BigInt {
         biguint_to_napi(self.inner.normalized())
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn raw(&self) -> BigInt {
         biguint_to_napi(self.inner.raw())
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn as_bool(&self) -> bool {
         self.inner.as_bool()
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn is_zero(&self) -> bool {
         !self.inner.as_bool()
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn to_signed(&self) -> SignedAmount {
         SignedAmount::from_inner(self.inner.to_signed())
     }
@@ -157,7 +160,7 @@ impl UnsignedAmount {
             .map(|cow| UnsignedAmount::from_inner(cow.into_owned()))
     }
 
-    #[napi]
+    #[napi(catch_unwind)]
     pub fn to_v2(&self) -> UnsignedAmount {
         UnsignedAmount::from_inner(self.inner.to_v2().into_owned())
     }
@@ -177,7 +180,7 @@ impl UnsignedAmount {
             })
     }
 
-    #[napi(js_name = "add", strict)]
+    #[napi(catch_unwind, js_name = "add", strict)]
     pub fn op_add(&self, other: &UnsignedAmount) -> UnsignedAmount {
         UnsignedAmount::from_inner(&self.inner + &other.inner)
     }
@@ -189,37 +192,37 @@ impl UnsignedAmount {
         UnsignedAmount::from_inner(&self.inner - &other.inner)
     }
 
-    #[napi(js_name = "eq", strict)]
+    #[napi(catch_unwind, js_name = "eq", strict)]
     pub fn op_eq(&self, other: &UnsignedAmount) -> bool {
         self.inner == other.inner
     }
 
-    #[napi(js_name = "ne", strict)]
+    #[napi(catch_unwind, js_name = "ne", strict)]
     pub fn op_ne(&self, other: &UnsignedAmount) -> bool {
         self.inner != other.inner
     }
 
-    #[napi(js_name = "lt", strict)]
+    #[napi(catch_unwind, js_name = "lt", strict)]
     pub fn op_lt(&self, other: &UnsignedAmount) -> bool {
         self.inner < other.inner
     }
 
-    #[napi(js_name = "le", strict)]
+    #[napi(catch_unwind, js_name = "le", strict)]
     pub fn op_le(&self, other: &UnsignedAmount) -> bool {
         self.inner <= other.inner
     }
 
-    #[napi(js_name = "gt", strict)]
+    #[napi(catch_unwind, js_name = "gt", strict)]
     pub fn op_gt(&self, other: &UnsignedAmount) -> bool {
         self.inner > other.inner
     }
 
-    #[napi(js_name = "ge", strict)]
+    #[napi(catch_unwind, js_name = "ge", strict)]
     pub fn op_ge(&self, other: &UnsignedAmount) -> bool {
         self.inner >= other.inner
     }
 
-    #[napi(strict)]
+    #[napi(catch_unwind, strict)]
     pub fn compare(&self, other: &UnsignedAmount) -> i32 {
         match self.inner.cmp(&other.inner) {
             Ordering::Less => -1,
@@ -228,7 +231,7 @@ impl UnsignedAmount {
         }
     }
 
-    #[napi(js_name = "toString")]
+    #[napi(catch_unwind, js_name = "toString")]
     pub fn to_string_js(&self) -> String {
         format!("{:?}", self.inner)
     }
