@@ -10,6 +10,7 @@ from hathorlib.nanocontracts.nc_types import (  # noqa: F401
     FIELD_TYPE_TO_NC_TYPE_MAP,
     RETURN_TYPE_TO_NC_TYPE_MAP,
     AddressNCType,
+    AmountNCType,
     BoolNCType,
     Bytes32NCType,
     BytesLikeNCType,

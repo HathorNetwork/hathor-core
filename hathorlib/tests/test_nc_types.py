@@ -136,6 +136,74 @@ class TestCustomTypes(unittest.TestCase):
         self.assertEqual(bid, data)
 
 
+class TestAmountNCType(unittest.TestCase):
+    def _make(self):
+        from hathorlib.nanocontracts.nc_types import AmountNCType, make_nc_type_for_field_type
+        nc_type = make_nc_type_for_field_type(Amount)
+        self.assertIsInstance(nc_type, AmountNCType)
+        return nc_type
+
+    def test_field_type_maps_to_amount_nc_type(self) -> None:
+        from hathorlib.nanocontracts.nc_types import (
+            AmountNCType,
+            make_nc_type_for_arg_type,
+            make_nc_type_for_field_type,
+            make_nc_type_for_return_type,
+        )
+        for make in (make_nc_type_for_field_type, make_nc_type_for_arg_type, make_nc_type_for_return_type):
+            self.assertIsInstance(make(Amount), AmountNCType)
+
+    def test_deserialize_returns_amount_instance(self) -> None:
+        nc_type = self._make()
+        value = nc_type.from_bytes(nc_type.to_bytes(Amount(100)))
+        self.assertIsInstance(value, Amount)
+        self.assertEqual(value, 100)
+
+    def test_deserialize_from_plain_int_returns_amount_instance(self) -> None:
+        # values are serialized as plain ints, but must come back as Amount
+        nc_type = self._make()
+        value = nc_type.from_bytes(nc_type.to_bytes(100))
+        self.assertIsInstance(value, Amount)
+        self.assertEqual(value, 100)
+
+    def test_roundtrip_bytes(self) -> None:
+        nc_type = self._make()
+        for raw in (0, 1, 100, 2**64, 2**128):
+            value = nc_type.from_bytes(nc_type.to_bytes(Amount(raw)))
+            self.assertIsInstance(value, Amount)
+            self.assertEqual(value, raw)
+
+    def test_value_to_json(self) -> None:
+        nc_type = self._make()
+        self.assertEqual(nc_type.value_to_json(Amount(7)), 7)
+
+    def test_plain_int_field_is_not_amount(self) -> None:
+        # a plain `int` field must not be turned into an Amount
+        from hathorlib.nanocontracts.nc_types import make_nc_type_for_field_type
+        nc_type = make_nc_type_for_field_type(int)
+        value = nc_type.from_bytes(nc_type.to_bytes(5))
+        self.assertNotIsInstance(value, Amount)
+        self.assertEqual(value, 5)
+
+    def test_custom_mapping_controls_deserialized_type(self) -> None:
+        # Building the NCType for `Amount` with a custom type map shows the mapping is what decides
+        # whether `Amount` round-trips as an `Amount` or degrades to a plain `int`.
+        from hathorlib.nanocontracts.nc_types import ESSENTIAL_TYPE_ALIAS_MAP, AmountNCType, NCType, VarUint32NCType
+
+        amount_map = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, {Amount: AmountNCType})
+        int_map = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, {Amount: VarUint32NCType})
+
+        amount_nc_type = NCType.from_type(Amount, type_map=amount_map)
+        int_nc_type = NCType.from_type(Amount, type_map=int_map)
+
+        # same serialized bytes, different deserialized type depending on the mapping
+        data = amount_nc_type.to_bytes(Amount(100))
+        self.assertEqual(int_nc_type.to_bytes(Amount(100)), data)
+
+        self.assertIsInstance(amount_nc_type.from_bytes(data), Amount)
+        self.assertNotIsInstance(int_nc_type.from_bytes(data), Amount)
+
+
 class TestSetMethodType(unittest.TestCase):
     def test_set_method_type(self) -> None:
         def my_func() -> None:

@@ -8,6 +8,7 @@ from typing import ClassVar
 from typing_extensions import Self, override
 
 from hathorlib.nanocontracts.nc_types.nc_type import NCType
+from hathorlib.nanocontracts.types import Amount
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.adapters import MaxBytesExceededError
 from hathorlib.serialization.encoding.leb128 import decode_leb128, encode_leb128
@@ -105,3 +106,11 @@ class VarUint32NCType(_VarIntNCType):
 
     _signed = False
     _max_byte_size = 32
+
+
+class AmountNCType(VarUint32NCType):
+    """Extension of `VarUint32NCType` that returns an `Amount` new-type instead of a plain `int`."""
+
+    @override
+    def _deserialize(self, deserializer: Deserializer, /) -> Amount:
+        return Amount(super()._deserialize(deserializer))
