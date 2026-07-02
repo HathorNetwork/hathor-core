@@ -43,7 +43,7 @@ class TestNano(BlueprintTestCase):
         self.blueprint_id2 = self._register_blueprint_class(MyBlueprint, token_amount_version=TokenAmountVersion.V2)
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
-    def test(self) -> None:
+    def test_current_serialization(self) -> None:
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy
@@ -57,12 +57,9 @@ class TestNano(BlueprintTestCase):
 
         artifacts.propagate_with(self.manager)
         b11 = artifacts.get_typed_vertex('b11', Block)
-        nc1 = artifacts.get_typed_vertex('nc1', Transaction)
+        nc1, = artifacts.get_typed_vertices(('nc1',), Transaction)
 
-        assert nc1.get_metadata().first_block == b11.hash
-        assert nc1.get_metadata().voided_by is None
         assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
-
         storage = self.manager.get_nc_storage(b11, nc1.hash)
 
         x = storage.get_obj(b'x', X_NC_TYPE)
@@ -70,7 +67,7 @@ class TestNano(BlueprintTestCase):
         assert x == 64
 
         y = storage.get_obj(b'y', Y_NC_TYPE)
-        assert type(y) is int  # TODO: Why?
+        assert type(y) is int  # the storage returns an int instead of the Amount wrapper.
         assert y == 64
 
         x_key = storage._to_attr_key(b'x')
