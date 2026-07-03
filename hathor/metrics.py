@@ -49,13 +49,12 @@ class PeerConnectionMetrics:
 @dataclass
 class Metrics:
     pubsub: PubSubManager
-    avg_time_between_blocks: int
     connections: ConnectionsManager
     tx_storage: TransactionStorage
     # Twisted reactor that handles the time and callLater
     reactor: Reactor
     # DAA factory to get the correct avg_time_between_blocks per block version
-    daa_factory: Optional['DAAFactory'] = None
+    daa_factory: 'DAAFactory'
 
     # Transactions count in the network
     transactions: int = 0
@@ -210,10 +209,7 @@ class Metrics:
         """ Weight formula: w = log2(avg_time_between_blocks) + log2(hash_rate)
         """
         from math import log
-        if self.daa_factory is not None:
-            avg_time = self.daa_factory.create_from_block(block).avg_time_between_blocks
-        else:
-            avg_time = self.avg_time_between_blocks
+        avg_time = self.daa_factory.create_from_block(block).avg_time_between_blocks
         return 2**(block.weight - log(avg_time, 2))
 
     def set_websocket_data(self) -> None:
