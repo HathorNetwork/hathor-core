@@ -3,7 +3,7 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
-from hathor.nanocontracts.types import Address, NCDepositAction, NCWithdrawalAction, TokenUid, public, view
+from hathor.nanocontracts.types import Address, Amount, NCDepositAction, NCWithdrawalAction, TokenUid, public, view
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 STR_NC_TYPE = make_nc_type(str)
@@ -84,12 +84,28 @@ class MyBlueprint(Blueprint):
         return 1
 
 
+class AmountFieldBlueprint(Blueprint):
+    y: Amount
+
+    @public
+    def initialize(self, ctx: Context, y: Amount) -> None:
+        self.y = y
+
+    @view
+    def get_y(self) -> Amount:
+        # Reading `self.y` must yield an `Amount` instance, not a plain `int`. This assert would
+        # fire if the field were mapped to a plain integer NCType (e.g. `Amount: VarUint32NCType`).
+        assert isinstance(self.y, Amount)
+        return self.y
+
+
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.simple_fields_id = self._register_blueprint_class(SimpleFields)
         self.container_fields_id = self._register_blueprint_class(ContainerFields)
         self.my_blueprint_id = self._register_blueprint_class(MyBlueprint)
+        self.amount_field_id = self._register_blueprint_class(AmountFieldBlueprint)
 
         genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = [t for t in genesis if t.is_transaction][0]
@@ -125,6 +141,16 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.assertEqual(storage.get_obj(b'a:\x01a', STR_NC_TYPE), '1')
         self.assertEqual(storage.get_obj(b'a:\x01b', STR_NC_TYPE), '2')
         self.assertEqual(storage.get_obj(b'a:\x01c', STR_NC_TYPE), '3')
+
+    def test_amount_field_getter_returns_amount(self) -> None:
+        nc_id = self.amount_field_id
+        ctx = self.create_context()
+        self.runner.create_contract(nc_id, self.amount_field_id, ctx, Amount(100))
+
+        # the field getter (`self.y`) must return an `Amount` instance, not a plain `int`
+        value = self.runner.call_view_method(nc_id, 'get_y')
+        self.assertIsInstance(value, Amount)
+        self.assertEqual(value, 100)
 
     def _create_my_blueprint_contract(self) -> None:
         nc_id = self.my_blueprint_id
