@@ -1285,11 +1285,25 @@ class Runner:
         # exception.
         _, token_amount_version = self.blueprint_service.get_blueprint_class_and_token_amount_version(blueprint_id)
 
-        if token_amount_version < self.token_amount_version:
-            raise NCFail(
-                f'cannot change blueprint to an older token amount version '
-                f'(current = {self.token_amount_version}, new = {token_amount_version})'
-            )
+        match (self.token_amount_version, token_amount_version):
+            case TokenAmountVersion.V1, TokenAmountVersion.V1:
+                # V1 blueprints can always be upgraded to other V1 blueprints.
+                # This is a bug-fix path for devs who don't want to upgrade to V2 yet.
+                pass
+            case TokenAmountVersion.V1, TokenAmountVersion.V2:
+                # This is the upgrade path.
+                pass
+            case TokenAmountVersion.V2, TokenAmountVersion.V1:
+                # We don't allow blueprints to "reverse" a version update.
+                raise NCFail(
+                    f'cannot change blueprint to an older token amount version '
+                    f'(current = {self.token_amount_version}, new = {token_amount_version})'
+                )
+            case TokenAmountVersion.V2, TokenAmountVersion.V2:
+                # Normal path for upgrading V2 blueprints.
+                pass
+            case _:
+                assert_never((self.token_amount_version, token_amount_version))
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
