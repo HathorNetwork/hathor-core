@@ -400,6 +400,15 @@ class BlueprintOnChainResourceTest(_BaseResourceTest._ResourceTest):
             blueprints=[],
         )
 
+    async def test_invalid_before_after_param(self) -> None:
+        # A non-hex `before`/`after` must yield a 400, not an uncaught
+        # ValueError from bytes.fromhex() that bubbles up as a 500 (see the
+        # on-call alert for mainnet fullnodes on 2026-07-06).
+        for param in (b'before', b'after'):
+            for bad_value in (b'not-hex', b'zzzz', b'abc'):
+                response = await self.web.get('on_chain', {param: bad_value})
+                self.assertEqual(400, response.responseCode)
+
     async def test_search_by_name(self) -> None:
         response = await self.web.get('builtin', {
             b'search': b'Bet',
