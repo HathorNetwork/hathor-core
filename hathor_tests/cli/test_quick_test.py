@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor_cli.quick_test import QuickTest
 from hathor_tests import unittest
 

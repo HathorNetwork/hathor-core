@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Token UID normalization for the shielded crypto library."""
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID

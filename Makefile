@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 py_sources = hathor/ hathor_tests/ extras/custom_tests/
 
 .PHONY: all
@@ -90,6 +93,10 @@ isort-check:
 .PHONY: yamllint
 yamllint:
 	yamllint .
+
+.PHONY: reuse
+reuse:
+	reuse lint
 
 .PHONY: check-custom
 check-custom:

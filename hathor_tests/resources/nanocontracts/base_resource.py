@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.manager import HathorManager
 from hathor.nanocontracts import Blueprint, OnChainBlueprint
 from hathor.nanocontracts.types import BlueprintId

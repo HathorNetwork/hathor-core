@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Optional, TypeVar
 
 from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type

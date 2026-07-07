@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.p2p.peer_endpoint import PeerAddress, PeerEndpoint, Protocol
 from hathor_tests import unittest
 

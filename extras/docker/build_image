@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 if [ ! -f envvars ]; then
 	echo "Error. Can't load envvars. You can run \"cp envvars.sample envvars\" and configure it with your paths."
 	exit 1

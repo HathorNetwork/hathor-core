@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 # before changing these variables, make sure the tag $PYTHON-slim-$DEBIAN exists first
 # list of valid tags hese: https://hub.docker.com/_/python
 ARG PYTHON=3.12

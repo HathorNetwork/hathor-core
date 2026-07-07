@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # DAA Transition Simulation
 
 Simulates the DAA's transient behavior when the REDUCE_DAA_TARGET feature activates, changing the target block time from 30s to 7.5s (4x faster blocks).

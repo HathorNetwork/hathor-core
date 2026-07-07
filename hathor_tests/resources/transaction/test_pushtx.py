@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any, Generator, Optional
 
 from twisted.internet.defer import inlineCallbacks

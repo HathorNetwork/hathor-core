@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.simulator.utils import add_new_blocks
 from hathor.utils.weight import weight_to_work
 from hathor_tests import unittest

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
