@@ -10,7 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from hathor.api.openapi.decorators import EndpointMetadata, get_endpoint_registry
-from hathor.api.openapi.versioning import merge_path_items
+from hathor.api.openapi.versioning import deep_merge
 from hathor.api.schema_utils import SchemaRegistryMixin
 
 
@@ -69,27 +69,27 @@ class OpenAPIGenerator(SchemaRegistryMixin):
 
         return parameters
 
-    def _build_request_body(self, request_model: type[BaseModel] | None) -> dict[str, Any] | None:
-        """Build OpenAPI requestBody from a request model."""
-        if not request_model:
+    def _build_request_body(self, metadata: EndpointMetadata) -> dict[str, Any] | None:
+        """Build OpenAPI requestBody from request model."""
+        if not metadata.request_model:
             return None
 
         return {
             'required': True,
             'content': {
                 'application/json': {
-                    'schema': self._get_schema_ref(request_model),
+                    'schema': self._get_schema_ref(metadata.request_model),
                 },
             },
         }
 
-    def _get_response_models(self, response_model: Any) -> list[type[BaseModel]]:
-        """Extract individual response models from a response_model value (handles Union types)."""
-        if response_model is None:
+    def _get_response_models(self, metadata: EndpointMetadata) -> list[type[BaseModel]]:
+        """Extract individual response models from response_model (handles Union types)."""
+        if metadata.response_model is None:
             return []
 
         # Check if it's a Union type
-        args = typing.get_args(response_model)
+        args = typing.get_args(metadata.response_model)
         if args:
             models = []
             for a in args:
@@ -101,15 +101,15 @@ class OpenAPIGenerator(SchemaRegistryMixin):
             return models
 
         # Single model
-        return [response_model]
+        return [metadata.response_model]
 
-    def _build_responses(self, response_model: Any) -> dict[str, Any]:
+    def _build_responses(self, metadata: EndpointMetadata) -> dict[str, Any]:
         """Build OpenAPI responses section.
 
         Reads http_status_code from each response model's ClassVar and groups
         by status code. If multiple models share a status code, uses oneOf.
         """
-        models = self._get_response_models(response_model)
+        models = self._get_response_models(metadata)
 
         if not models:
             return {'200': {'description': 'Success'}}
@@ -182,42 +182,14 @@ class OpenAPIGenerator(SchemaRegistryMixin):
             operation['parameters'] = parameters
 
         # Request body
-        request_body = self._build_request_body(metadata.request_model)
+        request_body = self._build_request_body(metadata)
         if request_body:
             operation['requestBody'] = request_body
 
         # Responses
-        operation['responses'] = self._build_responses(metadata.response_model)
+        operation['responses'] = self._build_responses(metadata)
 
         return operation
-
-    def _build_version_overrides(self, metadata: EndpointMetadata) -> dict[str, Any] | None:
-        """Lower per-version request/response models into an `x-api-version-overrides` map.
-
-        Each version that overrides a model contributes path-based overrides that replace the
-        operation's `requestBody`/`responses` for that version. The versioning expander resolves each
-        path against the base path item, so fields the version does not override fall back to the base.
-        """
-        request_models = metadata.request_models or {}
-        response_models = metadata.response_models or {}
-        if not request_models and not response_models:
-            return None
-
-        method = metadata.method.lower()
-        overrides: dict[str, Any] = {}
-        for version in sorted({*request_models, *response_models}, key=lambda v: v.value):
-            entries: list[dict[str, Any]] = []
-            if version in request_models:
-                request_body = self._build_request_body(request_models[version])
-                if request_body:
-                    entries.append({'path': [method, 'requestBody'], 'value': request_body})
-            if version in response_models:
-                responses = self._build_responses(response_models[version])
-                entries.append({'path': [method, 'responses'], 'value': responses})
-            if entries:
-                overrides[version.value] = entries
-
-        return overrides or None
 
     def _build_path_item(self, metadata: EndpointMetadata) -> dict[str, Any]:
         """Build an OpenAPI path item with operation-level extensions."""
@@ -247,13 +219,6 @@ class OpenAPIGenerator(SchemaRegistryMixin):
             operation['x-path-params-regex'] = metadata.path_params_regex
 
         path_item[metadata.method.lower()] = operation
-
-        if metadata.api_versions:
-            path_item['x-api-versions'] = [version.value for version in metadata.api_versions]
-
-        version_overrides = self._build_version_overrides(metadata)
-        if version_overrides:
-            path_item['x-api-version-overrides'] = version_overrides
 
         return path_item
 
@@ -287,21 +252,11 @@ class OpenAPIGenerator(SchemaRegistryMixin):
             seen_operations.add(key)
 
             if metadata.path in paths:
-                # Merge with existing path item (multiple methods on same path). The merge unions the
-                # path-level extensions (`x-api-versions`, `x-api-version-overrides`) that each method
-                # contributes, so every method's versions and overrides are preserved.
+                # Multiple methods (e.g. GET and POST) share this path; merge their path items so
+                # every method's operation and operation-level extensions survive.
                 existing_path_item = paths[metadata.path]
                 new_path_item = self._build_path_item(metadata)
-                # A path is served as a whole: all its methods must declare the same `x-api-versions`.
-                existing_versions = existing_path_item.get('x-api-versions')
-                new_versions = new_path_item.get('x-api-versions')
-                if existing_versions is not None and new_versions is not None \
-                        and set(existing_versions) != set(new_versions):
-                    raise ValueError(
-                        f'Path {metadata.path}: methods declare conflicting x-api-versions: '
-                        f'{existing_versions} vs {new_versions}'
-                    )
-                paths[metadata.path] = merge_path_items(existing_path_item, new_path_item)
+                paths[metadata.path] = deep_merge(existing_path_item, new_path_item)
             else:
                 paths[metadata.path] = self._build_path_item(metadata)
 

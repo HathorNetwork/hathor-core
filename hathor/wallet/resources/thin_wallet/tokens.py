@@ -146,14 +146,8 @@ class TokenResource(Resource):
 
 
 TokenResource.openapi = {
-    '/thin_wallet/token': {
+    '/v1a/thin_wallet/token': {
         'x-visibility': 'public',
-        'x-api-versions': ['v1a', 'v2'],
-        'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
-        },
         'x-rate-limit': {
             'global': [
                 {
@@ -254,5 +248,110 @@ TokenResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/thin_wallet/token': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
+        'get': {
+            'tags': ['wallet'],
+            'operationId': 'token',
+            'summary': 'Get information about a token if send token ID, otherwise return list of tokens',
+            'parameters': [
+                {
+                    'name': 'id',
+                    'in': 'query',
+                    'description': 'Token id',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'name': 'MyCoin',
+                                        'symbol': 'MYC',
+                                        'version': 1,
+                                        'mint': [
+                                            {
+                                                "tx_id": "00000299670db5814f69cede8b347f83"
+                                                         "0f73985eaa4cd1ce87c9a7c793771336",
+                                                "index": 0
+                                            }
+                                        ],
+                                        'melt': [
+                                            {
+                                                "tx_id": "00000299670db5814f69cede8b347f83"
+                                                         "0f73985eaa4cd1ce87c9a7c793771336",
+                                                "index": 1
+                                            }
+                                        ],
+                                        'can_mint': True,
+                                        'can_melt': True,
+                                        'total': 50000,
+                                        'transactions_count': 3,
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid token id',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid token id',
+                                    }
+                                },
+                                'success_list': {
+                                    'summary': 'List of tokens success',
+                                    'value': {
+                                        'success': True,
+                                        'truncated': False,
+                                        'tokens': [
+                                            {
+                                                'uid': "00000b1b8b1df522489f9aa38cba82a4"
+                                                       "50b1fe58093e97bc94a0275fbeb226b2",
+                                                'name': 'MyCoin',
+                                                'symbol': 'MYC',
+                                                'version': 1,
+                                            },
+                                            {
+                                                'uid': "00000093f76f44c664907a017bbf9ef6"
+                                                       "bb289692e30c7cf7361e6872c5ee1796",
+                                                'name': 'New Token',
+                                                'symbol': 'NTK',
+                                                'version': 1,
+                                            },
+                                        ],
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }
