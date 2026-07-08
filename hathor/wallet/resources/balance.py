@@ -38,14 +38,8 @@ class BalanceResource(Resource):
 
 
 BalanceResource.openapi = {
-    '/wallet/balance': {
+    '/v1a/wallet/balance': {
         'x-visibility': 'private',
-        'x-api-versions': ['v1a', 'v2'],
-        'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
-        },
         'get': {
             'tags': ['private_wallet'],
             'operationId': 'wallet_address',
@@ -72,5 +66,36 @@ BalanceResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/wallet/balance': {
+        'x-visibility': 'private',
+        'get': {
+            'tags': ['private_wallet'],
+            'operationId': 'wallet_address',
+            'summary': 'Balance',
+            'description': 'Returns the current balance of the wallet (available and locked tokens)',
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'balance': {
+                                            'available': 5000,
+                                            'locked': 1000
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

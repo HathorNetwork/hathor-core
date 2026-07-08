@@ -27,7 +27,7 @@ class TestGenerateNginxConfig:
         generate_nginx_config(openapi, out_file=out)
         config = out.getvalue()
 
-        # a path without `x-api-versions` is exposed only under the default (v1a)
+        # a path without a version prefix is exposed only under the default (v1a)
         assert 'location ~ ^/v1a/example/?$ {' in config
         assert 'location ~ ^/v2/example/?$ {' not in config
         # websockets are unversioned and follow the default, so only v1a serves them
@@ -41,8 +41,15 @@ class TestGenerateNginxConfig:
     def test_explicit_both_versions_emits_under_both(self) -> None:
         openapi = {
             'paths': {
-                '/example': {
-                    'x-api-versions': ['v1a', 'v2'],
+                '/v1a/example': {
+                    'get': {
+                        'x-visibility': 'public',
+                        'x-rate-limit': {
+                            'global': [{'rate': '10r/s', 'burst': 10, 'delay': 0}],
+                        },
+                    },
+                },
+                '/v2/example': {
                     'get': {
                         'x-visibility': 'public',
                         'x-rate-limit': {
@@ -63,8 +70,7 @@ class TestGenerateNginxConfig:
     def test_v2_only_excludes_v1a(self) -> None:
         openapi = {
             'paths': {
-                '/example': {
-                    'x-api-versions': ['v2'],
+                '/v2/example': {
                     'get': {
                         'x-visibility': 'public',
                         'x-rate-limit': {
@@ -82,13 +88,20 @@ class TestGenerateNginxConfig:
         assert 'location ~ ^/v1a/example/?$ {' not in config
         assert 'location ~ ^/v2/example/?$ {' in config
 
-    def test_operation_level_api_versions(self) -> None:
+    def test_versions_share_one_rate_limit_zone(self) -> None:
         openapi = {
             'paths': {
-                '/example': {
+                '/v1a/example': {
                     'get': {
                         'x-visibility': 'public',
-                        'x-api-versions': ['v1a', 'v2'],
+                        'x-rate-limit': {
+                            'global': [{'rate': '10r/s', 'burst': 10, 'delay': 0}],
+                        },
+                    },
+                },
+                '/v2/example': {
+                    'get': {
+                        'x-visibility': 'public',
                         'x-rate-limit': {
                             'global': [{'rate': '10r/s', 'burst': 10, 'delay': 0}],
                         },
@@ -101,51 +114,9 @@ class TestGenerateNginxConfig:
         generate_nginx_config(openapi, out_file=out)
         config = out.getvalue()
 
-        assert 'location ~ ^/v1a/example/?$ {' in config
-        assert 'location ~ ^/v2/example/?$ {' in config
-
-    def test_unknown_api_version_raises_error(self) -> None:
-        openapi = {
-            'paths': {
-                '/example': {
-                    'x-api-versions': ['v1a', 'v3'],
-                    'get': {
-                        'x-visibility': 'public',
-                        'x-rate-limit': {
-                            'global': [{'rate': '10r/s', 'burst': 10, 'delay': 0}],
-                        },
-                    },
-                },
-            },
-        }
-
-        with pytest.raises(ValueError, match='unknown API version `v3`'):
-            generate_nginx_config(openapi, out_file=StringIO())
-
-    def test_conflicting_public_api_versions_raise_error(self) -> None:
-        openapi = {
-            'paths': {
-                '/example': {
-                    'get': {
-                        'x-visibility': 'public',
-                        'x-api-versions': ['v1a', 'v2'],
-                        'x-rate-limit': {
-                            'global': [{'rate': '1r/s', 'burst': 1, 'delay': 0}],
-                        },
-                    },
-                    'post': {
-                        'x-visibility': 'public',
-                        'x-api-versions': ['v1a'],
-                        'x-rate-limit': {
-                            'global': [{'rate': '1r/s', 'burst': 1, 'delay': 0}],
-                        },
-                    },
-                },
-            },
-        }
-
-        with pytest.raises(ValueError, match='conflicting x-api-versions'):
-            generate_nginx_config(openapi, out_file=StringIO())
+        # the zone is keyed by the unversioned path, so both versions share a single definition
+        assert config.count('zone=global__example__0:') == 1
+        assert config.count('limit_req zone=global__example__0') == 2
 
     def test_mixed_visibility_excludes_private_method_from_limit_except(self) -> None:
         openapi = {
@@ -171,7 +142,7 @@ class TestGenerateNginxConfig:
         generate_nginx_config(openapi, out_file=out)
         config = out.getvalue()
 
-        # without `x-api-versions` the path defaults to v1a only
+        # without a version prefix the path defaults to v1a only
         assert 'location ~ ^/v1a/example/?$ {' in config
         assert 'location ~ ^/v2/example/?$ {' not in config
         assert config.count('limit_except OPTIONS POST { deny all; }') == 1

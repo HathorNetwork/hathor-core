@@ -125,14 +125,8 @@ class UtxoSearchResource(Resource):
 
 
 UtxoSearchResource.openapi = {
-    '/utxo_search': {
+    '/v1a/utxo_search': {
         'x-visibility': 'public',
-        'x-api-versions': ['v1a', 'v2'],
-        'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
-        },
         'x-rate-limit': {
             'global': [
                 {
@@ -247,5 +241,124 @@ UtxoSearchResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/utxo_search': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '10r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '1r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
+        'get': {
+            'tags': ['utxo'],
+            'operationId': 'utxo_search',
+            'summary': 'Search UTXOs with given address/token/amount',
+            'description': (
+              'For a given token-uid, address and target-amount, get a list of UTXOs that are candidates to be inputs '
+              'for a total of target-value. The resulsts will try to include the first UTXO with value higher or '
+              'equal value as target-amount. No more than 256 entries will ever be returned by this API.'
+             ),
+            'parameters': [
+                {
+                    'name': 'token_uid',
+                    'in': 'query',
+                    'description': 'The UID of the token formatted as a HEX string, use "00" for HTR',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'target_amount',
+                    'in': 'query',
+                    'description': 'The target amount that the UTXOs should sum-up to, 1 means 0.01 HTR',
+                    'required': True,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'address',
+                    'in': 'query',
+                    'description': 'The address that all UTXOs have',
+                    'required': True,
+                    'schema': {
+                        'type': 'str'
+                    }
+                },
+                {
+                    'name': 'target_timestamp',
+                    'in': 'query',
+                    'description': (
+                        'What timestamp to consider for timelocked outputs, by default uses the timestamp '
+                        'from the current best block'
+                    ),
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'target_height',
+                    'in': 'query',
+                    'description': (
+                        'What timestamp to consider for reward outputs (which are heightlocked), by default uses the '
+                        'height from the current best block'
+                    ),
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success UTXO search',
+                                    'value': {
+                                        'success': True,
+                                        'utxos': [
+                                            {
+                                                'txid': (
+                                                    '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792'
+                                                ),
+                                                'index': 0,
+                                                'amount': 1_000_000_000,
+                                                'timelock': None,
+                                                'heightlock': 10,
+                                            },
+                                        ]
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid parameter',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Failed to parse \'address\': foobar'
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

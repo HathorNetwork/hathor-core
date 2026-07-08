@@ -8,10 +8,7 @@ import os
 from collections.abc import Iterator
 from enum import Enum
 from json import dumps as json_dumps
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TextIO
-
-if TYPE_CHECKING:
-    from hathor.api_util import APIVersion
+from typing import Any, NamedTuple, Optional, TextIO
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
 
@@ -113,8 +110,6 @@ _OPENAPI_EXTENSIONS = (
     'x-rate-limit',
     'x-path-params-regex',
     'x-proxy-buffers',
-    'x-api-versions',
-    'x-api-version-overrides',
 )
 
 
@@ -171,23 +166,6 @@ def _resolve_path_operation_extension(
         raise ValueError(f'Path `{path}` has conflicting {ext} values across relevant methods: {methods_str}')
 
     return next(iter(values_by_method.values()))
-
-
-def _resolve_path_api_versions(
-    path: str,
-    params: dict[str, Any],
-    *,
-    methods: list[str] | None = None,
-) -> list[APIVersion]:
-    """Resolve the API versions a path is served under from its `x-api-versions` extension.
-
-    Resolution is delegated to `hathor.api.openapi.versioning`, the single source of truth shared
-    with the docs. nginx emits one location per listed version, so any version a path does not
-    declare falls through to that version's `403` block. `methods` limits the operation-level lookup
-    to this path's public methods.
-    """
-    from hathor.api.openapi.versioning import resolve_api_versions
-    return resolve_api_versions(path, params, methods=methods)
 
 
 def _get_public_methods(params: dict[str, Any], *, override: str) -> list[str]:
@@ -248,10 +226,14 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     """
     from datetime import datetime
 
+    from hathor.api.openapi.versioning import path_version_prefix, prefix_unversioned_paths
     from hathor.api_util import DEFAULT_API_VERSIONS, APIVersion
+
+    openapi = prefix_unversioned_paths(openapi)
 
     locations: dict[str, dict[str, Any]] = {}
     limit_rate_zones: list[RateLimitZone] = []
+    seen_zone_names: set[str] = set()
     for path, params in openapi['paths'].items():
         visibility, did_fallback, did_override = _resolve_path_visibility(
             params,
@@ -267,13 +249,12 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
 
         public_methods = _get_public_methods(params, override=override)
 
+        # `prefix_unversioned_paths` above guarantees every path now carries a version prefix.
+        version = path_version_prefix(path)
+        assert version is not None, f'path `{path}` is missing a version prefix'
         location_params: dict[str, Any] = {
             'rate_limits': [],
-            'api_versions': _resolve_path_api_versions(
-                path,
-                params,
-                methods=public_methods,
-            ),
+            'version': version,
             'path_vars_re': _resolve_path_operation_extension(
                 path,
                 params,
@@ -307,7 +288,10 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
             warn(f'Path `{path}` is public but has no rate limits, ignoring')
             continue
 
-        path_key = path.lower().replace('/', '__').replace('.', '__').replace('{', '').replace('}', '')
+        # Rate-limit zones are keyed by the unversioned path so every version of an endpoint shares a
+        # single zone and its budget; the version lives in the location regex, not in the zone name.
+        unversioned_path = path[len(f'/{version.value}'):]
+        path_key = unversioned_path.lower().replace('/', '__').replace('.', '__').replace('{', '').replace('}', '')
 
         if not disable_rate_limits:
             global_rate_limits = rate_limits.get('global', [])
@@ -316,12 +300,13 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
                 name = f'global{path_key}__{i}'  # must match [a-z][a-z0-9_]*
                 size = '32k'  # min is 32k which is enough
                 rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-                zone = RateLimitZone(name, '$global_key', size, rate)
-                limit_rate_zones.append(zone)
+                if name not in seen_zone_names:
+                    seen_zone_names.add(name)
+                    limit_rate_zones.append(RateLimitZone(name, '$global_key', size, rate))
                 # limit, for location level `limit_req`
                 burst = rate_limit.get('burst')
                 delay = rate_limit.get('delay')
-                location_params['rate_limits'].append(RateLimit(zone.name, burst, delay))
+                location_params['rate_limits'].append(RateLimit(name, burst, delay))
 
             per_ip_rate_limits = rate_limits.get('per-ip', [])
             for i, rate_limit in enumerate(per_ip_rate_limits):
@@ -329,12 +314,13 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
                 # zone, for top level `limit_req_zone`
                 size = '10m'
                 rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-                zone = RateLimitZone(name, '$per_ip_key', size, rate)
-                limit_rate_zones.append(zone)
+                if name not in seen_zone_names:
+                    seen_zone_names.add(name)
+                    limit_rate_zones.append(RateLimitZone(name, '$per_ip_key', size, rate))
                 # limit, for location level `limit_req`
                 burst = rate_limit.get('burst')
                 delay = rate_limit.get('delay')
-                location_params['rate_limits'].append(RateLimit(zone.name, burst, delay))
+                location_params['rate_limits'].append(RateLimit(name, burst, delay))
 
         locations[path] = location_params
 
@@ -500,11 +486,11 @@ server {{
     }}''')
 
         for location_path, location_params in locations.items():
-            if api_prefix not in location_params['api_versions']:
+            if location_params['version'] != api_prefix:
                 continue
             location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
             location_open = f'''
-    location ~ ^/{api_prefix}/{location_path}/?$ {{
+    location ~ ^/{location_path}/?$ {{
         include cors_params;
         include proxy_params;
 '''

@@ -113,8 +113,8 @@ class APIVersion(StrEnum):
     V2 = 'v2'
 
 
-# API versions a path is served under when it does not declare `x-api-versions`. Paths without an
-# explicit declaration are exposed only under v1a.
+# API versions a path is served under when its OpenAPI path carries no version prefix. Such paths
+# are exposed only under v1a.
 DEFAULT_API_VERSIONS: tuple[APIVersion, ...] = (APIVersion.V1A,)
 
 

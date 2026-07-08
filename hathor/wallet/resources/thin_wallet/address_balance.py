@@ -152,14 +152,8 @@ class AddressBalanceResource(Resource):
 
 
 AddressBalanceResource.openapi = {
-    '/thin_wallet/address_balance': {
+    '/v1a/thin_wallet/address_balance': {
         'x-visibility': 'public',
-        'x-api-versions': ['v1a', 'v2'],
-        'x-api-version-overrides': {
-            # TODO(decimals): v2 mirrors v1a here. Add the v2 request/response schema
-            # delta (decimal token amounts) when the v2 shape is finalized.
-            'v2': {},
-        },
         'x-rate-limit': {
             'global': [
                 {
@@ -231,5 +225,81 @@ AddressBalanceResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/thin_wallet/address_balance': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
+        'get': {
+            'tags': ['wallet'],
+            'operationId': 'address_balance',
+            'summary': 'Balance of an address',
+            'parameters': [
+                {
+                    'name': 'address',
+                    'in': 'query',
+                    'description': 'Address to get balance',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'total_transactions': 5,
+                                        'tokens_data': {
+                                            '00': {
+                                                'name': 'Hathor',
+                                                'symbol': 'HTR',
+                                                'received': 1000,
+                                                'spent': 800,
+                                            },
+                                            '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702': {
+                                                'name': 'NewCoin',
+                                                'symbol': 'NCN',
+                                                'received': 100,
+                                                'spent': 20,
+                                            },
+                                        }
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid address',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'The address xx is invalid',
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

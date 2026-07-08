@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 
 def get_base_path() -> Path:
@@ -86,7 +86,7 @@ def main():
                         nargs='?', help='Output file where OpenAPI json will be written')
     args = parser.parse_args()
 
-    from hathor.api.openapi.versioning import expand_openapi_versions
+    from hathor.api.openapi.versioning import prefix_unversioned_paths
 
-    openapi = expand_openapi_versions(get_openapi_dict())
+    openapi = prefix_unversioned_paths(get_openapi_dict())
     json.dump(openapi, args.out, indent=args.indent)

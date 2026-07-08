@@ -171,21 +171,21 @@ class ResourcesBuilder:
         cpu = get_cpu_profiler()
 
         # TODO get this from a file. How should we do with the factory?
-        root = Resource()
+        root_v1a = Resource()
         root_v2 = Resource()
 
-        wallet_resource = Resource()
+        wallet_resource_v1a = Resource()
         wallet_resource_v2 = Resource()
-        root.putChild(b'wallet', wallet_resource)
+        root_v1a.putChild(b'wallet', wallet_resource_v1a)
         root_v2.putChild(b'wallet', wallet_resource_v2)
-        thin_wallet_resource = Resource()
+        thin_wallet_resource_v1a = Resource()
         thin_wallet_resource_v2 = Resource()
-        root.putChild(b'thin_wallet', thin_wallet_resource)
+        root_v1a.putChild(b'thin_wallet', thin_wallet_resource_v1a)
         root_v2.putChild(b'thin_wallet', thin_wallet_resource_v2)
         contracts_resource = Resource()
-        wallet_resource.putChild(b'nano-contract', contracts_resource)
+        wallet_resource_v1a.putChild(b'nano-contract', contracts_resource)
         p2p_resource = Resource()
-        root.putChild(b'p2p', p2p_resource)
+        root_v1a.putChild(b'p2p', p2p_resource)
         graphviz = Resource()
         # XXX: reach the resource through /graphviz/ too, previously it was a leaf so this wasn't a problem
         graphviz.putChild(b'', graphviz)
@@ -195,39 +195,39 @@ class ResourcesBuilder:
             graphviz.putChild(b'neighbours.' + bfmt, GraphvizNeighboursResource(self.manager, format=fmt))
 
         resources = [
-            (b'status', StatusResource(self.manager), root),
-            (b'version', VersionResource(self.manager, self._feature_service), root),
-            (b'create_tx', CreateTxResource(self.manager, APIVersion.V1A), root),
+            (b'status', StatusResource(self.manager), root_v1a),
+            (b'version', VersionResource(self.manager, self._feature_service), root_v1a),
+            (b'create_tx', CreateTxResource(self.manager, APIVersion.V1A), root_v1a),
             (b'create_tx', CreateTxResource(self.manager, APIVersion.V2), root_v2),
-            (b'decode_tx', DecodeTxResource(self.manager), root),
-            (b'validate_address', ValidateAddressResource(self.manager), root),
+            (b'decode_tx', DecodeTxResource(self.manager), root_v1a),
+            (b'validate_address', ValidateAddressResource(self.manager), root_v1a),
             (b'push_tx',
                 PushTxResource(self.manager, self._args.max_output_script_size, self._args.allow_non_standard_script),
-                root),
-            (b'graphviz', graphviz, root),
-            (b'transaction', TransactionResource(self.manager), root),
-            (b'block_at_height', BlockAtHeightResource(self.manager), root),
-            (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root),
-            (b'dashboard_tx', DashboardTransactionResource(self.manager), root),
-            (b'profiler', ProfilerResource(self.manager), root),
-            (b'top', CPUProfilerResource(self.manager, cpu), root),
-            (b'mempool', MempoolResource(self.manager), root),
-            (b'health', HealthcheckResource(self.manager), root),
+                root_v1a),
+            (b'graphviz', graphviz, root_v1a),
+            (b'transaction', TransactionResource(self.manager), root_v1a),
+            (b'block_at_height', BlockAtHeightResource(self.manager), root_v1a),
+            (b'transaction_acc_weight', TransactionAccWeightResource(self.manager), root_v1a),
+            (b'dashboard_tx', DashboardTransactionResource(self.manager), root_v1a),
+            (b'profiler', ProfilerResource(self.manager), root_v1a),
+            (b'top', CPUProfilerResource(self.manager, cpu), root_v1a),
+            (b'mempool', MempoolResource(self.manager), root_v1a),
+            (b'health', HealthcheckResource(self.manager), root_v1a),
             # mining
-            (b'mining', MiningResource(self.manager), root),
-            (b'getmininginfo', MiningInfoResource(self.manager), root),
-            (b'get_block_template', GetBlockTemplateResource(self.manager, settings), root),
-            (b'submit_block', SubmitBlockResource(self.manager), root),
-            (b'tx_parents', TxParentsResource(self.manager), root),
+            (b'mining', MiningResource(self.manager), root_v1a),
+            (b'getmininginfo', MiningInfoResource(self.manager), root_v1a),
+            (b'get_block_template', GetBlockTemplateResource(self.manager, settings), root_v1a),
+            (b'submit_block', SubmitBlockResource(self.manager), root_v1a),
+            (b'tx_parents', TxParentsResource(self.manager), root_v1a),
             # /thin_wallet
-            (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource),
-            (b'address_balance', AddressBalanceResource(self.manager, APIVersion.V1A), thin_wallet_resource),
+            (b'address_history', AddressHistoryResource(self.manager), thin_wallet_resource_v1a),
+            (b'address_balance', AddressBalanceResource(self.manager, APIVersion.V1A), thin_wallet_resource_v1a),
             (b'address_balance', AddressBalanceResource(self.manager, APIVersion.V2), thin_wallet_resource_v2),
-            (b'address_search', AddressSearchResource(self.manager), thin_wallet_resource),
-            (b'send_tokens', SendTokensThinResource(self.manager), thin_wallet_resource),
-            (b'token', TokenResource(self.manager, APIVersion.V1A), thin_wallet_resource),
+            (b'address_search', AddressSearchResource(self.manager), thin_wallet_resource_v1a),
+            (b'send_tokens', SendTokensThinResource(self.manager), thin_wallet_resource_v1a),
+            (b'token', TokenResource(self.manager, APIVersion.V1A), thin_wallet_resource_v1a),
             (b'token', TokenResource(self.manager, APIVersion.V2), thin_wallet_resource_v2),
-            (b'token_history', TokenHistoryResource(self.manager), thin_wallet_resource),
+            (b'token_history', TokenHistoryResource(self.manager), thin_wallet_resource_v1a),
             # /wallet/nano-contract
             (b'match-value', NanoContractMatchValueResource(self.manager), contracts_resource),
             (b'decode', NanoContractDecodeResource(self.manager), contracts_resource),
@@ -244,13 +244,13 @@ class ResourcesBuilder:
                     feature_service=self._feature_service,
                     tx_storage=self.manager.tx_storage
                 ),
-                root
+                root_v1a
             )
         ]
         # XXX: only enable UTXO search API if the index is enabled
         if self._args.utxo_index:
             resources.extend([
-                (b'utxo_search', UtxoSearchResource(self.manager, APIVersion.V1A), root),
+                (b'utxo_search', UtxoSearchResource(self.manager, APIVersion.V1A), root_v1a),
                 (b'utxo_search', UtxoSearchResource(self.manager, APIVersion.V2), root_v2),
             ])
 
@@ -262,29 +262,29 @@ class ResourcesBuilder:
                 NanoContractStateResource,
                 NCDryRunResource,
             )
-            nc_resource = Resource()
+            nc_resource_v1a = Resource()
             nc_resource_v2 = Resource()
-            root.putChild(b'nano_contract', nc_resource)
+            root_v1a.putChild(b'nano_contract', nc_resource_v1a)
             root_v2.putChild(b'nano_contract', nc_resource_v2)
 
             blueprint_resource = Resource()
-            nc_resource.putChild(b'blueprint', blueprint_resource)
+            nc_resource_v1a.putChild(b'blueprint', blueprint_resource)
             blueprint_resource.putChild(b'info', BlueprintInfoResource(self.manager))
             blueprint_resource.putChild(b'builtin', BlueprintBuiltinResource(self.manager))
             blueprint_resource.putChild(b'on_chain', BlueprintOnChainResource(self.manager))
             blueprint_resource.putChild(b'source', BlueprintSourceCodeResource(self.manager))
-            nc_resource.putChild(b'history', NanoContractHistoryResource(self.manager))
-            nc_resource.putChild(b'state', NanoContractStateResource(self.manager, APIVersion.V1A))
+            nc_resource_v1a.putChild(b'history', NanoContractHistoryResource(self.manager))
+            nc_resource_v1a.putChild(b'state', NanoContractStateResource(self.manager, APIVersion.V1A))
             nc_resource_v2.putChild(b'state', NanoContractStateResource(self.manager, APIVersion.V2))
-            nc_resource.putChild(b'creation', NCCreationResource(self.manager))
-            nc_resource.putChild(b'logs', NCExecLogsResource(self.manager))
-            nc_resource.putChild(b'dry_run', NCDryRunResource(
+            nc_resource_v1a.putChild(b'creation', NCCreationResource(self.manager))
+            nc_resource_v1a.putChild(b'logs', NCExecLogsResource(self.manager))
+            nc_resource_v1a.putChild(b'dry_run', NCDryRunResource(
                 self.manager.tx_storage, self.manager.consensus_algorithm.block_executor
             ))
 
         if self._args.enable_debug_api:
             debug_resource = Resource()
-            root.putChild(b'_debug', debug_resource)
+            root_v1a.putChild(b'_debug', debug_resource)
             resources.extend([
                 (b'log', DebugLogResource(), debug_resource),
                 (b'raise', DebugRaiseResource(self.manager.reactor), debug_resource),
@@ -293,7 +293,7 @@ class ResourcesBuilder:
             ])
         if self._args.enable_crash_api:
             crash_resource = Resource()
-            root.putChild(b'_crash', crash_resource)
+            root_v1a.putChild(b'_crash', crash_resource)
             resources.extend([
                 (b'exit', DebugCrashResource(self.manager.reactor), crash_resource),
                 (b'mess_around', DebugMessAroundResource(self.manager), crash_resource),
@@ -304,22 +304,22 @@ class ResourcesBuilder:
 
         if self.manager.stratum_factory is not None:
             from hathor.stratum.resources import MiningStatsResource
-            root.putChild(b'miners', MiningStatsResource(self.manager))
+            root_v1a.putChild(b'miners', MiningStatsResource(self.manager))
 
         with_wallet_api = bool(self.wallet and self._args.wallet_enable_api)
         if with_wallet_api:
             wallet_resources = (
                 # /wallet
-                (b'balance', BalanceResource(self.manager, APIVersion.V1A), wallet_resource),
+                (b'balance', BalanceResource(self.manager, APIVersion.V1A), wallet_resource_v1a),
                 (b'balance', BalanceResource(self.manager, APIVersion.V2), wallet_resource_v2),
-                (b'history', HistoryResource(self.manager), wallet_resource),
-                (b'address', AddressResource(self.manager), wallet_resource),
-                (b'send_tokens', SendTokensResource(self.manager, settings, APIVersion.V1A), wallet_resource),
+                (b'history', HistoryResource(self.manager), wallet_resource_v1a),
+                (b'address', AddressResource(self.manager), wallet_resource_v1a),
+                (b'send_tokens', SendTokensResource(self.manager, settings, APIVersion.V1A), wallet_resource_v1a),
                 (b'send_tokens', SendTokensResource(self.manager, settings, APIVersion.V2), wallet_resource_v2),
-                (b'sign_tx', SignTxResource(self.manager), wallet_resource),
-                (b'unlock', UnlockWalletResource(self.manager), wallet_resource),
-                (b'lock', LockWalletResource(self.manager), wallet_resource),
-                (b'state', StateWalletResource(self.manager), wallet_resource),
+                (b'sign_tx', SignTxResource(self.manager), wallet_resource_v1a),
+                (b'unlock', UnlockWalletResource(self.manager), wallet_resource_v1a),
+                (b'lock', LockWalletResource(self.manager), wallet_resource_v1a),
+                (b'state', StateWalletResource(self.manager), wallet_resource_v1a),
             )
             for url_path, resource, parent in wallet_resources:
                 parent.putChild(url_path, resource)
@@ -330,26 +330,26 @@ class ResourcesBuilder:
                                                  address_index=self.manager.tx_storage.indexes.addresses)
         if self._args.disable_ws_history_streaming:
             ws_factory.disable_history_streaming()
-        root.putChild(b'ws', WebSocketResource(ws_factory))
+        root_v1a.putChild(b'ws', WebSocketResource(ws_factory))
 
         mining_ws_factory: MiningWebsocketFactory | None = None
         if settings.CONSENSUS_ALGORITHM.is_pow():
             # Mining websocket resource
             mining_ws_factory = MiningWebsocketFactory(self.manager)
-            root.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
+            root_v1a.putChild(b'mining_ws', WebSocketResource(mining_ws_factory))
 
         ws_factory.subscribe(self.manager.pubsub)
 
         # Event websocket resource
         if self._args.x_enable_event_queue or self._args.enable_event_queue:
-            root.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
-            root.putChild(b'event', EventResource(self.manager._event_manager))
+            root_v1a.putChild(b'event_ws', WebSocketResource(self.event_ws_factory))
+            root_v1a.putChild(b'event', EventResource(self.manager._event_manager))
 
         # Websocket stats resource
-        root.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
+        root_v1a.putChild(b'websocket_stats', WebsocketStatsResource(ws_factory))
 
         real_root = Resource()
-        real_root.putChild(APIVersion.V1A.encode('ascii'), root)
+        real_root.putChild(APIVersion.V1A.encode('ascii'), root_v1a)
         real_root.putChild(APIVersion.V2.encode('ascii'), root_v2)
 
         from hathor.profiler.site import SiteProfiler
