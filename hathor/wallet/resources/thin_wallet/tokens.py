@@ -69,7 +69,7 @@ class TokenResource(Resource):
             'melt': melt,
             'can_mint': token_info.can_mint(),
             'can_melt': token_info.can_melt(),
-            'total': token_info.get_total(),
+            'total': self.api_version.unsigned_amount_to_response(token_info.get_total()),
             'transactions_count': transactions_count,
         }
         return data
@@ -249,8 +249,6 @@ TokenResource.openapi = {
             }
         }
     },
-    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
-    # (decimal token amounts) once the v2 API shape is finalized.
     '/v2/thin_wallet/token': {
         'x-visibility': 'public',
         'x-rate-limit': {
@@ -313,7 +311,7 @@ TokenResource.openapi = {
                                         ],
                                         'can_mint': True,
                                         'can_melt': True,
-                                        'total': 50000,
+                                        'total': '1.0',
                                         'transactions_count': 3,
                                     }
                                 },

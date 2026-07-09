@@ -11,14 +11,12 @@ from hathor.api_util import (
     get_args,
     get_missing_params_msg,
     parse_args,
-    parse_int,
     set_cors,
 )
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
-from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from twisted.web.http import Request
@@ -84,7 +82,7 @@ class UtxoSearchResource(Resource):
 
         # target amount parameter must be an integer
         try:
-            target_amount = UnsignedAmount(parse_int(args['target_amount']))
+            target_amount = self.api_version.unsigned_amount_from_request(args['target_amount'])
         except ValueError as e:
             return json_dumpb({
                 'success': False,
@@ -116,7 +114,7 @@ class UtxoSearchResource(Resource):
         utxo_list = [{
             'txid': utxo.tx_id.hex(),
             'index': utxo.index,
-            'amount': utxo.amount,
+            'amount': self.api_version.unsigned_amount_to_response(utxo.amount),
             'timelock': utxo.timelock,
             'heightlock': utxo.heightlock,
         } for utxo in iter_utxos]
@@ -166,7 +164,7 @@ UtxoSearchResource.openapi = {
                 {
                     'name': 'target_amount',
                     'in': 'query',
-                    'description': 'The target amount that the UTXOs should sum-up to, 1 means 0.01 HTR',
+                    'description': 'The target amount that the UTXOs should sum-up to, with 2 decimals',
                     'required': True,
                     'schema': {
                         'type': 'int'
@@ -243,8 +241,6 @@ UtxoSearchResource.openapi = {
             }
         }
     },
-    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
-    # (decimal token amounts) once the v2 API shape is finalized.
     '/v2/utxo_search': {
         'x-visibility': 'public',
         'x-rate-limit': {
@@ -285,7 +281,7 @@ UtxoSearchResource.openapi = {
                 {
                     'name': 'target_amount',
                     'in': 'query',
-                    'description': 'The target amount that the UTXOs should sum-up to, 1 means 0.01 HTR',
+                    'description': 'The target amount that the UTXOs should sum-up to, with 18 decimals',
                     'required': True,
                     'schema': {
                         'type': 'int'
@@ -341,7 +337,7 @@ UtxoSearchResource.openapi = {
                                                     '339f47da87435842b0b1b528ecd9eac2495ce983b3e9c923a37e1befbe12c792'
                                                 ),
                                                 'index': 0,
-                                                'amount': 1_000_000_000,
+                                                'amount': '1.0',
                                                 'timelock': None,
                                                 'heightlock': 10,
                                             },
