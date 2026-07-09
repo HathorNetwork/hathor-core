@@ -51,7 +51,7 @@ class FeeHeader:
 
     def total_fee_amount(self) -> UnsignedAmount:
         """Sum fees amounts in this header and return as HTR"""
-        total_fee = 0
+        total_fee = UnsignedAmount.zero()
         for fee in self.get_fees():
             if fee.token_uid == self.settings.HATHOR_TOKEN_UID:
                 total_fee += fee.amount

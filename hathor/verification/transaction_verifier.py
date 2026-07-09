@@ -43,6 +43,7 @@ from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -291,9 +292,9 @@ class TransactionVerifier:
 
                 case TokenVersion.DEPOSIT:
                     if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, token_info.amount)
+                        withdraw += get_deposit_token_withdraw_amount(settings, UnsignedAmount(token_info.amount))
                     if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount)
+                        deposit += get_deposit_token_deposit_amount(settings, UnsignedAmount(token_info.amount))
 
                 case TokenVersion.FEE:
                     continue
@@ -342,9 +343,9 @@ class TransactionVerifier:
             return
         assert token_uid != HATHOR_TOKEN_UID
         if token_info.has_been_melted() and not token_info.can_melt:
-            raise ForbiddenMelt.from_token(token_info.amount, token_uid)
+            raise ForbiddenMelt.from_token(UnsignedAmount(token_info.amount), token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
-            raise ForbiddenMint(token_info.amount, token_uid)
+            raise ForbiddenMint(UnsignedAmount(token_info.amount), token_uid)
 
     def verify_version(self, tx: Transaction, params: VerificationParams) -> None:
         """Verify that the vertex version is valid."""
