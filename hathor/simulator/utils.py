@@ -164,6 +164,9 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
     if use_same_parents:
         tx2.parents = list(tx.parents)
     else:
+        # the best block timestamp may be ahead of the clock (e.g. blocks mined less than a second apart), and
+        # `get_new_tx_parents` requires a timestamp not older than the best block's
+        tx2.timestamp = max(tx2.timestamp, manager.get_timestamp_for_new_vertex())
         tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
 
     manager.cpu_mining_service.resolve(tx2)
