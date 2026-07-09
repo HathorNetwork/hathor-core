@@ -196,10 +196,12 @@ class FeeHeaderTest(unittest.TestCase):
         assert json['fees'][0] == {
             'token_uid': tx.get_token_uid(0).hex(),
             'amount': 100,
+            'amount_str': '1.0',
         }
         assert json['fees'][1] == {
             'token_uid': token1_uid.hex(),
             'amount': 200,
+            'amount_str': '2.0',
         }
 
     def test_to_json_without_fees(self) -> None:

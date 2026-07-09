@@ -27,10 +27,10 @@ class TokenData:
     name: str = ''
     symbol: str = ''
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, api_version: APIVersion) -> dict[str, Any]:
         return {
-            'received': self.received,
-            'spent': self.spent,
+            'received': api_version.unsigned_amount_to_response(self.received),
+            'spent': api_version.unsigned_amount_to_response(self.spent),
             'name': self.name,
             'symbol': self.symbol,
         }
@@ -140,7 +140,7 @@ class AddressBalanceResource(Resource):
                     # But better than get a 500 error
                     tokens_data[token_uid].name = '- (unable to fetch token information)'
                     tokens_data[token_uid].symbol = '- (unable to fetch token information)'
-            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict()
+            return_tokens_data[token_uid.hex()] = tokens_data[token_uid].to_dict(self.api_version)
 
         data: dict[str, Any] = {
             'success': True,
@@ -226,8 +226,6 @@ AddressBalanceResource.openapi = {
             }
         }
     },
-    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
-    # (decimal token amounts) once the v2 API shape is finalized.
     '/v2/thin_wallet/address_balance': {
         'x-visibility': 'public',
         'x-rate-limit': {
@@ -276,14 +274,14 @@ AddressBalanceResource.openapi = {
                                             '00': {
                                                 'name': 'Hathor',
                                                 'symbol': 'HTR',
-                                                'received': 1000,
-                                                'spent': 800,
+                                                'received': '1.0',
+                                                'spent': '1.0',
                                             },
                                             '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702': {
                                                 'name': 'NewCoin',
                                                 'symbol': 'NCN',
-                                                'received': 100,
-                                                'spent': 20,
+                                                'received': '1.0',
+                                                'spent': '1.0',
                                             },
                                         }
                                     }

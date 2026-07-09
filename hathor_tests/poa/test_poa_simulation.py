@@ -471,7 +471,7 @@ class PoaSimulationTest(SimulatorTestCase):
         script = P2PKH.create_output_script(base58.b58decode(address))
         signer_id = signer._signer_id
 
-        tokens = 100_000
+        tokens = 100_000_00
         block_timestamp = 1718894758
         min_block_weight = 0
         min_tx_weight = 0
@@ -496,9 +496,9 @@ class PoaSimulationTest(SimulatorTestCase):
             GENESIS_TX1_NONCE=0,
             GENESIS_TX2_NONCE=0,
             DISPLAY_DECIMAL_PLACES=0,
-            TOKEN_AMOUNT_V1_DECIMAL_PLACES=0,
-            TOKEN_AMOUNT_V2_DECIMAL_PLACES=0,
-            GENESIS_TOKEN_MAIN_UNITS=tokens,
+            TOKEN_AMOUNT_V1_DECIMAL_PLACES=2,
+            TOKEN_AMOUNT_V2_DECIMAL_PLACES=2,
+            GENESIS_TOKEN_MAIN_UNITS=tokens // 100,
             TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=100,
             BLOCKS_PER_HALVING=None,
             INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
@@ -542,7 +542,7 @@ class PoaSimulationTest(SimulatorTestCase):
             parents=[self.simulator.settings.GENESIS_TX1_HASH, self.simulator.settings.GENESIS_TX2_HASH],
             inputs=[TxInput(self.simulator.settings.GENESIS_BLOCK_HASH, 0, b'')],
             outputs=[
-                TxOutput(UnsignedAmount.from_v1(1_000_000_000_000), script, 0b00000001),
+                TxOutput(UnsignedAmount.from_v1(1_000_000_000_000_00), script, 0b00000001),
                 TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001),
                 TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001),
             ],

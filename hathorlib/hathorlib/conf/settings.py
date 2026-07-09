@@ -10,6 +10,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator, mo
 from typing_extensions import Self
 
 from hathorlib.conf.utils import parse_hex_str
+from hathorlib.token_amount import UnsignedAmount
 
 HATHOR_TOKEN_UID: bytes = b'\x00'
 
@@ -116,6 +117,10 @@ class HathorSettings(BaseModel):
 
     # Fee rate settings in V1 decimals (that is, 0.01 HTR)
     FEE_PER_OUTPUT_V1: int = 1
+
+    @property
+    def FEE_TOKEN_AMOUNT_PER_OUTPUT(self) -> UnsignedAmount:
+        return UnsignedAmount.from_v1(self.FEE_PER_OUTPUT_V1)
 
     @property
     def FEE_DIVISOR(self) -> int:
@@ -570,6 +575,9 @@ class HathorSettings(BaseModel):
 
     @model_validator(mode='after')
     def _validate_token_amount_decimal_places(self) -> Self:
+        if self.TOKEN_AMOUNT_V1_DECIMAL_PLACES < 2 or self.TOKEN_AMOUNT_V2_DECIMAL_PLACES < 2:
+            raise ValueError('number of decimal places must be greater than or equal to 2')
+
         if self.TOKEN_AMOUNT_V2_DECIMAL_PLACES < self.TOKEN_AMOUNT_V1_DECIMAL_PLACES:
             raise ValueError(
                 'TOKEN_AMOUNT_V2_DECIMAL_PLACES must be greater than or equal to TOKEN_AMOUNT_V1_DECIMAL_PLACES'

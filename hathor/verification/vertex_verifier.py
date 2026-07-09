@@ -3,6 +3,7 @@
 
 from typing import Optional
 
+from htr_lib import UnsignedAmount
 from typing_extensions import assert_never
 
 from hathor.conf.settings import HathorSettings
@@ -158,7 +159,7 @@ class VertexVerifier:
                     output.to_human_readable()))
 
             # output value must be positive
-            if output.value <= 0:
+            if output.value <= UnsignedAmount.zero():
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
 

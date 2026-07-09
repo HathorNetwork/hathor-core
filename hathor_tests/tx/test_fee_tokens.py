@@ -590,10 +590,7 @@ class FeeTokenTest(unittest.TestCase):
         with pytest.raises(InvalidNewTransaction) as e:
             self.resolve_and_propagate(tx2)
         assert isinstance(e.value.__cause__, InputOutputMismatch)
-        expected_msg = (
-            f'Fee amount is different than expected. '
-            f'(amount=0, expected={UnsignedAmount.from_v1(2).normalized()})'
-        )
+        expected_msg = 'Fee amount is different than expected. (amount=0.0, expected=0.02)'
         assert expected_msg in str(e.value)
 
     def test_fee_token_burn_authority(self) -> None:
