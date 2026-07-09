@@ -33,9 +33,12 @@ def validate_token_name_and_symbol(settings: HathorSettings,
 
 def validate_fee_amount(settings: HathorSettings, token_uid: bytes, amount: UnsignedAmount) -> None:
     """Validate the fee amount."""
-    if amount <= 0:
+    normalized_amount = amount.normalized()
+    normalized_fee_divisor = UnsignedAmount.from_v1(settings.FEE_DIVISOR).normalized()
+
+    if normalized_amount <= 0:
         raise InvalidFeeAmount(f'fees should be a positive integer, got {amount}')
 
-    if token_uid != settings.HATHOR_TOKEN_UID and amount % settings.FEE_DIVISOR != 0:
-        raise InvalidFeeAmount(f'fees using deposit custom tokens should be a multiple of {settings.FEE_DIVISOR}, '
-                               f'got {amount}')
+    if token_uid != settings.HATHOR_TOKEN_UID and normalized_amount % normalized_fee_divisor != 0:
+        raise InvalidFeeAmount(f'fees using deposit custom tokens should be a multiple of {normalized_fee_divisor}, '
+                               f'got {normalized_amount}')

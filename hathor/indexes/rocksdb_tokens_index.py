@@ -230,7 +230,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             value = self._to_value_info(_InfoDict(
                 name=name,
                 symbol=symbol,
-                total=total,
+                total=total.normalized(),
                 version=version,
                 n_contracts_can_mint=n_contracts_can_mint,
                 n_contracts_can_melt=n_contracts_can_melt,
@@ -243,7 +243,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             info.name = name
             info.symbol = symbol
             info.version = version
-            info.total += total
+            info.total += total.normalized()
             info.n_contracts_can_mint += n_contracts_can_mint
             info.n_contracts_can_melt += n_contracts_can_melt
             value = self._to_value_info(info)
@@ -320,7 +320,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             name=self._settings.HATHOR_TOKEN_NAME,
             symbol=self._settings.HATHOR_TOKEN_SYMBOL,
             version=TokenVersion.NATIVE,
-            total=UnsignedAmount(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
+            total=UnsignedAmount.from_v1(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
         )
 
     def _get_value_info(self, token_uid: bytes, *, create_default: bool = True) -> _InfoDict:
@@ -339,7 +339,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
     @override
     def add_to_total(self, token_uid: bytes, amount: SignedAmount) -> None:
         dict_info = self._get_value_info(token_uid, create_default=True)
-        dict_info.total += amount
+        dict_info.total += amount.raw()
         key_info = self._to_key_info(token_uid)
         new_value_info = self._to_value_info(dict_info)
         self._db.put((self._cf, key_info), new_value_info)
@@ -596,7 +596,7 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
         return self._info.version
 
     def get_total(self) -> UnsignedAmount:
-        return UnsignedAmount(self._info.total)
+        return UnsignedAmount.from_v2(self._info.total)
 
     def _iter_authority_utxos(self, *, is_mint: bool) -> Iterator[TokenUtxoInfo]:
         it = self._index._db.iterkeys(self._index._cf)

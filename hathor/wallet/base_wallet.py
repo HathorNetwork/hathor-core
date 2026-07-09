@@ -26,8 +26,10 @@ from hathor.types import AddressB58, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.token_amount import UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
 logger = get_logger()
+
 
 # check interval for maybe_spent_txs
 UTXO_CHECK_INTERVAL = 10
@@ -163,6 +165,11 @@ class BaseWallet:
     def _manually_initialize(self) -> None:
         pass
 
+    def _get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which token amounts in wallet-built vertices are encoded."""
+        # Hardcoded V1 until the wallet builds V2 vertices.
+        return TokenAmountVersion.V1
+
     def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, UnsignedAmount]:
         """Return balance per address for a given token. This method ignores locks."""
         balances: defaultdict[AddressB58, UnsignedAmount] = defaultdict(UnsignedAmount.zero)
@@ -238,6 +245,9 @@ class BaseWallet:
 
         Can be used to create blocks by passing empty list to inputs.
 
+        Output values may be TokenAmounts of any version; each one is denormalized to the
+        wallet's token amount version when its TxOutput is built.
+
         :param cls: defines if we're creating a Transaction or Block
         :type cls: :py:class:`hathor.transaction.Block` or :py:class:`hathor.transaction.Transaction`
 
@@ -265,7 +275,8 @@ class BaseWallet:
                 token_dict[token_uid] = token_index
 
             timelock = int_to_bytes(txout.timelock, 4) if txout.timelock else None
-            tx_outputs.append(TxOutput(txout.value, create_output_script(txout.address, timelock), token_index))
+            value = txout.value.to_version(self._get_token_amount_version())
+            tx_outputs.append(TxOutput(value, create_output_script(txout.address, timelock), token_index))
 
         tx_inputs = []
         private_keys = []
@@ -485,10 +496,10 @@ class BaseWallet:
         """Creates an output transaction with the change value
 
         :param sum_inputs: Sum of the input amounts
-        :type sum_inputs: int
+        :type sum_inputs: UnsignedAmount
 
         :param sum_outputs: Total value we're spending
-        :type outputs: int
+        :type outputs: UnsignedAmount
 
         :param token_uid: token uid of this utxo
         :type token_uid: bytes
@@ -515,13 +526,16 @@ class BaseWallet:
         of inputs.
 
         :param amount: amount requested
-        :type amount: int
+        :type amount: UnsignedAmount
 
         :param token_uid: the token uid for the requested amount
         :type token_uid: bytes
 
         :param max_ts: maximum timestamp the inputs can have
         :type max_ts: int
+
+        :return: the chosen inputs and the total amount they carry, as a V2 UnsignedAmount
+        :rtype: tuple[list[WalletInputInfo], UnsignedAmount]
 
         :raises InsufficientFunds: if the wallet does not have enough ballance
         """
@@ -734,7 +748,7 @@ class BaseWallet:
 
                 # Add as unspent output
                 utxo = UnspentTx(
-                    tx.hash, actual_index, UnsignedAmount(secrets.value), tx.timestamp,
+                    tx.hash, actual_index, secrets.value, tx.timestamp,
                     script_type_out.address, 0,
                     timelock=script_type_out.timelock,
                 )
@@ -1110,7 +1124,7 @@ class BaseWallet:
         """
         smallest_timestamp = inf
         for token_id, utxos in self.unspent_txs.items():
-            balance = {'locked': 0, 'available': 0}
+            balance = {'locked': UnsignedAmount.zero(), 'available': UnsignedAmount.zero()}
             for utxo in chain(utxos.values(), self.maybe_spent_txs[token_id].values()):
                 if utxo.is_token_authority():
                     # authority utxos don't transfer value
@@ -1122,9 +1136,7 @@ class BaseWallet:
                 else:
                     balance['available'] += utxo.value
 
-            self.balance[token_id] = WalletBalance(
-                UnsignedAmount(balance['locked']), UnsignedAmount(balance['available'])
-            )
+            self.balance[token_id] = WalletBalance(balance['locked'], balance['available'])
 
         self.should_schedule_update(smallest_timestamp)
 
@@ -1200,7 +1212,8 @@ class UnspentTx:
         data['timestamp'] = self.timestamp
         data['tx_id'] = self.tx_id.hex()
         data['index'] = self.index
-        data['value'] = self.value
+        data['value'] = self.value.raw()
+        data['value_str'] = str(self.value)
         data['address'] = self.address
         data['token_data'] = self.token_data
         data['voided'] = self.voided
@@ -1209,8 +1222,8 @@ class UnspentTx:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> 'UnspentTx':
-        return cls(bytes.fromhex(data['tx_id']), data['index'], data['value'], data['timestamp'], data['address'],
-                   data['token_data'], data['voided'], data['timelock'])
+        return cls(bytes.fromhex(data['tx_id']), data['index'], UnsignedAmount.parse(data['value_str']),
+                   data['timestamp'], data['address'], data['token_data'], data['voided'], data['timelock'])
 
     def is_locked(self, reactor: Reactor) -> bool:
         """ Returns if the unspent tx is locked or available to be spent
@@ -1251,12 +1264,13 @@ class SpentTx:
         data['tx_id'] = self.tx_id.hex()
         data['from_tx_id'] = self.from_tx_id.hex()
         data['from_index'] = self.from_index
-        data['value'] = self.value
+        data['value'] = self.value.raw()
+        data['value_str'] = str(self.value)
         data['voided'] = self.voided
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> 'SpentTx':
         return cls(
-            bytes.fromhex(data['tx_id']), bytes.fromhex(data['from_tx_id']), data['from_index'], data['value'],
-            data['timestamp'])
+            bytes.fromhex(data['tx_id']), bytes.fromhex(data['from_tx_id']), data['from_index'],
+            UnsignedAmount.parse(data['value_str']), data['timestamp'])

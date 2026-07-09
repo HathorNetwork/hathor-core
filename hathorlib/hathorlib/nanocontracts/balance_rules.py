@@ -13,12 +13,14 @@ from hathorlib.nanocontracts.exception import NCInvalidAction
 from hathorlib.nanocontracts.storage import NCChangesTracker
 from hathorlib.nanocontracts.types import (
     BaseAction,
+    BaseTokenAction,
     NCAcquireAuthorityAction,
     NCAction,
     NCDepositAction,
     NCGrantAuthorityAction,
     NCWithdrawalAction,
 )
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenVersion
 
@@ -92,7 +94,19 @@ class BalanceRules(ABC, Generic[T]):
                 assert_never(action)
 
 
-class _DepositRules(BalanceRules[NCDepositAction]):
+U = TypeVar('U', bound=BaseTokenAction)
+
+
+class _BaseTokenRules(BalanceRules[U], ABC):
+    __slots__ = ('action_signed_amount',)
+
+    def __init__(self, settings: HathorSettings, action: U, token_amount_version: TokenAmountVersion) -> None:
+        super().__init__(settings, action, token_amount_version)
+        amount = UnsignedAmount.from_version(action.amount, version=token_amount_version)
+        self.action_signed_amount = amount.to_signed()
+
+
+class _DepositRules(_BaseTokenRules[NCDepositAction]):
     """
     Define balance rules for the DEPOSIT action.
 
@@ -105,7 +119,7 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
         token_info = token_dict[self.action.token_uid]
-        token_info.amount = token_info.amount + self.action.amount
+        token_info.amount = token_info.amount + self.action_signed_amount
         token_dict[self.action.token_uid] = token_info
 
         if token_info.version == TokenVersion.FEE:
@@ -113,7 +127,7 @@ class _DepositRules(BalanceRules[NCDepositAction]):
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
-        callee_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        callee_changes_tracker.add_balance(self.action.token_uid, self.action_signed_amount)
 
     @override
     def nc_cross_call_execution_rule(
@@ -122,11 +136,11 @@ class _DepositRules(BalanceRules[NCDepositAction]):
         caller_changes_tracker: NCChangesTracker,
         callee_changes_tracker: NCChangesTracker,
     ) -> None:
-        caller_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        caller_changes_tracker.add_balance(self.action.token_uid, -self.action_signed_amount)
         self.nc_callee_execution_rule(callee_changes_tracker)
 
 
-class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
+class _WithdrawalRules(_BaseTokenRules[NCWithdrawalAction]):
     """
     Define balance rules for the WITHDRAWAL action.
 
@@ -139,7 +153,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
         token_info = token_dict[self.action.token_uid]
-        token_info.amount = token_info.amount - self.action.amount
+        token_info.amount = token_info.amount - self.action_signed_amount
         token_dict[self.action.token_uid] = token_info
 
         if token_info.version == TokenVersion.FEE:
@@ -147,7 +161,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
 
     @override
     def nc_callee_execution_rule(self, callee_changes_tracker: NCChangesTracker) -> None:
-        callee_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        callee_changes_tracker.add_balance(self.action.token_uid, -self.action_signed_amount)
 
     @override
     def nc_cross_call_execution_rule(
@@ -156,7 +170,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
         caller_changes_tracker: NCChangesTracker,
         callee_changes_tracker: NCChangesTracker,
     ) -> None:
-        caller_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        caller_changes_tracker.add_balance(self.action.token_uid, self.action_signed_amount)
         self.nc_callee_execution_rule(callee_changes_tracker)
 
 

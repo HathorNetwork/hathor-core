@@ -3,7 +3,32 @@
 
 import unittest
 
-from hathor.api_util import parse_args
+from hathor.api_util import APIVersion, parse_args
+from hathorlib.token_amount import UnsignedAmount
+
+
+class APIVersionAmountTestCase(unittest.TestCase):
+    """Pin the on-the-wire encoding of token amounts for each API version.
+
+    Decimal places are configured globally by the test conftest (V1 = 2, V2 = 18).
+    """
+
+    def test_to_response_v1a_is_v1_int(self) -> None:
+        self.assertEqual(APIVersion.V1A.unsigned_amount_to_response(UnsignedAmount.zero()), 0)
+        self.assertEqual(APIVersion.V1A.unsigned_amount_to_response(UnsignedAmount.from_v1(12345)), 12345)
+
+    def test_to_response_v2_is_18_decimal_string(self) -> None:
+        self.assertEqual(APIVersion.V2.unsigned_amount_to_response(UnsignedAmount.zero()), '0.0')
+        self.assertEqual(APIVersion.V2.unsigned_amount_to_response(UnsignedAmount.from_v1(12345)), '123.45')
+
+    def test_from_request_v1a_reads_v1_int(self) -> None:
+        self.assertEqual(APIVersion.V1A.unsigned_amount_from_request('12345'), UnsignedAmount.from_v1(12345))
+
+    def test_from_request_v2_reads_decimal_string(self) -> None:
+        self.assertEqual(
+            APIVersion.V2.unsigned_amount_from_request('123.45'),
+            UnsignedAmount.from_v1(12345),
+        )
 
 
 class ApiUtilsTestCase(unittest.TestCase):

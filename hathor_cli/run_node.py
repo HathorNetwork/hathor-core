@@ -8,6 +8,7 @@ from argparse import SUPPRESS, ArgumentParser, Namespace
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Iterator, Optional
 
+from hathorlib.token_amount import UnsignedAmount
 from pydantic import ValidationError
 from structlog import get_logger
 
@@ -194,6 +195,13 @@ class RunNode:
         reactor = initialize_global_reactor(use_asyncio_reactor=self._args.x_asyncio_reactor)
         self.reactor = reactor
 
+        from hathor.conf.get_settings import get_global_settings
+        settings = get_global_settings()
+        UnsignedAmount.set_decimal_places(
+            v1_decimal_places=settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES,
+            v2_decimal_places=settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES,
+        )
+
         from hathor.builder import ResourcesBuilder
         from hathor.exception import BuilderError
         from hathor_cli.builder import CliBuilder
@@ -218,9 +226,6 @@ class RunNode:
                 self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory, interface=interface)
             else:
                 self.reactor.listenTCP(self._args.stratum, self.manager.stratum_factory)
-
-        from hathor.conf.get_settings import get_global_settings
-        settings = get_global_settings()
 
         if register_resources:
             resources_builder = ResourcesBuilder(
