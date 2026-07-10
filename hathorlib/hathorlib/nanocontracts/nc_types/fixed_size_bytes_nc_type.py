@@ -15,6 +15,8 @@ B = TypeVar('B', bound=bytes)
 
 
 class _FixedSizeBytesNCType(NCType[B]):
+    # XXX: `_actual_type` slot is inherited from the `NCType` base class
+    __slots__ = ()
     _is_hashable = True
     _size: ClassVar[int]
     _actual_type: type[B]
@@ -70,4 +72,5 @@ class _FixedSizeBytesNCType(NCType[B]):
 
 
 class Bytes32NCType(_FixedSizeBytesNCType[B]):
+    __slots__ = ()
     _size = 32

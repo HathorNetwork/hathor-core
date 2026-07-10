@@ -21,7 +21,8 @@ class BytesLikeNCType(NCType[B]):
     """ Represents values from class that inherit/new-type `bytes`.
     """
 
-    __slots__ = ('_actual_type')
+    # XXX: `_actual_type` slot is inherited from the `NCType` base class
+    __slots__ = ()
     _is_hashable = True
     _actual_type: type[B]
 
@@ -39,7 +40,7 @@ class BytesLikeNCType(NCType[B]):
     def _check_value(self, value: bytes, /, *, deep: bool) -> None:
         if isclass(self._actual_type):
             if not isinstance(value, (bytes, self._actual_type)):
-                raise TypeError('expected {self._actual_type} instance')
+                raise TypeError(f'expected {self._actual_type} instance')
         else:
             if not isinstance(value, bytes):
                 raise TypeError('expected bytes instance')
@@ -71,11 +72,10 @@ class BytesNCType(BytesLikeNCType[bytes]):
     """ Represents builtin `bytes` values.
     """
     __slots__ = ()
-    _actual_type = bytes
 
     @override
     def __init__(self) -> None:
-        pass
+        super().__init__(bytes)
 
     @override
     @classmethod

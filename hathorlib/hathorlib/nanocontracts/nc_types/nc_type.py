@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, NamedTuple, TypeAlias, TypeVar, final
+from typing import Any, Generic, NamedTuple, TypeAlias, TypeVar, final
 
 from typing_extensions import Self
 
@@ -15,6 +15,7 @@ from hathorlib.nanocontracts.nc_types.utils import (
     get_usable_origin_type,
 )
 from hathorlib.serialization import Deserializer, Serializer
+from hathorlib.utils.typing import is_subclass
 
 T = TypeVar('T')
 
@@ -39,10 +40,17 @@ class NCType(ABC, Generic[T]):
         nc_types_map: TypeToNCTypeMap
 
     # XXX: subclasses must override this if they need any properties
-    __slots__ = ()
+    __slots__ = ('_actual_type',)
 
     # XXX: subclasses must initialize this property
     _is_hashable: bool
+
+    # XXX: set by `NCType.from_type` to the declared (post-alias) type, and used to wrap deserialized values back
+    #      into newtype-like classes (e.g. `Amount`, `Timestamp`). It is unset when an NCType is constructed
+    #      directly, so it must be read with `getattr(self, '_actual_type', None)`. Some subclass constructors
+    #      also assign it, possibly to a non-class (e.g. `NodeNCType` uses the `NodeId` NewType), which
+    #      `_to_actual_type` must skip.
+    _actual_type: type[Any]
 
     @final
     @staticmethod
@@ -53,13 +61,18 @@ class NCType(ABC, Generic[T]):
         types with substitute types to use instead.
         """
         usable_origin = get_usable_origin_type(type_, type_map=type_map)
-        nc_type = type_map.nc_types_map[usable_origin]
+        nc_type_cls = type_map.nc_types_map[usable_origin]
         # XXX: first we try to create the nc_type without making an alias, this ensures that an invalid annotation
         #      would not be accepted
-        _ = nc_type._from_type(type_, type_map=type_map)
+        _ = nc_type_cls._from_type(type_, type_map=type_map)
         # XXX: then we create the actual nc_type with type-alias
         aliased_type = get_aliased_type(type_, type_map.alias_map)
-        return nc_type._from_type(aliased_type, type_map=type_map)
+        nc_type = nc_type_cls._from_type(aliased_type, type_map=type_map)
+        # XXX: generic aliases (`tuple[int, ...]`, unions, ...) are not `type` instances and are skipped, their
+        #      inner types get their own NCType instances through recursion into `NCType.from_type`
+        if isinstance(aliased_type, type):
+            nc_type._actual_type = aliased_type
+        return nc_type
 
     @final
     @staticmethod
@@ -84,6 +97,24 @@ class NCType(ABC, Generic[T]):
         """
         # XXX: a NCType that is only meant for local use does not need to implement _from_type
         raise TypeError(f'{cls} is not compatible with use in a NCType.TypeMap')
+
+    @final
+    def _to_actual_type(self, value: T, /) -> T:
+        """ Wrap `value` into the declared actual class when the inner implementation produced a base instance.
+
+        This is what makes a field/arg/return declared as a newtype-like class (e.g. `Amount`, `Timestamp`)
+        yield instances of that class instead of the underlying base type (e.g. `int`). Only newtype-style
+        upcasts are made: the declared type must be a plain class and a subclass of the value's type.
+        """
+        actual: type[Any] | None = getattr(self, '_actual_type', None)
+        if actual is None or not isinstance(actual, type):
+            return value
+        if isinstance(value, actual) or not is_subclass(actual, type(value)):
+            return value
+        # XXX: `type[Any]` is used because newtype-style constructors take a single base-class value, which cannot
+        #      be expressed for an arbitrary `type[T]`
+        wrapped: T = actual(value)
+        return wrapped
 
     @final
     def is_hashable(self) -> bool:
@@ -126,7 +157,7 @@ class NCType(ABC, Generic[T]):
         so checking is only made as a double check and results in AssertionError (no TypeError).
         """
         # XXX: subclasses must implement NCType._deserialize, not NCType.deserialize
-        value = self._deserialize(deserializer)
+        value = self._to_actual_type(self._deserialize(deserializer))
         self._check_value(value, deep=False)
         return value
 
@@ -154,7 +185,7 @@ class NCType(ABC, Generic[T]):
         Will raise a ValueError if the given `json_value` is not compatible.
         """
         # XXX: subclasses must implement NCType._json_to_value, not NCType.json_to_value
-        value = self._json_to_value(json_value)
+        value = self._to_actual_type(self._json_to_value(json_value))
         self._check_value(value, deep=False)
         return value
 
