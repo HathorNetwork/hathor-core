@@ -8,7 +8,7 @@ from twisted.web.http import Request
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.conf.get_settings import get_global_settings
-from hathor.crypto.util import decode_address
+from hathor.crypto.util import decode_address_strict
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
@@ -90,8 +90,8 @@ class AddressSearchResource(Resource):
 
         try:
             address = raw_args[b'address'][0].decode('utf-8')
-            # Check if address is valid
-            decode_address(address)
+            # Check if address is valid for this network
+            decode_address_strict(address, settings=self._settings)
         except InvalidAddress:
             return json_dumpb({
                 'success': False,

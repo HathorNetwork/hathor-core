@@ -281,6 +281,8 @@ class VerificationService:
         if vertex.hash in self._settings.SKIP_VERIFICATION:
             return
 
+        self.verifiers.vertex.verify_signal_bits(vertex)
+
         if vertex.has_fees():
             self._verify_without_storage_fee_header(vertex)
 
