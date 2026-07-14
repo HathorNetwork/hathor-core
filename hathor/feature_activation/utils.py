@@ -11,6 +11,7 @@ from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.feature_state import FeatureState
 from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction.scripts.opcode import OpcodesVersion
+from hathorlib.conf.fee_policy import FeePolicyVersion
 from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
@@ -33,6 +34,7 @@ class Features:
     daa_version: DAAVersion
     shielded_transactions: bool
     token_amount_version: TokenAmountVersion
+    fee_policy_version: FeePolicyVersion
 
     @staticmethod
     def get_settings(settings: HathorSettings) -> dict[Feature, FeatureSetting]:
@@ -85,6 +87,7 @@ class Features:
             daa_version=daa_version,
             shielded_transactions=feature_is_active[Feature.SHIELDED_TRANSACTIONS],
             token_amount_version=token_amount_version,
+            fee_policy_version=FeePolicyVersion.V1,
         )
 
     @staticmethod
@@ -111,6 +114,7 @@ class Features:
             fee_tokens=features.fee_tokens,
             shielded_transactions=features.shielded_transactions,
             token_amount_version=features.token_amount_version,
+            fee_policy_version=features.fee_policy_version,
             # Indifferent features (come from the block state):
             nano_runtime_version=features.nano_runtime_version,
             daa_version=features.daa_version,
@@ -139,6 +143,7 @@ class Features:
             daa_version=DAAVersion.V2,
             shielded_transactions=True,
             token_amount_version=TokenAmountVersion.V2,
+            fee_policy_version=FeePolicyVersion.V1,
         )
 
 

@@ -219,7 +219,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: Fee amount is different than expected. (amount=0.01, expected=0.0)',
+            reason='InputOutputMismatch: Fee amount is different than expected. (token=00, amount=0.01, expected=0.0)',
         )
 
     def test_postponed_token_verification_failure_does_not_contaminate_state(self) -> None:
@@ -277,7 +277,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason='InputOutputMismatch: Fee amount is different than expected. (amount=0.01, expected=0.0)',
+            reason='InputOutputMismatch: Fee amount is different than expected. (token=00, amount=0.01, expected=0.0)',
         )
 
         nc_storage_after_fail = self.manager.get_best_block_nc_storage(tx1.hash)
@@ -447,7 +447,7 @@ class FeeTokensTestCase(BlueprintTestCase):
             manager=self.manager,
             tx_id=tx2.hash,
             block_id=b12.hash,
-            reason=f'InvalidToken: token {fbt_id.hex()} cannot be used to pay fees',
+            reason=f'InvalidFeePaymentToken: cannot pay fees with token {fbt_id.hex()}',
         )
 
     def test_postponed_verification_tx_spending_nano(self) -> None:

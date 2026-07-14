@@ -6,11 +6,11 @@ from enum import StrEnum, auto, unique
 from math import log
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Self
 
+from hathorlib.conf.fee_policy import FeePolicy, FeePolicyPerToken, FeePolicyVersion
 from hathorlib.conf.utils import parse_hex_str
-from hathorlib.token_amount import UnsignedAmount
 
 HATHOR_TOKEN_UID: bytes = b'\x00'
 
@@ -114,13 +114,6 @@ class HathorSettings(BaseModel):
         """Genesis pre-mined tokens in atomic units, that is, the on-chain integer amount."""
         # Blocks are always V1.
         return int(self.GENESIS_TOKEN_MAIN_UNITS * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
-
-    # Fee rate settings in V1 decimals (that is, 0.01 HTR)
-    FEE_PER_OUTPUT_V1: int = 1
-
-    @property
-    def FEE_TOKEN_AMOUNT_PER_OUTPUT(self) -> UnsignedAmount:
-        return UnsignedAmount.from_v1(self.FEE_PER_OUTPUT_V1)
 
     @property
     def FEE_DIVISOR(self) -> int:
@@ -558,6 +551,16 @@ class HathorSettings(BaseModel):
     NC_INITIAL_FUEL_TO_CALL_METHOD: int = 1_000_000  # 1M opcodes
     NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
 
+    FEE_POLICIES: dict[FeePolicyVersion, FeePolicyPerToken] = Field(default_factory=lambda: {
+        FeePolicyVersion.V1: {
+            HATHOR_TOKEN_UID: FeePolicy(
+                fee_based_tokens='0.01',
+                amount_shielded='0.01',
+                full_shielded='0.02',
+            )
+        },
+    })
+
     @model_validator(mode='after')
     def _validate_peer_connection_slots(self) -> Self:
         slot_total = (
@@ -585,3 +588,23 @@ class HathorSettings(BaseModel):
                 'TOKEN_AMOUNT_V2_DECIMAL_PLACES must be greater than or equal to TOKEN_AMOUNT_V1_DECIMAL_PLACES'
             )
         return self
+
+    @model_validator(mode='after')
+    def _validate_fee_policies(self) -> Self:
+        if FeePolicyVersion.V1 not in self.FEE_POLICIES:
+            raise ValueError('FEE_POLICIES must define the V1 policy')
+        for fee_policy_version, policies in self.FEE_POLICIES.items():
+            if HATHOR_TOKEN_UID not in policies:
+                raise ValueError(f'HTR policy must be defined in fee policy version {fee_policy_version}')
+        return self
+
+    def get_fee_policies(self, fee_policy_version: FeePolicyVersion) -> FeePolicyPerToken:
+        """Return the fee policies for the respective version."""
+        if policies := self.FEE_POLICIES.get(fee_policy_version):
+            return policies
+        raise ValueError(f'No policy configured for version {fee_policy_version}')
+
+    def get_htr_policy(self, fee_policy_version: FeePolicyVersion) -> FeePolicy:
+        """Return the HTR policy for the respective version."""
+        fee_policies = self.get_fee_policies(fee_policy_version)
+        return fee_policies[HATHOR_TOKEN_UID]

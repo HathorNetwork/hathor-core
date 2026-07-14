@@ -669,7 +669,7 @@ if foo:
 
 
     def test_token_amount_version_fee_token(self) -> None:
-        # A fee-based token-creation transaction is charged FEE_TOKEN_AMOUNT_PER_OUTPUT (0.01 HTR)
+        # A fee-based token-creation transaction is charged the HTR fee policy's per-unit fee (0.01 HTR)
         # per minted output, and so is a transaction that holds the resulting fee tokens. The fee
         # is encoded in each vertex's own decimal version, so the V1 vertices spell 0.01 HTR as `1`
         # while the V2 vertices spell the same 0.01 HTR as 10 ** 16.

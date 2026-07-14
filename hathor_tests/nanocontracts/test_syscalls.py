@@ -671,22 +671,24 @@ class NCNanoContractTestCase(BlueprintTestCase):
             ft1_balance_key: Balance(value=UnsignedAmount.from_v1(1000000).to_signed(), can_mint=True, can_melt=True),
         }
 
-        # Try to create another fee token using the first fee token as payment - should be rejected
+        # Try to create another fee token using the first fee token as payment - should be rejected,
+        # since it's a fee-based token absent from the fee policy
         from hathor.nanocontracts.exception import NCInvalidFeePaymentToken
-        with pytest.raises(NCInvalidFeePaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+        expected_msg = f'cannot pay fees with token {fee_token_uid.hex()}'
+        with pytest.raises(NCInvalidFeePaymentToken, match=expected_msg):
             self.runner.call_public_method(
                 nc_id, 'create_fee_token', self.create_context(),
                 'FeeToken2', 'FT2', 500000, fee_token_uid
             )
 
-        # Also test that fee tokens cannot be used as payment for minting
-        with pytest.raises(NCInvalidFeePaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+        # Also test that such fee tokens cannot be used as payment for minting
+        with pytest.raises(NCInvalidFeePaymentToken, match=expected_msg):
             self.runner.call_public_method(
                 nc_id, 'mint', self.create_context(), fee_token_uid, 100, fee_token_uid
             )
 
-        # Also test that fee tokens cannot be used as payment for melting
-        with pytest.raises(NCInvalidFeePaymentToken, match="fee-based tokens aren't allowed for paying fees"):
+        # Also test that such fee tokens cannot be used as payment for melting
+        with pytest.raises(NCInvalidFeePaymentToken, match=expected_msg):
             self.runner.call_public_method(
                 nc_id, 'melt', self.create_context(), fee_token_uid, 100, fee_token_uid
             )

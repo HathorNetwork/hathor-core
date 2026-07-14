@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Callable, Iterator, Mapping, TypeAlias, cast
 
 from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
 from hathorlib.nanocontracts.runner.call_info import CallInfo
 from hathorlib.nanocontracts.runner.runner import MAX_SEQNUM_JUMP_SIZE
@@ -234,7 +233,7 @@ class NCBlockExecutor:
 
             # Execute transaction and yield the result directly
             result = self.execute_transaction(
-                runtime_version=features.nano_runtime_version,
+                features=features,
                 tx=tx,
                 block_storage=block_storage,
                 rng_seed=rng_seed,
@@ -257,7 +256,7 @@ class NCBlockExecutor:
     def execute_transaction(
         self,
         *,
-        runtime_version: NanoRuntimeVersion,
+        features: Features,
         tx: Transaction,
         block_storage: 'NCBlockStorage',
         rng_seed: bytes,
@@ -286,7 +285,7 @@ class NCBlockExecutor:
             return NCTxExecutionSkipped(tx=tx)
 
         runner = self._runner_factory.create(
-            runtime_version=runtime_version,
+            runtime_version=features.nano_runtime_version,
             token_amount_version=tx.get_token_amount_version(),
             block_storage=block_storage,
             seed=rng_seed,
@@ -336,7 +335,7 @@ class NCBlockExecutor:
 
             # after the execution we have the latest state in the storage + changes tracker
             # and at this point no tokens pending creation, so we can validate the balances
-            self._verify_transparent_balance_after_execution(tx, block_storage, runner)
+            self._verify_transparent_balance_after_execution(tx, block_storage, runner, features)
         except NCFail as e:
             runner.discard_pending_changes()
             return NCTxExecutionFailure(
@@ -357,6 +356,7 @@ class NCBlockExecutor:
         tx: Transaction,
         block_storage: 'NCBlockStorage',
         runner: 'Runner',
+        features: Features,
     ) -> None:
         """Run strict verify_sum after execution using uncommitted token overlay visibility."""
         from hathor.transaction.exceptions import TokenNotFound
@@ -367,7 +367,10 @@ class NCBlockExecutor:
         block_proxy_as_storage = cast('NCBlockStorage', block_proxy)
 
         try:
-            token_dict = tx.get_complete_token_info(block_proxy_as_storage)
+            token_dict = tx.get_complete_token_info(
+                block_proxy_as_storage,
+                fee_policy_version=features.fee_policy_version,
+            )
             TransactionVerifier.verify_transparent_balance(self._settings, tx, token_dict)
         except TokenNotFound as e:
             # Missing tokens should have failed in earlier validation paths.

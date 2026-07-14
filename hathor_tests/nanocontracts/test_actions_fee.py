@@ -7,7 +7,7 @@ import pytest
 
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCInvalidFee, NCInvalidFeePaymentToken
+from hathor.nanocontracts.exception import NCFail, NCInvalidFee
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import ContractId, NCDepositAction, NCFee, NCWithdrawalAction, TokenUid, public
 from hathor.nanocontracts.utils import derive_child_token_id
@@ -17,6 +17,7 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.test_reentrancy import HTR_TOKEN_UID
 from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.conf.settings import HATHOR_TOKEN_UID
+from hathorlib.exceptions import InvalidFeePaymentToken
 
 
 class MyBlueprint(Blueprint):
@@ -368,9 +369,9 @@ class NCActionsFeeTestCase(BlueprintTestCase):
                 fee_amount=200
             )
 
-        # paying fees with a fee token is forbidden
-        msg = "fee-based tokens aren't allowed for paying fees"
-        with pytest.raises(NCInvalidFeePaymentToken, match=msg):
+        # paying fees with a fee token is forbidden. The metered executor converts the
+        # InvalidFeePaymentToken raised by the actions-fee validation into a bare NCFail.
+        with pytest.raises(NCFail) as e:
             self.runner.call_public_method(
                 self.nc1_id,
                 'move_tokens_to_nc',
@@ -381,6 +382,8 @@ class NCActionsFeeTestCase(BlueprintTestCase):
                 fee_payment_token=fbt_token_uid,
                 fee_amount=100
             )
+        assert isinstance(e.value.__cause__, InvalidFeePaymentToken)
+        assert str(e.value.__cause__) == f'cannot pay fees with token {fbt_token_uid.hex()}'
 
         assert self.nc1_storage.get_all_balances() == {
             nc1_htr_balance_key: Balance(value=UnsignedAmount.from_v1(87).to_signed(), can_mint=False, can_melt=False),

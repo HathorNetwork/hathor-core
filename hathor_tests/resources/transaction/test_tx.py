@@ -586,9 +586,10 @@ class _BaseTransactionTest(_BaseResourceTest._ResourceTest):
         self.assertIn('token_uid', fee_entry)
         self.assertIn('amount', fee_entry)
 
-        # The fee is paid in HTR (token_index=0)
+        # The fee is paid in HTR (token_index=0), and the V1 fee policy charges 0.01 HTR per output,
+        # which this V1 vertex encodes as 1.
         self.assertEqual(fee_entry['token_uid'], self._settings.HATHOR_TOKEN_UID.hex())
-        self.assertEqual(fee_entry['amount'], self._settings.FEE_PER_OUTPUT_V1)
+        self.assertEqual(fee_entry['amount'], 1)
 
     @inlineCallbacks
     def test_get_transaction_without_fee_header(self):

@@ -22,6 +22,7 @@ from hathor.transaction.exceptions import HathorError, TxValidationError
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.types import VertexId
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.conf.fee_policy import FeePolicyVersion
 from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
@@ -58,6 +59,7 @@ class TransactionStreamingClient:
                 daa_version=DAAVersion.V1,
                 shielded_transactions=False,
                 token_amount_version=TokenAmountVersion.V1,
+                fee_policy_version=FeePolicyVersion.V1,
             )
         )
 

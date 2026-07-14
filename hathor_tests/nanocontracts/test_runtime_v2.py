@@ -16,16 +16,17 @@ from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
-from hathorlib.conf.settings import FeatureSetting
+from hathorlib.conf.settings import HATHOR_TOKEN_UID, FeatureSetting
 from hathorlib.nanocontracts import NanoRuntimeVersion
 from hathorlib.nanocontracts.exception import NCFail
+from hathorlib.nanocontracts.types import TokenUid
 
 
 class MyBlueprint(Blueprint):
     @public
     def initialize(self, ctx: Context) -> int:
         settings = self.syscall.get_settings()
-        return settings.fee_per_output
+        return settings.fee_policies[TokenUid(HATHOR_TOKEN_UID)].fee_based_tokens
 
 
 class TestRuntimeV2(BlueprintTestCase):
@@ -43,7 +44,8 @@ class TestRuntimeV2(BlueprintTestCase):
     def test_syscall_get_settings_v2(self) -> None:
         self.runner = self.build_runner(NanoRuntimeVersion.V2)
         result = self.runner.create_contract(self.contract_id, self.blueprint_id, self.create_context())
-        assert result == self._settings.FEE_PER_OUTPUT_V1
+        # The V1 fee policy charges 0.01 HTR per output, and the runner reports it in V1 units.
+        assert result == 1
 
     def test_activation(self) -> None:
         feature_settings = FeatureSettings(

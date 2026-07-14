@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar
 
+from htr_lib import UnsignedAmount
 from typing_extensions import Self, final, override
 
 from hathor.checkpoint import Checkpoint
@@ -14,17 +15,14 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import (
-    AnyVertexHeader,
-    NanoHeader,
-    ShieldedOutputsHeader,
-    UnshieldBalanceHeader,
-)
+from hathor.transaction.headers import AnyVertexHeader, NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
+from hathorlib.conf.fee_policy import FeePolicyVersion
+from hathorlib.nanocontracts.runner.token_fees import aggregate_fee_charges
 from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
@@ -302,7 +300,12 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         raise InvalidNewTransaction(f'Invalid new transaction {self.hash_hex}: expected to reach a checkpoint but '
                                     'none of its children is checkpoint-valid')
 
-    def get_complete_token_info(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
+    def get_complete_token_info(
+        self,
+        nc_block_storage: NCBlockStorage,
+        *,
+        fee_policy_version: FeePolicyVersion,
+    ) -> TokenInfoDict:
         """
         Get a complete token info dict, including data from both inputs and outputs.
         It uses a block storage with the latest token changes in nano contracts
@@ -312,7 +315,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         self._update_token_info_from_nano_actions(token_dict=token_dict, nc_block_storage=nc_block_storage)
         # These must be called last so token_dict already contains all tokens in inputs and nano actions.
         self._update_token_info_from_outputs(token_dict=token_dict)
-        self._update_token_info_from_fees(token_dict=token_dict)
+        self._update_token_info_from_fees(token_dict=token_dict, fee_policy_version=fee_policy_version)
 
         return token_dict
 
@@ -346,28 +349,40 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 )
             rules.verification_rule(token_dict)
 
-    def _update_token_info_from_fees(self, *, token_dict: TokenInfoDict) -> None:
-        """Update token_dict with fees from fee header"""
+    def _update_token_info_from_fees(self, *, token_dict: TokenInfoDict, fee_policy_version: FeePolicyVersion) -> None:
+        """Apply fee-header amounts to `token_dict` balances and aggregate `token_dict.header_fee`.
 
-        if not self.has_fees():
-            return
+        With no fee header, `header_fee` is a zero charge.
+        """
+        fees = self.get_fee_header().get_fees() if self.has_fees() else []
 
-        fee_header = self.get_fee_header()
-        fees = fee_header.get_fees()
-        # we store the total fee amount from the header to be used in verify_transparent_balance
-        token_dict.fees_from_fee_header = fee_header.total_fee_amount()
+        # `charges` becomes None when some fee token's version is unresolved, i.e., the token doesn't
+        # exist in storage yet because it's created by this tx's own nano execution. In that case fee
+        # aggregation is impossible at this point, `token_dict.header_fee` stays None, and
+        # `verify_transparent_balance` skips its fee checks; the post-execution verification re-runs
+        # this with every version resolved.
+        charges: list[tuple[bytes, TokenVersion, UnsignedAmount]] | None = []
         for fee in fees:
             token_info = token_dict.get(fee.token_uid)
             if token_info is None:
-                raise InvalidToken('no inputs/actions for token {}'.format(fee.token_uid.hex()))
+                raise InvalidToken(f'no inputs/actions for token {fee.token_uid.hex()}')
+            if token_info.version is None:
+                charges = None
+                continue
+            if charges is not None:
+                charges.append((fee.token_uid, token_info.version, fee.amount))
 
-            # it should be defined in the inputs/actions
-            if token_info.version not in (None, TokenVersion.NATIVE, TokenVersion.DEPOSIT):
-                raise InvalidToken('token {} cannot be used to pay fees'.format(fee.token_uid.hex()))
+        if charges is not None:
+            # we store the fee charge from the header to be used in verify_transparent_balance
+            token_dict.header_fee = aggregate_fee_charges(
+                settings=self._settings,
+                fee_policy_version=fee_policy_version,
+                charges=charges,
+            )
 
-            # act as a regular output subtracting from the total amount (which is done with sum in this context)
-            token_info.amount += fee.amount.to_signed()
-            token_dict[fee.token_uid] = token_info
+        # fees act as regular outputs, subtracting from the total amount (which is done with sum in this context)
+        for fee in fees:
+            token_dict[fee.token_uid].amount += fee.amount.to_signed()
 
     def _get_token_info_from_inputs(self, nc_block_storage: NCBlockStorage) -> TokenInfoDict:
         """Sum up all tokens present in the inputs and their properties (amount, can_mint, can_melt)

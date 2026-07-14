@@ -12,7 +12,7 @@ from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar
 
 from typing_extensions import override
 
-from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathorlib.conf.settings import HATHOR_TOKEN_UID
 from hathorlib.nanocontracts.blueprint_syntax_validation import (
     validate_has_ctx_arg,
     validate_has_not_ctx_arg,
@@ -22,9 +22,6 @@ from hathorlib.nanocontracts.blueprint_syntax_validation import (
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathorlib.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathorlib.serialization import SerializationError
-from hathorlib.token_amount import UnsignedAmount
-from hathorlib.token_amount_version import TokenAmountVersion
-from hathorlib.utils import get_deposit_token_withdraw_amount
 from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import InnerTypeMixin
 
@@ -549,13 +546,3 @@ class NCFee:
     """The dataclass for all NC actions fee"""
     token_uid: TokenUid
     amount: int
-
-    def __get_htr_value__(self, settings: HathorSettings, token_amount_version: TokenAmountVersion) -> UnsignedAmount:
-        """
-        Get the amount converted to HTR
-        """
-        amount = UnsignedAmount.from_version(self.amount, version=token_amount_version)
-        if self.token_uid == HATHOR_TOKEN_UID:
-            return amount
-        else:
-            return get_deposit_token_withdraw_amount(settings, amount)
