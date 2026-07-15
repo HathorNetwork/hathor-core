@@ -16,7 +16,8 @@ N = TypeVar('N', bound=tuple)
 
 # XXX: we can't usefully describe the tuple type
 class NamedTupleNCType(NCType[N]):
-    __slots__ = ('_is_hashable', '_args', '_actual_type')
+    # XXX: `_actual_type` slot is inherited from the `NCType` base class
+    __slots__ = ('_is_hashable', '_args')
 
     # we can't even parametrize NCType, lists are allowed in tuples and it's still hashable it just fails in runtime
     _args: tuple[NCType, ...]

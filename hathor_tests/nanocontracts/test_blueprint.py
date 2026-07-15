@@ -6,7 +6,16 @@ from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
 from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
-from hathor.nanocontracts.types import Address, NCDepositAction, NCWithdrawalAction, TokenUid, public, view
+from hathor.nanocontracts.types import (
+    Address,
+    Amount,
+    NCDepositAction,
+    NCWithdrawalAction,
+    Timestamp,
+    TokenUid,
+    public,
+    view,
+)
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 STR_NC_TYPE = make_nc_type(str)
@@ -87,12 +96,35 @@ class MyBlueprint(Blueprint):
         return 1
 
 
+class NewTypeFieldsBlueprint(Blueprint):
+    y: Amount
+    t: Timestamp
+
+    @public
+    def initialize(self, ctx: Context, y: Amount, t: Timestamp) -> None:
+        self.y = y
+        self.t = t
+
+    @view
+    def get_y(self) -> Amount:
+        # Reading `self.y` must yield an `Amount` instance, not a plain `int`. This assert would fire if reading
+        # the field degraded it to the underlying base type.
+        assert isinstance(self.y, Amount)
+        return self.y
+
+    @view
+    def get_t(self) -> Timestamp:
+        assert isinstance(self.t, Timestamp)
+        return self.t
+
+
 class NCBlueprintTestCase(BlueprintTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.simple_fields_id = self._register_blueprint_class(SimpleFields)
         self.container_fields_id = self._register_blueprint_class(ContainerFields)
         self.my_blueprint_id = self._register_blueprint_class(MyBlueprint)
+        self.new_type_fields_id = self._register_blueprint_class(NewTypeFieldsBlueprint)
 
         genesis = self.manager.tx_storage.get_all_genesis()
         self.tx = [t for t in genesis if t.is_transaction][0]
@@ -112,6 +144,20 @@ class NCBlueprintTestCase(BlueprintTestCase):
         self.assertEqual(storage.get_obj(b'b', BYTES_NC_TYPE), b)
         self.assertEqual(storage.get_obj(b'c', INT_NC_TYPE), c)
         self.assertEqual(storage.get_obj(b'd', BOOL_NC_TYPE), d)
+
+    def test_new_type_field_getters_return_actual_types(self) -> None:
+        nc_id = self.new_type_fields_id
+        ctx = self.create_context()
+        self.runner.create_contract(nc_id, self.new_type_fields_id, ctx, Amount(100), Timestamp(1234567890))
+
+        # the field getters must return instances of the declared classes, not plain ints
+        y = self.runner.call_view_method(nc_id, 'get_y')
+        self.assertIsInstance(y, Amount)
+        self.assertEqual(y, 100)
+
+        t = self.runner.call_view_method(nc_id, 'get_t')
+        self.assertIsInstance(t, Timestamp)
+        self.assertEqual(t, 1234567890)
 
     def test_container_fields(self) -> None:
         nc_id = self.container_fields_id
