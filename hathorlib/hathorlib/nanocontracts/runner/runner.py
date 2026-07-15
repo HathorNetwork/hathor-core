@@ -492,6 +492,7 @@ class Runner:
             self._update_tokens_amount(
                 fee=UpdateTokenBalanceRecord(token_uid=fee.token_uid, amount=-fee_amount.to_signed()),
             )
+            # TODO: Deposit policy fees on deposit address, using global state. Same for mint/melt/create.
             self._register_paid_fee(fee.token_uid, fee_amount)
 
         ctx_actions = Context.__group_actions__(actions)

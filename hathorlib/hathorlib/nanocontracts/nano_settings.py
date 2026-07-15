@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class FeePolicy:
+    deposit_address: str | None
     fee_based_tokens: int
     amount_shielded: int
     full_shielded: int
@@ -30,6 +31,7 @@ class FeePolicy:
             return amount.to_version(token_amount_version).raw()
 
         return cls(
+            deposit_address=fee_policy.deposit_address,
             fee_based_tokens=denormalize(fee_policy.get_fee_based_tokens()),
             amount_shielded=denormalize(fee_policy.get_amount_shielded()),
             full_shielded=denormalize(fee_policy.get_full_shielded()),
@@ -57,7 +59,7 @@ class NanoSettings:
         match runtime_version:
             case NanoRuntimeVersion.V1:
                 raise NCFail('syscall `get_settings` is not yet supported')
-            case NanoRuntimeVersion.V2:
+            case NanoRuntimeVersion.V2 | NanoRuntimeVersion.V3:
                 fee_policy_version = runtime_version.get_fee_policy_version()
                 fee_policy_per_token = settings.get_fee_policies(fee_policy_version)
                 fee_policies = {

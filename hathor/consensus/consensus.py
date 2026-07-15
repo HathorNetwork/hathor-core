@@ -440,7 +440,7 @@ class ConsensusAlgorithm:
                 case Feature.NANO_CONTRACTS:
                     if not self._nano_activation_rule(tx, is_active):
                         return False
-                case Feature.FEE_TOKENS:
+                case Feature.FEE_TOKENS | Feature.FEE_POLICY_V2:
                     if not self._fee_tokens_activation_rule(tx, is_active):
                         return False
                 case Feature.COUNT_CHECKDATASIG_OP:

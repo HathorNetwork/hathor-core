@@ -40,12 +40,14 @@ from hathor.transaction.exceptions import (
     UnusedTokensError,
     WeightError,
 )
+from hathor.transaction.scripts import parse_address_script
 from hathor.transaction.scripts.opcode import OpcodesVersion
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.verification.verification_params import VerificationParams
 from hathorlib.exceptions import TxValidationError
+from hathorlib.nanocontracts.runner.token_fees import FeeCharge
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -330,6 +332,7 @@ class TransactionVerifier:
                 f'Fee amount is different than expected. (token={token_dict.header_fee.token_uid.hex()}, '
                 f'amount={token_dict.header_fee.amount}, expected={expected_fee})'
             )
+        cls._verify_fee_deposit_outputs(tx, token_dict.header_fee)
 
         if htr_info.amount < htr_expected_amount.to_signed():
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
@@ -338,6 +341,42 @@ class TransactionVerifier:
             ))
 
         assert htr_info.amount == htr_expected_amount.to_signed()
+
+    @staticmethod
+    def _verify_fee_deposit_outputs(tx: Transaction, header_fee: FeeCharge) -> None:
+        """Verify that outputs pay the header fee amount to the fee policy's deposit address.
+
+        Fees with a deposit address do not affect the balance; instead, outputs paying the fee amount
+        to the deposit address must exist. Does nothing when the policy has no deposit address.
+
+        :raises InputOutputMismatch: when the outputs paying the deposit address don't cover the fee
+        """
+        deposit_address = header_fee.policy.deposit_address
+        if deposit_address is None:
+            return
+
+        deposit_address_sum = UnsignedAmount.zero()
+        for output in tx.outputs:
+            if output.is_token_authority():
+                continue
+            if tx.get_token_uid(output.get_token_index()) != header_fee.token_uid:
+                continue
+            script = parse_address_script(output.script)
+            if script is None:
+                continue
+            if script.get_address() != deposit_address:
+                continue
+            if script.get_timelock() is not None:
+                # A timelocked output defers the deposit address's ability to spend it,
+                # so it does not count as fee payment.
+                continue
+            deposit_address_sum += output.value
+
+        if deposit_address_sum != header_fee.amount:
+            raise InputOutputMismatch(
+                f'expected {header_fee.amount} of token {header_fee.token_uid.hex()} '
+                f'fee paid to {deposit_address}, found {deposit_address_sum}'
+            )
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:

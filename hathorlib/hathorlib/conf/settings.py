@@ -524,6 +524,8 @@ class HathorSettings(BaseModel):
 
     ENABLE_TOKEN_AMOUNT_V2: FeatureSetting = FeatureSetting.DISABLED
 
+    ENABLE_FEE_POLICY_V2: FeatureSetting = FeatureSetting.DISABLED
+
     # List of enabled blueprints.
     BLUEPRINTS: dict[bytes, str] = {}
 
@@ -554,6 +556,7 @@ class HathorSettings(BaseModel):
     FEE_POLICIES: dict[FeePolicyVersion, FeePolicyPerToken] = Field(default_factory=lambda: {
         FeePolicyVersion.V1: {
             HATHOR_TOKEN_UID: FeePolicy(
+                deposit_address=None,
                 fee_based_tokens='0.01',
                 amount_shielded='0.01',
                 full_shielded='0.02',
@@ -596,7 +599,36 @@ class HathorSettings(BaseModel):
         for fee_policy_version, policies in self.FEE_POLICIES.items():
             if HATHOR_TOKEN_UID not in policies:
                 raise ValueError(f'HTR policy must be defined in fee policy version {fee_policy_version}')
+            htr_policy = policies[HATHOR_TOKEN_UID]
+            if htr_policy.deposit_address is not None:
+                raise ValueError('HTR policy must not define a deposit address')
+            for token_uid, policy in policies.items():
+                self._validate_fee_policy_deposit_address(fee_policy_version, token_uid, policy)
         return self
+
+    def _validate_fee_policy_deposit_address(
+        self,
+        fee_policy_version: FeePolicyVersion,
+        token_uid: bytes,
+        policy: FeePolicy,
+    ) -> None:
+        """Validate that a non-null `deposit_address` in `policy` is a valid address for this network."""
+        if policy.deposit_address is None:
+            return
+        from hathorlib.exceptions import InvalidAddress
+        from hathorlib.utils.address import decode_address
+        try:
+            decoded = decode_address(policy.deposit_address)
+        except InvalidAddress as e:
+            raise ValueError(
+                f'invalid deposit address {policy.deposit_address!r} for token {token_uid.hex()} '
+                f'in fee policy version {fee_policy_version}: {e}'
+            ) from e
+        if decoded[0:1] not in (self.P2PKH_VERSION_BYTE, self.MULTISIG_VERSION_BYTE):
+            raise ValueError(
+                f'deposit address {policy.deposit_address!r} for token {token_uid.hex()} '
+                f'in fee policy version {fee_policy_version} is not valid for network {self.NETWORK_NAME}'
+            )
 
     def get_fee_policies(self, fee_policy_version: FeePolicyVersion) -> FeePolicyPerToken:
         """Return the fee policies for the respective version."""
