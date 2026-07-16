@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for API-version path prefixing."""
 
 from hathor.api.openapi.versioning import deep_merge, path_version_prefix, prefix_unversioned_paths
