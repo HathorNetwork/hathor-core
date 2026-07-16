@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hashlib import sha256
 from json import dumps as json_dumps, loads as json_loads
 from time import sleep

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.internet import endpoints
 from twisted.internet.address import IPv4Address
 from twisted.internet.defer import inlineCallbacks

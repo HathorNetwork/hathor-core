@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ### Motivation
 
 What was the motivation for the changes in this PR?

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for the @api_endpoint decorator auto-validation and auto-serialization."""
 import json
 import unittest

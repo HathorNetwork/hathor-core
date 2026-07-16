@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Usage: update_checkpoints.py [-h] [-n NETWORK]
 

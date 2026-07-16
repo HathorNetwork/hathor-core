@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Hathor core (full node)
 
 [![Codecov](https://img.shields.io/codecov/c/github/HathorNetwork/hathor-core?logo=codecov)](https://codecov.io/gh/hathornetwork/hathor-core)

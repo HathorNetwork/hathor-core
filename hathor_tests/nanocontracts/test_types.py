@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts.types import ContractId, SignedData, VertexId
 from hathor.transaction.scripts import P2PKH
 from hathor_tests import unittest

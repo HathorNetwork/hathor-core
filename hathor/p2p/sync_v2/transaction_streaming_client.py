@@ -1,16 +1,5 @@
-# Copyright 2023 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from collections import deque
 from typing import TYPE_CHECKING, Any, Generator, Optional
@@ -187,15 +176,21 @@ class TransactionStreamingClient:
             if tx.hash in self._db:
                 # This case might happen during a resume, so we just log and keep syncing.
                 self.log.debug('duplicated vertex received', tx_id=tx.hash.hex())
-                self._update_dependencies(tx)
-            elif tx.hash in self._existing_deps:
+            elif tx.hash in self._existing_deps or self.tx_storage.transaction_exists(tx.hash):
                 # This case might happen if we already have the transaction from another sync.
                 self.log.debug('existing vertex received', tx_id=tx.hash.hex())
-                self._update_dependencies(tx)
             else:
-                self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
-                self.fails(UnexpectedVertex(tx.hash.hex()))
-            return
+                # The server may have moved to a later block while another peer satisfied this one.
+                yield self._advance_satisfied_blocks()
+                if tx.hash not in self._waiting_for:
+                    self.log.info('unexpected vertex received', tx_id=tx.hash.hex())
+                    self.fails(UnexpectedVertex(tx.hash.hex()))
+                    return
+
+            if tx.hash not in self._waiting_for:
+                self._update_dependencies(tx)
+                yield self._advance_satisfied_blocks()
+                return
         self._waiting_for.remove(tx.hash)
 
         self._update_dependencies(tx)
@@ -205,10 +200,7 @@ class TransactionStreamingClient:
 
         if not self._waiting_for:
             self.log.debug('no pending dependencies, processing buffer')
-            while not self._waiting_for:
-                result = yield self._execute_and_prepare_next()
-                if not result:
-                    break
+            yield self._advance_satisfied_blocks()
         else:
             self.log.debug('pending dependencies', counter=len(self._waiting_for))
 
@@ -241,6 +233,13 @@ class TransactionStreamingClient:
 
         self.log.info('transactions streaming ended', reason=self._response_code, waiting_for=len(self._waiting_for))
         self._deferred.callback(self._response_code)
+
+    @inlineCallbacks
+    def _advance_satisfied_blocks(self) -> Generator[Any, Any, None]:
+        """Advance past blocks whose dependencies are already available."""
+        while not self._waiting_for and self._idx < len(self.partial_blocks):
+            if not (yield self._execute_and_prepare_next()):
+                return
 
     @inlineCallbacks
     def _execute_and_prepare_next(self) -> Generator[Any, Any, bool]:

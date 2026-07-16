@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.conf import HathorSettings
 from hathor.nanocontracts import Blueprint, Context, public
 from hathor.nanocontracts.exception import NCFail

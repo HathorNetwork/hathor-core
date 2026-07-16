@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts import Runner
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 

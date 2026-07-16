@@ -1,12 +1,34 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.manager import HathorManager
 from hathor.simulator import FakeConnection
-from hathor.simulator.trigger import All as AllTriggers, StopWhenSynced, Trigger
+from hathor.simulator.trigger import StopWhenSynced, StopWhenTrue
 from hathor.verification.vertex_verifier import VertexVerifier
 from hathor_tests.simulation.base import SimulatorTestCase
 
 
 class RandomSimulatorTestCase(SimulatorTestCase):
+    @staticmethod
+    def _network_converged(reference: HathorManager, others: list[HathorManager]) -> bool:
+        """Return True when every manager in `others` has the same best block and mempool tips
+        as `reference`, i.e. the whole network has converged.
+
+        This checks convergence directly on each node's storage, independent of the state of
+        individual peer connections. A single connection may stay stuck (e.g. flapping on a
+        sync-v2 streaming error) without preventing the network from converging through the
+        other connections, so it is a more reliable stop condition than requiring every
+        connection to report itself as synced.
+        """
+        best_block = reference.tx_storage.get_best_block_hash()
+        mempool_tips = reference.tx_storage.indexes.mempool_tips.get()
+        return all(
+            node.tx_storage.get_best_block_hash() == best_block
+            and node.tx_storage.indexes.mempool_tips.get() == mempool_tips
+            for node in others
+        )
+
     def test_verify_pow(self) -> None:
         manager1 = self.create_peer()
         # just get one of the genesis, we don't really need to create any transaction
@@ -70,7 +92,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
     def test_many_miners_since_beginning(self) -> None:
         nodes: list[HathorManager] = []
         miners = []
-        stop_triggers: list[Trigger] = []
 
         for hashpower in [10e6, 5e6, 1e6, 1e6, 1e6]:
             manager = self.create_peer()
@@ -79,7 +100,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
                 #      failing without it for some reason
                 conn = FakeConnection(manager, node, latency=0.085, autoreconnect=True)
                 self.simulator.add_connection(conn)
-                stop_triggers.append(StopWhenSynced(conn))
 
             nodes.append(manager)
 
@@ -92,9 +112,10 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        # TODO Add self.assertTrue(...) when the trigger is fixed.
-        #      For further information, see https://github.com/HathorNetwork/hathor-core/pull/815.
-        self.simulator.run(3600, trigger=AllTriggers(stop_triggers))
+        # The network must fully converge within the time budget, so the tip comparison below
+        # reflects a converged network instead of an arbitrary moment in time.
+        converged = StopWhenTrue(lambda: self._network_converged(nodes[0], nodes[1:]))
+        self.assertTrue(self.simulator.run(3600, trigger=converged))
 
         for node in nodes[1:]:
             self.assertTipsEqual(nodes[0], node)
@@ -103,7 +124,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         nodes = []
         miners = []
         tx_generators = []
-        stop_triggers: list[Trigger] = []
 
         manager = self.create_peer()
         nodes.append(manager)
@@ -136,7 +156,6 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for node in nodes:
             conn = FakeConnection(late_manager, node, latency=0.300, autoreconnect=True)
             self.simulator.add_connection(conn)
-            stop_triggers.append(StopWhenSynced(conn))
 
         self.simulator.run(600)
 
@@ -145,9 +164,11 @@ class RandomSimulatorTestCase(SimulatorTestCase):
         for miner in miners:
             miner.stop()
 
-        # TODO Add self.assertTrue(...) when the trigger is fixed. Same as in test_many_miners_since_beginning.
-        #      For further information, see https://github.com/HathorNetwork/hathor-core/pull/815.
-        self.simulator.run(3600, trigger=AllTriggers(stop_triggers))
+        # The late node must fully converge with the network within the time budget. This
+        # asserts convergence actually happened, instead of merely checking consensus at an
+        # arbitrary cutoff (which would silently pass even if sync never completed).
+        converged = StopWhenTrue(lambda: self._network_converged(late_manager, nodes))
+        self.assertTrue(self.simulator.run(3600, trigger=converged))
 
         for idx, node in enumerate(nodes):
             self.log.debug(f'checking node {idx}')

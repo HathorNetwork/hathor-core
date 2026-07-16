@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import base64
 import os
 import string
@@ -157,6 +160,9 @@ def gen_custom_base_tx(manager: HathorManager,
         elif not tx_base.is_block:
             tx2.parents.append(tx_base.parents[0])
         else:
+            # the best block timestamp may be ahead of the clock (e.g. blocks mined less than a second apart in
+            # the simulator), and `get_new_tx_parents` requires a timestamp not older than the best block's
+            tx2.timestamp = max(tx2.timestamp, manager.get_timestamp_for_new_vertex())
             tx2.parents.extend(manager.get_new_tx_parents(tx2.timestamp))
             tx2.parents = tx2.parents[:2]
     assert len(tx2.parents) == 2

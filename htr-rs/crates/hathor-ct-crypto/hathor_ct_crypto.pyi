@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Type stubs for the hathor_ct_crypto native module.
 
 The implementations land in a later PR; until then the compiled module is

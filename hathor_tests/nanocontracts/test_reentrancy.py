@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.exception import NCForbiddenReentrancy
 from hathor.nanocontracts.types import Amount, CallerId, ContractId, NCAction, NCDepositAction, TokenUid

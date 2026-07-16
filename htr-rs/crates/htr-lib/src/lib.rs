@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Core Rust implementations for Hathor.
 //!
 //! This crate holds the pure-Rust domain types — bindings to other languages are

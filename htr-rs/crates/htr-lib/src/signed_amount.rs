@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Signed token amount type.
 //!
 //! [`SignedAmount`] is the signed counterpart to [`crate::unsigned_amount::UnsignedAmount`]:

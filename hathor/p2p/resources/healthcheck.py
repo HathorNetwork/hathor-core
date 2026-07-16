@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource
 from hathor.manager import HathorManager
