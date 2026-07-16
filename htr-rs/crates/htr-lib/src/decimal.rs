@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Decimal rendering and parsing for token amounts.
 //!
 //! Token amounts are stored as integers; the human-facing form places a decimal point a fixed
