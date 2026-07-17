@@ -11,7 +11,7 @@ from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import NC_EXECUTION_FAIL_ID, Blueprint, Context, public
 from hathor.nanocontracts.exception import NCFail, NCInvalidSignature
 from hathor.nanocontracts.method import Method
-from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_field_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCAction, NCActionType, NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import sign_pycoin
@@ -119,12 +119,11 @@ class NCConsensusTestCase(SimulatorTestCase):
         nc_actions: list[NanoHeaderAction] | None = None,
         is_custom_token: bool = False,
     ) -> Transaction:
-        method_parser = Method.from_callable(getattr(MyBlueprint, nc_method))
-
         if nc is None:
             nc = Transaction(timestamp=int(self.manager.reactor.seconds()))
         assert isinstance(nc, Transaction)
 
+        method_parser = Method.from_callable(getattr(MyBlueprint, nc_method), nc.get_token_amount_version())
         nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
 
         if address is None:

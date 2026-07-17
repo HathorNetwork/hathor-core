@@ -106,6 +106,7 @@ KNOWN_CASES = [
     'hathor.NCParsedArgs.some_new_attribute',
     'hathor.NCRawArgs.args_bytes',
     'hathor.NCRawArgs.some_new_attribute',
+    'hathor.NCRawArgs.token_amount_version',
     'hathor.NCRawArgs.try_parse_as',
     'hathor.NCWithdrawalAction.amount',
     'hathor.NCWithdrawalAction.name',

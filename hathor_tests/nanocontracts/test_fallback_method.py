@@ -16,6 +16,7 @@ from hathor.transaction import Block, Transaction
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathorlib.token_amount_version import TokenAmountVersion
 
 # TODO: Test support for container args/kwargs such as list[int] after Jan's PR
 
@@ -139,7 +140,7 @@ class TestFallbackMethod(BlueprintTestCase):
             self.runner.call_public_method(self.contract_id, 'call_another_fallback', self.ctx, contract_id)
 
     def test_fallback_args_bytes_success(self) -> None:
-        args_parser = ArgsOnly.from_arg_types((str, int))
+        args_parser = ArgsOnly.from_arg_types((str, int), TokenAmountVersion.V1)
         args_bytes = args_parser.serialize_args_bytes(('hello', 123))
         nc_args = NCRawArgs(args_bytes)
         result = self.runner.call_public_method_with_nc_args(self.contract_id, 'unknown', self.ctx, nc_args)
@@ -160,9 +161,9 @@ class TestFallbackMethod(BlueprintTestCase):
 
     def test_dag_fallback(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
-        valid_args_parser = ArgsOnly.from_arg_types((str, int))
+        valid_args_parser = ArgsOnly.from_arg_types((str, int), TokenAmountVersion.V1)
         valid_args_bytes = valid_args_parser.serialize_args_bytes(('hello', 123))
-        invalid_args_parser = ArgsOnly.from_arg_types((int, int))
+        invalid_args_parser = ArgsOnly.from_arg_types((int, int), TokenAmountVersion.V1)
         invalid_args_bytes = invalid_args_parser.serialize_args_bytes((123, 456))
 
         artifacts = dag_builder.build_from_str(f'''

@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 T = TypeVar('T')
-TypeAliasMap: TypeAlias = Mapping[type | UnionType, type]
-TypeToNCTypeMap: TypeAlias = Mapping[type | UnionType | tuple[type, ...], type['NCType']]
+TypeAliasMap: TypeAlias = dict[type | UnionType, type]
+TypeToNCTypeMap: TypeAlias = dict[type | UnionType | tuple[type, ...], type['NCType']]
 
 
 def get_origin_classes(type_: type) -> Iterator[type]:

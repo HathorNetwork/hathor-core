@@ -25,11 +25,16 @@ from hathor.nanocontracts.types import (
 from hathor.transaction.token_info import TokenVersion
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.token_amount import SignedAmount, UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
-CONTRACT_NC_TYPE = make_nc_type(ContractId)
-BLUEPRINT_NC_TYPE = make_nc_type(BlueprintId)
-OPT_CONTRACT_NC_TYPE: NCType[ContractId | None] = make_nc_type(ContractId | None)  # type: ignore[arg-type]
-OPT_BLUEPRINT_NC_TYPE: NCType[BlueprintId | None] = make_nc_type(BlueprintId | None)  # type: ignore[arg-type]
+CONTRACT_NC_TYPE = make_nc_type(ContractId, TokenAmountVersion.V1)
+BLUEPRINT_NC_TYPE = make_nc_type(BlueprintId, TokenAmountVersion.V1)
+OPT_CONTRACT_NC_TYPE: NCType[ContractId | None] = (
+    make_nc_type(ContractId | None, TokenAmountVersion.V1)  # type: ignore[arg-type]
+)
+OPT_BLUEPRINT_NC_TYPE: NCType[BlueprintId | None] = (
+    make_nc_type(BlueprintId | None, TokenAmountVersion.V1)  # type: ignore[arg-type]
+)
 
 
 class MyBlueprint(Blueprint):
@@ -129,7 +134,7 @@ class TargetBlueprint(Blueprint):
     @public(allow_deposit=True)
     def proxy_increment(self, ctx: Context, blueprint_id: BlueprintId, value: int) -> int:
         """Call the increment method of another blueprint using proxy_call_public_method_nc_args."""
-        args_parser = ArgsOnly.from_arg_types((int,))
+        args_parser = ArgsOnly.from_arg_types((int,), TokenAmountVersion.V1)
         args_bytes = args_parser.serialize_args_bytes((value,))
         nc_args = NCRawArgs(args_bytes)
         # Pay 1 HTR as fee for the proxy call

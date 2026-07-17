@@ -41,7 +41,7 @@ def _varint_byte_length(normalized: int) -> int:
 def _encode_amount_field(normalized: int) -> bytes:
     """Return the exact key bytes the UTXO index writes for an amount: `[length][big-endian payload]`."""
     serializer = Serializer.build_bytes_serializer()
-    encode_length_prefix_varint(serializer, normalized, strict=False)
+    encode_length_prefix_varint(serializer, normalized, signed=False)
     return bytes(serializer.finalize())
 
 

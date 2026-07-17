@@ -636,6 +636,7 @@ class Runner:
         assert self._metered_executor is not None
         assert self._call_info is not None
 
+        nc_args = self._stamp_nc_args(nc_args)
         self._validate_context(ctx)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
@@ -654,14 +655,14 @@ class Runner:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
             method = fallback_method
             assert is_nc_fallback_method(method)
-            parser = ReturnOnly.from_callable(method)
+            parser = ReturnOnly.from_callable(method, self.token_amount_version)
             called_method_name = NC_FALLBACK_METHOD
             args = method_name, nc_args
         else:
             if not is_nc_public_method(method):
                 from hathorlib.nanocontracts.exception import NCInvalidMethodCall
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
-            parser = Method.from_callable(method)
+            parser = Method.from_callable(method, self.token_amount_version)
             args = self._validate_nc_args_for_method(parser, nc_args)
 
         if not skip_reentrancy_validation:
@@ -701,6 +702,12 @@ class Runner:
 
         self._call_info.post_call(call_record)
         return self._validate_return_type_for_method(parser, ret)
+
+    def _stamp_nc_args(self, nc_args: NCArgs) -> NCArgs:
+        """Return `nc_args`, stamping raw args that carry no token amount version with this runner's version."""
+        if isinstance(nc_args, NCRawArgs) and nc_args.token_amount_version is None:
+            return NCRawArgs(nc_args.args_bytes, self.token_amount_version)
+        return nc_args
 
     @staticmethod
     def _validate_nc_args_for_method(method: Method, nc_args: NCArgs) -> tuple[Any, ...]:
@@ -820,7 +827,7 @@ class Runner:
             from hathorlib.nanocontracts.exception import NCInvalidMethodCall
             raise NCInvalidMethodCall(f'`{method_name}` is not a view method')
 
-        parser = Method.from_callable(method)
+        parser = Method.from_callable(method, self.token_amount_version)
         args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
 
         call_record = CallRecord(

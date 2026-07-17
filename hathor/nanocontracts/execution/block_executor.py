@@ -325,7 +325,7 @@ class NCBlockExecutor:
             context = nano_header.get_context()
             assert context.block.hash == vertex_metadata.first_block
 
-            nc_args = NCRawArgs(nano_header.nc_args_bytes)
+            nc_args = NCRawArgs(nano_header.nc_args_bytes, runner.token_amount_version)
             if nano_header.is_creating_a_new_contract():
                 blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
                 runner.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)

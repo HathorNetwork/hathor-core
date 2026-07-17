@@ -134,7 +134,7 @@ class VertexJsonSerializer:
         if method_callable is None:
             return None
 
-        method = Method.from_callable(method_callable)
+        method = Method.from_callable(method_callable, tx.get_token_amount_version())
 
         try:
             args_tuple = method.deserialize_args_bytes(nano_header.nc_args_bytes)

@@ -167,12 +167,12 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
     T must be serializable.
     """
 
-    def __init__(self, data: T, script_input: bytes) -> None:
+    def __init__(self, data: T, script_input: bytes, token_amount_version: TokenAmountVersion) -> None:
         from hathorlib.nanocontracts.nc_types import make_nc_type_for_return_type as make_nc_type
 
         self.data = data
         self.script_input = script_input
-        self.__nc_type = make_nc_type(self.__inner_type__)
+        self.__nc_type = make_nc_type(self.__inner_type__, token_amount_version)
 
     def __eq__(self, other):
         if not isinstance(other, RawSignedData):
@@ -199,9 +199,17 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
 
 class SignedData(InnerTypeMixin[T], Generic[T]):
-    def __init__(self, data: T, script_input: bytes) -> None:
+    """A wrapper class for data whose signature can be verified against a contract-bound payload.
+
+    Instances carry a `TokenAmountVersion` stamp that selects the serialization used for the signed payload.
+    Instances deserialized from method args are stamped by `SignedDataNCType`; instances built directly (e.g.
+    by an oracle producing the bytes to sign) must receive `token_amount_version` explicitly.
+    """
+
+    def __init__(self, data: T, script_input: bytes, token_amount_version: TokenAmountVersion | None = None) -> None:
         self.data = data
         self.script_input = script_input
+        self._token_amount_version = token_amount_version
 
     def __eq__(self, other):
         if not isinstance(other, SignedData):
@@ -213,10 +221,14 @@ class SignedData(InnerTypeMixin[T], Generic[T]):
         return True
 
     def _get_raw_signed_data(self, contract_id: ContractId) -> RawSignedData:
+        assert self._token_amount_version is not None, (
+            'SignedData must be stamped with a token_amount_version before its payload can be serialized'
+        )
         # XXX: for some reason mypy doesn't recognize that self.__inner_type__ is defined even though it should
         raw_type: type = tuple[ContractId, self.__inner_type__]  # type: ignore[name-defined]
         raw_data = (contract_id, self.data)
-        return RawSignedData[raw_type](raw_data, self.script_input)  # type: ignore[valid-type]
+        raw_signed_data_type = RawSignedData[raw_type]  # type: ignore[valid-type]
+        return raw_signed_data_type(raw_data, self.script_input, self._token_amount_version)
 
     def get_data_bytes(self, contract_id: ContractId) -> bytes:
         """Return the serialized data."""
@@ -519,6 +531,7 @@ NCAction: TypeAlias = (
 @dataclass(slots=True, frozen=True)
 class NCRawArgs:
     args_bytes: bytes
+    token_amount_version: TokenAmountVersion | None = None
 
     def __str__(self) -> str:
         return self.args_bytes.hex()
@@ -528,8 +541,11 @@ class NCRawArgs:
 
     def try_parse_as(self, arg_types: tuple[type, ...]) -> tuple[Any, ...] | None:
         from hathorlib.nanocontracts.method import ArgsOnly
+        assert self.token_amount_version is not None, (
+            'NCRawArgs must carry a token_amount_version before its args can be parsed'
+        )
         try:
-            args_parser = ArgsOnly.from_arg_types(arg_types)
+            args_parser = ArgsOnly.from_arg_types(arg_types, self.token_amount_version)
             return args_parser.deserialize_args_bytes(self.args_bytes)
         except (NCSerializationError, SerializationError, TypeError, ValueError):
             return None

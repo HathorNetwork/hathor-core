@@ -4,6 +4,7 @@
 from hathor.nanocontracts.types import ContractId, SignedData, VertexId
 from hathor.transaction.scripts import P2PKH
 from hathor_tests import unittest
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class BaseNanoContractTestCase(unittest.TestCase):
@@ -13,14 +14,14 @@ class BaseNanoContractTestCase(unittest.TestCase):
         nc_id = ContractId(VertexId(b'x' * 32))
 
         result = b'1x1'
-        signed_result = SignedData[bytes](result, b'')
+        signed_result = SignedData[bytes](result, b'', TokenAmountVersion.V1)
         result_bytes = signed_result.get_data_bytes(nc_id)
 
         # Check signature using oracle's private key.
         key = KeyPair.create(b'123')
         assert key.address is not None
         script_input = key.p2pkh_create_input_data(b'123', result_bytes)
-        signed_result = SignedData[bytes](result, script_input)
+        signed_result = SignedData[bytes](result, script_input, TokenAmountVersion.V1)
 
         p2pkh = P2PKH(key.address)
         oracle_script = p2pkh.get_script()
@@ -29,7 +30,7 @@ class BaseNanoContractTestCase(unittest.TestCase):
         # Try to tamper with the data.
         fake_result = b'2x2'
         self.assertNotEqual(result, fake_result)
-        invalid_signed_result = SignedData[bytes](fake_result, script_input)
+        invalid_signed_result = SignedData[bytes](fake_result, script_input, TokenAmountVersion.V1)
         self.assertFalse(invalid_signed_result.checksig(nc_id, oracle_script))
 
         # Try to use the wrong private key to sign the data.

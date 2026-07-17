@@ -300,7 +300,7 @@ class OnChainBlueprint(Transaction):
     def get_method(self, method_name: str) -> Method:
         # XXX: possibly do this by analyzing the source AST instead of using the loaded code
         blueprint_class = self.get_blueprint_class()
-        return Method.from_callable(getattr(blueprint_class, method_name))
+        return Method.from_callable(getattr(blueprint_class, method_name), self.get_token_amount_version())
 
     def sign(self, private_key: ec.EllipticCurvePrivateKey) -> None:
         """Sign this blueprint with the provided private key."""

@@ -15,7 +15,7 @@ from hathor.nanocontracts.exception import (
     NCUninitializedContractError,
     NCViewMethodError,
 )
-from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_arg_type as make_nc_type
+from hathor.nanocontracts.nc_types import NCType, make_nc_type_for_field_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import (
     Address,
