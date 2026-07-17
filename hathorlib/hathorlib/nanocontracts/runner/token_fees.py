@@ -1,21 +1,11 @@
-#  Copyright 2025 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from typing_extensions import assert_never
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.nanocontracts.exception import NCInvalidFeePaymentToken
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 
@@ -24,9 +14,9 @@ def calculate_mint_fee(
     *,
     settings: HathorSettings,
     token_version: TokenVersion,
-    amount: int,
+    amount: UnsignedAmount,
     fee_payment_token: TokenDescription,
-) -> int:
+) -> SignedAmount:
     """Calculate the fee for a mint operation."""
     match token_version:
         case TokenVersion.NATIVE:
@@ -45,9 +35,9 @@ def calculate_melt_fee(
     *,
     settings: HathorSettings,
     token_version: TokenVersion,
-    amount: int,
+    amount: UnsignedAmount,
     fee_payment_token: TokenDescription,
-) -> int:
+) -> SignedAmount:
     """Calculate the fee for a melt operation."""
     match token_version:
         case TokenVersion.NATIVE:
@@ -79,8 +69,10 @@ def _validate_fee_based_payment_token(fee_payment_token: TokenDescription) -> No
             assert_never(fee_payment_token.token_version)
 
 
-def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> int:
+def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> UnsignedAmount:
     """Calculate the fee for handling a fee-based token"""
     if fee_payment_token.token_id == HATHOR_TOKEN_UID:
-        return settings.FEE_PER_OUTPUT
-    return int(settings.FEE_PER_OUTPUT / settings.TOKEN_DEPOSIT_PERCENTAGE)
+        return settings.FEE_PER_OUTPUT_V1
+    numerator = settings.FEE_PER_OUTPUT_V1 * settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+    assert numerator % settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR == 0
+    return numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR

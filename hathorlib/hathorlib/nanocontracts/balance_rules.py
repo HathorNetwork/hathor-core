@@ -1,16 +1,5 @@
-#  Copyright 2025 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -30,6 +19,7 @@ from hathorlib.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCWithdrawalAction,
 )
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenVersion
 
 if TYPE_CHECKING:
@@ -46,11 +36,12 @@ class BalanceRules(ABC, Generic[T]):
     which is always a contract, and one for the caller, which may be a transaction or another contract.
     """
 
-    __slots__ = ('settings', 'action')
+    __slots__ = ('settings', 'action', 'token_amount_version')
 
-    def __init__(self, settings: HathorSettings, action: T) -> None:
+    def __init__(self, settings: HathorSettings, action: T, token_amount_version: TokenAmountVersion) -> None:
         self.settings = settings
         self.action = action
+        self.token_amount_version = token_amount_version
 
     @abstractmethod
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -69,25 +60,34 @@ class BalanceRules(ABC, Generic[T]):
         raise NotImplementedError
 
     @abstractmethod
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         """
         Define how the respective action interacts with the transaction's changes tracker during nano contract
-        execution, updating it, on the caller side — that is, when a contract calls another contract.
+        execution, updating it, on both the caller and callee side — that is, when a contract calls another contract.
         """
         raise NotImplementedError
 
     @staticmethod
-    def get_rules(settings: HathorSettings, action: NCAction) -> BalanceRules:
+    def get_rules(
+        settings: HathorSettings,
+        action: NCAction,
+        token_amount_version: TokenAmountVersion,
+    ) -> BalanceRules:
         """Get the balance rules instance for the provided action."""
         match action:
             case NCDepositAction():
-                return _DepositRules(settings, action)
+                return _DepositRules(settings, action, token_amount_version)
             case NCWithdrawalAction():
-                return _WithdrawalRules(settings, action)
+                return _WithdrawalRules(settings, action, token_amount_version)
             case NCGrantAuthorityAction():
-                return _GrantAuthorityRules(settings, action)
+                return _GrantAuthorityRules(settings, action, token_amount_version)
             case NCAcquireAuthorityAction():
-                return _AcquireAuthorityRules(settings, action)
+                return _AcquireAuthorityRules(settings, action, token_amount_version)
             case _:
                 assert_never(action)
 
@@ -100,6 +100,7 @@ class _DepositRules(BalanceRules[NCDepositAction]):
     - In the execution-phase (callee), the amount is added to the nano contract balance.
     - In the execution-phase (caller), the amount is removed from the nano contract balance.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -115,8 +116,14 @@ class _DepositRules(BalanceRules[NCDepositAction]):
         callee_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         caller_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        self.nc_callee_execution_rule(callee_changes_tracker)
 
 
 class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
@@ -127,6 +134,7 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
     - In the execution-phase (callee), the amount is removed from the nano contract balance.
     - In the execution-phase (caller), the amount is added to the nano contract balance.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -142,8 +150,14 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
         callee_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         caller_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        self.nc_callee_execution_rule(callee_changes_tracker)
 
 
 class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
@@ -154,6 +168,7 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
     - In the execution phase (callee), the authorities are granted to the nano contract.
     - In the execution phase (caller), we check whether the balance can grant the authorities to the called contract.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -179,7 +194,12 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
         )
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         if self.action.token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidAction('cannot grant authorities for HTR token')
 
@@ -197,6 +217,8 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
                 f'but contract does not have that authority'
             )
 
+        self.nc_callee_execution_rule(callee_changes_tracker)
+
 
 class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     """
@@ -206,6 +228,7 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
     - In the execution phase (callee), we check whether the nano contract balance can grant those authorities.
     - In the execution phase (caller), we grant the authorities to the caller.
     """
+    __slots__ = ()
 
     @override
     def verification_rule(self, token_dict: TokenInfoDict) -> None:
@@ -227,10 +250,15 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
             raise NCInvalidAction(f'cannot acquire melt authority for token {self.action.token_uid.hex()}')
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         if self.action.token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidAction('cannot acquire authorities for HTR token')
 
+        self.nc_callee_execution_rule(callee_changes_tracker)
         caller_changes_tracker.grant_authorities(
             self.action.token_uid,
             grant_mint=self.action.mint,

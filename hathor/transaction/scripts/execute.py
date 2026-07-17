@@ -1,16 +1,5 @@
-#  Copyright 2023 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -115,9 +104,15 @@ def script_eval(tx: Transaction, txin: TxInput, spent_tx: BaseTransaction, versi
 
     :raises ScriptError: if script verification fails
     """
+    # Use resolve_spent_output for shielded-aware lookup
+    try:
+        resolved = spent_tx.resolve_spent_output(txin.index)
+    except IndexError:
+        raise InvalidScriptError(f'input index {txin.index} out of range')
+    output_script = resolved.script
     raw_script_eval(
         input_data=txin.data,
-        output_script=spent_tx.resolve_spent_output(txin.index).script,
+        output_script=output_script,
         extras=UtxoScriptExtras(tx=tx, txin=txin, spent_tx=spent_tx, version=version),
     )
 

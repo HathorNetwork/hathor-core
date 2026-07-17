@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from io import StringIO, TextIOWrapper
 from typing import Sequence
 
@@ -18,6 +21,7 @@ from hathor.verification.on_chain_blueprint_verifier import OnChainBlueprintVeri
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
 from hathor_tests.nanocontracts.utils import TestRunner
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class BlueprintTestCase(unittest.TestCase):
@@ -121,7 +125,11 @@ class BlueprintTestCase(unittest.TestCase):
 
         return self._register_blueprint_class(blueprint_class, blueprint_id)
 
-    def build_runner(self, runtime_version: NanoRuntimeVersion = NanoRuntimeVersion.V2) -> TestRunner:
+    def build_runner(
+        self,
+        runtime_version: NanoRuntimeVersion = NanoRuntimeVersion.V2,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
+    ) -> TestRunner:
         """Create a test runner."""
         return TestRunner(
             tx_storage=self.manager.tx_storage,
@@ -129,6 +137,7 @@ class BlueprintTestCase(unittest.TestCase):
             settings=self._settings,
             reactor=self.reactor,
             runtime_version=runtime_version,
+            token_amount_version=token_amount_version,
         )
 
     def gen_random_token_uid(self) -> TokenUid:

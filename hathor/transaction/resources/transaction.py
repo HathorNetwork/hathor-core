@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
 
@@ -29,7 +18,7 @@ from hathor.api_util import (
 )
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction import Block
-from hathor.transaction.base_transaction import BaseTransaction, TxVersion
+from hathor.transaction.base_transaction import BaseTransaction, TxVersion, _shielded_output_to_json
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.util import json_dumpb
 
@@ -93,7 +82,18 @@ def get_tx_extra_data(
     for index, tx_in in enumerate(tx.inputs):
         if tx.storage:
             tx2 = tx.storage.get_transaction(tx_in.tx_id)
-            tx2_out = tx2.resolve_spent_output(tx_in.index)
+
+            if tx2.is_shielded_output(tx_in.index):
+                from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+                shielded_out = tx2.resolve_spent_output(tx_in.index)
+                assert isinstance(shielded_out, (AmountShieldedOutput, FullShieldedOutput))
+                output = _shielded_output_to_json(shielded_out, decode_script=True)
+                output['tx_id'] = tx2.hash_hex
+                output['index'] = tx_in.index
+                inputs.append(output)
+                continue
+
+            tx2_out = tx2.outputs[tx_in.index]
             output = tx2_out.to_json(decode_script=True)
             output['tx_id'] = tx2.hash_hex
             output['index'] = tx_in.index

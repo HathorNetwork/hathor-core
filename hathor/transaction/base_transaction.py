@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -30,7 +19,7 @@ from typing_extensions import Self
 from hathor.checkpoint import Checkpoint
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import InvalidOutputValue, WeightError
-from hathor.transaction.headers import VertexBaseHeader
+from hathor.transaction.headers import AnyVertexHeader
 from hathor.transaction.static_metadata import VertexStaticMetadata
 from hathor.transaction.transaction_metadata import TransactionMetadata
 from hathor.transaction.util import VerboseCallback
@@ -39,6 +28,7 @@ from hathor.types import TokenUid, TxOutputScript, VertexId
 from hathor.util import classproperty
 from hathor.utils.weight import weight_to_work
 from hathorlib.base_transaction import TxVersion  # noqa: F401
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -47,6 +37,7 @@ if TYPE_CHECKING:
     from hathor.transaction import Transaction
     from hathor.transaction.storage import TransactionStorage  # noqa: F401
     from hathor.transaction.vertex_children import VertexChildren
+    from hathorlib.transaction.shielded_tx_output import OutputMode, ShieldedOutput
 
 logger = get_logger()
 
@@ -76,6 +67,31 @@ def aux_calc_weight(w1: float, w2: float, multiplier: int) -> float:
         # We could use float('-inf'), but it is not serializable.
         return a
     return a + log(1 + 2**(b - a) * multiplier, 2)
+
+
+def _shielded_output_to_json(output: 'ShieldedOutput', *, decode_script: bool = False) -> dict[str, Any]:
+    """Serialize a shielded output to a JSON-compatible dict."""
+    from hathorlib.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
+
+    data: dict[str, Any] = {
+        'type': 'shielded',
+        'commitment': output.commitment.hex(),
+        'range_proof': base64.b64encode(output.range_proof).decode('utf-8'),
+        'script': base64.b64encode(output.script).decode('utf-8'),
+    }
+    if output.ephemeral_pubkey:
+        data['ephemeral_pubkey'] = output.ephemeral_pubkey.hex()
+    if isinstance(output, AmountShieldedOutput):
+        data['token_data'] = output.token_data
+    elif isinstance(output, FullShieldedOutput):
+        data['asset_commitment'] = output.asset_commitment.hex()
+        data['surjection_proof'] = base64.b64encode(output.surjection_proof).decode('utf-8')
+    if decode_script:
+        from hathor.transaction.scripts import parse_address_script
+        script_type = parse_address_script(output.script)
+        if script_type:
+            data['decoded'] = {'address': script_type.address}
+    return data
 
 
 def get_cls_from_tx_version(tx_version: TxVersion) -> type['BaseTransaction']:
@@ -172,7 +188,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         self._hash: VertexId | None = hash  # Stored as bytes.
         self._static_metadata = None
 
-        self.headers: list[VertexBaseHeader] = []
+        self.headers: list[AnyVertexHeader] = []
 
         # A name solely for debugging purposes.
         self.name: str | None = None
@@ -235,9 +251,13 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         """Return whether this transaction has a fee header."""
         return False
 
+    def has_shielded_outputs(self) -> bool:
+        """Return whether this vertex has shielded outputs."""
+        return False
+
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
-        return 2
+        return 3
 
     @classmethod
     @abstractmethod
@@ -293,18 +313,32 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
             return ''
 
     @property
-    def sum_outputs(self) -> int:
+    def sum_outputs(self) -> UnsignedAmount:
         """Sum of the value of the outputs"""
         return sum(output.value for output in self.outputs if not output.is_token_authority())
 
-    def resolve_spent_output(self, index: int) -> 'TxOutput':
-        """Return the output at `index` that an input may spend.
+    @property
+    def shielded_outputs(self) -> list['ShieldedOutput']:
+        """Return the list of shielded outputs. Empty for non-Transaction vertices."""
+        return []
 
-        Default implementation indexes `self.outputs` directly. Subclasses with
-        additional output spaces (e.g. shielded outputs) override this to make
-        the lookup aware of those spaces.
+    def is_shielded_output(self, index: int) -> bool:
+        """Return True if `index` refers to a shielded output (i.e. index >= len(self.outputs))."""
+        return index >= len(self.outputs) and index < len(self.outputs) + len(self.shielded_outputs)
+
+    def resolve_spent_output(self, index: int) -> 'TxOutput | ShieldedOutput':
+        """Resolve an output by index, checking both transparent and shielded outputs.
+
+        3-way lookup: transparent outputs first, then shielded, then raise.
         """
-        return self.outputs[index]
+        if index < len(self.outputs):
+            return self.outputs[index]
+        shielded_idx = index - len(self.outputs)
+        shielded = self.shielded_outputs
+        if shielded_idx < len(shielded):
+            return shielded[shielded_idx]
+        raise IndexError(f'output index {index} out of range (transparent={len(self.outputs)}, '
+                         f'shielded={len(shielded)})')
 
     def get_target(self, override_weight: Optional[float] = None) -> int:
         """Target to be achieved in the mining process"""
@@ -427,7 +461,7 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
         assert self.storage is not None
         addresses: set[str] = set()
 
-        def add_address_from_output(output: 'TxOutput') -> None:
+        def add_address_from_output(output: 'TxOutput' | 'ShieldedOutput') -> None:
             script_type_out = parse_address_script(output.script)
             if script_type_out:
                 address = script_type_out.address
@@ -435,8 +469,10 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for txin in self.inputs:
             tx2 = self.storage.get_transaction(txin.tx_id)
-            txout = tx2.resolve_spent_output(txin.index)
-            add_address_from_output(txout)
+            # resolve_spent_output is shielded-aware; both transparent TxOutput and
+            # shielded outputs expose `.script`, so we parse it directly.
+            resolved = tx2.resolve_spent_output(txin.index)
+            add_address_from_output(resolved)
 
         for txout in self.outputs:
             add_address_from_output(txout)
@@ -784,11 +820,23 @@ class GenericVertex(ABC, Generic[StaticMetadataT]):
 
         for index, tx_in in enumerate(self.inputs):
             tx2 = self.storage.get_transaction(tx_in.tx_id)
-            tx2_out = tx2.resolve_spent_output(tx_in.index)
-            output = serialize_output(tx2, tx2_out)
-            output['tx_id'] = tx2.hash_hex
-            output['index'] = tx_in.index
-            ret['inputs'].append(output)
+            # Shielded inputs need a different serialization shape than transparent ones,
+            # since shielded outputs have a commitment instead of a value.
+            resolved_output = tx2.resolve_spent_output(tx_in.index)
+            if tx2.is_shielded_output(tx_in.index):
+                shielded_out = resolved_output
+                assert isinstance(shielded_out, ShieldedOutput), "Output must be shielded."
+                output_data: dict[str, Any] = _shielded_output_to_json(shielded_out, decode_script=True)
+                output_data['tx_id'] = tx2.hash_hex
+                output_data['index'] = tx_in.index
+            else:
+                tx2_out = resolved_output
+                assert isinstance(tx2_out, TxOutput), "Output must be transparent."
+                output_data = serialize_output(tx2, tx2_out)
+                output_data['type'] = 'transparent'
+                output_data['tx_id'] = tx2.hash_hex
+                output_data['index'] = tx_in.index
+            ret['inputs'].append(output_data)
 
         for index, tx_out in enumerate(self.outputs):
             spent_by = meta.get_output_spent_by(index)
@@ -896,14 +944,6 @@ class TxInput:
         return vertex_serializer.serialize_tx_input_sighash(self)
 
     @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxInput', bytes]:
-        """ Creates a TxInput from a serialized input. Returns the input
-        and remaining bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_input(buf, verbose=verbose)
-
-    @classmethod
     def create_from_dict(cls, data: dict) -> 'TxInput':
         """ Creates a TxInput from a human readable dict."""
         return cls(
@@ -937,19 +977,19 @@ class TxOutput:
 
     ALL_AUTHORITIES = TOKEN_MINT_MASK | TOKEN_MELT_MASK
 
-    def __init__(self, value: int, script: TxOutputScript, token_data: int = 0) -> None:
+    def __init__(self, value: UnsignedAmount, script: TxOutputScript, token_data: int = 0) -> None:
         """
             value: amount spent (4 bytes)
             script: script in bytes
             token_data: index of the token uid in the uid list
         """
-        assert isinstance(value, int), 'value is %s, type %s' % (str(value), type(value))
+        assert isinstance(value, UnsignedAmount), 'value is %s, type %s' % (str(value), type(value))
         assert isinstance(script, TxOutputScript), 'script is %s, type %s' % (str(script), type(script))
         assert isinstance(token_data, int), 'token_data is %s, type %s' % (str(token_data), type(token_data))
         if value <= 0 or value > MAX_OUTPUT_VALUE:
             raise InvalidOutputValue
 
-        self.value = value  # int
+        self.value = value  # UnsignedAmount
         self.script = script  # bytes
         self.token_data = token_data  # int
 
@@ -971,25 +1011,15 @@ class TxOutput:
         else:
             return f'{cls_name}(value={value_str}, script={self.script.hex()})'
 
-    def __bytes__(self) -> bytes:
-        """Returns a byte representation of the output
-
-        :rtype: bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.serialize_tx_output_bytes(self)
-
-    @classmethod
-    def create_from_bytes(cls, buf: bytes, *, verbose: VerboseCallback = None) -> tuple['TxOutput', bytes]:
-        """ Creates a TxOutput from a serialized output. Returns the output
-        and remaining bytes
-        """
-        from hathor.transaction.vertex_parser import vertex_serializer
-        return vertex_serializer.deserialize_tx_output(buf, verbose=verbose)
-
     def get_token_index(self) -> int:
         """The token uid index in the list"""
         return self.token_data & self.TOKEN_INDEX_MASK
+
+    @staticmethod
+    def mode() -> OutputMode:
+        """Return the output mode (TRANSPARENT for standard TxOutput)."""
+        from hathorlib.transaction.shielded_tx_output import OutputMode as _OutputMode
+        return _OutputMode.TRANSPARENT
 
     def is_token_authority(self) -> bool:
         """Whether this is a token authority output"""

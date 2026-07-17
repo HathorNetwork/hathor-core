@@ -1,16 +1,5 @@
-#  Copyright 2024 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import hashlib
 from collections import defaultdict
@@ -505,13 +494,14 @@ class PoaSimulationTest(SimulatorTestCase):
             GENESIS_BLOCK_NONCE=0,
             GENESIS_TX1_NONCE=0,
             GENESIS_TX2_NONCE=0,
-            DECIMAL_PLACES=0,
-            GENESIS_TOKENS=tokens,
-            GENESIS_TOKEN_UNITS=tokens,
-            TOKEN_DEPOSIT_PERCENTAGE=0.0000001,
+            DISPLAY_DECIMAL_PLACES=0,
+            TOKEN_AMOUNT_V1_DECIMAL_PLACES=0,
+            TOKEN_AMOUNT_V2_DECIMAL_PLACES=0,
+            GENESIS_TOKEN_MAIN_UNITS=tokens,
+            TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR=100,
             BLOCKS_PER_HALVING=None,
-            INITIAL_TOKEN_UNITS_PER_BLOCK=0,
-            MINIMUM_TOKEN_UNITS_PER_BLOCK=0,
+            INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK=0,
+            MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK=0,
             MIN_BLOCK_WEIGHT=min_block_weight,
             MIN_TX_WEIGHT_K=0,
             MIN_TX_WEIGHT_COEFFICIENT=0,

@@ -1,16 +1,5 @@
-# Copyright 2024 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -40,6 +29,7 @@ from hathor.manager import HathorManager
 from hathor.nanocontracts.catalog import NCBlueprintCatalog
 from hathor.util import initialize_hd_wallet
 from hathor.wallet import BaseWallet
+from hathorlib.token_amount import SignedAmount
 
 logger = get_logger()
 
@@ -151,7 +141,7 @@ class DAGBuilder:
         from_node.deps.add(_to)
         return self
 
-    def update_balance(self, name: str, token: str, value: int) -> Self:
+    def update_balance(self, name: str, token: str, value: SignedAmount) -> Self:
         """Update the expected balance for a given token, where balance = sum(outputs) - sum(inputs).
 
         =0 means sum(txouts) = sum(txins)
@@ -159,7 +149,7 @@ class DAGBuilder:
         <0 means sum(txouts) < sum(txins), e.g., deposit
         """
         node = self._get_or_create_node(name)
-        node.balances[token] = node.balances.get(token, 0) + value
+        node.balances[token] = node.balances.get(token, SignedAmount(0)) + value
         if token != 'HTR':
             self._get_or_create_node(token, default_type=DAGNodeType.Token)
             self.add_deps(name, token)

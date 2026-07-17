@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 
 from hathor.simulator.utils import add_new_block, add_new_blocks

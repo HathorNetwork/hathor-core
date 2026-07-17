@@ -1,21 +1,11 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from hathor.types import TokenUid
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.token_info import TokenDescription, TokenVersion  # noqa: F401
 
 if TYPE_CHECKING:
@@ -41,14 +31,14 @@ class TokenInfo:
         Check if this token has been melted.
         A token is considered melted if its amount is negative.
         """
-        return self.amount < 0
+        return self.amount < SignedAmount(0)
 
     def has_been_minted(self) -> bool:
         """
         Check if this token has been minted.
         A token is considered minted if its amount is positive.
         """
-        return self.amount > 0
+        return self.amount > SignedAmount(0)
 
 
 class TokenInfoDict(dict[TokenUid, TokenInfo]):
@@ -58,7 +48,7 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
         super().__init__(*args, **kwargs)
         self.fees_from_fee_header: int = 0
 
-    def calculate_fee(self, settings: 'HathorSettings') -> int:
+    def calculate_fee(self, settings: 'HathorSettings') -> UnsignedAmount:
         """
          Calculate the total fee based on the number of chargeable
          outputs and inputs for each token in the transaction.
@@ -67,13 +57,13 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 
          The fee is determined using the following rules:
          - If a token has one or more chargeable outputs, the fee is calculated
-           as `chargeable_outputs * settings.FEE_PER_OUTPUT`.
+           as `chargeable_outputs * settings.FEE_PER_OUTPUT_V1`.
          - If a token has zero chargeable outputs but one or more chargeable inputs,
-           a flat fee of `settings.FEE_PER_OUTPUT` is applied.
+           a flat fee of `settings.FEE_PER_OUTPUT_V1` is applied.
 
          Args:
              settings (HathorSettings): The configuration object containing fee-related
-                 parameters, such as `FEE_PER_OUTPUT`.
+                 parameters, such as `FEE_PER_OUTPUT_V1`.
 
          Returns:
              int: The total transaction fee
@@ -82,10 +72,10 @@ class TokenInfoDict(dict[TokenUid, TokenInfo]):
 
         for token_uid, token_info in self.items():
             if token_info.chargeable_outputs > 0:
-                fee += token_info.chargeable_outputs * settings.FEE_PER_OUTPUT
+                fee += token_info.chargeable_outputs * settings.FEE_PER_OUTPUT_V1
             else:
                 if token_info.chargeable_inputs > 0:
-                    fee += settings.FEE_PER_OUTPUT
+                    fee += settings.FEE_PER_OUTPUT_V1
         return fee
 
 
@@ -98,7 +88,7 @@ def get_token_version(
     Get the token version for a given token uid.
     It searches first in the tx storage and then in the block storage.
     """
-    from hathor.conf.settings import HATHOR_TOKEN_UID
+    from hathorlib.conf.settings import HATHOR_TOKEN_UID
     if token_uid == HATHOR_TOKEN_UID:
         return TokenVersion.NATIVE
     from hathor.transaction.storage.exceptions import TransactionDoesNotExist

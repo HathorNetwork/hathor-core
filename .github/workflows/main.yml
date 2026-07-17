@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 # yamllint disable rule:line-length
 name: ci
 on: # yamllint disable-line rule:truthy
@@ -71,12 +74,29 @@ jobs:
           sudo apt-get -qy install graphviz librocksdb-dev libsnappy-dev liblz4-dev
       - name: Install uv
         run: pipx install uv
+      - name: Check uv.lock is up to date
+        run: uv lock --check
       - name: Install uv dependencies
         run: uv sync --frozen --dev --python 3.13
       - name: Run checks
         run: uv run --frozen make check
       - name: Run htr-lib smoke test
         run: uv run --frozen pytest -n0 -p no:warnings hathor_tests/others/test_htr_lib_integration.py
+  reuse:
+    name: reuse
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install REUSE tool
+        run: python -m pip install --upgrade reuse
+      - name: Check REUSE compliance
+        run: reuse lint
   lint:
     name: lint py${{ matrix.python }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -190,17 +210,19 @@ jobs:
     name: all-checks
     runs-on: ubuntu-latest
     if: always()
-    needs: [lint, test-cli, test-lib, test-other, uv-check]
+    needs: [lint, reuse, test-cli, test-lib, test-other, uv-check]
     steps:
       - name: Check job results
         run: |
           if [[ "${{ needs.lint.result }}" != "success" ||
+                "${{ needs.reuse.result }}" != "success" ||
                 "${{ needs.test-cli.result }}" != "success" ||
                 "${{ needs.test-lib.result }}" != "success" ||
                 "${{ needs.test-other.result }}" != "success" ||
                 "${{ needs.uv-check.result }}" != "success" ]]; then
             echo "One or more jobs failed or were cancelled:"
             echo "  lint: ${{ needs.lint.result }}"
+            echo "  reuse: ${{ needs.reuse.result }}"
             echo "  test-cli: ${{ needs.test-cli.result }}"
             echo "  test-lib: ${{ needs.test-lib.result }}"
             echo "  test-other: ${{ needs.test-other.result }}"

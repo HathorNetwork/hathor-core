@@ -1,16 +1,5 @@
-#  Copyright 2026 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """Serialization/deserialization for TokenCreationTransaction."""
 
@@ -55,7 +44,7 @@ def serialize_token_creation_funds(
     for tx_input in tx.inputs:
         serialize_tx_input(serializer, tx_input)
     for tx_output in tx.outputs:
-        serialize_tx_output(serializer, tx_output)
+        serialize_tx_output(serializer, tx_output, token_amount_version=tx.get_token_amount_version())
     serializer.write_bytes(_serialize_token_info(tx))
 
 
@@ -76,7 +65,7 @@ def serialize_token_creation_sighash(
     for tx_input in tx.inputs:
         serialize_tx_input_sighash(serializer, tx_input)
     for tx_output in tx.outputs:
-        serialize_tx_output(serializer, tx_output)
+        serialize_tx_output(serializer, tx_output, token_amount_version=tx.get_token_amount_version())
     serializer.write_bytes(_serialize_token_info(tx))
     for header_bytes in headers_sighash:
         serializer.write_bytes(header_bytes)
@@ -115,7 +104,11 @@ def deserialize_token_creation_funds(
 
     outputs: list[TxOutput] = []
     for _ in range(outputs_len):
-        txout = _deserialize_tx_output(deserializer, verbose=verbose)
+        txout = _deserialize_tx_output(
+            deserializer,
+            token_amount_version=tx.get_token_amount_version(),
+            verbose=verbose,
+        )
         outputs.append(txout)
 
     # Token info

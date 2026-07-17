@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -339,6 +328,11 @@ class ConsensusAlgorithm:
                     )
             for tx_input in tx.inputs:
                 spent_tx = tx.get_spent_tx(tx_input)
+                if spent_tx.hash in txset:
+                    # spent_tx is being removed as well, so its metadata is about to be discarded and must
+                    # not enter txs_affected: the post-removal integrity loop calls assert_valid_consensus on
+                    # every affected tx, which dereferences its conflicts from storage — and they are gone too.
+                    continue
                 spent_tx_meta = spent_tx.get_metadata()
                 if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
                     spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)
@@ -460,6 +454,11 @@ class ConsensusAlgorithm:
                 case Feature.REDUCE_DAA_TARGET:
                     # This feature does not affect transaction verification, only DAA parameters and the Nano runtime.
                     pass
+                case Feature.SHIELDED_TRANSACTIONS:
+                    # Shielded verification — including the reorg activation rule — lands
+                    # in PR 5. The feature ships gated OFF, so this case is unreachable
+                    # today; raise loudly if it is ever hit before PR 5 wires the real rule.
+                    raise NotImplementedError('shielded transaction activation rule not implemented yet')
                 case (
                     Feature.INCREASE_MAX_MERKLE_PATH_LENGTH
                     | Feature.FAILED_FEE_TOKENS

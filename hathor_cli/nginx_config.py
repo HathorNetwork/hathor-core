@@ -1,20 +1,11 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import json
 import os
+from collections.abc import Iterator
 from enum import Enum
+from json import dumps as json_dumps
 from typing import Any, NamedTuple, Optional, TextIO
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), 'nginx_files')
@@ -110,6 +101,114 @@ def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str)
         return fallback, True, False
 
 
+_HTTP_METHODS = ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace')
+_OPENAPI_EXTENSIONS = ('x-visibility', 'x-visibility-override', 'x-rate-limit', 'x-path-params-regex', 'x-proxy-buffers')
+
+
+def _iter_operation_params(params: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Yield `(method, operation)` pairs for HTTP methods present in a path item."""
+    for method in _HTTP_METHODS:
+        method_params = params.get(method)
+        if isinstance(method_params, dict):
+            yield method, method_params
+
+
+def _normalize_extension_value(value: Any) -> str:
+    """Serialize an extension value into a stable form for equality checks."""
+    return json_dumps(value, sort_keys=True)
+
+
+def _resolve_path_operation_extension(
+    path: str,
+    params: dict[str, Any],
+    ext: str,
+    *,
+    methods: list[str] | None = None,
+) -> Any:
+    """Resolve one path-level extension value from the relevant operations on a path.
+
+    Old-style resources place custom extensions at the path item level. New-style resources place
+    them at the operation level. Because nginx emits one location per path, operation-level values
+    can only be collapsed to a single path-level value when every relevant operation agrees.
+
+    If `methods` is provided, only those operations are considered. This is used for public-path
+    generation, where private methods do not participate in the emitted nginx location.
+    """
+    if ext in params:
+        return params[ext]
+
+    relevant_methods = set(methods) if methods is not None else None
+    values_by_method: dict[str, Any] = {}
+    for method, method_params in _iter_operation_params(params):
+        if relevant_methods is not None and method not in relevant_methods:
+            continue
+        if ext in method_params:
+            values_by_method[method] = method_params[ext]
+
+    if not values_by_method:
+        return None
+
+    normalized_values = {
+        method: _normalize_extension_value(value)
+        for method, value in values_by_method.items()
+    }
+    distinct_values = set(normalized_values.values())
+    if len(distinct_values) > 1:
+        methods_str = ', '.join(sorted(values_by_method))
+        raise ValueError(f'Path `{path}` has conflicting {ext} values across relevant methods: {methods_str}')
+
+    return next(iter(values_by_method.values()))
+
+
+def _get_public_methods(params: dict[str, Any], *, override: str) -> list[str]:
+    """Return the HTTP methods on this path that remain public after visibility overrides."""
+    public_methods: list[str] = []
+    for method, method_params in _iter_operation_params(params):
+        method_visibility, _, _ = _get_visibility(method_params, Visibility.PUBLIC, override)
+        if method_visibility == Visibility.PUBLIC:
+            public_methods.append(method)
+    return public_methods
+
+
+def _resolve_path_visibility(
+    params: dict[str, Any],
+    *,
+    fallback_visibility: Visibility,
+    override: str,
+) -> tuple[Visibility, bool, bool]:
+    """Resolve path visibility from path-level metadata or the set of operation visibilities.
+
+    Returns a tuple of `(visibility, did_fallback, did_override)` where:
+    - `visibility` is the effective visibility for the whole path as seen by nginx.
+    - `did_fallback` is `True` only when no visibility metadata was found at either the path
+      or operation level, so `fallback_visibility` had to be used.
+    - `did_override` is `True` when `x-visibility-override` provided the selected value.
+
+    For new-style OpenAPI, visibility may exist only at the operation level. In that case,
+    the path must stay public if any operation is public so nginx can still emit a location
+    block and restrict private methods via `limit_except`.
+    """
+    if 'x-visibility' in params or 'x-visibility-override' in params:
+        # This is the old style resource definition where visibility is explicitly set at the path level, so we can
+        # directly use the path-level visibility.
+        return _get_visibility(params, fallback_visibility, override)
+
+    has_operation_visibility = any(
+        'x-visibility' in method_params or 'x-visibility-override' in method_params
+        for _, method_params in _iter_operation_params(params)
+    )
+
+    public_methods = _get_public_methods(params, override=override)
+    if public_methods:
+        # If any operation is public, the path is public.
+        return Visibility.PUBLIC, False, False
+
+    if has_operation_visibility:
+        # If there are no public operations but at least one has visibility metadata, the path is private.
+        return Visibility.PRIVATE, False, False
+
+    return fallback_visibility, True, False
+
 def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: float = 1.0,
                           fallback_visibility: Visibility = Visibility.PRIVATE,
                           disable_rate_limits: bool = False,
@@ -127,7 +226,11 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     locations: dict[str, dict[str, Any]] = {}
     limit_rate_zones: list[RateLimitZone] = []
     for path, params in openapi['paths'].items():
-        visibility, did_fallback, did_override = _get_visibility(params, fallback_visibility, override)
+        visibility, did_fallback, did_override = _resolve_path_visibility(
+            params,
+            fallback_visibility=fallback_visibility,
+            override=override,
+        )
         if did_fallback:
             warn(f'Visibility not set for path `{path}`, falling back to {fallback_visibility}')
         if did_override:
@@ -135,28 +238,39 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
         if visibility == Visibility.PRIVATE:
             continue
 
+        public_methods = _get_public_methods(params, override=override)
+
         location_params: dict[str, Any] = {
             'rate_limits': [],
-            'path_vars_re': params.get('x-path-params-regex', {}),
-            'proxy_buffers': params.get('x-proxy-buffers'),
+            'path_vars_re': _resolve_path_operation_extension(
+                path,
+                params,
+                'x-path-params-regex',
+                methods=public_methods,
+            ) or {},
+            'proxy_buffers': _resolve_path_operation_extension(
+                path,
+                params,
+                'x-proxy-buffers',
+                methods=public_methods,
+            ),
         }
 
         allowed_methods = {'OPTIONS'}
-        for method in 'get post put patch delete head options trace'.split():
-            if method not in params:
-                continue
-            method_params = params[method]
-            method_visibility, _, _ = _get_visibility(method_params, Visibility.PUBLIC, override)
-            if method_visibility == Visibility.PRIVATE:
-                continue
+        for method in public_methods:
             allowed_methods.add(method.upper())
         location_params['allowed_methods'] = sorted(allowed_methods)
 
-        if not allowed_methods:
+        if not public_methods:
             warn(f'Path `{path}` has no public methods but is public')
             continue
 
-        rate_limits = params.get('x-rate-limit')
+        rate_limits = _resolve_path_operation_extension(
+            path,
+            params,
+            'x-rate-limit',
+            methods=public_methods,
+        )
         if not rate_limits:
             warn(f'Path `{path}` is public but has no rate limits, ignoring')
             continue
@@ -386,7 +500,7 @@ def main():
                         help='Input file with OpenAPI json, if not specified the spec is generated on-the-fly')
     parser.add_argument('--fallback-visibility', type=Visibility, default=Visibility.PRIVATE,
                         help='Set the visibility for paths without `x-visibility`, defaults to private')
-    parser.add_argument('--disable-rate-limits', type=bool, default=False,
+    parser.add_argument('--disable-rate-limits', action='store_true', default=False,
                         help='Disable including rate-limits in the config, defaults to False')
     parser.add_argument('--override', type=str, default='',
                         help='Override visibility for paths with `x-visibility-override` for the given value')

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.sysctl import WebsocketManagerSysctl
 from hathor.sysctl.exception import SysctlException
 from hathor.websocket.factory import HathorAdminWebsocketFactory

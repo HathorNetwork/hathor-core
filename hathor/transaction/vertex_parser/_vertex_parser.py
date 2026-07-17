@@ -1,16 +1,5 @@
-#  Copyright 2024 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -19,7 +8,14 @@ from typing import TYPE_CHECKING, Type
 
 from hathor.serialization.exceptions import SerializationError
 from hathor.transaction.base_transaction import get_cls_from_tx_version
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader, VertexHeaderId
+from hathor.transaction.headers import (
+    AnyVertexHeader,
+    FeeHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+    VertexHeaderId,
+)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -34,17 +30,20 @@ class VertexParser:
         self._settings = settings
 
     @staticmethod
-    def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[VertexBaseHeader]]:
+    def get_supported_headers(settings: HathorSettings) -> dict[VertexHeaderId, Type[AnyVertexHeader]]:
         """Return a dict of supported headers."""
-        supported_headers: dict[VertexHeaderId, Type[VertexBaseHeader]] = {}
+        supported_headers: dict[VertexHeaderId, Type[AnyVertexHeader]] = {}
         if settings.ENABLE_NANO_CONTRACTS:
             supported_headers[VertexHeaderId.NANO_HEADER] = NanoHeader
         if settings.ENABLE_FEE_BASED_TOKENS:
             supported_headers[VertexHeaderId.FEE_HEADER] = FeeHeader
+        if settings.ENABLE_SHIELDED_TRANSACTIONS:
+            supported_headers[VertexHeaderId.SHIELDED_OUTPUTS_HEADER] = ShieldedOutputsHeader
+            supported_headers[VertexHeaderId.UNSHIELD_BALANCE_HEADER] = UnshieldBalanceHeader
         return supported_headers
 
     @staticmethod
-    def get_header_parser(header_id_bytes: bytes, settings: HathorSettings) -> Type[VertexBaseHeader]:
+    def get_header_parser(header_id_bytes: bytes, settings: HathorSettings) -> Type[AnyVertexHeader]:
         """Get the parser for a given header type."""
         header_id = VertexHeaderId(header_id_bytes)
         supported_headers = VertexParser.get_supported_headers(settings)

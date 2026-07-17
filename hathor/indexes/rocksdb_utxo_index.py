@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import struct
 from dataclasses import dataclass
@@ -23,6 +12,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address, get_address_b58_from_bytes
 from hathor.indexes.rocksdb_utils import InternalUid, RocksDBIndexUtils, from_internal_token_uid, to_internal_token_uid
 from hathor.indexes.utxo_index import UtxoIndex, UtxoIndexItem
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -340,7 +330,7 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
             assert key.address == seek.address
             yield key.to_index_item()
 
-    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                              target_timestamp: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyTimeLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
                                 amount=target_amount, timelock=(target_timestamp or 0xffffffff))
@@ -354,7 +344,7 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
                 continue
             yield i
 
-    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                                target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyHeightLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
                                   amount=target_amount, heightlock=(target_height or 0xffffffff))

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import re
 from typing import Any, NamedTuple, Optional
@@ -25,6 +28,7 @@ from hathor.transaction import Transaction
 from hathor.transaction.scripts import P2PKH
 from hathor.util import initialize_hd_wallet, not_none
 from hathor.wallet import KeyPair
+from hathorlib.token_amount_version import TokenAmountVersion
 
 from ...utils import DEFAULT_WORDS
 from .. import test_blueprints
@@ -175,7 +179,9 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
 
         # set expected self objects:
         self.nc_id = ContractId(VertexId(nc_init_tx.hash))
-        self.runner = TestRunner.from_runner(self.manager.get_nc_runner(block))
+        self.runner = TestRunner.from_runner(
+            self.manager.get_nc_runner(block, token_amount_version=TokenAmountVersion.V1)
+        )
         self.nc_storage = self.runner.get_storage(self.nc_id)
 
     def test_blueprint_initialization(self) -> None:

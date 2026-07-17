@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.crypto.util import decode_address
@@ -6,6 +9,12 @@ from hathor.transaction.scripts import parse_address_script
 from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressSearchResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens
+
+# Valid base58check payload (25 bytes, correct checksum) whose string is only 33 characters long, from the
+# incident in issue #1758. It passes `decode_address` but must be rejected at the API boundary.
+ADDRESS_33 = '1P8cW6gqriMRhKBR98mqFXXYj3shYySuJ'
+# 34 characters and valid checksum, but testnet version byte (0x49) — invalid on the unittests network.
+ADDRESS_WRONG_VERSION = 'WNg2svm2qApxheBKndKGQ9sRwporvRgRpT'
 
 
 class SearchAddressTest(_BaseResourceTest._ResourceTest):
@@ -39,6 +48,18 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
 
         # Invalid address
         response_error = yield resource.get('thin_wallet/address_search', {b'address': 'vvvv'.encode(), b'count': 3})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but only 33 characters: must be rejected before reaching the address index
+        response_error = yield resource.get(
+            'thin_wallet/address_search', {b'address': ADDRESS_33.encode(), b'count': 3})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but wrong network version byte
+        response_error = yield resource.get(
+            'thin_wallet/address_search', {b'address': ADDRESS_WRONG_VERSION.encode(), b'count': 3})
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
 
@@ -98,11 +119,24 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
 
+        # Valid checksum but only 33 characters: must be rejected before reaching the address index
+        response_error = yield resource.get('thin_wallet/address_balance', {b'address': ADDRESS_33.encode()})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but wrong network version byte
+        response_error = yield resource.get(
+            'thin_wallet/address_balance', {b'address': ADDRESS_WRONG_VERSION.encode()})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
         response = yield resource.get('thin_wallet/address_balance', {b'address': self.address.encode()})
         data = response.json_value()
         self.assertTrue(data['success'])
         # Genesis - token deposit + blocks mined
-        HTR_value = self._settings.GENESIS_TOKENS - 1 + (self._settings.INITIAL_TOKENS_PER_BLOCK * 5)
+        HTR_value = (
+            self._settings.GENESIS_TOKEN_ATOMIC_UNITS - 1 + (self._settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK * 5)
+        )
         self.assertEqual(data['total_transactions'], 6)  # 5 blocks mined + token creation tx
         self.assertIn(self._settings.HATHOR_TOKEN_UID.hex(), data['tokens_data'])
         self.assertIn(self.token_uid.hex(), data['tokens_data'])

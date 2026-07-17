@@ -1,9 +1,12 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 
 import pytest
 
 from hathor.conf.get_settings import get_global_settings
 from hathor.transaction.exceptions import TransactionDataError
-from hathor.transaction.util import validate_token_name_and_symbol
+from hathorlib.utils.token_validation import validate_token_name_and_symbol
 
 
 def test_token_name():

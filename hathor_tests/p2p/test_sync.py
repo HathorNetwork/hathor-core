@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.checkpoint import Checkpoint as cp
 from hathor.crypto.util import decode_address
 from hathor.simulator import FakeConnection

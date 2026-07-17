@@ -1,16 +1,5 @@
-# Copyright 2022 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -25,6 +14,7 @@ from hathor.indexes.scope import Scope
 from hathor.transaction import BaseTransaction, Block, TxOutput
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import sorted_merger
+from hathorlib.token_amount import UnsignedAmount
 
 logger = get_logger()
 
@@ -41,7 +31,7 @@ class UtxoIndexItem:
     tx_id: bytes
     index: int
     address: str
-    amount: int
+    amount: UnsignedAmount
     timelock: Optional[int]
     heightlock: Optional[int]
 
@@ -143,7 +133,11 @@ class UtxoIndex(BaseIndex):
         # remove all inputs
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
-            spent_tx_output = spent_tx.resolve_spent_output(tx_input.index)
+            resolved = spent_tx.resolve_spent_output(tx_input.index)
+            if not isinstance(resolved, TxOutput):
+                # Shielded outputs don't have public value/token for the UTXO index
+                continue
+            spent_tx_output = resolved
             log_it = log.new(tx_id=spent_tx.hash_hex, index=tx_input.index)
             if _should_skip_output(spent_tx_output):
                 log_it.debug('ignore input')
@@ -184,7 +178,11 @@ class UtxoIndex(BaseIndex):
         # re-add inputs that aren't voided
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
-            spent_tx_output = spent_tx.resolve_spent_output(tx_input.index)
+            resolved = spent_tx.resolve_spent_output(tx_input.index)
+            if not isinstance(resolved, TxOutput):
+                # Shielded outputs don't have public value/token for the UTXO index
+                continue
+            spent_tx_output = resolved
             log_it = log.new(tx_id=spent_tx.hash_hex, index=tx_input.index)
             if _should_skip_output(spent_tx_output):
                 log_it.debug('ignore input')
@@ -200,7 +198,7 @@ class UtxoIndex(BaseIndex):
             log_it.debug('re-add input that became unspent')
             self._add_utxo(UtxoIndexItem.from_tx_output(spent_tx, tx_input.index, spent_tx_output))
 
-    def iter_utxos(self, *, address: str, target_amount: int, token_uid: Optional[bytes] = None,
+    def iter_utxos(self, *, address: str, target_amount: UnsignedAmount, token_uid: Optional[bytes] = None,
                    target_timestamp: Optional[int] = None,
                    target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """ Search UTXOs for a given token_uid+address+target_value, if no token_uid is given, HTR is assumed.
@@ -283,13 +281,13 @@ class UtxoIndex(BaseIndex):
         raise NotImplementedError
 
     @abstractmethod
-    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                              target_timestamp: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """Iterate over all UTXOs that ONLY HAVE timelocks that will be unlocked at target_timestamp."""
         raise NotImplementedError
 
     @abstractmethod
-    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: int,
+    def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                                target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         """Iterate over all UTXOs that ONLY HAVE heightlocks that will be unlocked at target_height."""
         raise NotImplementedError

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for OpenAPI 3.1 specification generator."""
 import unittest
 from typing import ClassVar, Literal, Optional, Union

@@ -1,16 +1,5 @@
-# Copyright 2023 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -19,15 +8,13 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import assert_never
 
-from hathor.transaction.headers.base import VertexBaseHeader
-from hathor.transaction.util import VerboseCallback
 from hathor.types import VertexId
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathor.nanocontracts.context import Context
     from hathor.nanocontracts.types import BlueprintId, ContractId, NCAction, NCActionType, TokenUid
     from hathor.transaction import Transaction
-    from hathor.transaction.base_transaction import BaseTransaction
     from hathor.transaction.block import Block
     from hathor.transaction.vertex_parser._nano_header import NanoHeaderData
 
@@ -40,7 +27,7 @@ _NC_SCRIPT_LEN_MAX_BYTES: int = 2
 class NanoHeaderAction:
     type: NCActionType
     token_index: int
-    amount: int
+    amount: UnsignedAmount
 
     def to_nc_action(self, tx: Transaction) -> NCAction:
         """Create a NCAction from this NanoHeaderAction"""
@@ -89,7 +76,7 @@ class NanoHeaderAction:
 
 
 @dataclass(slots=True, kw_only=True)
-class NanoHeader(VertexBaseHeader):
+class NanoHeader:
     tx: Transaction
 
     # Sequence number for the caller.
@@ -115,37 +102,6 @@ class NanoHeader(VertexBaseHeader):
     def create_from_data(cls, tx: Transaction, data: NanoHeaderData) -> NanoHeader:
         """Create a NanoHeader from a NanoHeaderData instance."""
         return cls(tx=tx, **{f.name: getattr(data, f.name) for f in fields(data)})
-
-    @classmethod
-    def deserialize(
-        cls,
-        tx: BaseTransaction,
-        buf: bytes,
-        *,
-        verbose: VerboseCallback = None
-    ) -> tuple[NanoHeader, bytes]:
-        from hathor.serialization import Deserializer
-        from hathor.transaction import Transaction
-        from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header
-        deserializer = Deserializer.build_bytes_deserializer(buf)
-        data = deserialize_nano_header(deserializer, verbose=verbose)
-        assert isinstance(tx, Transaction)
-        header = cls.create_from_data(tx, data)
-        return header, bytes(deserializer.read_all())
-
-    def serialize(self) -> bytes:
-        from hathor.serialization import Serializer
-        from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
-        serializer = Serializer.build_bytes_serializer()
-        serialize_nano_header(serializer, self)
-        return bytes(serializer.finalize())
-
-    def get_sighash_bytes(self) -> bytes:
-        from hathor.serialization import Serializer
-        from hathor.transaction.vertex_parser._nano_header import serialize_nano_header
-        serializer = Serializer.build_bytes_serializer()
-        serialize_nano_header(serializer, self, skip_signature=True)
-        return bytes(serializer.finalize())
 
     def is_creating_a_new_contract(self) -> bool:
         """Return true if this transaction is creating a new contract."""

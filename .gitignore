@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 .DS_Store
 
 __pycache__/
@@ -30,3 +33,7 @@ keys.json
 
 # Pycharm
 .idea
+
+# Claude Code personal overrides
+CLAUDE.local.md
+.claude/settings.local.json

@@ -1,20 +1,11 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import struct
-from math import ceil, floor
 from typing import TYPE_CHECKING, Any, Optional, Tuple, TypeVar
+
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathorlib.conf.settings import HathorSettings
@@ -80,9 +71,21 @@ def not_none(optional: Optional[_T], message: str = 'Unexpected `None`') -> _T:
     return optional
 
 
-def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: int) -> int:
-    return ceil(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * mint_amount))
+def get_deposit_token_deposit_amount(settings: 'HathorSettings', mint_amount: UnsignedAmount) -> UnsignedAmount:
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(mint_amount)
+    denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+    return ceil_div(numerator, denominator)
 
 
-def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: int) -> int:
-    return floor(abs(settings.TOKEN_DEPOSIT_PERCENTAGE * melt_amount))
+def get_deposit_token_withdraw_amount(settings: 'HathorSettings', melt_amount: UnsignedAmount) -> UnsignedAmount:
+    numerator = settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR * abs(melt_amount)
+    denominator = settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+    return numerator // denominator
+
+
+def ceil_div(a: int, b: int) -> int:
+    """
+    Calculate ceil division using integer math for non-negative operands, equivalent to `ceil(a / b)` for integers.
+    """
+    assert a >= 0 and b >= 0
+    return (a + b - 1) // b

@@ -1,16 +1,5 @@
-#  Copyright 2023 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -120,10 +109,12 @@ class TransactionVerifier:
                 spent_tx = tx.get_spent_tx(tx_input)
             except TransactionDoesNotExist:
                 raise InexistentInput('Input tx does not exist: {}'.format(tx_input.tx_id.hex()))
-            if tx_input.index >= len(spent_tx.outputs):
+            try:
+                script = spent_tx.resolve_spent_output(tx_input.index).script
+            except IndexError:
                 raise InexistentInput('Output spent by this input does not exist: {} index {}'.format(
                     tx_input.tx_id.hex(), tx_input.index))
-            n_txops += counter.get_sigops_count(tx_input.data, spent_tx.resolve_spent_output(tx_input.index).script)
+            n_txops += counter.get_sigops_count(tx_input.data, script)
 
         if n_txops > self._settings.MAX_TX_SIGOPS_INPUT:
             raise TooManySigOps(
@@ -149,8 +140,13 @@ class TransactionVerifier:
                     len(input_tx.data), settings.MAX_INPUT_DATA_SIZE
                 ))
 
+            from hathor.transaction import TxOutput
+            from hathorlib.transaction.shielded_tx_output import ShieldedOutput
+
             spent_tx = tx.get_spent_tx(input_tx)
-            assert input_tx.index < len(spent_tx.outputs)
+            resolved = spent_tx.resolve_spent_output(input_tx.index)
+            assert isinstance(resolved, (TxOutput, ShieldedOutput)), \
+                'resolve_spent_output must return TxOutput or ShieldedOutput'
 
             if tx.timestamp <= spent_tx.timestamp:
                 raise TimestampError('tx={} timestamp={}, spent_tx={} timestamp={}'.format(
@@ -338,7 +334,7 @@ class TransactionVerifier:
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
         """Verify whether token can be minted/melted based on its authority."""
-        from hathor.conf.settings import HATHOR_TOKEN_UID
+        from hathorlib.conf.settings import HATHOR_TOKEN_UID
         if token_info.version == TokenVersion.NATIVE:
             assert token_uid == HATHOR_TOKEN_UID
             assert not token_info.can_mint

@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.11, <3.14"
 
+[manifest]
+members = [
+    "hathor",
+    "htr-lib",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.3.5"
@@ -422,7 +428,7 @@ wheels = [
 
 [[package]]
 name = "hathor"
-version = "0.70.0"
+version = "0.71.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -433,6 +439,7 @@ dependencies = [
     { name = "configargparse" },
     { name = "cryptography" },
     { name = "graphviz" },
+    { name = "hathor-ct-crypto" },
     { name = "hathorlib" },
     { name = "htr-lib" },
     { name = "idna" },
@@ -489,8 +496,9 @@ requires-dist = [
     { name = "configargparse", specifier = ">=1.7.1,<1.8.0" },
     { name = "cryptography", specifier = ">=42.0.5,<42.1.0" },
     { name = "graphviz", specifier = ">=0.20.1,<0.21.0" },
+    { name = "hathor-ct-crypto", editable = "htr-rs/crates/hathor-ct-crypto" },
     { name = "hathorlib", editable = "hathorlib" },
-    { name = "htr-lib", editable = "htr-rs/crates/htr-lib" },
+    { name = "htr-lib", editable = "htr-rs/crates/htr-lib-py" },
     { name = "idna", specifier = ">=3.4,<3.5" },
     { name = "ipython", extras = ["kernel"], specifier = ">=8.7.0,<8.8.0" },
     { name = "mnemonic", specifier = ">=0.20,<0.21" },
@@ -533,12 +541,17 @@ dev = [
 ]
 
 [[package]]
+name = "hathor-ct-crypto"
+source = { editable = "htr-rs/crates/hathor-ct-crypto" }
+
+[[package]]
 name = "hathorlib"
-version = "0.14.1"
+version = "0.15.0"
 source = { editable = "hathorlib" }
 dependencies = [
     { name = "base58" },
     { name = "cryptography" },
+    { name = "htr-lib" },
     { name = "pycoin" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -550,6 +563,7 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'client'", specifier = ">=3.9.3,<3.10.0" },
     { name = "base58", specifier = ">=2.1.1,<2.2.0" },
     { name = "cryptography", specifier = ">=42.0.5,<42.1.0" },
+    { name = "htr-lib" },
     { name = "pycoin", specifier = ">=0.92,<0.93" },
     { name = "pydantic", specifier = ">=2.0,<3.0" },
     { name = "pyyaml", specifier = ">=6.0.1,<7.0.0" },
@@ -559,7 +573,7 @@ provides-extras = ["client"]
 
 [[package]]
 name = "htr-lib"
-source = { editable = "htr-rs/crates/htr-lib" }
+source = { editable = "htr-rs/crates/htr-lib-py" }
 
 [[package]]
 name = "hyperlink"

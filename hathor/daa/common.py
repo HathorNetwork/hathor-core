@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """Shared types, the DAA config value object, and utility functions for the DAA module."""
 
@@ -194,7 +183,8 @@ def _minimum_tx_weight(settings: HathorSettings, tx: 'Transaction', test_mode: T
     # We need to take into consideration the decimal places because it is inside the amount.
     # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     # Max below is preventing division by 0 when handling authority methods that have no outputs
-    amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
+    decimal_places = tx.get_token_amount_version().get_decimal_places(settings)
+    amount = max(1, tx.sum_outputs) / (10 ** decimal_places)
     weight = (
         + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)
         + 4 / (1 + settings.MIN_TX_WEIGHT_K / amount) + 4
@@ -209,17 +199,17 @@ def _minimum_tx_weight(settings: HathorSettings, tx: 'Transaction', test_mode: T
 def _get_base_tokens_issued_per_block(settings: HathorSettings, height: int) -> int:
     """Return the base number of tokens issued per block (before any reduction)."""
     if settings.BLOCKS_PER_HALVING is None:
-        assert settings.MINIMUM_TOKENS_PER_BLOCK == settings.INITIAL_TOKENS_PER_BLOCK
-        return settings.MINIMUM_TOKENS_PER_BLOCK
+        assert settings.MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK == settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+        return settings.MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK
 
     number_of_halvings = (height - 1) // settings.BLOCKS_PER_HALVING
     number_of_halvings = max(0, number_of_halvings)
 
     if number_of_halvings > settings.MAXIMUM_NUMBER_OF_HALVINGS:
-        return settings.MINIMUM_TOKENS_PER_BLOCK
+        return settings.MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK
 
-    amount = settings.INITIAL_TOKENS_PER_BLOCK // (2**number_of_halvings)
-    return max(amount, settings.MINIMUM_TOKENS_PER_BLOCK)
+    amount = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // (2**number_of_halvings)
+    return max(amount, settings.MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK)
 
 
 def _sum_block_rewards_in_range(
@@ -241,8 +231,8 @@ def _sum_block_rewards_in_range(
     h = start_height
     while h <= end_height:
         halving = max(0, (h - 1) // settings.BLOCKS_PER_HALVING)
-        tokens_per_block = settings.INITIAL_TOKENS_PER_BLOCK // (2 ** halving)
-        tokens_per_block = max(tokens_per_block, settings.MINIMUM_TOKENS_PER_BLOCK)
+        tokens_per_block = settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK // (2 ** halving)
+        tokens_per_block = max(tokens_per_block, settings.MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK)
 
         next_halving_first_height = (halving + 1) * settings.BLOCKS_PER_HALVING + 1
         chunk_end = min(end_height, next_halving_first_height - 1)

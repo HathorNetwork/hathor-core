@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.p2p.netfilter import get_table
 from hathor.p2p.netfilter.chain import NetfilterChain
 from hathor.p2p.netfilter.table import NetfilterTable

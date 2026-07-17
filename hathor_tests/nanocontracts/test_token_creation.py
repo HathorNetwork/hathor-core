@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
@@ -263,7 +266,7 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         tokens_index = self.manager.tx_storage.indexes.tokens
         assert tokens_index.get_token_info(settings.HATHOR_TOKEN_UID).get_total() == (
-            settings.GENESIS_TOKENS + 40 * settings.INITIAL_TOKENS_PER_BLOCK - 2
+            settings.GENESIS_TOKEN_ATOMIC_UNITS + 40 * settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 2
         )
         assert tokens_index.get_token_info(child_token_id0).get_total() == 100
         assert tokens_index.get_token_info(child_token_id1).get_total() == 30

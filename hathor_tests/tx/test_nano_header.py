@@ -1,16 +1,47 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 
 from hathor.exception import InvalidNewTransaction
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCActionType
+from hathor.serialization import Deserializer, Serializer
 from hathor.transaction import BaseTransaction, Block, Transaction
 from hathor.transaction.exceptions import HeaderNotSupported
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import NanoHeader
 from hathor.transaction.headers.nano_header import ADDRESS_LEN_BYTES, NanoHeaderAction
 from hathor.transaction.token_creation_tx import TokenCreationTransaction
-from hathor.transaction.util import VerboseCallback
+from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header, serialize_nano_header
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+
+
+def _serialize_nano_header(header: NanoHeader) -> bytes:
+    serializer = Serializer.build_bytes_serializer()
+    serialize_nano_header(serializer, header, token_amount_version=header.tx.get_token_amount_version())
+    return bytes(serializer.finalize())
+
+
+def _deserialize_nano_header(tx: Transaction, buf: bytes) -> tuple[NanoHeader, bytes]:
+    deserializer = Deserializer.build_bytes_deserializer(buf)
+    data = deserialize_nano_header(deserializer, token_amount_version=tx.get_token_amount_version())
+    header = NanoHeader.create_from_data(tx, data)
+    return header, bytes(deserializer.read_all())
+
+
+def _make_nano_header() -> NanoHeader:
+    """Build a minimal nano header to append to a vertex when checking that headers affect its hash."""
+    return NanoHeader(
+        tx=Transaction(),
+        nc_seqnum=0,
+        nc_id=b'1' * 32,
+        nc_method='nop',
+        nc_args_bytes=b'',
+        nc_actions=[],
+        nc_address=b'\x00' * ADDRESS_LEN_BYTES,
+        nc_script=b'',
+    )
 
 
 class MyTestBlueprint(Blueprint):
@@ -21,24 +52,6 @@ class MyTestBlueprint(Blueprint):
     @public
     def nop(self, ctx: Context) -> None:
         pass
-
-
-class FakeHeader(VertexBaseHeader):
-    @classmethod
-    def deserialize(
-        cls,
-        tx: BaseTransaction,
-        buf: bytes,
-        *,
-        verbose: VerboseCallback = None,
-    ) -> tuple[VertexBaseHeader, bytes]:
-        raise NotImplementedError
-
-    def serialize(self) -> bytes:
-        return b'fake header'
-
-    def get_sighash_bytes(self) -> bytes:
-        return b'fake sighash'
 
 
 class VertexHeadersTest(unittest.TestCase):
@@ -104,7 +117,7 @@ class VertexHeadersTest(unittest.TestCase):
             msg = f'changing headers should change the hash on "{name}"'
             clone = vertex.clone(include_storage=False, include_metadata=False)
             assert clone.hash == clone.calculate_hash()
-            clone.headers.append(FakeHeader())
+            clone.headers.append(_make_nano_header())
             assert clone.hash != clone.calculate_hash(), msg
 
             # Now we'll test nano header attributes, so we can skip non-nano txs
@@ -144,7 +157,7 @@ class VertexHeadersTest(unittest.TestCase):
             clone = vertex.clone(include_storage=False, include_metadata=False)
             sighash_before = clone.get_sighash_all(skip_cache=True)
             assert sighash_before == vertex.get_sighash_all(skip_cache=True)
-            clone.headers.append(FakeHeader())
+            clone.headers.append(_make_nano_header())
             sighash_after = clone.get_sighash_all(skip_cache=True)
             assert sighash_before != sighash_after, msg
 
@@ -218,11 +231,11 @@ class VertexHeadersTest(unittest.TestCase):
             nc_script=b'some script',
         )
 
-        header1_bytes = header1.serialize()
-        header2, buf = NanoHeader.deserialize(tx, header1_bytes)
+        header1_bytes = _serialize_nano_header(header1)
+        header2, buf = _deserialize_nano_header(tx, header1_bytes)
 
         assert len(buf) == 0
-        assert header1_bytes == header2.serialize()
+        assert header1_bytes == _serialize_nano_header(header2)
         assert header1.tx is header2.tx  # allow-is
         assert header1.nc_id == header2.nc_id
         assert header1.nc_method == header2.nc_method

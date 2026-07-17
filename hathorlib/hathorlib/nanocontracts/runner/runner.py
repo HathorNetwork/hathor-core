@@ -1,16 +1,5 @@
-# Copyright 2023 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -90,6 +79,8 @@ from hathorlib.nanocontracts.utils import (
     is_nc_public_method,
     is_nc_view_method,
 )
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenDescription, TokenVersion
 from hathorlib.utils import clean_token_string
 from hathorlib.utils.token_validation import validate_fee_amount, validate_token_name_and_symbol
@@ -126,6 +117,7 @@ class Runner:
         reactor: ClockProtocol,
         settings: HathorSettings,
         runtime_version: NanoRuntimeVersion,
+        token_amount_version: TokenAmountVersion,
         tx_storage: NCTransactionStorageProtocol,
         blueprint_service: BlueprintServiceProtocol,
         storage_factory: NCStorageFactory,
@@ -140,6 +132,7 @@ class Runner:
         self._settings = settings
         self.reactor = reactor
         self._runtime_version = runtime_version
+        self.token_amount_version = token_amount_version
 
         # For tracking fuel and memory usage
         self._initial_fuel = self._settings.NC_INITIAL_FUEL_TO_CALL_METHOD
@@ -159,10 +152,10 @@ class Runner:
         self._rng_per_contract: dict[ContractId, NanoRNG] = {}
 
         # Information about updated tokens in the current call via syscalls.
-        self._updated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
+        self._updated_tokens_totals: defaultdict[TokenUid, SignedAmount] = defaultdict(SignedAmount)
 
         # Information about fees paid during execution inter-contract calls.
-        self._paid_actions_fees: defaultdict[TokenUid, int] = defaultdict(int)
+        self._paid_actions_fees: defaultdict[TokenUid, UnsignedAmount] = defaultdict(int)
 
     def disable_call_trace(self) -> None:
         """Disable call trace. Useful when the runner is only used to call view methods, for example in APIs."""
@@ -266,7 +259,13 @@ class Runner:
 
         blueprint_id = self.get_blueprint_id(contract_id)
 
+        changes_tracker = self._create_changes_tracker(contract_id)
+        for action in ctx.__all_actions__:
+            rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
+            rules.nc_callee_execution_rule(changes_tracker)
+
         ret = self._execute_public_method_call(
+            changes_tracker=changes_tracker,
             contract_id=contract_id,
             blueprint_id=blueprint_id,
             method_name=method_name,
@@ -466,12 +465,15 @@ class Runner:
         first_ctx = self._call_info.stack[0].ctx
         assert first_ctx is not None
 
-        # Execute the actions on the caller side. The callee side is executed by the `_execute_public_method_call()`
-        # call below, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
+        new_changes_tracker = self._create_changes_tracker(contract_id)
+
         for action in actions:
-            rules = BalanceRules.get_rules(self._settings, action)
-            rules.nc_caller_execution_rule(previous_changes_tracker)
+            rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
+            rules.nc_cross_call_execution_rule(
+                caller_changes_tracker=previous_changes_tracker,
+                callee_changes_tracker=new_changes_tracker,
+            )
 
         # All calls must begin with non-negative balance.
         previous_changes_tracker.validate_balances_are_positive()
@@ -494,6 +496,7 @@ class Runner:
             actions=ctx_actions,
         )
         result = self._execute_public_method_call(
+            changes_tracker=new_changes_tracker,
             contract_id=contract_id,
             blueprint_id=blueprint_id,
             method_name=method_name,
@@ -519,7 +522,7 @@ class Runner:
         self._call_info = None
 
         # Reset the tokens counters so this Runner can be reused (in blueprint tests, for example).
-        self._updated_tokens_totals = defaultdict(int)
+        self._updated_tokens_totals = defaultdict(SignedAmount)
         self._paid_actions_fees = defaultdict(int)
 
     def _validate_balances(self, ctx: Context) -> None:
@@ -531,7 +534,7 @@ class Runner:
         assert self._call_info.calls is not None
 
         # total_diffs accumulates the balance differences for all contracts called during this execution.
-        total_diffs: defaultdict[TokenUid, int] = defaultdict(int)
+        total_diffs: defaultdict[TokenUid, SignedAmount] = defaultdict(SignedAmount)
 
         # Each list of change trackers account for a single call in a contract.
         for change_trackers in self._call_info.change_trackers.values():
@@ -544,7 +547,7 @@ class Runner:
                 total_diffs[TokenUid(balance_key.token_uid)] += balance
 
         # Accumulate tokens totals from syscalls to compare with the totals from this runner.
-        calculated_tokens_totals: defaultdict[TokenUid, int] = defaultdict(int)
+        calculated_tokens_totals: defaultdict[TokenUid, SignedAmount] = defaultdict(SignedAmount)
         for call in self._call_info.calls:
             if call.index_updates is None:
                 assert call.type == CallType.VIEW
@@ -584,7 +587,7 @@ class Runner:
                 case _:  # pragma: no cover
                     assert_never(action)
 
-        assert all(diff == 0 for diff in total_diffs.values()), (
+        assert all(diff == SignedAmount(0) for diff in total_diffs.values()), (
             f'change tracker diffs do not match actions: {total_diffs}'
         )
 
@@ -612,6 +615,7 @@ class Runner:
     def _execute_public_method_call(
         self,
         *,
+        changes_tracker: NCChangesTracker,
         contract_id: ContractId,
         blueprint_id: BlueprintId,
         method_name: str,
@@ -627,7 +631,6 @@ class Runner:
         assert self._call_info is not None
 
         self._validate_context(ctx)
-        changes_tracker = self._create_changes_tracker(contract_id)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
@@ -673,8 +676,6 @@ class Runner:
 
         self._validate_actions(method, called_method_name, ctx)
         for action in ctx.__all_actions__:
-            rules = BalanceRules.get_rules(self._settings, action)
-            rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
         # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.
@@ -1103,9 +1104,9 @@ class Runner:
             case TokenVersion.NATIVE:
                 raise AssertionError
             case TokenVersion.DEPOSIT:
-                assert fee_amount > 0
+                assert fee_amount > SignedAmount(0)
             case TokenVersion.FEE:
-                assert fee_amount < 0
+                assert fee_amount < SignedAmount(0)
             case _:  # pragma: no cover
                 assert_never(token_info.token_version)
 
@@ -1285,7 +1286,7 @@ class Runner:
                 raise NCFail('syscall `get_settings` is not yet supported')
             case NanoRuntimeVersion.V2:
                 return NanoSettings(
-                    fee_per_output=self._settings.FEE_PER_OUTPUT,
+                    fee_per_output=self._settings.FEE_PER_OUTPUT_V1,
                 )
             case _:
                 assert_never(self._runtime_version)
@@ -1390,7 +1391,7 @@ class Runner:
             self._updated_tokens_totals[record.token_uid] += record.amount
             call_record.index_updates.append(record)
 
-    def _register_paid_fee(self, token_uid: TokenUid, amount: int) -> None:
+    def _register_paid_fee(self, token_uid: TokenUid, amount: UnsignedAmount) -> None:
         """ Register a fee payment in the current call."""
         self._paid_actions_fees[token_uid] += amount
 
@@ -1421,7 +1422,7 @@ class Runner:
             # because we registered all fee tokens in the paid fees dict, it should contain at
             # least the length of fees
             assert fee.token_uid in self._paid_actions_fees
-            fee_sum += fee.get_htr_value(self._settings)
+            fee_sum += fee.__get_htr_value__(self._settings, self.token_amount_version)
 
         chargeable_actions = {NCActionType.DEPOSIT, NCActionType.WITHDRAWAL}
         for token_uid, actions in ctx_actions.items():
@@ -1470,6 +1471,7 @@ class RunnerFactory:
         self,
         *,
         runtime_version: NanoRuntimeVersion,
+        token_amount_version: TokenAmountVersion,
         block_storage: NCBlockStorage,
         seed: bytes | None = None,
     ) -> Runner:
@@ -1477,6 +1479,7 @@ class RunnerFactory:
             reactor=self.reactor,
             settings=self.settings,
             runtime_version=runtime_version,
+            token_amount_version=token_amount_version,
             tx_storage=self.tx_storage,
             storage_factory=self.nc_storage_factory,
             blueprint_service=self.blueprint_service,

@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """
 Module for mining websocket API discussed at https://github.com/HathorNetwork/hathor-core/issues/91
@@ -20,6 +9,7 @@ from json import JSONDecodeError
 from typing import Any, NamedTuple, Optional, Union
 
 from autobahn.twisted.websocket import WebSocketServerFactory, WebSocketServerProtocol
+from autobahn.websocket import ConnectionRequest
 from structlog import get_logger
 
 from hathor.manager import HathorManager
@@ -57,9 +47,12 @@ JSON_RPC_INTERNAL_ERROR = JsonRpcError(-32603, 'Internal error', fatal=True)
 
 class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
     """Small JSONRPC 2.0 abstraction over WebSocket, will forward method calls to do_<method>"""
+    def __init__(self) -> None:
+        super().__init__()
+        self.info: dict[str, Any] = {}
 
     def onMessage(self, payload: bytes, isBinary: bool) -> None:
-        self.log.info('message', payload=payload)
+        self.log.info('message', payload=payload, **self.info)
         try:
             data: Union[list[dict], dict] = json_loadb(payload)
         except JSONDecodeError:
@@ -115,6 +108,7 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
         else:
             assert id is not None, '`id` is required for a success response'
             response['result'] = result
+        self.log.info('response', data=response, **self.info)
         self.sendMessage(json_dumpb(response))
         if error is not None and error.fatal:
             self.sendClose()
@@ -126,6 +120,7 @@ class JsonRpcWebsocketServerProtocol(WebSocketServerProtocol):
         }
         if params:
             request['params'] = params
+        self.log.info('notification', data=request, **self.info)
         self.sendMessage(json_dumpb(request))
 
 
@@ -136,23 +131,25 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
         self.log = logger.new()
         self.factory = factory
 
-    def onConnect(self, request):
-        self.log.info('connect', request=request)
+    def onConnect(self, request: ConnectionRequest) -> None:
+        self.info = request.__json__()
+        self.log.info('connect', **self.info)
 
     def onOpen(self) -> None:
-        self.log.info('open')
+        self.log.info('open', **self.info, connections=len(self.factory.connections))
         if self.factory.manager.can_start_mining():
             self.send_notification(method='mining.notify', params=self.do_mining_refresh())
         self.factory.connections.add(self)
         self._open = True
 
     def onClose(self, wasClean, code, reason):
-        self.log.info('close', reason=reason)
+        self.log.info('close', reason=reason, **self.info)
         if self._open:
             self.factory.connections.remove(self)
             self._open = False
 
     def do_mining_refresh(self) -> list[dict]:
+        self.log.info('do_mining_refresh', **self.info)
         if not self.factory.manager.can_start_mining():
             self.log.warn('node syncing')
             return []
@@ -166,6 +163,7 @@ class MiningWebsocketProtocol(JsonRpcWebsocketServerProtocol):
             bytes.fromhex(hexdata),
             storage=self.factory.manager.tx_storage
         )
+        self.log.info('do_mining_submit', **self.info, block=tx.hash_hex, optimistic=optimistic)
         if not tx.is_block:
             self.log.warn('expected Block, received Transaction', data=hexdata)
             return False

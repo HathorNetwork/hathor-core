@@ -1,22 +1,12 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.utils import clean_token_string
 
 if TYPE_CHECKING:
@@ -41,7 +31,7 @@ def validate_token_name_and_symbol(settings: HathorSettings,
         raise TransactionDataError('Invalid token symbol ({})'.format(token_symbol))
 
 
-def validate_fee_amount(settings: HathorSettings, token_uid: bytes, amount: int) -> None:
+def validate_fee_amount(settings: HathorSettings, token_uid: bytes, amount: UnsignedAmount) -> None:
     """Validate the fee amount."""
     if amount <= 0:
         raise InvalidFeeAmount(f'fees should be a positive integer, got {amount}')

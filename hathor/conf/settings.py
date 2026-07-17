@@ -1,16 +1,6 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any, Union
 
 from pydantic import ConfigDict, field_validator, model_validator
@@ -21,16 +11,16 @@ from hathor.consensus.consensus_settings import ConsensusSettings, PowSettings
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
 from hathorlib.conf.settings import FeatureSetting, HathorSettings as LibSettings
 
-DECIMAL_PLACES = 2
-
-GENESIS_TOKEN_UNITS = 1 * (10 ** 9)  # 1B
-GENESIS_TOKENS = GENESIS_TOKEN_UNITS * (10 ** DECIMAL_PLACES)  # 100B
-
-HATHOR_TOKEN_UID: bytes = b'\x00'
-
 
 class HathorSettings(LibSettings):
     model_config = ConfigDict(extra='forbid')
+
+    # Fee rate settings for shielded outputs
+    FEE_PER_AMOUNT_SHIELDED_OUTPUT: int = 1
+    FEE_PER_FULL_SHIELDED_OUTPUT: int = 2
+
+    # Used to enable shielded transactions (including mint/melt headers).
+    ENABLE_SHIELDED_TRANSACTIONS: FeatureSetting = FeatureSetting.DISABLED
 
     # Block checkpoints
     CHECKPOINTS: list[Checkpoint] = []
@@ -72,8 +62,8 @@ class HathorSettings(LibSettings):
             return self
 
         if (self.BLOCKS_PER_HALVING is not None or
-            self.INITIAL_TOKEN_UNITS_PER_BLOCK != 0 or
-                self.MINIMUM_TOKEN_UNITS_PER_BLOCK != 0):
+            self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK != 0 or
+                self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK != 0):
             raise ValueError('PoA networks do not support block rewards')
         return self
 

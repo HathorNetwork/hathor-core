@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.p2p.states import ReadyState
 from hathor.p2p.sync_v2.agent import NodeBlockSync
 from hathor.simulator import FakeConnection

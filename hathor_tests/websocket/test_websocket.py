@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from json import JSONDecodeError
 from unittest.mock import Mock
 
@@ -151,7 +154,7 @@ class WebsocketTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(self.factory.address_connections), 0)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         # Subscribe to address
-        address = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
+        address = self.get_address(0)
         payload = json_dumpb({'type': 'subscribe_address', 'address': address})
         self.protocol.onMessage(payload, True)
         self.assertEqual(len(self.factory.address_connections), 1)
@@ -173,11 +176,30 @@ class WebsocketTest(_BaseResourceTest._ResourceTest):
         # Publishing with address that was not subscribed must not generate any value in the ws
         # First clean the transport to make sure the value comes from this execution
         self.transport.clear()
-        wrong_address = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9b'
+        wrong_address = self.get_address(1)
         self.manager.pubsub.publish(HathorEvents.WALLET_ADDRESS_HISTORY, address=wrong_address, history=element)
         self.run_to_completion()
         value = self._decode_value(self.transport.value())
         self.assertIsNone(value)
+
+    def test_subscribe_address_invalid(self):
+        self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
+        invalid_payloads = [
+            # Valid checksum but only 33 characters (issue #1758): must not reach the address index
+            {'type': 'subscribe_address', 'address': '1P8cW6gqriMRhKBR98mqFXXYj3shYySuJ'},
+            # 34 characters and valid checksum, but testnet version byte (0x49): invalid on this network
+            {'type': 'subscribe_address', 'address': 'WNg2svm2qApxheBKndKGQ9sRwporvRgRpT'},
+            # Missing address
+            {'type': 'subscribe_address'},
+        ]
+        for payload in invalid_payloads:
+            self.transport.clear()
+            self.protocol.onMessage(json_dumpb(payload), True)
+            value = self._decode_value(self.transport.value())
+            self.assertEqual(value['type'], 'subscribe_address')
+            self.assertFalse(value['success'])
+            self.assertIn('message', value)
+            self.assertEqual(len(self.factory.address_connections), 0)
 
     def test_connections(self):
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
@@ -212,11 +234,11 @@ class WebsocketTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(len(self.factory.address_connections), 0)
         self.protocol.state = HathorAdminWebsocketProtocol.STATE_OPEN
         # Subscribe to address
-        address1 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9a'
+        address1 = self.get_address(0)
         payload = json_dumpb({'type': 'subscribe_address', 'address': address1})
         self.protocol.onMessage(payload, True)
 
-        address2 = '1Q4qyTjhpUXUZXzwKs6Yvh2RNnF5J1XN9b'
+        address2 = self.get_address(1)
         payload = json_dumpb({'type': 'subscribe_address', 'address': address2})
         self.protocol.onMessage(payload, True)
 

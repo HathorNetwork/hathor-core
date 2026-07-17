@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -40,6 +29,7 @@ from hathor.transaction.base_transaction import TxVersion
 from hathor.transaction.token_info import TokenVersion
 from hathor.types import TokenUid
 from hathor.util import collect_n, json_dumpb, json_loadb
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 
 if TYPE_CHECKING:  # pragma: no cover
     import rocksdb
@@ -235,7 +225,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         name: str | None,
         symbol: str | None,
         version: TokenVersion | None,
-        total: int = 0,
+        total: UnsignedAmount = 0,
         n_contracts_can_mint: int = 0,
         n_contracts_can_melt: int = 0,
     ) -> None:
@@ -270,7 +260,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         name: str,
         symbol: str,
         version: TokenVersion,
-        total: int,
+        total: UnsignedAmount,
     ) -> None:
         self.create_token_info(
             token_uid=token_uid,
@@ -335,7 +325,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
             name=self._settings.HATHOR_TOKEN_NAME,
             symbol=self._settings.HATHOR_TOKEN_SYMBOL,
             version=TokenVersion.NATIVE,
-            total=self._settings.GENESIS_TOKENS,
+            total=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
         )
 
     def _get_value_info(self, token_uid: bytes, *, create_default: bool = True) -> _InfoDict:
@@ -352,7 +342,7 @@ class RocksDBTokensIndex(TokensIndex, RocksDBIndexUtils):
         return dict_info
 
     @override
-    def add_to_total(self, token_uid: bytes, amount: int) -> None:
+    def add_to_total(self, token_uid: bytes, amount: SignedAmount) -> None:
         dict_info = self._get_value_info(token_uid, create_default=True)
         dict_info.total += amount
         key_info = self._to_key_info(token_uid)
@@ -610,8 +600,8 @@ class RocksDBTokenIndexInfo(TokenIndexInfo):
         assert self._info.version is not None
         return self._info.version
 
-    def get_total(self) -> int:
-        return self._info.total
+    def get_total(self) -> UnsignedAmount:
+        return UnsignedAmount(self._info.total)
 
     def _iter_authority_utxos(self, *, is_mint: bool) -> Iterator[TokenUtxoInfo]:
         it = self._index._db.iterkeys(self._index._cf)

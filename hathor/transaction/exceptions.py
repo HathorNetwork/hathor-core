@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from hathorlib.exceptions import (  # noqa: F401
     AuxPowError,
@@ -74,6 +63,7 @@ from hathorlib.exceptions import (  # noqa: F401
     VerifyFailed,
     WeightError,
 )
+from hathorlib.token_amount import UnsignedAmount
 
 
 class ForbiddenMint(InputOutputMismatch):
@@ -81,9 +71,8 @@ class ForbiddenMint(InputOutputMismatch):
 
     from hathor.types import TokenUid
 
-    def __init__(self, amount: int, token_uid: TokenUid) -> None:
-        super().__init__('{} {} tokens minted, but there is no mint authority input'.format(
-            (-1) * amount, token_uid.hex()))
+    def __init__(self, amount: UnsignedAmount, token_uid: TokenUid) -> None:
+        super().__init__(f'{amount} {token_uid.hex()} tokens minted, but there is no mint authority input')
 
 
 class ForbiddenMelt(InputOutputMismatch):
@@ -95,6 +84,33 @@ class ForbiddenMelt(InputOutputMismatch):
         super().__init__(msg)
 
     @classmethod
-    def from_token(cls, amount: int, token_uid: TokenUid) -> 'ForbiddenMelt':
-        return cls('{} {} tokens melted, but there is no melt authority input'.format(
-            (-1) * amount, token_uid.hex()))
+    def from_token(cls, amount: UnsignedAmount, token_uid: TokenUid) -> 'ForbiddenMelt':
+        return cls(f'{amount} {token_uid.hex()} tokens melted, but there is no melt authority input')
+
+
+class InvalidRangeProofError(TxValidationError):
+    """Range proof is invalid."""
+
+
+class InvalidSurjectionProofError(TxValidationError):
+    """Surjection proof is invalid."""
+
+
+class ShieldedBalanceMismatchError(TxValidationError):
+    """Shielded balance equation does not hold."""
+
+
+class TrivialCommitmentError(TxValidationError):
+    """Rule 4: All transparent inputs require >= 2 shielded outputs."""
+
+
+class ShieldedAuthorityError(TxValidationError):
+    """Rule 7: Authority outputs cannot be shielded."""
+
+
+class ShieldedMintMeltForbiddenError(TxValidationError):
+    """Mint/melt operations are not allowed in transactions with shielded outputs."""
+
+
+class InvalidShieldedOutputError(TxValidationError):
+    """Generic invalid shielded output error."""

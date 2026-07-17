@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 BASEDIR=`pwd`
 
 HTR_PATH_DATA="/var/lib/hathor"

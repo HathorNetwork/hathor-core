@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from pydantic import Field
 
@@ -44,11 +33,18 @@ class VersionResponse(ResponseModel):
     min_tx_weight: int = Field(description="Minimum transaction weight")
     min_tx_weight_coefficient: float = Field(description="Minimum transaction weight coefficient")
     min_tx_weight_k: float = Field(description="Minimum transaction weight k constant")
-    token_deposit_percentage: float = Field(description="Token deposit percentage")
+    token_deposit_percentage: float = Field(description="Token deposit percentage. DEPRECATED")
+    token_deposit_percentage_numerator: int = Field(description="Token deposit percentage numerator")
+    token_deposit_percentage_denominator: int = Field(description="Token deposit percentage denominator")
     reward_spend_min_blocks: int = Field(description="Minimum blocks before reward can be spent")
     max_number_inputs: int = Field(description="Maximum number of inputs per transaction")
     max_number_outputs: int = Field(description="Maximum number of outputs per transaction")
-    decimal_places: int = Field(description="Number of decimal places for token amounts")
+    decimal_places: int = Field(description="Number of decimal places for token amounts. DEPRECATED")
+    display_decimal_places: int = Field(
+        description="Number of decimal places to be displayed for all tokens; it is simply cosmetic"
+    )
+    token_amount_v1_decimal_places: int = Field(description="Number of decimal places for V1")
+    token_amount_v2_decimal_places: int = Field(description="Number of decimal places for V2")
     genesis_block_hash: Hex[BlockId] = Field(description="Genesis block hash in hex")
     genesis_tx1_hash: Hex[TransactionId] = Field(description="Genesis transaction 1 hash in hex")
     genesis_tx2_hash: Hex[TransactionId] = Field(description="Genesis transaction 2 hash in hex")
@@ -67,10 +63,15 @@ VersionResponse.openapi_examples = {
             min_tx_weight_coefficient=1.6,
             min_tx_weight_k=100,
             token_deposit_percentage=0.01,
+            token_deposit_percentage_numerator=10**7,
+            token_deposit_percentage_denominator=10**9,
             reward_spend_min_blocks=300,
             max_number_inputs=256,
             max_number_outputs=256,
             decimal_places=2,
+            display_decimal_places=2,
+            token_amount_v1_decimal_places=2,
+            token_amount_v2_decimal_places=18,
             genesis_block_hash=BlockId(b'\x00' * 32),
             genesis_tx1_hash=TransactionId(b'\x00' * 31 + b'\x01'),
             genesis_tx2_hash=TransactionId(b'\x00' * 31 + b'\x02'),
@@ -126,11 +127,18 @@ class VersionResource(Resource):
             min_tx_weight=self._settings.MIN_TX_WEIGHT,
             min_tx_weight_coefficient=self._settings.MIN_TX_WEIGHT_COEFFICIENT,
             min_tx_weight_k=self._settings.MIN_TX_WEIGHT_K,
-            token_deposit_percentage=self._settings.TOKEN_DEPOSIT_PERCENTAGE,
+            token_deposit_percentage=(
+                self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR / self._settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+            ),
+            token_deposit_percentage_numerator=self._settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+            token_deposit_percentage_denominator=self._settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
             reward_spend_min_blocks=self._settings.REWARD_SPEND_MIN_BLOCKS,
             max_number_inputs=self._settings.MAX_NUM_INPUTS,
             max_number_outputs=self._settings.MAX_NUM_OUTPUTS,
-            decimal_places=self._settings.DECIMAL_PLACES,
+            decimal_places=self._settings.DISPLAY_DECIMAL_PLACES,  # TODO: This field is deprecated and will be removed
+            display_decimal_places=self._settings.DISPLAY_DECIMAL_PLACES,
+            token_amount_v1_decimal_places=self._settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES,
+            token_amount_v2_decimal_places=self._settings.TOKEN_AMOUNT_V2_DECIMAL_PLACES,
             genesis_block_hash=self._settings.GENESIS_BLOCK_HASH,
             genesis_tx1_hash=self._settings.GENESIS_TX1_HASH,
             genesis_tx2_hash=self._settings.GENESIS_TX2_HASH,

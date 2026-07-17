@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -48,6 +37,7 @@ class NanoContractStateResource(Resource):
     def __init__(self, manager: 'HathorManager') -> None:
         super().__init__()
         self.manager = manager
+        self.nc_storage_factory = manager.consensus_algorithm.nc_storage_factory
 
     def render_GET(self, request: 'Request') -> bytes:
         request.setHeader(b'content-type', b'application/json; charset=utf-8')
@@ -135,9 +125,11 @@ class NanoContractStateResource(Resource):
         else:
             block = self.manager.tx_storage.get_best_block()
 
+        from hathor.nanocontracts.storage import get_block_storage_from_block
+        block_storage = get_block_storage_from_block(self.nc_storage_factory, block)
+
         try:
-            runner = self.manager.get_nc_runner(block)
-            nc_storage = runner.get_storage(nc_id_bytes)
+            nc_storage = block_storage.get_contract_storage(nc_id_bytes)
         except NanoContractDoesNotExist:
             # Nano contract does not exist at this block
             request.setResponseCode(404)
@@ -148,7 +140,10 @@ class NanoContractStateResource(Resource):
             return error_response.json_dumpb()
 
         blueprint_id = nc_storage.get_blueprint_id()
-        blueprint_class = self.manager.blueprint_service.get_blueprint_class(blueprint_id)
+        blueprint_class, token_amount_version = (
+            self.manager.blueprint_service.get_blueprint_class_and_token_amount_version(blueprint_id)
+        )
+        runner = self.manager.get_nc_runner(block, token_amount_version=token_amount_version)
 
         value: Any
         # Get balances.

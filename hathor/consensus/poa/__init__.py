@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from .poa import (
     BLOCK_WEIGHT_IN_TURN,
     BLOCK_WEIGHT_OUT_OF_TURN,

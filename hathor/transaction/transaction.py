@@ -1,22 +1,11 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional, TypeVar
 
-from typing_extensions import Self, override
+from typing_extensions import Self, final, override
 
 from hathor.checkpoint import Checkpoint
 from hathor.crypto.util import get_address_b58_from_bytes
@@ -25,14 +14,21 @@ from hathor.serialization import Serializer
 from hathor.transaction import TxInput, TxOutput, TxVersion
 from hathor.transaction.base_transaction import GenericVertex
 from hathor.transaction.exceptions import InvalidToken
-from hathor.transaction.headers import NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    AnyVertexHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+)
 from hathor.transaction.headers.fee_header import FeeHeader
 from hathor.transaction.static_metadata import TransactionStaticMetadata
 from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion, get_token_version
 from hathor.transaction.util import VerboseCallback
 from hathor.types import TokenUid, VertexId
+from hathorlib.token_amount_version import TokenAmountVersion
+from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
-T = TypeVar('T', bound=VertexBaseHeader)
+T = TypeVar('T', bound=AnyVertexHeader)
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -161,6 +157,59 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
 
+    def has_shielded_outputs(self) -> bool:
+        """Returns true if this transaction has a shielded outputs header."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def has_shielded_inputs(self) -> bool:
+        """Return whether any input references a shielded output (needs storage)."""
+        assert self.storage is not None
+        for tx_input in self.inputs:
+            spent_tx = self.storage.get_transaction(tx_input.tx_id)
+            if tx_input.index >= len(spent_tx.outputs):
+                return True
+        return False
+
+    def is_shielded(self) -> bool:
+        """Return whether this tx involves any shielded components (inputs or outputs)."""
+        return self.has_shielded_outputs() or self.has_shielded_inputs()
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        return self._get_header(ShieldedOutputsHeader)
+
+    @property
+    def shielded_outputs(self) -> list[ShieldedOutput]:
+        """Return the list of shielded outputs, or empty list if no header."""
+        if self.has_shielded_outputs():
+            return self.get_shielded_outputs_header().shielded_outputs
+        return []
+
+    def has_unshield_balance_header(self) -> bool:
+        """Returns true if this tx carries an excess blinding factor for full-unshield."""
+        try:
+            self.get_unshield_balance_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_unshield_balance_header(self) -> UnshieldBalanceHeader:
+        """Return the UnshieldBalanceHeader or raise ValueError."""
+        return self._get_header(UnshieldBalanceHeader)
+
+    @property
+    def excess_blinding_factor(self) -> bytes | None:
+        """Return the 32-byte excess blinding factor, or None if not a full unshield."""
+        if self.has_unshield_balance_header():
+            return self.get_unshield_balance_header().excess_blinding_factor
+        return None
+
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
         for header in self.headers:
@@ -207,6 +256,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def to_json(self, decode_script: bool = False, include_metadata: bool = False) -> dict[str, Any]:
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = [h.hex() for h in self.tokens]
+        json['token_amount_version'] = self.get_token_amount_version().value
 
         if self.is_nano_contract():
             nano_header = self.get_nano_header()
@@ -284,7 +334,7 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
         nano_header = self.get_nano_header()
 
         for action in nano_header.get_actions():
-            rules = BalanceRules.get_rules(self._settings, action)
+            rules = BalanceRules.get_rules(self._settings, action, self.get_token_amount_version())
             if action.token_uid not in token_dict:
                 # we try to load this token version from storage in case it's not in the inputs
                 token_dict[action.token_uid] = TokenInfo(
@@ -328,8 +378,23 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
 
         for tx_input in self.inputs:
             spent_tx = self.get_spent_tx(tx_input)
-            spent_output = spent_tx.resolve_spent_output(tx_input.index)
 
+            try:
+                resolved = spent_tx.resolve_spent_output(tx_input.index)
+            except IndexError:
+                # Out of bounds — will be caught by _verify_inputs
+                continue
+
+            # NOTE (PR-5 scope): the SEMANTIC "skip shielded inputs (amount hidden — verified
+            # by the homomorphic balance equation)" decision for token accounting belongs to
+            # PR-5's token-info work. While ENABLE_SHIELDED_TRANSACTIONS is DISABLED (the only
+            # state that ships), tx.shielded_outputs is always empty so this assert cannot fire.
+            # When PR-5 lands, replace this assert with the proper shielded-skip:
+            #     from hathorlib.transaction.shielded_tx_output import OutputMode
+            #     if resolved.mode() != OutputMode.TRANSPARENT:
+            #         continue  # Shielded input: skip for token info (amount is hidden)
+            assert isinstance(resolved, TxOutput)
+            spent_output = resolved
             token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
             token_version = get_token_version(self.storage, nc_block_storage, token_uid)
 
@@ -411,3 +476,9 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     def init_static_metadata_from_storage(self, settings: HathorSettings, storage: 'TransactionStorage') -> None:
         static_metadata = TransactionStaticMetadata.create_from_storage(self, settings, storage)
         self.set_static_metadata(static_metadata)
+
+    @final
+    def get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which this transaction's token amounts are interpreted."""
+        # Transactions are always V1. This will be updated in the future.
+        return TokenAmountVersion.V1

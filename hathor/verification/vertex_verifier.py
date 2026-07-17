@@ -1,16 +1,5 @@
-#  Copyright 2023 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from typing import Optional
 
@@ -35,8 +24,15 @@ from hathor.transaction.exceptions import (
     TooManyOutputs,
     TooManySigOps,
 )
-from hathor.transaction.headers import FeeHeader, NanoHeader, VertexBaseHeader
+from hathor.transaction.headers import (
+    AnyVertexHeader,
+    FeeHeader,
+    NanoHeader,
+    ShieldedOutputsHeader,
+    UnshieldBalanceHeader,
+)
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.exceptions import UnknownSignalBits
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -56,6 +52,20 @@ class VertexVerifier:
         self._reactor = reactor
         self._settings = settings
         self._feature_service = feature_service
+
+    def verify_signal_bits(self, vertex: BaseTransaction) -> None:
+        from hathor.transaction import Block, Transaction
+        assert vertex.signal_bits <= 0xFF
+        match vertex:
+            case Transaction():
+                unknown_signal_bits = 0xFF
+            case Block():
+                unknown_signal_bits = 0xFF - vertex.get_feature_activation_bitmask()
+            case _:
+                raise AssertionError('unreachable')
+
+        if vertex.signal_bits & unknown_signal_bits != 0:
+            raise UnknownSignalBits(f'vertex has unknown signal bits: {bin(vertex.signal_bits)}')
 
     def verify_version_basic(self, vertex: BaseTransaction) -> None:
         """Verify that the vertex version is valid."""
@@ -196,9 +206,9 @@ class VertexVerifier:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
 
-    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[VertexBaseHeader]]:
+    def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[AnyVertexHeader]]:
         """Return a set of allowed headers for the vertex."""
-        allowed_headers: set[type[VertexBaseHeader]] = set()
+        allowed_headers: set[type[AnyVertexHeader]] = set()
         match vertex.version:
             case TxVersion.REGULAR_BLOCK:
                 pass
@@ -208,11 +218,19 @@ class VertexVerifier:
                 pass
             case TxVersion.ON_CHAIN_BLUEPRINT:
                 pass
-            case TxVersion.REGULAR_TRANSACTION | TxVersion.TOKEN_CREATION_TRANSACTION:
+            case TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+            case TxVersion.REGULAR_TRANSACTION:
+                if params.features.nanocontracts:
+                    allowed_headers.add(NanoHeader)
+                if params.features.fee_tokens:
+                    allowed_headers.add(FeeHeader)
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers

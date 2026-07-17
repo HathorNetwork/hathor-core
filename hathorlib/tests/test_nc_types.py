@@ -1,26 +1,28 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 # mypy: disable-error-code="no-untyped-def"
 
+import json
 import unittest
+from typing import Any, NewType
 
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCInvalidAction
+from hathorlib.nanocontracts.nc_types import (
+    ESSENTIAL_TYPE_ALIAS_MAP,
+    BytesLikeNCType,
+    NCType,
+    VarUint32NCType,
+    make_nc_type_for_arg_type,
+    make_nc_type_for_field_type,
+    make_nc_type_for_return_type,
+)
 from hathorlib.nanocontracts.types import (
     NC_HTR_TOKEN_UID,
+    Address,
     Amount,
     BlueprintId,
+    CallerId,
     ContractId,
     NCAcquireAuthorityAction,
     NCActionType,
@@ -145,6 +147,148 @@ class TestCustomTypes(unittest.TestCase):
         bid = blueprint_id_from_bytes(data)
         self.assertIsInstance(bid, BlueprintId)
         self.assertEqual(bid, data)
+
+
+class TestActualTypeWrapping(unittest.TestCase):
+    """Deserializing must yield the declared actual class (e.g. `Amount`), not its base type (e.g. `int`)."""
+
+    def _json_roundtrip(self, nc_type: NCType, value: object) -> object:
+        """Roundtrip a value through an actual JSON encode/decode cycle."""
+        return nc_type.json_to_value(json.loads(json.dumps(nc_type.value_to_json(value))))
+
+    def test_amount_all_factories(self) -> None:
+        for make in (make_nc_type_for_field_type, make_nc_type_for_arg_type, make_nc_type_for_return_type):
+            nc_type = make(Amount)
+            value = nc_type.from_bytes(nc_type.to_bytes(Amount(100)))
+            self.assertIsInstance(value, Amount)
+            self.assertEqual(value, 100)
+
+    def test_amount_from_plain_int(self) -> None:
+        # values are serialized as plain ints, but must come back as Amount
+        nc_type = make_nc_type_for_field_type(Amount)
+        value = nc_type.from_bytes(nc_type.to_bytes(100))  # type: ignore[arg-type]
+        self.assertIsInstance(value, Amount)
+        self.assertEqual(value, 100)
+
+    def test_amount_roundtrip_bytes(self) -> None:
+        nc_type = make_nc_type_for_field_type(Amount)
+        for raw in (0, 1, 100, 2**64, 2**128):
+            value = nc_type.from_bytes(nc_type.to_bytes(Amount(raw)))
+            self.assertIsInstance(value, Amount)
+            self.assertEqual(value, raw)
+
+    def test_amount_json(self) -> None:
+        nc_type = make_nc_type_for_field_type(Amount)
+        self.assertEqual(nc_type.value_to_json(Amount(7)), 7)
+        value = self._json_roundtrip(nc_type, Amount(7))
+        self.assertIsInstance(value, Amount)
+        self.assertEqual(value, 7)
+
+    def test_timestamp(self) -> None:
+        nc_type = make_nc_type_for_field_type(Timestamp)
+        value = nc_type.from_bytes(nc_type.to_bytes(Timestamp(1234567890)))
+        self.assertIsInstance(value, Timestamp)
+        self.assertEqual(value, 1234567890)
+        json_value = self._json_roundtrip(nc_type, Timestamp(1234567890))
+        self.assertIsInstance(json_value, Timestamp)
+
+    def test_plain_int_is_not_wrapped(self) -> None:
+        # a plain `int` field must not be turned into an Amount
+        nc_type = make_nc_type_for_field_type(int)
+        value = nc_type.from_bytes(nc_type.to_bytes(5))
+        self.assertNotIsInstance(value, Amount)
+        self.assertIs(type(value), int)
+        self.assertEqual(value, 5)
+
+    def test_directly_constructed_nc_type_is_not_wrapped(self) -> None:
+        # an NCType built directly (not through `NCType.from_type`) has no declared actual type
+        nc_type = VarUint32NCType()
+        value = nc_type.from_bytes(nc_type.to_bytes(Amount(5)))
+        self.assertIs(type(value), int)
+
+    def test_containers_compose(self) -> None:
+        token = TokenUid(b'\x03' * 32)
+
+        dict_nc_type = make_nc_type_for_arg_type(dict[TokenUid, Amount])
+        for out in (
+            dict_nc_type.from_bytes(dict_nc_type.to_bytes({token: Amount(5)})),
+            self._json_roundtrip(dict_nc_type, {token: Amount(5)}),
+        ):
+            assert isinstance(out, dict)
+            (key, value), = out.items()
+            self.assertIsInstance(key, TokenUid)
+            self.assertIsInstance(value, Amount)
+
+        opt_nc_type: NCType[Amount | None] = make_nc_type_for_arg_type(Amount | None)  # type: ignore[arg-type]
+        self.assertIsInstance(opt_nc_type.from_bytes(opt_nc_type.to_bytes(Amount(7))), Amount)
+        self.assertIsNone(opt_nc_type.from_bytes(opt_nc_type.to_bytes(None)))
+
+        tuple_nc_type = make_nc_type_for_arg_type(tuple[Timestamp, ...])
+        out = tuple_nc_type.from_bytes(tuple_nc_type.to_bytes((Timestamp(1), Timestamp(2))))
+        assert isinstance(out, tuple)
+        for item in out:
+            self.assertIsInstance(item, Timestamp)
+
+        # `list` is aliased to `tuple` in the field map
+        list_nc_type = make_nc_type_for_field_type(list[Amount])
+        out = list_nc_type.from_bytes(list_nc_type.to_bytes((Amount(1), Amount(2))))  # type: ignore[arg-type]
+        assert isinstance(out, tuple)
+        for item in out:
+            self.assertIsInstance(item, Amount)
+
+    def test_bytes_actual_types_no_regression(self) -> None:
+        cases: list[tuple[type, bytes]] = [
+            (BlueprintId, BlueprintId(b'\x01' * 32)),
+            (ContractId, ContractId(b'\x02' * 32)),
+            (VertexId, VertexId(b'\x03' * 32)),
+            (TokenUid, TokenUid(b'\x04' * 32)),
+            (TokenUid, NC_HTR_TOKEN_UID),
+            (TxOutputScript, TxOutputScript(b'\x76\xa9')),
+        ]
+        for type_, value in cases:
+            nc_type: NCType[Any] = make_nc_type_for_field_type(type_)
+            out = nc_type.from_bytes(nc_type.to_bytes(value))
+            self.assertIs(type(out), type_)
+            self.assertEqual(out, value)
+            json_out = self._json_roundtrip(nc_type, value)
+            self.assertIsInstance(json_out, type_)
+            self.assertEqual(json_out, value)
+
+    def test_address_and_caller_id_no_regression(self) -> None:
+        address = Address(bytes.fromhex('2873c0a326af979a12be89ee8a00e8871c8e2765022e9b803c'))
+        contract_id = ContractId(b'\x05' * 32)
+
+        address_nc_type = make_nc_type_for_field_type(Address)
+        out = address_nc_type.from_bytes(address_nc_type.to_bytes(address))
+        self.assertIs(type(out), Address)
+        self.assertIsInstance(self._json_roundtrip(address_nc_type, address), Address)
+
+        caller_id_nc_type: NCType[CallerId] = make_nc_type_for_field_type(CallerId)  # type: ignore[arg-type]
+        for caller in (address, contract_id):
+            caller_out = caller_id_nc_type.from_bytes(caller_id_nc_type.to_bytes(caller))
+            self.assertIs(type(caller_out), type(caller))
+            self.assertEqual(caller_out, caller)
+            json_out = self._json_roundtrip(caller_id_nc_type, caller)
+            self.assertIs(type(json_out), type(caller))
+
+    def test_newtype_direct_construction_is_not_wrapped(self) -> None:
+        # some NCTypes are constructed directly with a NewType instead of a class (e.g. `NodeNCType` builds
+        # `BytesLikeNCType(NodeId)`), which must be skipped since a NewType cannot be isinstance-checked
+        node_id_type = NewType('node_id_type', bytes)
+        nc_type = BytesLikeNCType(node_id_type)
+        value = nc_type.from_bytes(nc_type.to_bytes(node_id_type(b'\x01' * 32)))
+        self.assertIs(type(value), bytes)
+        self.assertEqual(value, b'\x01' * 32)
+        json_value = self._json_roundtrip(nc_type, node_id_type(b'\x01' * 32))
+        self.assertIs(type(json_value), bytes)
+
+    def test_wrapping_is_mapping_independent(self) -> None:
+        # the declared type is preserved no matter which plain NCType class it is mapped to
+        type_map = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, {Amount: VarUint32NCType})
+        nc_type = NCType.from_type(Amount, type_map=type_map)
+        value = nc_type.from_bytes(nc_type.to_bytes(Amount(100)))
+        self.assertIsInstance(value, Amount)
+        self.assertEqual(value, 100)
 
 
 class TestSetMethodType(unittest.TestCase):

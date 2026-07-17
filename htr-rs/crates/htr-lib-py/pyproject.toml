@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 [build-system]
 requires = ["maturin>=1.13,<2.0"]
 build-backend = "maturin"
@@ -10,3 +13,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
 ]
 dynamic = ["version"]
+
+[tool.maturin]
+module-name = "htr_lib"

@@ -1,16 +1,5 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from math import log
 from typing import TYPE_CHECKING
@@ -42,7 +31,8 @@ def minimum_tx_weight(tx: 'Transaction', *, fix_parents: bool = True) -> float:
     # We need to take into consideration the decimal places because it is inside the amount.
     # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     # Max below is preventing division by 0 when handling authority methods that have no outputs
-    amount = max(1, tx.sum_outputs) / (10 ** settings.DECIMAL_PLACES)
+    decimal_places = tx.get_token_amount_version().get_decimal_places(settings)
+    amount = max(1, tx.sum_outputs) / (10 ** decimal_places)
 
     weight: float = (
         + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)

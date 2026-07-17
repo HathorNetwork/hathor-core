@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.event.model.base_event import BaseEvent
 from hathor.event.model.node_state import NodeState
 from hathor.event.storage.rocksdb_storage import EventRocksDBStorage
