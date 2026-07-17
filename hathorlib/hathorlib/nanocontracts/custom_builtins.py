@@ -22,10 +22,11 @@ from typing import (
 
 from typing_extensions import Self, TypeVarTuple
 
-from hathorlib.nanocontracts.allowed_imports import ALLOWED_IMPORTS
+from hathorlib.nanocontracts.allowed_imports import get_allowed_imports
 from hathorlib.nanocontracts.exception import NCDisabledBuiltinError
 from hathorlib.nanocontracts.faux_immutable import FauxImmutable
 from hathorlib.nanocontracts.types import BLUEPRINT_EXPORT_NAME
+from hathorlib.token_amount_version import TokenAmountVersion
 
 T = TypeVar('T')
 Ts = TypeVarTuple('Ts')
@@ -484,16 +485,20 @@ AST_NAME_BLACKLIST: frozenset[str] = frozenset({
 })
 
 
-_EXEC_BUILTINS: dict[str, Any] | None = None
+_EXEC_BUILTINS: dict[TokenAmountVersion, dict[str, Any]] = {}
 
 
-def get_exec_builtins() -> dict[str, Any]:
-    global _EXEC_BUILTINS
-    if _EXEC_BUILTINS is not None:
-        return _EXEC_BUILTINS
+def get_exec_builtins(token_amount_version: TokenAmountVersion) -> dict[str, Any]:
+    """Return the builtins for blueprint execution.
+
+    The `token_amount_version` selects the import table, so version-routed names (`SignedData`,
+    `NCRawArgs`) resolve to the concrete class matching the executing blueprint's version.
+    """
+    if token_amount_version in _EXEC_BUILTINS:
+        return _EXEC_BUILTINS[token_amount_version]
 
     # list of allowed builtins during execution of an on-chain blueprint code
-    _EXEC_BUILTINS = {
+    exec_builtins = {
         # XXX: check https://github.com/python/mypy/blob/master/mypy/typeshed/stdlib/builtins.pyi for the full typing
         # XXX: check https://github.com/python/cpython/blob/main/Python/bltinmodule.c for the implementation
 
@@ -506,7 +511,7 @@ def get_exec_builtins() -> dict[str, Any]:
         # XXX: will trigger the execution of the imported module
         # (name: str, globals: Mapping[str, object] | None = None, locals: Mapping[str, object] | None = None,
         #  fromlist: Sequence[str] = (), level: int = 0) -> types.ModuleType
-        '__import__': _generate_restricted_import_function(ALLOWED_IMPORTS),
+        '__import__': _generate_restricted_import_function(get_allowed_imports(token_amount_version)),
 
         # XXX: also required to declare classes
         # XXX: this would be '__main__' for a module that is loaded as the main entrypoint, and the module name
@@ -832,9 +837,10 @@ def get_exec_builtins() -> dict[str, Any]:
         },
     }
 
-    for name, builtin in _EXEC_BUILTINS.items():
+    for name, builtin in exec_builtins.items():
         import inspect
         if inspect.isclass(builtin) and issubclass(builtin, BaseException):
             assert issubclass(builtin, Exception), f'cannot allow non-Exception subclasses: {name}'
 
-    return _EXEC_BUILTINS
+    _EXEC_BUILTINS[token_amount_version] = exec_builtins
+    return exec_builtins

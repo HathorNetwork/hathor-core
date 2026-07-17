@@ -17,6 +17,9 @@ from hathor_tests.resources.nanocontracts.base_resource import GenericNanoResour
 class BaseBlueprintInfoTest(GenericNanoResourceTest):
     # this is what subclasses have to define
     blueprint_id: BlueprintId
+    # the display name of `SignedData` annotations: the routed name binds to the class matching the
+    # loading context's version, so the builtin (V2) and on-chain (V1) variants differ
+    signed_data_type_name: str
 
     def setUp(self):
         super().setUp()
@@ -81,7 +84,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
             'a_timestamp': 'Timestamp',
             'a_token_uid': 'TokenUid',
             'a_script': 'TxOutputScript',
-            'a_signed_data': 'SignedData[str]',
+            'a_signed_data': self.signed_data_type_name,
             'a_dict': 'dict[str, int]',
             'a_tuple': 'tuple[str, int, bool]',
             'a_dict_dict_tuple': 'dict[str, tuple[str, int]]',
@@ -103,7 +106,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
                     'type': 'int'
                 }, {
                     'name': 'arg2',
-                    'type': 'SignedData[str]',
+                    'type': self.signed_data_type_name,
                 }],
                 'return_type': 'null',
                 'docstring': 'No operation.',
@@ -154,6 +157,7 @@ class BaseBlueprintInfoTest(GenericNanoResourceTest):
 
 class BuiltinBlueprintInfoTest(BaseBlueprintInfoTest):
     __test__ = True
+    signed_data_type_name = 'SignedDataV2[str]'
 
     def setUp(self):
         super().setUp()
@@ -164,6 +168,7 @@ class BuiltinBlueprintInfoTest(BaseBlueprintInfoTest):
 
 class OCBBlueprintInfoTest(BaseBlueprintInfoTest):
     __test__ = True
+    signed_data_type_name = 'SignedDataV1[str]'
 
     def setUp(self):
         super().setUp()

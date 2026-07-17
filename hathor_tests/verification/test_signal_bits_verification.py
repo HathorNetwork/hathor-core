@@ -39,9 +39,25 @@ class TestSignalBitsVerification(unittest.TestCase):
     def test_tx_no_signal_bits_success(self) -> None:
         self._test_tx(signal_bits=0)
 
+    def test_tx_token_amount_version_bit_is_known(self) -> None:
+        """Bit 0 encodes the transaction's token amount version, so `verify_signal_bits` accepts it.
+
+        It is gated separately by `TransactionVerifier.verify_token_amount_version`, covered in
+        `hathor_tests/token_amount_version/`.
+        """
+        manager = self.create_peer('unittests')
+        dag_builder = TestDAGBuilder.from_manager(manager)
+        artifacts = dag_builder.build_from_str('''
+            blockchain genesis b[1..10]
+            b10 < dummy < tx1
+        ''')
+        tx1 = artifacts.get_typed_vertex('tx1', Transaction)
+
+        tx1.signal_bits = 1 << 0
+        manager.verification_service.verifiers.vertex.verify_signal_bits(tx1)
+
     def test_tx_unknown_signal_bits_fail(self) -> None:
         signal_bits = (
-            1 << 0,
             1 << 1,
             1 << 2,
             1 << 3,

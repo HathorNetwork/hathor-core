@@ -10,8 +10,9 @@ import pytest
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCFail, NCSerializationArgTooLong
 from hathor.nanocontracts.method import MAX_BYTES_SERIALIZED_ARG, Method
-from hathor.nanocontracts.types import SignedData, public
+from hathor.nanocontracts.types import SignedData, SignedDataV1, public
 from hathor_tests import unittest
+from hathorlib.token_amount_version import TokenAmountVersion
 
 T = TypeVar('T')
 
@@ -38,7 +39,7 @@ class MyBlueprint:
         pass
 
     @public
-    def method_signed_str(self, ctx: Context, x: SignedData[str]) -> None:
+    def method_signed_str(self, ctx: Context, x: SignedDataV1[str]) -> None:
         pass
 
     @public
@@ -52,7 +53,7 @@ class MyBlueprint:
 
 class NCBlueprintTestCase(unittest.TestCase):
     def _run_test(self, method: Callable[[Any, T], None], data: T) -> None:
-        parser = Method.from_callable(method)
+        parser = Method.from_callable(method, TokenAmountVersion.V1)
         self._run_test_parser(parser, data)
 
     def _run_test_parser(self, method_parser: Method, data: T) -> None:
@@ -116,7 +117,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         class Foo:
             def bar(self, data: bytes) -> None:
                 pass
-        parser = Method.from_callable(Foo.bar)
+        parser = Method.from_callable(Foo.bar, TokenAmountVersion.V1)
         parser.args._max_bytes = 2**32  # more than long enough to test a single bytes write
         max_write_length = 2**16 - 3
         self._run_test_parser(parser, b'a' * max_write_length)  # largest valid write
@@ -197,11 +198,11 @@ class NCBlueprintTestCase(unittest.TestCase):
         self._run_test(MyBlueprint.method_with_tuple, ('x', 1, 2))
 
     def test_type_signed_str(self) -> None:
-        x: SignedData[str] = SignedData[str]('áéíóú', b'here-goes-the-signature')
+        x: SignedData[str] = SignedDataV1[str]('áéíóú', b'here-goes-the-signature')
         self._run_test(MyBlueprint.method_signed_str, x)
 
     def test_basic_types(self) -> None:
-        parser = Method.from_callable(MyBlueprint.initialize)
+        parser = Method.from_callable(MyBlueprint.initialize, TokenAmountVersion.V1)
 
         # Then, check serialization and deserialization.
         args_in = ('a', b'b', 1, True)
@@ -210,7 +211,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_in, args_out)
 
     def test_arg_parse_str(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_str)
+        parser = Method.from_callable(MyBlueprint.method_str, TokenAmountVersion.V1)
 
         value = 'test'
         args_json = json.loads(f'["{value}"]')
@@ -225,7 +226,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_bytes(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_bytes)
+        parser = Method.from_callable(MyBlueprint.method_bytes, TokenAmountVersion.V1)
 
         value = b'\x01'
         args_json = json.loads(f'["{value.hex()}"]')
@@ -240,7 +241,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_int(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_int)
+        parser = Method.from_callable(MyBlueprint.method_int, TokenAmountVersion.V1)
 
         value = 1
         args_json = json.loads(f'[{value}]')
@@ -255,7 +256,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_bool(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_bool)
+        parser = Method.from_callable(MyBlueprint.method_bool, TokenAmountVersion.V1)
 
         args_json = json.loads('[false]')
         parsed_args = parser.args.json_to_value(args_json)
@@ -269,7 +270,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_optional_none(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_with_optional)
+        parser = Method.from_callable(MyBlueprint.method_with_optional, TokenAmountVersion.V1)
 
         # If optional is None
         args_json = json.loads('[null]')
@@ -284,7 +285,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_optional_some(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_with_optional)
+        parser = Method.from_callable(MyBlueprint.method_with_optional, TokenAmountVersion.V1)
 
         # If optional has str value
         value = 'test'
@@ -300,7 +301,7 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_tuple(self):
-        parser = Method.from_callable(MyBlueprint.method_with_tuple)
+        parser = Method.from_callable(MyBlueprint.method_with_tuple, TokenAmountVersion.V1)
 
         args_json = json.loads('[["test", 1, 2]]')
         parsed_args = parser.args.json_to_value(args_json)
@@ -314,15 +315,15 @@ class NCBlueprintTestCase(unittest.TestCase):
         self.assertEqual(args_json, args_json2)
 
     def test_arg_parse_signed_data(self) -> None:
-        parser = Method.from_callable(MyBlueprint.method_signed_str)
+        parser = Method.from_callable(MyBlueprint.method_signed_str, TokenAmountVersion.V1)
 
         args_json = json.loads('[["test", "1234"]]')
         parsed_args = parser.args.json_to_value(args_json)
 
         # test that it parsed back the original value
         self.assertEqual(len(parsed_args), 1)
-        self.assertEqual(parsed_args[0], SignedData[str]('test', bytes.fromhex('1234')))
+        self.assertEqual(parsed_args[0], SignedDataV1[str]('test', bytes.fromhex('1234')))
 
         # also test that it can generate the same JSON representation
-        args_json2 = parser.args.value_to_json((SignedData[str]('test', bytes.fromhex('1234')),))
+        args_json2 = parser.args.value_to_json((SignedDataV1[str]('test', bytes.fromhex('1234')),))
         self.assertEqual(args_json, args_json2)

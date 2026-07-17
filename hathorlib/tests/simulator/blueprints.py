@@ -6,7 +6,7 @@
 from hathorlib.nanocontracts.blueprint import Blueprint
 from hathorlib.nanocontracts.context import Context
 from hathorlib.nanocontracts.exception import NCFail
-from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, NCActionType, SignedData, TxOutputScript, public, view
+from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, NCActionType, SignedDataV2, TxOutputScript, public, view
 
 
 class Counter(Blueprint):
@@ -149,7 +149,7 @@ class SignedMessage(Blueprint):
         self.oracle_script = oracle_script
 
     @public
-    def set_message(self, ctx: Context, signed: SignedData[str]) -> None:
+    def set_message(self, ctx: Context, signed: SignedDataV2[str]) -> None:
         if not signed.checksig(self.syscall.get_contract_id(), self.oracle_script):
             raise NCFail('invalid signature')
         self.message = signed.data

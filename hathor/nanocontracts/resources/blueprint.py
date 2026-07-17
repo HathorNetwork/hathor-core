@@ -63,8 +63,10 @@ class BlueprintInfoResource(Resource):
                     case (hathor.Address, hathor.ContractId) | (hathor.ContractId, hathor.Address):
                         return 'CallerId'
                 return self._get_composed_type_name('union', args)
-            case nc_types.SignedData:
-                return self._get_composed_type_name('SignedData', args)
+            case type() if issubclass(origin, nc_types.SignedData):
+                # the concrete class name (`SignedDataV1`/`SignedDataV2`) tells API consumers which
+                # version's encodings to sign over
+                return self._get_composed_type_name(origin.__name__, args)
 
         return type_.__name__
 

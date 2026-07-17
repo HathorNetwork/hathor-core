@@ -7,9 +7,10 @@ from types import MethodType
 from typing import Any
 
 from hathor.nanocontracts import Blueprint, Context, public
-from hathor.nanocontracts.allowed_imports import ALLOWED_IMPORTS
+from hathor.nanocontracts.allowed_imports import get_allowed_imports
 from hathor.nanocontracts.custom_builtins import get_exec_builtins
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount_version import TokenAmountVersion
 
 MAX_DEPTH = 20
 NEW_PROP_NAME = 'some_new_attribute'
@@ -261,9 +262,10 @@ class MyBlueprint(Blueprint):
         mutable_props.extend(search_writeable_properties(MyBlueprint, 'MyBlueprint'))
         mutable_props.extend(search_writeable_properties(self, 'self'))
         mutable_props.extend(search_writeable_properties(ctx, 'ctx'))
-        exec_builtins = get_exec_builtins()
+        # matches the version this test's runner and blueprint registration use
+        exec_builtins = get_exec_builtins(TokenAmountVersion.V1)
         custom_import = exec_builtins['__import__']
-        for module_name, import_names in ALLOWED_IMPORTS.items():
+        for module_name, import_names in get_allowed_imports(TokenAmountVersion.V1).items():
             module = custom_import(module_name, fromlist=list(import_names))
             for import_name in import_names:
                 obj = getattr(module, import_name)

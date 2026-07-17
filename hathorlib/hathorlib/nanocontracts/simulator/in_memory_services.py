@@ -70,8 +70,13 @@ class InMemoryBlueprintService:
         blueprint: type[Blueprint],
         *,
         strict: bool = False,
-        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V2,
     ) -> None:
+        """Register a blueprint class under `blueprint_id`.
+
+        The default `token_amount_version` matches the simulator's runner, which always executes
+        with `TokenAmountVersion.V2` — a blueprint registered as V1 can only be reached by a V1 runner.
+        """
         from hathorlib.nanocontracts.types import BlueprintId as BId
         bid = BId(blueprint_id)
         if strict and bid in self._blueprints:
@@ -83,7 +88,7 @@ class InMemoryBlueprintService:
         blueprints: dict[bytes, type[Blueprint]],
         *,
         strict: bool = False,
-        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V2,
     ) -> None:
         for bid, bp in blueprints.items():
             self.register_blueprint(bid, bp, strict=strict, token_amount_version=token_amount_version)

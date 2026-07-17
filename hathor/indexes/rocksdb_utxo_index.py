@@ -92,7 +92,7 @@ class _SeekKeyNoLock(_SeekKeyBase):
     def _bytes(self, array: bytearray) -> None:
         super()._bytes(array)
         serializer = Serializer.build_bytes_serializer()
-        length = encode_length_prefix_varint(serializer, self.amount, strict=False)
+        length = encode_length_prefix_varint(serializer, self.amount, signed=False)
         array.extend(serializer.finalize())
         assert len(array) == 1 + 32 + 25 + length + 1
 
@@ -141,7 +141,7 @@ class _SeekKeyTimeLock(_SeekKeyBase):
         super()._bytes(array)
         array.extend(struct.pack('>I', self.timelock))
         serializer = Serializer.build_bytes_serializer()
-        length = encode_length_prefix_varint(serializer, self.amount, strict=False)
+        length = encode_length_prefix_varint(serializer, self.amount, signed=False)
         array.extend(serializer.finalize())
         assert len(array) == 1 + 32 + 25 + 4 + length + 1
 
@@ -191,7 +191,7 @@ class _SeekKeyHeightLock(_SeekKeyBase):
         super()._bytes(array)
         array.extend(struct.pack('>I', self.heightlock))
         serializer = Serializer.build_bytes_serializer()
-        length = encode_length_prefix_varint(serializer, self.amount, strict=False)
+        length = encode_length_prefix_varint(serializer, self.amount, signed=False)
         array.extend(serializer.finalize())
         assert len(array) == 1 + 32 + 25 + 4 + length + 1
 
@@ -234,7 +234,7 @@ def _parse_key(key: bytes) -> _KeyBase:
     elif tag == _Tag.NOLOCK:
         token_uid_internal = InternalUid(bytes(deserializer.read_bytes(32)))
         address = bytes(deserializer.read_bytes(25))
-        amount = decode_length_prefix_varint(deserializer, strict=False)
+        amount = decode_length_prefix_varint(deserializer, signed=False)
         tx_id = bytes(deserializer.read_bytes(32))
         index = deserializer.read_byte()
         deserializer.finalize()
@@ -250,7 +250,7 @@ def _parse_key(key: bytes) -> _KeyBase:
         token_uid_internal = InternalUid(bytes(deserializer.read_bytes(32)))
         address = bytes(deserializer.read_bytes(25))
         timelock = deserializer.read_struct('>I')[0]
-        amount = decode_length_prefix_varint(deserializer, strict=False)
+        amount = decode_length_prefix_varint(deserializer, signed=False)
         tx_id = bytes(deserializer.read_bytes(32))
         index = deserializer.read_byte()
         deserializer.finalize()
@@ -267,7 +267,7 @@ def _parse_key(key: bytes) -> _KeyBase:
         token_uid_internal = InternalUid(bytes(deserializer.read_bytes(32)))
         address = bytes(deserializer.read_bytes(25))
         heightlock = deserializer.read_struct('>I')[0]
-        amount = decode_length_prefix_varint(deserializer, strict=False)
+        amount = decode_length_prefix_varint(deserializer, signed=False)
         tx_id = bytes(deserializer.read_bytes(32))
         index = deserializer.read_byte()
         deserializer.finalize()

@@ -215,7 +215,13 @@ class OnChainBlueprint(Transaction):
         from hathor.nanocontracts.metered_exec import MeteredExecutor, OutOfFuelError, OutOfMemoryError
         fuel = self._settings.NC_INITIAL_FUEL_TO_LOAD_BLUEPRINT_MODULE
         memory_limit = self._settings.NC_MEMORY_LIMIT_TO_LOAD_BLUEPRINT_MODULE
-        metered_executor = MeteredExecutor(fuel=fuel, memory_limit=memory_limit)
+        # the loading blueprint's own token amount version selects which classes the version-routed
+        # names (`SignedData`, `NCRawArgs`) resolve to inside the on-chain code
+        metered_executor = MeteredExecutor(
+            fuel=fuel,
+            memory_limit=memory_limit,
+            token_amount_version=self.get_token_amount_version(),
+        )
         try:
             env = metered_executor.exec(self.code.text)
         except OutOfFuelError as e:
@@ -300,7 +306,7 @@ class OnChainBlueprint(Transaction):
     def get_method(self, method_name: str) -> Method:
         # XXX: possibly do this by analyzing the source AST instead of using the loaded code
         blueprint_class = self.get_blueprint_class()
-        return Method.from_callable(getattr(blueprint_class, method_name))
+        return Method.from_callable(getattr(blueprint_class, method_name), self.get_token_amount_version())
 
     def sign(self, private_key: ec.EllipticCurvePrivateKey) -> None:
         """Sign this blueprint with the provided private key."""

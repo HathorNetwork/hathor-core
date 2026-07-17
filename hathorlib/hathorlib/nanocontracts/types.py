@@ -8,9 +8,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum, unique
-from typing import Any, Callable, Generic, Protocol, Self, TypeAlias, TypeVar
+from typing import Any, Callable, ClassVar, Generic, Protocol, Self, TypeAlias, TypeVar
 
-from typing_extensions import override
+from typing_extensions import assert_never, override
 
 from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathorlib.nanocontracts.blueprint_syntax_validation import (
@@ -167,12 +167,12 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
     T must be serializable.
     """
 
-    def __init__(self, data: T, script_input: bytes) -> None:
+    def __init__(self, data: T, script_input: bytes, token_amount_version: TokenAmountVersion) -> None:
         from hathorlib.nanocontracts.nc_types import make_nc_type_for_return_type as make_nc_type
 
         self.data = data
         self.script_input = script_input
-        self.__nc_type = make_nc_type(self.__inner_type__)
+        self.__nc_type = make_nc_type(self.__inner_type__, token_amount_version)
 
     def __eq__(self, other):
         if not isinstance(other, RawSignedData):
@@ -199,12 +199,29 @@ class RawSignedData(InnerTypeMixin[T], Generic[T]):
 
 
 class SignedData(InnerTypeMixin[T], Generic[T]):
+    """A wrapper class for data whose signature can be verified against a contract-bound payload.
+
+    This is a version-abstract base: the serialization of the signed payload depends on a
+    `TokenAmountVersion`, carried by the concrete subclasses `SignedDataV1` and `SignedDataV2`.
+    Blueprint code always sees the name `SignedData` bound to the subclass matching its own token
+    amount version, so within a blueprint both annotations and direct construction use the right
+    encoding transparently.
+    """
+
+    # dunder so blueprint code cannot read or reassign it: the AST sandbox blocks dunder attribute
+    # access, which keeps this version tag out of reach of the shared class object exposed to contracts
+    __token_amount_version__: ClassVar[TokenAmountVersion]
+
     def __init__(self, data: T, script_input: bytes) -> None:
+        if not hasattr(type(self), '__token_amount_version__'):
+            raise TypeError('SignedData is version-abstract; construct SignedDataV1 or SignedDataV2')
         self.data = data
         self.script_input = script_input
 
     def __eq__(self, other):
         if not isinstance(other, SignedData):
+            return False
+        if self.__token_amount_version__ != other.__token_amount_version__:
             return False
         if self.data != other.data:
             return False
@@ -216,7 +233,8 @@ class SignedData(InnerTypeMixin[T], Generic[T]):
         # XXX: for some reason mypy doesn't recognize that self.__inner_type__ is defined even though it should
         raw_type: type = tuple[ContractId, self.__inner_type__]  # type: ignore[name-defined]
         raw_data = (contract_id, self.data)
-        return RawSignedData[raw_type](raw_data, self.script_input)  # type: ignore[valid-type]
+        raw_signed_data_type = RawSignedData[raw_type]  # type: ignore[valid-type]
+        return raw_signed_data_type(raw_data, self.script_input, self.__token_amount_version__)
 
     def get_data_bytes(self, contract_id: ContractId) -> bytes:
         """Return the serialized data."""
@@ -227,6 +245,29 @@ class SignedData(InnerTypeMixin[T], Generic[T]):
         """Check if script_input satisfies the provided script."""
         raw_signed_data = self._get_raw_signed_data(contract_id)
         return raw_signed_data.checksig(script)
+
+
+class SignedDataV1(SignedData[T], Generic[T]):
+    """A `SignedData` whose signed payload is serialized with `TokenAmountVersion.V1` encodings."""
+
+    __token_amount_version__: ClassVar[TokenAmountVersion] = TokenAmountVersion.V1
+
+
+class SignedDataV2(SignedData[T], Generic[T]):
+    """A `SignedData` whose signed payload is serialized with `TokenAmountVersion.V2` encodings."""
+
+    __token_amount_version__: ClassVar[TokenAmountVersion] = TokenAmountVersion.V2
+
+
+def get_signed_data_class(token_amount_version: TokenAmountVersion) -> type[SignedData]:
+    """Return the concrete `SignedData` class for the given token amount version."""
+    match token_amount_version:
+        case TokenAmountVersion.V1:
+            return SignedDataV1
+        case TokenAmountVersion.V2:
+            return SignedDataV2
+        case _:
+            assert_never(token_amount_version)
 
 
 def _set_method_type(fn: Callable, method_type: NCMethodType) -> None:
@@ -518,21 +559,63 @@ NCAction: TypeAlias = (
 
 @dataclass(slots=True, frozen=True)
 class NCRawArgs:
+    """Method call args as raw serialized bytes.
+
+    This is a version-abstract base: parsing the bytes depends on a `TokenAmountVersion`, carried
+    by the concrete subclasses `NCRawArgsV1` and `NCRawArgsV2`. Blueprint code always sees the name
+    `NCRawArgs` bound to the subclass matching its own token amount version.
+    """
+
     args_bytes: bytes
+
+    # dunder so blueprint code cannot read or reassign it: the AST sandbox blocks dunder attribute
+    # access, which keeps this version tag out of reach of the shared class object exposed to contracts
+    __token_amount_version__: ClassVar[TokenAmountVersion]
+
+    def __post_init__(self) -> None:
+        if not hasattr(type(self), '__token_amount_version__'):
+            raise TypeError('NCRawArgs is version-abstract; construct NCRawArgsV1 or NCRawArgsV2')
 
     def __str__(self) -> str:
         return self.args_bytes.hex()
 
     def __repr__(self) -> str:
-        return f"NCRawArgs('{str(self)}')"
+        return f"{type(self).__name__}('{str(self)}')"
 
     def try_parse_as(self, arg_types: tuple[type, ...]) -> tuple[Any, ...] | None:
         from hathorlib.nanocontracts.method import ArgsOnly
         try:
-            args_parser = ArgsOnly.from_arg_types(arg_types)
+            args_parser = ArgsOnly.from_arg_types(arg_types, self.__token_amount_version__)
             return args_parser.deserialize_args_bytes(self.args_bytes)
         except (NCSerializationError, SerializationError, TypeError, ValueError):
             return None
+
+
+class NCRawArgsV1(NCRawArgs):
+    """Raw method call args parsed with `TokenAmountVersion.V1` encodings."""
+
+    __slots__ = ()
+
+    __token_amount_version__: ClassVar[TokenAmountVersion] = TokenAmountVersion.V1
+
+
+class NCRawArgsV2(NCRawArgs):
+    """Raw method call args parsed with `TokenAmountVersion.V2` encodings."""
+
+    __slots__ = ()
+
+    __token_amount_version__: ClassVar[TokenAmountVersion] = TokenAmountVersion.V2
+
+
+def get_nc_raw_args_class(token_amount_version: TokenAmountVersion) -> type[NCRawArgs]:
+    """Return the concrete `NCRawArgs` class for the given token amount version."""
+    match token_amount_version:
+        case TokenAmountVersion.V1:
+            return NCRawArgsV1
+        case TokenAmountVersion.V2:
+            return NCRawArgsV2
+        case _:
+            assert_never(token_amount_version)
 
 
 @dataclass(slots=True, frozen=True)

@@ -255,7 +255,11 @@ class Runner:
         if not self.has_contract_been_initialized(contract_id):
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
-        self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+        self._metered_executor = MeteredExecutor(
+            fuel=self._initial_fuel,
+            memory_limit=self._memory_limit,
+            token_amount_version=self.token_amount_version,
+        )
 
         blueprint_id = self.get_blueprint_id(contract_id)
 
@@ -654,14 +658,14 @@ class Runner:
                 raise NCMethodNotFound(f'method `{method_name}` not found and no fallback is provided')
             method = fallback_method
             assert is_nc_fallback_method(method)
-            parser = ReturnOnly.from_callable(method)
+            parser = ReturnOnly.from_callable(method, self.token_amount_version)
             called_method_name = NC_FALLBACK_METHOD
             args = method_name, nc_args
         else:
             if not is_nc_public_method(method):
                 from hathorlib.nanocontracts.exception import NCInvalidMethodCall
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
-            parser = Method.from_callable(method)
+            parser = Method.from_callable(method, self.token_amount_version)
             args = self._validate_nc_args_for_method(parser, nc_args)
 
         if not skip_reentrancy_validation:
@@ -807,7 +811,11 @@ class Runner:
             raise NCUninitializedContractError('cannot call methods from uninitialized contracts')
 
         if self._metered_executor is None:
-            self._metered_executor = MeteredExecutor(fuel=self._initial_fuel, memory_limit=self._memory_limit)
+            self._metered_executor = MeteredExecutor(
+                fuel=self._initial_fuel,
+                memory_limit=self._memory_limit,
+                token_amount_version=self.token_amount_version,
+            )
 
         changes_tracker = self._create_changes_tracker(contract_id)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
@@ -820,7 +828,7 @@ class Runner:
             from hathorlib.nanocontracts.exception import NCInvalidMethodCall
             raise NCInvalidMethodCall(f'`{method_name}` is not a view method')
 
-        parser = Method.from_callable(method)
+        parser = Method.from_callable(method, self.token_amount_version)
         args = self._validate_nc_args_for_method(parser, NCParsedArgs(args, kwargs))
 
         call_record = CallRecord(
@@ -1309,8 +1317,8 @@ class Runner:
             case TokenAmountVersion.V2, TokenAmountVersion.V2:
                 # Normal path for upgrading V2 blueprints.
                 pass
-            case _:
-                assert_never((self.token_amount_version, token_amount_version))
+            case _:  # pragma: no cover
+                raise AssertionError('unreachable')
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)

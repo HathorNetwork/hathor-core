@@ -25,7 +25,11 @@ from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.token_info import TokenVersion
 
 if TYPE_CHECKING:
-    from hathor.transaction.token_info import TokenInfoDict  # type: ignore[import-not-found]
+    # `hathor` is not a hathorlib dependency, so this import errors in every environment, but under
+    # different codes: `import-not-found` in hathorlib's own environment, where `hathor` is absent,
+    # and `import-untyped` in hathor-core's environment, where it lacks a `py.typed` marker. The
+    # ignore must stay bare: pinning either code trips `unused-ignore` in the other environment.
+    from hathor.transaction.token_info import TokenInfoDict  # type: ignore
 
 T = TypeVar('T', bound=BaseAction)
 

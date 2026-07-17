@@ -186,7 +186,7 @@ def set_nano_header(
     nc_args_bytes = b'\x00'
     if nc_args is not None:
         assert nc_method is not None
-        method_parser = Method.from_callable(getattr(blueprint, nc_method))
+        method_parser = Method.from_callable(getattr(blueprint, nc_method), tx.get_token_amount_version())
         nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
 
     nano_header = NanoHeader(

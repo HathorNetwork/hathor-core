@@ -367,10 +367,10 @@ class VertexExporter:
             nc_args_bytes = bytes.fromhex(get_literal(raw_args_bytes))
         else:
             from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
-            from hathor.nanocontracts.method import Method
+            assert isinstance(vertex, Transaction)
+            token_amount_version = vertex.get_token_amount_version()
             nc_method_raw = _TEMPLATE_PATTERN.sub(_replace_escaped_vertex_id, nc_method_raw)
-            nc_method, nc_args, _ = parse_nc_method_call(blueprint_class, nc_method_raw)
-            method = Method.from_callable(getattr(blueprint_class, nc_method))
+            nc_method, nc_args, method = parse_nc_method_call(blueprint_class, nc_method_raw, token_amount_version)
             nc_args_bytes = method.serialize_args_bytes(nc_args)
 
         wallet_name = node.attrs.get('nc_address', f'node_{node.name}')
@@ -468,6 +468,7 @@ class VertexExporter:
 
         assert len(block_parents) == 0
         ocb = OnChainBlueprint(parents=txs_parents, inputs=inputs, outputs=outputs, tokens=tokens)
+        self._encode_token_amount_version(ocb, node)
         self.add_headers_if_needed(node, ocb)
         code_attr = node.get_attr_str('ocb_code')
 

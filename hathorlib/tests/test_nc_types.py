@@ -4,14 +4,19 @@
 # mypy: disable-error-code="no-untyped-def"
 
 import json
+import re
 import unittest
 from typing import Any, NewType
+
+import pytest
 
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCInvalidAction
 from hathorlib.nanocontracts.nc_types import (
     ESSENTIAL_TYPE_ALIAS_MAP,
     BytesLikeNCType,
     NCType,
+    VarInt32NCType,
+    VarInt32V2NCType,
     VarUint32NCType,
     make_nc_type_for_arg_type,
     make_nc_type_for_field_type,
@@ -30,6 +35,8 @@ from hathorlib.nanocontracts.types import (
     NCGrantAuthorityAction,
     NCMethodType,
     NCRawArgs,
+    NCRawArgsV1,
+    NCRawArgsV2,
     NCWithdrawalAction,
     Timestamp,
     TokenUid,
@@ -39,6 +46,7 @@ from hathorlib.nanocontracts.types import (
     blueprint_id_from_bytes,
     set_checksig_backend,
 )
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class TestNCActionType(unittest.TestCase):
@@ -157,8 +165,11 @@ class TestActualTypeWrapping(unittest.TestCase):
         return nc_type.json_to_value(json.loads(json.dumps(nc_type.value_to_json(value))))
 
     def test_amount_all_factories(self) -> None:
-        for make in (make_nc_type_for_field_type, make_nc_type_for_arg_type, make_nc_type_for_return_type):
-            nc_type = make(Amount)
+        nc_types = [make_nc_type_for_field_type(Amount)]
+        for version in TokenAmountVersion:
+            nc_types.append(make_nc_type_for_arg_type(Amount, token_amount_version=version))
+            nc_types.append(make_nc_type_for_return_type(Amount, token_amount_version=version))
+        for nc_type in nc_types:
             value = nc_type.from_bytes(nc_type.to_bytes(Amount(100)))
             self.assertIsInstance(value, Amount)
             self.assertEqual(value, 100)
@@ -209,25 +220,29 @@ class TestActualTypeWrapping(unittest.TestCase):
     def test_containers_compose(self) -> None:
         token = TokenUid(b'\x03' * 32)
 
-        dict_nc_type = make_nc_type_for_arg_type(dict[TokenUid, Amount])
-        for out in (
-            dict_nc_type.from_bytes(dict_nc_type.to_bytes({token: Amount(5)})),
-            self._json_roundtrip(dict_nc_type, {token: Amount(5)}),
-        ):
-            assert isinstance(out, dict)
-            (key, value), = out.items()
-            self.assertIsInstance(key, TokenUid)
-            self.assertIsInstance(value, Amount)
+        for version in TokenAmountVersion:
+            dict_nc_type = make_nc_type_for_arg_type(dict[TokenUid, Amount], token_amount_version=version)
+            for out in (
+                dict_nc_type.from_bytes(dict_nc_type.to_bytes({token: Amount(5)})),
+                self._json_roundtrip(dict_nc_type, {token: Amount(5)}),
+            ):
+                assert isinstance(out, dict)
+                (key, value), = out.items()
+                self.assertIsInstance(key, TokenUid)
+                self.assertIsInstance(value, Amount)
 
-        opt_nc_type: NCType[Amount | None] = make_nc_type_for_arg_type(Amount | None)  # type: ignore[arg-type]
-        self.assertIsInstance(opt_nc_type.from_bytes(opt_nc_type.to_bytes(Amount(7))), Amount)
-        self.assertIsNone(opt_nc_type.from_bytes(opt_nc_type.to_bytes(None)))
+            opt_nc_type: NCType[Amount | None] = make_nc_type_for_arg_type(
+                Amount | None,  # type: ignore[arg-type]
+                token_amount_version=version,
+            )
+            self.assertIsInstance(opt_nc_type.from_bytes(opt_nc_type.to_bytes(Amount(7))), Amount)
+            self.assertIsNone(opt_nc_type.from_bytes(opt_nc_type.to_bytes(None)))
 
-        tuple_nc_type = make_nc_type_for_arg_type(tuple[Timestamp, ...])
-        out = tuple_nc_type.from_bytes(tuple_nc_type.to_bytes((Timestamp(1), Timestamp(2))))
-        assert isinstance(out, tuple)
-        for item in out:
-            self.assertIsInstance(item, Timestamp)
+            tuple_nc_type = make_nc_type_for_arg_type(tuple[Timestamp, ...], token_amount_version=version)
+            out = tuple_nc_type.from_bytes(tuple_nc_type.to_bytes((Timestamp(1), Timestamp(2))))
+            assert isinstance(out, tuple)
+            for item in out:
+                self.assertIsInstance(item, Timestamp)
 
         # `list` is aliased to `tuple` in the field map
         list_nc_type = make_nc_type_for_field_type(list[Amount])
@@ -291,6 +306,25 @@ class TestActualTypeWrapping(unittest.TestCase):
         self.assertEqual(value, 100)
 
 
+class TestVarIntBounds(unittest.TestCase):
+    def test_signed_check_bounds_match_encoding(self) -> None:
+        # the check bounds must equal the codec's encodable range: the storage change tracker calls
+        # `check_value` eagerly but serializes only at commit, so every value the check accepts must
+        # be encodable, and every value it rejects must be exactly those the codec cannot encode.
+        for nc_type, payload_bits in ((VarInt32NCType(), 223), (VarInt32V2NCType(), 247)):
+            min_value = -(2 ** payload_bits)
+            max_value = 2 ** payload_bits - 1
+            nc_type.check_value(min_value)
+            nc_type.check_value(max_value)
+            assert nc_type.from_bytes(nc_type.to_bytes(min_value)) == min_value
+            assert nc_type.from_bytes(nc_type.to_bytes(max_value)) == max_value
+            # the rejection must come from the range check, not from a later encode overflow
+            with pytest.raises(ValueError, match=re.escape('below lower bound')):
+                nc_type.check_value(min_value - 1)
+            with pytest.raises(ValueError, match=re.escape('above upper bound')):
+                nc_type.check_value(max_value + 1)
+
+
 class TestSetMethodType(unittest.TestCase):
     def test_set_method_type(self) -> None:
         def my_func() -> None:
@@ -309,13 +343,18 @@ class TestSetMethodType(unittest.TestCase):
 
 
 class TestNCRawArgs(unittest.TestCase):
+    def test_version_abstract_base(self) -> None:
+        with self.assertRaises(TypeError):
+            NCRawArgs(args_bytes=b'\xde\xad')
+
     def test_str(self) -> None:
-        args = NCRawArgs(args_bytes=b'\xde\xad')
-        self.assertEqual(str(args), 'dead')
+        for cls in (NCRawArgsV1, NCRawArgsV2):
+            args = cls(args_bytes=b'\xde\xad')
+            self.assertEqual(str(args), 'dead')
 
     def test_repr(self) -> None:
-        args = NCRawArgs(args_bytes=b'\xde\xad')
-        self.assertEqual(repr(args), "NCRawArgs('dead')")
+        self.assertEqual(repr(NCRawArgsV1(args_bytes=b'\xde\xad')), "NCRawArgsV1('dead')")
+        self.assertEqual(repr(NCRawArgsV2(args_bytes=b'\xde\xad')), "NCRawArgsV2('dead')")
 
 
 class TestChecksigBackend(unittest.TestCase):

@@ -50,9 +50,10 @@ from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
 from hathor_tests.token_amount import UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
-STR_NC_TYPE = make_nc_type(str)
-INT_NC_TYPE = make_nc_type(int)
+STR_NC_TYPE = make_nc_type(str, TokenAmountVersion.V1)
+INT_NC_TYPE = make_nc_type(int, TokenAmountVersion.V1)
 
 
 class MyBlueprint(Blueprint):
@@ -114,7 +115,7 @@ class NCNanoContractTestCase(unittest.TestCase):
     def _fill_nc(self, nc: Transaction, nc_id: VertexId, nc_method: str, nc_args: list[Any]) -> None:
         method = getattr(MyBlueprint, nc_method, None)
         if method is not None:
-            method_parser = Method.from_callable(method)
+            method_parser = Method.from_callable(method, nc.get_token_amount_version())
             nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
         else:
             nc_args_bytes = b''

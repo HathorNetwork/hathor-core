@@ -202,7 +202,7 @@ class _BaseNanoContractStateTest(_BaseResourceTest._ResourceTest):
         nc_actions: list[NanoHeaderAction] | None = None
     ) -> None:
 
-        method_parser = Method.from_callable(getattr(MyBlueprint, nc_method))
+        method_parser = Method.from_callable(getattr(MyBlueprint, nc_method), nc.get_token_amount_version())
         nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
 
         nano_header = NanoHeader(

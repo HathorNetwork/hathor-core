@@ -8,6 +8,7 @@ from typing import Any, Callable, TypeVar, TypeVarTuple, Unpack, cast
 from structlog import get_logger
 
 from hathorlib.nanocontracts.on_chain_blueprint import PYTHON_CODE_COMPAT_VERSION
+from hathorlib.token_amount_version import TokenAmountVersion
 
 logger = get_logger()
 
@@ -31,11 +32,14 @@ class OutOfMemoryError(MemoryError):
 
 
 class MeteredExecutor:
-    __slots__ = ('_fuel', '_memory_limit', '_debug')
+    __slots__ = ('_fuel', '_memory_limit', '_token_amount_version', '_debug')
 
-    def __init__(self, fuel: int, memory_limit: int) -> None:
+    def __init__(self, fuel: int, memory_limit: int, token_amount_version: TokenAmountVersion) -> None:
         self._fuel = fuel
         self._memory_limit = memory_limit
+        # selects the import table for the executed code, so version-routed names (`SignedData`,
+        # `NCRawArgs`) bind to the executing blueprint's version
+        self._token_amount_version = token_amount_version
         self._debug = False
 
     def get_fuel(self) -> int:
@@ -49,7 +53,7 @@ class MeteredExecutor:
         """
         from hathorlib.nanocontracts.custom_builtins import get_exec_builtins
         env: dict[str, object] = {
-            '__builtins__': get_exec_builtins(),
+            '__builtins__': get_exec_builtins(self._token_amount_version),
         }
         # XXX: calling compile now makes the exec step consume less fuel
         code = compile(
@@ -73,7 +77,7 @@ class MeteredExecutor:
         from hathorlib.nanocontracts.exception import NCFail
 
         env: dict[str, object] = {
-            '__builtins__': get_exec_builtins(),
+            '__builtins__': get_exec_builtins(self._token_amount_version),
             '__func__': func,
             '__args__': args,
             '__result__': None,

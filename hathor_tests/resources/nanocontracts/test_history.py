@@ -103,7 +103,7 @@ class NanoContractHistoryTest(_BaseResourceTest._ResourceTest):
                  private_key: ec.EllipticCurvePrivateKeyWithSerialization) -> None:
 
         method = getattr(MyBlueprint, nc_method)
-        method_parser = Method.from_callable(method)
+        method_parser = Method.from_callable(method, nc.get_token_amount_version())
         nc_args_bytes = method_parser.serialize_args_bytes(nc_args)
 
         nano_header = NanoHeader(
