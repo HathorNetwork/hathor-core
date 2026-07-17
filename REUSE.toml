@@ -4,6 +4,7 @@ version = 1
 path = [
     ".claude/rules/*.md",
     ".github/CODEOWNERS",
+    ".github/PULL_REQUEST_TEMPLATE/*.md",
     "CLAUDE.md",
     "docs/legacy/images/syncing-example.txt",
     "docs/legacy/make.bat",
