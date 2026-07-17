@@ -328,6 +328,11 @@ class ConsensusAlgorithm:
                     )
             for tx_input in tx.inputs:
                 spent_tx = tx.get_spent_tx(tx_input)
+                if spent_tx.hash in txset:
+                    # spent_tx is being removed as well, so its metadata is about to be discarded and must
+                    # not enter txs_affected: the post-removal integrity loop calls assert_valid_consensus on
+                    # every affected tx, which dereferences its conflicts from storage — and they are gone too.
+                    continue
                 spent_tx_meta = spent_tx.get_metadata()
                 if tx.hash in spent_tx_meta.spent_outputs[tx_input.index]:
                     spent_tx_meta.spent_outputs[tx_input.index].remove(tx.hash)

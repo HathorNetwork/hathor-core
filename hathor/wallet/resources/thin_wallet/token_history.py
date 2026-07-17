@@ -81,6 +81,12 @@ class TokenHistoryResource(Resource):
                     'message': f'Failed to parse \'hash\': {e}'
                 })
 
+            if len(hash_bytes) != TX_HASH_SIZE:
+                return json_dumpb({
+                    'success': False,
+                    'message': f'Failed to parse \'hash\': length must be {TX_HASH_SIZE} bytes'
+                })
+
             page = parsed['args']['page']
             if page != 'previous' and page != 'next':
                 return json_dumpb({

@@ -243,14 +243,14 @@ class Block(GenericVertex[BlockStaticMetadata]):
         """
         assert self.signal_bits <= 0xFF, 'signal_bits must be one byte at most'
 
-        bitmask = self._get_feature_activation_bitmask()
+        bitmask = self.get_feature_activation_bitmask()
         bits = self.signal_bits & bitmask
 
         bit_list = get_bit_list(bits, min_size=self._settings.FEATURE_ACTIVATION.max_signal_bits)
 
         return bit_list
 
-    def _get_feature_activation_bitmask(self) -> int:
+    def get_feature_activation_bitmask(self) -> int:
         """Returns the bitmask that gets feature activation bits from signal bits."""
         bitmask = (1 << self._settings.FEATURE_ACTIVATION.max_signal_bits) - 1
 

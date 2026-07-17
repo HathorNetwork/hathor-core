@@ -270,3 +270,7 @@ class FeeHeaderTokenNotFound(InvalidFeeHeader):
 
 class TokenNotFound(TxValidationError):
     """Token not found."""
+
+
+class UnknownSignalBits(TxValidationError):
+    """Vertex has unknown signal bits."""

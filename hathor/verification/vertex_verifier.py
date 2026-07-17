@@ -32,6 +32,7 @@ from hathor.transaction.headers import (
     UnshieldBalanceHeader,
 )
 from hathor.verification.verification_params import VerificationParams
+from hathorlib.exceptions import UnknownSignalBits
 
 # tx should have 2 parents, both other transactions
 _TX_PARENTS_TXS = 2
@@ -51,6 +52,20 @@ class VertexVerifier:
         self._reactor = reactor
         self._settings = settings
         self._feature_service = feature_service
+
+    def verify_signal_bits(self, vertex: BaseTransaction) -> None:
+        from hathor.transaction import Block, Transaction
+        assert vertex.signal_bits <= 0xFF
+        match vertex:
+            case Transaction():
+                unknown_signal_bits = 0xFF
+            case Block():
+                unknown_signal_bits = 0xFF - vertex.get_feature_activation_bitmask()
+            case _:
+                raise AssertionError('unreachable')
+
+        if vertex.signal_bits & unknown_signal_bits != 0:
+            raise UnknownSignalBits(f'vertex has unknown signal bits: {bin(vertex.signal_bits)}')
 
     def verify_version_basic(self, vertex: BaseTransaction) -> None:
         """Verify that the vertex version is valid."""
