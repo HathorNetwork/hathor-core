@@ -10,6 +10,7 @@ from structlog import get_logger
 from twisted.internet.task import LoopingCall
 
 from hathor.conf import HathorSettings
+from hathor.crypto.util import decode_address_strict
 from hathor.indexes import AddressIndex
 from hathor.manager import HathorManager
 from hathor.metrics import Metrics
@@ -17,6 +18,7 @@ from hathor.p2p.rate_limiter import RateLimiter
 from hathor.pubsub import EventArguments, HathorEvents
 from hathor.reactor import get_global_reactor
 from hathor.util import json_dumpb
+from hathor.wallet.exceptions import InvalidAddress
 from hathor.websocket.protocol import HathorAdminWebsocketProtocol
 
 settings = HathorSettings()
@@ -305,8 +307,11 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def _handle_subscribe_address(self, connection: HathorAdminWebsocketProtocol, message: dict[Any, Any]) -> None:
         """ Handler for subscription to an address, consideirs subscription limits."""
-        address: str = message['address']
-        success, errmsg = self.subscribe_address(connection, address)
+        address = message.get('address')
+        if not isinstance(address, str):
+            success, errmsg = False, 'Missing or invalid \'address\' parameter.'
+        else:
+            success, errmsg = self.subscribe_address(connection, address)
         response = {
             'type': 'subscribe_address',
             'address': address,
@@ -318,6 +323,11 @@ class HathorAdminWebsocketFactory(WebSocketServerFactory):
 
     def subscribe_address(self, connection: HathorAdminWebsocketProtocol, address: str) -> tuple[bool, str]:
         """Subscribe an address to send real time updates to a websocket connection."""
+        try:
+            decode_address_strict(address, settings=settings)
+        except InvalidAddress:
+            return False, f'Invalid address: {address}'
+
         subs: set[str] = connection.subscribed_to
         if self.max_subs_addrs_conn is not None and len(subs) >= self.max_subs_addrs_conn:
             return False, f'Reached maximum number of subscribed addresses ({self.max_subs_addrs_conn}).'

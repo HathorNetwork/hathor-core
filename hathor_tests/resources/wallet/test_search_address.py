@@ -10,6 +10,12 @@ from hathor.wallet.resources.thin_wallet import AddressBalanceResource, AddressS
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, create_tokens
 
+# Valid base58check payload (25 bytes, correct checksum) whose string is only 33 characters long, from the
+# incident in issue #1758. It passes `decode_address` but must be rejected at the API boundary.
+ADDRESS_33 = '1P8cW6gqriMRhKBR98mqFXXYj3shYySuJ'
+# 34 characters and valid checksum, but testnet version byte (0x49) — invalid on the unittests network.
+ADDRESS_WRONG_VERSION = 'WNg2svm2qApxheBKndKGQ9sRwporvRgRpT'
+
 
 class SearchAddressTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
@@ -42,6 +48,18 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
 
         # Invalid address
         response_error = yield resource.get('thin_wallet/address_search', {b'address': 'vvvv'.encode(), b'count': 3})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but only 33 characters: must be rejected before reaching the address index
+        response_error = yield resource.get(
+            'thin_wallet/address_search', {b'address': ADDRESS_33.encode(), b'count': 3})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but wrong network version byte
+        response_error = yield resource.get(
+            'thin_wallet/address_search', {b'address': ADDRESS_WRONG_VERSION.encode(), b'count': 3})
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
 
@@ -98,6 +116,17 @@ class SearchAddressTest(_BaseResourceTest._ResourceTest):
 
         # Invalid address
         response_error = yield resource.get('thin_wallet/address_search', {b'address': 'vvvv'.encode(), b'count': 3})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but only 33 characters: must be rejected before reaching the address index
+        response_error = yield resource.get('thin_wallet/address_balance', {b'address': ADDRESS_33.encode()})
+        data_error = response_error.json_value()
+        self.assertFalse(data_error['success'])
+
+        # Valid checksum but wrong network version byte
+        response_error = yield resource.get(
+            'thin_wallet/address_balance', {b'address': ADDRESS_WRONG_VERSION.encode()})
         data_error = response_error.json_value()
         self.assertFalse(data_error['success'])
 

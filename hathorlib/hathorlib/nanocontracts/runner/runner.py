@@ -259,7 +259,13 @@ class Runner:
 
         blueprint_id = self.get_blueprint_id(contract_id)
 
+        changes_tracker = self._create_changes_tracker(contract_id)
+        for action in ctx.__all_actions__:
+            rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
+            rules.nc_callee_execution_rule(changes_tracker)
+
         ret = self._execute_public_method_call(
+            changes_tracker=changes_tracker,
             contract_id=contract_id,
             blueprint_id=blueprint_id,
             method_name=method_name,
@@ -459,12 +465,15 @@ class Runner:
         first_ctx = self._call_info.stack[0].ctx
         assert first_ctx is not None
 
-        # Execute the actions on the caller side. The callee side is executed by the `_execute_public_method_call()`
-        # call below, if it succeeds.
         previous_changes_tracker = last_call_record.changes_tracker
+        new_changes_tracker = self._create_changes_tracker(contract_id)
+
         for action in actions:
             rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
-            rules.nc_caller_execution_rule(previous_changes_tracker)
+            rules.nc_cross_call_execution_rule(
+                caller_changes_tracker=previous_changes_tracker,
+                callee_changes_tracker=new_changes_tracker,
+            )
 
         # All calls must begin with non-negative balance.
         previous_changes_tracker.validate_balances_are_positive()
@@ -487,6 +496,7 @@ class Runner:
             actions=ctx_actions,
         )
         result = self._execute_public_method_call(
+            changes_tracker=new_changes_tracker,
             contract_id=contract_id,
             blueprint_id=blueprint_id,
             method_name=method_name,
@@ -605,6 +615,7 @@ class Runner:
     def _execute_public_method_call(
         self,
         *,
+        changes_tracker: NCChangesTracker,
         contract_id: ContractId,
         blueprint_id: BlueprintId,
         method_name: str,
@@ -620,7 +631,6 @@ class Runner:
         assert self._call_info is not None
 
         self._validate_context(ctx)
-        changes_tracker = self._create_changes_tracker(contract_id)
         blueprint = self._create_blueprint_instance(blueprint_id, changes_tracker)
         method = getattr(blueprint, method_name, None)
 
@@ -666,8 +676,6 @@ class Runner:
 
         self._validate_actions(method, called_method_name, ctx)
         for action in ctx.__all_actions__:
-            rules = BalanceRules.get_rules(self._settings, action, self.token_amount_version)
-            rules.nc_callee_execution_rule(changes_tracker)
             self._handle_index_update(action)
 
         # Although the context is immutable, we're passing a copy to the blueprint method as an added precaution.

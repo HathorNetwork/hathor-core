@@ -60,10 +60,15 @@ class BalanceRules(ABC, Generic[T]):
         raise NotImplementedError
 
     @abstractmethod
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         """
         Define how the respective action interacts with the transaction's changes tracker during nano contract
-        execution, updating it, on the caller side — that is, when a contract calls another contract.
+        execution, updating it, on both the caller and callee side — that is, when a contract calls another contract.
         """
         raise NotImplementedError
 
@@ -111,8 +116,14 @@ class _DepositRules(BalanceRules[NCDepositAction]):
         callee_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         caller_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
+        self.nc_callee_execution_rule(callee_changes_tracker)
 
 
 class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
@@ -139,8 +150,14 @@ class _WithdrawalRules(BalanceRules[NCWithdrawalAction]):
         callee_changes_tracker.add_balance(self.action.token_uid, -self.action.amount)
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         caller_changes_tracker.add_balance(self.action.token_uid, self.action.amount)
+        self.nc_callee_execution_rule(callee_changes_tracker)
 
 
 class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
@@ -177,7 +194,12 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
         )
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        *,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         if self.action.token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidAction('cannot grant authorities for HTR token')
 
@@ -194,6 +216,8 @@ class _GrantAuthorityRules(BalanceRules[NCGrantAuthorityAction]):
                 f'{self.action.name} token {self.action.token_uid.hex()} requires melt, '
                 f'but contract does not have that authority'
             )
+
+        self.nc_callee_execution_rule(callee_changes_tracker)
 
 
 class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
@@ -226,10 +250,15 @@ class _AcquireAuthorityRules(BalanceRules[NCAcquireAuthorityAction]):
             raise NCInvalidAction(f'cannot acquire melt authority for token {self.action.token_uid.hex()}')
 
     @override
-    def nc_caller_execution_rule(self, caller_changes_tracker: NCChangesTracker) -> None:
+    def nc_cross_call_execution_rule(
+        self,
+        caller_changes_tracker: NCChangesTracker,
+        callee_changes_tracker: NCChangesTracker,
+    ) -> None:
         if self.action.token_uid == HATHOR_TOKEN_UID:
             raise NCInvalidAction('cannot acquire authorities for HTR token')
 
+        self.nc_callee_execution_rule(callee_changes_tracker)
         caller_changes_tracker.grant_authorities(
             self.action.token_uid,
             grant_mint=self.action.mint,
