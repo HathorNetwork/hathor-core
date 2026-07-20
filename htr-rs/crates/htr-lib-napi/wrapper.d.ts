@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 // Re-export the generated declarations and augment the classes with the
 // [Symbol.toPrimitive] member attached at runtime in wrapper.js.
 export * from './index.js'

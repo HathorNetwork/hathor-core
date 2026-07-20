@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # @hathor/htr-lib
 
 TypeScript/JavaScript binding for the Hathor `htr-lib` Rust library, built with

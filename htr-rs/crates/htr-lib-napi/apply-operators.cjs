@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 // Attaches [Symbol.toPrimitive] to the amount wrappers so the native relational operators
 // (<, >, <=, >=) work on UnsignedAmount / SignedAmount — JavaScript cannot declare it from Rust.
 //

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 import test from 'ava'
 import applyOperators from '../apply-operators.cjs'
 import { UnsignedAmount, SignedAmount } from '../index.js'

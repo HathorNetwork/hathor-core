@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! SignedAmount napi wrapper.
 
 use crate::convert::{napi_to_rsbigint, rsbigint_to_napi};

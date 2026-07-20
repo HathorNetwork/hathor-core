@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! UnsignedAmount napi wrapper and the decimal-places version enum.
 
 use std::cmp::Ordering;

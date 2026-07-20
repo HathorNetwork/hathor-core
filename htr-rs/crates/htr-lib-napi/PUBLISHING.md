@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Building & publishing `@hathor/htr-lib`
 
 `@hathor/htr-lib` is a [napi-rs](https://napi.rs) native addon (it wraps the Rust `htr-lib` crate)

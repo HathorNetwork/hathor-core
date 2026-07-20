@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
+
 //! Conversions between napi's `BigInt` (aliased `NapiBigInt` here, to disambiguate from
 //! `num_bigint::BigInt`) and `num-bigint`'s `BigUint` / `BigInt`.
 //!
