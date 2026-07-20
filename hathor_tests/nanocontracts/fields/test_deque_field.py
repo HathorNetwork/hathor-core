@@ -9,6 +9,7 @@ from hathor.nanocontracts.nc_types import VarInt32NCType
 from hathor.transaction import Block, Transaction
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.nanocontracts.utils import set_force_legacy_fields
 
 INT_NC_TYPE = VarInt32NCType()
 
@@ -80,6 +81,9 @@ class BlueprintWithList(Blueprint):
 class TestDequeField(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
+        # These tests assert raw storage keys/values with legacy (V1) encodings, so pin the
+        # global storage serialization to legacy for their duration.
+        set_force_legacy_fields(self, True)
         self.manager = self.create_peer('unittests')
         self.bp_deque = b'1' * 32
         self.bp_list = b'2' * 32

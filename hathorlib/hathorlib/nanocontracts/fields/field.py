@@ -3,13 +3,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Generic, NamedTuple, TypeVar, final
 
 from typing_extensions import TYPE_CHECKING
 
-from hathorlib.nanocontracts.fields.container import ContainerNodeFactory, TypeToContainerMap
+from hathorlib.nanocontracts.fields.container import ContainerNode, ContainerNodeFactory, TypeToContainerMap
 from hathorlib.nanocontracts.nc_types import NCType
 from hathorlib.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
+from hathorlib.nanocontracts.storage_version import get_storage_token_amount_version
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathorlib.nanocontracts.blueprint import Blueprint
@@ -33,9 +36,9 @@ class Field(Generic[T]):
     - A Blueprint must not be able to access a Field instance directly
     """
 
-    __slots__ = ('_prefix', '_container_node_factory')
+    __slots__ = ('_prefix', '_container_node_factories')
     _prefix: bytes
-    _container_node_factory: ContainerNodeFactory[T]
+    _container_node_factories: Mapping[TokenAmountVersion, ContainerNodeFactory[T]]
 
     class TypeMap(NamedTuple):
         alias_map: TypeAliasMap
@@ -47,34 +50,47 @@ class Field(Generic[T]):
 
     # XXX: do we need to define field.__objclass__ for anything?
 
-    def __init__(self, prefix: bytes, type_: type[T], type_map: TypeMap) -> None:
+    def __init__(self, prefix: bytes, type_: type[T], type_maps: Mapping[TokenAmountVersion, TypeMap]) -> None:
         self._prefix = prefix
-        self._container_node_factory = ContainerNodeFactory[T](type_, type_map)
+        self._container_node_factories = {
+            version: ContainerNodeFactory[T](type_, type_map) for version, type_map in type_maps.items()
+        }
 
     @final
     @staticmethod
-    def from_name_and_type(name: str, type_: type[T], /, *, type_map: TypeMap) -> Field[T]:
+    def from_name_and_type(
+        name: str,
+        type_: type[T],
+        /,
+        *,
+        type_maps: Mapping[TokenAmountVersion, TypeMap],
+    ) -> Field[T]:
         assert name.isidentifier()
         prefix = name.encode('utf-8')
-        return Field(prefix, type_, type_map)
+        return Field(prefix, type_, type_maps)
+
+    def _build_node(self, instance: Blueprint) -> ContainerNode[T]:
+        """Build the container node with the globally-selected storage serialization version."""
+        factory = self._container_node_factories[get_storage_token_amount_version()]
+        return factory.build(instance)
 
     def _is_initialized(self, instance: Blueprint) -> bool:
-        node = self._container_node_factory.build(instance)
+        node = self._build_node(instance)
         return node.has_value(self._prefix)
 
     def __set__(self, instance: Blueprint, value: T) -> None:
-        node = self._container_node_factory.build(instance)
+        node = self._build_node(instance)
         node.set_value(self._prefix, value)
 
     def __get__(self, instance: Blueprint, owner: object | None = None) -> T:
-        node = self._container_node_factory.build(instance)
+        node = self._build_node(instance)
         try:
             return node.get_value(self._prefix)
         except KeyError:
             raise AttributeError('attribute not initialized')
 
     def __delete__(self, instance: Blueprint) -> None:
-        node = self._container_node_factory.build(instance)
+        node = self._build_node(instance)
         try:
             node.del_value(self._prefix)
         except KeyError:

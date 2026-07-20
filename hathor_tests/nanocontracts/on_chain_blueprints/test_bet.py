@@ -16,7 +16,7 @@ from hathor.nanocontracts.types import (
     ContractId,
     NCDepositAction,
     NCWithdrawalAction,
-    SignedData,
+    SignedDataV1,
     Timestamp,
     TokenUid,
     TxOutputScript,
@@ -39,10 +39,10 @@ from .utils import get_ocb_private_key
 settings = HathorSettings()
 
 ON_CHAIN_BET_NC_CODE: str = load_builtin_blueprint_for_ocb('bet.py', 'Bet', test_blueprints)
-TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type(TxOutputScript)
-RESULT_NC_TYPE: NCType[str | None] = make_nc_type(str | None)  # type: ignore[arg-type]
-TIMESTAMP_NC_TYPE = make_nc_type(Timestamp)
-TOKEN_UID_NC_TYPE = make_nc_type(TokenUid)
+TX_OUTPUT_SCRIPT_NC_TYPE = make_nc_type(TxOutputScript, TokenAmountVersion.V1)
+RESULT_NC_TYPE: NCType[str | None] = make_nc_type(str | None, TokenAmountVersion.V1)  # type: ignore[arg-type]
+TIMESTAMP_NC_TYPE = make_nc_type(Timestamp, TokenAmountVersion.V1)
+TOKEN_UID_NC_TYPE = make_nc_type(TokenUid, TokenAmountVersion.V1)
 
 
 class BetInfo(NamedTuple):
@@ -78,7 +78,7 @@ class OnChainBetBlueprintTestCase(BlueprintTestCase):
         return BetInfo(key=key, address=Address(address_bytes), amount=Amount(amount), score=score)
 
     def _set_result(self, result: str, oracle_key: Optional[KeyPair] = None) -> None:
-        signed_result = SignedData[str](result, b'')
+        signed_result = SignedDataV1[str](result, b'')
 
         if oracle_key is None:
             oracle_key = self.oracle_key

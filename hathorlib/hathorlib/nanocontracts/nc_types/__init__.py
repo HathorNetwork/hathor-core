@@ -5,6 +5,8 @@ from collections import OrderedDict, deque
 from types import NoneType, UnionType
 from typing import NamedTuple, TypeVar, Union
 
+from typing_extensions import assert_never
+
 from hathorlib.nanocontracts.nc_types.address_nc_type import AddressNCType
 from hathorlib.nanocontracts.nc_types.bool_nc_type import BoolNCType
 from hathorlib.nanocontracts.nc_types.bytes_nc_type import BytesLikeNCType, BytesNCType
@@ -23,13 +25,20 @@ from hathorlib.nanocontracts.nc_types.str_nc_type import StrNCType
 from hathorlib.nanocontracts.nc_types.token_uid_nc_type import TokenUidNCType
 from hathorlib.nanocontracts.nc_types.tuple_nc_type import TupleNCType
 from hathorlib.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
-from hathorlib.nanocontracts.nc_types.varint_nc_type import VarInt32NCType, VarUint32NCType
+from hathorlib.nanocontracts.nc_types.varint_nc_type import (
+    VarInt32NCType,
+    VarInt32V2NCType,
+    VarUint32NCType,
+    VarUint32V2NCType,
+)
+from hathorlib.nanocontracts.storage_version import get_storage_token_amount_version
 from hathorlib.nanocontracts.types import (
     Address,
     Amount,
     BlueprintId,
     ContractId,
-    SignedData,
+    SignedDataV1,
+    SignedDataV2,
     Timestamp,
     TokenUid,
     TxOutputScript,
@@ -65,11 +74,16 @@ __all__ = [
     'TypeToNCTypeMap',
     'Uint32NCType',
     'VarInt32NCType',
+    'VarInt32V2NCType',
     'VarUint32NCType',
+    'VarUint32V2NCType',
     'make_nc_type_for_field_type',
     'make_nc_type_for_arg_type',
     'make_nc_type_for_return_type',
+    'make_versioned_nc_type_map',
 ]
+
+from hathorlib.token_amount_version import TokenAmountVersion
 
 T = TypeVar('T')
 
@@ -113,7 +127,11 @@ FIELD_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
     TokenUid: TokenUidNCType,
     TxOutputScript: BytesLikeNCType[TxOutputScript],
     VertexId: Bytes32NCType,
-    SignedData: SignedDataNCType,
+    # XXX: the version-abstract `SignedData` base is intentionally not mapped: annotations must name a
+    #      concrete class, which pins the payload-signing version under any map. Blueprint code names
+    #      `SignedData` and gets the concrete class for its version through the routed imports.
+    SignedDataV1: SignedDataNCType,
+    SignedDataV2: SignedDataNCType,
     (Address, ContractId): CallerIdNCType,
 }
 
@@ -137,34 +155,67 @@ RETURN_TYPE_TO_NC_TYPE_MAP: TypeToNCTypeMap = {
 }
 
 
-_FIELD_TYPE_MAP = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, FIELD_TYPE_TO_NC_TYPE_MAP)
+def make_versioned_nc_type_map(
+    nc_type_map: TypeToNCTypeMap,
+    token_amount_version: TokenAmountVersion,
+) -> TypeToNCTypeMap:
+    """Return a copy of `nc_type_map` with its version-dependent NCTypes set to `token_amount_version`.
+
+    Only the version-abstract `int` and `Amount` keys are swapped. `SignedData` annotations name a
+    concrete versioned class, which is annotation-faithful and identical in every map.
+    """
+    versioned_map = nc_type_map.copy()
+    match token_amount_version:
+        case TokenAmountVersion.V1:
+            assert versioned_map[int] is VarInt32NCType
+            assert versioned_map[Amount] is VarUint32NCType
+        case TokenAmountVersion.V2:
+            versioned_map[int] = VarInt32V2NCType
+            versioned_map[Amount] = VarUint32V2NCType
+        case _:
+            assert_never(token_amount_version)
+    return versioned_map
+
+
+def _build_type_maps(
+    alias_map: TypeAliasMap,
+    nc_type_map: TypeToNCTypeMap,
+) -> dict[TokenAmountVersion, NCType.TypeMap]:
+    """Build one `TypeMap` per token amount version; the maps depend only on the version, so they are shared."""
+    return {
+        version: NCType.TypeMap(alias_map, make_versioned_nc_type_map(nc_type_map, version))
+        for version in TokenAmountVersion
+    }
+
+
+# Per-version type maps, built once and reused; `NCType.from_type` does not mutate the map it is given.
+_FIELD_TYPE_MAPS = _build_type_maps(DEFAULT_TYPE_ALIAS_MAP, FIELD_TYPE_TO_NC_TYPE_MAP)
+_ARG_TYPE_MAPS = _build_type_maps(ESSENTIAL_TYPE_ALIAS_MAP, ARG_TYPE_TO_NC_TYPE_MAP)
+_RETURN_TYPE_MAPS = _build_type_maps(ESSENTIAL_TYPE_ALIAS_MAP, RETURN_TYPE_TO_NC_TYPE_MAP)
 
 
 def make_nc_type_for_field_type(type_: type[T], /) -> NCType[T]:
     """ Like NCType.from_type, but with maps for field annotations.
 
+    Uses the storage serialization version from `get_storage_token_amount_version`, which is global
+    and independent of any contract's token amount version.
+
     If you need to customize the mapping use `NCType.from_type` instead.
     """
-    return NCType.from_type(type_, type_map=_FIELD_TYPE_MAP)
+    return NCType.from_type(type_, type_map=_FIELD_TYPE_MAPS[get_storage_token_amount_version()])
 
 
-_ARG_TYPE_MAP = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, ARG_TYPE_TO_NC_TYPE_MAP)
-
-
-def make_nc_type_for_arg_type(type_: type[T], /) -> NCType[T]:
+def make_nc_type_for_arg_type(type_: type[T], /, token_amount_version: TokenAmountVersion) -> NCType[T]:
     """ Like NCType.from_type, but with maps for function arg annotations.
 
     If you need to customize the mapping use `NCType.from_type` instead.
     """
-    return NCType.from_type(type_, type_map=_ARG_TYPE_MAP)
+    return NCType.from_type(type_, type_map=_ARG_TYPE_MAPS[token_amount_version])
 
 
-_RETURN_TYPE_MAP = NCType.TypeMap(ESSENTIAL_TYPE_ALIAS_MAP, RETURN_TYPE_TO_NC_TYPE_MAP)
-
-
-def make_nc_type_for_return_type(type_: type[T], /) -> NCType[T]:
+def make_nc_type_for_return_type(type_: type[T], /, token_amount_version: TokenAmountVersion) -> NCType[T]:
     """ Like NCType.from_type, but with maps for function return annotations.
 
     If you need to customize the mapping use `NCType.from_type` instead.
     """
-    return NCType.from_type(type_, type_map=_RETURN_TYPE_MAP)
+    return NCType.from_type(type_, type_map=_RETURN_TYPE_MAPS[token_amount_version])

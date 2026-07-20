@@ -8,13 +8,14 @@ from hathor.nanocontracts.nc_types import NCType, NullNCType, make_nc_type_for_a
 from hathor.nanocontracts.storage import NCChangesTracker
 from hathor.nanocontracts.types import Amount, ContractId, Timestamp, VertexId
 from hathor_tests import unittest
+from hathorlib.token_amount_version import TokenAmountVersion
 
 T = TypeVar('T')
 
-STR_NC_TYPE = make_nc_type(str)
-BYTES_NC_TYPE = make_nc_type(bytes)
-INT_NC_TYPE = make_nc_type(int)
-BOOL_NC_TYPE = make_nc_type(bool)
+STR_NC_TYPE = make_nc_type(str, TokenAmountVersion.V1)
+BYTES_NC_TYPE = make_nc_type(bytes, TokenAmountVersion.V1)
+INT_NC_TYPE = make_nc_type(int, TokenAmountVersion.V1)
+BOOL_NC_TYPE = make_nc_type(bool, TokenAmountVersion.V1)
 
 
 class NCRocksDBStorageTestCase(unittest.TestCase):
@@ -70,7 +71,7 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
 
     def test_float(self) -> None:
         with self.assertRaises(TypeError):
-            make_nc_type(float)
+            make_nc_type(float, TokenAmountVersion.V1)
         with self.assertRaises(TypeError):
             # XXX: ignore misc, mypy catches this error but we want to test for it
             self._run_test(1.23, INT_NC_TYPE)  # type: ignore[misc]
@@ -80,7 +81,7 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
         self._run_test(None, value)
 
     def test_optional(self) -> None:
-        value: NCType[int | None] = make_nc_type(int | None)  # type: ignore[arg-type]
+        value: NCType[int | None] = make_nc_type(int | None, TokenAmountVersion.V1)  # type: ignore[arg-type]
         self._run_test(1, value)
         self._run_test(None, value)
 
@@ -92,7 +93,7 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
 
     def test_tuple(self) -> None:
         value: NCType[tuple[str, int, set[int], bool]]
-        value = make_nc_type(tuple[str, int, set[int], bool])
+        value = make_nc_type(tuple[str, int, set[int], bool], TokenAmountVersion.V1)
         self._run_test(('str', 1, {3}, True), value)
 
     def test_changes_tracker_delete(self) -> None:
@@ -124,17 +125,17 @@ class NCRocksDBStorageTestCase(unittest.TestCase):
 
         # other examples of failures:
 
-        amount_nc_type = make_nc_type(Amount)
+        amount_nc_type = make_nc_type(Amount, TokenAmountVersion.V1)
         with self.assertRaises(ValueError):
             # Amount must be non-negative
             changes_tracker.put_obj(b'y', amount_nc_type, -1)  # type: ignore[misc]
 
-        timestamp_nc_type = make_nc_type(Timestamp)
+        timestamp_nc_type = make_nc_type(Timestamp, TokenAmountVersion.V1)
         with self.assertRaises(ValueError):
             # Timestamp uses Int32NCType
             changes_tracker.put_obj(b'y', timestamp_nc_type, 2**32)  # type: ignore[misc]
 
-        nested_nc_type = make_nc_type(dict[int, set[int]])
+        nested_nc_type = make_nc_type(dict[int, set[int]], TokenAmountVersion.V1)
         with self.assertRaises(TypeError):
             # inner string is not int
             changes_tracker.put_obj(b'y', nested_nc_type, {1: {'foo'}})  # type: ignore[misc]

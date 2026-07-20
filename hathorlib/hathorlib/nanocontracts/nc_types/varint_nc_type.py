@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import ClassVar
 
 from typing_extensions import Self, override
@@ -11,6 +12,7 @@ from hathorlib.nanocontracts.nc_types.nc_type import NCType
 from hathorlib.serialization import Deserializer, Serializer
 from hathorlib.serialization.adapters import MaxBytesExceededError
 from hathorlib.serialization.encoding.leb128 import decode_leb128, encode_leb128
+from hathorlib.serialization.encoding.output_value import decode_length_prefix_varint, encode_length_prefix_varint
 from hathorlib.utils.typing import is_subclass
 
 
@@ -21,22 +23,14 @@ class _VarIntNCType(NCType[int]):
     _max_byte_size: ClassVar[int | None]
 
     @classmethod
-    def _upper_bound_value(self) -> int | None:
-        if self._max_byte_size is None:
-            return None
-        if self._signed:
-            return int(2**(self._max_byte_size * 7 - 1) - 1)
-        else:
-            return int(2**(self._max_byte_size * 7) - 1)
+    @abstractmethod
+    def _upper_bound_value(cls) -> int | None:
+        raise NotImplementedError
 
     @classmethod
-    def _lower_bound_value(self) -> int | None:
-        if not self._signed:
-            return 0
-        if self._max_byte_size is not None:
-            return int(-(2**(self._max_byte_size * 7)))
-        else:
-            return None
+    @abstractmethod
+    def _lower_bound_value(cls) -> int | None:
+        raise NotImplementedError
 
     @override
     @classmethod
@@ -64,7 +58,7 @@ class _VarIntNCType(NCType[int]):
         if self._max_byte_size is not None:
             serializer = serializer.with_max_bytes(self._max_byte_size)
         try:
-            encode_leb128(serializer, value, signed=self._signed)
+            self._encode(serializer, value, signed=self._signed)
         except MaxBytesExceededError as e:
             raise ValueError('value too long') from e
 
@@ -73,7 +67,7 @@ class _VarIntNCType(NCType[int]):
         if self._max_byte_size is not None:
             deserializer = deserializer.with_max_bytes(self._max_byte_size)
         try:
-            value = decode_leb128(deserializer, signed=self._signed)
+            value = self._decode(deserializer, signed=self._signed)
         except MaxBytesExceededError as e:
             raise ValueError('value too long') from e
         return value
@@ -90,8 +84,87 @@ class _VarIntNCType(NCType[int]):
         # XXX: should we use str instead?
         return value
 
+    @abstractmethod
+    def _encode(self, serializer: Serializer, value: int, *, signed: bool) -> None:
+        raise NotImplementedError
 
-class VarInt32NCType(_VarIntNCType):
+    @abstractmethod
+    def _decode(self, deserializer: Deserializer, *, signed: bool) -> int:
+        raise NotImplementedError
+
+
+class _LEB128NCType(_VarIntNCType):
+    """Variable-size integer using LEB128 encoding (`TokenAmountVersion.V1`).
+
+    `_max_byte_size` bounds the full LEB128 encoding, which carries 7 value bits per byte.
+    """
+
+    @override
+    @classmethod
+    def _upper_bound_value(cls) -> int | None:
+        if cls._max_byte_size is None:
+            return None
+        if cls._signed:
+            return int(2**(cls._max_byte_size * 7 - 1) - 1)
+        else:
+            return int(2**(cls._max_byte_size * 7) - 1)
+
+    @override
+    @classmethod
+    def _lower_bound_value(cls) -> int | None:
+        if not cls._signed:
+            return 0
+        if cls._max_byte_size is not None:
+            return int(-(2**(cls._max_byte_size * 7 - 1)))
+        else:
+            return None
+
+    @override
+    def _encode(self, serializer: Serializer, value: int, *, signed: bool) -> None:
+        encode_leb128(serializer, value, signed=signed)
+
+    @override
+    def _decode(self, deserializer: Deserializer, *, signed: bool) -> int:
+        return decode_leb128(deserializer, signed=signed)
+
+
+class _LPENCType(_VarIntNCType):
+    """Variable-size integer using length-prefix encoding (`TokenAmountVersion.V2`).
+
+    `_max_byte_size` bounds the full encoding: one length byte plus a minimal big-endian payload.
+    """
+
+    @override
+    @classmethod
+    def _upper_bound_value(cls) -> int | None:
+        if cls._max_byte_size is None:
+            return None
+        payload_bits = (cls._max_byte_size - 1) * 8
+        if cls._signed:
+            return int(2**(payload_bits - 1) - 1)
+        else:
+            return int(2**payload_bits - 1)
+
+    @override
+    @classmethod
+    def _lower_bound_value(cls) -> int | None:
+        if not cls._signed:
+            return 0
+        if cls._max_byte_size is None:
+            return None
+        payload_bits = (cls._max_byte_size - 1) * 8
+        return int(-(2**(payload_bits - 1)))
+
+    @override
+    def _encode(self, serializer: Serializer, value: int, *, signed: bool) -> None:
+        encode_length_prefix_varint(serializer, value, signed=signed)
+
+    @override
+    def _decode(self, deserializer: Deserializer, *, signed: bool) -> int:
+        return decode_length_prefix_varint(deserializer, signed=signed)
+
+
+class VarInt32NCType(_LEB128NCType):
     """Variable-size signed integer with at most 32 bytes, effectively 223 bits + sign bit.
     """
 
@@ -99,8 +172,24 @@ class VarInt32NCType(_VarIntNCType):
     _max_byte_size = 32
 
 
-class VarUint32NCType(_VarIntNCType):
+class VarUint32NCType(_LEB128NCType):
     """Variable-size unsigned integer with at most 32 bytes.
+    """
+
+    _signed = False
+    _max_byte_size = 32
+
+
+class VarInt32V2NCType(_LPENCType):
+    """Variable-size signed integer with at most 32 bytes: 1 length byte + 31 payload bytes.
+    """
+
+    _signed = True
+    _max_byte_size = 32
+
+
+class VarUint32V2NCType(_LPENCType):
+    """Variable-size unsigned integer with at most 32 bytes: 1 length byte + 31 payload bytes.
     """
 
     _signed = False

@@ -6,6 +6,9 @@ This is module exports all types and functions available to blueprints as the ma
 """
 
 from hathor.nanocontracts import HATHOR_TOKEN_UID, Blueprint, Context, NCFail, export, fallback, public, view
+
+# Python-imported blueprints (built-ins) are always registered with `TokenAmountVersion.V2`, so the
+# version-routed names bind to the V2 classes here, mirroring the on-chain import table.
 from hathor.nanocontracts.types import (
     Address,
     Amount,
@@ -20,9 +23,9 @@ from hathor.nanocontracts.types import (
     NCFee,
     NCGrantAuthorityAction,
     NCParsedArgs,
-    NCRawArgs,
+    NCRawArgsV2 as NCRawArgs,
     NCWithdrawalAction,
-    SignedData,
+    SignedDataV2 as SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,

@@ -4,7 +4,7 @@
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import BlueprintSyntaxError, NCFail, NCInsufficientFunds, NCViewMethodError
-from hathor.nanocontracts.nc_types import make_nc_type_for_arg_type as make_nc_type
+from hathor.nanocontracts.nc_types import make_nc_type_for_field_type as make_nc_type
 from hathor.nanocontracts.storage.contract_storage import Balance, BalanceKey
 from hathor.nanocontracts.types import (
     Address,

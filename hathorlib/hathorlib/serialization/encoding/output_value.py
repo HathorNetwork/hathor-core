@@ -118,6 +118,7 @@ from hathorlib.token_amount_version import TokenAmountVersion
 MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2_147_483_647
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
 
+
 def get_max_output_value_v2() -> int:
     return MAX_OUTPUT_VALUE_64 * UnsignedAmount.get_normalization_factor()
 
@@ -195,45 +196,79 @@ def encode_output_value_v2(serializer: Serializer, amount: UnsignedAmount, *, st
     """
     assert amount.is_v2()
     value = amount.raw()
-    encode_length_prefix_varint(serializer, value, strict=strict, max_value=get_max_output_value_v2())
+    if strict and value == 0:
+        raise ValueError('value must not be zero')
+    encode_length_prefix_varint(serializer, value, signed=False, max_value=get_max_output_value_v2())
 
 
 def encode_length_prefix_varint(
     serializer: Serializer,
     value: int,
     *,
-    strict: bool,
+    signed: bool,
     max_value: int | None = None,
 ) -> int:
     """
-    >>> se = Serializer.build_bytes_serializer()
-    >>> encode_length_prefix_varint(se, -1, strict=False)
+    Encode `value` as a single length byte followed by its minimal big-endian representation.
+
+    Zero is encoded as a single zero length byte with no payload. `max_value` bounds `abs(value)`.
+    Returns the payload length in bytes.
+
+    >>> def encode(value, *, signed):
+    ...     se = Serializer.build_bytes_serializer()
+    ...     encode_length_prefix_varint(se, value, signed=signed)
+    ...     return bytes(se.finalize()).hex()
+    >>> encode(0, signed=True)
+    '00'
+    >>> encode(127, signed=True)
+    '017f'
+    >>> encode(128, signed=True)
+    '020080'
+    >>> encode(-1, signed=True)
+    '01ff'
+    >>> encode(-128, signed=True)
+    '0180'
+    >>> encode(-129, signed=True)
+    '02ff7f'
+    >>> encode(128, signed=False)
+    '0180'
+    >>> encode(-1, signed=False)
     Traceback (most recent call last):
     ...
-    ValueError: value must be not be negative
+    ValueError: value must not be negative
     """
-    if value < 0:
-        raise ValueError('value must be not be negative')
+    if not signed and value < 0:
+        raise ValueError('value must not be negative')
 
     if value == 0:
-        if strict:
-            raise ValueError('value must not be zero')
         serializer.write_byte(0)
         return 0
 
-    if max_value is not None and value > max_value:
+    if max_value is not None and abs(value) > max_value:
         raise ValueError(f'value is too big; max is {max_value}, got: {value}')
 
-    length = (value.bit_length() + 7) // 8
-    payload = value.to_bytes(length, byteorder='big')
+    length = _length_prefix_varint_length(value, signed=signed)
+    if length > 0xFF:
+        raise ValueError(f'value needs {length} bytes, which does not fit the one-byte length prefix')
+    payload = value.to_bytes(length, byteorder='big', signed=signed)
 
     assert len(payload) == length
-    assert payload[0] != 0
+    assert signed or payload[0] != 0
 
     serializer.write_byte(length)
     serializer.write_bytes(payload)
 
     return length
+
+
+def _length_prefix_varint_length(value: int, *, signed: bool) -> int:
+    """Return the minimal number of big-endian bytes needed to represent a non-zero `value`."""
+    if not signed:
+        return (value.bit_length() + 7) // 8
+    # Signed values reserve the payload's most significant bit for the sign, so e.g. 128 needs two
+    # bytes (`0080`) while -128 fits in one (`80`). `value + (value < 0)` makes the negative bound
+    # of each width land on the same bit length as its positive counterpart.
+    return ((value + (value < 0)).bit_length() + 8) // 8
 
 
 def decode_output_value(deserializer: Deserializer, *, token_amount_version: TokenAmountVersion) -> UnsignedAmount:
@@ -327,28 +362,69 @@ def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -
     >>> decode_output_value_v2(build('03 c0ffee')) == UnsignedAmount.from_v2(0xc0ffee)
     True
     """
-    value = decode_length_prefix_varint(deserializer, strict=strict, max_value=get_max_output_value_v2())
+    value = decode_length_prefix_varint(deserializer, signed=False, max_value=get_max_output_value_v2())
+    if strict and value == 0:
+        raise ValueError('value must not be zero')
     return UnsignedAmount.from_v2(value)
 
 
-def decode_length_prefix_varint(deserializer: Deserializer, *, strict: bool, max_value: int | None = None) -> int:
+def decode_length_prefix_varint(deserializer: Deserializer, *, signed: bool, max_value: int | None = None) -> int:
+    """
+    Decode a value produced by `encode_length_prefix_varint`, rejecting non-minimal encodings.
+
+    >>> def decode(hex_value, *, signed):
+    ...     return decode_length_prefix_varint(
+    ...         Deserializer.build_bytes_deserializer(bytes.fromhex(hex_value)), signed=signed)
+    >>> decode('00', signed=True)
+    0
+    >>> decode('017f', signed=True)
+    127
+    >>> decode('020080', signed=True)
+    128
+    >>> decode('01ff', signed=True)
+    -1
+    >>> decode('0180', signed=True)
+    -128
+    >>> decode('02ff7f', signed=True)
+    -129
+    >>> decode('0180', signed=False)
+    128
+    >>> decode('0100', signed=True)
+    Traceback (most recent call last):
+    ...
+    ValueError: non-canonical encoding, redundant leading byte: 00
+    >>> decode('02007f', signed=True)
+    Traceback (most recent call last):
+    ...
+    ValueError: non-canonical encoding, redundant leading byte: 007f
+    >>> decode('02ff80', signed=True)
+    Traceback (most recent call last):
+    ...
+    ValueError: non-canonical encoding, redundant leading byte: ff80
+    """
     length = deserializer.read_byte()
     if length == 0:
-        if strict:
-            raise ValueError('value must not be zero')
         return 0
 
     if max_value is not None:
-        max_length = (max_value.bit_length() + 7) // 8
+        max_length = _length_prefix_varint_length(max_value, signed=signed)
         if length > max_length:
             raise ValueError(f'length is too big; max is {max_length}, got: {length}')
 
     payload = deserializer.read_bytes(length)
-    if payload[0] == 0:
+    if signed:
+        # A leading byte is redundant when it only repeats the sign already carried by the next
+        # byte's most significant bit; a minimal encoding never starts with such a byte. This also
+        # rejects zero, whose only canonical encoding is the bare zero length byte.
+        redundant_zero = payload[0] == 0x00 and (length == 1 or payload[1] < 0x80)
+        redundant_ff = payload[0] == 0xFF and length > 1 and payload[1] >= 0x80
+        if redundant_zero or redundant_ff:
+            raise ValueError(f'non-canonical encoding, redundant leading byte: {payload.hex()}')
+    elif payload[0] == 0:
         raise ValueError(f'non-canonical encoding, leading zero byte: {payload.hex()}')
 
-    value = int.from_bytes(payload, byteorder='big')
-    if max_value is not None and value > max_value:
+    value = int.from_bytes(payload, byteorder='big', signed=signed)
+    if max_value is not None and abs(value) > max_value:
         raise ValueError(f'value is too big; max is {max_value}, got: {value}')
 
     return value

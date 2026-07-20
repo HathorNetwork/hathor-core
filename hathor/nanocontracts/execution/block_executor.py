@@ -16,7 +16,7 @@ from hathor.nanocontracts.nano_runtime_version import NanoRuntimeVersion
 from hathor.transaction import Block, Transaction
 from hathorlib.nanocontracts.runner.call_info import CallInfo
 from hathorlib.nanocontracts.runner.runner import MAX_SEQNUM_JUMP_SIZE
-from hathorlib.nanocontracts.types import Address, BlueprintId, ContractId, NCRawArgs, VertexId
+from hathorlib.nanocontracts.types import Address, BlueprintId, ContractId, VertexId, get_nc_raw_args_class
 
 # Type alias for the skip predicate
 ShouldSkipPredicate = Callable[[Transaction], bool]
@@ -325,7 +325,8 @@ class NCBlockExecutor:
             context = nano_header.get_context()
             assert context.block.hash == vertex_metadata.first_block
 
-            nc_args = NCRawArgs(nano_header.nc_args_bytes)
+            nc_raw_args_class = get_nc_raw_args_class(runner.token_amount_version)
+            nc_args = nc_raw_args_class(nano_header.nc_args_bytes)
             if nano_header.is_creating_a_new_contract():
                 blueprint_id = BlueprintId(VertexId(nano_header.nc_id))
                 runner.create_contract_with_nc_args(contract_id, blueprint_id, context, nc_args)

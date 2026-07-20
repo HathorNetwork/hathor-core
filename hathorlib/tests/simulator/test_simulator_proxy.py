@@ -16,7 +16,7 @@ from hathorlib.nanocontracts.simulator import (
     NanoSimulatorBuilder,
     NcCallResult,
 )
-from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, SignedData, TxOutputScript
+from hathorlib.nanocontracts.types import NC_HTR_TOKEN_UID, SignedDataV2, TxOutputScript
 
 from .blueprints import CollectionArgs, Counter, FailingBlueprint, SignedMessage, Vault
 
@@ -173,7 +173,7 @@ class TestProxySignedData:
         assert proxy.get_message() == ''
 
         assert _nc_types._checksig_backend is None
-        signed = SignedData[str]('hello world', CHECKSIG_VALID)
+        signed = SignedDataV2[str]('hello world', CHECKSIG_VALID)
         proxy.set_message(signed, caller=alice)
         assert _nc_types._checksig_backend is None
         assert proxy.get_message() == 'hello world'
@@ -185,7 +185,7 @@ class TestProxySignedData:
 
         proxy = sim.create_contract(bid, caller=alice, args=(self.ORACLE_SCRIPT,))
 
-        signed = SignedData[str]('hello world', CHECKSIG_INVALID)
+        signed = SignedDataV2[str]('hello world', CHECKSIG_INVALID)
         with pytest.raises(NCFail, match='invalid signature'):
             proxy.set_message(signed, caller=alice)
 
@@ -196,7 +196,7 @@ class TestProxySignedData:
 
         proxy = sim.create_contract(bid, caller=alice, args=(self.ORACLE_SCRIPT,))
 
-        signed = SignedData[str]('hello world', b'some-random-bytes')
+        signed = SignedDataV2[str]('hello world', b'some-random-bytes')
         with caplog.at_level(logging.WARNING):
             with pytest.raises(NCFail, match='invalid signature'):
                 proxy.set_message(signed, caller=alice)
@@ -212,6 +212,6 @@ class TestProxySignedData:
 
         # Without the simulated backend, checksig raises NotImplementedError
         # which the metered executor wraps in NCFail
-        signed = SignedData[str]('hello world', CHECKSIG_VALID)
+        signed = SignedDataV2[str]('hello world', CHECKSIG_VALID)
         with pytest.raises(NCFail):
             proxy.set_message(signed, caller=alice)

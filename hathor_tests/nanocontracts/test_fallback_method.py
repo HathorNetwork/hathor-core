@@ -11,11 +11,21 @@ from hathor.nanocontracts.exception import NCInvalidMethodCall
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.nc_exec_logs import NCCallBeginEntry, NCCallEndEntry
 from hathor.nanocontracts.runner.call_info import CallType
-from hathor.nanocontracts.types import ContractId, NCArgs, NCDepositAction, NCParsedArgs, NCRawArgs, TokenUid, fallback
+from hathor.nanocontracts.types import (
+    ContractId,
+    NCArgs,
+    NCDepositAction,
+    NCParsedArgs,
+    NCRawArgs,
+    NCRawArgsV1,
+    TokenUid,
+    fallback,
+)
 from hathor.transaction import Block, Transaction
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathorlib.token_amount_version import TokenAmountVersion
 
 # TODO: Test support for container args/kwargs such as list[int] after Jan's PR
 
@@ -139,9 +149,9 @@ class TestFallbackMethod(BlueprintTestCase):
             self.runner.call_public_method(self.contract_id, 'call_another_fallback', self.ctx, contract_id)
 
     def test_fallback_args_bytes_success(self) -> None:
-        args_parser = ArgsOnly.from_arg_types((str, int))
+        args_parser = ArgsOnly.from_arg_types((str, int), TokenAmountVersion.V1)
         args_bytes = args_parser.serialize_args_bytes(('hello', 123))
-        nc_args = NCRawArgs(args_bytes)
+        nc_args = NCRawArgsV1(args_bytes)
         result = self.runner.call_public_method_with_nc_args(self.contract_id, 'unknown', self.ctx, nc_args)
         assert result == 'hello 246'
 
@@ -152,7 +162,7 @@ class TestFallbackMethod(BlueprintTestCase):
                 nc_id=self.contract_id,
                 call_type=CallType.PUBLIC,
                 method_name='fallback',
-                str_args=f"('unknown', NCRawArgs('{args_bytes.hex()}'))",
+                str_args=f"('unknown', NCRawArgsV1('{args_bytes.hex()}'))",
                 actions=[dict(amount=123, token_uid='00', type='deposit')]
             ),
             NCCallEndEntry.model_construct(timestamp=ANY),
@@ -160,9 +170,9 @@ class TestFallbackMethod(BlueprintTestCase):
 
     def test_dag_fallback(self) -> None:
         dag_builder = TestDAGBuilder.from_manager(self.manager)
-        valid_args_parser = ArgsOnly.from_arg_types((str, int))
+        valid_args_parser = ArgsOnly.from_arg_types((str, int), TokenAmountVersion.V1)
         valid_args_bytes = valid_args_parser.serialize_args_bytes(('hello', 123))
-        invalid_args_parser = ArgsOnly.from_arg_types((int, int))
+        invalid_args_parser = ArgsOnly.from_arg_types((int, int), TokenAmountVersion.V1)
         invalid_args_bytes = invalid_args_parser.serialize_args_bytes((123, 456))
 
         artifacts = dag_builder.build_from_str(f'''

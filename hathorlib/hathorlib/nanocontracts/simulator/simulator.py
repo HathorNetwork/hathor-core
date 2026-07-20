@@ -238,11 +238,15 @@ class NanoSimulator:
 
     @staticmethod
     def _ensure_hathor_shim() -> ModuleType:
-        """Create a shim 'hathor' module that re-exports what blueprints are allowed to import."""
-        from hathorlib.nanocontracts.allowed_imports import ALLOWED_IMPORTS
+        """Create a shim 'hathor' module that re-exports what blueprints are allowed to import.
+
+        Uses the V2 import table, matching the simulator's runner, which always executes with
+        `TokenAmountVersion.V2`.
+        """
+        from hathorlib.nanocontracts.allowed_imports import get_allowed_imports
 
         shim = ModuleType('hathor')
-        for name, obj in ALLOWED_IMPORTS['hathor'].items():
+        for name, obj in get_allowed_imports(TokenAmountVersion.V2)['hathor'].items():
             setattr(shim, name, obj)
         return shim
 

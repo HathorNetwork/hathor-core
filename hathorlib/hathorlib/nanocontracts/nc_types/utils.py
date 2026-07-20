@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable
 from functools import reduce
 from operator import or_
 from types import MappingProxyType as mappingproxy, NoneType, UnionType
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 T = TypeVar('T')
-TypeAliasMap: TypeAlias = Mapping[type | UnionType, type]
-TypeToNCTypeMap: TypeAlias = Mapping[type | UnionType | tuple[type, ...], type['NCType']]
+TypeAliasMap: TypeAlias = dict[type | UnionType, type]
+TypeToNCTypeMap: TypeAlias = dict[type | UnionType | tuple[type, ...], type['NCType']]
 
 
 def get_origin_classes(type_: type) -> Iterator[type]:
@@ -227,7 +227,8 @@ def get_usable_origin_type(
     `TypeError` to indicate that the given type is not supported:
 
     >>> type_ = set[int]
-    >>> from hathorlib.nanocontracts.nc_types import _FIELD_TYPE_MAP as default_type_map
+    >>> from hathorlib.nanocontracts.nc_types import NCType, DEFAULT_TYPE_ALIAS_MAP, FIELD_TYPE_TO_NC_TYPE_MAP
+    >>> default_type_map = NCType.TypeMap(DEFAULT_TYPE_ALIAS_MAP, FIELD_TYPE_TO_NC_TYPE_MAP)
     >>> origin = get_usable_origin_type(type_, type_map=default_type_map, _verbose=False)
     >>> assert origin in default_type_map.nc_types_map
     >>> origin

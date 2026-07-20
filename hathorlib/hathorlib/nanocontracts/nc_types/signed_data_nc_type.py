@@ -17,17 +17,21 @@ V = TypeVar('V', bound=NCType)
 
 
 class SignedDataNCType(NCType[SignedData[V]]):
-    """ Represents a SignedData[*] values.
+    """ Represents `SignedData[*]` values.
+
+    The wire format is version-independent, but deserialization must produce a concrete `SignedData`
+    subclass, which determines the payload-signing version. Annotations must name a concrete class
+    (`SignedDataV1[T]`, `SignedDataV2[T]`), which is the class deserialization produces.
     """
-    __slots__ = ('_is_hashable', '_value', '_inner_type')
+    __slots__ = ('_is_hashable', '_value', '_signed_data_type')
 
     _value: NCType[V]
-    _inner_type: type[V]
+    _signed_data_type: type[SignedData[V]]
 
-    def __init__(self, inner_nc_type: NCType[V], inner_type: type[V], /) -> None:
+    def __init__(self, inner_nc_type: NCType[V], signed_data_type: type[SignedData[V]], /) -> None:
         self._value = inner_nc_type
         self._is_hashable = inner_nc_type.is_hashable()
-        self._inner_type = inner_type
+        self._signed_data_type = signed_data_type
 
     @override
     @classmethod
@@ -35,11 +39,16 @@ class SignedDataNCType(NCType[SignedData[V]]):
         origin_type = get_origin(type_) or type_
         if not issubclass(origin_type, SignedData):
             raise TypeError('expected SignedData type')
+        if origin_type is SignedData:
+            raise TypeError('SignedData is version-abstract; annotate with SignedDataV1 or SignedDataV2')
+        signed_data_cls = origin_type
         args: tuple[type, ...] = get_args(type_) or tuple()
         if len(args) != 1:
             raise TypeError('expected one type argument')
         inner_type, = args
-        return cls(NCType.from_type(inner_type, type_map=type_map), inner_type)
+        # XXX: ignore index because mypy doesn't recognize dynamic class subscription, but it's correct
+        signed_data_type = signed_data_cls[inner_type]  # type: ignore[index]
+        return cls(NCType.from_type(inner_type, type_map=type_map), signed_data_type)
 
     @override
     def _check_value(self, value: SignedData[V], /, *, deep: bool) -> None:
@@ -54,7 +63,7 @@ class SignedDataNCType(NCType[SignedData[V]]):
 
     @override
     def _deserialize(self, deserializer: Deserializer, /) -> SignedData[V]:
-        return decode_signed_data(deserializer, self._value.deserialize, self._inner_type)
+        return decode_signed_data(deserializer, self._value.deserialize, self._signed_data_type)
 
     @override
     def _json_to_value(self, json_value: NCType.Json, /) -> SignedData[V]:
@@ -67,10 +76,7 @@ class SignedDataNCType(NCType[SignedData[V]]):
         if not isinstance(signature_json_value, str):
             raise ValueError('expected str for signature')
         script_input = bytes.fromhex(signature_json_value)
-        # XXX: ignore named-defined because mypy doesn't recognize self._inner_type
-        # NOTE: strangely enough it gives a name-defined error but in some nearly identical situations it gives a
-        #       valid-type error
-        return SignedData[self._inner_type](data, script_input)  # type: ignore[name-defined]
+        return self._signed_data_type(data, script_input)
 
     @override
     def _value_to_json(self, value: SignedData[V], /) -> NCType.Json:
