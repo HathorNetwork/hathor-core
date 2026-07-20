@@ -1303,7 +1303,7 @@ class Runner:
                 # Normal path for upgrading V2 blueprints.
                 pass
             case _:
-                assert_never((self.token_amount_version, token_amount_version))
+                raise AssertionError('unreachable')
 
         nc_storage = self.get_current_changes_tracker()
         nc_storage.set_blueprint_id(blueprint_id)
