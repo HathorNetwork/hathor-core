@@ -156,3 +156,50 @@ class TestGenerateNginxConfig:
 
         with pytest.raises(ValueError, match='conflicting x-proxy-buffers'):
             generate_nginx_config(openapi, out_file=StringIO())
+
+    def test_enable_api_proxy_routes_push_tx_to_api_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._stub_settings_modules(monkeypatch)
+        openapi = {
+            'paths': {
+                '/push_tx': {
+                    'post': {
+                        'x-visibility': 'public',
+                        'x-rate-limit': {
+                            'global': [{'rate': '1r/s', 'burst': 1, 'delay': 0}],
+                        },
+                    },
+                },
+            },
+        }
+
+        out = StringIO()
+        generate_nginx_config(openapi, out_file=out, enable_api_proxy=True)
+        config = out.getvalue()
+
+        assert 'upstream api_proxy {' in config
+        assert 'server 127.0.0.1:5000;' in config
+        assert 'location ~ ^/v1a/push_tx/?$ {' in config
+        assert 'proxy_pass http://api_proxy;' in config
+
+    def test_api_proxy_disabled_keeps_push_tx_on_backend(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._stub_settings_modules(monkeypatch)
+        openapi = {
+            'paths': {
+                '/push_tx': {
+                    'post': {
+                        'x-visibility': 'public',
+                        'x-rate-limit': {
+                            'global': [{'rate': '1r/s', 'burst': 1, 'delay': 0}],
+                        },
+                    },
+                },
+            },
+        }
+
+        out = StringIO()
+        generate_nginx_config(openapi, out_file=out)
+        config = out.getvalue()
+
+        assert 'upstream api_proxy {' not in config
+        assert 'proxy_pass http://api_proxy;' not in config
+        assert 'proxy_pass http://backend;' in config
