@@ -81,8 +81,13 @@ class BlueprintOnChainResource(Resource):
         if not params.before and not params.after:
             iter_bps = bp_index.get_newest() if params.order.is_desc() else bp_index.get_oldest()
         else:
-            ref_tx_id = bytes.fromhex(params.before or params.after or '')
-            assert ref_tx_id
+            ref_tx_id = bytes_from_hex(params.before or params.after or '')
+            if not ref_tx_id:
+                request.setResponseCode(400)
+                error_response = ErrorResponse(
+                    success=False, error='Invalid before/after parameter: not a valid hex string.'
+                )
+                return error_response.json_dumpb()
             try:
                 ref_tx = bp_service.get_on_chain_blueprint(blueprint_id_from_bytes(ref_tx_id))
             except (BlueprintDoesNotExist, OCBInvalidBlueprintVertexType, OCBBlueprintNotConfirmed) as e:
