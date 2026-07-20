@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
+import unittest
 from typing import Any
 
 from hathor.conf.settings import HathorSettings
@@ -24,6 +25,7 @@ from hathor.transaction.storage import TransactionRocksDBStorage
 from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
+from hathorlib.nanocontracts import storage_version
 from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
 from hathorlib.token_amount_version import TokenAmountVersion
 
@@ -154,6 +156,13 @@ def get_nc_failure_entry(*, manager: HathorManager, tx_id: VertexId, block_id: V
     )
     logs = not_none(nc_log_storage.get_logs(tx_id, block_id=block_id))
     return logs.entries[block_id][-1]
+
+
+def set_force_legacy_fields(test_case: unittest.TestCase, value: bool) -> None:
+    """Set the global `FORCE_LEGACY_FIELDS` flag, restoring the original value at test teardown."""
+    original = storage_version.FORCE_LEGACY_FIELDS
+    storage_version.FORCE_LEGACY_FIELDS = value
+    test_case.addCleanup(setattr, storage_version, 'FORCE_LEGACY_FIELDS', original)
 
 
 def assert_nc_failure_reason(*, manager: HathorManager, tx_id: VertexId, block_id: VertexId, reason: str) -> None:

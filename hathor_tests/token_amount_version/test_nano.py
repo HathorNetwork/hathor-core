@@ -6,7 +6,7 @@ from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
-from hathorlib.nanocontracts import fields as nc_fields
+from hathor_tests.nanocontracts.utils import set_force_legacy_fields
 from hathorlib.nanocontracts.nc_types import make_nc_type_for_arg_type
 from hathorlib.nanocontracts.types import Amount
 from hathorlib.serialization import Serializer
@@ -32,14 +32,8 @@ class TestNano(BlueprintTestCase):
         self.blueprint_id2 = self._register_blueprint_class(MyBlueprint, token_amount_version=TokenAmountVersion.V2)
         self.dag_builder = TestDAGBuilder.from_manager(self.manager)
 
-    def _set_force_legacy_fields(self, value: bool) -> None:
-        """Set the global `FORCE_LEGACY_FIELDS` flag, restoring the original value at test teardown."""
-        original = nc_fields.FORCE_LEGACY_FIELDS
-        nc_fields.FORCE_LEGACY_FIELDS = value
-        self.addCleanup(setattr, nc_fields, 'FORCE_LEGACY_FIELDS', original)
-
     def test_legacy_serialization(self) -> None:
-        self._set_force_legacy_fields(True)
+        set_force_legacy_fields(self, True)
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy
@@ -79,7 +73,7 @@ class TestNano(BlueprintTestCase):
         assert y_raw == b'\x01' + encode_unsigned_leb128(64) == b'\x01\x40'
 
     def test_new_serialization(self) -> None:
-        self._set_force_legacy_fields(False)
+        set_force_legacy_fields(self, False)
         artifacts = self.dag_builder.build_from_str(f'''
             blockchain genesis b[1..11]
             b10 < dummy

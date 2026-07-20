@@ -11,6 +11,7 @@ from typing_extensions import TYPE_CHECKING
 from hathorlib.nanocontracts.fields.container import ContainerNode, ContainerNodeFactory, TypeToContainerMap
 from hathorlib.nanocontracts.nc_types import NCType
 from hathorlib.nanocontracts.nc_types.utils import TypeAliasMap, TypeToNCTypeMap
+from hathorlib.nanocontracts.storage_version import get_storage_token_amount_version
 from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
@@ -70,7 +71,6 @@ class Field(Generic[T]):
 
     def _build_node(self, instance: Blueprint) -> ContainerNode[T]:
         """Build the container node with the globally-selected storage serialization version."""
-        from hathorlib.nanocontracts.fields import get_storage_token_amount_version
         factory = self._container_node_factories[get_storage_token_amount_version()]
         return factory.build(instance)
 
