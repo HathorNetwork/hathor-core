@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathorlib.nanocontracts.types import BlueprintId
+from hathorlib.token_amount_version import TokenAmountVersion
 
 _BLUEPRINTS_MAPPER: dict[str, type[Blueprint]] = {}
 
@@ -18,32 +19,41 @@ class NCBlueprintCatalog:
     """Catalog of blueprints available."""
     __slots__ = ('_blueprints',)
 
-    _blueprints: dict[bytes, type[Blueprint]]
-
     def __init__(self) -> None:
-        self._blueprints: dict[bytes, type[Blueprint]] = {}
+        self._blueprints: dict[bytes, tuple[type[Blueprint], TokenAmountVersion]] = {}
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint] | None:
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> tuple[type[Blueprint], TokenAmountVersion] | None:
         """Return the blueprint class related to the given blueprint id or None if it doesn't exist."""
         return self._blueprints.get(blueprint_id)
 
-    def register_blueprints(self, blueprints: dict[bytes, type[Blueprint]], *, strict: bool = False) -> None:
+    def register_blueprints(
+        self,
+        blueprints: dict[bytes, tuple[type[Blueprint], TokenAmountVersion]],
+        *,
+        strict: bool = False,
+    ) -> None:
         """Register blueprints in the catalog."""
         if strict:
             for blueprint_id in blueprints:
-                if blueprint := self._blueprints.get(blueprint_id):
-                    raise ValueError(f'Blueprint {blueprint_id.hex()} is already registered: {blueprint.__name__}')
+                if existing := self._blueprints.get(blueprint_id):
+                    blueprint_class, _ = existing
+                    raise ValueError(
+                        f'Blueprint {blueprint_id.hex()} is already registered: {blueprint_class.__name__}'
+                    )
         self._blueprints.update(blueprints)
 
     def get_all(self) -> dict[bytes, type[Blueprint]]:
         """Return a copy of all registered blueprints."""
-        return dict(self._blueprints)
+        return {bp_id: bp for bp_id, (bp, _) in self._blueprints.items()}
 
     @staticmethod
-    def generate_blueprints_from_settings(settings: 'HathorSettings') -> dict[bytes, type['Blueprint']]:
+    def generate_blueprints_from_settings(
+        settings: 'HathorSettings',
+    ) -> dict[bytes, tuple[type['Blueprint'], TokenAmountVersion]]:
         """Generate a catalog of blueprints based on the provided settings."""
         assert settings.ENABLE_NANO_CONTRACTS
-        blueprints: dict[bytes, type['Blueprint']] = {}
+        blueprints: dict[bytes, tuple[type['Blueprint'], TokenAmountVersion]] = {}
         for _id, _name in settings.BLUEPRINTS.items():
-            blueprints[_id] = _BLUEPRINTS_MAPPER[_name]
+            # Hardcode all builtin blueprints as V2.
+            blueprints[_id] = _BLUEPRINTS_MAPPER[_name], TokenAmountVersion.V2
         return blueprints
