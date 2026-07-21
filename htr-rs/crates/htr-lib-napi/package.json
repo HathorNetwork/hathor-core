@@ -38,14 +38,14 @@
     "test": "ava"
   },
   "dependencies": {
-    "@napi-rs/wasm-runtime": "^1"
+    "@napi-rs/wasm-runtime": "1.1.6"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3",
-    "@oxc-node/core": "^0.1.0",
-    "@types/node": "^25",
-    "ava": "^8",
-    "typescript": "^5"
+    "@napi-rs/cli": "3.7.4",
+    "@oxc-node/core": "0.1.0",
+    "@types/node": "25.9.5",
+    "ava": "8.0.1",
+    "typescript": "5.9.3"
   },
   "ava": {
     "extensions": ["ts"],
