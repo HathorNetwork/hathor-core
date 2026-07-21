@@ -5,7 +5,7 @@ import test from 'ava'
 import { UnsignedAmount, SignedAmount } from '../wrapper.js'
 
 test.before(() => {
-  UnsignedAmount.setNormalizationFactor(2, 18)
+  UnsignedAmount.setDecimalPlaces(2, 18)
 })
 
 test('native relational operators on UnsignedAmount', (t) => {
@@ -25,8 +25,8 @@ test('native relational operators on SignedAmount', (t) => {
 })
 
 test('String() coercion uses toString, not the primitive value', (t) => {
-  t.is(String(UnsignedAmount.fromV2(5n)), 'V2 { normalized: 5 }')
-  t.is(`${new SignedAmount(-3n)}`, 'SignedAmount(-3)')
+  t.is(String(UnsignedAmount.fromV2(5n)), '0.000000000000000005')
+  t.is(`${new SignedAmount(-3n)}`, '-0.000000000000000003')
 })
 
 test('SignedAmount.add/sub accept a SignedAmount', (t) => {

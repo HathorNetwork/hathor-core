@@ -146,8 +146,18 @@ impl SignedAmount {
         }
     }
 
+    /// Decimal rendering, mirroring Python's `__str__`: the sign, then an explicit point and at
+    /// least one fractional digit, with any further trailing zeros dropped. `catch_unwind` because
+    /// rendering reads the global decimal places, which panics in `htr-lib` when they were unset.
     #[napi(catch_unwind, js_name = "toString")]
     pub fn to_string_js(&self) -> String {
+        self.inner.to_string()
+    }
+
+    /// The internal form, mirroring Python's `__repr__`. Use this for diagnostics; `toString` is
+    /// the decimal rendering.
+    #[napi(catch_unwind, js_name = "toDebugString")]
+    pub fn to_debug_string(&self) -> String {
         format!("{:?}", self.inner)
     }
 }

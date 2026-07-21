@@ -55,11 +55,13 @@ impl UnsignedAmount {
 // the workspace `Cargo.toml`). The comments below call out the methods with a *known* panic path.
 #[napi]
 impl UnsignedAmount {
-    /// Set the global V1->V2 normalization factor. Panics (-> thrown error) on a
-    /// conflicting re-set or when `v2_decimal_places < v1_decimal_places`.
+    /// Set the global decimal places for both versions, which fix the V1->V2 normalization factor.
+    /// Idempotent: repeating the same values is a no-op, so independent initializers need not
+    /// coordinate. Panics (-> thrown error) on a conflicting re-set or when
+    /// `v2_decimal_places < v1_decimal_places`.
     #[napi(catch_unwind)]
-    pub fn set_normalization_factor(v1_decimal_places: u32, v2_decimal_places: u32) {
-        InnerUnsignedAmount::set_normalization_factor(v1_decimal_places, v2_decimal_places);
+    pub fn set_decimal_places(v1_decimal_places: u32, v2_decimal_places: u32) {
+        InnerUnsignedAmount::set_decimal_places(v1_decimal_places, v2_decimal_places);
     }
 
     /// Get the global normalization factor. Panics (-> thrown error) if it was never set.
@@ -101,6 +103,17 @@ impl UnsignedAmount {
     #[napi(catch_unwind)]
     pub fn zero() -> UnsignedAmount {
         UnsignedAmount::from_inner(InnerUnsignedAmount::ZERO)
+    }
+
+    /// Parse a decimal string into a V2 amount, the inverse of `toString`. The string must carry an
+    /// explicit decimal point with at least one fractional digit, and no more fractional digits
+    /// than the V2 unit can hold. `catch_unwind` because reading the global decimal places panics
+    /// in `htr-lib` when they were never set.
+    #[napi(catch_unwind)]
+    pub fn parse(s: String) -> napi::Result<UnsignedAmount> {
+        InnerUnsignedAmount::parse(&s)
+            .map(UnsignedAmount::from_inner)
+            .map_err(|err| napi::Error::from_reason(err.to_string()))
     }
 
     #[napi(catch_unwind)]
@@ -234,8 +247,18 @@ impl UnsignedAmount {
         }
     }
 
+    /// Decimal rendering, mirroring Python's `__str__`: an explicit point and at least one
+    /// fractional digit, with any further trailing zeros dropped. `catch_unwind` because rendering
+    /// reads the global decimal places, which panics in `htr-lib` when they were never set.
     #[napi(catch_unwind, js_name = "toString")]
     pub fn to_string_js(&self) -> String {
+        self.inner.to_string()
+    }
+
+    /// The variant-tagged internal form, mirroring Python's `__repr__`. Use this for diagnostics;
+    /// `toString` is the decimal rendering.
+    #[napi(catch_unwind, js_name = "toDebugString")]
+    pub fn to_debug_string(&self) -> String {
         format!("{:?}", self.inner)
     }
 }

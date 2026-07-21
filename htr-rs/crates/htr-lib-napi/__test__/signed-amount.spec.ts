@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import test from 'ava'
-import { SignedAmount } from '../index.js'
+import { SignedAmount, UnsignedAmount } from '../index.js'
+
+// toString renders the decimal form, which reads the global decimal places. ava runs each spec
+// file in its own process, so this file must set them itself.
+test.before(() => {
+  UnsignedAmount.setDecimalPlaces(2, 18)
+})
 
 test('constructor defaults to zero', (t) => {
   t.is(new SignedAmount().raw(), 0n)
@@ -52,9 +58,19 @@ test('pos returns the same object (identity)', (t) => {
   t.is(a.pos(), a)
 })
 
-test('toString matches Rust Debug', (t) => {
-  t.is(new SignedAmount(5n).toString(), 'SignedAmount(5)')
-  t.is(`${new SignedAmount(-3n)}`, 'SignedAmount(-3)')
+test('toString renders the signed decimal form', (t) => {
+  t.is(new SignedAmount(5n).toString(), '0.000000000000000005')
+  t.is(new SignedAmount(-5n).toString(), '-0.000000000000000005')
+  t.is(new SignedAmount(1_500_000_000_000_000_000n).toString(), '1.5')
+  t.is(new SignedAmount(-1_500_000_000_000_000_000n).toString(), '-1.5')
+  t.is(new SignedAmount(0n).toString(), '0.0')
+  // Template literals route through toString via Symbol.toPrimitive.
+  t.is(`${new SignedAmount(-1_500_000_000_000_000_000n)}`, '-1.5')
+})
+
+test('toDebugString exposes the internal form', (t) => {
+  t.is(new SignedAmount(5n).toDebugString(), 'SignedAmount(5)')
+  t.is(new SignedAmount(-3n).toDebugString(), 'SignedAmount(-3)')
 })
 
 test('comparison against a foreign type throws', (t) => {

@@ -7,7 +7,7 @@ import { UnsignedAmount, TokenAmountVersion } from '../index.js'
 // factor = 10^(18-2) = 10^16. Process-global OnceLock; idempotent for equal values.
 const FACTOR = 10n ** 16n
 test.before(() => {
-  UnsignedAmount.setNormalizationFactor(2, 18)
+  UnsignedAmount.setDecimalPlaces(2, 18)
 })
 
 test('TokenAmountVersion has V1=1 and V2=2', (t) => {
@@ -62,8 +62,42 @@ test('negative amount is rejected', (t) => {
   t.throws(() => UnsignedAmount.fromV2(-1n), { message: /non-negative/ })
 })
 
-test('toString matches Rust Debug', (t) => {
-  t.is(UnsignedAmount.fromV2(5n).toString(), 'V2 { normalized: 5 }')
+test('toString renders the decimal form', (t) => {
+  // V2 carries 18 decimal places, so a raw 5 is 5 * 10^-18.
+  t.is(UnsignedAmount.fromV2(5n).toString(), '0.000000000000000005')
+  t.is(UnsignedAmount.fromV2(1_500_000_000_000_000_000n).toString(), '1.5')
+  // A whole amount keeps the point and one fractional digit.
+  t.is(UnsignedAmount.fromV2(10n ** 18n).toString(), '1.0')
+  t.is(UnsignedAmount.zero().toString(), '0.0')
+  // V1 renders in its own two decimal places, not the V2 scale.
+  t.is(UnsignedAmount.fromV1(150n).toString(), '1.5')
+  // Template literals and String() route through toString via Symbol.toPrimitive.
+  t.is(`${UnsignedAmount.fromV2(1_500_000_000_000_000_000n)}`, '1.5')
+})
+
+test('toDebugString exposes the internal form', (t) => {
+  t.is(UnsignedAmount.fromV2(5n).toDebugString(), 'V2 { normalized: 5 }')
+})
+
+test('parse reads the decimal form back as V2', (t) => {
+  t.is(UnsignedAmount.parse('1.5').normalized(), 1_500_000_000_000_000_000n)
+  t.is(UnsignedAmount.parse('0.0').normalized(), 0n)
+  // parse always yields V2, whatever the value's magnitude.
+  t.true(UnsignedAmount.parse('1.5').isV2())
+  // Round-trips for V2 values.
+  t.is(UnsignedAmount.parse(UnsignedAmount.fromV2(1_500_000_000_000_000_000n).toString()).toString(), '1.5')
+})
+
+test('parse rejects malformed decimal strings', (t) => {
+  // An explicit point with at least one fractional digit is required.
+  t.throws(() => UnsignedAmount.parse('1'), { message: /decimal point/ })
+  t.throws(() => UnsignedAmount.parse('1.'), { message: /missing required digits/ })
+  t.throws(() => UnsignedAmount.parse('.5'), { message: /missing required digits/ })
+  t.throws(() => UnsignedAmount.parse('1.2.3'), { message: /more than one decimal point/ })
+  t.throws(() => UnsignedAmount.parse('1,5'), { message: /non-digit character/ })
+  t.throws(() => UnsignedAmount.parse('-1.5'), { message: /non-digit character/ })
+  // More fractional digits than the V2 unit can hold.
+  t.throws(() => UnsignedAmount.parse(`0.${'0'.repeat(19)}`), { message: /too many decimal places/ })
 })
 
 test('toSigned carries normalized value', (t) => {
