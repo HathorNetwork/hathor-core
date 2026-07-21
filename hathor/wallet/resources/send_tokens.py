@@ -7,7 +7,7 @@ from twisted.internet import threads
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, render_options, set_cors
+from hathor.api_util import APIVersion, Resource, render_options, set_cors
 from hathor.conf.settings import HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
@@ -29,8 +29,8 @@ class SendTokensResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: HathorManager, settings: HathorSettings) -> None:
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: HathorManager, settings: HathorSettings, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self.manager = manager
         self._settings = settings
 
@@ -177,7 +177,7 @@ class SendTokensResource(Resource):
 
 
 SendTokensResource.openapi = {
-    '/wallet/send_tokens': {
+    '/v1a/wallet/send_tokens': {
         'x-visibility': 'private',
         'post': {
             'tags': ['private_wallet'],
@@ -313,5 +313,144 @@ SendTokensResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/wallet/send_tokens': {
+        'x-visibility': 'private',
+        'post': {
+            'tags': ['private_wallet'],
+            'operationId': 'wallet_send_tokens',
+            'summary': 'Send tokens',
+            'requestBody': {
+                'description': 'Data to create transactions',
+                'required': True,
+                'content': {
+                    'application/json': {
+                        'schema': {
+                            '$ref': '#/components/schemas/SendToken'
+                        },
+                        'examples': {
+                            'data': {
+                                'summary': 'Data to create transactions',
+                                'value': {
+                                    'data': {
+                                        'outputs': [
+                                            {
+                                                'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
+                                                'value': 1000
+                                            },
+                                            {
+                                                'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
+                                                'value': 800
+                                            }
+                                        ],
+                                        'inputs': [
+                                            {
+                                                'tx_id': ('00000257054251161adff5899a451ae9'
+                                                          '74ac62ca44a7a31179eec5750b0ea406'),
+                                                'index': 0
+                                            }
+                                        ],
+                                        'timestamp': 1549667726
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'message': '',
+                                        'tx': {
+                                            'hash': '00000c064ec72c8561a24b65bd50095a401b8d9a66c360cfe99cfcfeed73afc4',
+                                            'nonce': 2979,
+                                            'timestamp': 1547211690,
+                                            'version': 1,
+                                            'weight': 17.93619278054934,
+                                            'parents': [
+                                                '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
+                                                '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
+                                            ],
+                                            'inputs': [
+                                                {
+                                                    'tx_id': ('00000257054251161adff5899a451ae9'
+                                                              '74ac62ca44a7a31179eec5750b0ea406'),
+                                                    'index': 0,
+                                                    'data': ('RzBFAiAh6Jq+HOn9laOq3A5uUcaGLdWB4gM6RehsaP9OIMrOrwIhAOjW'
+                                                             'T+4ceSQI8CNXqaNNJgaOzCDhmFF1z1rhxOMCgonxIQNhXZKwBZeKxJps'
+                                                             'JEqP4gIS4FFbEpG284HhmBfp1p5gUw==')
+                                                }
+                                            ],
+                                            'outputs': [
+                                                {
+                                                    'value': 1109,
+                                                    'script': 'dqkUMUdd0fmGCmGfv7B5UriM5VS5g16IrA=='
+                                                },
+                                                {
+                                                    'value': 800,
+                                                    'script': 'dqkUeZkoJssEgwjPw/1ubA9XXZNk+xGIrA=='
+                                                }
+                                            ],
+                                            'tokens': []
+                                        }
+                                    }
+                                },
+                                'error1': {
+                                    'summary': 'Invalid address',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'The address abc is invalid'
+                                    }
+                                },
+                                'error2': {
+                                    'summary': 'Insufficient funds',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Insufficient funds. Requested amount: 200 / Available: 50'
+                                    }
+                                },
+                                'error3': {
+                                    'summary': 'Invalid input',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid input to create transaction'
+                                    }
+                                },
+                                'error4': {
+                                    'summary': 'Propagation error',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Propagation error message',
+                                        'tx': {
+                                            'hash': '00002b3be4e3876e67b5e090d76dcd71cde1a30ca1e54e38d65717ba131cd22f',
+                                            'nonce': 17076,
+                                            'timestamp': 1539271482,
+                                            'version': 1,
+                                            'weight': 14.0,
+                                            'parents': [],
+                                            'inputs': [],
+                                            'outputs': [],
+                                            'tokens': [],
+                                            'accumulated_weight': 14.0,
+                                            'accumulated_weight_raw': '16384'
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

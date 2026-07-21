@@ -4,7 +4,7 @@
 import base64
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import APIVersion, Resource, set_cors
 from hathor.crypto.util import decode_address
 from hathor.exception import InvalidNewTransaction
 from hathor.feature_activation.utils import Features
@@ -41,8 +41,8 @@ class CreateTxResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: HathorManager) -> None:
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self.manager = manager
 
     @api_catch_exceptions
@@ -118,7 +118,7 @@ class CreateTxResource(Resource):
 
 
 CreateTxResource.openapi = {
-    '/create_tx': {
+    '/v1a/create_tx': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
@@ -286,5 +286,176 @@ CreateTxResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/create_tx': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '2000r/s',
+                    'burst': 200,
+                    'delay': 100
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '50r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
+        'post': {
+            'tags': ['transaction'],
+            'operationId': 'create_tx',
+            'summary': 'Create unsigned unmined raw transaction',
+            'requestBody': {
+                'description': 'Inputs and outputs to use',
+                'required': True,
+                'content': {
+                    'application/json': {
+                        'schema': {
+                            'type': 'object',
+                            'properties': {
+                                'inputs': {
+                                    'type': 'array',
+                                    'items': {
+                                        '$ref': '#/components/schemas/TxInput'
+                                    }
+                                },
+                                'outputs': {
+                                    'type': 'array',
+                                    'items': {
+                                        'oneOf': [
+                                            {
+                                                '$ref': '#/components/schemas/AddressOutput'
+                                            },
+                                            {
+                                                '$ref': '#/components/schemas/ScriptOutput'
+                                            },
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        'examples': {
+                            'tx': {
+                                'summary': 'Example tx creation',
+                                'value': {
+                                    'inputs': [
+                                        {
+                                            'tx_id': '000005551d7740fd7d3c0acc50b5677f'
+                                                     'dd844f1225985aa431e1712af2a2fd89',
+                                            'index': 1,
+                                        },
+                                    ],
+                                    'outputs': [
+                                        {
+                                            'address': 'HNXsVtRUmwDCtpcCJUrH4QiHo9kUKx199A',
+                                            'value': 5600,
+                                        },
+                                    ],
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'schema': {
+                                'success': {
+                                    'type': 'boolean',
+                                },
+                                'hex_data': {
+                                    'type': 'string',  # hex encoded serialized transaction
+                                },
+                                'data': {
+                                    'type': 'object',
+                                    'properties': {
+                                        'timestamp': {
+                                            'type': 'integer',
+                                        },
+                                        'version': {
+                                            'type': 'integer',
+                                        },
+                                        'weight': {
+                                            'type': 'number',
+                                        },
+                                        'parents': {
+                                            'type': 'array',
+                                            'items': {
+                                                'type': 'string',  # hex encoded tx id
+                                            }
+                                        },
+                                        'inputs': {
+                                            'type': 'array',
+                                            'items': {
+                                                '$ref': '#/components/schemas/TxInput'
+                                            }
+                                        },
+                                        'outputs': {
+                                            'type': 'array',
+                                            'items': {
+                                                '$ref': '#/components/schemas/TxOutput'
+                                            }
+                                        },
+                                        'tokens': {
+                                            'type': 'array',
+                                            'items': {
+                                                'type': 'string',  # hex encoded token_uid
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            'examples': {
+                                'tx': {
+                                    'summary': 'This is what could be returned from the example request.',
+                                    'value': {
+                                        'success': True,
+                                        'hex_data': '0001000101000005551d7740fd7d3c0acc50b5677fdd844f1225985aa431e171'
+                                                    '2af2a2fd89010000000015e000001976a914afa600556bf43ece9b8e0486baa3'
+                                                    '1bd46a82c3af88ac40310c373eed982e5f63d94d0200000000b0e8be665f308f'
+                                                    '1d48d2201060846203280062b1cccc4e3d657486e90000000071c0d2cafa192b'
+                                                    '421bb5727c84174c999f9400d3be74331e7feba08a00000000',
+                                        'data': {
+                                            'timestamp': 1600379213,
+                                            'version': 1,
+                                            'weight': 17.047717984205683,
+                                            'parents': [
+                                                '00000000b0e8be665f308f1d48d2201060846203280062b1cccc4e3d657486e9',
+                                                '0000000071c0d2cafa192b421bb5727c84174c999f9400d3be74331e7feba08a',
+                                            ],
+                                            'inputs': [
+                                                {
+                                                    'tx_id': '000005551d7740fd7d3c0acc50b5677f'
+                                                             'dd844f1225985aa431e1712af2a2fd89',
+                                                    'index': 1,
+                                                    'data': '',
+                                                },
+                                            ],
+                                            'outputs': [
+                                                {
+                                                    'value': 5600,
+                                                    'token_data': 0,
+                                                    'script': 'dqkUr6YAVWv0Ps6bjgSGuqMb1GqCw6+IrA==',
+                                                },
+                                            ],
+                                            'tokens': []
+                                        }
+                                    },
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

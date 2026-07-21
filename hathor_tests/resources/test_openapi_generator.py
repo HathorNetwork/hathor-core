@@ -508,3 +508,4 @@ class TestOpenAPIGenerator(unittest.TestCase):
         }
         # Should not raise since schemas are identical
         gen._flatten_schemas()
+

@@ -7,6 +7,7 @@ from io import StringIO
 import pytest
 from structlog.testing import capture_logs
 
+from hathor.api_util import APIVersion
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TransactionMetadata
 from hathor.util import json_loadb
@@ -91,7 +92,7 @@ class TwinTxTest(unittest.TestCase):
         tx = response['tx']
 
         # Twin different weight and parents
-        host = 'http://localhost:8085/{}/'.format(self._settings.API_VERSION_PREFIX)
+        host = 'http://localhost:8085/{}/'.format(APIVersion.V1A)
         params = ['--url', host, '--hash', tx['hash'], '--parents', '--weight', '14']
         args = self.parser.parse_args(params)
 

@@ -5,6 +5,7 @@ import base64
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.daa import TestMode
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
@@ -17,7 +18,8 @@ from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
 class TransactionTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
-        self.web = StubSite(CreateTxResource(self.manager))
+        # TODO(decimals): test v2
+        self.web = StubSite(CreateTxResource(self.manager, APIVersion.V1A))
         self.manager.wallet.unlock(b'MYPASS')
         self.spent_blocks = add_new_blocks(self.manager, 10)
         self.unspent_blocks = add_blocks_unlock_reward(self.manager)
