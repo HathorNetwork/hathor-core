@@ -79,12 +79,18 @@ class BlueprintTestCase(unittest.TestCase):
         self,
         blueprint_class: type[Blueprint],
         blueprint_id: BlueprintId | None = None,
+        token_amount_version: TokenAmountVersion = TokenAmountVersion.V1,
     ) -> BlueprintId:
         """Register a blueprint class with an optional id, allowing contracts to be created from it."""
         if blueprint_id is None:
             blueprint_id = self.gen_random_blueprint_id()
 
-        self.blueprint_service.register_blueprint(blueprint_id, blueprint_class, strict=True)
+        self.blueprint_service.register_blueprint(
+            blueprint_id,
+            blueprint_class,
+            strict=True,
+            token_amount_version=token_amount_version,
+        )
         return blueprint_id
 
     def register_blueprint_file(self, path: str, blueprint_id: BlueprintId | None = None) -> BlueprintId:
