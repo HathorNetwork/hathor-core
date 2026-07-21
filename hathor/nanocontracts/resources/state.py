@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from pydantic import Field
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import APIVersion, Resource, set_cors
 from hathor.crypto.util import decode_address
 from hathor.nanocontracts.api_arguments_parser import parse_nc_method_call
 from hathor.nanocontracts.exception import NanoContractDoesNotExist
@@ -34,8 +34,8 @@ class NanoContractStateResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager: 'HathorManager') -> None:
-        super().__init__()
+    def __init__(self, manager: 'HathorManager', api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self.manager = manager
         self.nc_storage_factory = manager.consensus_algorithm.nc_storage_factory
 
@@ -304,7 +304,7 @@ _openapi_success_value = {
 
 
 NanoContractStateResource.openapi = {
-    '/nano_contract/state': {
+    '/v1a/nano_contract/state': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
@@ -465,5 +465,169 @@ NanoContractStateResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/nano_contract/state': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '30r/s',
+                    'burst': 20,
+                    'delay': 10
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '5r/s',
+                    'burst': 6,
+                    'delay': 3
+                }
+            ]
+        },
+        'get': {
+            'tags': ['nano_contracts'],
+            'operationId': 'nano_contracts_state',
+            'summary': 'Get state of a nano contract',
+            'description': 'Returns the state requested of a nano contract.',
+            'parameters': [
+                {
+                    'name': 'id',
+                    'in': 'query',
+                    'description': 'ID of the nano contract to get the state from',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'balances[]',
+                    'in': 'query',
+                    'description': 'List of token ids in hex to get the contract balance. '
+                                   'If you want to get the balance for all tokens in the contract, just use __all__.',
+                    'required': False,
+                    'schema': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'string'
+                        }
+                    },
+                    'examples': {
+                        'balances': {
+                            'summary': 'Example of balances',
+                            'value': ['00', '000008f2ee2059a189322ae7cb1d7e7773dcb4fdc8c4de8767f63022b3731845']
+                        },
+                    }
+                },
+                {
+                    'name': 'calls[]',
+                    'in': 'query',
+                    'description': 'List of private method calls to be executed. '
+                                   'The format must be "method_name(arg1, arg2, arg3, ...)". '
+                                   'Bytes arguments must be sent in hex, address arguments in bytes '
+                                   'must be sent as hex itself, or in base58 with the address tag, e.g. '
+                                   'a\'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6\', and tuple arguments must be '
+                                   'sent as an array, e.g., (a, b, c) must be sent as [a, b, c]. '
+                                   'For SignedData field we expect a list with two elements, where the '
+                                   'first one is the data to be signed and the second is the signature in hex.',
+                    'required': False,
+                    'schema': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'string'
+                        }
+                    },
+                    'examples': {
+                        'calls': {
+                            'summary': 'Example of calls',
+                            'value': ['view_method_1(arg1, arg2)', 'view_method_2()']
+                        },
+                    }
+                },
+                {
+                    'name': 'fields[]',
+                    'in': 'query',
+                    'description': 'Fields to get the data from the nano contract state',
+                    'required': False,
+                    'schema': {
+                        'type': 'array',
+                        'items': {
+                            'type': 'string'
+                        }
+                    },
+                    'examples': {
+                        'simple fields': {
+                            'summary': 'Only direct fields',
+                            'value': ['token_uid', 'total', 'final_result', 'oracle_script']
+                        },
+                        'With dict fields': {
+                            'summary': ('Simple and dict fields (dict fields where the keys are addresses). '
+                                        'For an address you must encapsulate the b58 with a\'\''),
+                            'value': [
+                                'token_uid',
+                                'total',
+                                'final_result',
+                                'oracle_script',
+                                'withdrawals.a\'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6\'',
+                                'address_details.a\'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6\''
+                            ]
+                        },
+                    }
+                },
+                {
+                    'name': 'block_height',
+                    'in': 'query',
+                    'description': 'Height of the block to get the nano contract state from.'
+                                   'Can\'t be used together with block_hash or timestamp parameter.',
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+                {
+                    'name': 'block_hash',
+                    'in': 'query',
+                    'description': 'Hash of the block to get the nano contract state from.'
+                                   'Can\'t be used together with block_height or timestamp parameter.',
+                    'required': False,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+                {
+                    'name': 'timestamp',
+                    'in': 'query',
+                    'description': 'Timestamp to get the nano contract state from.'
+                                   'Can\'t be used together with block_hash or block_height parameter.',
+                    'required': False,
+                    'schema': {
+                        'type': 'int'
+                    }
+                },
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success to get state from nano',
+                                    'value': _openapi_success_value,
+                                },
+                                'error': {
+                                    'summary': 'Invalid nano contract ID',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'Invalid nano contract ID.'
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

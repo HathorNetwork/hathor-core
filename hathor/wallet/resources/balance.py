@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, set_cors
+from hathor.api_util import APIVersion, Resource, set_cors
 from hathor.conf.get_settings import get_global_settings
+from hathor.manager import HathorManager
 from hathor.util import json_dumpb
 
 
@@ -15,8 +16,8 @@ class BalanceResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
-        # Important to have the manager so we can know the tx_storage
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self._settings = get_global_settings()
         self.manager = manager
 
@@ -37,7 +38,7 @@ class BalanceResource(Resource):
 
 
 BalanceResource.openapi = {
-    '/wallet/balance': {
+    '/v1a/wallet/balance': {
         'x-visibility': 'private',
         'get': {
             'tags': ['private_wallet'],
@@ -65,5 +66,36 @@ BalanceResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/wallet/balance': {
+        'x-visibility': 'private',
+        'get': {
+            'tags': ['private_wallet'],
+            'operationId': 'wallet_address',
+            'summary': 'Balance',
+            'description': 'Returns the current balance of the wallet (available and locked tokens)',
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'balance': {
+                                            'available': 5000,
+                                            'locked': 1000
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

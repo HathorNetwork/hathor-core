@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from hathor.api.openapi.decorators import EndpointMetadata, get_endpoint_registry
+from hathor.api.openapi.versioning import deep_merge
 from hathor.api.schema_utils import SchemaRegistryMixin
 
 
@@ -251,9 +252,11 @@ class OpenAPIGenerator(SchemaRegistryMixin):
             seen_operations.add(key)
 
             if metadata.path in paths:
-                # Merge with existing path item (multiple methods on same path)
+                # Multiple methods (e.g. GET and POST) share this path; merge their path items so
+                # every method's operation and operation-level extensions survive.
+                existing_path_item = paths[metadata.path]
                 new_path_item = self._build_path_item(metadata)
-                paths[metadata.path].update(new_path_item)
+                paths[metadata.path] = deep_merge(existing_path_item, new_path_item)
             else:
                 paths[metadata.path] = self._build_path_item(metadata)
 

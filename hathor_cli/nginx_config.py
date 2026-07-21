@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 import os
 from collections.abc import Iterator
@@ -102,7 +104,13 @@ def _get_visibility(source: dict[str, Any], fallback: Visibility, override: str)
 
 
 _HTTP_METHODS = ('get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace')
-_OPENAPI_EXTENSIONS = ('x-visibility', 'x-visibility-override', 'x-rate-limit', 'x-path-params-regex', 'x-proxy-buffers')
+_OPENAPI_EXTENSIONS = (
+    'x-visibility',
+    'x-visibility-override',
+    'x-rate-limit',
+    'x-path-params-regex',
+    'x-proxy-buffers',
+)
 
 
 def _iter_operation_params(params: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
@@ -218,13 +226,14 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
     """
     from datetime import datetime
 
-    from hathor.conf.get_settings import get_global_settings
+    from hathor.api.openapi.versioning import path_version_prefix, prefix_unversioned_paths
+    from hathor.api_util import DEFAULT_API_VERSIONS, APIVersion
 
-    settings = get_global_settings()
-    api_prefix = settings.API_VERSION_PREFIX
+    openapi = prefix_unversioned_paths(openapi)
 
     locations: dict[str, dict[str, Any]] = {}
     limit_rate_zones: list[RateLimitZone] = []
+    seen_zone_names: set[str] = set()
     for path, params in openapi['paths'].items():
         visibility, did_fallback, did_override = _resolve_path_visibility(
             params,
@@ -240,8 +249,12 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
 
         public_methods = _get_public_methods(params, override=override)
 
+        # `prefix_unversioned_paths` above guarantees every path now carries a version prefix.
+        version = path_version_prefix(path)
+        assert version is not None, f'path `{path}` is missing a version prefix'
         location_params: dict[str, Any] = {
             'rate_limits': [],
+            'version': version,
             'path_vars_re': _resolve_path_operation_extension(
                 path,
                 params,
@@ -275,7 +288,10 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
             warn(f'Path `{path}` is public but has no rate limits, ignoring')
             continue
 
-        path_key = path.lower().replace('/', '__').replace('.', '__').replace('{', '').replace('}', '')
+        # Rate-limit zones are keyed by the unversioned path so every version of an endpoint shares a
+        # single zone and its budget; the version lives in the location regex, not in the zone name.
+        unversioned_path = path[len(f'/{version.value}'):]
+        path_key = unversioned_path.lower().replace('/', '__').replace('.', '__').replace('{', '').replace('}', '')
 
         if not disable_rate_limits:
             global_rate_limits = rate_limits.get('global', [])
@@ -284,12 +300,13 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
                 name = f'global{path_key}__{i}'  # must match [a-z][a-z0-9_]*
                 size = '32k'  # min is 32k which is enough
                 rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-                zone = RateLimitZone(name, '$global_key', size, rate)
-                limit_rate_zones.append(zone)
+                if name not in seen_zone_names:
+                    seen_zone_names.add(name)
+                    limit_rate_zones.append(RateLimitZone(name, '$global_key', size, rate))
                 # limit, for location level `limit_req`
                 burst = rate_limit.get('burst')
                 delay = rate_limit.get('delay')
-                location_params['rate_limits'].append(RateLimit(zone.name, burst, delay))
+                location_params['rate_limits'].append(RateLimit(name, burst, delay))
 
             per_ip_rate_limits = rate_limits.get('per-ip', [])
             for i, rate_limit in enumerate(per_ip_rate_limits):
@@ -297,12 +314,13 @@ def generate_nginx_config(openapi: dict[str, Any], *, out_file: TextIO, rate_k: 
                 # zone, for top level `limit_req_zone`
                 size = '10m'
                 rate = _scale_rate_limit(rate_limit['rate'], rate_k)
-                zone = RateLimitZone(name, '$per_ip_key', size, rate)
-                limit_rate_zones.append(zone)
+                if name not in seen_zone_names:
+                    seen_zone_names.add(name)
+                    limit_rate_zones.append(RateLimitZone(name, '$per_ip_key', size, rate))
                 # limit, for location level `limit_req`
                 burst = rate_limit.get('burst')
                 delay = rate_limit.get('delay')
-                location_params['rate_limits'].append(RateLimit(zone.name, burst, delay))
+                location_params['rate_limits'].append(RateLimit(name, burst, delay))
 
         locations[path] = location_params
 
@@ -415,7 +433,27 @@ server {{
     location @429 {{
         include cors_params;
         try_files /path/doesnt/matter =429;
-    }}
+    }}'''
+
+    server_close = '''
+    location / {
+        return 404;
+    }
+}
+'''
+
+    out_file.write(header)
+
+    # http level settings
+    for zone in sorted(limit_rate_zones):
+        out_file.write(zone.to_nginx_config())
+
+    out_file.write(server_open)
+
+    # server level settings, emitted once per supported API version
+    for api_prefix in APIVersion:
+        if api_prefix in DEFAULT_API_VERSIONS:
+            out_file.write(f'''
     location ~ ^/{api_prefix}/ws/?$ {{
         limit_conn global__ws {websocket_max_conn_global};
         limit_conn per_ip__ws {websocket_max_conn_per_ip};
@@ -445,45 +483,36 @@ server {{
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_pass http://backend;
-    }}'''
-    # TODO: maybe return 403 instead?
-    server_close = f'''
-    location /{api_prefix} {{
-        return 403;
-    }}
-    location / {{
-        return 404;
-    }}
-}}
-'''
+    }}''')
 
-    out_file.write(header)
-
-    # http level settings
-    for zone in sorted(limit_rate_zones):
-        out_file.write(zone.to_nginx_config())
-
-    out_file.write(server_open)
-    # server level settings
-    for location_path, location_params in locations.items():
-        location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
-        location_open = f'''
-    location ~ ^/{api_prefix}/{location_path}/?$ {{
+        for location_path, location_params in locations.items():
+            if location_params['version'] != api_prefix:
+                continue
+            location_path = location_path.replace('.', r'\.').strip('/').format(**location_params['path_vars_re'])
+            location_open = f'''
+    location ~ ^/{location_path}/?$ {{
         include cors_params;
         include proxy_params;
 '''
-        location_close = '''\
+            location_close = '''\
         proxy_pass http://backend;
     }'''
-        out_file.write(location_open)
-        methods = ' '.join(location_params['allowed_methods'])
-        out_file.write(' ' * 8 + f'limit_except {methods} {{ deny all; }}\n')
-        for rate_limit in location_params.get('rate_limits', []):
-            out_file.write(' ' * 8 + rate_limit.to_nginx_config())
-        proxy_buffers = location_params.get('proxy_buffers')
-        if proxy_buffers:
-            out_file.write(' ' * 8 + f'proxy_buffers {proxy_buffers};\n')
-        out_file.write(location_close)
+            out_file.write(location_open)
+            methods = ' '.join(location_params['allowed_methods'])
+            out_file.write(' ' * 8 + f'limit_except {methods} {{ deny all; }}\n')
+            for rate_limit in location_params.get('rate_limits', []):
+                out_file.write(' ' * 8 + rate_limit.to_nginx_config())
+            proxy_buffers = location_params.get('proxy_buffers')
+            if proxy_buffers:
+                out_file.write(' ' * 8 + f'proxy_buffers {proxy_buffers};\n')
+            out_file.write(location_close)
+
+        # TODO: maybe return 403 instead?
+        out_file.write(f'''
+    location /{api_prefix} {{
+        return 403;
+    }}''')
+
     out_file.write(server_close)
 
 

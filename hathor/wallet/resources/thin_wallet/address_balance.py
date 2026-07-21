@@ -7,13 +7,15 @@ from typing import TYPE_CHECKING, Any
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
-from hathor.api_util import Resource, get_args, get_missing_params_msg, set_cors
+from hathor.api_util import APIVersion, Resource, get_args, get_missing_params_msg, set_cors
 from hathor.conf.get_settings import get_global_settings
 from hathor.crypto.util import decode_address_strict
+from hathor.manager import HathorManager
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
 from hathorlib.token_amount import UnsignedAmount
+from hathorlib.utils import not_none
 
 if TYPE_CHECKING:
     from hathor.transaction import TxOutput
@@ -25,7 +27,7 @@ class TokenData:
     name: str = ''
     symbol: str = ''
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             'received': self.received,
             'spent': self.spent,
@@ -42,7 +44,8 @@ class AddressBalanceResource(Resource):
     """
     isLeaf = True
 
-    def __init__(self, manager):
+    def __init__(self, manager: HathorManager, api_version: APIVersion) -> None:
+        super().__init__(api_version)
         self._settings = get_global_settings()
         self.manager = manager
 
@@ -130,8 +133,8 @@ class AddressBalanceResource(Resource):
             else:
                 try:
                     token_info = tokens_index.get_token_info(token_uid)
-                    tokens_data[token_uid].name = token_info.get_name()
-                    tokens_data[token_uid].symbol = token_info.get_symbol()
+                    tokens_data[token_uid].name = not_none(token_info.get_name())
+                    tokens_data[token_uid].symbol = not_none(token_info.get_symbol())
                 except KeyError:
                     # Should never get here because this token appears in our wallet index
                     # But better than get a 500 error
@@ -149,7 +152,7 @@ class AddressBalanceResource(Resource):
 
 
 AddressBalanceResource.openapi = {
-    '/thin_wallet/address_balance': {
+    '/v1a/thin_wallet/address_balance': {
         'x-visibility': 'public',
         'x-rate-limit': {
             'global': [
@@ -222,5 +225,81 @@ AddressBalanceResource.openapi = {
                 }
             }
         }
-    }
+    },
+    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
+    # (decimal token amounts) once the v2 API shape is finalized.
+    '/v2/thin_wallet/address_balance': {
+        'x-visibility': 'public',
+        'x-rate-limit': {
+            'global': [
+                {
+                    'rate': '100r/s',
+                    'burst': 100,
+                    'delay': 50
+                }
+            ],
+            'per-ip': [
+                {
+                    'rate': '3r/s',
+                    'burst': 10,
+                    'delay': 3
+                }
+            ]
+        },
+        'get': {
+            'tags': ['wallet'],
+            'operationId': 'address_balance',
+            'summary': 'Balance of an address',
+            'parameters': [
+                {
+                    'name': 'address',
+                    'in': 'query',
+                    'description': 'Address to get balance',
+                    'required': True,
+                    'schema': {
+                        'type': 'string'
+                    }
+                },
+            ],
+            'responses': {
+                '200': {
+                    'description': 'Success',
+                    'content': {
+                        'application/json': {
+                            'examples': {
+                                'success': {
+                                    'summary': 'Success',
+                                    'value': {
+                                        'success': True,
+                                        'total_transactions': 5,
+                                        'tokens_data': {
+                                            '00': {
+                                                'name': 'Hathor',
+                                                'symbol': 'HTR',
+                                                'received': 1000,
+                                                'spent': 800,
+                                            },
+                                            '00000828d80dd4cd809c959139f7b4261df41152f4cce65a8777eb1c3a1f9702': {
+                                                'name': 'NewCoin',
+                                                'symbol': 'NCN',
+                                                'received': 100,
+                                                'spent': 20,
+                                            },
+                                        }
+                                    }
+                                },
+                                'error': {
+                                    'summary': 'Invalid address',
+                                    'value': {
+                                        'success': False,
+                                        'message': 'The address xx is invalid',
+                                    }
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
 }

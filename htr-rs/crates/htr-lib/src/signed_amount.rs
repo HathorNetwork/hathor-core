@@ -9,8 +9,9 @@
 //! both directions; [`SignedAmount::to_unsigned`] fails on negative values.
 //! Multiplication and division are deliberately not implemented.
 
+use crate::decimal::format_decimal;
 use crate::unsigned_amount::UnsignedAmount;
-use num_bigint::BigInt;
+use num_bigint::{BigInt, Sign};
 use std::cmp::Ordering;
 
 /// Signed token amount, stored as a `BigInt` in the V2-normalized unit.
@@ -37,6 +38,21 @@ impl SignedAmount {
     /// negative, since `UnsignedAmount` cannot represent negative values.
     pub fn to_unsigned(&self) -> Option<UnsignedAmount> {
         self.0.to_biguint().map(UnsignedAmount::from_v2)
+    }
+}
+
+/// Renders the V2-normalized value as a decimal at the configured V2 decimal places, keeping the
+/// point and at least one fractional digit while dropping any further trailing zeros and prefixing
+/// `-` for negative amounts.
+impl std::fmt::Display for SignedAmount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.sign() == Sign::Minus {
+            f.write_str("-")?;
+        }
+        f.write_str(&format_decimal(
+            self.0.magnitude(),
+            UnsignedAmount::v2_decimal_places(),
+        ))
     }
 }
 
@@ -121,6 +137,21 @@ mod tests {
     #[test]
     fn to_unsigned_none_for_negative() {
         assert!(signed(-1).to_unsigned().is_none());
+    }
+
+    // ---- Display ----
+
+    // Renders the V2-normalized value at the configured V2 decimal places, always keeping the
+    // point and at least one fractional digit; negatives carry a leading `-`, zero renders as
+    // `0.0` with no sign.
+    #[test]
+    fn display_trims_trailing_zeros_with_sign() {
+        UnsignedAmount::set_decimal_places(2, 18);
+        assert_eq!(signed(0).to_string(), "0.0");
+        assert_eq!(signed(5).to_string(), "0.000000000000000005");
+        assert_eq!(signed(-5).to_string(), "-0.000000000000000005");
+        assert_eq!(signed(1_500_000_000_000_000_000).to_string(), "1.5");
+        assert_eq!(signed(-1_500_000_000_000_000_000).to_string(), "-1.5");
     }
 
     // ---- Equality and ordering ----
