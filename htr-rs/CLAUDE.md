@@ -11,14 +11,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `htr-rs/` is the Rust workspace nested inside the parent `hathor-core` repository (at `../`, a Python project). Its output is consumed from Python: the `htr-lib-py` crate compiles to a `cdylib` and is packaged as a Python extension module via [PyO3](https://pyo3.rs/) + [maturin](https://www.maturin.rs/).
 
-CI for this workspace lives in the parent repo at `../.github/workflows/htr-rs.yml`. Jobs mirror the `just` recipes — `check`, `fmt`, `clippy`, `test` (`cargo nextest run --workspace`), `sort` (runs `cargo sort --workspace --check` — verify-only, does not rewrite), and `audit`. When changing the local `justfile`, keep it consistent with the workflow so local `just all` matches what CI runs.
+CI for this workspace lives in the parent repo at `../.github/workflows/htr-rs.yml`. Jobs mirror the `just` recipes — `check`, `fmt`, `clippy`, `test` (`cargo nextest run --workspace`), `sort` (runs `cargo sort --workspace --check` — verify-only, does not rewrite), `audit`, and `node-test` (builds the `htr-lib-napi` napi addon and runs its `ava` suite). When changing the local `justfile`, keep it consistent with the workflow: `just all` runs the Rust jobs and `just all-js` adds `node-test`, together matching what CI runs.
 
 ## Commands
 
 All commands are `just` recipes (see `justfile`) and assume you've run `just install` once to get the required cargo extensions (`cargo-nextest`, `cargo-sort`, `cargo-audit`).
 
 - `just` — list available recipes.
-- `just all` — full local check suite: `check fmt clippy test sort audit`. Run this before pushing.
+- `just all` — full local Rust check suite: `check fmt clippy test sort audit`. `just all-js` adds the napi JS tests (`node-test`). Run before pushing.
 - `just check` — `cargo check --workspace --all-targets --all-features`.
 - `just fmt` — `cargo fmt --all -- --check` (verify only; does not modify).
 - `just clippy` — `cargo clippy --workspace --all-targets --all-features`.

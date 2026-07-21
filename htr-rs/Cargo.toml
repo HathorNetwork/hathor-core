@@ -17,7 +17,10 @@ num-derive = "0.4"
 num-traits = "0.2"
 pyo3 = { version = "0.29.0", features = ["num-bigint"] }
 
-# Overflows must always panic.
+# Overflows must always panic. Also do NOT set `panic = "abort"` in any profile: the napi and PyO3
+# bindings rely on unwinding to convert Rust panics into thrown JS/Python errors
+# (`#[napi(catch_unwind)]` / PyO3's default panic catcher). Under `abort` those panics would crash
+# the host process instead.
 [profile.release]
 overflow-checks = true
 

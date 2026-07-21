@@ -12,6 +12,8 @@ path = [
     "hathor/_openapi/openapi_components.json",
     "hathor_tests/peer_id_pool.json",
     "hathor_tests/resources/nanocontracts/dummy_blueprint.py",
+    "htr-rs/crates/htr-lib-napi/__test__/tsconfig.json",
+    "htr-rs/crates/htr-lib-napi/package.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Hathor Labs"
@@ -29,6 +31,7 @@ path = [
     "hathorlib/LICENSE.txt",
     "hathorlib/poetry.lock",
     "htr-rs/Cargo.lock",
+    "htr-rs/crates/htr-lib-napi/package-lock.json",
     "poetry.lock",
     "uv.lock",
 ]
