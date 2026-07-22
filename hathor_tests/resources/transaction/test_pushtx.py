@@ -14,6 +14,7 @@ from hathor.transaction.scripts import P2PKH, parse_address_script
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.resources import SendTokensResource
 from hathor_tests.resources.base_resource import StubSite, _BaseResourceTest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_tx_with_data_script, create_fee_tokens, create_tokens
 
 
@@ -25,7 +26,6 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
     def setUp(self):
         super().setUp()
         self.web = StubSite(PushTxResource(self.manager))
-        # TODO(decimals): test v2
         self.web_tokens = StubSite(SendTokensResource(self.manager, self._settings, APIVersion.V1A))
 
     def get_tx(
@@ -37,8 +37,8 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
             address = self.get_address(0)
             assert address is not None
             outputs = [
-                WalletOutputInfo(address=decode_address(address), value=1, timelock=None),
-                WalletOutputInfo(address=decode_address(address), value=1, timelock=None)
+                WalletOutputInfo(address=decode_address(address), value=UnsignedAmount.from_v1(1), timelock=None),
+                WalletOutputInfo(address=decode_address(address), value=UnsignedAmount.from_v1(1), timelock=None)
             ]
         if inputs:
             tx = self.manager.wallet.prepare_transaction(Transaction, inputs, outputs)
