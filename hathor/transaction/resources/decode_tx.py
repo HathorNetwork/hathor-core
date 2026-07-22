@@ -47,8 +47,10 @@ class DecodeTxResource(Resource):
             data = get_tx_extra_data(tx)
         except ValueError:
             data = {'success': False, 'message': 'Invalid hexadecimal data'}
-        except struct.error:
+        except (IndexError, struct.error):
             data = {'success': False, 'message': 'Could not decode transaction'}
+        except KeyError:
+            data = {'success': False, 'message': 'Unknown token'}
 
         return json_dumpb(data)
 
