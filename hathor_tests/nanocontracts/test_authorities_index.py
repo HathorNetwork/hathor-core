@@ -15,6 +15,7 @@ from hathor.wallet import HDWallet
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.utils import set_nano_header
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 
 
 class MyBlueprint(Blueprint):
@@ -84,7 +85,11 @@ class TestAuthoritiesIndex(BlueprintTestCase):
             wallet=self.wallet,
             nc_id=self.blueprint_id,
             nc_actions=[
-                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.ALL_AUTHORITIES)
+                NanoHeaderAction(
+                    type=NCActionType.GRANT_AUTHORITY,
+                    token_index=1,
+                    amount=UnsignedAmount.from_v1(TxOutput.ALL_AUTHORITIES),
+                )
             ],
             nc_method='initialize',
             blueprint=MyBlueprint,
@@ -104,7 +109,9 @@ class TestAuthoritiesIndex(BlueprintTestCase):
         assert tka.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         storage = self.manager.get_best_block_nc_storage(tka.hash)
-        assert storage.get_balance(tka.hash) == Balance(value=0, can_mint=True, can_melt=True)
+        assert storage.get_balance(tka.hash) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=True
+        )
 
         token_info = self.tokens_index.get_token_info(tka.hash)
         assert list(token_info.iter_mint_utxos()) == []
@@ -129,7 +136,9 @@ class TestAuthoritiesIndex(BlueprintTestCase):
         assert tx1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         storage = self.manager.get_best_block_nc_storage(tka.hash)
-        assert storage.get_balance(tka.hash) == Balance(value=0, can_mint=False, can_melt=False)
+        assert storage.get_balance(tka.hash) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
         token_info = self.tokens_index.get_token_info(tka.hash)
         assert list(token_info.iter_mint_utxos()) == []
@@ -166,7 +175,11 @@ class TestAuthoritiesIndex(BlueprintTestCase):
             wallet=self.wallet,
             nc_id=self.blueprint_id,
             nc_actions=[
-                NanoHeaderAction(type=NCActionType.GRANT_AUTHORITY, token_index=1, amount=TxOutput.ALL_AUTHORITIES)
+                NanoHeaderAction(
+                    type=NCActionType.GRANT_AUTHORITY,
+                    token_index=1,
+                    amount=UnsignedAmount.from_v1(TxOutput.ALL_AUTHORITIES),
+                )
             ],
             nc_method='initialize',
             blueprint=MyBlueprint,
@@ -188,7 +201,9 @@ class TestAuthoritiesIndex(BlueprintTestCase):
         assert tka.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
         storage = self.manager.get_best_block_nc_storage(tka.hash)
-        assert storage.get_balance(tka.hash) == Balance(value=0, can_mint=True, can_melt=True)
+        assert storage.get_balance(tka.hash) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=True
+        )
 
         token_info = self.tokens_index.get_token_info(tka.hash)
         assert list(token_info.iter_mint_utxos()) == []
@@ -260,7 +275,9 @@ class TestAuthoritiesIndex(BlueprintTestCase):
         assert nc2b.get_metadata().nc_execution is None
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
-        assert nc1_storage.get_balance(tka) == Balance(value=1000, can_mint=True, can_melt=True)
+        assert nc1_storage.get_balance(tka) == Balance(
+            value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True
+        )
 
         token_info = self.tokens_index.get_token_info(tka)
         assert list(token_info.iter_mint_utxos()) == []
@@ -274,8 +291,12 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
         nc2_storage = self.manager.get_best_block_nc_storage(nc2a.hash)
-        assert nc1_storage.get_balance(tka) == Balance(value=1000, can_mint=True, can_melt=True)
-        assert nc2_storage.get_balance(tka) == Balance(value=0, can_mint=True, can_melt=True)
+        assert nc1_storage.get_balance(tka) == Balance(
+            value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=True, can_melt=True
+        )
+        assert nc2_storage.get_balance(tka) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=True
+        )
 
         token_info = self.tokens_index.get_token_info(tka)
         assert list(token_info.iter_mint_utxos()) == []
@@ -289,8 +310,12 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
         nc2_storage = self.manager.get_best_block_nc_storage(nc2a.hash)
-        assert nc1_storage.get_balance(tka) == Balance(value=1000, can_mint=False, can_melt=False)
-        assert nc2_storage.get_balance(tka) == Balance(value=0, can_mint=True, can_melt=True)
+        assert nc1_storage.get_balance(tka) == Balance(
+            value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+        )
+        assert nc2_storage.get_balance(tka) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=True
+        )
 
         token_info = self.tokens_index.get_token_info(tka)
         assert list(token_info.iter_mint_utxos()) == []
@@ -304,8 +329,12 @@ class TestAuthoritiesIndex(BlueprintTestCase):
 
         nc1_storage = self.manager.get_best_block_nc_storage(nc1a.hash)
         nc2_storage = self.manager.get_best_block_nc_storage(nc2a.hash)
-        assert nc1_storage.get_balance(tka) == Balance(value=1000, can_mint=False, can_melt=False)
-        assert nc2_storage.get_balance(tka) == Balance(value=0, can_mint=False, can_melt=False)
+        assert nc1_storage.get_balance(tka) == Balance(
+            value=UnsignedAmount.from_v1(1000).to_signed(), can_mint=False, can_melt=False
+        )
+        assert nc2_storage.get_balance(tka) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
         token_info = self.tokens_index.get_token_info(tka)
         assert list(token_info.iter_mint_utxos()) == []

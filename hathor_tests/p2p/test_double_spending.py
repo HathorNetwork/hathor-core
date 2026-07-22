@@ -9,6 +9,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.util import not_none
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx
 
 
@@ -44,7 +45,7 @@ class SyncMethodsTestCase(unittest.TestCase):
 
         outputs = []
         outputs.append(
-            WalletOutputInfo(address=decode_address(address), value=value, timelock=None))
+            WalletOutputInfo(address=decode_address(address), value=UnsignedAmount.from_v1(value), timelock=None))
 
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         tx1.weight = 10
@@ -145,7 +146,7 @@ class SyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 100
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=UnsignedAmount.from_v1(int(value)), timelock=None)]
         self.clock.advance(1)
         tx1 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         tx1.weight = 5
@@ -155,9 +156,10 @@ class SyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
-        tx_total_value = sum(txout.value for txout in tx1.outputs)
-        outputs = [WalletOutputInfo(address=address, value=value, timelock=None),
-                   WalletOutputInfo(address=address, value=tx_total_value - 500, timelock=None)]
+        tx_total_value = sum((txout.value for txout in tx1.outputs), start=UnsignedAmount.zero())
+        outputs = [WalletOutputInfo(address=address, value=UnsignedAmount.from_v1(value), timelock=None),
+                   WalletOutputInfo(address=address, value=tx_total_value - UnsignedAmount.from_v1(500),
+                                    timelock=None)]
         self.clock.advance(1)
         inputs = [WalletInputInfo(i.tx_id, i.index, Mock()) for i in tx1.inputs]
         tx4 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs,
@@ -181,7 +183,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 100
         inputs = [WalletInputInfo(tx_id=tx1.hash, index=1, private_key=Mock())]
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=UnsignedAmount.from_v1(int(value)), timelock=None)]
         self.clock.advance(1)
         tx2 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                          self.manager1.tx_storage)
@@ -199,7 +201,7 @@ class SyncMethodsTestCase(unittest.TestCase):
 
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=UnsignedAmount.from_v1(int(value)), timelock=None)]
         self.clock.advance(1)
         tx3 = self.manager1.wallet.prepare_transaction_compute_inputs(Transaction, outputs, self.manager1.tx_storage)
         self.assertNotEqual(tx3.inputs[0].tx_id, tx1.hash)
@@ -231,7 +233,7 @@ class SyncMethodsTestCase(unittest.TestCase):
         address = self.manager1.wallet.get_unused_address_bytes()
         value = 500
         inputs = [WalletInputInfo(tx_id=tx4.hash, index=0, private_key=Mock())]
-        outputs = [WalletOutputInfo(address=address, value=int(value), timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=UnsignedAmount.from_v1(int(value)), timelock=None)]
         self.clock.advance(1)
         tx5 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs, force=True,
                                                                          tx_storage=self.manager1.tx_storage)
@@ -266,9 +268,9 @@ class SyncMethodsTestCase(unittest.TestCase):
         # ---
 
         address = self.manager1.wallet.get_unused_address_bytes()
-        value = blocks[3].outputs[0].value
+        block_output_value = blocks[3].outputs[0].value
         inputs = [WalletInputInfo(tx_id=blocks[3].hash, index=0, private_key=Mock())]
-        outputs = [WalletOutputInfo(address=address, value=value, timelock=None)]
+        outputs = [WalletOutputInfo(address=address, value=block_output_value, timelock=None)]
         self.clock.advance(1)
         tx7 = self.manager1.wallet.prepare_transaction_incomplete_inputs(Transaction, inputs, outputs,
                                                                          self.manager1.tx_storage)

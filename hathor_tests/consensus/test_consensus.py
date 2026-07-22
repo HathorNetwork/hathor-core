@@ -7,6 +7,7 @@ from hathor.execution_manager import ExecutionManager
 from hathor.simulator.utils import add_new_block, add_new_blocks, gen_new_tx
 from hathor.util import not_none
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_double_spending, add_new_transactions
 
 
@@ -26,7 +27,7 @@ class ConsensusTestCase(unittest.TestCase):
         add_blocks_unlock_reward(manager)
 
         address = 'HGov979VaeyMQ92ubYcnVooP6qPzUJU8Ro'
-        value = 1
+        value = UnsignedAmount.from_v1(1)
         tx = gen_new_tx(manager, address, value)
 
         class MyError(Exception):

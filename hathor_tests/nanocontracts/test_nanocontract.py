@@ -49,6 +49,7 @@ from hathor.verification.nano_header_verifier import MAX_NC_SCRIPT_SIGOPS_COUNT,
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet import KeyPair
 from hathor_tests import unittest
+from hathor_tests.token_amount import UnsignedAmount
 
 STR_NC_TYPE = make_nc_type(str)
 INT_NC_TYPE = make_nc_type(int)
@@ -416,9 +417,9 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         # Incomplete transaction. It will be used as input of nc2.
         outputs = [
-            TxOutput(100, b'', 0),  # HTR
-            TxOutput(200, b'', 1),  # TOKEN A
-            TxOutput(300, b'', 2),  # TOKEN B
+            TxOutput(UnsignedAmount.from_v1(100), b'', 0),  # HTR
+            TxOutput(UnsignedAmount.from_v1(200), b'', 1),  # TOKEN A
+            TxOutput(UnsignedAmount.from_v1(300), b'', 2),  # TOKEN B
         ]
         tokens = [b'token-a', b'token-b']
         tx = Transaction(outputs=outputs, tokens=tokens)
@@ -435,9 +436,9 @@ class NCNanoContractTestCase(unittest.TestCase):
             TxInput(tx.hash, 2, b''),
         ]
         outputs = [
-            TxOutput(10, b'', 0),   # HTR
-            TxOutput(250, b'', 1),  # TOKEN A
-            TxOutput(300, b'', 2),  # TOKEN B
+            TxOutput(UnsignedAmount.from_v1(10), b'', 0),   # HTR
+            TxOutput(UnsignedAmount.from_v1(250), b'', 1),  # TOKEN A
+            TxOutput(UnsignedAmount.from_v1(300), b'', 2),  # TOKEN B
         ]
         nc2 = Transaction(
             weight=1,
@@ -458,12 +459,12 @@ class NCNanoContractTestCase(unittest.TestCase):
                 NanoHeaderAction(
                     type=NCActionType.WITHDRAWAL,
                     token_index=1,
-                    amount=50,
+                    amount=UnsignedAmount.from_v1(50),
                 ),
                 NanoHeaderAction(
                     type=NCActionType.DEPOSIT,
                     token_index=0,
-                    amount=90,
+                    amount=UnsignedAmount.from_v1(90),
                 ),
             ],
         ))

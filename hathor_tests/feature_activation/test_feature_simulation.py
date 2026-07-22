@@ -21,6 +21,7 @@ from hathor.transaction.exceptions import BlockMustSignalError
 from hathor.util import not_none
 from hathor_tests.resources.base_resource import StubSite
 from hathor_tests.simulation.base import SimulatorTestCase
+from hathor_tests.token_amount import UnsignedAmount
 
 
 class BaseFeatureSimulationTest(SimulatorTestCase):
@@ -100,7 +101,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at the beginning, the feature is DEFINED:
             [*_, last_block] = add_new_blocks(manager, 10)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*10)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*10))
             tx.weight = 25
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -138,7 +139,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 19, the feature is DEFINED, just before becoming STARTED:
             [*_, last_block] = add_new_blocks(manager, 9)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*19)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*19))
             tx.weight = 25
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -175,7 +176,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 20, the feature becomes STARTED:
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*20)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*20))
             tx.weight = 25
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -214,7 +215,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 55, the feature is STARTED, just before becoming MUST_SIGNAL:
             [*_, last_block] = add_new_blocks(manager, 34)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*55)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*55))
             tx.weight = 30
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -250,7 +251,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 56, the feature becomes MUST_SIGNAL:
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*56)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*56))
             tx.weight = 30
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -301,7 +302,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 59, the feature is MUST_SIGNAL, just before becoming LOCKED_IN:
             [*_, last_block] = add_new_blocks(manager, num_blocks=2, signal_bits=0b1)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*59)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*59))
             tx.weight = 30
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -338,7 +339,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 60, the feature becomes LOCKED_IN:
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*60)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*60))
             tx.weight = 30
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -377,7 +378,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 71, the feature is LOCKED_IN, just before becoming ACTIVE:
             [*_, last_block] = add_new_blocks(manager, 10)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*71)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*71))
             tx.weight = 30
             tx.update_hash()
             assert manager.propagate_tx(tx)
@@ -413,7 +414,7 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
             # at block 72, the feature becomes ACTIVE, forever:
             [*_, last_block] = add_new_blocks(manager, 1)
             self.simulator.run(60)
-            tx = gen_new_tx(manager, address, 6400*72)
+            tx = gen_new_tx(manager, address, UnsignedAmount.from_v1(6400*72))
             tx.weight = 30
             tx.update_hash()
             assert manager.propagate_tx(tx)

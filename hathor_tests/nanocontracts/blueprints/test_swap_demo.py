@@ -6,6 +6,7 @@ from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 from hathor_tests.nanocontracts.test_blueprints.swap_demo import InvalidActions, InvalidRatio, InvalidTokens, SwapDemo
+from hathor_tests.token_amount import UnsignedAmount
 
 SWAP_NC_TYPE = make_nc_type(int)
 
@@ -84,10 +85,12 @@ class SwapDemoTestCase(BlueprintTestCase):
 
         # Assert:
         self.assertEqual(
-            Balance(value=100_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_a)
+            Balance(value=UnsignedAmount.from_v1(100_00).to_signed(), can_mint=False, can_melt=False),
+            self.nc_storage.get_balance(self.token_a),
         )
         self.assertEqual(
-            Balance(value=100_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_b)
+            Balance(value=UnsignedAmount.from_v1(100_00).to_signed(), can_mint=False, can_melt=False),
+            self.nc_storage.get_balance(self.token_b),
         )
         self.assertEqual(0, self.nc_storage.get_obj(b'swaps_counter', SWAP_NC_TYPE))
 
@@ -96,10 +99,12 @@ class SwapDemoTestCase(BlueprintTestCase):
         self._swap((20_00, self.token_a), (-20_00, self.token_b))
         # Assert:
         self.assertEqual(
-            Balance(value=120_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_a)
+            Balance(value=UnsignedAmount.from_v1(120_00).to_signed(), can_mint=False, can_melt=False),
+            self.nc_storage.get_balance(self.token_a),
         )
         self.assertEqual(
-            Balance(value=80_00, can_mint=False, can_melt=False), self.nc_storage.get_balance(self.token_b)
+            Balance(value=UnsignedAmount.from_v1(80_00).to_signed(), can_mint=False, can_melt=False),
+            self.nc_storage.get_balance(self.token_b),
         )
         self.assertEqual(1, self.nc_storage.get_obj(b'swaps_counter', SWAP_NC_TYPE))
 

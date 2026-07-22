@@ -14,6 +14,7 @@ from hathor.transaction.scripts import P2PKH
 from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, get_genesis_key
 
 DEBUG: bool = False
@@ -170,7 +171,7 @@ class TransactionTest(unittest.TestCase):
         self.assertTrue(self.manager.on_new_tx(tx))
         self.clock.advance(1)
         balance_per_address = self.manager.wallet.get_balance_per_address(self._settings.HATHOR_TOKEN_UID)
-        assert balance_per_address[tx_address] == 6400
+        assert balance_per_address[tx_address] == UnsignedAmount.from_v1(6400)
 
         # re-org: replace last two blocks with one block, new height will be just one short of enough
         block_to_replace = blocks[-2]

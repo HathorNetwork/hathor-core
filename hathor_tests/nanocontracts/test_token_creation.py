@@ -17,6 +17,7 @@ from hathor.transaction.token_info import TokenDescription, TokenVersion
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts.utils import assert_nc_failure_reason
+from hathor_tests.token_amount import SignedAmount, UnsignedAmount
 
 settings = HathorSettings()
 
@@ -117,7 +118,9 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nc_storage = self.manager.get_best_block_nc_storage(tx1.hash)
         assert tx1.is_nano_contract()
-        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=1, can_mint=False, can_melt=False)
+        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(
+            value=UnsignedAmount.from_v1(1).to_signed(), can_mint=False, can_melt=False
+        )
 
         vertices.propagate_with(self.manager, up_to='b32')
         TKA, ABC, DEF, GHI, JKL, tx2 = vertices.get_typed_vertices(
@@ -141,20 +144,24 @@ class NCNanoContractTestCase(unittest.TestCase):
         assert JKL.get_metadata().voided_by is None
 
         nc_storage = self.manager.get_best_block_nc_storage(tx1.hash)
-        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
+        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
         ghi_nc_storage = self.manager.get_best_block_nc_storage(GHI.hash)
         assert ghi_nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == (
-            Balance(value=7, can_mint=False, can_melt=False)
+            Balance(value=UnsignedAmount.from_v1(7).to_signed(), can_mint=False, can_melt=False)
         )
 
         jkl_token_info = JKL._get_token_info_from_inputs(Mock())
         JKL._update_token_info_from_outputs(token_dict=jkl_token_info)
-        assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -2
+        assert jkl_token_info[settings.HATHOR_TOKEN_UID].amount == -UnsignedAmount.from_v1(2).to_signed()
 
         jkl_context = JKL.get_nano_header().get_context()
         htr_token_uid = TokenUid(settings.HATHOR_TOKEN_UID)
-        assert jkl_context.actions[htr_token_uid] == (NCWithdrawalAction(token_uid=htr_token_uid, amount=3),)
+        assert jkl_context.actions[htr_token_uid] == (
+            NCWithdrawalAction(token_uid=htr_token_uid, amount=3),
+        )
 
         assert not tx2.is_nano_contract()
         assert tx2.get_metadata().voided_by is None
@@ -163,7 +170,9 @@ class NCNanoContractTestCase(unittest.TestCase):
         TKB, tx3 = vertices.get_typed_vertices(['TKB', 'tx3'], Transaction)
 
         nc_storage = self.manager.get_best_block_nc_storage(tx1.hash)
-        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(value=0, can_mint=False, can_melt=False)
+        assert nc_storage.get_balance(settings.HATHOR_TOKEN_UID) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
         assert TKB.is_nano_contract()
         assert TKB.get_metadata().voided_by == {TKB.hash, NC_EXECUTION_FAIL_ID}
@@ -259,14 +268,18 @@ class NCNanoContractTestCase(unittest.TestCase):
 
         nc_storage = block_storage.get_contract_storage(tx1.hash)
         assert nc_storage.get_all_balances() == {
-            child_token_balance_key0: Balance(value=100, can_mint=False, can_melt=False),
-            child_token_balance_key1: Balance(value=30, can_mint=True, can_melt=False),
-            htr_balance_key: Balance(value=2, can_mint=False, can_melt=False),
+            child_token_balance_key0: Balance(
+                value=UnsignedAmount.from_v1(100).to_signed(), can_mint=False, can_melt=False
+            ),
+            child_token_balance_key1: Balance(
+                value=UnsignedAmount.from_v1(30).to_signed(), can_mint=True, can_melt=False
+            ),
+            htr_balance_key: Balance(value=UnsignedAmount.from_v1(2).to_signed(), can_mint=False, can_melt=False),
         }
 
         tokens_index = self.manager.tx_storage.indexes.tokens
-        assert tokens_index.get_token_info(settings.HATHOR_TOKEN_UID).get_total() == (
+        assert tokens_index.get_token_info(settings.HATHOR_TOKEN_UID).get_total() == UnsignedAmount.from_v1(
             settings.GENESIS_TOKEN_ATOMIC_UNITS + 40 * settings.INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK - 2
         )
-        assert tokens_index.get_token_info(child_token_id0).get_total() == 100
-        assert tokens_index.get_token_info(child_token_id1).get_total() == 30
+        assert tokens_index.get_token_info(child_token_id0).get_total() == UnsignedAmount.from_v1(100)
+        assert tokens_index.get_token_info(child_token_id1).get_total() == UnsignedAmount.from_v1(30)

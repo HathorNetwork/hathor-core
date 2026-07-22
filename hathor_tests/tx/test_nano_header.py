@@ -15,6 +15,7 @@ from hathor.transaction.token_creation_tx import TokenCreationTransaction
 from hathor.transaction.vertex_parser._nano_header import deserialize_nano_header, serialize_nano_header
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathor_tests.token_amount import UnsignedAmount
 
 
 def _serialize_nano_header(header: NanoHeader) -> bytes:
@@ -130,7 +131,9 @@ class VertexHeadersTest(unittest.TestCase):
                 ('nc_seqnum', vertex.get_nano_header().nc_seqnum + 1),
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
-                ('nc_actions', [NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123)]),
+                ('nc_actions', [
+                    NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(123)),
+                ]),
                 ('nc_address', b'\x01' * ADDRESS_LEN_BYTES),
                 ('nc_script', b'new script'),
             ]
@@ -171,7 +174,9 @@ class VertexHeadersTest(unittest.TestCase):
                 ('nc_seqnum', vertex.get_nano_header().nc_seqnum + 1),
                 ('nc_method', 'new_method'),
                 ('nc_args_bytes', b'new args'),
-                ('nc_actions', [NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=123)]),
+                ('nc_actions', [
+                    NanoHeaderAction(type=NCActionType.DEPOSIT, token_index=0, amount=UnsignedAmount.from_v1(123)),
+                ]),
                 ('nc_address', b'\x01' * ADDRESS_LEN_BYTES),
             ]
 
@@ -224,7 +229,7 @@ class VertexHeadersTest(unittest.TestCase):
                 NanoHeaderAction(
                     type=NCActionType.DEPOSIT,
                     token_index=0,
-                    amount=123,
+                    amount=UnsignedAmount.from_v1(123),
                 ),
             ],
             nc_address=b'\x01' * ADDRESS_LEN_BYTES,

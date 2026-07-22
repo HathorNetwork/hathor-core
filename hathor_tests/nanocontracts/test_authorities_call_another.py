@@ -9,6 +9,7 @@ from hathor.nanocontracts.storage.contract_storage import Balance
 from hathor.nanocontracts.types import ContractId, NCAcquireAuthorityAction, NCAction, NCGrantAuthorityAction, TokenUid
 from hathor.transaction.token_info import TokenVersion
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathor_tests.token_amount import SignedAmount
 
 
 class CalleeBlueprint(Blueprint):
@@ -169,43 +170,67 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
 
     def test_grant_mint_success(self) -> None:
         self._initialize(caller_actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=False)])
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
         self._grant_to_other(mint=True, melt=False)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=False
+        )
 
     def test_revoke_mint_success(self) -> None:
         self.test_grant_mint_success()
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=False
+        )
         self._revoke_from_other(mint=True, melt=False)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
     def test_grant_mint_fail(self) -> None:
         self._initialize()
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
         msg = f'GRANT_AUTHORITY token {self.token_a.hex()} requires mint, but contract does not have that authority'
         with pytest.raises(NCInvalidAction, match=msg):
             self._grant_to_other(mint=True, melt=False)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
     def test_grant_melt_success(self) -> None:
         self._initialize(caller_actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=False, melt=True)])
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
         self._grant_to_other(mint=False, melt=True)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=True
+        )
 
     def test_revoke_melt_success(self) -> None:
         self.test_grant_melt_success()
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=True
+        )
         self._revoke_from_other(mint=False, melt=True)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
     def test_grant_melt_fail(self) -> None:
         self._initialize()
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
         msg = f'GRANT_AUTHORITY token {self.token_a.hex()} requires melt, but contract does not have that authority'
         with pytest.raises(NCInvalidAction, match=msg):
             self._grant_to_other(mint=False, melt=True)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
     def test_acquire_mint(self) -> None:
         self._initialize()
@@ -216,8 +241,12 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             timestamp=self.now
         )
         self.runner.call_public_method(self.callee_id, 'nop', context)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=False
+        )
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
         context = self.create_context(
             actions=[],
@@ -229,8 +258,12 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             self.caller_id, 'acquire_another', context, token_uid=self.token_a, mint=True, melt=False
         )
 
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=False
+        )
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=False
+        )
 
     def test_acquire_melt(self) -> None:
         self._initialize()
@@ -241,8 +274,12 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             timestamp=self.now
         )
         self.runner.call_public_method(self.callee_id, 'nop', context)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=True
+        )
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
         context = self.create_context(
             actions=[],
@@ -254,12 +291,18 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             self.caller_id, 'acquire_another', context, token_uid=self.token_a, mint=False, melt=True
         )
 
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=True)
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=True
+        )
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=True
+        )
 
     def test_grant_and_revoke_single_contract(self) -> None:
         self._initialize()
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
         self._revoke_from_self(
             self.caller_id,
             actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True)],
@@ -267,13 +310,19 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
             melt=True,
         )
         # actions run before the method, so the final result is revoked.
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
     def test_revoke_then_grant_same_call_another_contract(self) -> None:
         self._initialize(caller_actions=[NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True)])
         self._grant_to_other(mint=True, melt=True)
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=True)
-        assert self.callee_storage.get_balance(self.token_a) == Balance(value=0, can_mint=True, can_melt=True)
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=True
+        )
+        assert self.callee_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=True, can_melt=True
+        )
         context = self.create_context(
             actions=[],
             vertex=self.tx,
@@ -282,7 +331,9 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         )
         self.runner.call_public_method(self.caller_id, 'call_grant_all_to_other_then_revoke', context, self.token_a)
         # the main call calls the revoke syscall last, so the final result is revoked.
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
 
     def test_grant_then_revoke_same_call_another_contract(self) -> None:
         self._initialize()
@@ -294,4 +345,6 @@ class TestAuthoritiesCallAnother(BlueprintTestCase):
         )
         self.runner.call_public_method(self.caller_id, 'call_revoke_all_from_other', context, self.token_a)
         # actions run before the method, so the final result is revoked.
-        assert self.caller_storage.get_balance(self.token_a) == Balance(value=0, can_mint=False, can_melt=False)
+        assert self.caller_storage.get_balance(self.token_a) == Balance(
+            value=SignedAmount(), can_mint=False, can_melt=False
+        )
