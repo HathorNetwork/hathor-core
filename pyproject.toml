@@ -3,7 +3,7 @@
 
 [project]
 name = "hathor"
-version = "0.71.0"
+version = "0.72.0"
 description = "Hathor Network full-node"
 authors = [
     {name = "Hathor Team", email = "contact@hathor.network"},
