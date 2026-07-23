@@ -1,16 +1,5 @@
-# Copyright 2024 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -21,6 +10,7 @@ from hathor.daa import DAAFactory
 from hathor.dag_builder.builder import DAGBuilder, DAGInput, DAGNode, DAGNodeType, DAGOutput
 from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 
 
 class DefaultFiller:
@@ -41,7 +31,7 @@ class DefaultFiller:
         # create the dummy and genesis nodes before builder.build() is called
         genesis_block = self._get_or_create_node('genesis_block', default_type=DAGNodeType.Genesis)
         if len(genesis_block.outputs) == 0:
-            genesis_block.outputs.append(DAGOutput(self._settings.GENESIS_TOKENS, 'HTR', {}))
+            genesis_block.outputs.append(DAGOutput(self._settings.GENESIS_TOKEN_ATOMIC_UNITS, 'HTR', {}))
         self._get_or_create_node('genesis_1', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('genesis_2', default_type=DAGNodeType.Genesis)
         self._get_or_create_node('dummy', default_type=DAGNodeType.Transaction)
@@ -86,7 +76,7 @@ class DefaultFiller:
                 break
             node.parents.add(pi)
 
-    def find_txin(self, amount: int, token: str) -> DAGInput:
+    def find_txin(self, amount: UnsignedAmount, token: str) -> DAGInput:
         """Create a DAGInput for an amount of tokens."""
         if token == 'HTR':
             dummy = self._get_node('dummy')
@@ -104,19 +94,19 @@ class DefaultFiller:
             token_node.outputs[index] = DAGOutput(amount, token, {'_origin': 'f2'})
             return DAGInput(token, index)
 
-    def calculate_balance(self, node: DAGNode) -> dict[str, int]:
+    def calculate_balance(self, node: DAGNode) -> dict[str, SignedAmount]:
         """Calculate the balance for each token in a node.
 
         balance = sum(outputs) - sum(inputs)
         """
-        ins: defaultdict[str, int] = defaultdict(int)
+        ins: defaultdict[str, UnsignedAmount] = defaultdict(int)
         for tx_name, index in node.inputs:
             node2 = self._get_or_create_node(tx_name)
             txout = node2.outputs[index]
             assert txout is not None
             ins[txout.token] += txout.amount
 
-        outs: defaultdict[str, int] = defaultdict(int)
+        outs: defaultdict[str, UnsignedAmount] = defaultdict(int)
         for txout in node.outputs:
             assert txout is not None
             outs[txout.token] += txout.amount
@@ -133,12 +123,12 @@ class DefaultFiller:
         balance = self.calculate_balance(node)
 
         for key, diff in balance.items():
-            target = node.balances.get(key, 0)
+            target = node.balances.get(key, SignedAmount(0))
             diff -= target
-            if diff < 0:
+            if diff < SignedAmount(0):
                 index = self.get_next_index(node.outputs)
                 node.outputs[index] = DAGOutput(abs(diff), key, {'_origin': 'f3'})
-            elif diff > 0:
+            elif diff > SignedAmount(0):
                 txin = self.find_txin(diff, key)
                 node.inputs.add(txin)
 
@@ -208,11 +198,11 @@ class DefaultFiller:
 
                     balance = self.calculate_balance(node)
                     assert set(balance.keys()).issubset({'HTR'})
-                    diff = balance.get('HTR', 0)
+                    diff = balance.get('HTR', SignedAmount(0))
 
                     # TODO Use the actual height. DAG construction has no chain context, so V1.
                     target = self._daa_factory.create_v1().get_tokens_issued_per_block(1)
-                    assert diff >= 0
+                    assert diff >= SignedAmount(0)
                     assert diff <= target
 
                     if diff < target:
@@ -247,7 +237,7 @@ class DefaultFiller:
             assert set(balance.keys()).issubset({'HTR', token})
 
             token_version = node.get_attr_token_version()
-            htr_deposit: int
+            htr_deposit: UnsignedAmount
 
             match token_version:
                 case TokenVersion.NATIVE:
@@ -257,7 +247,7 @@ class DefaultFiller:
                 case TokenVersion.FEE:
                     htr_deposit = 0
 
-            htr_balance = balance.get('HTR', 0)
+            htr_balance = balance.get('HTR', SignedAmount(0))
 
             # target = sum(outputs) - sum(inputs)
             # <0 means deposit
@@ -266,11 +256,11 @@ class DefaultFiller:
 
             diff = htr_balance - htr_target
 
-            if diff < 0:
+            if diff < SignedAmount(0):
                 index = self.get_next_index(node.outputs)
                 node.outputs[index] = DAGOutput(-diff, 'HTR', {'_origin': 'f8'})
 
-            elif diff > 0:
+            elif diff > SignedAmount(0):
                 txin = self.find_txin(diff, 'HTR')
                 node.inputs.add(txin)
 
@@ -281,11 +271,11 @@ class DefaultFiller:
                 del self._builder._nodes['dummy']
             else:
                 assert set(balance.keys()) == {'HTR'}
-                diff = balance.get('HTR', 0)
+                diff = balance.get('HTR', SignedAmount(0))
 
-                assert diff <= 0
+                assert diff <= SignedAmount(0)
 
-                if diff < 0:
+                if diff < SignedAmount(0):
                     index = self.get_next_index(node.outputs)
                     node.outputs[index] = DAGOutput(-diff, 'HTR', {})
 

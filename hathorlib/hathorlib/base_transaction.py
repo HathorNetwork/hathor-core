@@ -1,16 +1,6 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import base64
 import datetime
 import hashlib
@@ -218,7 +208,15 @@ class BaseTransaction(ABC):
 
     def get_maximum_number_of_headers(self) -> int:
         """Return the maximum number of headers for this vertex."""
-        return 2
+        return 3
+
+    def has_shielded_outputs(self) -> bool:
+        """Whether this vertex carries a shielded outputs header.
+
+        Always False on the base; overridden by `Transaction`. Defined here so callers
+        (e.g. `is_standard`) can check it directly without `hasattr`.
+        """
+        return False
 
     @classmethod
     @abstractmethod
@@ -499,6 +497,29 @@ class BaseTransaction(ABC):
                         continue
 
                 return False
+
+        # Check shielded output scripts (same rules as transparent)
+        if self.has_shielded_outputs():
+            for shielded_output in self.get_shielded_outputs_header().shielded_outputs:  # type: ignore[attr-defined]
+                script = shielded_output.script
+                # Same logic as TxOutput.is_standard_script
+                is_std = True
+                if len(script) > std_max_output_script_size:
+                    is_std = False
+                elif only_standard_script_type:
+                    parsed = parse_address_script(script)
+                    if parsed is None or not isinstance(parsed, TxOutput.STANDARD_SCRIPT_TYPES):
+                        is_std = False
+
+                if not is_std:
+                    # Check if data script (same as transparent)
+                    if len(script) <= std_max_output_script_size and DataScript.parse_script(script) is not None:
+                        if number_of_data_script_outputs == max_number_of_data_script_outputs:
+                            return False
+                        else:
+                            number_of_data_script_outputs += 1
+                            continue
+                    return False
 
         return True
 

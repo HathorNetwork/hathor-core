@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Testing Github Action workflows
 
 It's possible to test the Github Action workflows locally by using https://github.com/nektos/act

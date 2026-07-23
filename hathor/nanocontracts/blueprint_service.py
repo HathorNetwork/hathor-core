@@ -1,16 +1,5 @@
-#  Copyright 2026 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -30,6 +19,7 @@ from hathor.nanocontracts.exception import (
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.storage.exceptions import TransactionDoesNotExist
 from hathorlib.nanocontracts.types import BlueprintId
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor import Blueprint
@@ -72,17 +62,28 @@ class BlueprintService:
         # XXX: maybe use N blocks confirmation, like reward-locks
         return blueprint_tx
 
-    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
-        """Returns the blueprint class associated with the given blueprint_id.
+    def get_blueprint_class_and_token_amount_version(
+        self,
+        blueprint_id: BlueprintId,
+    ) -> tuple[type[Blueprint], TokenAmountVersion]:
+        """Returns the blueprint class associated with the given blueprint_id, and its TokenAmountVersion.
 
         The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
         """
         from hathor.nanocontracts import OnChainBlueprint
         blueprint = self._get_blueprint(blueprint_id)
         if isinstance(blueprint, OnChainBlueprint):
-            return blueprint.get_blueprint_class()
+            return blueprint.get_blueprint_class(), blueprint.get_token_amount_version()
         else:
-            return blueprint
+            return blueprint, TokenAmountVersion.V2
+
+    def get_blueprint_class(self, blueprint_id: BlueprintId) -> type[Blueprint]:
+        """Returns the blueprint class associated with the given blueprint_id.
+
+        The blueprint class could be in the catalog (first search), or it could be the tx_id of an on-chain blueprint.
+        """
+        blueprint_class, _ = self.get_blueprint_class_and_token_amount_version(blueprint_id)
+        return blueprint_class
 
     def get_blueprint_source(self, blueprint_id: BlueprintId) -> str:
         """Returns the source code associated with the given blueprint_id.

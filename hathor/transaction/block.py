@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -29,6 +18,7 @@ from hathor.transaction.exceptions import CheckpointError
 from hathor.transaction.static_metadata import BlockStaticMetadata
 from hathor.transaction.util import VerboseCallback
 from hathor.utils.int import get_bit_list
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -202,6 +192,7 @@ class Block(GenericVertex[BlockStaticMetadata]):
         json = super().to_json(decode_script=decode_script, include_metadata=include_metadata)
         json['tokens'] = []
         json['data'] = base64.b64encode(self.data).decode('utf-8')
+        json['token_amount_version'] = TokenAmountVersion.V1.value  # Blocks are always V1.
         return json
 
     def to_json_extended(self) -> dict[str, Any]:
@@ -252,14 +243,14 @@ class Block(GenericVertex[BlockStaticMetadata]):
         """
         assert self.signal_bits <= 0xFF, 'signal_bits must be one byte at most'
 
-        bitmask = self._get_feature_activation_bitmask()
+        bitmask = self.get_feature_activation_bitmask()
         bits = self.signal_bits & bitmask
 
         bit_list = get_bit_list(bits, min_size=self._settings.FEATURE_ACTIVATION.max_signal_bits)
 
         return bit_list
 
-    def _get_feature_activation_bitmask(self) -> int:
+    def get_feature_activation_bitmask(self) -> int:
         """Returns the bitmask that gets feature activation bits from signal bits."""
         bitmask = (1 << self._settings.FEATURE_ACTIVATION.max_signal_bits) - 1
 

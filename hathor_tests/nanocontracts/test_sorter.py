@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts.sorter.random_sorter import NCBlockSorter
 from hathor.transaction import Transaction
 from hathor.types import VertexId

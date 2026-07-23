@@ -1,32 +1,22 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import struct
 from collections import namedtuple
 from struct import pack
-from typing import TYPE_CHECKING, List, TypeVar
+from typing import TYPE_CHECKING, List, TypeVar, final
 
 from hathorlib.base_transaction import TX_HASH_SIZE, BaseTransaction, TxInput, TxOutput
 from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidOutputValue, InvalidToken
 from hathorlib.headers import VertexBaseHeader
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.utils import unpack, unpack_len
 
 if TYPE_CHECKING:
-    from hathorlib.headers import FeeHeader, NanoHeader
+    from hathorlib.headers import FeeHeader, NanoHeader, ShieldedOutputsHeader, UnshieldBalanceHeader
 
 T = TypeVar('T', bound=VertexBaseHeader)
 
@@ -88,6 +78,34 @@ class Transaction(BaseTransaction):
         from hathorlib.headers import FeeHeader
         """Return the FeeHeader or raise ValueError."""
         return self._get_header(FeeHeader)
+
+    def has_shielded_outputs(self) -> bool:
+        """Returns true if this transaction has a shielded outputs header."""
+        try:
+            self.get_shielded_outputs_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_shielded_outputs_header(self) -> ShieldedOutputsHeader:
+        from hathorlib.headers import ShieldedOutputsHeader
+        """Return the ShieldedOutputsHeader or raise ValueError."""
+        return self._get_header(ShieldedOutputsHeader)
+
+    def has_unshield_balance(self) -> bool:
+        """Returns true if this transaction has an unshield balance header."""
+        try:
+            self.get_unshield_balance_header()
+        except ValueError:
+            return False
+        else:
+            return True
+
+    def get_unshield_balance_header(self) -> UnshieldBalanceHeader:
+        from hathorlib.headers import UnshieldBalanceHeader
+        """Return the UnshieldBalanceHeader or raise ValueError."""
+        return self._get_header(UnshieldBalanceHeader)
 
     def _get_header(self, header_type: type[T]) -> T:
         """Return the header of the given type or raise ValueError."""
@@ -250,3 +268,9 @@ class Transaction(BaseTransaction):
             if output.value <= 0:
                 raise InvalidOutputValue('Output value must be a positive integer. Value: {} and index: {}'.format(
                     output.value, index))
+
+    @final
+    def get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which this transaction's token amounts are interpreted."""
+        # Transactions are always V1. This will be updated in the future.
+        return TokenAmountVersion.V1

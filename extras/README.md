@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Hathor Labs
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## Daemonizing with Supervisor
 
 Create a `run_hathord` with execution permission:

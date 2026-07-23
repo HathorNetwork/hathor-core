@@ -1,16 +1,5 @@
-#  Copyright 2026 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """Serialization/deserialization for Block, MergeMinedBlock, and PoaBlock."""
 
@@ -26,6 +15,7 @@ from hathor.transaction.vertex_parser._common import (
     serialize_graph_fields,
     serialize_tx_output,
 )
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.transaction.base_transaction import TxOutput
@@ -50,7 +40,7 @@ def serialize_block_funds(
     """
     serializer.write_struct((block.signal_bits, block.version, len(block.outputs)), '!BBB')
     for tx_output in block.outputs:
-        serialize_tx_output(serializer, tx_output)
+        serialize_tx_output(serializer, tx_output, token_amount_version=TokenAmountVersion.V1)  # Blocks are always V1.
 
 
 def serialize_block_graph_fields(
@@ -103,7 +93,11 @@ def deserialize_block_funds(
 
     outputs: list[TxOutput] = []
     for _ in range(outputs_len):
-        txout = _deserialize_tx_output(deserializer, verbose=verbose)
+        txout = _deserialize_tx_output(
+            deserializer,
+            token_amount_version=TokenAmountVersion.V1,  # Blocks are always V1.
+            verbose=verbose,
+        )
         outputs.append(txout)
 
     block.signal_bits = signal_bits

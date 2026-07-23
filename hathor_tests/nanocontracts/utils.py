@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any
 
 from hathor.conf.settings import HathorSettings
@@ -22,6 +25,7 @@ from hathor.types import VertexId
 from hathor.util import not_none
 from hathor.wallet import HDWallet
 from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class TestRunner:
@@ -42,6 +46,7 @@ class TestRunner:
         self,
         *,
         runtime_version: NanoRuntimeVersion,
+        token_amount_version: TokenAmountVersion,
         tx_storage: NCTransactionStorageProtocol,
         blueprint_service: BlueprintService,
         settings: HathorSettings,
@@ -57,6 +62,7 @@ class TestRunner:
         block_storage = NCBlockStorage(block_trie)
         self._runner: Runner = Runner(
             runtime_version=runtime_version,
+            token_amount_version=token_amount_version,
             tx_storage=tx_storage,
             blueprint_service=blueprint_service,
             storage_factory=storage_factory,

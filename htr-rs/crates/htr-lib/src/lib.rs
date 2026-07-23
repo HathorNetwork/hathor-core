@@ -1,50 +1,20 @@
-//! Python extension module exposing Hathor's Rust implementations to `hathor-core` via PyO3.
+// SPDX-FileCopyrightText: Hathor Labs
+// SPDX-License-Identifier: Apache-2.0
 
-use pyo3::prelude::*;
+//! Core Rust implementations for Hathor.
+//!
+//! This crate holds the pure-Rust domain types — bindings to other languages are
+//! provided by wrapper crates.
 
 // Prohibit compilation for non-64-bit targets to ensure consistent use of `usize`.
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("compilation is only allowed for 64-bit targets");
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
+#[macro_use]
+extern crate num_derive;
 
-/// A Python module implemented in Rust.
-#[pymodule]
-fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
-    Ok(())
-}
+mod signed_amount;
+mod unsigned_amount;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pyo3::types::PyModule;
-
-    #[test]
-    fn test_sum_as_string() {
-        assert_eq!(sum_as_string(2, 3).unwrap(), "5");
-    }
-
-    // Drives sum_as_string through PyO3 dispatch so the #[pymodule] init runs under coverage —
-    // a direct Rust call leaves the registration block unexecuted.
-    #[test]
-    fn test_pymodule_registration() {
-        Python::initialize();
-        Python::attach(|py| {
-            let module = PyModule::new(py, "htr_lib").unwrap();
-            htr_lib(&module).unwrap();
-            let result: String = module
-                .getattr("sum_as_string")
-                .unwrap()
-                .call1((2, 3))
-                .unwrap()
-                .extract()
-                .unwrap();
-            assert_eq!(result, "5");
-        });
-    }
-}
+pub use signed_amount::SignedAmount;
+pub use unsigned_amount::{TokenAmountVersion, UnsignedAmount};

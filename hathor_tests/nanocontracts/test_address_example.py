@@ -1,16 +1,5 @@
-#  Copyright 2025 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.nanocontracts import OnChainBlueprint
@@ -18,6 +7,7 @@ from hathor.transaction import Block, Transaction
 from hathor.transaction.nc_execution_state import NCExecutionState
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class TestAllFields(unittest.TestCase):
@@ -54,7 +44,7 @@ class TestAllFields(unittest.TestCase):
         assert nc1.get_metadata().first_block == b12.hash
         assert nc1.get_metadata().nc_execution == NCExecutionState.SUCCESS
 
-        runner = manager.get_nc_runner(b12)
+        runner = manager.get_nc_runner(b12, token_amount_version=TokenAmountVersion.V1)
         method_address = runner.call_view_method(nc1.hash, 'get_last_address_str')
         expected_address = get_address_b58_from_bytes(nc1.get_nano_header().nc_address)
         assert method_address == expected_address

@@ -1,25 +1,14 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from twisted.web.http import Request
 
 from hathor._openapi.register import register_resource
 from hathor.api_util import Resource, get_args, get_missing_params_msg, parse_int, set_cors
 from hathor.conf.get_settings import get_global_settings
-from hathor.crypto.util import decode_address
+from hathor.crypto.util import decode_address_strict
 from hathor.transaction.scripts import parse_address_script
 from hathor.util import json_dumpb
 from hathor.wallet.exceptions import InvalidAddress
@@ -46,6 +35,9 @@ class AddressSearchResource(Resource):
         """
         for tx_input in tx.inputs:
             spent_tx = tx.get_spent_tx(tx_input)
+            # Skip shielded outputs
+            if spent_tx.is_shielded_output(tx_input.index):
+                continue
             spent_output = spent_tx.outputs[tx_input.index]
 
             input_token_uid = spent_tx.get_token_uid(spent_output.get_token_index())
@@ -98,8 +90,8 @@ class AddressSearchResource(Resource):
 
         try:
             address = raw_args[b'address'][0].decode('utf-8')
-            # Check if address is valid
-            decode_address(address)
+            # Check if address is valid for this network
+            decode_address_strict(address, settings=self._settings)
         except InvalidAddress:
             return json_dumpb({
                 'success': False,
@@ -132,12 +124,15 @@ class AddressSearchResource(Resource):
         # we must get all transactions and sort them
         # This is not optimal for performance
         transactions = []
+        has_shielded = False
         for tx_hash in hashes:
             tx = self.manager.tx_storage.get_transaction(tx_hash)
             if token_uid_bytes and not self.has_token_and_address(tx, address, token_uid_bytes):
                 # Request wants to filter by token but tx does not have this token
                 # so we don't add it to the transactions array
                 continue
+            if tx.shielded_outputs:
+                has_shielded = True
             transactions.append(tx.to_json_extended())
 
         sorted_transactions = sorted(transactions, key=lambda tx: tx['timestamp'], reverse=True)
@@ -186,12 +181,13 @@ class AddressSearchResource(Resource):
             ret_transactions = sorted_transactions[:count]
             has_more = len(sorted_transactions) > count
 
-        data = {
+        data: dict[str, Any] = {
             'success': True,
             'transactions': ret_transactions,
             'has_more': has_more,
             'total': len(sorted_transactions),
         }
+        data['has_shielded'] = has_shielded
         return json_dumpb(data)
 
 

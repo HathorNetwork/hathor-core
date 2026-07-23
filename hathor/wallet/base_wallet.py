@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from abc import ABCMeta
 from collections import defaultdict
@@ -25,7 +14,6 @@ from structlog import get_logger
 from twisted.internet.interfaces import IDelayedCall
 
 from hathor.conf.get_settings import get_global_settings
-from hathor.conf.settings import HATHOR_TOKEN_UID, HathorSettings
 from hathor.crypto.util import decode_address
 from hathor.pubsub import EventArguments, HathorEvents, PubSubManager
 from hathor.reactor import ReactorProtocol as Reactor, get_global_reactor
@@ -34,8 +22,10 @@ from hathor.transaction.scripts import P2PKH, create_output_script, parse_addres
 from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.transaction import Transaction
 from hathor.transaction.util import int_to_bytes
-from hathor.types import AddressB58, Amount, TokenUid
+from hathor.types import AddressB58, TokenUid
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, PrivateKeyNotFound
+from hathorlib.conf.settings import HATHOR_TOKEN_UID, HathorSettings
+from hathorlib.token_amount import UnsignedAmount
 
 logger = get_logger()
 
@@ -53,19 +43,50 @@ class WalletInputInfo(NamedTuple):
 
 class WalletOutputInfo(NamedTuple):
     address: bytes
-    value: int
+    value: UnsignedAmount
     timelock: Optional[int]
     token_uid: str = HATHOR_TOKEN_UID.hex()
 
 
 class WalletBalance(NamedTuple):
-    locked: int = 0
-    available: int = 0
+    locked: UnsignedAmount = 0
+    available: UnsignedAmount = 0
 
 
 class WalletBalanceUpdate(NamedTuple):
     call_id: IDelayedCall
     timelock: int
+
+
+def extract_key_bytes(key: object) -> tuple[bytes, bytes]:
+    """Extract (private_key_bytes, compressed_pubkey_bytes) from a wallet key.
+
+    Handles both key types used in the wallet:
+    - `cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePrivateKey`
+      (from Wallet.get_private_key())
+    - pycoin `Key` (from HDWallet.get_private_key())
+
+    Returns:
+        (private_key_bytes: 32B, compressed_pubkey_bytes: 33B)
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    if isinstance(key, ec.EllipticCurvePrivateKey):
+        privkey_bytes = key.private_numbers().private_value.to_bytes(32, 'big')  # type: ignore[attr-defined]
+        pubkey_bytes = key.public_key().public_bytes(
+            encoding=Encoding.X962,
+            format=PublicFormat.CompressedPoint,
+        )
+        return privkey_bytes, pubkey_bytes
+
+    if isinstance(key, Key):
+        secret_exp = key.secret_exponent()
+        privkey_bytes = secret_exp.to_bytes(32, 'big')
+        pubkey_bytes = key.sec(is_compressed=True)
+        return privkey_bytes, pubkey_bytes
+
+    raise TypeError(f'unsupported key type: {type(key).__name__}')
 
 
 class BaseWallet:
@@ -142,9 +163,9 @@ class BaseWallet:
     def _manually_initialize(self) -> None:
         pass
 
-    def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, Amount]:
+    def get_balance_per_address(self, token_uid: TokenUid) -> dict[AddressB58, UnsignedAmount]:
         """Return balance per address for a given token. This method ignores locks."""
-        balances: defaultdict[AddressB58, Amount] = defaultdict(Amount)
+        balances: defaultdict[AddressB58, UnsignedAmount] = defaultdict(int)
         for utxo_info, unspent_tx in self.unspent_txs[token_uid].items():
             balances[unspent_tx.address] += unspent_tx.value
         return dict(balances)
@@ -322,9 +343,27 @@ class BaseWallet:
         for _input in inputs:
             new_input = None
             output_tx = tx_storage.get_transaction(_input.tx_id)
-            output = output_tx.outputs[_input.index]
-            token_id = output_tx.get_token_uid(output.get_token_index())
+            resolved = output_tx.resolve_spent_output(_input.index)
+
+            # For shielded outputs, try to find the token_id from our tracked UTXOs
             key = (_input.tx_id, _input.index)
+            if isinstance(resolved, TxOutput):
+                token_id: bytes = output_tx.get_token_uid(resolved.get_token_index())
+            else:
+                # Shielded output: look up the token_id from our unspent_txs
+                _found_token_id: bytes | None = None
+                for tid, utxo_dict in self.unspent_txs.items():
+                    if key in utxo_dict:
+                        _found_token_id = tid
+                        break
+                if _found_token_id is None:
+                    for tid, utxo_dict in self.maybe_spent_txs.items():
+                        if key in utxo_dict:
+                            _found_token_id = tid
+                            break
+                if _found_token_id is None:
+                    raise PrivateKeyNotFound
+                token_id = _found_token_id
             # we'll remove this utxo so it can't be selected again shortly
             utxo = self.unspent_txs[token_id].pop(key, None)
             if utxo is None:
@@ -334,7 +373,7 @@ class BaseWallet:
                 utxo.maybe_spent_ts = int(self.reactor.seconds())
                 self.maybe_spent_txs[token_id][key] = utxo
             elif force:
-                script_type = parse_address_script(output.script)
+                script_type = parse_address_script(resolved.script)
 
                 if script_type:
                     address = script_type.address
@@ -378,7 +417,7 @@ class BaseWallet:
         :param timestamp: the tx timestamp
         :type timestamp: int
         """
-        token_dict: dict[bytes, int] = defaultdict(int)
+        token_dict: dict[bytes, UnsignedAmount] = defaultdict(int)
         for output in outputs:
             token_uid = bytes.fromhex(output.token_uid)
             token_dict[token_uid] += output.value
@@ -441,7 +480,7 @@ class BaseWallet:
                 public_key_bytes, signature = self.get_input_aux_data(data_to_sign, self.get_private_key(address58))
                 _input.data = P2PKH.create_input_data(public_key_bytes, signature)
 
-    def handle_change_tx(self, sum_inputs: int, sum_outputs: int,
+    def handle_change_tx(self, sum_inputs: UnsignedAmount, sum_outputs: UnsignedAmount,
                          token_uid: bytes = HATHOR_TOKEN_UID) -> Optional[WalletOutputInfo]:
         """Creates an output transaction with the change value
 
@@ -467,9 +506,9 @@ class BaseWallet:
         return None
 
     def get_inputs_from_amount(
-        self, amount: int, tx_storage: 'TransactionStorage',
+        self, amount: UnsignedAmount, tx_storage: 'TransactionStorage',
         token_uid: bytes = HATHOR_TOKEN_UID, max_ts: Optional[int] = None
-    ) -> tuple[list[WalletInputInfo], int]:
+    ) -> tuple[list[WalletInputInfo], UnsignedAmount]:
         """Creates inputs from our pool of unspent tx given a value
 
         This is a very simple algorithm, so it does not try to find the best combination
@@ -559,25 +598,50 @@ class BaseWallet:
             # publish new output and new balance
             self.publish_update(HathorEvents.WALLET_OUTPUT_RECEIVED, total=self.get_total_tx(), output=utxo)
 
+        # check shielded outputs — try ECDH + rewind to recover hidden amounts
+        if tx.shielded_outputs:
+            if self._process_shielded_outputs_on_new_tx(tx):
+                should_update = True
+
         # check inputs
         for _input in tx.inputs:
             assert tx.storage is not None
             output_tx = tx.storage.get_transaction(_input.tx_id)
-            output = output_tx.outputs[_input.index]
-            token_id = output_tx.get_token_uid(output.get_token_index())
+            resolved = output_tx.resolve_spent_output(_input.index)
 
-            script_type_out = parse_address_script(output.script)
+            script_type_out = parse_address_script(resolved.script)
             if not script_type_out:
                 self.log.warn('unknown input data')
                 continue
             if script_type_out.address not in self.keys:
                 continue
-            # this wallet spent tokens
-            # remove from unspent_txs
+
+            # For shielded outputs, look up via the unspent_txs that were
+            # added by _process_shielded_outputs_on_new_tx (ECDH rewind).
+            # The key and token_id are stored there.
             key = (_input.tx_id, _input.index)
-            old_utxo = self.unspent_txs[token_id].pop(key, None)
-            if old_utxo is None:
-                old_utxo = self.maybe_spent_txs[token_id].pop(key, None)
+
+            # Try to find the UTXO across all token buckets
+            old_utxo = None
+            if isinstance(resolved, TxOutput):
+                token_id = output_tx.get_token_uid(resolved.get_token_index())
+                old_utxo = self.unspent_txs[token_id].pop(key, None)
+                if old_utxo is None:
+                    old_utxo = self.maybe_spent_txs[token_id].pop(key, None)
+            else:
+                # Shielded output: scan all token buckets for the UTXO
+                for tid, utxo_dict in self.unspent_txs.items():
+                    if key in utxo_dict:
+                        old_utxo = utxo_dict.pop(key)
+                        token_id = tid
+                        break
+                if old_utxo is None:
+                    for tid, utxo_dict in self.maybe_spent_txs.items():
+                        if key in utxo_dict:
+                            old_utxo = utxo_dict.pop(key)
+                            token_id = tid
+                            break
+
             if old_utxo:
                 # add to spent_txs
                 spent = SpentTx(tx.hash, _input.tx_id, _input.index, old_utxo.value, tx.timestamp)
@@ -589,15 +653,117 @@ class BaseWallet:
                 # If we dont have it in the unspent_txs, it must be in the spent_txs
                 # So we append this spent with the others
                 if key in self.spent_txs:
-                    output_tx = tx.storage.get_transaction(_input.tx_id)
-                    output = output_tx.outputs[_input.index]
-                    spent = SpentTx(tx.hash, _input.tx_id, _input.index, output.value, tx.timestamp)
+                    # For transparent outputs, get the value directly
+                    if isinstance(resolved, TxOutput):
+                        value = resolved.value
+                    else:
+                        # For shielded outputs, use 0 as fallback (value is hidden)
+                        value = 0
+                    spent = SpentTx(tx.hash, _input.tx_id, _input.index, value, tx.timestamp)
                     self.spent_txs[key].append(spent)
 
         if should_update:
             # TODO update history file?
             # XXX should wallet always update it or it will be called externally?
             self.update_balance()
+
+    @staticmethod
+    def _verify_recovered_token_uid(token_id: bytes, asset_bf: bytes, asset_commitment: bytes) -> None:
+        """Verify that a recovered token UID and asset blinding factor match the asset_commitment.
+
+        Prevents social engineering attacks where a malicious sender
+        embeds a wrong token UID in the range proof message.
+
+        Raises ValueError if the token UID is inconsistent.
+        """
+        from hathor_ct_crypto import create_asset_commitment, derive_tag
+        expected_tag = derive_tag(token_id)
+        expected_commitment = create_asset_commitment(tag_bytes=expected_tag, r_asset=asset_bf)
+        if expected_commitment != asset_commitment:
+            raise ValueError(
+                'recovered token UID does not match asset_commitment — '
+                'the sender may have embedded a fraudulent token UID'
+            )
+
+    def _process_shielded_outputs_on_new_tx(self, tx: BaseTransaction) -> bool:
+        """Try to recover shielded outputs that belong to this wallet via ECDH + rewind.
+
+        Returns True if any shielded output was recovered.
+        """
+        from hathor.crypto.shielded.recovery import recover_shielded_secrets
+        from hathorlib.transaction.shielded_tx_output import FullShieldedOutput
+
+        if not get_global_settings().ENABLE_SHIELDED_TRANSACTIONS:
+            if tx.shielded_outputs:
+                self.log.error(
+                    'cannot recover shielded outputs: shielded transactions are disabled',
+                    tx=tx.hash_hex,
+                )
+            return False
+
+        found_any = False
+        for shielded_idx, output in enumerate(tx.shielded_outputs):
+            # Index in the combined output list (transparent + shielded)
+            actual_index = len(tx.outputs) + shielded_idx
+
+            # Check if the script matches a wallet address
+            script_type_out = parse_address_script(output.script)
+            if not script_type_out:
+                continue
+            if script_type_out.address not in self.keys:
+                continue
+
+            # Need ephemeral pubkey for ECDH
+            if not output.ephemeral_pubkey:
+                continue
+
+            try:
+                # Get wallet private key for this address
+                private_key = self.get_private_key(script_type_out.address)
+                privkey_bytes, _ = extract_key_bytes(private_key)
+
+                # Recover secrets using the centralized recovery function
+                secrets = recover_shielded_secrets(output, privkey_bytes, tx.get_token_uid)
+                token_id = secrets.token_uid
+
+                # For FullShieldedOutput, cross-check recovered token UID against asset_commitment
+                if isinstance(output, FullShieldedOutput) and secrets.asset_blinding_factor is not None:
+                    self._verify_recovered_token_uid(
+                        token_id, secrets.asset_blinding_factor, output.asset_commitment
+                    )
+
+                # Add as unspent output
+                utxo = UnspentTx(
+                    tx.hash, actual_index, secrets.value, tx.timestamp,
+                    script_type_out.address, 0,
+                    timelock=script_type_out.timelock,
+                )
+                self.unspent_txs[token_id][(tx.hash, actual_index)] = utxo
+                self.tokens_received(script_type_out.address)
+                found_any = True
+
+                self.log.debug(
+                    'recovered shielded output',
+                    tx=tx.hash_hex,
+                    index=actual_index,
+                    recovered=True,
+                    address=script_type_out.address,
+                )
+                self.publish_update(
+                    HathorEvents.WALLET_OUTPUT_RECEIVED,
+                    total=self.get_total_tx(),
+                    output=utxo,
+                )
+            except (ValueError, TypeError, OverflowError):
+                # Rewind failed — output is not for this wallet or different ECDH key
+                self.log.info(
+                    'shielded output rewind failed (not ours?)',
+                    tx=tx.hash_hex,
+                    index=actual_index,
+                )
+                continue
+
+        return found_any
 
     def on_tx_update(self, tx: Transaction) -> None:
         """This method is called when a tx is updated by the consensus algorithm."""
@@ -662,9 +828,34 @@ class BaseWallet:
                 self.voided_unspent[key] = voided
                 should_update = True
 
+        # check shielded outputs — remove from unspent/spent if voided
+        for shielded_idx, shielded_output in enumerate(tx.shielded_outputs):
+            actual_index = len(tx.outputs) + shielded_idx
+            key = (tx.hash, actual_index)
+            # Check all token_id buckets since we don't know which one it was tracked under
+            for token_id, utxos in list(self.unspent_txs.items()):
+                utxo = utxos.pop(key, None)
+                if utxo is None:
+                    utxo = self.maybe_spent_txs[token_id].pop(key, None)
+                if utxo:
+                    should_update = True
+                    # Save in voided_unspent
+                    if key not in self.voided_unspent:
+                        voided = UnspentTx(tx.hash, actual_index, utxo.value, tx.timestamp,
+                                           utxo.address, 0, voided=True, timelock=utxo.timelock)
+                        self.voided_unspent[key] = voided
+                    break
+            else:
+                if key in self.spent_txs:
+                    should_update = True
+                    del self.spent_txs[key]
+
         # check inputs
         for _input in tx.inputs:
             output_tx = tx.storage.get_transaction(_input.tx_id)
+            # Skip shielded outputs
+            if output_tx.is_shielded_output(_input.index):
+                continue
             output_ = output_tx.outputs[_input.index]
             script_type_out = parse_address_script(output_.script)
             token_id = output_tx.get_token_uid(output_.get_token_index())
@@ -778,9 +969,34 @@ class BaseWallet:
                 # If it's there, we should update
                 should_update = True
 
+        # check shielded outputs — restore from voided_unspent if winner
+        for shielded_idx, shielded_output in enumerate(tx.shielded_outputs):
+            actual_index = len(tx.outputs) + shielded_idx
+            key = (tx.hash, actual_index)
+            voided_utxo = self.voided_unspent.pop(key, None)
+            if voided_utxo:
+                # Restore the UTXO from voided state
+                _restored = UnspentTx(  # noqa: F841
+                    tx.hash, actual_index, voided_utxo.value, tx.timestamp,
+                    voided_utxo.address, 0, timelock=voided_utxo.timelock,
+                )
+                # Determine token_id: we stored it generically, try to find via script match
+                # Use HATHOR_TOKEN_UID as default; the correct bucket was used when first tracked
+                for tid, utxos in self.unspent_txs.items():
+                    if key in utxos:
+                        break
+                else:
+                    # Re-process to find the right token bucket
+                    if self._process_shielded_outputs_on_new_tx(tx):
+                        should_update = True
+                should_update = True
+
         # check inputs
         for _input in tx.inputs:
             output_tx = tx.storage.get_transaction(_input.tx_id)
+            # Skip shielded outputs
+            if output_tx.is_shielded_output(_input.index):
+                continue
             output = output_tx.outputs[_input.index]
             token_id = output_tx.get_token_uid(output.get_token_index())
 
@@ -946,6 +1162,10 @@ class BaseWallet:
         """
         for _input in inputs:
             output_tx = tx_storage.get_transaction(_input.tx_id)
+            # Skip shielded outputs
+            if output_tx.is_shielded_output(_input.index):
+                yield _input, None
+                continue
             output = output_tx.outputs[_input.index]
             token_id = output_tx.get_token_uid(output.get_token_index())
             utxo = self.unspent_txs[token_id].get((_input.tx_id, _input.index))
@@ -960,7 +1180,7 @@ class BaseWallet:
 
 
 class UnspentTx:
-    def __init__(self, tx_id: bytes, index: int, value: int, timestamp: int, address: str, token_data: int,
+    def __init__(self, tx_id: bytes, index: int, value: UnsignedAmount, timestamp: int, address: str, token_data: int,
                  voided: bool = False, timelock: Optional[int] = None) -> None:
         self.tx_id = tx_id
         self.index = index
@@ -1010,7 +1230,7 @@ class UnspentTx:
 
 
 class SpentTx:
-    def __init__(self, tx_id: bytes, from_tx_id: bytes, from_index: int, value: int, timestamp: int,
+    def __init__(self, tx_id: bytes, from_tx_id: bytes, from_index: int, value: UnsignedAmount, timestamp: int,
                  voided: bool = False) -> None:
         """tx_id: the tx spending the output
         from_tx_id: tx where we received the tokens

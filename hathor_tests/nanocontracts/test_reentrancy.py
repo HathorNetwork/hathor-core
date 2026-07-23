@@ -1,7 +1,11 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.nanocontracts import Blueprint, Context, NCFail, public
 from hathor.nanocontracts.exception import NCForbiddenReentrancy
 from hathor.nanocontracts.types import Amount, CallerId, ContractId, NCAction, NCDepositAction, TokenUid
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount import SignedAmount
 
 HTR_TOKEN_UID = TokenUid(b'\0')
 
@@ -167,7 +171,7 @@ class NCReentrancyTestCase(BlueprintTestCase):
         self.attacker_storage = self.runner.get_storage(self.nc_attacker_id)
 
         assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
-        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == 0
+        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == SignedAmount(0)
 
     def test_basics(self) -> None:
         # Address1 sends 0.30 HTR to attacker contract.
@@ -225,7 +229,7 @@ class NCReentrancyTestCase(BlueprintTestCase):
             )
 
         assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
-        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == 0
+        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == SignedAmount(0)
 
     def test_attack_fail_protected(self) -> None:
         # Attacker contract has a balance of 0.50 HTR in the target contract.
@@ -239,4 +243,4 @@ class NCReentrancyTestCase(BlueprintTestCase):
             )
 
         assert self.target_storage.get_balance(HTR_TOKEN_UID).value == 10_150
-        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == 0
+        assert self.attacker_storage.get_balance(HTR_TOKEN_UID).value == SignedAmount(0)

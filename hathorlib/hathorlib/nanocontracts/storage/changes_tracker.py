@@ -1,16 +1,5 @@
-# Copyright 2023 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import itertools
 from dataclasses import dataclass
@@ -32,6 +21,7 @@ from hathorlib.nanocontracts.storage.contract_storage import (
 )
 from hathorlib.nanocontracts.storage.types import _NOT_PROVIDED, DeletedKey, DeletedKeyType
 from hathorlib.nanocontracts.types import BlueprintId, ContractId, TokenUid
+from hathorlib.token_amount import SignedAmount
 from hathorlib.token_info import TokenDescription, TokenVersion
 
 T = TypeVar('T')
@@ -78,7 +68,7 @@ class NCChangesTracker(NCContractStorage):
         self.nc_id = nc_id
 
         self.data: dict[AttrKey, tuple[Any, NCType | None]] = {}
-        self._balance_diff: dict[BalanceKey, int] = {}
+        self._balance_diff: dict[BalanceKey, SignedAmount] = {}
         self._authorities_diff: dict[BalanceKey, _NCAuthorityDiff] = {}
         self._created_tokens: dict[TokenUid, TokenDescription] = {}
         self._blueprint_id: BlueprintId | None = None
@@ -117,7 +107,7 @@ class NCChangesTracker(NCContractStorage):
             return token_description
         return self.storage.get_token(token_id)
 
-    def get_balance_diff(self) -> MappingProxyType[BalanceKey, int]:
+    def get_balance_diff(self) -> MappingProxyType[BalanceKey, SignedAmount]:
         """Return the balance diff of this change tracker."""
         return MappingProxyType(self._balance_diff)
 
@@ -217,7 +207,7 @@ class NCChangesTracker(NCContractStorage):
     def _get_mutable_balance(self, token_uid: bytes) -> MutableBalance:
         internal_key = BalanceKey(self.nc_id, token_uid)
         balance = self.storage._get_mutable_balance(token_uid)
-        balance_diff = self._balance_diff.get(internal_key, 0)
+        balance_diff = self._balance_diff.get(internal_key, SignedAmount(0))
         authorities_diff = self._authorities_diff.get(internal_key, _NCAuthorityDiff())
 
         balance.value += balance_diff
@@ -236,7 +226,7 @@ class NCChangesTracker(NCContractStorage):
         """Check that all final balances are positive. If not, it raises NCInsufficientFunds."""
         for balance_key in self._balance_diff.keys():
             balance = self.get_balance(balance_key.token_uid)
-            if balance.value < 0:
+            if balance.value < SignedAmount(0):
                 raise NCInsufficientFunds(
                     f'negative balance for contract {self.nc_id.hex()} '
                     f'(balance={balance} token_uid={balance_key.token_uid.hex()})'
@@ -258,7 +248,7 @@ class NCChangesTracker(NCContractStorage):
     def add_balance(self, token_uid: bytes, amount: int) -> None:
         self.check_if_locked()
         internal_key = BalanceKey(self.nc_id, token_uid)
-        old = self._balance_diff.get(internal_key, 0)
+        old = self._balance_diff.get(internal_key, SignedAmount(0))
         new = old + amount
         self._balance_diff[internal_key] = new
 

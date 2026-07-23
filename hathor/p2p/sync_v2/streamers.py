@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntFlag
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional, Union
@@ -261,7 +250,7 @@ class TransactionsStreamingServer(_StreamingServerBase):
 
             # Check if this block is still in the best blockchain.
             if self.current_block.get_metadata().voided_by:
-                self.sync_agent.stop_tx_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
+                self._stop_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
                 return
 
             self.current_block = self.current_block.get_next_block_best_chain()
@@ -272,12 +261,22 @@ class TransactionsStreamingServer(_StreamingServerBase):
         assert self.is_running
         assert self.is_producing
 
+        # A reorg can move the requested last block off the best chain while this stream is
+        # running. Stop before advancing through its same-height replacement, whose transactions
+        # were not requested by the peer.
+        if self.last_block.get_metadata().voided_by:
+            self._stop_streaming_server(StreamEnd.STREAM_BECAME_VOIDED)
+            return
+
         try:
             cur = next(self.iter)
         except StopIteration:
-            # nothing more to send
+            # Nothing more to send. The iterator may have already stopped the server itself (for
+            # example when the current block became voided mid-stream), so only stop it if it is
+            # still running — otherwise we would stop it a second time and crash.
             self.log.debug('no more transactions, stopping streaming')
-            self.sync_agent.stop_tx_streaming_server(StreamEnd.END_HASH_REACHED)
+            if self.is_running:
+                self._stop_streaming_server(StreamEnd.END_HASH_REACHED)
             return
 
         # Skip blocks.

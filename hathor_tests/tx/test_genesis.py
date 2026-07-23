@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from unittest.mock import Mock
 
 from hathor.conf import HathorSettings
@@ -71,7 +74,7 @@ class GenesisTest(unittest.TestCase):
         genesis_blocks = [tx for tx in genesis if tx.is_block]
         genesis_block = genesis_blocks[0]
 
-        self.assertEqual(settings.GENESIS_TOKENS, sum([output.value for output in genesis_block.outputs]))
+        self.assertEqual(settings.GENESIS_TOKEN_ATOMIC_UNITS, sum([output.value for output in genesis_block.outputs]))
 
     def test_genesis_weight(self):
         genesis = self.storage.get_all_genesis()

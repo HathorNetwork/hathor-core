@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.crypto.util import decode_address
 from hathor.graphviz import GraphvizVisualizer
 from hathor.indexes import RocksDBIndexesManager
@@ -139,7 +142,7 @@ class BaseIndexesTest(unittest.TestCase):
                 tx_id=self._settings.GENESIS_BLOCK_HASH,
                 index=0,
                 address=GENESIS_ADDRESS_B58,
-                amount=self._settings.GENESIS_TOKENS,
+                amount=self._settings.GENESIS_TOKEN_ATOMIC_UNITS,
                 timelock=None,
                 heightlock=self._settings.REWARD_SPEND_MIN_BLOCKS,
             ),
@@ -148,7 +151,7 @@ class BaseIndexesTest(unittest.TestCase):
         # height just not enough should be empty
         self.assertEqual(
             list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=self._settings.HATHOR_TOKEN_UID,
-                                       target_amount=self._settings.GENESIS_TOKEN_UNITS,
+                                       target_amount=self._settings.GENESIS_TOKEN_MAIN_UNITS,
                                        target_height=self._settings.REWARD_SPEND_MIN_BLOCKS - 1)),
             [],
         )
@@ -156,7 +159,7 @@ class BaseIndexesTest(unittest.TestCase):
         # height is now enough
         self.assertEqual(
             list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=self._settings.HATHOR_TOKEN_UID,
-                                       target_amount=self._settings.GENESIS_TOKEN_UNITS,
+                                       target_amount=self._settings.GENESIS_TOKEN_MAIN_UNITS,
                                        target_height=self._settings.REWARD_SPEND_MIN_BLOCKS)),
             expected_genesis_utxos,
         )
@@ -164,7 +167,7 @@ class BaseIndexesTest(unittest.TestCase):
         # otherwise we can leave out the height and it should give the utxos
         self.assertEqual(
             list(utxo_index.iter_utxos(address=GENESIS_ADDRESS_B58, token_uid=self._settings.HATHOR_TOKEN_UID,
-                                       target_amount=self._settings.GENESIS_TOKEN_UNITS)),
+                                       target_amount=self._settings.GENESIS_TOKEN_MAIN_UNITS)),
             expected_genesis_utxos,
         )
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 FROM nginx:stable-alpine
 RUN rm /etc/nginx/conf.d/default.conf
 COPY cors_params /etc/nginx/cors_params

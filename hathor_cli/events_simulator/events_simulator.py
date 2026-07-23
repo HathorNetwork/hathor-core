@@ -1,19 +1,9 @@
-#  Copyright 2023 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import os
 from argparse import ArgumentParser, Namespace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from autobahn.twisted.resource import WebSocketResource
@@ -36,7 +26,16 @@ def create_parser() -> ArgumentParser:
     parser = create_parser()
     possible_scenarios = [scenario.name for scenario in Scenario]
 
-    parser.add_argument('--scenario', help=f'One of {possible_scenarios}', type=str, required=True)
+    scenario_group = parser.add_mutually_exclusive_group(required=True)
+    scenario_group.add_argument('--scenario', help=f'One of {possible_scenarios}', type=str)
+    scenario_group.add_argument('--file', help='external scenario file, e.g. "./my_scenario.py"', type=Path)
+
+    parser.add_argument(
+        '--function',
+        help='function name to call in the external scenario file (default: simulate)',
+        type=str,
+        default='simulate',
+    )
     parser.add_argument('--port', help='Port to run the WebSocket server', type=int, default=DEFAULT_PORT)
     parser.add_argument('--seed', help='The seed used to create simulated events', type=int)
 
@@ -47,15 +46,23 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     from hathorlib.conf import UNITTESTS_SETTINGS_FILEPATH
     os.environ['HATHOR_CONFIG_YAML'] = UNITTESTS_SETTINGS_FILEPATH
     from hathor_cli.events_simulator.event_forwarding_websocket_factory import EventForwardingWebsocketFactory
+    from hathor_cli.events_simulator.external_scenario import ExternalScenario
     from hathor_cli.events_simulator.scenario import Scenario
     from hathor.conf.get_settings import get_global_settings
     from hathor.simulator import Simulator
 
-    try:
-        scenario = Scenario[args.scenario]
-    except KeyError as e:
-        possible_scenarios = [scenario.name for scenario in Scenario]
-        raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
+    if args.function != 'simulate' and args.file is None:
+        raise ValueError('--function can only be used together with --file')
+
+    scenario: Scenario | ExternalScenario
+    if args.file is not None:
+        scenario = ExternalScenario(args.file, args.function)
+    else:
+        try:
+            scenario = Scenario[args.scenario]
+        except KeyError as e:
+            possible_scenarios = [s.name for s in Scenario]
+            raise ValueError(f'Invalid scenario "{args.scenario}". Choose one of {possible_scenarios}') from e
 
     settings = get_global_settings().model_copy(
         update={"REWARD_SPEND_MIN_BLOCKS": scenario.get_reward_spend_min_blocks()}
@@ -87,7 +94,7 @@ def execute(args: Namespace, reactor: 'ReactorProtocol') -> None:
     api.putChild(b'event_ws', WebSocketResource(forwarding_ws_factory))
     site = Site(root)
 
-    log.info('Started simulating events', scenario=args.scenario, seed=simulator.seed)
+    log.info('Started simulating events', scenario=args.file if args.file is not None else args.scenario, seed=simulator.seed)
 
     forwarding_ws_factory.start(stream_id='simulator_stream_id')
     scenario.simulate(simulator, manager)

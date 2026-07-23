@@ -1,23 +1,12 @@
-# Copyright 2026 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import os
 from enum import StrEnum, auto, unique
 from math import log
 from typing import Annotated, Optional
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, computed_field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator, model_validator
 from typing_extensions import Self
 
 from hathorlib.conf.utils import parse_hex_str
@@ -81,8 +70,13 @@ class HathorSettings(BaseModel):
     NATIVE_TOKEN_NAME: str = 'Hathor'
     NATIVE_TOKEN_SYMBOL: str = 'HTR'
 
-    # Number of decimal places for the Hathor token
-    DECIMAL_PLACES: int = 2
+    # Number of decimal places to be displayed for all tokens; it is simply cosmetic.
+    DISPLAY_DECIMAL_PLACES: int = 2
+
+    # Number of decimal places for each supported vertex decimal version.
+    # A version absent from this mapping is not supported on this network.
+    TOKEN_AMOUNT_V1_DECIMAL_PLACES: int = 2
+    TOKEN_AMOUNT_V2_DECIMAL_PLACES: int = 18
 
     # Minimum weight of a tx
     MIN_TX_WEIGHT: int = 14
@@ -111,38 +105,40 @@ class HathorSettings(BaseModel):
     # enable peer whitelist
     ENABLE_PEER_WHITELIST: bool = False
 
-    # Genesis pre-mined tokens
-    GENESIS_TOKEN_UNITS: int = 1 * (10 ** 9)  # 1B
+    # Genesis pre-mined tokens in main units, that is, whole tokens without decimal places.
+    GENESIS_TOKEN_MAIN_UNITS: int = 1 * (10 ** 9)  # 1B
 
-    GENESIS_TOKENS: int = 1 * (10 ** 9) * (10 ** 2)  # 100B = GENESIS_TOKEN_UNITS * (10 ** DECIMAL_PLACES)
+    @property
+    def GENESIS_TOKEN_ATOMIC_UNITS(self) -> int:
+        """Genesis pre-mined tokens in atomic units, that is, the on-chain integer amount."""
+        # Blocks are always V1.
+        return int(self.GENESIS_TOKEN_MAIN_UNITS * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
 
-    # Fee rate settings
-    FEE_PER_OUTPUT: int = 1
+    # Fee rate settings in V1 decimals (that is, 0.01 HTR)
+    FEE_PER_OUTPUT_V1: int = 1
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def FEE_DIVISOR(self) -> int:
         """Divisor used for evaluating fee amounts"""
-        result = 1 / self.TOKEN_DEPOSIT_PERCENTAGE
-        assert result.is_integer()
-        return int(result)
+        assert self.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR % self.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR == 0
+        return self.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR // self.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR
 
-    # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_UNITS_PER_BLOCK is equal to
-    # MINIMUM_TOKEN_UNITS_PER_BLOCK.
+    # To disable reward halving, just set this to `None` and make sure that INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK
+    # is equal to MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK.
     BLOCKS_PER_HALVING: Optional[int] = 2 * 60 * 24 * 365  # 1051200, every 365 days
 
-    INITIAL_TOKEN_UNITS_PER_BLOCK: int = 64
-    MINIMUM_TOKEN_UNITS_PER_BLOCK: int = 8
+    INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK: int = 64
+    MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK: int = 8
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
-    def INITIAL_TOKENS_PER_BLOCK(self) -> int:
-        return int(self.INITIAL_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES))
+    def INITIAL_TOKEN_ATOMIC_UNITS_PER_BLOCK(self) -> int:
+        # Blocks are always V1.
+        return int(self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
-    def MINIMUM_TOKENS_PER_BLOCK(self) -> int:
-        return int(self.MINIMUM_TOKEN_UNITS_PER_BLOCK * (10 ** self.DECIMAL_PLACES))
+    def MINIMUM_TOKEN_ATOMIC_UNITS_PER_BLOCK(self) -> int:
+        # Blocks are always V1.
+        return int(self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK * (10 ** self.TOKEN_AMOUNT_V1_DECIMAL_PLACES))
 
     # Assume that: amount < minimum
     # But, amount = initial / (2**n), where n = number_of_halvings. Thus:
@@ -152,10 +148,9 @@ class HathorSettings(BaseModel):
     # Applying log to both sides:
     #   n > log2(initial / minimum)
     #   n > log2(initial) - log2(minimum)
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def MAXIMUM_NUMBER_OF_HALVINGS(self) -> int:
-        return int(log(self.INITIAL_TOKEN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_UNITS_PER_BLOCK, 2))
+        return int(log(self.INITIAL_TOKEN_MAIN_UNITS_PER_BLOCK, 2) - log(self.MINIMUM_TOKEN_MAIN_UNITS_PER_BLOCK, 2))
 
     # Average time between blocks.
     AVG_TIME_BETWEEN_BLOCKS: int = 30  # in seconds
@@ -180,13 +175,11 @@ class HathorSettings(BaseModel):
     # Timestamp used for the genesis block
     GENESIS_BLOCK_TIMESTAMP: int = 1572636343
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def GENESIS_TX1_TIMESTAMP(self) -> int:
         """Timestamp used for the first genesis transaction."""
         return self.GENESIS_BLOCK_TIMESTAMP + 1
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def GENESIS_TX2_TIMESTAMP(self) -> int:
         """Timestamp used for the second genesis transaction."""
@@ -340,22 +333,23 @@ class HathorSettings(BaseModel):
     # Whether miners are assumed to mine txs by default
     STRATUM_MINE_TXS_DEFAULT: bool = True
 
-    # Percentage used to calculate the number of HTR that must be deposited when minting new tokens
-    # The same percentage is used to calculate the number of HTR that must be withdraw when melting tokens
+    # Percentage used to calculate the amount of HTR that must be deposited when minting new tokens,
+    # expressed with a numerator and denominator in parts per billion, where 10**7 / 10**9 = 0.01 = 1%.
+    # The same percentage is used to calculate the number of HTR that must be withdrawn when melting tokens
     # See for further information, see [rfc 0011-token-deposit].
-    TOKEN_DEPOSIT_PERCENTAGE: float = 0.01
+    TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR: int = 10 ** 7
+    TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR: int = 10 ** 9
 
-    @field_validator('TOKEN_DEPOSIT_PERCENTAGE', mode='after')
-    @classmethod
-    def _validate_token_deposit_percentage(cls, token_deposit_percentage: float) -> float:
-        """Validate that TOKEN_DEPOSIT_PERCENTAGE results in an integer FEE_DIVISOR."""
-        result = 1 / token_deposit_percentage
-        if not result.is_integer():
+    @model_validator(mode='after')
+    def _validate_token_deposit_percentage(self) -> Self:
+        """Validate that TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR results in an integer FEE_DIVISOR."""
+        if self.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR % self.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR != 0:
             raise ValueError(
-                f'TOKEN_DEPOSIT_PERCENTAGE must result in an integer FEE_DIVISOR. '
-                f'Got TOKEN_DEPOSIT_PERCENTAGE={token_deposit_percentage}, FEE_DIVISOR={result}'
+                f'TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR must result in an integer FEE_DIVISOR. '
+                f'Got TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR={self.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR}, '
+                f'FEE_DIVISOR={self.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR / self.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR}'
             )
-        return token_deposit_percentage
+        return self
 
     # Array with the settings parameters that are used when calculating the settings hash
     P2P_SETTINGS_HASH_FIELDS: list[str] = [
@@ -561,20 +555,6 @@ class HathorSettings(BaseModel):
     NC_MEMORY_LIMIT_TO_CALL_METHOD: int = 1024 * 1024 * 1024  # 1GiB
 
     @model_validator(mode='after')
-    def _validate_genesis_tokens(self) -> Self:
-        """Validate genesis tokens."""
-        genesis_tokens = self.GENESIS_TOKENS
-        genesis_token_units = self.GENESIS_TOKEN_UNITS
-        decimal_places = self.DECIMAL_PLACES
-
-        if genesis_tokens != genesis_token_units * (10 ** decimal_places):
-            raise ValueError(
-                f'invalid tokens: GENESIS_TOKENS={genesis_tokens}, '
-                f'GENESIS_TOKEN_UNITS={genesis_token_units}, DECIMAL_PLACES={decimal_places}'
-            )
-        return self
-
-    @model_validator(mode='after')
     def _validate_peer_connection_slots(self) -> Self:
         slot_total = (
             self.P2P_PEER_MAX_INCOMING_CONNECTIONS
@@ -588,5 +568,13 @@ class HathorSettings(BaseModel):
                 f'P2P_PEER_MAX_OUTGOING_CONNECTIONS ({self.P2P_PEER_MAX_OUTGOING_CONNECTIONS}) + '
                 f'P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS '
                 f'({self.P2P_PEER_MAX_BOOTSTRAP_PEERS_CONNECTIONS}) = {slot_total}'
+            )
+        return self
+
+    @model_validator(mode='after')
+    def _validate_token_amount_decimal_places(self) -> Self:
+        if self.TOKEN_AMOUNT_V2_DECIMAL_PLACES < self.TOKEN_AMOUNT_V1_DECIMAL_PLACES:
+            raise ValueError(
+                'TOKEN_AMOUNT_V2_DECIMAL_PLACES must be greater than or equal to TOKEN_AMOUNT_V1_DECIMAL_PLACES'
             )
         return self

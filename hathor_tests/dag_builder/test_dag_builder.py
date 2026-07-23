@@ -1,6 +1,8 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import pytest
 
-from hathor.conf.settings import HATHOR_TOKEN_UID
 from hathor.nanocontracts import Blueprint, Context, OnChainBlueprint, public
 from hathor.nanocontracts.types import NCDepositAction, NCWithdrawalAction, TokenUid
 from hathor.nanocontracts.utils import load_builtin_blueprint_for_ocb
@@ -13,6 +15,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.nanocontracts import test_blueprints
+from hathorlib.conf.settings import HATHOR_TOKEN_UID
 
 
 class MyBlueprint(Blueprint):

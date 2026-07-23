@@ -1,16 +1,5 @@
-#  Copyright 2025 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, field
 from enum import StrEnum, auto, unique
@@ -19,6 +8,7 @@ from typing import Any, Self, TypeAlias
 from typing_extensions import Literal, assert_never
 
 from hathorlib.nanocontracts.types import BlueprintId, ContractId, TokenUid, VertexId
+from hathorlib.token_amount import SignedAmount, UnsignedAmount
 from hathorlib.token_info import TokenVersion
 
 
@@ -61,7 +51,7 @@ class CreateTokenRecord:
     """Record for token creation."""
     type: Literal[IndexRecordType.CREATE_TOKEN] = field(default=IndexRecordType.CREATE_TOKEN, init=False)
     token_uid: TokenUid
-    amount: int
+    amount: UnsignedAmount
     token_symbol: str
     token_name: str
     token_version: Literal[TokenVersion.DEPOSIT] | Literal[TokenVersion.FEE]
@@ -102,7 +92,7 @@ class UpdateTokenBalanceRecord:
         init=False,
     )
     token_uid: TokenUid
-    amount: int
+    amount: SignedAmount
 
     def __post_init__(self) -> None:
         assert self.type == IndexRecordType.UPDATE_TOKEN_BALANCE
@@ -114,7 +104,7 @@ class UpdateTokenBalanceRecord:
     def from_json(cls, json_dict: dict[str, Any]) -> Self:
         return cls(
             token_uid=TokenUid(VertexId(bytes.fromhex(json_dict['token_uid']))),
-            amount=json_dict['amount'],
+            amount=SignedAmount(json_dict['amount']),
         )
 
 

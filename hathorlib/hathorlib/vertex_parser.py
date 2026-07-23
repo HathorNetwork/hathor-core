@@ -1,16 +1,5 @@
-#  Copyright 2024 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -26,10 +15,20 @@ class VertexParser:
     @staticmethod
     def get_supported_headers() -> dict[VertexHeaderId, type[VertexBaseHeader]]:
         """Return a dict of supported headers."""
-        from hathorlib.headers import FeeHeader, NanoHeader, VertexHeaderId
+        # NOTE: MintHeader/MeltHeader (0x14/0x15) imports and dict entries are
+        # deferred — see hathorlib/headers/__init__.py for the full explanation.
+        from hathorlib.headers import (
+            FeeHeader,
+            NanoHeader,
+            ShieldedOutputsHeader,
+            UnshieldBalanceHeader,
+            VertexHeaderId,
+        )
         return {
             VertexHeaderId.NANO_HEADER: NanoHeader,
             VertexHeaderId.FEE_HEADER: FeeHeader,
+            VertexHeaderId.SHIELDED_OUTPUTS_HEADER: ShieldedOutputsHeader,
+            VertexHeaderId.UNSHIELD_BALANCE_HEADER: UnshieldBalanceHeader,
         }
 
     @staticmethod

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from hathor.conf import HathorSettings
 from hathor.crypto.util import get_address_b58_from_bytes
 from hathor.indexes import RocksDBIndexesManager

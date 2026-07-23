@@ -1,16 +1,5 @@
-#  Copyright 2025 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -32,7 +21,8 @@ class BytesLikeNCType(NCType[B]):
     """ Represents values from class that inherit/new-type `bytes`.
     """
 
-    __slots__ = ('_actual_type')
+    # XXX: `_actual_type` slot is inherited from the `NCType` base class
+    __slots__ = ()
     _is_hashable = True
     _actual_type: type[B]
 
@@ -50,7 +40,7 @@ class BytesLikeNCType(NCType[B]):
     def _check_value(self, value: bytes, /, *, deep: bool) -> None:
         if isclass(self._actual_type):
             if not isinstance(value, (bytes, self._actual_type)):
-                raise TypeError('expected {self._actual_type} instance')
+                raise TypeError(f'expected {self._actual_type} instance')
         else:
             if not isinstance(value, bytes):
                 raise TypeError('expected bytes instance')
@@ -82,11 +72,10 @@ class BytesNCType(BytesLikeNCType[bytes]):
     """ Represents builtin `bytes` values.
     """
     __slots__ = ()
-    _actual_type = bytes
 
     @override
     def __init__(self) -> None:
-        pass
+        super().__init__(bytes)
 
     @override
     @classmethod

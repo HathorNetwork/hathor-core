@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """DifficultyAdjustmentAlgorithm: the Hathor DAA, parameterized by a `DAAConfig`."""
 
@@ -28,6 +17,7 @@ from hathor.daa.common import (
 )
 from hathor.profiler import get_cpu_profiler
 from hathor.types import VertexId
+from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -102,12 +92,12 @@ class DifficultyAdjustmentAlgorithm:
         """Return the ids of the required blocks to call calculate_block_difficulty."""
         return _get_block_dependencies(self._settings, block, parent_block_getter)
 
-    def get_tokens_issued_per_block(self, height: int) -> int:
+    def get_tokens_issued_per_block(self, height: int) -> UnsignedAmount:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         amount = _get_base_tokens_issued_per_block(self._settings, height)
         return amount // self._config.reward_reduction_factor
 
-    def get_reward_for_next_block(self, parent_block: Block) -> int:
+    def get_reward_for_next_block(self, parent_block: Block) -> UnsignedAmount:
         """Return the reward for the next block after parent_block."""
         return self.get_tokens_issued_per_block(parent_block.get_height() + 1)
 

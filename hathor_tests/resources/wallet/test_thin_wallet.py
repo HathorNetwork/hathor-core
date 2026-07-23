@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import math
 from typing import Any, Generator
 
@@ -8,6 +11,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction, TxInput, TxOutput
 from hathor.transaction.scripts import P2PKH, create_output_script, parse_address_script
 from hathor.transaction.token_info import TokenVersion
+from hathor.util import json_loadb
 from hathor.wallet.resources.thin_wallet import (
     AddressHistoryResource,
     SendTokensResource,
@@ -16,6 +20,12 @@ from hathor.wallet.resources.thin_wallet import (
 )
 from hathor_tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx, create_fee_tokens, create_tokens
+
+# Valid base58check payload (25 bytes, correct checksum) whose string is only 33 characters long, from the
+# incident in issue #1758. It passes `decode_address` but must be rejected at the API boundary.
+ADDRESS_33 = '1P8cW6gqriMRhKBR98mqFXXYj3shYySuJ'
+# 34 characters and valid checksum, but testnet version byte (0x49) — invalid on the unittests network.
+ADDRESS_WRONG_VERSION = 'WNg2svm2qApxheBKndKGQ9sRwporvRgRpT'
 
 
 class SendTokensTest(_BaseResourceTest._ResourceTest):
@@ -575,6 +585,24 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_data = response_history.json_value()
         self.assertFalse(response_data['success'])
 
+        # valid checksum but only 33 characters: must be rejected before reaching the address index
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': ADDRESS_33.encode('ascii')
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+        # valid checksum but wrong network version byte
+        response_history = yield self.web_address_history.get(
+            'thin_wallet/address_history', {
+                b'addresses[]': ADDRESS_WRONG_VERSION.encode('ascii')
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
         # invalid tx_version parameter
         address = self.get_address(0)
         response_history = yield self.web_address_history.get(
@@ -599,6 +627,24 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response_history = yield self.web_address_history.post(
             'thin_wallet/address_history', {
                 'addresses[]': 'aaa'
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+        # valid checksum but only 33 characters: must be rejected before reaching the address index
+        response_history = yield self.web_address_history.post(
+            'thin_wallet/address_history', {
+                'addresses': [ADDRESS_33]
+            }
+        )
+        response_data = response_history.json_value()
+        self.assertFalse(response_data['success'])
+
+        # valid checksum but wrong network version byte
+        response_history = yield self.web_address_history.post(
+            'thin_wallet/address_history', {
+                'addresses': [ADDRESS_WRONG_VERSION]
             }
         )
         response_data = response_history.json_value()
@@ -645,6 +691,28 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         response = yield self.web.post('thin_wallet/send_tokens', {'tx_hex': 'aaa'})
         data = response.json_value()
         self.assertFalse(data['success'])
+
+    def test_send_tokens_invalid_json_body(self):
+        # An empty or malformed body reaches the resource as raw bytes (not None); it must
+        # produce a graceful failure response with success=False.
+        for raw_body in (b'', b'   ', b'{not json'):
+            request = TestDummyRequest('POST', 'thin_wallet/send_tokens')
+            request.content.setvalue(raw_body)
+            result = self.web.resource.render(request)
+            data = json_loadb(result)
+            self.assertFalse(data['success'])
+
+        # empty body is reported as missing JSON
+        request = TestDummyRequest('POST', 'thin_wallet/send_tokens')
+        request.content.setvalue(b'')
+        data = json_loadb(self.web.resource.render(request))
+        self.assertEqual(data['return_code'], 'missing_json')
+
+        # non-empty malformed JSON is reported as invalid JSON
+        request = TestDummyRequest('POST', 'thin_wallet/send_tokens')
+        request.content.setvalue(b'{not json')
+        data = json_loadb(self.web.resource.render(request))
+        self.assertEqual(data['return_code'], 'invalid_json')
 
     @inlineCallbacks
     def test_token_history_zero_count(self):
@@ -741,6 +809,17 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
             b'timestamp': b'1578118186',
             b'page': b'next',
             b'hash': b'000',
+        })
+        data = response.json_value()
+        self.assertFalse(data['success'])
+
+        # valid hex hash but wrong length (31 bytes): must be rejected before reaching the tokens index
+        response = yield resource.get('thin_wallet/token_history', {
+            b'id': b'000003a3b261e142d3dfd84970d3a50a93b5bc3a66a3b6ba973956148a3eb824',
+            b'count': b'3',
+            b'timestamp': b'1578118186',
+            b'page': b'next',
+            b'hash': b'00' * 31,
         })
         data = response.json_value()
         self.assertFalse(data['success'])

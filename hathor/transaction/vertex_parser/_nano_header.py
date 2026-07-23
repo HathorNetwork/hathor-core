@@ -1,16 +1,5 @@
-#  Copyright 2026 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """Serialization/deserialization for NanoHeader."""
 
@@ -20,7 +9,7 @@ from dataclasses import dataclass
 
 from hathor.serialization import Deserializer, Serializer
 from hathor.serialization.encoding.leb128 import decode_leb128, encode_leb128
-from hathor.serialization.encoding.output_value import decode_output_value, encode_output_value
+from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.headers.nano_header import (
     _NC_SCRIPT_LEN_MAX_BYTES,
     ADDRESS_LEN_BYTES,
@@ -30,6 +19,8 @@ from hathor.transaction.headers.nano_header import (
 )
 from hathor.transaction.headers.types import VertexHeaderId
 from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.serialization.encoding.output_value import encode_output_value
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -52,6 +43,7 @@ class NanoHeaderData:
 def deserialize_nano_header(
     deserializer: Deserializer,
     *,
+    token_amount_version: TokenAmountVersion,
     verbose: VerboseCallback = None,
 ) -> NanoHeaderData:
     """Deserialize nano header data from the deserializer."""
@@ -89,7 +81,7 @@ def deserialize_nano_header(
     if verbose:
         verbose('nc_actions_len', nc_actions_len)
     for _ in range(nc_actions_len):
-        action = _deserialize_nano_action(deserializer)
+        action = _deserialize_nano_action(deserializer, token_amount_version=token_amount_version)
         nc_actions.append(action)
 
     nc_address = bytes(deserializer.read_bytes(ADDRESS_LEN_BYTES))
@@ -117,14 +109,18 @@ def deserialize_nano_header(
     )
 
 
-def _deserialize_nano_action(deserializer: Deserializer) -> NanoHeaderAction:
+def _deserialize_nano_action(
+    deserializer: Deserializer,
+    *,
+    token_amount_version: TokenAmountVersion,
+) -> NanoHeaderAction:
     """Deserialize a single NanoHeaderAction from the deserializer."""
     from hathor.nanocontracts.types import NCActionType
 
     type_bytes = bytes(deserializer.read_bytes(1))
     action_type = NCActionType.from_bytes(type_bytes)
     token_index = deserializer.read_byte()
-    amount = decode_output_value(deserializer)
+    amount = decode_output_value(deserializer, token_amount_version=token_amount_version)
     return NanoHeaderAction(
         type=action_type,
         token_index=token_index,
@@ -137,7 +133,13 @@ def _deserialize_nano_action(deserializer: Deserializer) -> NanoHeaderAction:
 # ---------------------------------------------------------------------------
 
 
-def serialize_nano_header(serializer: Serializer, header: NanoHeader, *, skip_signature: bool = False) -> None:
+def serialize_nano_header(
+    serializer: Serializer,
+    header: NanoHeader,
+    *,
+    token_amount_version: TokenAmountVersion,
+    skip_signature: bool = False,
+) -> None:
     """Serialize a NanoHeader into the serializer."""
     encoded_method = header.nc_method.encode('ascii')
 
@@ -151,7 +153,7 @@ def serialize_nano_header(serializer: Serializer, header: NanoHeader, *, skip_si
 
     serializer.write_bytes(int_to_bytes(len(header.nc_actions), 1))
     for action in header.nc_actions:
-        _serialize_nano_action(serializer, action)
+        _serialize_nano_action(serializer, action, token_amount_version=token_amount_version)
 
     serializer.write_bytes(header.nc_address)
     if not skip_signature:
@@ -167,8 +169,13 @@ def serialize_nano_header(serializer: Serializer, header: NanoHeader, *, skip_si
         )
 
 
-def _serialize_nano_action(serializer: Serializer, action: NanoHeaderAction) -> None:
+def _serialize_nano_action(
+    serializer: Serializer,
+    action: NanoHeaderAction,
+    *,
+    token_amount_version: TokenAmountVersion,
+) -> None:
     """Serialize a single NanoHeaderAction into the serializer."""
     serializer.write_bytes(action.type.to_bytes())
     serializer.write_bytes(int_to_bytes(action.token_index, 1))
-    encode_output_value(serializer, action.amount)
+    encode_output_value(serializer, action.amount, token_amount_version=token_amount_version)

@@ -1,16 +1,5 @@
-#  Copyright 2025 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import re
 
@@ -32,7 +21,7 @@ from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
 
 
 class MyBlueprint(Blueprint):
-    @public
+    @public(allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
         pass
 
@@ -78,6 +67,7 @@ class TestAllowedActions(BlueprintTestCase):
             NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
             NCAcquireAuthorityAction(token_uid=self.token_a, mint=True, melt=True),
         }
+        self.grant_action = NCGrantAuthorityAction(token_uid=self.token_a, mint=True, melt=True)
 
         all_actions_types = [action.type for action in self.all_actions]
         for action_type in NCActionType:
@@ -93,7 +83,7 @@ class TestAllowedActions(BlueprintTestCase):
         )
 
     def test_no_actions_allowed(self) -> None:
-        self.runner.create_contract(self.contract_id, self.blueprint_id, self._get_context())
+        self.runner.create_contract(self.contract_id, self.blueprint_id, self._get_context(self.grant_action))
         for action in self.all_actions:
             ctx = self._get_context(action)
 
@@ -116,7 +106,7 @@ class TestAllowedActions(BlueprintTestCase):
     def test_allow_specific_action_on_public(self) -> None:
         for allowed_action in self.all_actions:
             runner = self.build_runner()
-            runner.create_contract(self.contract_id, self.blueprint_id, self._get_context())
+            runner.create_contract(self.contract_id, self.blueprint_id, self._get_context(self.grant_action))
             method_name = allowed_action.name.lower()
             forbidden_actions = self.all_actions.difference({allowed_action})
 
@@ -129,7 +119,7 @@ class TestAllowedActions(BlueprintTestCase):
     def test_allow_specific_action_on_fallback(self) -> None:
         for allowed_action in self.all_actions:
             class MyOtherBlueprint(Blueprint):
-                @public
+                @public(allow_grant_authority=True)
                 def initialize(self, ctx: Context) -> None:
                     pass
 
@@ -139,7 +129,7 @@ class TestAllowedActions(BlueprintTestCase):
 
             runner = self.build_runner()
             blueprint_id = self._register_blueprint_class(MyOtherBlueprint)
-            runner.create_contract(self.contract_id, blueprint_id, self._get_context())
+            runner.create_contract(self.contract_id, blueprint_id, self._get_context(self.grant_action))
             method_name = allowed_action.name.lower()
             forbidden_actions = self.all_actions.difference({allowed_action})
 

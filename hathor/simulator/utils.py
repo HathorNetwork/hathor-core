@@ -1,26 +1,17 @@
-#  Copyright 2023 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from typing import Optional, cast
 
 from hathor.crypto.util import decode_address
+from hathor.dag_builder import DAGBuilder
 from hathor.manager import HathorManager
 from hathor.transaction import Block, Transaction
 from hathor.types import Address, VertexId
+from hathorlib.token_amount import UnsignedAmount
 
 
-def gen_new_tx(manager: HathorManager, address: str, value: int) -> Transaction:
+def gen_new_tx(manager: HathorManager, address: str, value: UnsignedAmount) -> Transaction:
     """
     Generate and return a new transaction.
 
@@ -173,7 +164,34 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
     if use_same_parents:
         tx2.parents = list(tx.parents)
     else:
+        # the best block timestamp may be ahead of the clock (e.g. blocks mined less than a second apart), and
+        # `get_new_tx_parents` requires a timestamp not older than the best block's
+        tx2.timestamp = max(tx2.timestamp, manager.get_timestamp_for_new_vertex())
         tx2.parents = manager.get_new_tx_parents(tx2.timestamp)
 
     manager.cpu_mining_service.resolve(tx2)
     return tx2
+
+
+def create_dag_builder(manager: 'HathorManager') -> 'DAGBuilder':
+    from mnemonic import Mnemonic
+
+    from hathor.wallet import HDWallet
+
+    seed = (
+        "coral light army gather adapt blossom school alcohol coral light army gather "
+        "adapt blossom school alcohol coral light army gather adapt blossom school awesome"
+    )
+
+    def create_random_hd_wallet():
+        m = Mnemonic('english')
+        words = m.to_mnemonic(manager.rng.randbytes(32))
+        hd = HDWallet(words=words)
+        hd._manually_initialize()
+        return hd
+
+    return DAGBuilder.from_manager(
+        manager=manager,
+        genesis_words=seed,
+        wallet_factory=create_random_hd_wallet,
+    )

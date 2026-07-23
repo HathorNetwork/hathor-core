@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import sys
 import time
@@ -69,6 +58,8 @@ from hathor.verification.verification_service import VerificationService
 from hathor.vertex_handler import VertexHandler
 from hathor.wallet import BaseWallet
 from hathorlib.base_transaction import tx_or_block_from_bytes as lib_tx_or_block_from_bytes
+from hathorlib.token_amount import UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.websocket.factory import HathorAdminWebsocketFactory
@@ -410,7 +401,7 @@ class HathorManager:
         if save_to:
             self.profiler.dump_stats(save_to)
 
-    def get_nc_runner(self, block: Block) -> Runner:
+    def get_nc_runner(self, block: Block, *, token_amount_version: TokenAmountVersion) -> Runner:
         """Return a contract runner for a given block."""
         nc_storage_factory = self.consensus_algorithm.nc_storage_factory
         block_storage = get_block_storage_from_block(nc_storage_factory, block)
@@ -418,12 +409,8 @@ class HathorManager:
         return self.runner_factory.create(
             runtime_version=features.nano_runtime_version,
             block_storage=block_storage,
+            token_amount_version=token_amount_version
         )
-
-    def get_best_block_nc_runner(self) -> Runner:
-        """Return a contract runner for the best block."""
-        best_block = self.tx_storage.get_best_block()
-        return self.get_nc_runner(best_block)
 
     def get_nc_block_storage(self, block: Block) -> NCBlockStorage:
         """Return the nano block storage for a given block."""
@@ -796,7 +783,7 @@ class HathorManager:
         )
         return block
 
-    def get_tokens_issued_per_block(self, height: int) -> int:
+    def get_tokens_issued_per_block(self, height: int) -> UnsignedAmount:
         """Return the number of tokens issued (aka reward) per block of a given height."""
         best_block = self.tx_storage.get_best_block()
         return self.daa_factory.create_from_parent(best_block).get_tokens_issued_per_block(height)

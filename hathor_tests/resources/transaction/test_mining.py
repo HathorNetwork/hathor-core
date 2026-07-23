@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 from twisted.internet.defer import inlineCallbacks
 
 from hathor.mining.cpu_mining_service import CpuMiningService
@@ -48,7 +51,8 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
             },
             'tokens': [],
             'data': '',
-            'signal_bits': 0
+            'signal_bits': 0,
+            'token_amount_version': 1,
         })
 
     @inlineCallbacks
@@ -88,7 +92,8 @@ class MiningApiTest(_BaseResourceTest._ResourceTest):
             },
             'tokens': [],
             'data': '',
-            'signal_bits': 0
+            'signal_bits': 0,
+            'token_amount_version': 1,
         })
 
     @inlineCallbacks

@@ -1,16 +1,5 @@
-# Copyright 2021 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 import gc
 import os
@@ -38,6 +27,7 @@ METRIC_INFO = {
     'best_block_height': 'Height of best chain',
     'websocket_connections': 'Number of connections in the websocket',
     'subscribed_addresses': 'Number of subscribed addresses in the websocket',
+    'mining_ws_connections': 'Number of subscribed addresses in the mining websocket',
     'completed_jobs': 'Number of completed jobs in stratum',
     'blocks_found': 'Number of blocks found by the miner in stratum',
     'estimated_hash_rate': 'Estimated hash rate for stratum miners',

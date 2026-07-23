@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
 import base64
 import os
 import string
@@ -157,6 +160,9 @@ def gen_custom_base_tx(manager: HathorManager,
         elif not tx_base.is_block:
             tx2.parents.append(tx_base.parents[0])
         else:
+            # the best block timestamp may be ahead of the clock (e.g. blocks mined less than a second apart in
+            # the simulator), and `get_new_tx_parents` requires a timestamp not older than the best block's
+            tx2.timestamp = max(tx2.timestamp, manager.get_timestamp_for_new_vertex())
             tx2.parents.extend(manager.get_new_tx_parents(tx2.timestamp))
             tx2.parents = tx2.parents[:2]
     assert len(tx2.parents) == 2
@@ -596,7 +602,7 @@ def create_fee_tokens(
     outputs.append(TxOutput(TxOutput.TOKEN_MELT_MASK, script, 0b10000001))
 
     # fee
-    fee = settings.FEE_PER_OUTPUT
+    fee = settings.FEE_PER_OUTPUT_V1
 
     # fee output
     outputs.append(TxOutput(genesis_block.outputs[0].value - fee - (genesis_output_amount or 0), script, 0))
@@ -635,26 +641,6 @@ def create_fee_tokens(
         manager.reactor.advance(8)
 
     return tx
-
-
-def get_deposit_token_amount_from_htr(htr_amount: int) -> int:
-    """
-    Calculate how many tokens correspond to a given HTR amount based on the
-    configured TOKEN_DEPOSIT_PERCENTAGE.
-
-    Returns
-    -------
-    int
-        The smallest integer number of tokens that covers the given HTR amount.
-    Raises
-    ------
-    AssertionError
-        If the computed token amount is not an integer (this should not occur
-        when TOKEN_DEPOSIT_PERCENTAGE is a positive divisor).
-    """
-    token_amount = abs(htr_amount / settings.TOKEN_DEPOSIT_PERCENTAGE)
-    assert token_amount.is_integer()
-    return int(token_amount)
 
 
 def create_script_with_sigops(nops: int) -> bytes:

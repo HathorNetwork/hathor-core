@@ -1,16 +1,5 @@
-# Copyright 2023 Hathor Labs
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -33,6 +22,8 @@ from hathorlib.nanocontracts.blueprint_syntax_validation import (
 from hathorlib.nanocontracts.exception import BlueprintSyntaxError, NCSerializationError
 from hathorlib.nanocontracts.faux_immutable import FauxImmutableMeta
 from hathorlib.serialization import SerializationError
+from hathorlib.token_amount import UnsignedAmount
+from hathorlib.token_amount_version import TokenAmountVersion
 from hathorlib.utils import get_deposit_token_withdraw_amount
 from hathorlib.utils.address import decode_address, get_address_b58_from_bytes
 from hathorlib.utils.typing import InnerTypeMixin
@@ -559,7 +550,7 @@ class NCFee:
     token_uid: TokenUid
     amount: int
 
-    def get_htr_value(self, settings: HathorSettings) -> int:
+    def __get_htr_value__(self, settings: HathorSettings, token_amount_version: TokenAmountVersion) -> UnsignedAmount:
         """
         Get the amount converted to HTR
         """

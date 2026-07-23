@@ -1,16 +1,5 @@
-#  Copyright 2026 Hathor Labs
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
 
 """Shared serialization/deserialization primitives for graph fields, TxInput, and TxOutput."""
 
@@ -19,10 +8,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from hathor.serialization import Deserializer, Serializer
-from hathor.serialization.encoding.output_value import decode_output_value
 from hathor.transaction.base_transaction import TX_HASH_SIZE
 from hathor.transaction.exceptions import SerializedSizeError
-from hathor.transaction.util import VerboseCallback, int_to_bytes, output_value_to_bytes
+from hathor.transaction.util import VerboseCallback, int_to_bytes
+from hathorlib.serialization.encoding.output_value import decode_output_value, encode_output_value
+from hathorlib.token_amount_version import TokenAmountVersion
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -65,9 +55,14 @@ def serialize_tx_input_sighash(serializer: Serializer, tx_input: TxInput) -> Non
     serializer.write_bytes(int_to_bytes(0, 2))
 
 
-def serialize_tx_output(serializer: Serializer, tx_output: TxOutput) -> None:
+def serialize_tx_output(
+    serializer: Serializer,
+    tx_output: TxOutput,
+    *,
+    token_amount_version: TokenAmountVersion,
+) -> None:
     """Serialize a TxOutput. Matches bytes(TxOutput)."""
-    serializer.write_bytes(output_value_to_bytes(tx_output.value))
+    encode_output_value(serializer, tx_output.value, token_amount_version=token_amount_version)
     serializer.write_bytes(int_to_bytes(tx_output.token_data, 1))
     serializer.write_bytes(int_to_bytes(len(tx_output.script), 2))
     serializer.write_bytes(tx_output.script)
@@ -142,6 +137,7 @@ def _deserialize_tx_input(
 def _deserialize_tx_output(
     deserializer: Deserializer,
     *,
+    token_amount_version: TokenAmountVersion,
     verbose: VerboseCallback = None,
 ) -> 'TxOutput':
     """Deserialize a single TxOutput. Matches TxOutput.create_from_bytes()."""
@@ -150,7 +146,7 @@ def _deserialize_tx_output(
     from hathor.transaction.exceptions import InvalidOutputValue
 
     try:
-        value = decode_output_value(deserializer)
+        value = decode_output_value(deserializer, token_amount_version=token_amount_version)
     except BadDataError as e:
         raise InvalidOutputValue(*e.args) from e
     if verbose:
