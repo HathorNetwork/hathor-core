@@ -663,3 +663,27 @@ class VertexHeadersTest(unittest.TestCase):
         tx5.timestamp = int(self.manager.reactor.seconds())
         self.dag_builder._exporter._vertex_resolver(tx5)
         self.manager.vertex_handler.on_new_mempool_transaction(tx5)
+
+    def test_unseen_fee_token_on_mempool(self) -> None:
+        artifacts = self.dag_builder.build_from_str('''
+            blockchain genesis b[1..10]
+            b10 < dummy
+
+            FBT.token_version = fee
+            FBT.fee = 1 HTR
+
+            tx.out[0] = 123 FBT
+            tx.fee = 100 DBT
+        ''')
+
+        dbt, tx = artifacts.get_typed_vertices(('DBT', 'tx'), Transaction)
+
+        assert tx.has_fees()
+        fees = tx.get_fee_header().fees
+        assert len(fees) == 1
+        fee_entry = fees[0]
+        assert tx.get_token_uid(fee_entry.token_index) == dbt.hash
+
+        artifacts.propagate_with(self.manager, up_to_before='tx')
+        tx.timestamp = int(self.manager.reactor.seconds())
+        assert self.manager.vertex_handler.on_new_mempool_transaction(tx)
