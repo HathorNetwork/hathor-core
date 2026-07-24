@@ -72,6 +72,10 @@ class UtxoSearchResource(Resource):
 
         # token_uid parameter must be a valid hash
         try:
+            if len(args['token_uid']) % 2 != 0:
+                raise ValueError(
+                    f'non-hexadecimal number found in fromhex() arg at position {len(args["token_uid"])}'
+                )
             token_uid = bytes.fromhex(args['token_uid'])
             if token_uid != self._settings.HATHOR_TOKEN_UID and len(token_uid) != 32:
                 raise ValueError('not a valid hash length')
