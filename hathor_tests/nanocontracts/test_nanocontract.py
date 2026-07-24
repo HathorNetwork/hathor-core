@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
-from unittest.mock import Mock
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -14,7 +13,6 @@ from hathor.crypto.util import (
     get_address_from_public_key_bytes,
     get_public_key_bytes_compressed,
 )
-from hathor.feature_activation.utils import Features
 from hathor.nanocontracts.blueprint import Blueprint
 from hathor.nanocontracts.context import Context
 from hathor.nanocontracts.exception import NCInvalidSignature
@@ -90,7 +88,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         self.genesis = self.peer.tx_storage.get_all_genesis()
         self.genesis_txs = [tx for tx in self.genesis if not tx.is_block]
 
-        self.verification_params = VerificationParams.for_mempool(best_block=Mock(), features=Features.all_enabled())
+        self.verification_params = VerificationParams.for_apis(self.peer.tx_storage)
 
     def _create_nc(
         self,
@@ -394,7 +392,7 @@ class NCNanoContractTestCase(unittest.TestCase):
         timestamp = 1 + max(tx.timestamp for tx in self.genesis)
 
         nc = self._get_nc(parents=parents, timestamp=timestamp)
-        self.assertTrue(self.peer.on_new_tx(nc))
+        self.assertTrue(self.peer.vertex_handler.on_new_trusted_vertex(nc))
         return nc
 
     def test_dag_call_public_method(self) -> None:
@@ -410,7 +408,7 @@ class NCNanoContractTestCase(unittest.TestCase):
             parents=parents,
             timestamp=timestamp,
         )
-        self.assertTrue(self.peer.on_new_tx(nc2))
+        self.assertTrue(self.peer.vertex_handler.on_new_trusted_vertex(nc2))
 
     def test_get_context(self) -> None:
         tx_storage = self.peer.tx_storage

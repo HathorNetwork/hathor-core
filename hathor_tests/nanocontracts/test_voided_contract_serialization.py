@@ -58,17 +58,17 @@ class VoidedContractSerializationTest(BlueprintTestCase):
         assert b12.storage is None
         assert b12.get_metadata().validation.is_initial()
 
-        # manually add call_tx as if it was received from the push_tx endpoint
-        # XXX: in the future if this has to be refactored check `hathor/transaction/resources/push_tx.py` and mimick it
+        # manually add call_tx as a valid unconfirmed tx; the trusted entry point skips the
+        # mempool-entry restrictions, which would reject the DAG builder's historical timestamp
         call_tx.storage = self.manager.tx_storage
-        self.manager.push_tx(call_tx, allow_non_standard_script=True)
+        assert self.manager.vertex_handler.on_new_trusted_vertex(call_tx)
         call_meta = call_tx.get_metadata()
         assert call_meta.validation.is_valid()
         assert call_meta.first_block is None
         assert call_meta.voided_by is None
 
         # now manually add b12 as if it was received from the network
-        assert self.manager.vertex_handler.on_new_block(b12, deps=[])
+        assert self.manager.vertex_handler.on_new_sync_block(b12, deps=[])
 
         call_meta = call_tx.get_metadata()
         assert call_meta.first_block == b12.hash

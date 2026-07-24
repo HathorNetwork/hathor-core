@@ -162,7 +162,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def _run_invalid_signature(self, attr, value, cause=NCInvalidSignature):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         tx = self._gen_nc_tx(nc.hash, 'deposit', [])
@@ -174,7 +174,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         tx.clear_sighash_cache()
         with self.assertRaises(InvalidNewTransaction) as cm:
-            self.manager.on_new_tx(tx)
+            self.manager.vertex_handler.on_new_trusted_vertex(tx)
         exc = cm.exception
         self.assertIsInstance(exc.__cause__, cause)
 
@@ -199,12 +199,12 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_execution_fails(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         tx = self._gen_nc_tx(nc.hash, 'deposit', [])
         self.manager.cpu_mining_service.resolve(tx)
-        self.manager.on_new_tx(tx)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx)
         self.assertIsNone(tx.get_metadata().voided_by)
 
         trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
@@ -226,7 +226,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         token_creation_tx = create_tokens(self.manager, mint_amount=100, use_genesis=False, propagate=False)
         self._finish_preparing_tx(token_creation_tx, set_timestamp=False)
         self.manager.cpu_mining_service.resolve(token_creation_tx)
-        self.manager.on_new_tx(token_creation_tx)
+        self.manager.vertex_handler.on_new_trusted_vertex(token_creation_tx)
 
         self.token_uid = token_creation_tx.hash
         self.test_nc_consensus_success(is_custom_token=True)
@@ -234,7 +234,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_success(self, *, is_custom_token: bool = False) -> None:
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         nc_id = nc.hash
@@ -266,7 +266,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             )
         ])
         self.manager.cpu_mining_service.resolve(tx)
-        self.manager.on_new_tx(tx)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx)
         self.assertIsNone(tx.get_metadata().voided_by)
 
         add_new_blocks(self.manager, 2, advance_clock=1)
@@ -304,7 +304,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             )
         ])
         self.manager.cpu_mining_service.resolve(tx2)
-        self.manager.on_new_tx(tx2)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx2)
         self.assertIsNone(tx2.get_metadata().voided_by)
 
         add_new_blocks(self.manager, 2, advance_clock=1)
@@ -335,7 +335,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             )
         ])
         self.manager.cpu_mining_service.resolve(tx3)
-        self.manager.on_new_tx(tx3)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx3)
         self.assertIsNone(tx3.get_metadata().voided_by)
 
         add_new_blocks(self.manager, 2, advance_clock=1)
@@ -371,7 +371,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             )
         ])
         self.manager.cpu_mining_service.resolve(tx4)
-        self.manager.on_new_tx(tx4)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx4)
         self.assertIsNone(tx4.get_metadata().voided_by)
 
         add_new_blocks(self.manager, 2, advance_clock=1)
@@ -405,7 +405,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_failure_voided_by_propagation(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         # Find some blocks.
@@ -420,7 +420,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         tx1 = self.wallet.prepare_transaction_compute_inputs(Transaction, _outputs, self.manager.tx_storage)
         tx1 = self._gen_nc_tx(nc.hash, 'deposit', [], nc=tx1)
         self.manager.cpu_mining_service.resolve(tx1)
-        self.manager.on_new_tx(tx1)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx1)
         self.assertIsNone(tx1.get_metadata().voided_by)
 
         # add tx21 spending tx1 in mempool before tx1 has been executed
@@ -437,7 +437,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         self._finish_preparing_tx(tx22)
         tx22.parents[0] = tx1.hash
         self.manager.cpu_mining_service.resolve(tx22)
-        self.manager.on_new_tx(tx22)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx22)
         tx22_meta = tx22.get_metadata()
         self.assertIsNone(tx22_meta.voided_by)
 
@@ -486,7 +486,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_chain_fail(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         # Find some blocks.
@@ -507,8 +507,8 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.cpu_mining_service.resolve(tx2)
 
         # propagate both tx1 and tx2
-        self.assertTrue(self.manager.on_new_tx(tx1))
-        self.assertTrue(self.manager.on_new_tx(tx2))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx1))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx2))
 
         # tx3 is a NanoContract transaction that has tx1 as parent
         tx3 = self._gen_nc_tx(nc.hash, 'nop', [1])
@@ -516,7 +516,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             tx3.parents[0] = tx1.hash
         tx3.timestamp += 1
         self.manager.cpu_mining_service.resolve(tx3)
-        self.assertTrue(self.manager.on_new_tx(tx3))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx3))
 
         # tx4 is a NanoContract transaction that spents tx1 output.
         tx4 = gen_custom_base_tx(self.manager, tx_inputs=[(tx1, 0)])
@@ -524,7 +524,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         tx4.timestamp += 2
         # self.assertNotIn(tx1.hash, tx4.parents)
         self.manager.cpu_mining_service.resolve(tx4)
-        self.assertTrue(self.manager.on_new_tx(tx4))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx4))
 
         # tx5 is a NanoContract transaction that spents tx4 output.
         tx5 = gen_custom_base_tx(self.manager, tx_inputs=[(tx4, 0)])
@@ -532,7 +532,7 @@ class NCConsensusTestCase(SimulatorTestCase):
         tx5.timestamp += 3
         # self.assertNotIn(tx1.hash, tx5.parents)
         self.manager.cpu_mining_service.resolve(tx5)
-        self.assertTrue(self.manager.on_new_tx(tx5))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx5))
 
         # execute all transactions.
         trigger = StopAfterNMinedBlocks(self.miner, quantity=2)
@@ -571,7 +571,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_reorg(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         nc_id = nc.hash
@@ -632,9 +632,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertGreater(withdrawal_amount_1, deposit_amount_2)
 
         # Propagate tx1, tx2, and tx11.
-        self.manager.on_new_tx(tx1)
-        self.manager.on_new_tx(tx2)
-        self.manager.on_new_tx(tx11)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx1)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx2)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx11)
 
         # Add a block that executes tx1 and tx11 (but not tx2).
         blk10 = self._add_new_block(tx_parents=[
@@ -700,7 +700,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def test_nc_consensus_reorg_fail_before_reorg(self):
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         nc_id = nc.hash
@@ -761,9 +761,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.assertGreater(withdrawal_amount_1, deposit_amount_1)
 
         # Propagate tx1, tx2, and tx11.
-        self.manager.on_new_tx(tx1)
-        self.manager.on_new_tx(tx2)
-        self.manager.on_new_tx(tx11)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx1)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx2)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx11)
 
         # Add a block that executes tx1 and tx11 (but not tx2).
         blk10 = self._add_new_block(tx_parents=[
@@ -819,7 +819,7 @@ class NCConsensusTestCase(SimulatorTestCase):
     def _prepare_nc_consensus_conflict(self, *, conflict_with_nano: bool) -> tuple[Transaction, ...]:
         nc = self._gen_nc_tx(self.myblueprint_id, 'initialize', [self.token_uid])
         self.manager.cpu_mining_service.resolve(nc)
-        self.manager.on_new_tx(nc)
+        self.manager.vertex_handler.on_new_trusted_vertex(nc)
         self.assertIsNone(nc.get_metadata().voided_by)
 
         # Find some blocks.
@@ -862,10 +862,10 @@ class NCConsensusTestCase(SimulatorTestCase):
         self.manager.cpu_mining_service.resolve(tx1b)
 
         # propagate both tx1 and tx2
-        self.assertTrue(self.manager.on_new_tx(tx0))
-        self.assertTrue(self.manager.on_new_tx(tx1))
-        self.assertTrue(self.manager.on_new_tx(tx1b))
-        self.assertTrue(self.manager.on_new_tx(tx2))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx0))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx1))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx1b))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(tx2))
 
         return cast(tuple[Transaction, ...], (tx0, tx1, tx1b, tx2))
 
@@ -880,7 +880,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             tx1b.hash,
         ]
         self.manager.cpu_mining_service.resolve(block)
-        self.assertTrue(self.manager.on_new_tx(block))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(block))
         self.assertTrue(block.get_metadata().voided_by)
 
     def test_nc_consensus_conflict_block_voided_1(self) -> None:
@@ -900,7 +900,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             tx2.hash,
         ]
         self.manager.cpu_mining_service.resolve(b0)
-        self.assertTrue(self.manager.on_new_tx(b0))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(b0))
         self.assertIsNone(b0.get_metadata().voided_by)
 
         # this block will be voided because it confirms tx1b.
@@ -911,7 +911,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             tx1b.parents[0],
         ]
         self.manager.cpu_mining_service.resolve(b1)
-        self.assertTrue(self.manager.on_new_tx(b1))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(b1))
         self.assertIsNotNone(b1.get_metadata().voided_by)
 
     @pytest.mark.xfail(strict=True, reason='temporarily broken')
@@ -944,9 +944,9 @@ class NCConsensusTestCase(SimulatorTestCase):
         ]
         self.manager.cpu_mining_service.resolve(b1)
 
-        self.assertTrue(self.manager.on_new_tx(b0))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(b0))
         self.assertIsNone(b0.get_metadata().voided_by)
-        self.assertTrue(self.manager.on_new_tx(b1))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(b1))
         self.assertIsNotNone(b0.get_metadata().voided_by)
         self.assertIsNone(b1.get_metadata().voided_by)
         self.assertIsNone(tx1.get_metadata().voided_by)
@@ -981,13 +981,13 @@ class NCConsensusTestCase(SimulatorTestCase):
         ]
         self.manager.cpu_mining_service.resolve(b1)
 
-        self.assertTrue(self.manager.on_new_tx(b0))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(b0))
         self.assertIsNone(b0.get_metadata().voided_by)
         self.assertIsNotNone(tx1.get_metadata().voided_by)
         self.assertIsNotNone(tx2.get_metadata().voided_by)
         self.assertIsNone(tx1b.get_metadata().voided_by)
 
-        self.assertTrue(self.manager.on_new_tx(b1))
+        self.assertTrue(self.manager.vertex_handler.on_new_trusted_vertex(b1))
         self.assertIsNotNone(b0.get_metadata().voided_by)
         self.assertIsNone(b1.get_metadata().voided_by)
         self.assertIsNone(tx1.get_metadata().voided_by)
@@ -1030,7 +1030,7 @@ class NCConsensusTestCase(SimulatorTestCase):
             print()
             print(node.name)
             print()
-            self.manager.on_new_tx(vertex)
+            self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
         b31 = vertices.by_name['b31'].vertex
         b32 = vertices.by_name['b32'].vertex
@@ -1099,7 +1099,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         found_b33 = False
         for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
             if node.name == 'b33':
                 found_b33 = True
@@ -1166,7 +1166,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         found_b33 = False
         for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
             if node.name == 'b33':
                 found_b33 = True
@@ -1327,7 +1327,7 @@ class NCConsensusTestCase(SimulatorTestCase):
 
         found_b33 = False
         for node, vertex in artifacts.list:
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
             if node.name == 'b33':
                 found_b33 = True

@@ -100,7 +100,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
 
         # broadcast
         self.manager.cpu_mining_service.resolve(tx)
-        self.manager.on_new_tx(tx)
+        self.manager.vertex_handler.on_new_trusted_vertex(tx)
         trigger = StopAfterNMinedBlocks(self.miner, quantity=confirmations)
         self.assertTrue(self.simulator.run(7200, trigger=trigger))
 
@@ -190,7 +190,7 @@ class BaseIndexesTestCase(BlueprintTestCase, SimulatorTestCase):
             print()
             print(node.name)
             print()
-            self.manager.on_new_tx(vertex)
+            self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
         tx1 = vertices.by_name['tx1'].vertex
         tx2 = vertices.by_name['tx2'].vertex
