@@ -379,6 +379,11 @@ class TransactionVerifier:
             for action in nano_header.nc_actions:
                 seen_token_indexes.add(action.token_index)
 
+        if tx.has_fees():
+            fee_header = tx.get_fee_header()
+            for fee in fee_header.fees:
+                seen_token_indexes.add(fee.token_index)
+
         seen_token_indexes.discard(0)
         if sorted(seen_token_indexes) != list(range(1, len(tx.tokens) + 1)):
             raise UnusedTokensError('unused tokens are not allowed')
