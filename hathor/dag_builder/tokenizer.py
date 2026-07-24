@@ -34,9 +34,11 @@ Special keywords:
 
 Special attributes:
 
-    a.out[i] = 100 HTR          # set that the i-th output of a holds 100 HTR
-    a.out[i] = 100 TOKEN        # set that the i-th output of a holds 100 TOKEN where TOKEN is a custom token
-    a.weight = 50               # set vertex weight
+    a.out[i] = 100 HTR           # set that the i-th output of a holds 100 HTR
+    a.out[i] = 100 TOKEN         # set that the i-th output of a holds 100 TOKEN where TOKEN is a custom token
+    a.out[i] = 1.23 HTR          # set that the i-th output of a holds 1.23 HTR represented in a's token amount version
+    a.token_amount_version = V2  # set `a` to use TokenAmountVersion.V2. Supports [V1, V2], V1 is default.
+    a.weight = 50                # set vertex weight
 
 Nano Contracts:
 
@@ -201,7 +203,7 @@ def tokenize(content: str) -> Iterator[Token]:
             name, key = parts[0].split('.', 1)
             if key.startswith('out[') and key[-1] == ']':
                 index = int(key[4:-1])
-                amount = int(parts[2])
+                amount = parts[2]
                 token = parts[3]
                 attrs = parts[4:]
                 yield (TokenType.OUTPUT, (name, index, amount, token, attrs))

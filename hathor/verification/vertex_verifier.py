@@ -56,10 +56,13 @@ class VertexVerifier:
 
     def verify_signal_bits(self, vertex: BaseTransaction) -> None:
         from hathor.transaction import Block, Transaction
+        from hathor.transaction.transaction import TOKEN_AMOUNT_VERSION_MASK
         assert vertex.signal_bits <= 0xFF
         match vertex:
             case Transaction():
-                unknown_signal_bits = 0xFF
+                # A transaction's least significant signal bit encodes its token amount version, which is
+                # feature-gated separately by `TransactionVerifier.verify_token_amount_version`.
+                unknown_signal_bits = 0xFF - TOKEN_AMOUNT_VERSION_MASK
             case Block():
                 unknown_signal_bits = 0xFF - vertex.get_feature_activation_bitmask()
             case _:

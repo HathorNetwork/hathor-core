@@ -30,6 +30,9 @@ from hathorlib.transaction.shielded_tx_output import ShieldedOutput
 
 T = TypeVar('T', bound=AnyVertexHeader)
 
+# The least significant bit of a transaction's signal bits encodes its token amount version.
+TOKEN_AMOUNT_VERSION_MASK: int = 0b0000_0001
+
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
     from hathor.nanocontracts.storage import NCBlockStorage
@@ -481,5 +484,5 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
     @final
     def get_token_amount_version(self) -> TokenAmountVersion:
         """Return the version under which this transaction's token amounts are interpreted."""
-        # Transactions are always V1. This will be updated in the future.
-        return TokenAmountVersion.V1
+        raw_version = self.signal_bits & TOKEN_AMOUNT_VERSION_MASK
+        return TokenAmountVersion(raw_version + 1)  # versions are 1-indexed.

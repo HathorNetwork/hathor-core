@@ -80,19 +80,25 @@ class DAGNode:
         from hathor.dag_builder.builder import TOKEN_VERSION_KEY
         return TokenVersion[self.attrs.get(TOKEN_VERSION_KEY, TokenVersion.DEPOSIT.name).upper()]
 
-    def _get_token_amount_version(self) -> TokenAmountVersion:
-        """Return the version under which this node's amounts are interpreted."""
-        # Hardcoded V1 until the DSL grows a `token_amount_version` attribute.
-        return TokenAmountVersion.V1
+    def get_token_amount_version(self) -> TokenAmountVersion:
+        """Return the version under which this node's amounts are interpreted, defaulting to V1."""
+        from hathor.dag_builder.builder import TOKEN_AMOUNT_VERSION_KEY
+        version_name = self.attrs.get(TOKEN_AMOUNT_VERSION_KEY, TokenAmountVersion.V1.name)
+        return TokenAmountVersion[version_name.upper()]
 
     def as_node_amount(self, raw_amount: int) -> UnsignedAmount:
-        """Wrap a raw amount (in the node's native decimal version) into a UnsignedAmount."""
-        return UnsignedAmount.from_version(raw_amount, version=self._get_token_amount_version())
+        """Wrap a raw amount (in the node's native decimal version) into an UnsignedAmount."""
+        return UnsignedAmount.from_version(raw_amount, version=self.get_token_amount_version())
+
+    def parse_amount(self, raw_amount: str) -> UnsignedAmount:
+        """Parse a string amount into an UnsignedAmount."""
+        if '.' in raw_amount:
+            return UnsignedAmount.parse(raw_amount).to_version(self.get_token_amount_version())
+        return self.as_node_amount(int(raw_amount))
 
     def denormalize_amount(self, amount: UnsignedAmount) -> UnsignedAmount:
-        """Convert an `amount` to a UnsignedAmount in the node's native decimal version."""
-        token_amount_version = self._get_token_amount_version()
-        return amount.to_version(token_amount_version)
+        """Convert an `amount` to an UnsignedAmount in the node's native decimal version."""
+        return amount.to_version(self.get_token_amount_version())
 
     def get_required_literal(self, attr: str) -> str:
         """Return the value of a required attribute as a literal or raise a SyntaxError if it doesn't exist."""
