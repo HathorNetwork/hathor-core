@@ -158,7 +158,7 @@ class NanoHeaderVerifier:
         else:
             if not is_nc_public_method(method):
                 raise NCInvalidMethodCall(f'method `{method_name}` is not a public method')
-            parser = Method.from_callable(method)
+            parser = Method.from_callable(method, tx.get_token_amount_version())
             try:
                 parser.deserialize_args_bytes(nano_header.nc_args_bytes)
             except NCFail as e:

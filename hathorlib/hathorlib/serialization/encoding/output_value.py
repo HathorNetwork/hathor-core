@@ -118,6 +118,7 @@ from hathorlib.token_amount_version import TokenAmountVersion
 MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1  # max value (inclusive) before having to use 8 bytes: 2_147_483_647
 MAX_OUTPUT_VALUE_64 = 2 ** 63  # max value (inclusive) that can be encoded (with 8 bytes): 9_223_372_036_854_775_808
 
+
 def get_max_output_value_v2() -> int:
     return MAX_OUTPUT_VALUE_64 * UnsignedAmount.get_normalization_factor()
 
@@ -195,37 +196,27 @@ def encode_output_value_v2(serializer: Serializer, amount: UnsignedAmount, *, st
     """
     assert amount.is_v2()
     value = amount.raw()
-    encode_length_prefix_varint(serializer, value, strict=strict, max_value=get_max_output_value_v2())
+    if strict and value == 0:
+        raise ValueError('value must not be zero')
+    encode_length_prefix_varint(serializer, value, signed=False, max_value=get_max_output_value_v2())
 
 
 def encode_length_prefix_varint(
     serializer: Serializer,
     value: int,
     *,
-    strict: bool,
+    signed: bool,
     max_value: int | None = None,
 ) -> int:
-    """
-    >>> se = Serializer.build_bytes_serializer()
-    >>> encode_length_prefix_varint(se, -1, strict=False)
-    Traceback (most recent call last):
-    ...
-    ValueError: value must be not be negative
-    """
-    if value < 0:
-        raise ValueError('value must be not be negative')
-
     if value == 0:
-        if strict:
-            raise ValueError('value must not be zero')
         serializer.write_byte(0)
         return 0
 
-    if max_value is not None and value > max_value:
+    if max_value is not None and abs(value) > max_value:
         raise ValueError(f'value is too big; max is {max_value}, got: {value}')
 
     length = (value.bit_length() + 7) // 8
-    payload = value.to_bytes(length, byteorder='big')
+    payload = value.to_bytes(length, byteorder='big', signed=signed)
 
     assert len(payload) == length
     assert payload[0] != 0
@@ -327,15 +318,15 @@ def decode_output_value_v2(deserializer: Deserializer, *, strict: bool = True) -
     >>> decode_output_value_v2(build('03 c0ffee')) == UnsignedAmount.from_v2(0xc0ffee)
     True
     """
-    value = decode_length_prefix_varint(deserializer, strict=strict, max_value=get_max_output_value_v2())
+    value = decode_length_prefix_varint(deserializer, signed=False, max_value=get_max_output_value_v2())
+    if strict and value == 0:
+        raise ValueError('value must not be zero')
     return UnsignedAmount.from_v2(value)
 
 
-def decode_length_prefix_varint(deserializer: Deserializer, *, strict: bool, max_value: int | None = None) -> int:
+def decode_length_prefix_varint(deserializer: Deserializer, *, signed: bool, max_value: int | None = None) -> int:
     length = deserializer.read_byte()
     if length == 0:
-        if strict:
-            raise ValueError('value must not be zero')
         return 0
 
     if max_value is not None:
@@ -347,8 +338,8 @@ def decode_length_prefix_varint(deserializer: Deserializer, *, strict: bool, max
     if payload[0] == 0:
         raise ValueError(f'non-canonical encoding, leading zero byte: {payload.hex()}')
 
-    value = int.from_bytes(payload, byteorder='big')
-    if max_value is not None and value > max_value:
+    value = int.from_bytes(payload, byteorder='big', signed=signed)
+    if max_value is not None and abs(value) > max_value:
         raise ValueError(f'value is too big; max is {max_value}, got: {value}')
 
     return value

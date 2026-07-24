@@ -21,6 +21,7 @@ from hathorlib.nanocontracts.nc_types import (
 from hathorlib.nanocontracts.utils import is_nc_public_method
 from hathorlib.serialization import Deserializer, SerializationError, Serializer
 from hathorlib.serialization.adapters import MaxBytesExceededError
+from hathorlib.token_amount_version import TokenAmountVersion
 
 _num_args_nc_type = VarUint32NCType()
 T = TypeVar('T')
@@ -134,10 +135,10 @@ class ArgsOnly:
         self.args = args_nc_type
 
     @classmethod
-    def from_arg_types(cls, arg_types: tuple[type, ...]) -> Self:
+    def from_arg_types(cls, arg_types: tuple[type, ...], token_amount_version: TokenAmountVersion) -> Self:
         args_nc_types: list[NCType] = []
         for arg_type in arg_types:
-            args_nc_types.append(make_nc_type_for_arg_type(arg_type))
+            args_nc_types.append(make_nc_type_for_arg_type(arg_type, token_amount_version))
 
         return cls(_ArgsNCType(args_nc_types, max_bytes=MAX_BYTES_SERIALIZED_ARG))
 
@@ -164,9 +165,9 @@ class ReturnOnly:
         self.return_nc_type = return_nc_type
 
     @classmethod
-    def from_callable(cls, method: Callable) -> Self:
+    def from_callable(cls, method: Callable, token_amount_version: TokenAmountVersion) -> Self:
         method_signature = _get_method_signature(method)
-        nc_type = make_nc_type_for_return_type(method_signature.return_annotation)
+        nc_type = make_nc_type_for_return_type(method_signature.return_annotation, token_amount_version)
         return cls(nc_type)
 
     def serialize_return_bytes(self, return_value: Any) -> bytes:
@@ -210,7 +211,7 @@ class Method:
         self.return_ = return_nc_type
 
     @classmethod
-    def from_callable(cls, method: Callable) -> Self:
+    def from_callable(cls, method: Callable, token_amount_version: TokenAmountVersion) -> Self:
         method_signature = _get_method_signature(method)
 
         # XXX: bound methods don't have the self argument
@@ -273,13 +274,18 @@ class Method:
             if param.default is not EMPTY:
                 raise TypeError('default values are not supported')
             arg_names.append(param.name)
-            args_nc_types.append(make_nc_type_for_arg_type(param.annotation))
+            args_nc_types.append(
+                make_nc_type_for_arg_type(param.annotation, token_amount_version)
+            )
 
         return cls(
             name=method.__name__,
             arg_names=arg_names,
             args_nc_type=_ArgsNCType(args_nc_types, max_bytes=MAX_BYTES_SERIALIZED_ARG),
-            return_nc_type=make_nc_type_for_return_type(method_signature.return_annotation),
+            return_nc_type=make_nc_type_for_return_type(
+                method_signature.return_annotation,
+                token_amount_version=token_amount_version,
+            ),
         )
 
     def serialize_args_bytes(self, args: tuple[Any, ...] | list[Any], kwargs: dict[str, Any] | None = None) -> bytes:

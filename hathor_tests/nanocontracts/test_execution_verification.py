@@ -15,6 +15,7 @@ from hathor.nanocontracts.exception import (
 from hathor.nanocontracts.method import ArgsOnly
 from hathor.nanocontracts.types import NCRawArgs
 from hathor_tests.nanocontracts.blueprints.unittest import BlueprintTestCase
+from hathorlib.token_amount_version import TokenAmountVersion
 
 
 class MyBlueprint(Blueprint):
@@ -88,7 +89,7 @@ class TestExecutionVerification(BlueprintTestCase):
         assert e.value.__cause__.args[0] == 'expected integer'
 
     def test_wrong_arg_type_raw(self) -> None:
-        args_parser = ArgsOnly.from_arg_types((str,))
+        args_parser = ArgsOnly.from_arg_types((str,), TokenAmountVersion.V1)
         args_bytes = args_parser.serialize_args_bytes(('abc',))
         nc_args = NCRawArgs(args_bytes)
 
@@ -113,7 +114,7 @@ class TestExecutionVerification(BlueprintTestCase):
 
     @pytest.mark.xfail(strict=True, reason='not implemented yet')
     def test_wrong_arg_type_but_valid_serialization(self) -> None:
-        args_parser = ArgsOnly.from_arg_types((str,))
+        args_parser = ArgsOnly.from_arg_types((str,), TokenAmountVersion.V1)
         args_bytes = args_parser.serialize_args_bytes(('',))
         nc_args = NCRawArgs(args_bytes)
 
