@@ -51,6 +51,7 @@ from hathor_tests.utils import (
     create_script_with_sigops,
     get_genesis_key,
 )
+from hathorlib.conf.fee_policy import FeePolicyVersion
 from hathorlib.serialization import BadDataError, Deserializer, Serializer
 from hathorlib.serialization.encoding.output_value import decode_output_value_v1, encode_output_value_v1
 
@@ -98,7 +99,9 @@ class TransactionTest(unittest.TestCase):
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
             self._verifiers.tx.verify_transparent_balance(
-                self._settings, tx, tx.get_complete_token_info(block_storage)
+                self._settings,
+                tx,
+                tx.get_complete_token_info(block_storage, fee_policy_version=FeePolicyVersion.V1),
             )
 
     def test_input_output_match_more_htr(self):
@@ -121,7 +124,9 @@ class TransactionTest(unittest.TestCase):
         block_storage = self.manager.get_nc_block_storage(best_block)
         with self.assertRaises(InputOutputMismatch):
             self._verifiers.tx.verify_transparent_balance(
-                self._settings, tx, tx.get_complete_token_info(block_storage)
+                self._settings,
+                tx,
+                tx.get_complete_token_info(block_storage, fee_policy_version=FeePolicyVersion.V1),
             )
 
     def test_validation(self):

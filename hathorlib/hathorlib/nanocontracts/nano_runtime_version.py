@@ -3,6 +3,10 @@
 
 from enum import IntEnum
 
+from typing_extensions import assert_never
+
+from hathorlib.conf.fee_policy import FeePolicyVersion
+
 
 class NanoRuntimeVersion(IntEnum):
     """
@@ -17,3 +21,11 @@ class NanoRuntimeVersion(IntEnum):
     """
     V1 = 1
     V2 = 2
+
+    def get_fee_policy_version(self) -> FeePolicyVersion:
+        """Get the fee policy version used in the respective nano runtime."""
+        match self:
+            case NanoRuntimeVersion.V1 | NanoRuntimeVersion.V2:
+                return FeePolicyVersion.V1
+            case _:
+                assert_never(self)

@@ -332,3 +332,11 @@ RESTRICT_DUP_ACTIONS: feature_activation
 NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   - HDkKGHwDHTuUGbhET73XdTJZkS8uU7PHf9
   - HUbxYhtqW8pdRCC2WngPxN7MB4SUMDPrrh
+
+FEE_POLICIES:
+  v1:
+    # HTR
+    "00":
+      fee_based_tokens: "0.01"
+      amount_shielded: "0.01"
+      full_shielded: "0.02"

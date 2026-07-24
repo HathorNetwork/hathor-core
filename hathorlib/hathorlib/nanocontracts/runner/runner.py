@@ -26,7 +26,6 @@ from hathorlib.nanocontracts.exception import (
     NCInvalidContext,
     NCInvalidContractId,
     NCInvalidFee,
-    NCInvalidFeePaymentToken,
     NCInvalidInitializeMethodCall,
     NCInvalidPublicMethodCallFromView,
     NCInvalidSyscall,
@@ -48,7 +47,7 @@ from hathorlib.nanocontracts.runner.index_records import (
     UpdateAuthoritiesRecord,
     UpdateTokenBalanceRecord,
 )
-from hathorlib.nanocontracts.runner.token_fees import calculate_melt_fee, calculate_mint_fee
+from hathorlib.nanocontracts.runner.token_fees import aggregate_fee_charges, calculate_melt_fee, calculate_mint_fee
 from hathorlib.nanocontracts.storage import NCBlockStorage, NCChangesTracker, NCContractStorage, NCStorageFactory
 from hathorlib.nanocontracts.storage.contract_storage import Balance
 from hathorlib.nanocontracts.tx_storage_protocol import NCTransactionStorageProtocol
@@ -456,7 +455,11 @@ class Runner:
                 raise NCInvalidContext('action amount must be positive')
 
         # Validate fees
+        seen_fee_tokens: set[TokenUid] = set()
         for fee in fees:
+            if fee.token_uid in seen_fee_tokens:
+                raise NCInvalidFee(f'duplicate fees for token {fee.token_uid.hex()}')
+            seen_fee_tokens.add(fee.token_uid)
             if fee.amount <= 0:
                 raise NCInvalidFee(f'fees should be a positive integer, got {fee.amount}')
             amount = UnsignedAmount.from_version(fee.amount, version=self.token_amount_version)
@@ -1062,6 +1065,7 @@ class Runner:
         token_info = self._get_token(token_uid)
         fee_amount = calculate_mint_fee(
             settings=self._settings,
+            fee_policy_version=self._runtime_version.get_fee_policy_version(),
             token_version=token_info.token_version,
             amount=token_amount,
             fee_payment_token=self._get_token(fee_payment_token),
@@ -1102,6 +1106,7 @@ class Runner:
         token_info = self._get_token(token_uid)
         fee_amount = calculate_melt_fee(
             settings=self._settings,
+            fee_policy_version=self._runtime_version.get_fee_policy_version(),
             token_version=token_info.token_version,
             amount=token_amount,
             fee_payment_token=self._get_token(fee_payment_token),
@@ -1317,22 +1322,11 @@ class Runner:
 
     def syscall_get_nano_settings(self) -> NanoSettings:
         """Get nano settings according to the current runtime."""
-        match self._runtime_version:
-            case NanoRuntimeVersion.V1:
-                raise NCFail('syscall `get_settings` is not yet supported')
-            case NanoRuntimeVersion.V2:
-                fee_per_output: int
-                assert self._settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.is_v1()
-                match self.token_amount_version:
-                    case TokenAmountVersion.V1:
-                        fee_per_output = self._settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.raw()
-                    case TokenAmountVersion.V2:
-                        fee_per_output = self._settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.normalized()
-                    case _:
-                        assert_never(self.token_amount_version)
-                return NanoSettings(fee_per_output=fee_per_output)
-            case _:
-                assert_never(self._runtime_version)
+        return NanoSettings.__from_settings__(
+            settings=self._settings,
+            runtime_version=self._runtime_version,
+            token_amount_version=self.token_amount_version,
+        )
 
     def _get_token(self, token_uid: TokenUid) -> TokenDescription:
         """
@@ -1389,6 +1383,7 @@ class Runner:
         token_amount = UnsignedAmount.from_version(amount, version=self.token_amount_version)
         fee_amount = calculate_mint_fee(
             settings=self._settings,
+            fee_policy_version=self._runtime_version.get_fee_policy_version(),
             token_version=token_version,
             amount=token_amount,
             fee_payment_token=fee_payment_token,
@@ -1448,44 +1443,37 @@ class Runner:
         Validate if the sum of fees is the same of the provided actions fees.
         It should be called only after a nano contract method execution to ensure all tokens are already created.
         """
-        # sum of the fee provided by the caller
-        fee_sum = UnsignedAmount.zero()
-
         # sum of the expected fee calculated by this method
         expected_fee = UnsignedAmount.zero()
 
-        allowed_token_versions = {TokenVersion.DEPOSIT, TokenVersion.NATIVE}
-        # check if the payment tokens are all deposit
-        for token_uid in self._paid_actions_fees.keys():
-            token = self._get_token(token_uid)
+        fee_policy_version = self._runtime_version.get_fee_policy_version()
+        fee_charges = [
+            (
+                fee.token_uid,
+                self._get_token(fee.token_uid).token_version,
+                UnsignedAmount.from_version(fee.amount, version=self.token_amount_version),
+            )
+            for fee in fees
+        ]
+        fee_charge = aggregate_fee_charges(
+            settings=self._settings,
+            fee_policy_version=fee_policy_version,
+            charges=fee_charges,
+        )
 
-            if token.token_version not in allowed_token_versions:
-                raise NCInvalidFeePaymentToken("fee-based tokens aren't allowed for paying fees")
-
-        for fee in fees:
-            # because we registered all fee tokens in the paid fees dict, it should contain at
-            # least the length of fees
-            assert fee.token_uid in self._paid_actions_fees
-            fee_sum += fee.__get_htr_value__(self._settings, self.token_amount_version)
-
+        fee_per_unit = fee_charge.policy.get_fee_based_tokens()
         chargeable_actions = {NCActionType.DEPOSIT, NCActionType.WITHDRAWAL}
         for token_uid, actions in ctx_actions.items():
-            # it is in the paid fees, so we assume this token is deposit-based or htr
-            if token_uid in self._paid_actions_fees:
-                continue
-
-            # we still need to check here, other tokens that weren't used to pay fees can be used
-            # so we need to fetch them
             token_info = self._get_token(token_uid)
             if token_info.token_version == TokenVersion.FEE:
                 # filter actions to only include deposit and withdrawal actions
-                expected_fee += UnsignedAmount.from_v1(
-                    sum(self._settings.FEE_PER_OUTPUT_V1 for action in actions if action.type in chargeable_actions)
-                )
+                chargeable_count = sum(1 for action in actions if action.type in chargeable_actions)
+                expected_fee += UnsignedAmount.from_v2(chargeable_count * fee_per_unit.normalized())
 
-        if fee_sum != expected_fee:
+        if fee_charge.amount != expected_fee:
             raise NCInvalidFee(
-                f'Fee payment balance is different than expected. (amount={fee_sum}, expected={expected_fee})'
+                f'Fee payment balance is different than expected. (amount={fee_charge.amount}, '
+                f'expected={expected_fee})'
             )
 
     def forbid_call_on_view(self, name: str) -> None:

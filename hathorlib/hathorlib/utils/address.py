@@ -8,7 +8,6 @@ import base58
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from hathorlib.conf import HathorSettings
 from hathorlib.exceptions import InvalidAddress
 
 
@@ -91,6 +90,7 @@ def get_address_from_public_key_hash(
         :return: address in bytes
         :rtype: bytes
     """
+    from hathorlib.conf import HathorSettings
     settings = HathorSettings()
     version_byte = (
         settings.P2PKH_VERSION_BYTE
@@ -117,6 +117,7 @@ def get_address_b58_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in base 58
         :rtype: string
     """
+    from hathorlib.conf import HathorSettings
     settings = HathorSettings()
     version_byte = (
         settings.MULTISIG_VERSION_BYTE
@@ -140,6 +141,7 @@ def get_address_from_redeem_script_hash(redeem_script_hash: bytes,
         :return: address in bytes
         :rtype: bytes
     """
+    from hathorlib.conf import HathorSettings
     settings = HathorSettings()
     version_byte = (
         settings.MULTISIG_VERSION_BYTE

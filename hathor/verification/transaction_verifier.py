@@ -321,11 +321,14 @@ class TransactionVerifier:
             assert tx.is_nano_contract()
             return
 
-        expected_fee = token_dict.calculate_fee(settings)
-        if expected_fee != token_dict.fees_from_fee_header:
+        # Fee tokens are always present in token_dict, so an unresolved fee token implies
+        # `has_nonexistent_tokens` above; reaching this point means header_fee was aggregated.
+        assert token_dict.header_fee is not None
+        expected_fee = token_dict.calculate_fee()
+        if expected_fee != token_dict.header_fee.amount:
             raise InputOutputMismatch(
-                f'Fee amount is different than expected. '
-                f'(amount={token_dict.fees_from_fee_header}, expected={expected_fee})'
+                f'Fee amount is different than expected. (token={token_dict.header_fee.token_uid.hex()}, '
+                f'amount={token_dict.header_fee.amount}, expected={expected_fee})'
             )
 
         if htr_info.amount < htr_expected_amount.to_signed():

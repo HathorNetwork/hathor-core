@@ -268,6 +268,10 @@ class FeeHeaderTokenNotFound(InvalidFeeHeader):
     """Token not found in the transaction tokens list"""
 
 
+class InvalidFeePaymentToken(TxValidationError):
+    """Invalid token used to pay fees."""
+
+
 class TokenNotFound(TxValidationError):
     """Token not found."""
 

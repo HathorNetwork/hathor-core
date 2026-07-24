@@ -6,7 +6,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from hathor.transaction.util import get_deposit_token_withdraw_amount
 from hathor.types import TokenUid
 from hathorlib.token_amount import UnsignedAmount
 
@@ -48,13 +47,3 @@ class FeeHeader:
             )
             for fee in self.fees
         ]
-
-    def total_fee_amount(self) -> UnsignedAmount:
-        """Sum fees amounts in this header and return as HTR"""
-        total_fee = UnsignedAmount.zero()
-        for fee in self.get_fees():
-            if fee.token_uid == self.settings.HATHOR_TOKEN_UID:
-                total_fee += fee.amount
-            else:
-                total_fee += get_deposit_token_withdraw_amount(self.settings, fee.amount)
-        return total_fee

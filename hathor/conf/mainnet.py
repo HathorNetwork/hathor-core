@@ -6,6 +6,7 @@ from hathor.conf.settings import HathorSettings
 from hathor.feature_activation.feature import Feature
 from hathor.feature_activation.model.criteria import Criteria
 from hathor.feature_activation.settings import Settings as FeatureActivationSettings
+from hathorlib.conf.fee_policy import FeePolicy, FeePolicyVersion
 from hathorlib.conf.settings import FeatureSetting
 
 SETTINGS = HathorSettings(
@@ -344,5 +345,15 @@ SETTINGS = HathorSettings(
                 signal_support_by_default=True,
             ),
         }
-    )
+    ),
+    FEE_POLICIES={
+        FeePolicyVersion.V1: {
+            # HTR
+            b'\x00': FeePolicy(
+                fee_based_tokens='0.01',
+                amount_shielded='0.01',
+                full_shielded='0.02',
+            ),
+        },
+    },
 )

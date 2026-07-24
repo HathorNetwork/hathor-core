@@ -18,6 +18,7 @@ from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
 from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, create_fee_tokens, create_tokens, get_genesis_key
+from hathorlib.conf.fee_policy import FeePolicyVersion
 from hathorlib.conf.settings import FeatureSetting
 
 
@@ -97,9 +98,11 @@ class FeeTokenTest(unittest.TestCase):
 
         # Melt 100 tokens from fee_token and add 4 outputs, should charge only by the outputs count
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(4))
-        self.assertEqual(tx_fee, fee_header.total_fee_amount())
+        assert token_info.header_fee is not None
+        self.assertEqual(tx_fee, token_info.header_fee.amount)
         #  It's the tx item output signature
         #  this signature_data allows the tx output to be spent by the tx2 inputs
         self.sign_inputs(tx2)
@@ -150,7 +153,8 @@ class FeeTokenTest(unittest.TestCase):
         # melting 2 tokens without outputs, should charge FEE_PER_OUT * 2 = 2
         # melting 1 token with outputs, should charge 1 per non-authority output = 3
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx3_fee = tx3.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx3.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx3_fee = token_info.calculate_fee()
         # Multiple inputs should be only charge once per token when no outputs are present
         self.assertEqual(tx3_fee, UnsignedAmount.from_v1(5))
 
@@ -201,9 +205,11 @@ class FeeTokenTest(unittest.TestCase):
 
         # pick the last tip tx output in HTR then subtracts the fee
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
-        self.assertEqual(tx_fee, fee_header.total_fee_amount())
+        assert token_info.header_fee is not None
+        self.assertEqual(tx_fee, token_info.header_fee.amount)
 
         #  It's the tx item output signature
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -254,10 +260,12 @@ class FeeTokenTest(unittest.TestCase):
 
         # pick the last tip tx output in HTR then subtracts the fee
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         # check if only the melting operation was considered
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
-        self.assertEqual(tx_fee, fee_header.total_fee_amount())
+        assert token_info.header_fee is not None
+        self.assertEqual(tx_fee, token_info.header_fee.amount)
 
         self.sign_inputs(tx2)
         self.resolve_and_propagate(tx2)
@@ -313,9 +321,11 @@ class FeeTokenTest(unittest.TestCase):
         tx2.headers.append(fee_header)
 
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
-        self.assertEqual(tx_fee, fee_header.total_fee_amount())
+        assert token_info.header_fee is not None
+        self.assertEqual(tx_fee, token_info.header_fee.amount)
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -394,9 +404,11 @@ class FeeTokenTest(unittest.TestCase):
         tx2.headers.append(fee_header)
 
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
-        self.assertEqual(tx_fee, fee_header.total_fee_amount())
+        assert token_info.header_fee is not None
+        self.assertEqual(tx_fee, token_info.header_fee.amount)
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -473,9 +485,11 @@ class FeeTokenTest(unittest.TestCase):
         )
         tx2.headers.append(fee_header)
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(5))
-        self.assertEqual(tx_fee, fee_header.total_fee_amount())
+        assert token_info.header_fee is not None
+        self.assertEqual(tx_fee, token_info.header_fee.amount)
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -530,9 +544,11 @@ class FeeTokenTest(unittest.TestCase):
         tx2.headers.append(fee_header)
         # pick the last tip tx output in HTR then subtracts the fee
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(1))
-        self.assertEqual(fee_header.total_fee_amount(), UnsignedAmount.from_v1(1))
+        assert token_info.header_fee is not None
+        self.assertEqual(token_info.header_fee.amount, UnsignedAmount.from_v1(1))
 
         #  It's the signature of the output of the tx item
         #  this signature_data allows the tx output to be spent by the tx2 inputs
@@ -580,7 +596,8 @@ class FeeTokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.from_v1(2))
 
         #  It's the signature of the output of the tx item
@@ -590,7 +607,7 @@ class FeeTokenTest(unittest.TestCase):
         with pytest.raises(InvalidNewTransaction) as e:
             self.resolve_and_propagate(tx2)
         assert isinstance(e.value.__cause__, InputOutputMismatch)
-        expected_msg = 'Fee amount is different than expected. (amount=0.0, expected=0.02)'
+        expected_msg = 'Fee amount is different than expected. (token=00, amount=0.0, expected=0.02)'
         assert expected_msg in str(e.value)
 
     def test_fee_token_burn_authority(self) -> None:
@@ -614,7 +631,8 @@ class FeeTokenTest(unittest.TestCase):
             timestamp=int(self.clock.seconds())
         )
         nc_storage = self.manager.get_nc_block_storage(self.manager.tx_storage.get_best_block())
-        tx_fee = tx2.get_complete_token_info(nc_storage).calculate_fee(self.manager._settings)
+        token_info = tx2.get_complete_token_info(nc_storage, fee_policy_version=FeePolicyVersion.V1)
+        tx_fee = token_info.calculate_fee()
         self.assertEqual(tx_fee, UnsignedAmount.zero())
 
         #  It's the signature of the output of the tx item
@@ -769,4 +787,4 @@ class FeeTokenTest(unittest.TestCase):
             artifacts.propagate_with(self.manager, up_to='tx1')
 
         assert isinstance(e.value.__cause__, InvalidNewTransaction)
-        assert e.value.__cause__.args[0] == f'full validation failed: token {fbt.hash_hex} cannot be used to pay fees'
+        assert e.value.__cause__.args[0] == f'full validation failed: cannot pay fees with token {fbt.hash_hex}'

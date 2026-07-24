@@ -254,10 +254,11 @@ class VerificationService:
         self.verifiers.tx.verify_version(tx, params)
 
         block_storage = self._get_block_storage(params)
+        fee_policy_version = params.features.fee_policy_version
         self.verifiers.tx.verify_transparent_balance(
             self._settings,
             tx,
-            token_dict or tx.get_complete_token_info(block_storage),
+            token_dict or tx.get_complete_token_info(block_storage, fee_policy_version=fee_policy_version),
             # if this tx isn't a nano contract we assume we can find all the tokens to validate this tx
             allow_nonexistent_tokens=tx.is_nano_contract()
         )
@@ -273,7 +274,10 @@ class VerificationService:
         """
         # we should validate the token info before verifying the tx
         self.verifiers.token_creation_tx.verify_token_info(tx, params)
-        token_dict = tx.get_complete_token_info(self._get_block_storage(params))
+        token_dict = tx.get_complete_token_info(
+            self._get_block_storage(params),
+            fee_policy_version=params.features.fee_policy_version,
+        )
         self._verify_tx(tx, params, token_dict=token_dict)
         self.verifiers.token_creation_tx.verify_minted_tokens(tx, token_dict)
 

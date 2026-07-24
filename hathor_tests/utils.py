@@ -33,6 +33,7 @@ from hathor.transaction.token_info import TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount
 from hathor.util import Random
 from hathor_tests.token_amount import UnsignedAmount
+from hathorlib.conf.fee_policy import FeePolicyVersion
 from hathorlib.scripts import DataScript
 
 settings = HathorSettings()
@@ -607,8 +608,9 @@ def create_fee_tokens(
     outputs.append(TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MINT_MASK), script, 0b10000001))
     outputs.append(TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001))
 
-    # fee
-    fee = settings.FEE_TOKEN_AMOUNT_PER_OUTPUT
+    # fee, in V1 units since this tx is built entirely with V1 amounts
+    htr_fee_policy = settings.get_fee_policies(FeePolicyVersion.V1)[settings.HATHOR_TOKEN_UID]
+    fee = htr_fee_policy.get_fee_based_tokens().to_v1()
 
     # fee output
     fee_output_raw = (
