@@ -48,6 +48,25 @@ class MiningTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(response_post.written[0], b'0')
 
     @inlineCallbacks
+    def test_post_respects_ignore_switch(self):
+        response_get = yield self.web.get('mining')
+        data_get = response_get.json_value()
+        block_bytes_str = data_get.get('block_bytes')
+
+        block_bytes = base64.b64decode(block_bytes_str)
+        block = Block.create_from_struct(block_bytes)
+        block.weight = 4
+        self.manager.cpu_mining_service.resolve(block)
+
+        block_bytes_str = base64.b64encode(bytes(block)).decode('ascii')
+
+        # with the ignore switch on, a valid block is rejected and not stored
+        self.manager.ignore_mining_submissions = True
+        response_post = yield self.web.post('mining', {'block_bytes': block_bytes_str})
+        self.assertEqual(response_post.written[0], b'0')
+        self.assertFalse(self.manager.tx_storage.transaction_exists(block.hash))
+
+    @inlineCallbacks
     def test_post_invalid_data(self):
         response_get = yield self.web.get('mining')
         data_get = response_get.json_value()

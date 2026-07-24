@@ -123,6 +123,10 @@ class RunNode:
         parser.add_argument('--cache-interval', type=int, help='Cache flush interval')
         parser.add_argument('--recursion-limit', type=int, help='Set python recursion limit')
         parser.add_argument('--allow-mining-without-peers', action='store_true', help='Allow mining without peers')
+        parser.add_argument('--mining-submission-delay', type=float, default=0.0,
+                            help='Seconds to defer processing of submitted blocks (backup-node orphan mitigation)')
+        parser.add_argument('--ignore-mining-submissions', action='store_true',
+                            help='Reject all block submissions (operational kill switch)')
         parser.add_argument('--procname-prefix', help='Add a prefix to the process name', default='')
         parser.add_argument('--allow-non-standard-script', action='store_true', help='Accept non-standard scripts on '
                             '/push-tx API')
