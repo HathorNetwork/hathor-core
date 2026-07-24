@@ -27,6 +27,8 @@ from hathor.transaction.exceptions import (
 from hathor.transaction.headers import (
     AnyVertexHeader,
     FeeHeader,
+    MeltHeader,
+    MintHeader,
     NanoHeader,
     ShieldedOutputsHeader,
     UnshieldBalanceHeader,
@@ -223,6 +225,13 @@ class VertexVerifier:
                     allowed_headers.add(NanoHeader)
                 if params.features.fee_tokens:
                     allowed_headers.add(FeeHeader)
+                # A shielded TCT carries shielded outputs of the new token plus a
+                # MintHeader declaring its initial supply. A MeltHeader is not
+                # admitted: a creation tx mints, it does not melt.
+                if params.features.shielded_transactions:
+                    allowed_headers.add(ShieldedOutputsHeader)
+                    allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
@@ -231,6 +240,8 @@ class VertexVerifier:
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
                     allowed_headers.add(UnshieldBalanceHeader)
+                    allowed_headers.add(MintHeader)
+                    allowed_headers.add(MeltHeader)
             case _:  # pragma: no cover
                 assert_never(vertex.version)
         return allowed_headers
