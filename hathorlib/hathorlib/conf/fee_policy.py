@@ -16,10 +16,12 @@ from hathorlib.utils.pydantic import BaseModel
 class FeePolicyVersion(StrEnum):
     """The version of the fee policy, activated through feature activation."""
     V1 = auto()
+    V2 = auto()
 
 
 class FeePolicy(BaseModel):
     """The fee policy for a single token, that is, the fee amounts charged when paying with that token."""
+    deposit_address: str | None
     fee_based_tokens: str
     amount_shielded: str
     full_shielded: str

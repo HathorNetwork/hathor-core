@@ -42,3 +42,20 @@ NC_ON_CHAIN_BLUEPRINT_ALLOWED_ADDRESSES:
   # - password:
   #   OCBtestPW
   - HFwHrQHUftQ7obLj7xbQjG4ZEwvyVXeyoE
+
+FEE_POLICIES:
+  v1:
+    # HTR
+    "00":
+      deposit_address: null
+      fee_based_tokens: "0.01"
+      amount_shielded: "0.01"
+      full_shielded: "0.02"
+
+  v2:
+    # HTR
+    "00":
+      deposit_address: null
+      fee_based_tokens: "0.01"
+      amount_shielded: "0.01"
+      full_shielded: "0.02"

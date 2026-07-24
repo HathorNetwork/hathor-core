@@ -52,6 +52,7 @@ class Features:
             Feature.REDUCE_DAA_TARGET: settings.ENABLE_DAA_V2,
             Feature.SHIELDED_TRANSACTIONS: settings.ENABLE_SHIELDED_TRANSACTIONS,
             Feature.TOKEN_AMOUNT_V2: settings.ENABLE_TOKEN_AMOUNT_V2,
+            Feature.FEE_POLICY_V2: settings.ENABLE_FEE_POLICY_V2,
         }
 
     @staticmethod
@@ -66,9 +67,16 @@ class Features:
         }
 
         opcodes_version = OpcodesVersion.V2 if feature_is_active[Feature.OPCODES_V2] else OpcodesVersion.V1
-        nano_runtime_version = (
-            NanoRuntimeVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else NanoRuntimeVersion.V1
-        )
+
+        nano_runtime_version = NanoRuntimeVersion.V1
+        assert nano_runtime_version.get_fee_policy_version() == FeePolicyVersion.V1
+        if feature_is_active[Feature.REDUCE_DAA_TARGET]:
+            nano_runtime_version = NanoRuntimeVersion.V2
+            assert nano_runtime_version.get_fee_policy_version() == FeePolicyVersion.V1
+        if feature_is_active[Feature.FEE_POLICY_V2]:
+            nano_runtime_version = NanoRuntimeVersion.V3
+            assert nano_runtime_version.get_fee_policy_version() == FeePolicyVersion.V2
+
         daa_version = (
             DAAVersion.V2 if feature_is_active[Feature.REDUCE_DAA_TARGET] else DAAVersion.V1
         )
@@ -87,7 +95,7 @@ class Features:
             daa_version=daa_version,
             shielded_transactions=feature_is_active[Feature.SHIELDED_TRANSACTIONS],
             token_amount_version=token_amount_version,
-            fee_policy_version=FeePolicyVersion.V1,
+            fee_policy_version=nano_runtime_version.get_fee_policy_version(),
         )
 
     @staticmethod
@@ -143,7 +151,7 @@ class Features:
             daa_version=DAAVersion.V2,
             shielded_transactions=True,
             token_amount_version=TokenAmountVersion.V2,
-            fee_policy_version=FeePolicyVersion.V1,
+            fee_policy_version=FeePolicyVersion.V2,
         )
 
 

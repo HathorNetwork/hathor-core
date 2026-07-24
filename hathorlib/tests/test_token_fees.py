@@ -93,11 +93,13 @@ def test_get_fee_charge_with_two_policy_tokens() -> None:
         FEE_POLICIES={
             FeePolicyVersion.V1: {
                 HATHOR_TOKEN_UID: FeePolicy(
+                    deposit_address=None,
                     fee_based_tokens='0.01',
                     amount_shielded='0.01',
                     full_shielded='0.02',
                 ),
                 FEE_TOKEN: FeePolicy(
+                    deposit_address=None,
                     fee_based_tokens='0.005',
                     amount_shielded='0.01',
                     full_shielded='0.02',

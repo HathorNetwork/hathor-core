@@ -379,6 +379,10 @@ class Transaction(GenericVertex[TransactionStaticMetadata]):
                 fee_policy_version=fee_policy_version,
                 charges=charges,
             )
+            if token_dict.header_fee.policy.deposit_address is not None:
+                # Fees with a deposit address do not affect the balance; `verify_transparent_balance`
+                # checks that outputs pay the fee amount to the deposit address.
+                return
 
         # fees act as regular outputs, subtracting from the total amount (which is done with sum in this context)
         for fee in fees:

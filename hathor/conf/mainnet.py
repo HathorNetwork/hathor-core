@@ -350,10 +350,28 @@ SETTINGS = HathorSettings(
         FeePolicyVersion.V1: {
             # HTR
             b'\x00': FeePolicy(
+                deposit_address=None,
                 fee_based_tokens='0.01',
                 amount_shielded='0.01',
                 full_shielded='0.02',
             ),
+        },
+        FeePolicyVersion.V2: {
+            # HTR
+            b'\x00': FeePolicy(
+                deposit_address=None,
+                fee_based_tokens='1.00',
+                amount_shielded='2.00',
+                full_shielded='4.00',
+            ),
+            # hUSDC
+            bytes.fromhex('00003b17e8d656e4612926d5d2c5a4d5b3e4536e6bebc61c76cb71a65b81986f'):
+                FeePolicy(
+                    deposit_address='HDeadDeadDeadDeadDeadDeadDeagTPgmn',
+                    fee_based_tokens='0.005',
+                    amount_shielded='0.01',
+                    full_shielded='0.02',
+                ),
         },
     },
 )
