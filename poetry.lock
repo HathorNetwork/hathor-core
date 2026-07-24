@@ -740,7 +740,7 @@ name = "hathor-ct-crypto"
 version = "0.1.0"
 description = ""
 optional = false
-python-versions = ">=3.11"
+python-versions = ">=3.12"
 groups = ["main"]
 files = []
 develop = true
@@ -754,7 +754,7 @@ name = "hathorlib"
 version = "0.15.0"
 description = "Hathor Network base objects library"
 optional = false
-python-versions = ">=3.11,<4"
+python-versions = ">=3.12,<4"
 groups = ["main"]
 files = []
 develop = true
@@ -780,7 +780,7 @@ name = "htr-lib"
 version = "0.1.0"
 description = ""
 optional = false
-python-versions = ">=3.11"
+python-versions = ">=3.12"
 groups = ["main"]
 files = []
 develop = true
@@ -2815,5 +2815,5 @@ sentry = ["sentry-sdk", "structlog-sentry"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.11,<3.14"
-content-hash = "34c319a066b95764cda7b9082ff3e757750b925a6499b3aded5907ad57671994"
+python-versions = ">=3.12,<3.14"
+content-hash = "2ecf8930342b073712364fb3da92c223fa391b7f9da73840de497de7c2b19a7a"
