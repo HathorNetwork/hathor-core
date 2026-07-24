@@ -205,11 +205,11 @@ class HathorManager:
 
         self.metrics = Metrics(
             pubsub=self.pubsub,
-            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
             connections=self.connections,
             tx_storage=self.tx_storage,
             reactor=self.reactor,
             websocket_factory=self.websocket_factory,
+            daa_factory=self.daa_factory,
         )
 
         self.wallet = wallet

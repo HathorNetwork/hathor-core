@@ -18,6 +18,7 @@ from hathor.transaction.block import Block
 from hathor.transaction.storage import TransactionRocksDBStorage, TransactionStorage
 
 if TYPE_CHECKING:
+    from hathor.daa.factory import DAAFactory  # noqa: F401
     from hathor.stratum import StratumFactory  # noqa: F401
     from hathor.websocket.factory import HathorAdminWebsocketFactory  # noqa: F401
 
@@ -48,11 +49,12 @@ class PeerConnectionMetrics:
 @dataclass
 class Metrics:
     pubsub: PubSubManager
-    avg_time_between_blocks: int
     connections: ConnectionsManager
     tx_storage: TransactionStorage
     # Twisted reactor that handles the time and callLater
     reactor: Reactor
+    # DAA factory to get the correct avg_time_between_blocks per block version
+    daa_factory: 'DAAFactory'
 
     # Transactions count in the network
     transactions: int = 0
@@ -207,7 +209,8 @@ class Metrics:
         """ Weight formula: w = log2(avg_time_between_blocks) + log2(hash_rate)
         """
         from math import log
-        return 2**(block.weight - log(self.avg_time_between_blocks, 2))
+        avg_time = self.daa_factory.create_from_block(block).avg_time_between_blocks
+        return 2**(block.weight - log(avg_time, 2))
 
     def set_websocket_data(self) -> None:
         """ Set websocket metrics data. Connections and addresses subscribed.
