@@ -19,7 +19,6 @@ from hathor.util import json_dumpb, json_loadb
 from hathor.verification.verification_params import VerificationParams
 from hathor.wallet.base_wallet import WalletInputInfo, WalletOutputInfo
 from hathor.wallet.exceptions import InputDuplicated, InsufficientFunds, InvalidAddress, PrivateKeyNotFound
-from hathorlib.token_amount import UnsignedAmount
 
 
 @register_resource
@@ -57,7 +56,7 @@ class SendTokensResource(Resource):
             except InvalidAddress:
                 return self.return_POST(False, 'The address {} is invalid'.format(output['address']))
 
-            value = UnsignedAmount(int(output['value']))
+            value = self.api_version.unsigned_amount_from_request(output['value'])
             timelock = output.get('timelock')
             token_uid = output.get('token_uid')
             if token_uid:
@@ -315,8 +314,6 @@ SendTokensResource.openapi = {
             }
         }
     },
-    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
-    # (decimal token amounts) once the v2 API shape is finalized.
     '/v2/wallet/send_tokens': {
         'x-visibility': 'private',
         'post': {
@@ -339,11 +336,11 @@ SendTokensResource.openapi = {
                                         'outputs': [
                                             {
                                                 'address': '15VZc2jy1L3LGFweZeKVbWMsTzfKFJLpsN',
-                                                'value': 1000
+                                                'value': '1.0'
                                             },
                                             {
                                                 'address': '1C5xEjewerH4zTWPC6wqzhoEkMhiHEHPZ8',
-                                                'value': 800
+                                                'value': '0.8'
                                             }
                                         ],
                                         'inputs': [

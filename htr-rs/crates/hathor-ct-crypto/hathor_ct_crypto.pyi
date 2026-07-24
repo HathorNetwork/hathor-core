@@ -8,6 +8,8 @@ empty and any access fails at call time. These stubs describe the eventual
 native API so that call sites type-check against it today.
 """
 
+from htr_lib import UnsignedAmount
+
 COMMITMENT_SIZE: int
 GENERATOR_SIZE: int
 ZERO_TWEAK: bytes
@@ -37,7 +39,7 @@ def rewind_range_proof(
     commitment: bytes,
     nonce: bytes,
     generator: bytes,
-) -> tuple[int, bytes, bytes]: ...
+) -> tuple[UnsignedAmount, bytes, bytes]: ...
 def create_surjection_proof(
     *,
     codomain_tag: bytes,

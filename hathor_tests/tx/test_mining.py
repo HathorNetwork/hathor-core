@@ -109,7 +109,7 @@ class MiningTest(unittest.TestCase):
             hash=None,
             inputs=[],
             nonce=0,
-            outputs=[dict(script='', token_data=0, value=6400)],
+            outputs=[dict(script='', token_data=0, value=6400, value_str='64.0')],
             parents=['01', '02', '03'],
             signal_bits=0b0101,
             timestamp=12344,

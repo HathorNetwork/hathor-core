@@ -56,7 +56,7 @@ def generate_new_genesis(
     block = Block(
         timestamp=block_timestamp,
         weight=min_block_weight,
-        outputs=[TxOutput(UnsignedAmount(tokens), output_script)],
+        outputs=[TxOutput(UnsignedAmount.from_v1(tokens), output_script)],
     )
     mining_service.start_mining(block, update_time=False)
     block.update_hash()

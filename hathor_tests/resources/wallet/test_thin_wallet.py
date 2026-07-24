@@ -20,8 +20,8 @@ from hathor.wallet.resources.thin_wallet import (
     TokenResource,
 )
 from hathor_tests.resources.base_resource import StubSite, TestDummyRequest, _BaseResourceTest
-from hathor_tests.token_amount import UnsignedAmount
 from hathor_tests.utils import add_blocks_unlock_reward, add_new_tx, create_fee_tokens, create_tokens
+from hathorlib.token_amount import UnsignedAmount
 
 # Valid base58check payload (25 bytes, correct checksum) whose string is only 33 characters long, from the
 # incident in issue #1758. It passes `decode_address` but must be rejected at the API boundary.
@@ -50,9 +50,12 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         blocks = add_new_blocks(self.manager, 3, advance_clock=1)
         add_blocks_unlock_reward(self.manager)
-        blocks_tokens = [sum(txout.value for txout in blk.outputs) for blk in blocks]
+        blocks_tokens = [sum((txout.value for txout in blk.outputs), start=UnsignedAmount.zero()) for blk in blocks]
 
-        self.assertEqual(self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available, sum(blocks_tokens))
+        self.assertEqual(
+            self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available,
+            sum(blocks_tokens, start=UnsignedAmount.zero()),
+        )
 
         # Options
         yield self.web.options('thin_wallet/send_tokens')
@@ -64,9 +67,12 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         private_key = self.manager.wallet.get_private_key(address)
 
         output_address = decode_address(self.get_address(0))
-        value = blocks_tokens[0]
+        value = blocks_tokens[0].to_v1()
         o = TxOutput(value, create_output_script(output_address, None))
-        o_invalid_amount = TxOutput(value-1, create_output_script(output_address, None))
+        o_invalid_amount = TxOutput(
+            (value - UnsignedAmount.from_v1(1)).to_v1(),
+            create_output_script(output_address, None),
+        )
         i = TxInput(tx_id, 0, b'')
 
         # wrong weight
@@ -126,7 +132,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         # Check if tokens were really sent
         self.assertEqual(
             self.manager.wallet.balance[self._settings.HATHOR_TOKEN_UID].available,
-            sum(blocks_tokens[:-1])
+            sum(blocks_tokens[:-1], start=UnsignedAmount.zero())
         )
 
         response_history = yield self.web_address_history.get(
@@ -251,8 +257,8 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         for i in range(tx_count):
             start_index = i*self._settings.MAX_NUM_INPUTS
             end_index = start_index + self._settings.MAX_NUM_INPUTS
-            amount = sum([b.outputs[0].value for b in blocks[start_index:end_index]])
-            add_new_tx(self.manager, random_address, amount, advance_clock=1)
+            amount = sum(([b.outputs[0].value for b in blocks[start_index:end_index]]), start=UnsignedAmount.zero())
+            add_new_tx(self.manager, random_address, amount.to_v1().raw(), advance_clock=1)
 
         response_history = yield self.web_address_history.get(
             'thin_wallet/address_history', {
@@ -338,10 +344,9 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertIsNone(request._finishedDeferreds)
 
     @inlineCallbacks
-    def test_token(self):
+    def _check_token(self, api_version):
         self.manager.wallet.unlock(b'MYPASS')
-        # TODO(decimals): test v2
-        resource = StubSite(TokenResource(self.manager, APIVersion.V1A))
+        resource = StubSite(TokenResource(self.manager, api_version))
 
         # test list of tokens empty
         response_list1 = yield resource.get('thin_wallet/token')
@@ -391,7 +396,7 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
         self.assertEqual(data['melt'][0]['index'], 2)
         self.assertTrue(data['can_mint'])
         self.assertTrue(data['can_melt'])
-        self.assertEqual(data['total'], amount)
+        self.assertEqual(data['total'], api_version.unsigned_amount_to_response(UnsignedAmount.from_v1(amount)))
         self.assertEqual(data['name'], token_name)
         self.assertEqual(data['symbol'], token_symbol)
         self.assertEqual(data['version'], token_info_version)
@@ -440,11 +445,19 @@ class SendTokensTest(_BaseResourceTest._ResourceTest):
 
         # test no wallet index
         manager2 = self.create_peer(self.network, unlock_wallet=True)
-        resource2 = StubSite(TokenResource(manager2, APIVersion.V1A))
+        resource2 = StubSite(TokenResource(manager2, api_version))
         response2 = yield resource2.get('thin_wallet/token')
         data2 = response2.json_value()
         self.assertEqual(response2.responseCode, 503)
         self.assertFalse(data2['success'])
+
+    @inlineCallbacks
+    def test_token(self):
+        yield self._check_token(APIVersion.V1A)
+
+    @inlineCallbacks
+    def test_token_v2(self):
+        yield self._check_token(APIVersion.V2)
 
     @inlineCallbacks
     def test_fee_token(self) -> Generator[Deferred[Any], Any, None]:

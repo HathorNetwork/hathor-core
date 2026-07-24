@@ -608,7 +608,7 @@ def create_fee_tokens(
     outputs.append(TxOutput(UnsignedAmount.from_v1(TxOutput.TOKEN_MELT_MASK), script, 0b10000001))
 
     # fee
-    fee = UnsignedAmount.from_v1(settings.FEE_PER_OUTPUT_V1)
+    fee = settings.FEE_TOKEN_AMOUNT_PER_OUTPUT
 
     # fee output
     fee_output_raw = (

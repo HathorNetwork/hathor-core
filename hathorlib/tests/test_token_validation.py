@@ -82,11 +82,6 @@ class TestValidateFeeAmount(unittest.TestCase):
         with self.assertRaises(InvalidFeeAmount):
             validate_fee_amount(settings, b'\x00', UnsignedAmount.from_v1(0))
 
-    def test_negative_amount_raises(self) -> None:
-        settings = self._get_settings()
-        with self.assertRaises(InvalidFeeAmount):
-            validate_fee_amount(settings, b'\x00', UnsignedAmount(-10))
-
     def test_custom_token_valid_multiple(self) -> None:
         settings = self._get_settings()
         # Custom token: amount must be multiple of FEE_DIVISOR

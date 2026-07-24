@@ -4,6 +4,7 @@
 """
 Module for abstractions around generating mining templates.
 """
+
 from typing import Iterable, NamedTuple, Optional, TypeVar, cast
 
 from hathor.transaction import BaseTransaction, Block, MergeMinedBlock
@@ -88,7 +89,7 @@ class BlockTemplate(NamedTuple):
         return {
             'data': self.generate_minimally_valid_block().get_struct_without_nonce().hex(),
             'versions': sorted(self.versions),
-            'reward': self.reward,
+            'reward': self.reward.raw(),
             'weight': self.weight,
             'timestamp_now': self.timestamp_now,
             'timestamp_min': self.timestamp_min,
@@ -104,7 +105,7 @@ class BlockTemplate(NamedTuple):
     def from_dict(cls, data: dict) -> 'BlockTemplate':
         return cls(
             versions=set(data['versions']),
-            reward=UnsignedAmount(int(data['reward'])),
+            reward=UnsignedAmount.from_v1(data['reward']),
             weight=float(data['weight']),
             timestamp_now=int(data['timestamp_now']),
             timestamp_min=int(data['timestamp_min']),

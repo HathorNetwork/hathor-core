@@ -943,7 +943,7 @@ class TransactionStorage(ABC):
             weight=self._settings.MIN_BLOCK_WEIGHT,
             outputs=[
                 TxOutput(
-                    UnsignedAmount(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
+                    UnsignedAmount.from_v1(self._settings.GENESIS_TOKEN_ATOMIC_UNITS),
                     self._settings.GENESIS_OUTPUT_SCRIPT,
                 ),
             ],

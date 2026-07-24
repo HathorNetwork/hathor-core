@@ -72,7 +72,7 @@ def _validate_fee_based_payment_token(fee_payment_token: TokenDescription) -> No
 def _calculate_unit_fee_token_fee(settings: HathorSettings, fee_payment_token: TokenDescription) -> UnsignedAmount:
     """Calculate the fee for handling a fee-based token"""
     if fee_payment_token.token_id == HATHOR_TOKEN_UID:
-        return UnsignedAmount(settings.FEE_PER_OUTPUT_V1)
-    numerator = settings.FEE_PER_OUTPUT_V1 * settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
+        return settings.FEE_TOKEN_AMOUNT_PER_OUTPUT
+    numerator = settings.FEE_TOKEN_AMOUNT_PER_OUTPUT.normalized() * settings.TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
     assert numerator % settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR == 0
-    return UnsignedAmount(numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR)
+    return UnsignedAmount.from_v2(numerator // settings.TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR)

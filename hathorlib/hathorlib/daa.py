@@ -31,8 +31,8 @@ def minimum_tx_weight(tx: 'Transaction', *, fix_parents: bool = True) -> float:
     # We need to take into consideration the decimal places because it is inside the amount.
     # For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     # Max below is preventing division by 0 when handling authority methods that have no outputs
-    decimal_places = tx.get_token_amount_version().get_decimal_places(settings)
-    amount = max(1, tx.sum_outputs) / (10 ** decimal_places)
+    # TODO: Update hathorlib with normalization changes.
+    amount = max(1, tx.sum_outputs) / (10 ** settings.TOKEN_AMOUNT_V1_DECIMAL_PLACES)
 
     weight: float = (
         + settings.MIN_TX_WEIGHT_COEFFICIENT * log(tx_size, 2)

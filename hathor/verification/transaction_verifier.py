@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
+from htr_lib import UnsignedAmount
+
 from hathor.daa import DAAFactory
 from hathor.feature_activation.feature_service import FeatureService
 from hathor.profiler import get_cpu_profiler
@@ -43,7 +45,6 @@ from hathor.transaction.token_info import TokenInfo, TokenInfoDict, TokenVersion
 from hathor.transaction.util import get_deposit_token_deposit_amount, get_deposit_token_withdraw_amount
 from hathor.types import TokenUid, VertexId
 from hathor.verification.verification_params import VerificationParams
-from hathorlib.token_amount import UnsignedAmount
 
 if TYPE_CHECKING:
     from hathor.conf.settings import HathorSettings
@@ -273,8 +274,8 @@ class TransactionVerifier:
 
         :raises InputOutputMismatch: if sum of inputs is not equal to outputs and there's no mint/melt
         """
-        deposit = 0
-        withdraw = 0
+        deposit = UnsignedAmount.zero()
+        withdraw = UnsignedAmount.zero()
         has_nonexistent_tokens = False
 
         for token_uid, token_info in token_dict.items():
@@ -292,9 +293,9 @@ class TransactionVerifier:
 
                 case TokenVersion.DEPOSIT:
                     if token_info.has_been_melted():
-                        withdraw += get_deposit_token_withdraw_amount(settings, UnsignedAmount(token_info.amount))
+                        withdraw += get_deposit_token_withdraw_amount(settings, (-token_info.amount).to_unsigned())
                     if token_info.has_been_minted():
-                        deposit += get_deposit_token_deposit_amount(settings, UnsignedAmount(token_info.amount))
+                        deposit += get_deposit_token_deposit_amount(settings, token_info.amount.to_unsigned())
 
                 case TokenVersion.FEE:
                     continue
@@ -303,9 +304,9 @@ class TransactionVerifier:
                     assert_never(token_info.version)
 
         # check whether the deposit/withdraw amount is correct
-        htr_expected_amount = withdraw - deposit
+        htr_expected_amount = withdraw.to_signed() - deposit.to_signed()
         htr_info = token_dict[settings.HATHOR_TOKEN_UID]
-        if htr_info.amount > htr_expected_amount:
+        if htr_info.amount > htr_expected_amount.to_signed():
             raise InputOutputMismatch('There\'s an invalid surplus of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
@@ -321,16 +322,18 @@ class TransactionVerifier:
 
         expected_fee = token_dict.calculate_fee(settings)
         if expected_fee != token_dict.fees_from_fee_header:
-            raise InputOutputMismatch(f"Fee amount is different than expected. "
-                                      f"(amount={token_dict.fees_from_fee_header}, expected={expected_fee})")
+            raise InputOutputMismatch(
+                f'Fee amount is different than expected. '
+                f'(amount={token_dict.fees_from_fee_header}, expected={expected_fee})'
+            )
 
-        if htr_info.amount < htr_expected_amount:
+        if htr_info.amount < htr_expected_amount.to_signed():
             raise InputOutputMismatch('There\'s an invalid deficit of HTR. (amount={}, expected={})'.format(
                 htr_info.amount,
                 htr_expected_amount,
             ))
 
-        assert htr_info.amount == htr_expected_amount
+        assert htr_info.amount == htr_expected_amount.to_signed()
 
     @staticmethod
     def _check_token_permissions(token_uid: TokenUid, token_info: TokenInfo) -> None:
@@ -343,9 +346,9 @@ class TransactionVerifier:
             return
         assert token_uid != HATHOR_TOKEN_UID
         if token_info.has_been_melted() and not token_info.can_melt:
-            raise ForbiddenMelt.from_token(UnsignedAmount(token_info.amount), token_uid)
+            raise ForbiddenMelt.from_token((-token_info.amount).to_unsigned(), token_uid)
         if token_info.has_been_minted() and not token_info.can_mint:
-            raise ForbiddenMint(UnsignedAmount(token_info.amount), token_uid)
+            raise ForbiddenMint(token_info.amount.to_unsigned(), token_uid)
 
     def verify_version(self, tx: Transaction, params: VerificationParams) -> None:
         """Verify that the vertex version is valid."""

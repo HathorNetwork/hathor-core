@@ -26,7 +26,7 @@ def gen_new_tx(manager: HathorManager, address: str, value: UnsignedAmount) -> T
     from hathor.wallet.base_wallet import WalletOutputInfo
 
     outputs = []
-    outputs.append(WalletOutputInfo(address=decode_address(address), value=UnsignedAmount(value), timelock=None))
+    outputs.append(WalletOutputInfo(address=decode_address(address), value=value, timelock=None))
 
     assert manager.wallet is not None
     tx = manager.wallet.prepare_transaction_compute_inputs(Transaction, outputs, manager.tx_storage)
@@ -154,7 +154,7 @@ def gen_new_double_spending(manager: HathorManager, *, use_same_parents: bool = 
     inputs = [WalletInputInfo(tx_id=txin.tx_id, index=txin.index, private_key=private_key)]
 
     address = wallet.get_unused_address(mark_as_used=True)
-    outputs = [WalletOutputInfo(address=decode_address(address), value=UnsignedAmount(value), timelock=None)]
+    outputs = [WalletOutputInfo(address=decode_address(address), value=value, timelock=None)]
 
     tx2 = wallet.prepare_transaction(Transaction, inputs, outputs)
     tx2.storage = manager.tx_storage

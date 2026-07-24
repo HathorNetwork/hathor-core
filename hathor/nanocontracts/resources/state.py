@@ -153,8 +153,9 @@ class NanoContractStateResource(Resource):
                 # User wants to get the balance of all tokens in the nano contract
                 all_balances = nc_storage.get_all_balances()
                 for key_balance, balance in all_balances.items():
+                    value = self.api_version.unsigned_amount_to_response(balance.value.to_unsigned())
                     balances[key_balance.token_uid.hex()] = NCBalanceSuccessResponse(
-                        value=str(balance.value),
+                        value=str(value),
                         can_mint=balance.can_mint,
                         can_melt=balance.can_melt,
                     )
@@ -167,8 +168,9 @@ class NanoContractStateResource(Resource):
                 continue
 
             balance = nc_storage.get_balance(token_uid)
+            value = self.api_version.unsigned_amount_to_response(balance.value.to_unsigned())
             balances[token_uid_hex] = NCBalanceSuccessResponse(
-                value=str(balance.value),
+                value=str(value),
                 can_mint=balance.can_mint,
                 can_melt=balance.can_melt,
             )
@@ -466,8 +468,6 @@ NanoContractStateResource.openapi = {
             }
         }
     },
-    # TODO(decimals): /v2 currently mirrors /v1a. Give it its own request/response schema
-    # (decimal token amounts) once the v2 API shape is finalized.
     '/v2/nano_contract/state': {
         'x-visibility': 'public',
         'x-rate-limit': {

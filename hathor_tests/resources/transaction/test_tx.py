@@ -3,6 +3,7 @@
 
 from twisted.internet.defer import inlineCallbacks
 
+from hathor.api_util import APIVersion
 from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Transaction
 from hathor.transaction.resources import TransactionResource
@@ -15,10 +16,13 @@ from hathor_tests.utils import add_blocks_unlock_reward, add_new_transactions, c
 from hathorlib.token_amount_version import TokenAmountVersion
 
 
-class TransactionTest(_BaseResourceTest._ResourceTest):
+class _BaseTransactionTest(_BaseResourceTest._ResourceTest):
+    __test__ = False
+    api_version: APIVersion
+
     def setUp(self):
         super().setUp()
-        self.web = StubSite(TransactionResource(self.manager))
+        self.web = StubSite(TransactionResource(self.manager, self.api_version))
         self.manager.wallet.unlock(b'MYPASS')
 
     @inlineCallbacks
@@ -61,6 +65,27 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
         response_conflict = yield self.web.get("transaction", {b'id': bytes(tx2.hash.hex(), 'utf-8')})
         data_conflict = response_conflict.json_value()
         self.assertTrue(data_conflict['success'])
+
+    @inlineCallbacks
+    def test_value_str_and_token_amount_version(self):
+        """Each serialized output carries `value_str`, and a single tx carries `token_amount_version`."""
+        add_new_blocks(self.manager, 2, advance_clock=1)
+        add_blocks_unlock_reward(self.manager)
+        tx = add_new_transactions(self.manager, 1)[0]
+
+        response = yield self.web.get("transaction", {b'id': tx.hash_hex.encode()})
+        data = response.json_value()
+        self.assertTrue(data['success'])
+
+        # Transactions always serialize their amounts under token amount version V1, regardless of the
+        # API version, so both `value`/`value_str` and `token_amount_version` are version-independent here.
+        self.assertEqual(data['tx']['token_amount_version'], TokenAmountVersion.V1)
+
+        serialized_outputs = data['tx']['outputs']
+        self.assertTrue(serialized_outputs)
+        for tx_output, serialized in zip(tx.outputs, serialized_outputs, strict=True):
+            self.assertEqual(serialized['value'], tx_output.value.raw())
+            self.assertEqual(serialized['value_str'], str(tx_output.value))
 
     @inlineCallbacks
     def test_get_one_known_tx(self):
@@ -577,3 +602,13 @@ class TransactionTest(_BaseResourceTest._ResourceTest):
 
         self.assertTrue(data['success'])
         self.assertNotIn('fees', data['tx'])
+
+
+class TransactionV1ATest(_BaseTransactionTest):
+    __test__ = True
+    api_version = APIVersion.V1A
+
+
+class TransactionV2Test(_BaseTransactionTest):
+    __test__ = True
+    api_version = APIVersion.V2

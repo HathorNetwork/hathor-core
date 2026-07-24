@@ -120,7 +120,7 @@ class _KeyNoLock(_SeekKeyNoLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=UnsignedAmount(self.amount),
+            amount=UnsignedAmount.from_v2(self.amount),
             timelock=None,
             heightlock=None,
         )
@@ -169,7 +169,7 @@ class _KeyTimeLock(_SeekKeyTimeLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=UnsignedAmount(self.amount),
+            amount=UnsignedAmount.from_v2(self.amount),
             timelock=self.timelock,
             heightlock=None,
         )
@@ -219,7 +219,7 @@ class _KeyHeightLock(_SeekKeyHeightLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=UnsignedAmount(self.amount),
+            amount=UnsignedAmount.from_v2(self.amount),
             timelock=None,
             heightlock=self.heightlock,
         )
@@ -291,7 +291,7 @@ def _key_from_index_item(item: UtxoIndexItem) -> _KeyBase:
             token_uid_internal=to_internal_token_uid(item.token_uid),
             address=decode_address(item.address),
             timelock=item.timelock,
-            amount=item.amount,
+            amount=item.amount.normalized(),
             tx_id=item.tx_id,
             index=item.index,
         )
@@ -300,7 +300,7 @@ def _key_from_index_item(item: UtxoIndexItem) -> _KeyBase:
             token_uid_internal=to_internal_token_uid(item.token_uid),
             address=decode_address(item.address),
             heightlock=item.heightlock,
-            amount=item.amount,
+            amount=item.amount.normalized(),
             tx_id=item.tx_id,
             index=item.index,
         )
@@ -308,7 +308,7 @@ def _key_from_index_item(item: UtxoIndexItem) -> _KeyBase:
         return _KeyNoLock(
             token_uid_internal=to_internal_token_uid(item.token_uid),
             address=decode_address(item.address),
-            amount=item.amount,
+            amount=item.amount.normalized(),
             tx_id=item.tx_id,
             index=item.index,
         )
@@ -350,9 +350,15 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
         key = bytes(_key_from_index_item(item))
         self._db.delete((self._cf, key))
 
-    def _iter_utxos_nolock(self, *, token_uid: bytes, address: str, target_amount: int) -> Iterator[UtxoIndexItem]:
+    def _iter_utxos_nolock(
+        self,
+        *,
+        token_uid: bytes,
+        address: str,
+        target_amount: UnsignedAmount,
+    ) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyNoLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
-                              amount=target_amount)
+                              amount=target_amount.normalized())
         for key in self._iter_keys(seek):
             assert isinstance(key, _KeyNoLock)
             assert key.token_uid_internal == seek.token_uid_internal
@@ -362,7 +368,7 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
     def _iter_utxos_timelock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                              target_timestamp: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyTimeLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
-                                amount=target_amount, timelock=(target_timestamp or 0xffffffff))
+                                amount=target_amount.normalized(), timelock=(target_timestamp or 0xffffffff))
         for key in self._iter_keys(seek):
             assert isinstance(key, _KeyTimeLock)
             assert key.token_uid_internal == seek.token_uid_internal
@@ -376,7 +382,7 @@ class RocksDBUtxoIndex(UtxoIndex, RocksDBIndexUtils):
     def _iter_utxos_heightlock(self, *, token_uid: bytes, address: str, target_amount: UnsignedAmount,
                                target_height: Optional[int] = None) -> Iterator[UtxoIndexItem]:
         seek = _SeekKeyHeightLock(token_uid_internal=to_internal_token_uid(token_uid), address=decode_address(address),
-                                  amount=target_amount, heightlock=(target_height or 0xffffffff))
+                                  amount=target_amount.normalized(), heightlock=(target_height or 0xffffffff))
         for key in self._iter_keys(seek):
             assert isinstance(key, _KeyHeightLock)
             assert key.token_uid_internal == seek.token_uid_internal
