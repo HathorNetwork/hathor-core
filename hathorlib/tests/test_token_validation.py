@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from hathorlib.exceptions import InvalidFeeAmount, TransactionDataError
+from hathorlib.token_amount import UnsignedAmount
 from hathorlib.utils.token_validation import validate_fee_amount, validate_token_name_and_symbol
 
 
@@ -73,26 +74,26 @@ class TestValidateFeeAmount(unittest.TestCase):
     def test_valid_htr_fee(self) -> None:
         settings = self._get_settings()
         # HTR token: any positive amount is valid
-        validate_fee_amount(settings, b'\x00', 1)
-        validate_fee_amount(settings, b'\x00', 50)
+        validate_fee_amount(settings, b'\x00', UnsignedAmount.from_v1(1))
+        validate_fee_amount(settings, b'\x00', UnsignedAmount.from_v1(50))
 
     def test_zero_amount_raises(self) -> None:
         settings = self._get_settings()
         with self.assertRaises(InvalidFeeAmount):
-            validate_fee_amount(settings, b'\x00', 0)
+            validate_fee_amount(settings, b'\x00', UnsignedAmount.from_v1(0))
 
     def test_negative_amount_raises(self) -> None:
         settings = self._get_settings()
         with self.assertRaises(InvalidFeeAmount):
-            validate_fee_amount(settings, b'\x00', -10)
+            validate_fee_amount(settings, b'\x00', UnsignedAmount(-10))
 
     def test_custom_token_valid_multiple(self) -> None:
         settings = self._get_settings()
         # Custom token: amount must be multiple of FEE_DIVISOR
-        validate_fee_amount(settings, b'\x01', 100)
-        validate_fee_amount(settings, b'\x01', 200)
+        validate_fee_amount(settings, b'\x01', UnsignedAmount.from_v1(100))
+        validate_fee_amount(settings, b'\x01', UnsignedAmount.from_v1(200))
 
     def test_custom_token_not_multiple_raises(self) -> None:
         settings = self._get_settings()
         with self.assertRaises(InvalidFeeAmount):
-            validate_fee_amount(settings, b'\x01', 50)
+            validate_fee_amount(settings, b'\x01', UnsignedAmount.from_v1(50))

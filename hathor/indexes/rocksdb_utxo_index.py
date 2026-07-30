@@ -120,7 +120,7 @@ class _KeyNoLock(_SeekKeyNoLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=self.amount,
+            amount=UnsignedAmount(self.amount),
             timelock=None,
             heightlock=None,
         )
@@ -169,7 +169,7 @@ class _KeyTimeLock(_SeekKeyTimeLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=self.amount,
+            amount=UnsignedAmount(self.amount),
             timelock=self.timelock,
             heightlock=None,
         )
@@ -219,7 +219,7 @@ class _KeyHeightLock(_SeekKeyHeightLock):
             tx_id=self.tx_id,
             index=self.index,
             address=get_address_b58_from_bytes(self.address),
-            amount=self.amount,
+            amount=UnsignedAmount(self.amount),
             timelock=None,
             heightlock=self.heightlock,
         )
