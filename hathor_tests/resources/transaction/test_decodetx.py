@@ -46,6 +46,12 @@ class DecodeTxTest(_BaseResourceTest._ResourceTest):
 
         self.assertFalse(data_error2['success'])
 
+        # Valid hex but too short to hold a version byte
+        response_error3 = yield self.web.get("decode_tx", {b'hex_tx': b'00'})
+        data_error3 = response_error3.json_value()
+
+        self.assertFalse(data_error3['success'])
+
         # Token creation tx
         script_type_out = parse_address_script(genesis[0].outputs[0].script)
         address = script_type_out.address
