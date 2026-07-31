@@ -283,6 +283,66 @@ class HathorCommonsTestCase(unittest.TestCase):
         self.assertTrue(tx.has_unshield_balance())
         self.assertIs(tx.get_unshield_balance_header(), header)
 
+    def test_tx_with_mint_melt_headers(self):
+        """MintHeader / MeltHeader: entry (de)serialization round-trip through the
+        module-level helpers, parser-registry dispatch, and entry validation.
+
+        The header classes' deserialize/serialize/get_sighash_bytes are unused
+        stubs that raise NotImplementedError: hathor-core drives (de)serialization
+        through the framework free functions in `_mint_melt_header.py`, which
+        delegate to `serialize_entries` / `deserialize_entries`.
+        """
+        from hathorlib.headers import (
+            MeltHeader,
+            MintHeader,
+            MintMeltEntry,
+            VertexHeaderId,
+            deserialize_entries,
+            serialize_entries,
+        )
+        from hathorlib.serialization import Deserializer, Serializer
+        from hathorlib.vertex_parser import VertexParser
+
+        tx = Transaction()
+        cases = [
+            (MintHeader, VertexHeaderId.MINT_HEADER.value, b'\x14', 'MintHeader'),
+            (MeltHeader, VertexHeaderId.MELT_HEADER.value, b'\x15', 'MeltHeader'),
+        ]
+        for header_cls, id_value, id_byte, header_name in cases:
+            self.assertEqual(id_value, id_byte)  # the enum value is the literal id byte
+            entries = [MintMeltEntry(token_index=1, amount=1000), MintMeltEntry(token_index=3, amount=2 ** 63)]
+            header = header_cls(entries=entries)
+
+            # The parser registry still dispatches the correct class by header id.
+            self.assertIs(VertexParser.get_header_parser(id_byte), header_cls)
+
+            # Entries round-trip through the module-level helpers (the real path).
+            # Entry block wire format: num_entries(1) | (token_index(1) | amount(8 BE))...
+            serializer = Serializer.build_bytes_serializer()
+            serialize_entries(serializer, entries)
+            wire = bytes(serializer.finalize())
+            self.assertEqual(wire[0], len(entries))
+            self.assertEqual(len(wire), 1 + len(entries) * 9)
+
+            deserializer = Deserializer.build_bytes_deserializer(wire)
+            self.assertEqual(deserialize_entries(deserializer, header_name=header_name), entries)
+
+            # The header class's (de)serialization methods are unused stubs.
+            with self.assertRaises(NotImplementedError):
+                header.serialize()
+            with self.assertRaises(NotImplementedError):
+                header.get_sighash_bytes()
+            with self.assertRaises(NotImplementedError):
+                header_cls.deserialize(tx, wire)
+
+        # Entry validation at construction time: token_index in [1, 16], amount in [1, 2**64).
+        with self.assertRaises(ValueError):
+            MintMeltEntry(token_index=0, amount=1)
+        with self.assertRaises(ValueError):
+            MintMeltEntry(token_index=1, amount=0)
+        with self.assertRaises(ValueError):
+            MintMeltEntry(token_index=17, amount=1)
+
     def test_shielded_output_serialization_roundtrip(self):
         """serialize/deserialize round-trip for both output modes, incl. ephemeral present/absent.
 
