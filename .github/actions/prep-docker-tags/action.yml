@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: Hathor Labs
+# SPDX-License-Identifier: Apache-2.0
+
+name: prep-docker-tags
+description: Derive the image version, tag list and registry list for the current ref
+inputs:
+  python-version:
+    description: The python version of this build, used as the image tag suffix
+  dockerhub-image:
+    description: The Docker Hub repository to publish to, empty to skip Docker Hub
+  ghcr-image:
+    description: The GitHub Container Registry repository to publish to, empty to skip GHCR
+outputs:
+  check-version:
+    description: Version to check against the source files, empty when the ref is not a tag
+    value: ${{ steps.prep.outputs.check-version }}
+  version:
+    description: The base version with the python suffix, always present in the tag list
+    value: ${{ steps.prep.outputs.version }}
+  created:
+    description: Build timestamp, for the org.opencontainers.image.created label
+    value: ${{ steps.prep.outputs.created }}
+  dockerfile:
+    description: The Dockerfile to build
+    value: ${{ steps.prep.outputs.dockerfile }}
+  repositories:
+    description: Comma-separated repositories to publish to, without tags
+    value: ${{ steps.prep.outputs.repositories }}
+  tags:
+    description: Comma-separated fully qualified tags, the product of repositories and tags
+    value: ${{ steps.prep.outputs.tags }}
+  push:
+    description: Whether there is at least one repository to publish to
+    value: ${{ steps.prep.outputs.push }}
+  login-dockerhub:
+    description: Whether Docker Hub is one of the repositories
+    value: ${{ steps.prep.outputs.login-dockerhub }}
+  login-ghcr:
+    description: Whether GHCR is one of the repositories
+    value: ${{ steps.prep.outputs.login-ghcr }}
+  slack-notification-version:
+    description: Version to announce on Slack, empty for non-default python versions
+    value: ${{ steps.prep.outputs.slack-notification-version }}
+  disable-slack-notification:
+    description: Whether this ref must not trigger a Slack notification
+    value: ${{ steps.prep.outputs.disable-slack-notification }}
+runs:
+  using: composite
+  steps:
+    # XXX: pass every value through `env` rather than interpolating it into the `run` body. git
+    # ref names may contain single quotes, so exporting a ref inside a single quoted shell string
+    # lets anyone who can push a branch break out of it and run commands in a step that has the
+    # registry credentials in scope. GITHUB_REF, GITHUB_EVENT_NAME, GITHUB_SHA and
+    # GITHUB_REPOSITORY are already in the runner environment, so they need not be passed at all.
+    - name: Prepare tags
+      id: prep
+      shell: bash
+      env:
+        GITHUB_EVENT_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        GITHUB_EVENT_NUMBER: ${{ github.event.number }}
+        MATRIX_PYTHON_VERSION: ${{ inputs.python-version }}
+        SECRETS_DOCKERHUB_IMAGE: ${{ inputs.dockerhub-image }}
+        SECRETS_GHCR_IMAGE: ${{ inputs.ghcr-image }}
+      run: python extras/github/docker.py
