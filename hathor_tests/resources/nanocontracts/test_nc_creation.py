@@ -556,6 +556,41 @@ class NCCreationResourceTest(_BaseResourceTest._ResourceTest):
             nc_creation_txs=[],
         )
 
+    async def test_search_wrong_size(self) -> None:
+        # A valid hex of the wrong size is neither a NC ID nor a BP ID. It used to reach the
+        # blueprint-history index and trip its `len(key) == _KEY_SIZE` assert, returning HTTP 500.
+        self.prepare_ncs()
+        for search in (b'ab', b'ab' * 31, b'ab' * 33):
+            response = await self.web.get('creation', {
+                b'search': search,
+            })
+            data = response.json_value()
+            assert data == dict(
+                success=True,
+                count=10,
+                before=None,
+                after=None,
+                has_more=False,
+                nc_creation_txs=[],
+            )
+
+    async def test_search_wrong_size_asc(self) -> None:
+        # Same as above, but the ascending order takes a different branch (get_oldest).
+        self.prepare_ncs()
+        response = await self.web.get('creation', {
+            b'search': b'ab' * 31,
+            b'order': b'asc',
+        })
+        data = response.json_value()
+        assert data == dict(
+            success=True,
+            count=10,
+            before=None,
+            after=None,
+            has_more=False,
+            nc_creation_txs=[],
+        )
+
     async def test_non_hex_pagination(self) -> None:
         self.prepare_ncs()
         response = await self.web.get('creation', {
