@@ -462,7 +462,7 @@ class RunNode:
 
     def check_python_version(self) -> None:
         # comments to help grep's
-        MIN_VER = (3, 11)  # Python-3.11
+        MIN_VER = (3, 12)  # Python-3.12
         MIN_STABLE = (3, 12)  # Python-3.12
         RECOMMENDED_VER = (3, 12)  # Python-3.12
         cur = sys.version_info

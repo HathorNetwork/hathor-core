@@ -599,7 +599,7 @@ name = "htr-lib"
 version = "0.1.0"
 description = ""
 optional = false
-python-versions = ">=3.11"
+python-versions = ">=3.12"
 groups = ["main"]
 files = []
 develop = true
@@ -1695,5 +1695,5 @@ client = ["aiohttp"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.11,<4"
-content-hash = "bdb0844394e615e0d7c5891fb1361b42052f29bbb8a2d88e7a68eab8a8e0b516"
+python-versions = ">=3.12,<4"
+content-hash = "7b1a2986de40b6bff130634a76de70e98ade5ffb46e10f9bed6f336bbd39e1a0"
