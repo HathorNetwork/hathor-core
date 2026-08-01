@@ -79,7 +79,7 @@ class DbImport(RunNode):
             tx = parser.deserialize(tx_bytes)
             assert tx is not None
             tx.storage = self.tx_storage
-            self.manager.on_new_tx(tx, quiet=True)
+            self.manager.vertex_handler.on_new_trusted_vertex(tx, quiet=True)
             yield tx
 
 

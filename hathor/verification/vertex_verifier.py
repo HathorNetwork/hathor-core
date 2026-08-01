@@ -255,7 +255,7 @@ class VertexVerifier:
 
     def verify_old_timestamp(self, vertex: BaseTransaction, params: VerificationParams) -> None:
         """Verify that the timestamp is not too old. Mempool only."""
-        if not params.reject_too_old_vertices:
+        if not params.apply_mempool_restrictions:
             return
 
         now = self._reactor.seconds()

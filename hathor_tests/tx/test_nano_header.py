@@ -204,7 +204,7 @@ class VertexHeadersTest(unittest.TestCase):
             vertex.storage = self.manager.tx_storage
             clone = vertex.clone(include_metadata=False, include_storage=True)
             assert bytes(clone) == bytes(vertex)
-            assert self.manager.on_new_tx(vertex)
+            assert self.manager.vertex_handler.on_new_trusted_vertex(vertex)
 
         expected_to_fail: list[tuple[str, type[BaseTransaction], bool]] = [
             ('b12', Block, True),
@@ -214,7 +214,7 @@ class VertexHeadersTest(unittest.TestCase):
             vertex = self.artifacts.get_typed_vertex(name, _type)
             assert self.has_nano_header(vertex) == should_have_nano_header
             with pytest.raises(InvalidNewTransaction) as e:
-                self.manager.on_new_tx(vertex)
+                self.manager.vertex_handler.on_new_trusted_vertex(vertex)
             assert isinstance(e.value.__cause__, HeaderNotSupported)
 
     def test_nano_header_round_trip(self) -> None:

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
+from unittest.mock import patch
+
 import pytest
 
 from hathor.crypto.util import get_address_b58_from_bytes, get_address_from_public_key
@@ -11,6 +13,7 @@ from hathor.simulator.utils import add_new_blocks
 from hathor.transaction import Block, Transaction, TxInput, TxOutput
 from hathor.transaction.exceptions import RewardLocked
 from hathor.transaction.scripts import P2PKH
+from hathor.verification.transaction_verifier import TransactionVerifier
 from hathor.wallet import Wallet
 from hathor_tests import unittest
 from hathor_tests.dag_builder.builder import TestDAGBuilder
@@ -100,7 +103,8 @@ class TransactionTest(unittest.TestCase):
         #      transaction before it can the RewardLocked exception is raised
         tx, _ = self._spend_reward_tx(self.manager, reward_block)
         self.assertEqual(tx.static_metadata.min_height, unlock_height)
-        self.assertTrue(self.manager.on_new_tx(tx, reject_locked_reward=False))
+        with patch.object(TransactionVerifier, 'verify_reward_locked'):
+            self.assertTrue(self.manager.on_new_tx(tx))
 
         # new block will try to confirm it and fail
         with pytest.raises(InvalidNewTransaction) as e:
