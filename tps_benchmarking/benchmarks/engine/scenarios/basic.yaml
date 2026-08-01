@@ -1,0 +1,34 @@
+# Baseline scenario — single batch, transparent 1-in/2-out transactions.
+# Validate with:  python -m hathor_tps_bench validate --config scenarios/basic.yaml
+name: baseline
+
+# Which benchmark approach(es) to run (registry keys). Only stage-latency exists
+# in early checkpoints; fullnode-ingestion / single-wallet-e2e come later.
+benchmarks:
+  - stage-latency
+
+# Optional batch-size sweep (throughput-vs-N). Omit for a single run.
+# n_sweep: [100, 500, 1000, 5000]
+
+results_root: tps_benchmarking/benchmarks/engine/results   # run from the hathor-core repo root
+
+workload:
+  tx_type: transparent
+  num_txs: 500
+  num_inputs: 1      # I
+  num_outputs: 2     # O
+
+env:
+  network: unittests       # real verifiers + cheap PoW
+  storage: rocksdb_temp     # rocksdb_temp | memory
+  seed: 1234
+  trivial_pow: true         # DAA TEST_ALL_WEIGHT (weights -> 1)
+
+measure:
+  sampler_interval_s: 0.1
+  tdp_watts: 65.0           # analytical energy: CPU_s * TDP * util
+  cpu_util: 1.0
+  deep_tracemalloc_sample: 0
+
+reporting:
+  formats: [csv, plots, markdown]
