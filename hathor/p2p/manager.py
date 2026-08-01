@@ -598,14 +598,14 @@ class ConnectionsManager:
     def connect_to_peer(self, peer: UnverifiedPeer | PublicPeer, now: int) -> None:
         """ Attempts to connect if it is not connected to the peer.
         """
-        if not peer.info.entrypoints or (
-            not self.enable_ipv6 and not peer.info.get_ipv4_only_entrypoints()
-        ) or (
-            self.disable_ipv4 and not peer.info.get_ipv6_only_entrypoints()
-        ):
-            # It makes no sense to keep storing peers that have disconnected and have no entrypoints
-            # We will never be able to connect to them anymore and they will only keep spending memory
-            # and other resources when used in APIs, so we are removing them here
+        connectable_entrypoints = peer.info.get_connectable_entrypoints(
+            enable_ipv6=self.enable_ipv6, disable_ipv4=self.disable_ipv4,
+        )
+        if not connectable_entrypoints:
+            # It makes no sense to keep storing peers that have disconnected and to which we can no longer
+            # connect (no entrypoints, or none compatible with our IP-family configuration). We will never be
+            # able to connect to them anymore and they will only keep spending memory and other resources when
+            # used in APIs, so we are removing them here
             if peer.id not in self.connected_peers:
                 self.verified_peer_storage.remove(peer)
             return
@@ -614,14 +614,7 @@ class ConnectionsManager:
 
         assert peer.id is not None
         if peer.info.can_retry(now):
-            if self.enable_ipv6 and not self.disable_ipv4:
-                addr = self.rng.choice(list(peer.info.entrypoints))
-            elif self.enable_ipv6 and self.disable_ipv4:
-                addr = self.rng.choice(peer.info.get_ipv6_only_entrypoints())
-            elif not self.enable_ipv6 and not self.disable_ipv4:
-                addr = self.rng.choice(peer.info.get_ipv4_only_entrypoints())
-            else:
-                raise ValueError('IPv4 is disabled and IPv6 is not enabled')
+            addr = self.rng.choice(connectable_entrypoints)
             self.connect_to_endpoint(addr.with_id(peer.id), peer)
         else:
             self.log.debug('connecting too often, skip retrying', peer=str(peer.id))
