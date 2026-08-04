@@ -79,13 +79,19 @@ def _drive_one(manager, vh, settings, params, raw: bytes, index: int) -> TxRecor
     )
 
 
-def run_batch(harness, prepared, *, sampler_interval_s: float = 0.1, warmup: int = 0) -> RunResult:
+def run_batch(harness, prepared, *, sampler_interval_s: float = 0.1, warmup: int = 0,
+              on_progress=None) -> RunResult:
     """Drive `prepared` through S1..S6. The first `warmup` txs are driven through the full
     pipeline but their records are DISCARDED — they burn in the RocksDB read cache and the
     interpreter so the measured window reflects steady state, not the cold start. (We do
     NOT inject a block before measuring: in the 1-tip-transparent chain tips are already ~1 so a block
     resets nothing, and block processing evicts the tx LRU cache — which would re-introduce
-    the very cold transient we are removing; see CP-4.)"""
+    the very cold transient we are removing; see CP-4.)
+
+    `on_progress(phase, done, total)` is an OPTIONAL UI hook, called between txs (never inside a
+    timed stage) at ~1% granularity, with phase in {"warmup", "measure"}. It cannot perturb the
+    headline: processing TPS is summed from the per-stage timings taken inside `_drive_one`, not
+    from the batch wall clock."""
     manager = harness.manager
     vh = manager.vertex_handler
     settings = manager._settings
@@ -93,9 +99,14 @@ def run_batch(harness, prepared, *, sampler_interval_s: float = 0.1, warmup: int
 
     # --- warm-up: drive W txs, keep nothing. They still extend the DAG (real processing). ---
     warmup = max(0, min(warmup, len(prepared)))
+    tick = lambda n: max(1, n // 100)  # ~1% granularity; keeps the hook's cost negligible
+    wtick = tick(warmup)
     for i in range(warmup):
         _drive_one(manager, vh, settings, params, prepared[i].raw, i)
+        if on_progress is not None and (i + 1) % wtick == 0:
+            on_progress("warmup", i + 1, warmup)
     measured = prepared[warmup:]
+    mtick = tick(len(measured))
 
     # Snapshot resources AFTER warm-up so batch figures cover only the measured K txs.
     io_r0, io_w0 = procstats.read_io()
@@ -107,6 +118,8 @@ def run_batch(harness, prepared, *, sampler_interval_s: float = 0.1, warmup: int
     for i, p in enumerate(measured):  # i = position within the measured window (0..K-1)
         records.append(_drive_one(manager, vh, settings, params, p.raw, i))
         sampler.set_progress(i + 1)
+        if on_progress is not None and (i + 1) % mtick == 0:
+            on_progress("measure", i + 1, len(measured))
     wall_s = time.perf_counter() - w0
     cpu_s = time.process_time() - c0
 

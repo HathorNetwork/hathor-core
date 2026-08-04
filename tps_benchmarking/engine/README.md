@@ -59,13 +59,16 @@ hathor-tps-bench --version
 | Flag | Meaning | Default |
 |---|---|---|
 | `--config FILE` | base scenario YAML | (built-in defaults) |
-| `--tx-type NAME` | workload: `1-tip-transparent` \| `defunct` \| `amount-shielded` \| `full-shielded` | `1-tip-transparent` |
+| `--tx-type NAME` | workload; see `list` for all 8 | `1-tip-transparent` |
+| `--shielded` | **the default fully-shielded workload** — `capless-full-shielded` (shielded in **and** out; chunked source funding, so `N × inputs` is uncapped). Needs a shielded-output cap ≥ 16 | — |
+| `--full-shielded` | *transparent* inputs → fully-shielded outputs; narrower question, source pool capped ≈ 6.4k UTXOs | — |
 | `-n, --num-txs K` | **measured** transactions | 500 |
 | `-i, --num-inputs I` | inputs per tx | 1 |
 | `-o, --num-outputs O` | outputs per tx | 2 |
 | `-w, --warmup W` | warm-up txs (driven then **discarded**, for steady state) | 100 |
 | `--window N` | rolling-curve window | adaptive `min(50, max(5, 10%·N))` |
 | `--seed S` | RNG seed (reproducible builds) | 1234 |
+| `--verbose-node-logs` | leave structlog unconfigured — the node then renders a full tx repr per vertex **inside timed S6**. Only for reproducing the published Phase-1/Phase-3 figures | off |
 | `--sweep-inputs MIN MAX` | sweep I over `[MIN..MAX]` (O, N fixed) — fresh node per point | — |
 | `--sweep-outputs MIN MAX` | sweep O over `[MIN..MAX]` (I, N fixed) | — |
 | `--sweep-txs N [N …]` | sweep batch size over the given list | — |
@@ -165,6 +168,15 @@ purpose to demonstrate the pathology — hence "defunct", not for real measureme
   doesn't inflate the result.
 - **Double `validate_full`.** Verification runs twice (S3S4 + S6) — real per-tx cost here, and the top
   optimization target.
+- **Node logging is filtered (changed 2026-07-31).** The engine now calls `structlog.configure` at
+  INFO in `NodeHarness`. Before this it configured nothing, so structlog emitted every level and the
+  node rendered a transaction repr per vertex inside the timed S6 stage. Measured (N=400, W=60, 1i2o,
+  3 interleaved reps): **S6 226 µs → 98 µs**, total 1 960 µs → 1 792 µs, ~1.09× throughput. **Figures
+  published before this date were collected with logging live** — use `--verbose-node-logs` to
+  reproduce them. Per-section contribution deltas (P10) are unaffected: logging added the same
+  constant to both arms and cancels in the difference. A further ~46 µs/tx remains in
+  `_log_new_object`, which builds its kwargs before testing the level; that one needs an upstream
+  `hathor/` change and is deliberately not made here.
 - **Funding scale.** The funding caps near ~253 fund txs (≈ 50k UTXOs, i.e. `(K+W)·I ≲ 50k`); beyond
   that, serialization byte-fields overflow. Keep `(K+W)·I` under ~50k.
 

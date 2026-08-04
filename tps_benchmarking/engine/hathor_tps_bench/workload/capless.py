@@ -51,8 +51,27 @@ class CaplessFullShielded(OneTipTransparentTxSource):
         return self._fee
 
     def build(self, harness: Any, num_txs: int, num_inputs: int, num_outputs: int) -> list[PreparedTx]:
+        self._check_shielded_output_cap()
         self._fee = getattr(harness.manager._settings, self._fee_setting)
         return super().build(harness, num_txs, num_inputs, num_outputs)
+
+    @staticmethod
+    def _check_shielded_output_cap() -> None:
+        """Fail early, and legibly, when the shielded-output cap is below SRC_CHUNK.
+
+        The funding mints its shielded SOURCE pool SRC_CHUNK (16) outputs at a time, so a cap
+        under that rejects a *source* tx during the untimed build — even though the measured tx
+        may only have 2 outputs. Left unguarded the node raises `too many shielded outputs: 16
+        exceeds maximum <cap>`, which names a tx the caller never asked for and reads as a bug.
+        Checked here (not in the CLI) so `report_data.py` and any UI get the same clear error."""
+        from hathorlib.transaction.shielded_tx_output import MAX_SHIELDED_OUTPUTS
+        if MAX_SHIELDED_OUTPUTS < SRC_CHUNK:
+            raise ValueError(
+                f"capless-full-shielded needs a shielded-output cap of at least {SRC_CHUNK} "
+                f"(HATHOR_MAX_SHIELDED_OUTPUTS / --max-shielded-outputs is {MAX_SHIELDED_OUTPUTS}): "
+                f"its source pool mints {SRC_CHUNK} shielded outputs per source tx. Raise the cap, "
+                f"or use `full-shielded` (transparent inputs) if you need a cap below {SRC_CHUNK}."
+            )
 
     def render_dsl(self, num_txs: int, num_inputs: int, num_outputs: int) -> str:
         # here num_inputs/num_outputs are the SHIELDED input/output counts (transparent slice = 0)

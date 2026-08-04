@@ -33,7 +33,8 @@ def _run_one(cfg, tx_type: str, num_inputs: int, num_outputs: int, K: int, W: in
         source.shielded_inputs = cfg.workload.shielded_inputs
         source.shielded_outputs = cfg.workload.shielded_outputs
     harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow,
-                          shielded=source_cls.shielded).start()
+                          shielded=source_cls.shielded,
+                          verbose_logs=cfg.env.verbose_logs).start()
     try:
         prepared = source.build(harness, W + K, num_inputs, num_outputs)
         result = run_batch(harness, prepared,

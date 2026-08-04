@@ -86,6 +86,8 @@ def _apply_overrides(cfg: RootConfig, args: argparse.Namespace) -> None:
         cfg.env.seed = args.seed
     if getattr(args, "results_root", None) is not None:
         cfg.results_root = args.results_root
+    if getattr(args, "verbose_node_logs", False):
+        cfg.env.verbose_logs = True
     # Resolve --opt/--no-opt into the per-section ON/OFF map (defaults to all-ON when absent).
     cfg.opt = resolve_opt(getattr(args, "opt", None), getattr(args, "no_opt", None))
 
@@ -152,7 +154,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         source.shielded_inputs = w.shielded_inputs
         source.shielded_outputs = w.shielded_outputs
     harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow,
-                          shielded=source_cls.shielded, opt=cfg.opt).start()
+                          shielded=source_cls.shielded, opt=cfg.opt,
+                          verbose_logs=cfg.env.verbose_logs).start()
     try:
         prepared = source.build(harness, W + K, w.num_inputs, w.num_outputs)  # build W+K
         print(f"[run] built {len(prepared)} txs; warming {W}, measuring {K} through S1..S6...")
@@ -362,7 +365,8 @@ def _run_multibatch(cfg: RootConfig, args: argparse.Namespace) -> int:
                      for i, s in enumerate(segments))
     print(f"[mult-batches] {len(segments)} segments, {total} txs (warmup {W})\n  {desc}")
 
-    harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow, shielded=has_shielded).start()
+    harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow,
+                          shielded=has_shielded, verbose_logs=cfg.env.verbose_logs).start()
     try:
         st = harness.manager._settings
         prepared, starts = build_multibatch(harness, segments,
@@ -408,10 +412,14 @@ def _add_shielded_flags(parser: argparse.ArgumentParser) -> None:
     """Shielded workload selectors + parameter overrides, shared by `run` and `sweep`.
     The selector flags store into the `tx_type` dest; the parameter flags are translated
     to env vars by `_apply_shielded_env` before the node is built."""
-    parser.add_argument("--shielded", action="store_const", const="full-shielded", dest="tx_type",
-                        help="shorthand for --full-shielded")
+    parser.add_argument("--shielded", action="store_const", const="capless-full-shielded", dest="tx_type",
+                        help="DEFAULT fully-shielded workload: capless-full-shielded (shielded IN + OUT, "
+                             "chunked source funding so N x inputs is not capped). Use this unless you "
+                             "specifically want transparent inputs")
     parser.add_argument("--full-shielded", action="store_const", const="full-shielded", dest="tx_type",
-                        help="FULLY_SHIELDED outputs (amount+token hidden; range+surjection proofs)")
+                        help="TRANSPARENT inputs -> FULLY_SHIELDED outputs (amount+token hidden; "
+                             "range+surjection proofs). Narrower question than --shielded; source pool "
+                             "is capped (~6.4k shielded UTXOs)")
     parser.add_argument("--amount-shielded", action="store_const", const="amount-shielded", dest="tx_type",
                         help="AMOUNT_ONLY shielded outputs (amount hidden; range proof only)")
     parser.add_argument("--mixed-full", action="store_const", const="mixed-full", dest="tx_type",
@@ -428,6 +436,15 @@ def _add_shielded_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-shielded-outputs", dest="max_shielded_outputs", metavar="N|max",
                         help="lift the per-tx shielded-output cap (default 32, ceiling 255); "
                              "sets HATHOR_MAX_SHIELDED_OUTPUTS")
+
+
+def _add_logging_flag(parser: argparse.ArgumentParser) -> None:
+    """Restore the pre-fix node logging. Off by default: leaving structlog unconfigured makes the
+    node render a full tx repr per vertex INSIDE the timed S6 stage (~110 us/tx here). Pass this
+    to reproduce the published Phase-1 / Phase-3 figures, which were collected that way."""
+    parser.add_argument("--verbose-node-logs", dest="verbose_node_logs", action="store_true",
+                        help="leave structlog unconfigured (per-tx DEBUG render inside timed S6); "
+                             "reproduces the pre-fix / published numbers")
 
 
 def _add_opt_flags(parser: argparse.ArgumentParser) -> None:
@@ -458,7 +475,8 @@ def build_parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("run", help="single run, OR a sweep if a --sweep-* flag is given")
     pr.add_argument("--config", help="optional base scenario YAML (else built-in defaults)")
     pr.add_argument("--tx-type", dest="tx_type",
-                    help="tx type (1-tip-transparent | defunct | amount-shielded | full-shielded)")
+                    help="tx type (1-tip-transparent | defunct | capless-full-shielded | "
+                         "amount-shielded | full-shielded | mixed-amount | mixed-full); see `list`")
     pr.add_argument("-n", "--num-txs", type=int, dest="num_txs", help="measured txs K")
     pr.add_argument("-i", "--num-inputs", type=int, dest="num_inputs", help="inputs per tx I")
     pr.add_argument("-o", "--num-outputs", type=int, dest="num_outputs", help="outputs per tx O")
@@ -475,6 +493,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="sweep batch size over the given list")
     _add_shielded_flags(pr)
     _add_opt_flags(pr)
+    _add_logging_flag(pr)
     pr.add_argument("--mult-batches", nargs=argparse.REMAINDER, dest="mult_batches",
                     help="run a SEQUENCE of segments as one timed stream (TPS-over-time). Each segment: "
                          "--n N [-i I -o O] [--shielded|--full-shielded|--amount-shielded -i Is -o Os]. "
@@ -491,6 +510,7 @@ def build_parser() -> argparse.ArgumentParser:
                      help="where run dirs are written (default: <engine>/results, absolute)")
     _add_shielded_flags(psw)
     _add_opt_flags(psw)
+    _add_logging_flag(psw)
     psw.set_defaults(fn=_cmd_sweep)
 
     psc = sub.add_parser("script", help="run a named script from scripts/ (e.g. demo_experiments)")

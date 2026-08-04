@@ -35,7 +35,6 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from statistics import mean, median
@@ -55,95 +54,23 @@ from hathor_tps_bench.workload import get_txtype  # noqa: E402
 
 SEED = 1234
 TDP_WATTS, CPU_UTIL = 65.0, 1.0
-SECTIONS = ("s1", "s2", "s3s4", "s5", "s6")
-ALL_ON = {s: True for s in SECTIONS}
-TRANSPARENT = "1-tip-transparent"
-SHIELDED = "capless-full-shielded"          # truly confidential in+out (locked decision)
-DEFAULT_OUT = Path(__file__).resolve().parent.parent / "report-data"
-
-
-def _opt_off(section: str) -> dict[str, bool]:
-    """all sections ON except `section` (P10 per-section isolation)."""
-    return {s: (s != section) for s in SECTIONS}
-
-
-@dataclass
-class Cell:
-    i: int
-    o: int
-    label: str                              # short id used for filenames, e.g. "8i2o", "no-opt", "no-s5"
-    bits: int = 64
-    opt: dict[str, bool] | None = None      # None → all-ON (--opt). Sets NodeHarness(opt=...)
-    workload: str | None = None             # override the scenario workload (P6/P7 "both")
-    transition: str | None = None           # P11 only: "T2S" | "S2T" — a two-segment multibatch stream
-
-
-@dataclass
-class Scenario:
-    id: str
-    title: str
-    workload: str
-    cells: list[Cell]
-    n: int
-    warmup: int
-    k: int = 3
-    shielded: bool = False                   # scenario default; a cell's own workload can override
-    cost: int = 0                            # light→heavy ordering hint for --all
-    deferred: str = ""                       # non-empty → skip in Stage 1 (needs a dedicated runner)
-    note: str = ""
-
-
-def _io(i: int, o: int) -> str:
-    return f"{i}i{o}o"
-
-
-def _scaling(workload: str, ios: list[tuple[int, int]]) -> list[Cell]:
-    return [Cell(i, o, _io(i, o)) for i, o in ios]
-
-
-# --------------------------------------------------------------------------------------------------
-# The P1–P11 matrix (reconstructed + locked decisions applied). N / warmup are the report-scale
-# values; --smoke shrinks them for plumbing checks.
-# --------------------------------------------------------------------------------------------------
-SCENARIOS: list[Scenario] = [
-    Scenario("P1", "transparent baseline", TRANSPARENT,
-             _scaling(TRANSPARENT, [(1, 2)]), n=5000, warmup=200, cost=10),
-    Scenario("P2", "transparent input scaling", TRANSPARENT,
-             _scaling(TRANSPARENT, [(1, 2), (2, 2), (4, 2), (8, 2)]), n=5000, warmup=200, cost=40),
-    Scenario("P3", "shielded baseline", SHIELDED,
-             _scaling(SHIELDED, [(1, 2)]), n=2000, warmup=200, shielded=True, cost=30),
-    Scenario("P4", "shielded input scaling", SHIELDED,
-             _scaling(SHIELDED, [(1, 2), (2, 2), (4, 2), (8, 2)]), n=2000, warmup=200,
-             shielded=True, cost=80),
-    Scenario("P5", "shielded output scaling", SHIELDED,
-             _scaling(SHIELDED, [(2, 2), (2, 4), (2, 8)]), n=2000, warmup=200, shielded=True, cost=60),
-    Scenario("P6", "transparent vs shielded", SHIELDED, [
-        Cell(1, 2, "transparent", workload=TRANSPARENT),
-        Cell(1, 2, "shielded", workload=SHIELDED),
-    ], n=2000, warmup=200, shielded=True, cost=25),
-    Scenario("P7", "transparent vs shielded, scaled", SHIELDED, [
-        Cell(i, o, f"{tag}-{_io(i, o)}", workload=wl)
-        for (tag, wl) in (("transparent", TRANSPARENT), ("shielded", SHIELDED))
-        for (i, o) in [(1, 2), (4, 4), (8, 8)]
-    ], n=2000, warmup=200, shielded=True, cost=90),
-    Scenario("P8", "shielded surjection grid", SHIELDED,
-             _scaling(SHIELDED, [(i, o) for i in (2, 4, 8) for o in (2, 4, 8)]),
-             n=1000, warmup=100, shielded=True, cost=100),
-    Scenario("P9", "opt vs no-opt", TRANSPARENT, [
-        Cell(1, 2, "opt", opt=dict(ALL_ON)),
-        Cell(1, 2, "no-opt", opt={s: False for s in SECTIONS}),
-    ], n=5000, warmup=200, cost=20),
-    Scenario("P10", "per-section isolation", TRANSPARENT,
-             [Cell(1, 2, "full", opt=dict(ALL_ON))]
-             + [Cell(1, 2, f"no-{s}", opt=_opt_off(s)) for s in SECTIONS],
-             n=5000, warmup=200, cost=50),
-    Scenario("P11", "transition (multi-batch)", "multibatch",
-             [Cell(i, o, f"{d}-{_io(i, o)}", transition=d)
-              for d in ("T2S", "S2T") for (i, o) in [(1, 2), (2, 4), (4, 8)]],
-             n=1000, warmup=0, shielded=True, cost=110,
-             note="two-segment stream (n each); transparent↔full-shielded, driven continuously"),
-]
-SCN_BY_ID = {s.id: s for s in SCENARIOS}
+# The declarative matrix (Cell / Scenario / SCENARIOS) lives in report_scenarios.py so that the UI
+# — and anything else that only needs to KNOW the scenarios — can read it without importing hathor
+# or spinning a reactor. Re-exported here so existing `from report_data import SCENARIOS` still works.
+from report_scenarios import (  # noqa: E402,F401
+    ALL_ON,
+    DEFAULT_OUT,
+    SCENARIOS,
+    SCN_BY_ID,
+    SECTIONS,
+    SHIELDED,
+    TRANSPARENT,
+    Cell,
+    Scenario,
+    _io,
+    _opt_off,
+    _scaling,
+)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -157,8 +84,13 @@ def _apply_cell_env(scn: Scenario, cell: Cell, is_shielded: bool) -> None:
         os.environ.pop("HATHOR_BENCH_CACHE_RANGE_PROOFS", None)
 
 
-def run_cell(scn: Scenario, cell: Cell, n: int, warmup: int, k: int) -> dict:
-    """Run one cell k times; return {band:[(idx,min,avg,max)], meta:{...}}."""
+def run_cell(scn: Scenario, cell: Cell, n: int, warmup: int, k: int, on_progress=None,
+             verbose_logs: bool = False) -> dict:
+    """Run one cell k times; return {band:[(idx,min,avg,max)], meta:{...}}.
+
+    `on_progress(rep, k, phase, done, total)` is an optional UI hook — `phase` is "build" (no
+    counts) or the driver's "warmup"/"measure" with per-tx counts. It is threaded to `run_batch`,
+    which only calls it between transactions, so it cannot perturb the measurement."""
     workload = cell.workload or scn.workload
     cls = get_txtype(workload)
     is_shielded = bool(getattr(cls, "shielded", False))
@@ -167,16 +99,24 @@ def run_cell(scn: Scenario, cell: Cell, n: int, warmup: int, k: int) -> dict:
     per_rep_totals: list[list[float]] = []   # [rep][tx-index] total wall µs
     heads: list[dict] = []
     stage_reps: list[dict[str, float]] = []   # [rep] {stage -> mean wall µs}
+    size_reps: list[float] = []               # [rep] mean serialized size of measured txs (bytes)
     for rep in range(k):
         h = NodeHarness(seed=SEED + rep, trivial_pow=True, shielded=is_shielded,
-                        opt=(dict(cell.opt) if cell.opt is not None else None)).start()
+                        opt=(dict(cell.opt) if cell.opt is not None else None),
+                        verbose_logs=verbose_logs).start()
         try:
+            if on_progress:
+                on_progress(rep, k, "build", 0, 0)
             prepared = cls().build(h, warmup + n, cell.i, cell.o)
-            result = run_batch(h, prepared, sampler_interval_s=0.1, warmup=warmup)
+            result = run_batch(h, prepared, sampler_interval_s=0.1, warmup=warmup,
+                               on_progress=(lambda ph, d, t: on_progress(rep, k, ph, d, t))
+                               if on_progress else None)
         finally:
             h.stop()
         heads.append(compute.headline(result, tdp_watts=TDP_WATTS, cpu_util=CPU_UTIL))
         stage_reps.append(result.stage_mean_wall_us())
+        measured = prepared[warmup:] or prepared
+        size_reps.append(mean(len(p.raw) for p in measured))
         per_rep_totals.append(
             [sum(s.wall_ns for s in r.stages.values()) / 1000.0 for r in result.records]
         )
@@ -204,6 +144,7 @@ def run_cell(scn: Scenario, cell: Cell, n: int, warmup: int, k: int) -> dict:
         "processing_tps_reps": [round(hd["processing_tps"], 1) for hd in heads],
         "processing_tps": round(med("processing_tps"), 1),
         "mean_total_us": round(med("mean_total_us"), 2),
+        "size_bytes": int(median(size_reps)),
         "stage_mean_us": stage_mean_us,
         "rss_peak_mb": round(med("rss_peak_mb"), 1),
         "disk_written_mb": round(med("disk_written_mb"), 2),
@@ -214,7 +155,8 @@ def run_cell(scn: Scenario, cell: Cell, n: int, warmup: int, k: int) -> dict:
     return {"band": band, "meta": meta}
 
 
-def run_cell_multibatch(scn: Scenario, cell: Cell, n: int, k: int) -> dict:
+def run_cell_multibatch(scn: Scenario, cell: Cell, n: int, k: int, on_progress=None,
+                        verbose_logs: bool = False) -> dict:
     """P11: one continuous stream of two n-tx segments (transparent + full-shielded, ordered by the
     cell's transition direction), driven with NO warm-up so the transition itself is measured. Records
     a per-GLOBAL-index band + each segment's own TPS."""
@@ -232,12 +174,17 @@ def run_cell_multibatch(scn: Scenario, cell: Cell, n: int, k: int) -> dict:
     seg_tps_reps: list[list[float]] = [[], []]
     boundary = n
     for rep in range(k):
-        h = NodeHarness(seed=SEED + rep, trivial_pow=True, shielded=True).start()
+        h = NodeHarness(seed=SEED + rep, trivial_pow=True, shielded=True,
+                        verbose_logs=verbose_logs).start()
         try:
             fa = h.manager._settings.FEE_PER_AMOUNT_SHIELDED_OUTPUT
             ff = h.manager._settings.FEE_PER_FULL_SHIELDED_OUTPUT
+            if on_progress:
+                on_progress(rep, k, "build", 0, 0)
             prepared, starts = build_multibatch(h, segs, fa, ff)
-            result = run_batch(h, prepared, sampler_interval_s=0.1, warmup=0)
+            result = run_batch(h, prepared, sampler_interval_s=0.1, warmup=0,
+                               on_progress=(lambda ph, d, t: on_progress(rep, k, ph, d, t))
+                               if on_progress else None)
         finally:
             h.stop()
         heads.append(compute.headline(result, tdp_watts=TDP_WATTS, cpu_util=CPU_UTIL))
@@ -298,12 +245,15 @@ def _save_manifest(out_dir: Path, man: dict) -> None:
     _manifest_path(out_dir).write_text(json.dumps(man, indent=2), encoding="utf-8")
 
 
-def run_scenario(scn: Scenario, out_dir: Path, *, smoke: bool, resume: bool) -> None:
+def run_scenario(scn: Scenario, out_dir: Path, *, smoke: bool, resume: bool,
+                 n_over: int | None = None, warmup_over: int | None = None, k_over: int | None = None) -> None:
     if scn.deferred:
         print(f"[{scn.id}] DEFERRED: {scn.deferred}\n")
         return
-    n, warmup, k = scn.n, scn.warmup, scn.k
-    if smoke:
+    n = n_over if n_over is not None else scn.n
+    warmup = warmup_over if warmup_over is not None else scn.warmup
+    k = k_over if k_over is not None else scn.k
+    if smoke:                                    # smoke overrides everything (fast plumbing check)
         n, warmup, k = min(n, 100), min(warmup, 10), 2
     print(f"== {scn.id}: {scn.title}  ({scn.workload}, N={n} W={warmup} k={k}, {len(scn.cells)} cells) ==")
     man = _load_manifest(out_dir)
@@ -314,7 +264,8 @@ def run_scenario(scn: Scenario, out_dir: Path, *, smoke: bool, resume: bool) -> 
         if resume and done and (cell_dir / f"{cell.label}.band.csv").exists():
             print(f"  {cell.label:16s} SKIP (already done)")
             continue
-        out = run_cell_multibatch(scn, cell, n, k) if cell.transition else run_cell(scn, cell, n, warmup, k)
+        out = (run_cell_multibatch(scn, cell, n, k) if cell.transition
+               else run_cell(scn, cell, n, warmup, k))
         _write_cell(cell_dir, cell, out)
         mt = out["meta"]
         man["cells"][key] = {"status": "done", "tps": mt["processing_tps"],
@@ -343,6 +294,9 @@ def main() -> int:
     ap.add_argument("--all", action="store_true", help="run every scenario, light→heavy")
     ap.add_argument("--list", action="store_true", help="print the scenario matrix and exit")
     ap.add_argument("--smoke", action="store_true", help="tiny N/warmup/k for a fast plumbing check")
+    ap.add_argument("--n", type=int, default=None, help="override measured N for this run")
+    ap.add_argument("--warmup", type=int, default=None, help="override warm-up count for this run")
+    ap.add_argument("--k", type=int, default=None, help="override reps for this run")
     ap.add_argument("--out", type=Path, default=None, help="report dir (default: report-data/<timestamp>)")
     ap.add_argument("--resume", type=Path, default=None, help="resume into an existing report dir")
     ap.add_argument("--no-plots", action="store_true", help="skip figure rendering after the run")
@@ -377,7 +331,8 @@ def main() -> int:
     print(f"report dir: {out_dir}\n")
 
     for i in ids:
-        run_scenario(SCN_BY_ID[i], out_dir, smoke=args.smoke, resume=resume)
+        run_scenario(SCN_BY_ID[i], out_dir, smoke=args.smoke, resume=resume,
+                     n_over=args.n, warmup_over=args.warmup, k_over=args.k)
     print(f"done → {out_dir}")
 
     if not args.no_plots:

@@ -99,6 +99,10 @@ class EnvConfig:
     storage: str = "rocksdb_temp"     # rocksdb_temp | memory
     seed: int = 1234
     trivial_pow: bool = True          # set DAA TEST_ALL_WEIGHT (weights -> 1)
+    # Node logging. Default False => structlog is filtered at INFO, keeping the per-tx DEBUG
+    # render (~110 us/tx) out of the timed S6 stage. True leaves structlog unconfigured, which is
+    # what produced the published Phase-1/Phase-3 figures. See node.harness.configure_logging.
+    verbose_logs: bool = False
 
     def validate(self) -> list[str]:
         errs: list[str] = []

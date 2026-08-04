@@ -28,15 +28,47 @@ from hathor_tests.test_memory_reactor_clock import TestMemoryReactorClock  # noq
 from hathor_tests.unittest import TestBuilder  # noqa: E402
 
 
+def configure_logging(verbose: bool = False) -> None:
+    """Filter the node's per-transaction DEBUG logging out of the timed pipeline.
+
+    Nothing on the benchmark path ever called `structlog.configure` — that lives in `hathor_cli`,
+    which the engine does not import — so structlog fell back to emitting EVERY level. The node
+    then rendered a full transaction repr for every vertex inside `_post_consensus`, which the
+    driver times as S6. The driver's `quiet=True` only downgrades info->debug; it does not skip
+    the call, so nothing suppressed the render.
+
+    Measured (N=400, W=60, 1i2o, 3 interleaved reps, medians): S6 226 us unconfigured -> 117 us
+    filtered at INFO, i.e. ~110 us/tx of pure render+write inside a timed stage.
+
+    A production node runs at INFO, so filtering is both faster AND more representative. Pass
+    verbose=True to leave structlog untouched and reproduce the pre-fix numbers exactly (the
+    Phase-1 / Phase-3 report figures were all collected that way).
+
+    NOTE: a further ~46 us/tx remains in `_log_new_object`, which builds its kwargs
+    (`get_metadata`, two `datetime.fromtimestamp`, `get_feature_states`) BEFORE testing the level,
+    so that work happens even when the line is discarded. Fixing it means changing `hathor/`
+    itself and is deliberately left upstream — see the checkpoint notes."""
+    if verbose:
+        return                      # leave structlog unconfigured == exactly the old behaviour
+    import logging
+
+    import structlog
+    structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.INFO))
+
+
 class NodeHarness:
     """Builds a real in-process node: RocksDB temp-dir storage, REAL verifiers, and
     trivial (weight-1) PoW. Reproducible via `seed`. See RFC §"Standing up the node"."""
 
     def __init__(self, seed: int = 1234, trivial_pow: bool = True, shielded: bool = False,
-                 opt: dict[str, bool] | None = None, sync_precompute: bool = False) -> None:
+                 opt: dict[str, bool] | None = None, sync_precompute: bool = False,
+                 verbose_logs: bool = False) -> None:
         self.seed = seed
         self.trivial_pow = trivial_pow
         self.shielded = shielded
+        # False (default) filters the node's per-tx DEBUG render out of timed S6; True restores
+        # the pre-fix behaviour for reproducing the published figures. See configure_logging().
+        self.verbose_logs = verbose_logs
         # Opt-in sync-path mode: when set (and s3s4 on), swap in RustVerificationService so a batch
         # driver can call precompute_stateless_batch (the fused Rust pipeline). Off by default — the
         # standard --opt path keeps the bare script-pool (verified). See deferred-sync-path doc.
@@ -51,6 +83,10 @@ class NodeHarness:
         self.rust_service = None  # sync-path: RustVerificationService, set when sync_precompute
 
     def start(self) -> "NodeHarness":
+        # Logging first: it must be filtered before any vertex is processed, or the build itself
+        # renders a repr per funding vertex (and S6 would carry it for the measured txs).
+        configure_logging(self.verbose_logs)
+
         # Export the per-section optimization gating to env BEFORE building the node, so the gated
         # hathor-core sites (read via hathor.opt_flags.opt_enabled) pick it up. HATHOR_OPT_<S>=1
         # optimized / 0 baseline. cache_clear() handles multiple harnesses in one process.
