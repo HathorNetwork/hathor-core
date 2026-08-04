@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hathor TPS Benchmark</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>Hathor full-node TPS benchmark</h1>
+          <p class="tagline">Drive real transactions through a real node. Measure where the time goes.</p>
+        </div>
+      </div>
+      <span class="badge">proof of concept</span>
+    </div>
+  </header>
+
+  <main class="wrap" id="sims">
+    <p class="loading">Loading simulations…</p>
+  </main>
+
+  <footer class="wrap foot">
+    <p>Each run boots an in-process <code>HathorManager</code> with real verifiers and a fresh
+       RocksDB, then drives every transaction through stages S1–S6. Results are written to
+       <code>ui-tests/runs/&lt;timestamp&gt;/</code> as PNG + <code>results.xlsx</code>.</p>
+    <p class="muted">Single-thread, single-machine figures — scale by single-thread CPU
+       performance before comparing to other hardware.</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
