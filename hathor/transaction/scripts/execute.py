@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import struct
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 
@@ -35,6 +36,32 @@ class ScriptExtras:
 class UtxoScriptExtras(ScriptExtras):
     txin: TxInput
     spent_tx: BaseTransaction
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class DetachedUtxoScriptExtras:
+    """S3S4 OPTIMIZATION (PR #1729): a storage-free, picklable variant of UtxoScriptExtras carrying only the
+    primitive data the opcodes read, so script evaluation can run off the reactor thread. Used by the
+    process/thread script-verification executor modes. NOTE: on this (shielded) branch the opcode interpreter
+    still reads ``extras.tx`` directly, so the process/thread modes are NOT wired here — the supported modes are
+    ``rust`` (Rust does the script evaluation) and the serial/disabled baseline. This class exists so the
+    ScriptVerificationPool module imports cleanly."""
+    version: OpcodesVersion
+    sighash_all_data: bytes
+    timestamp: int
+    spent_output_value: int
+    # (value, script) for each tx output; only needed by the V1-only OP_FIND_P2PKH, empty otherwise.
+    tx_outputs: tuple[tuple[int, bytes], ...]
+
+    def get_sighash_all_data(self) -> bytes:
+        return self.sighash_all_data
+
+    def iter_outputs(self) -> Iterator[tuple[int, bytes]]:
+        yield from self.tx_outputs
+
+
+# Extras accepted by the opcode interpreter (in-process variants or the detached one).
+AnyScriptExtras = Union[ScriptExtras, DetachedUtxoScriptExtras]
 
 
 # XXX: Because the Stack is a heterogeneous list of bytes and int, and some OPs only work for when the stack has some

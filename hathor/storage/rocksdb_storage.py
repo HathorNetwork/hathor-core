@@ -21,6 +21,8 @@ import rocksdb
 from structlog import get_logger
 from typing_extensions import assert_never
 
+from hathor.opt_flags import opt_enabled
+
 logger = get_logger()
 _DB_NAME = 'data_v2.db'
 
@@ -39,35 +41,49 @@ class RocksDBStorage:
         self.path, self.temp_dir = self._get_path_and_temp_dir(path)
 
         db_path = os.path.join(self.path, _DB_NAME)
-        lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
-        table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
-        options = rocksdb.Options(
-            table_factory=table_factory,
-            write_buffer_size=83886080,  # 80MB (default is 4MB)
-            compression=rocksdb.CompressionType.no_compression,
-            allow_mmap_writes=True,  # default is False
-            allow_mmap_reads=True,  # default is already True
-            # This limits the total size of WAL files (the .log files) in RocksDB.
-            # When reached, a flush is triggered by RocksDB to free up space.
-            # This was added because we had cases where these files would accumulate and use too much disk space.
-            max_total_wal_size=3 * 1024 * 1024 * 1024,  # 3GB
-        )
+        # S5 OPTIMIZATION (PR #1729): the optimized backend is a Rust-owned RocksDB handle
+        # (htr_lib.RocksDb) wrapped in a python-rocksdb-shaped facade (rocksdb_compat); its main
+        # benefit is the native shared-handle read path used by the Rust verifier. Baseline
+        # (--no-opt s5) is python-rocksdb. Our benchmark always uses a fresh temp-dir per run, so
+        # the on-disk format difference between the two backends is never a problem.
+        self._use_rust = opt_enabled("s5")
+        if self._use_rust:
+            import htr_lib
 
-        cf_names: list[bytes]
-        try:
-            # get the list of existing column families
-            cf_names = rocksdb.list_column_families(db_path, options)
-        except rocksdb.errors.RocksIOError:
-            # this means the db doesn't exist, a repair will create one
-            rocksdb.repair_db(db_path, options)
-            cf_names = []
+            from hathor.storage import rocksdb_compat
+            inner = htr_lib.RocksDb(db_path, cache_capacity)
+            self._db = rocksdb_compat.DB(inner)
+        else:
+            lru_cache = cache_capacity and rocksdb.LRUCache(cache_capacity)
+            table_factory = rocksdb.BlockBasedTableFactory(block_cache=lru_cache)
+            options = rocksdb.Options(
+                table_factory=table_factory,
+                write_buffer_size=83886080,  # 80MB (default is 4MB)
+                compression=rocksdb.CompressionType.no_compression,
+                allow_mmap_writes=True,  # default is False
+                allow_mmap_reads=True,  # default is already True
+                # This limits the total size of WAL files (the .log files) in RocksDB.
+                # When reached, a flush is triggered by RocksDB to free up space.
+                # This was added because we had cases where these files would accumulate and use too much disk space.
+                max_total_wal_size=3 * 1024 * 1024 * 1024,  # 3GB
+            )
 
-        # we need to open all column families
-        column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
+            cf_names: list[bytes]
+            try:
+                # get the list of existing column families
+                cf_names = rocksdb.list_column_families(db_path, options)
+            except rocksdb.errors.RocksIOError:
+                # this means the db doesn't exist, a repair will create one
+                rocksdb.repair_db(db_path, options)
+                cf_names = []
 
-        # finally, open the database
-        self._db = rocksdb.DB(db_path, options, column_families=column_families)
-        self.log.info('starting rocksdb', path=self.path)
+            # we need to open all column families
+            column_families = {cf: rocksdb.ColumnFamilyOptions() for cf in cf_names}
+
+            # finally, open the database
+            self._db = rocksdb.DB(db_path, options, column_families=column_families)
+        self.log.info('starting rocksdb', path=self.path,
+                      backend='rust' if self._use_rust else 'python-rocksdb')
         self.log.debug('open db', cf_list=[cf.name.decode('ascii') for cf in self._db.column_families])
 
     @staticmethod
@@ -93,7 +109,11 @@ class RocksDBStorage:
     def get_or_create_column_family(self, cf_name: bytes) -> 'rocksdb.ColumnFamilyHandle':
         cf = self._db.get_column_family(cf_name)
         if cf is None:
-            cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
+            if self._use_rust:
+                from hathor.storage import rocksdb_compat
+                cf = self._db.create_column_family(cf_name, rocksdb_compat.ColumnFamilyOptions())
+            else:
+                cf = self._db.create_column_family(cf_name, rocksdb.ColumnFamilyOptions())
         return cf
 
     def close(self) -> None:

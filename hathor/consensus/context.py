@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from structlog import get_logger
 
+from hathor.opt_flags import opt_enabled
 from hathor.transaction import BaseTransaction, Block, Transaction
 
 if TYPE_CHECKING:
@@ -50,6 +51,8 @@ class ConsensusAlgorithmContext:
         'reorg_info',
         'nc_events',
         'nc_exec_success',
+        '_pending_saves',
+        '_saves_flushed',
     )
 
     consensus: 'ConsensusAlgorithm'
@@ -68,12 +71,36 @@ class ConsensusAlgorithmContext:
         self.reorg_info = None
         self.nc_events = None
         self.nc_exec_success = []
+        # S5 OPTIMIZATION (PR #1729) — save-dedup: while the algorithms run, metadata saves are
+        # deferred into a dict keyed by hash (an 8-input tx would otherwise save the same spent
+        # tx's metadata once per input). unsafe_update calls flush_saves() once, after which save()
+        # writes through again (the reorg removal paths run after the flush and keep their original
+        # immediate-persistence semantics). Baseline (--no-opt s5) writes through immediately.
+        self._pending_saves: dict[bytes, BaseTransaction] = {}
+        self._saves_flushed = False
 
     def save(self, tx: BaseTransaction) -> None:
         """Only metadata is ever saved in a consensus update."""
         assert tx.storage is not None
         self.txs_affected.add(tx)
-        tx.storage.save_transaction(tx, only_metadata=True)
+        if not opt_enabled("s5") or self._saves_flushed:
+            tx.storage.save_transaction(tx, only_metadata=True)
+        else:
+            self._pending_saves[tx.hash] = tx
+
+    def flush_saves(self) -> None:
+        """S5: persist every deferred metadata save (each affected tx exactly once) and switch
+        save() to write-through. Must be called exactly once per consensus update, before any path
+        that deletes transactions (a deferred save flushed after a removal would resurrect the
+        removed tx's metadata row). No-op under --no-opt s5 (nothing was deferred)."""
+        if not opt_enabled("s5"):
+            return
+        assert not self._saves_flushed
+        self._saves_flushed = True
+        for tx in self._pending_saves.values():
+            assert tx.storage is not None
+            tx.storage.save_transaction(tx, only_metadata=True)
+        self._pending_saves.clear()
 
     def mark_as_reorg(self, reorg_info: ReorgInfo) -> None:
         """Must only be called once, will raise an assert error if called twice."""

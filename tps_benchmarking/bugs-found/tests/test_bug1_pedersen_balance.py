@@ -12,7 +12,7 @@ Two levels:
                                CP-7 reconciliation patch it passes. (Regression guard for the fix.)
 
 Run (from the engine dir, with the shielded native crypto built):
-  cd tps_benchmarking/benchmarks/engine
+  cd tps_benchmarking/engine
   PYTHONPATH="<repo>:$PWD" <venv-python> -m unittest \
       tps_benchmarking.bugs-found.tests.test_bug1_pedersen_balance
 or directly:  <venv-python> path/to/test_bug1_pedersen_balance.py

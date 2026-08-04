@@ -2,6 +2,14 @@
 
 use pyo3::prelude::*;
 
+pub mod metadata;
+pub mod pipeline;
+pub mod script;
+pub mod static_meta;
+pub mod storage;
+pub mod verify;
+pub mod vertex;
+
 // Prohibit compilation for non-64-bit targets to ensure consistent use of `usize`.
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("compilation is only allowed for 64-bit targets");
@@ -16,6 +24,33 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn htr_lib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_function(wrap_pyfunction!(script::verify_scripts_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(script::count_sigops_inputs, m)?)?;
+    m.add_function(wrap_pyfunction!(verify::verify_vertex_stateless, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        verify::verify_vertices_stateless_batch,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(vertex::parse_vertex, m)?)?;
+    m.add_function(wrap_pyfunction!(vertex::sighash_from_vertex_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(pipeline::verify_tx_from_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        static_meta::block_static_metadata_to_bytes,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        static_meta::tx_static_metadata_to_bytes,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        static_meta::static_metadata_from_bytes,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(metadata::metadata_to_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(metadata::metadata_from_bytes, m)?)?;
+    m.add_class::<storage::RocksDb>()?;
+    m.add_class::<storage::RocksDbWriteBatch>()?;
+    m.add_class::<storage::RocksDbIterator>()?;
     Ok(())
 }
 

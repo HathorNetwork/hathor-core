@@ -186,3 +186,13 @@ docker-push-aws: docker
 .PHONY: fix-rocksdb
 fix-rocksdb:
 	poetry run pip uninstall -y rocksdb && poetry run pip install --no-binary :all: git+https://github.com/hathornetwork/python-rocksdb.git
+
+# TPS benchmark engine — run from the repo root (no need to cd into the engine dir).
+#   make tps ARGS="list"
+#   make tps ARGS="run --config tps_benchmarking/engine/scenarios/basic.yaml -n 500"
+# Defaults to poetry; for the uv-managed env override RUN:
+#   make tps RUN="uv run" ARGS="list"
+RUN ?= poetry run
+.PHONY: tps
+tps:
+	$(RUN) hathor-tps-bench $(ARGS)

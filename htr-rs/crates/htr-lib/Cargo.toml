@@ -10,6 +10,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { workspace = true }
+rayon = "1"
+ripemd = "0.1"
+rocksdb = "0.24.0"
+secp256k1 = { version = "0.31", features = ["global-context"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [lints]
 workspace = true

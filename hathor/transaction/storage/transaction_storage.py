@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod, abstractproperty
 from collections import OrderedDict, deque
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Iterator, Optional, cast
 from weakref import WeakValueDictionary
@@ -29,6 +29,7 @@ from hathor.execution_manager import ExecutionManager, non_critical_code
 from hathor.indexes import IndexesManager
 from hathor.indexes.height_index import HeightInfo
 from hathor.nanocontracts.storage import get_block_storage_from_block
+from hathor.opt_flags import opt_enabled
 from hathor.profiler import get_cpu_profiler
 from hathor.pubsub import PubSubManager
 from hathor.transaction.base_transaction import BaseTransaction, TxOutput, Vertex
@@ -84,6 +85,10 @@ class CacheData:
     capacity: int
     cache: OrderedDict[bytes, BaseTransaction]
     dirty_txs: set[bytes]  # txs that have been modified but are not persisted yet
+    # S5 OPTIMIZATION (PR #1729): hashes whose immutable vertex bytes still need to be written
+    # (set on a full save, cleared on the first flush after). Lets metadata-only saves skip
+    # re-serializing/re-writing the vertex bytes. Only populated when s5 is on.
+    pending_tx_bytes: set[bytes] = field(default_factory=set)
     flush_deferred: Deferred[None] | None = None
     hit: int = 0
     miss: int = 0
@@ -432,7 +437,11 @@ class TransactionStorage(ABC):
         """
         meta = tx.get_metadata()
         self.pre_save_validation(tx, meta)
-        self._save_static_metadata(tx)
+        # S5 OPTIMIZATION (PR #1729): static metadata is immutable and written before the first full
+        # save, so metadata-only saves (several per consensus update) need not rewrite it. Baseline
+        # (--no-opt s5) always rewrites it.
+        if not (opt_enabled("s5") and only_metadata):
+            self._save_static_metadata(tx)
 
     @abstractmethod
     def _save_static_metadata(self, vertex: BaseTransaction) -> None:
@@ -460,6 +469,16 @@ class TransactionStorage(ABC):
         second measure to prevent getting a transaction while using the wrong scope.
         """
         tx_meta = tx.get_metadata()
+        if opt_enabled("s2"):
+            from hathor.transaction.validation_state import ValidationState
+            # S2 OPTIMIZATION (PR #1729): fast path for the overwhelmingly common case (~38 gets per
+            # added tx) — default VALID scope and a fully-valid tx. Provably equivalent to the slow
+            # path: FULL is fully-connected and neither partial nor invalid, so is_allowed reduces to
+            # `VALID in scope` and marker consistency reduces to the partial marker being absent.
+            if self._allow_scope is TxAllowScope.VALID and tx_meta.validation is ValidationState.FULL:
+                assert self._settings.PARTIALLY_VALIDATED_ID not in tx_meta.get_frozen_voided_by(), \
+                       'Inconsistent ValidationState and voided_by'
+                return
         self._validate_partial_marker_consistency(tx_meta)
         self._validate_transaction_in_scope(tx)
 
