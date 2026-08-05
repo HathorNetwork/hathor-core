@@ -17,7 +17,7 @@ import sys
 
 from hathor_tps_bench import __version__
 from hathor_tps_bench.benchmarks import list_benchmarks
-from hathor_tps_bench.config import OPT_SECTIONS, RootConfig, resolve_opt
+from hathor_tps_bench.config import OPT_SECTIONS, SCRIPT_MODES, RootConfig, resolve_opt
 from hathor_tps_bench.workload import list_txtypes
 
 
@@ -88,6 +88,10 @@ def _apply_overrides(cfg: RootConfig, args: argparse.Namespace) -> None:
         cfg.results_root = args.results_root
     if getattr(args, "verbose_node_logs", False):
         cfg.env.verbose_logs = True
+    for attr in ("script_mode", "script_workers", "script_min_inputs"):
+        val = getattr(args, attr, None)
+        if val is not None:
+            setattr(cfg.env, attr, val)
     # Resolve --opt/--no-opt into the per-section ON/OFF map (defaults to all-ON when absent).
     cfg.opt = resolve_opt(getattr(args, "opt", None), getattr(args, "no_opt", None))
 
@@ -155,7 +159,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
         source.shielded_outputs = w.shielded_outputs
     harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow,
                           shielded=source_cls.shielded, opt=cfg.opt,
-                          verbose_logs=cfg.env.verbose_logs).start()
+                          verbose_logs=cfg.env.verbose_logs,
+                          script_mode=cfg.env.script_mode, script_workers=cfg.env.script_workers,
+                          script_min_inputs=cfg.env.script_min_inputs).start()
     try:
         prepared = source.build(harness, W + K, w.num_inputs, w.num_outputs)  # build W+K
         print(f"[run] built {len(prepared)} txs; warming {W}, measuring {K} through S1..S6...")
@@ -366,7 +372,9 @@ def _run_multibatch(cfg: RootConfig, args: argparse.Namespace) -> int:
     print(f"[mult-batches] {len(segments)} segments, {total} txs (warmup {W})\n  {desc}")
 
     harness = NodeHarness(seed=cfg.env.seed, trivial_pow=cfg.env.trivial_pow,
-                          shielded=has_shielded, verbose_logs=cfg.env.verbose_logs).start()
+                          shielded=has_shielded, verbose_logs=cfg.env.verbose_logs,
+                          script_mode=cfg.env.script_mode, script_workers=cfg.env.script_workers,
+                          script_min_inputs=cfg.env.script_min_inputs).start()
     try:
         st = harness.manager._settings
         prepared, starts = build_multibatch(harness, segments,
@@ -438,6 +446,21 @@ def _add_shielded_flags(parser: argparse.ArgumentParser) -> None:
                              "sets HATHOR_MAX_SHIELDED_OUTPUTS")
 
 
+def _add_verification_flags(parser: argparse.ArgumentParser) -> None:
+    """Input-script verification pool — the single-thread vs multi-core axis.
+
+    `--workers` sizes the pool; in the rust modes it sizes the rayon pool, which htr-lib builds
+    ONCE PER PROCESS, so a worker sweep must use one process per point (the harness raises rather
+    than let a second value be silently ignored). `--min-inputs` gates only threads/processes:
+    below it they run serially instead of paying fan-out overhead; the rust modes ignore it."""
+    parser.add_argument("--script-mode", dest="script_mode", choices=SCRIPT_MODES,
+                        help="how input scripts are verified (default: rust)")
+    parser.add_argument("--workers", type=int, dest="script_workers", metavar="N",
+                        help="verification pool size; 0 disables the pool (default: 4)")
+    parser.add_argument("--min-inputs", type=int, dest="script_min_inputs", metavar="N",
+                        help="fan-out threshold, inert in the rust modes (default: 4)")
+
+
 def _add_logging_flag(parser: argparse.ArgumentParser) -> None:
     """Restore the pre-fix node logging. Off by default: leaving structlog unconfigured makes the
     node render a full tx repr per vertex INSIDE the timed S6 stage (~110 us/tx here). Pass this
@@ -494,6 +517,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shielded_flags(pr)
     _add_opt_flags(pr)
     _add_logging_flag(pr)
+    _add_verification_flags(pr)
     pr.add_argument("--mult-batches", nargs=argparse.REMAINDER, dest="mult_batches",
                     help="run a SEQUENCE of segments as one timed stream (TPS-over-time). Each segment: "
                          "--n N [-i I -o O] [--shielded|--full-shielded|--amount-shielded -i Is -o Os]. "
@@ -511,6 +535,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_shielded_flags(psw)
     _add_opt_flags(psw)
     _add_logging_flag(psw)
+    _add_verification_flags(psw)
     psw.set_defaults(fn=_cmd_sweep)
 
     psc = sub.add_parser("script", help="run a named script from scripts/ (e.g. demo_experiments)")

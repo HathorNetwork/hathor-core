@@ -56,16 +56,57 @@ def configure_logging(verbose: bool = False) -> None:
     structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.INFO))
 
 
+_rayon_workers_used: int | None = None
+
+
+def _check_rayon_pool_reuse(workers: int) -> None:
+    """Refuse to pretend a rust worker-count change took effect when it cannot.
+
+    `htr-rs/crates/htr-lib/src/script/mod.rs` holds the rayon pool in a `OnceLock`: it is sized on
+    first use and *"later calls with a different num_workers reuse the existing pool"*. So within
+    one process the FIRST rust worker count wins forever.
+
+    That matters because `report_data.run_cell` drives every cell and every repetition in a single
+    process. A worker-count sweep written as several cells would therefore run every point at the
+    first cell's thread count and draw a flat line — which reads as "threads don't help" rather
+    than "the experiment was invalid". Failing loudly is the only safe behaviour; a sweep must use
+    one PROCESS per worker count (the UI already runs one subprocess per run, and the CLI is one
+    process per invocation)."""
+    global _rayon_workers_used
+    if _rayon_workers_used is None:
+        _rayon_workers_used = workers
+        return
+    if _rayon_workers_used != workers:
+        raise RuntimeError(
+            f"rust script worker count cannot change within a process: the rayon pool was already "
+            f"built with {_rayon_workers_used} worker(s) and this harness asked for {workers}. "
+            f"The pool is a OnceLock in htr-lib, so the new value would be silently ignored and "
+            f"the measurement would be wrong. Run one worker count per process instead "
+            f"(one CLI invocation, or one UI run, per point)."
+        )
+
+
 class NodeHarness:
     """Builds a real in-process node: RocksDB temp-dir storage, REAL verifiers, and
     trivial (weight-1) PoW. Reproducible via `seed`. See RFC §"Standing up the node"."""
 
     def __init__(self, seed: int = 1234, trivial_pow: bool = True, shielded: bool = False,
                  opt: dict[str, bool] | None = None, sync_precompute: bool = False,
-                 verbose_logs: bool = False) -> None:
+                 verbose_logs: bool = False, script_mode: str = "rust",
+                 script_workers: int = 4, script_min_inputs: int = 4) -> None:
         self.seed = seed
         self.trivial_pow = trivial_pow
         self.shielded = shielded
+        # Input-script verification pool — the knobs for the single-thread vs multi-core axis.
+        #   script_mode: disabled | threads | processes | rust | shadow-rust
+        #   script_workers: pool size. In rust mode this sizes the rayon pool (see the
+        #     one-pool-per-process caveat in _check_rayon_pool_reuse).
+        #   script_min_inputs: below this many inputs the threads/processes modes run serially
+        #     rather than pay fan-out overhead. The rust modes ignore it (run_jobs docstring:
+        #     "the batch call is a single in-process call, so it wins even at one input").
+        self.script_mode = script_mode
+        self.script_workers = script_workers
+        self.script_min_inputs = script_min_inputs
         # False (default) filters the node's per-tx DEBUG render out of timed S6; True restores
         # the pre-fix behaviour for reproducing the published figures. See configure_logging().
         self.verbose_logs = verbose_logs
@@ -152,9 +193,13 @@ class NodeHarness:
         # txs use it; shielded txs fall back to the serial shielded path via the dispatcher. The per-tx
         # driver does not use the batch stateless-precompute (that helps block sync), so the pool alone
         # delivers the s3s4 win here. Baseline (--no-opt s3s4): no pool -> serial Python verification.
-        if self.opt.get("s3s4", True):
+        if self.opt.get("s3s4", True) and self.script_mode != "disabled" and self.script_workers > 0:
             from hathor.verification.script_verification_pool import ScriptVerificationMode, ScriptVerificationPool
-            self._script_pool = ScriptVerificationPool(mode=ScriptVerificationMode.RUST, num_workers=4, min_inputs=4)
+            mode = ScriptVerificationMode(self.script_mode)
+            if mode in (ScriptVerificationMode.RUST, ScriptVerificationMode.SHADOW_RUST):
+                _check_rayon_pool_reuse(self.script_workers)
+            self._script_pool = ScriptVerificationPool(
+                mode=mode, num_workers=self.script_workers, min_inputs=self.script_min_inputs)
             self._script_pool.start()
             self.manager.verification_service.verifiers.tx._script_verification_pool = self._script_pool
 

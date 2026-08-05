@@ -28,6 +28,17 @@ DEFAULT_RESULTS_ROOT: str = str(Path(__file__).resolve().parents[1] / "results")
 # pipeline stages S1..S6.
 OPT_SECTIONS: tuple[str, ...] = ("s1", "s2", "s3s4", "s5", "s6")
 
+# Input-script verification modes SUPPORTED ON THIS BRANCH.
+#
+# ScriptVerificationMode also defines `threads` and `processes`, but they are deliberately not
+# wired here: they hand jobs to the *Python* opcode interpreter via `DetachedUtxoScriptExtras`,
+# whose docstring states that "on this (shielded) branch the opcode interpreter still reads
+# extras.tx directly, so the process/thread modes are NOT wired here". Selecting them raises
+# `AttributeError: 'DetachedUtxoScriptExtras' object has no attribute 'tx'` inside OP_CHECKSIG.
+# They are omitted rather than offered-and-broken; the multi-core axis is `rust` + --workers,
+# which sizes the rayon pool.
+SCRIPT_MODES: tuple[str, ...] = ("disabled", "rust", "shadow-rust")
+
 
 def resolve_opt(opt: list[str] | None, no_opt: list[str] | None) -> dict[str, bool]:
     """Resolve the --opt / --no-opt selectors into a per-section ON/OFF map.
@@ -103,11 +114,23 @@ class EnvConfig:
     # render (~110 us/tx) out of the timed S6 stage. True leaves structlog unconfigured, which is
     # what produced the published Phase-1/Phase-3 figures. See node.harness.configure_logging.
     verbose_logs: bool = False
+    # Input-script verification pool — the single-thread vs multi-core axis. `script_workers`
+    # sizes the rust rayon pool, which is built ONCE PER PROCESS, so sweeping it needs one
+    # process per point (see node.harness._check_rayon_pool_reuse).
+    script_mode: str = "rust"          # disabled | threads | processes | rust | shadow-rust
+    script_workers: int = 4
+    script_min_inputs: int = 4         # threads/processes only; the rust modes ignore it
 
     def validate(self) -> list[str]:
         errs: list[str] = []
         if self.storage not in ("rocksdb_temp", "memory"):
             errs.append(f"env.storage must be 'rocksdb_temp' or 'memory' (got {self.storage!r})")
+        if self.script_mode not in SCRIPT_MODES:
+            errs.append(f"env.script_mode must be one of {SCRIPT_MODES} (got {self.script_mode!r})")
+        if self.script_workers < 0:
+            errs.append("env.script_workers must be >= 0 (0 disables the pool)")
+        if self.script_min_inputs < 1:
+            errs.append("env.script_min_inputs must be >= 1")
         return errs
 
 
