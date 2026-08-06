@@ -27,6 +27,8 @@ from hathor_tests.dag_builder.builder import TestDAGBuilder  # noqa: E402
 from hathor_tests.test_memory_reactor_clock import TestMemoryReactorClock  # noqa: E402
 from hathor_tests.unittest import TestBuilder  # noqa: E402
 
+from hathor_tps_bench.probes.cpuinfo import default_script_workers  # noqa: E402
+
 
 def configure_logging(verbose: bool = False) -> None:
     """Filter the node's per-transaction DEBUG logging out of the timed pipeline.
@@ -93,19 +95,25 @@ class NodeHarness:
     def __init__(self, seed: int = 1234, trivial_pow: bool = True, shielded: bool = False,
                  opt: dict[str, bool] | None = None, sync_precompute: bool = False,
                  verbose_logs: bool = False, script_mode: str = "rust",
-                 script_workers: int = 4, script_min_inputs: int = 4) -> None:
+                 script_workers: int | None = None, script_min_inputs: int = 4) -> None:
         self.seed = seed
         self.trivial_pow = trivial_pow
         self.shielded = shielded
         # Input-script verification pool — the knobs for the single-thread vs multi-core axis.
         #   script_mode: disabled | threads | processes | rust | shadow-rust
-        #   script_workers: pool size. In rust mode this sizes the rayon pool (see the
-        #     one-pool-per-process caveat in _check_rayon_pool_reuse).
+        #   script_workers: pool size; None = auto -> PHYSICAL cores. Sizing from logical cores
+        #     oversubscribes: on the reference 4-physical/8-logical machine, 8 workers measured
+        #     ~2x WORSE than 4, because rayon then claims every thread and preempts the
+        #     single-threaded driver and RocksDB's compaction. In rust mode this sizes the rayon
+        #     pool (see the one-pool-per-process caveat in _check_rayon_pool_reuse).
         #   script_min_inputs: below this many inputs the threads/processes modes run serially
         #     rather than pay fan-out overhead. The rust modes ignore it (run_jobs docstring:
         #     "the batch call is a single in-process call, so it wins even at one input").
         self.script_mode = script_mode
-        self.script_workers = script_workers
+        # Resolved eagerly so the effective value is recorded and printed, not left as "auto".
+        self.script_workers = (default_script_workers() if script_workers is None
+                               else script_workers)
+        self.script_workers_auto = script_workers is None
         self.script_min_inputs = script_min_inputs
         # False (default) filters the node's per-tx DEBUG render out of timed S6; True restores
         # the pre-fix behaviour for reproducing the published figures. See configure_logging().

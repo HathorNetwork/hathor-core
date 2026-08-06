@@ -162,6 +162,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
                           verbose_logs=cfg.env.verbose_logs,
                           script_mode=cfg.env.script_mode, script_workers=cfg.env.script_workers,
                           script_min_inputs=cfg.env.script_min_inputs).start()
+    print(f"[cpu] {_cpu_line(harness)}")
     try:
         prepared = source.build(harness, W + K, w.num_inputs, w.num_outputs)  # build W+K
         print(f"[run] built {len(prepared)} txs; warming {W}, measuring {K} through S1..S6...")
@@ -181,8 +182,16 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if "csv" in fmts:
         persist.write_per_tx_csv(run_dir / "per_tx_stages.csv", result)
         persist.write_samples_csv(run_dir / "samples.csv", result)
+    from hathor_tps_bench.probes import cpuinfo
     persist.write_summary_json(run_dir / "batch_summary.json",
                                {"scenario": cfg.name, "workload": asdict(w),
+                                # A throughput figure without its machine is not comparable to any
+                                # other figure — record the hardware with the result, always.
+                                "machine": cpuinfo.describe(),
+                                "script_pool": {"mode": harness.script_mode,
+                                                "workers": harness.script_workers,
+                                                "auto": harness.script_workers_auto,
+                                                "min_inputs": harness.script_min_inputs},
                                 "headline": head, "stages": rows, "mtb": mtb})
     plot_names = (plots.generate(run_dir / "plots", result, window=cfg.reporting.window)
                   if "plots" in fmts else [])
@@ -190,6 +199,20 @@ def _cmd_run(args: argparse.Namespace) -> int:
         report.write_report(run_dir / "summary.md", cfg, head, rows, plot_names)
     print(f"\n[run] results → {run_dir}/  ({len(plot_names)} plots)")
     return 0
+
+
+def _cpu_line(harness) -> str:
+    """One line of machine + pool context. Throughput here is a single-thread, hardware-specific
+    figure, so the machine it came from belongs next to it — not only in a report caveat."""
+    from hathor_tps_bench.probes import cpuinfo
+    info = cpuinfo.describe()
+    auto = " (auto)" if getattr(harness, "script_workers_auto", False) else ""
+    pool = ("none — serial verification" if harness.script_mode == "disabled"
+            or harness.script_workers < 1
+            else f"{harness.script_mode} x{harness.script_workers}{auto}")
+    return (f"{info['cpu_model'] or 'unknown CPU'} · "
+            f"{info['physical_cores']} physical / {info['logical_cores']} logical · "
+            f"script pool: {pool}")
 
 
 def _print_run_summary(result, cfg) -> None:
@@ -456,7 +479,8 @@ def _add_verification_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--script-mode", dest="script_mode", choices=SCRIPT_MODES,
                         help="how input scripts are verified (default: rust)")
     parser.add_argument("--workers", type=int, dest="script_workers", metavar="N",
-                        help="verification pool size; 0 disables the pool (default: 4)")
+                        help="verification pool size; 0 disables the pool "
+                             "(default: auto = physical cores)")
     parser.add_argument("--min-inputs", type=int, dest="script_min_inputs", metavar="N",
                         help="fan-out threshold, inert in the rust modes (default: 4)")
 

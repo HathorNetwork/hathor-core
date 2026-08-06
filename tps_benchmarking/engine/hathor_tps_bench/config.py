@@ -117,9 +117,13 @@ class EnvConfig:
     # Input-script verification pool — the single-thread vs multi-core axis. `script_workers`
     # sizes the rust rayon pool, which is built ONCE PER PROCESS, so sweeping it needs one
     # process per point (see node.harness._check_rayon_pool_reuse).
-    script_mode: str = "rust"          # disabled | threads | processes | rust | shadow-rust
-    script_workers: int = 4
-    script_min_inputs: int = 4         # threads/processes only; the rust modes ignore it
+    script_mode: str = "rust"          # see SCRIPT_MODES
+    # None = auto: sized to PHYSICAL cores by the harness. A hardcoded 4 happened to be optimal on
+    # the reference i5-11300H (4 physical / 8 logical) purely by coincidence — it would
+    # oversubscribe a 2-core laptop and under-use a 16-core workstation, and oversubscription is
+    # the expensive side of that cliff (measured: 2x worse at 8 workers on 4 physical cores).
+    script_workers: int | None = None
+    script_min_inputs: int = 4         # fan-out threshold; inert in the rust modes
 
     def validate(self) -> list[str]:
         errs: list[str] = []
@@ -127,8 +131,8 @@ class EnvConfig:
             errs.append(f"env.storage must be 'rocksdb_temp' or 'memory' (got {self.storage!r})")
         if self.script_mode not in SCRIPT_MODES:
             errs.append(f"env.script_mode must be one of {SCRIPT_MODES} (got {self.script_mode!r})")
-        if self.script_workers < 0:
-            errs.append("env.script_workers must be >= 0 (0 disables the pool)")
+        if self.script_workers is not None and self.script_workers < 0:
+            errs.append("env.script_workers must be >= 0 (0 disables the pool), or null for auto")
         if self.script_min_inputs < 1:
             errs.append("env.script_min_inputs must be >= 1")
         return errs
