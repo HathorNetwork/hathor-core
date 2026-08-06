@@ -522,7 +522,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr = sub.add_parser("run", help="single run, OR a sweep if a --sweep-* flag is given")
     pr.add_argument("--config", help="optional base scenario YAML (else built-in defaults)")
     pr.add_argument("--tx-type", dest="tx_type",
-                    help="tx type (1-tip-transparent | defunct | capless-full-shielded | "
+                    help="tx type (3-tip-transparent [default] | 2-tip | 1-tip | defunct | capless-full-shielded | "
                          "amount-shielded | full-shielded | mixed-amount | mixed-full); see `list`")
     pr.add_argument("-n", "--num-txs", type=int, dest="num_txs", help="measured txs K")
     pr.add_argument("-i", "--num-inputs", type=int, dest="num_inputs", help="inputs per tx I")

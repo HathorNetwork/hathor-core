@@ -284,3 +284,104 @@ class OneTipTransparentTxSource(TransparentTxSource):
         if t >= 1:
             lines.append(f"tx{t} --> tx{t - 1}")  # tx_{t-1} becomes a parent of tx_t
         return lines
+
+
+class KTipTransparentTxSource(TransparentTxSource):
+    """A **k-tip mesh**: the mempool tip set holds steady at `k` instead of 1, which is what
+    mainnet actually looks like (~2-3 tips) — and, unlike the 1-tip chain, the transactions are
+    not all serially dependent on one another.
+
+    ================================================================================
+    WHY A LAYERED MESH, AND NOT "EACH TX PARENTS k TIPS"
+    ================================================================================
+    A Hathor transaction has EXACTLY TWO parents — that is protocol, not a parameter. So `k`
+    here means the **size of the tip set**, never the number of parents.
+
+    The obvious construction does not work. If every new tx parents two *current* tips, the tip
+    set changes by +1 (the new tx) −2 (its two parents stop being tips) = **−1 per tx**: it
+    collapses to a single tip no matter which k was asked for, silently rebuilding
+    `1-tip-transparent`. Randomly picking two parents from a rolling window of the last k txs
+    fails differently — a tx that is never picked before it leaves the window stays a tip
+    forever, so the tip set *grows* instead.
+
+    What does hold the count is a **layer** in which every transaction retires **exactly one**
+    tip. `tx_i` of layer L takes its first parent from the previous layer — retiring that tip —
+    and its second from the layer *before* that, which every member of layer L-1 has already
+    named, so it is not a tip and parenting it removes nothing.
+
+        layer L-2:    X       Y       Z              (already covered — NOT tips)
+                      |       |       |              second parent: costs no tip
+        layer L-1:    A       B       C              (k = 3, the current tips)
+                      |       |       |              first parent: retires exactly one tip
+        layer L:    tx0     tx1     tx2              tips = {tx0,tx1,tx2} = k, always
+
+    Each transaction removes one tip and adds one, so the count is **exactly k after every
+    single transaction**, not merely at layer boundaries.
+
+    An earlier version had `tx_i` take both parents from layer L-1 (`prev[i]`, `prev[i+1 mod k]`).
+    That covers the layer too, but each tx then retires *two* tips while adding one, so the count
+    sags inside a layer and only recovers at the boundary — measured 1↔2 (mean 1.5) for k=2 and
+    2→2→3 (mean 2.34) for k=3. The tip set is the thing this workload exists to control, and an
+    oscillating count makes `k` a muddy axis, so the second parent was moved one layer back.
+
+    The cost is a small fidelity trade: a real node picks both parents from the current tips,
+    whereas here one parent is a slightly older (already-confirmed) vertex. That is legal in the
+    protocol, and it buys an exact, sweepable tip count.
+
+    ================================================================================
+    WHAT THIS BUYS OVER THE 1-TIP CHAIN
+    ================================================================================
+    * **Tips = k exactly**, which is mainnet-like (~2-3) instead of the chain's 1.
+
+      Raising the tip count used to be dangerous: `mempool_tips.update` was O(tip count), so
+      `defunct` (tips = N) cost O(N²). **The merged s5 optimizations removed that** — measured on
+      `defunct`, which is the worst case at tips = N:
+
+          --opt        N=150  S5 =   485 us      N=400  S5 =   426 us    flat
+          --no-opt s5  N=150  S5 = 4 611 us      N=400  S5 = 8 540 us    doubles -> O(N^2)
+
+      So with the optimizations on (the default) the tip count is essentially free, and a
+      realistic tip topology no longer costs anything. The Phase-1 justification for pinning the
+      workload at a single tip is now historical.
+    * **Transactions inside a layer are mutually independent** — none names another as a parent.
+      The 1-tip chain makes every tx strictly depend on its predecessor, which is the *maximally*
+      serial arrangement and the worst possible case for any parallel-processing study. The layer
+      width is therefore also the batch of transactions that could, in principle, be processed
+      together.
+
+    Funding, inputs and outputs are unchanged from the base — only the parent edges differ."""
+
+    k: int = 2
+
+    def _frontier_lines(self, t: int, name: str, tx_anchor: int) -> list[str]:
+        lines = [f"b{tx_anchor} < {name}"]
+        k = max(1, self.k)
+        layer, pos = divmod(t, k)
+        if layer == 0:
+            # Seed layer: no parent edges, so the filler supplies two genesis parents. These k
+            # txs are the first tip set. (Genesis is never a mempool tip, so it adds nothing.)
+            return lines
+        # First parent: my counterpart in the previous layer — retires exactly one tip.
+        lines.append(f"{name} --> tx{(layer - 1) * k + pos}")
+        if layer >= 2:
+            # Second parent: two layers back, already covered by layer L-1, so it is not a tip
+            # and naming it costs nothing. Layer 1 has no such layer, so the filler supplies
+            # genesis there — also not a tip. Either way the count stays at exactly k.
+            lines.append(f"{name} --> tx{(layer - 2) * k + pos}")
+        return lines
+
+
+@register_txtype("2-tip-transparent")
+class TwoTipTransparentTxSource(KTipTransparentTxSource):
+    """`2-tip-transparent` — layered mesh holding the tip set at 2 (see KTipTransparentTxSource).
+    Pairs of independent transactions; the lower end of mainnet's ~2-3 tips."""
+
+    k = 2
+
+
+@register_txtype("3-tip-transparent")
+class ThreeTipTransparentTxSource(KTipTransparentTxSource):
+    """`3-tip-transparent` — layered mesh holding the tip set at 3. The upper end of mainnet's
+    observed ~2-3 tips, and the widest independent batch of the transparent workloads."""
+
+    k = 3

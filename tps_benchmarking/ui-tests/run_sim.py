@@ -97,6 +97,23 @@ def _opt_map(params: dict) -> dict:
     return {s: bool(params.get(f"opt_{s}", True)) for s in SECTIONS}
 
 
+def _script_kwargs(params: dict) -> dict:
+    """Verification-pool settings from the form, omitted when unset so the harness auto-sizes."""
+    out = {}
+    for key, kw in (("script_mode", "script_mode"), ("script_workers", "script_workers"),
+                    ("script_min_inputs", "script_min_inputs")):
+        if params.get(key) is not None:
+            out[kw] = params[key]
+    return out
+
+
+def _machine() -> dict:
+    """Hardware context. A throughput figure without its machine is not comparable to any other,
+    so it is recorded with every run rather than left to a report caveat."""
+    from hathor_tps_bench.probes import cpuinfo
+    return cpuinfo.describe()
+
+
 # ==================================================================================================
 # custom path — one free-form cell, UI-native figures
 # ==================================================================================================
@@ -117,7 +134,8 @@ def run_custom(params: dict) -> dict:
     run_dir = _run_dir(params)
     emit(t="phase", phase="boot", msg="starting in-process node")
     harness = NodeHarness(seed=seed, trivial_pow=bool(params.get("trivial_pow", True)),
-                          shielded=is_shielded, opt=opt, verbose_logs=not quiet_logs).start()
+                          shielded=is_shielded, opt=opt, verbose_logs=not quiet_logs,
+                          **_script_kwargs(params)).start()
     try:
         emit(t="phase", phase="build", msg=f"building {w + n} transactions (untimed setup)")
         prepared = cls().build(harness, w + n, i, o)
@@ -133,6 +151,10 @@ def run_custom(params: dict) -> dict:
     meta = {"sim_id": "custom", "workload": workload, "n": n, "i": i, "o": o, "warmup": w,
             "seed": seed, "opt": opt, "bits": int(params.get("bits", 64)),
             "trivial_pow": bool(params.get("trivial_pow", True)), "quiet_logs": quiet_logs,
+            "machine": _machine(),
+            "script_pool": {"mode": harness.script_mode, "workers": harness.script_workers,
+                            "auto": harness.script_workers_auto,
+                            "min_inputs": harness.script_min_inputs},
             "created": datetime.now().isoformat(timespec="seconds"),
             "headline": head, "stages": stages}
 
@@ -176,9 +198,17 @@ def _prepare_scenario(sim_id: str, params: dict):
     scn = SCN_BY_ID[sim_id]
     bits = params.get("bits")
     optmap = _opt_map(params)
+    # One pool setting for the WHOLE scenario, applied uniformly to every cell. That uniformity is
+    # required, not incidental: htr-lib's rayon pool is a per-process OnceLock, and every cell of a
+    # scenario runs in this one process, so cells with differing worker counts would make the
+    # harness raise. Sweeping workers therefore means one scenario RUN per value.
+    script = {"script_mode": params.get("script_mode"),
+              "workers": params.get("script_workers"),
+              "min_inputs": params.get("script_min_inputs")}
+    script = {k: v for k, v in script.items() if v is not None}
     cells = []
     for c in scn.cells:
-        kw = {}
+        kw = dict(script)
         if bits is not None and sim_id not in BITS_IS_THE_EXPERIMENT:
             kw["bits"] = int(bits)
         if sim_id not in OPT_IS_THE_EXPERIMENT:
@@ -216,6 +246,7 @@ def run_scenario(sim_id: str, params: dict) -> dict:
                if cell.transition else
                report_data.run_cell(scn, cell, n, warmup, k, on_progress=progress,
                                     verbose_logs=verbose))
+        out["meta"]["machine"] = _machine()      # hardware belongs with every recorded figure
         report_data._write_cell(cell_dir, cell, out)
         m = out["meta"]
         manifest["cells"][f"{scn.id}/{cell.label}"] = {

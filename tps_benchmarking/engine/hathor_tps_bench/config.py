@@ -74,7 +74,12 @@ def resolve_opt(opt: list[str] | None, no_opt: list[str] | None) -> dict[str, bo
 
 @dataclass
 class WorkloadConfig:
-    tx_type: str = "1-tip-transparent"  # registry key; the realistic tip-confirming baseline
+    # Registry key. Default is the 3-tip mesh: it holds the mempool tip set at 3 (mainnet runs
+    # ~2-3) and leaves transactions within a layer mutually independent, where the older
+    # 1-tip chain made every tx depend on its predecessor — the maximally serial arrangement.
+    # Raising the tip count is free now that the s5 optimizations removed the O(tip-count)
+    # mempool-tips scan (measured on `defunct`: S5 flat with --opt, O(N²) with --no-opt s5).
+    tx_type: str = "3-tip-transparent"
     num_txs: int = 500             # K — the MEASURED txs
     num_inputs: int = 1            # I — TRANSPARENT inputs per tx
     num_outputs: int = 2           # O — TRANSPARENT outputs per tx

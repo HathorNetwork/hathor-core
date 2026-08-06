@@ -13,7 +13,12 @@ from pathlib import Path
 
 SECTIONS =("s1", "s2", "s3s4", "s5", "s6")
 ALL_ON = {s: True for s in SECTIONS}
-TRANSPARENT = "1-tip-transparent"
+# The transparent workload every scenario uses. Moved from `1-tip-transparent` to the 3-tip mesh
+# (2026-08-06): mainnet runs ~2-3 tips, and a layer of 3 leaves its transactions mutually
+# independent instead of chaining each to its predecessor. Costs nothing — the s5 optimizations
+# removed the O(tip-count) consensus scan. NOTE: figures collected before this change used the
+# 1-tip chain and are not strictly comparable.
+TRANSPARENT = "3-tip-transparent"
 SHIELDED = "capless-full-shielded"          # truly confidential in+out (locked decision)
 DEFAULT_OUT = Path(__file__).resolve().parent.parent / "report-data"
 
@@ -32,6 +37,11 @@ class Cell:
     opt: dict[str, bool] | None = None      # None → all-ON (--opt). Sets NodeHarness(opt=...)
     workload: str | None = None             # override the scenario workload (P6/P7 "both")
     transition: str | None = None           # P11 only: "T2S" | "S2T" — a two-segment multibatch stream
+    # Verification-pool overrides (None → harness default). `workers` is the single-thread vs
+    # multi-core axis; see the OnceLock caveat in report_data._script_kwargs before sweeping it.
+    script_mode: str | None = None          # disabled | threads | processes | rust | shadow-rust
+    workers: int | None = None
+    min_inputs: int | None = None
 
 
 @dataclass

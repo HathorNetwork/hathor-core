@@ -59,7 +59,7 @@ hathor-tps-bench --version
 | Flag | Meaning | Default |
 |---|---|---|
 | `--config FILE` | base scenario YAML | (built-in defaults) |
-| `--tx-type NAME` | workload; see `list` for all 8 | `1-tip-transparent` |
+| `--tx-type NAME` | workload; see `list` for all 10 | `3-tip-transparent` |
 | `--shielded` | **the default fully-shielded workload** — `capless-full-shielded` (shielded in **and** out; chunked source funding, so `N × inputs` is uncapped). Needs a shielded-output cap ≥ 16 | — |
 | `--full-shielded` | *transparent* inputs → fully-shielded outputs; narrower question, source pool capped ≈ 6.4k UTXOs | — |
 | `-n, --num-txs K` | **measured** transactions | 500 |
@@ -138,16 +138,36 @@ Each batch is mined + assembled with hathor-core's `DAGBuilder`. Two edge types 
        b2.out[0] ═╬═══▶ fund0 ══change══▶ fund1 ══change══▶ ··· ══change══▶ fundM
           ···    ═╝       (each fund mints up to 200 pinned UTXOs of value `per`)
 
- (3) PAYLOAD — each txk spends its OWN disjoint UTXOs (inputs) and PARENTS the previous tx
+ (3) PAYLOAD — each txk spends its OWN disjoint UTXOs, and its PARENT edges set the tip topology
                           fundF.out[k] ═══spend═══▶ txk
-       genesis ◀── tx0 ◀── tx1 ◀── tx2 ◀── ··· ◀── tx(N-1)       ◀═══ the ONLY tip
-                 each tx confirms its predecessor  ⇒  tips ≈ 1  ⇒  S5 is O(1), flat
+
+     default `3-tip-transparent` — layers of 3; tips stay at exactly 3:
+
+       layer L-2:   tx0    tx1    tx2      ← already confirmed (2nd parent: costs no tip)
+                     │      │      │
+       layer L-1:   tx3    tx4    tx5      ← the current tips (1st parent: retires one each)
+                     │      │      │
+       layer L:     tx6    tx7    tx8      ← the new tips.  tips = 3, always
+                    └── mutually independent: none parents another ──┘
 ```
 
-The **parent-chaining in (3) is the key correctness fix**: the `1-tip-transparent` workload chains
-transactions so only the latest is a tip. The alternative `defunct` workload parents every tx to genesis →
-all N are tips → consensus (`mempool_tips.update`) is O(tips) = O(N) → the batch costs **O(N²)** (kept on
-purpose to demonstrate the pathology — hence "defunct", not for real measurement).
+The **parent edges in (3) set the tip topology**, which is what the `*-tip-transparent` workloads vary:
+
+| workload | tip set | shape |
+|---|---|---|
+| `3-tip-transparent` **(default)** | exactly 3 | layers of 3 mutually-independent txs; mainnet runs ~2-3 tips |
+| `2-tip-transparent` | exactly 2 | same, narrower |
+| `1-tip-transparent` | 1 | a chain — every tx depends on its predecessor (maximally serial) |
+| `defunct` | N | every tx parented to genesis; the pathology, kept for demonstration |
+
+A k-tip layer takes its first parent from the previous layer (retiring exactly one tip) and its second
+from two layers back (already confirmed, so it costs no tip) — which holds the count at exactly k after
+*every* transaction rather than only at layer boundaries.
+
+> **The O(N²) tip pathology is fixed by the s5 optimizations.** Measured on `defunct` (tips = N):
+> `--opt` gives a flat S5 (485 µs at N=150, 426 µs at N=400) while `--no-opt s5` doubles it
+> (4 611 µs → 8 540 µs). Tip count is therefore essentially free on the default path, which is why the
+> workload no longer needs to be pinned at a single tip.
 
 ---
 

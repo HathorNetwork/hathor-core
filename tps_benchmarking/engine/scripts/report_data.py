@@ -76,6 +76,22 @@ from report_scenarios import (  # noqa: E402,F401
 # --------------------------------------------------------------------------------------------------
 # Execution
 # --------------------------------------------------------------------------------------------------
+def _script_kwargs(cell: Cell) -> dict:
+    """Per-cell verification-pool settings, omitted when the cell does not set them so the
+    harness defaults apply.
+
+    ⚠️ A cell that varies `workers` only takes effect if it is the FIRST rust-mode cell in the
+    process — htr-lib's rayon pool is a OnceLock. The harness raises on a conflicting second
+    value, so a worker sweep must be driven one process per point, not as sibling cells here."""
+    out = {}
+    for cell_attr, kw in (("script_mode", "script_mode"), ("workers", "script_workers"),
+                          ("min_inputs", "script_min_inputs")):
+        val = getattr(cell, cell_attr, None)
+        if val is not None:
+            out[kw] = val
+    return out
+
+
 def _apply_cell_env(scn: Scenario, cell: Cell, is_shielded: bool) -> None:
     os.environ["HATHOR_RANGE_PROOF_BITS"] = str(cell.bits)   # read at proof-creation (shielded only)
     if is_shielded:
@@ -103,7 +119,8 @@ def run_cell(scn: Scenario, cell: Cell, n: int, warmup: int, k: int, on_progress
     for rep in range(k):
         h = NodeHarness(seed=SEED + rep, trivial_pow=True, shielded=is_shielded,
                         opt=(dict(cell.opt) if cell.opt is not None else None),
-                        verbose_logs=verbose_logs).start()
+                        verbose_logs=verbose_logs,
+                        **_script_kwargs(cell)).start()
         try:
             if on_progress:
                 on_progress(rep, k, "build", 0, 0)

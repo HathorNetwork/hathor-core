@@ -28,7 +28,9 @@ if str(ENGINE_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(ENGINE_SCRIPTS))
 
 WORKLOAD_LABEL = {
-    "1-tip-transparent": "transparent",
+    "3-tip-transparent": "transparent (3-tip mesh)",
+    "2-tip-transparent": "transparent (2-tip mesh)",
+    "1-tip-transparent": "transparent (1-tip chain)",
     "capless-full-shielded": "shielded (capless, in+out)",
     "multibatch": "transparent ↔ shielded stream",
 }
@@ -70,6 +72,43 @@ OPT_CONTROLS = [
     _bool("opt_s6", "S6 · post-cons.", True, "Drops the redundant 2nd validate_full"),
 ]
 
+def _cpu() -> tuple[int, int]:
+    """(physical, logical) cores — read from the engine's probe, so the UI and the harness agree."""
+    import sys
+    from pathlib import Path
+    engine = str(Path(__file__).resolve().parents[1] / "engine")
+    if engine not in sys.path:
+        sys.path.insert(0, engine)
+    from hathor_tps_bench.probes import cpuinfo
+    logical = cpuinfo.logical_cores()
+    return cpuinfo.physical_cores() or logical, logical
+
+
+def _worker_choices(logical: int, physical: int) -> list[int]:
+    """Powers of two up to the logical count, plus the physical count — so the bar stays short on
+    a large machine while always offering the value where the optimum sits."""
+    vals, v = {physical, logical}, 1
+    while v <= logical:
+        vals.add(v)
+        v *= 2
+    return sorted(vals)
+
+
+_PHYSICAL, _LOGICAL = _cpu()
+
+VERIFICATION_CONTROLS = [
+    _choice("script_workers", f"Verification workers (this machine: {_PHYSICAL} physical / "
+                              f"{_LOGICAL} logical)",
+            _worker_choices(_LOGICAL, _PHYSICAL), _PHYSICAL,
+            "Rayon threads for input-script verification. The optimum tracks PHYSICAL cores — "
+            "going beyond them oversubscribes the driver and RocksDB, and measured ~2x WORSE "
+            "on the reference machine. 0 disables the pool entirely (serial).",
+            wide=True),
+    _choice("script_mode", "Verification mode", ["rust", "disabled"], "rust",
+            "rust = batched, GIL-released Rust verification (~5x on its own). "
+            "disabled = serial Python, for reference."),
+]
+
 ENV_CONTROLS = [
     _bool("trivial_pow", "Trivial PoW (weight = 1)", True,
           "Speeds batch setup only — verification cost is weight-independent."),
@@ -95,11 +134,14 @@ CUSTOM = {
             "label": "Workload",
             "controls": [
                 _choice("workload", "Workload",
-                        ["1-tip-transparent", "capless-full-shielded", "amount-shielded",
-                         "full-shielded", "defunct"],
-                        "1-tip-transparent",
-                        "capless-full-shielded is shielded in AND out (-i/-o mean shielded counts). "
-                        "defunct is the O(N²) genesis-parented pathology, kept for demonstration.",
+                        ["3-tip-transparent", "2-tip-transparent", "1-tip-transparent",
+                         "capless-full-shielded", "amount-shielded", "full-shielded", "defunct"],
+                        "3-tip-transparent",
+                        "k-tip holds the mempool tip set at k (mainnet ~2-3) and leaves each "
+                        "layer's transactions independent; 1-tip chains every tx to its "
+                        "predecessor. capless-full-shielded is shielded in AND out (-i/-o mean "
+                        "shielded counts). defunct is the genesis-parented pathology — O(N²) "
+                        "only with --no-opt s5, kept for demonstration.",
                         wide=True),
                 _num("num_txs", "Measured transactions (N)", 20, 5000, 10, UI_DEFAULT_N,
                      "Transactions actually timed. Build time grows with N."),
@@ -118,6 +160,10 @@ CUSTOM = {
         {"label": "Optimizations (PR #1729)",
          "note": "All on = --opt. Turn one off to isolate that section's contribution.",
          "controls": OPT_CONTROLS},
+        {"label": "Verification pool",
+         "note": "The single-thread vs multi-core axis. A worker sweep must be one run per "
+                 "value \u2014 htr-lib builds its rayon pool once per process.",
+         "controls": VERIFICATION_CONTROLS},
         {"label": "Environment", "controls": ENV_CONTROLS},
     ],
 }
@@ -158,6 +204,11 @@ def _scenario_card(scn) -> dict:
                        "note": "Fixed by this experiment — the cells ARE the optimization "
                                "configurations, so there is nothing to choose here.",
                        "controls": []})
+    groups.append({"label": "Verification pool",
+                   "note": "Applied to every cell. Sweeping workers means one RUN per value — "
+                           "htr-lib builds its rayon pool once per process, and all cells of a "
+                           "scenario share that process.",
+                   "controls": VERIFICATION_CONTROLS})
     groups.append({"label": "Environment", "controls": ENV_CONTROLS})
 
     note = f" {scn.note}" if scn.note else ""
