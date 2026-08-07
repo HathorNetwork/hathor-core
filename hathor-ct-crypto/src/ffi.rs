@@ -178,6 +178,43 @@ fn rewind_range_proof(
         .into_py(py))
 }
 
+/// Verify many Borromean range proofs at once, in parallel, with the GIL released.
+///
+/// `items` is a sequence of (proof, commitment, generator) byte triples — one per shielded output.
+/// Returns a list the same length: `None` where the proof is valid, else a string explaining why
+/// it is not. Results are positional, so the caller can name the offending output.
+///
+/// Why this exists: range-proof verification is 76-87% of a shielded transaction's cost and each
+/// proof is an independent ~4.5-6 ms pure function, so verifying a transaction's outputs one at a
+/// time on the calling thread wasted almost all of the machine. Two things had to change together
+/// — parallelism alone is useless while the GIL is held, and releasing the GIL alone buys nothing
+/// on a single-threaded driver.
+///
+/// Deserialization still raises (ValueError), matching the per-proof function: a malformed proof
+/// is a caller error, not a verification outcome.
+#[pyfunction]
+fn verify_range_proofs_batch(
+    py: Python<'_>,
+    items: Vec<(Vec<u8>, Vec<u8>, Vec<u8>)>,
+) -> PyResult<Vec<Option<String>>> {
+    // Deserialize while holding the GIL (it touches Python-owned bytes), then hand pure Rust data
+    // to the pool.
+    let mut proofs = Vec::with_capacity(items.len());
+    let mut commitments = Vec::with_capacity(items.len());
+    let mut generators = Vec::with_capacity(items.len());
+    for (proof, commitment, generator) in &items {
+        proofs.push(crate::rangeproof::deserialize_range_proof(proof).map_err(to_py_err)?);
+        commitments.push(crate::pedersen::deserialize_commitment(commitment).map_err(to_py_err)?);
+        generators.push(parse_generator(generator)?);
+    }
+    // detach: the verification below touches no Python objects, so the interpreter is free to run
+    // other threads (the reactor, on a real node) while the pool works.
+    py.allow_threads(|| {
+        crate::rangeproof::verify_range_proofs_parallel(&proofs, &commitments, &generators)
+            .map_err(to_py_err)
+    })
+}
+
 /// Verify a Borromean range proof.
 ///
 /// Returns True if the proof is valid, False if cryptographic verification fails.
@@ -655,6 +692,7 @@ fn hathor_ct_crypto(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_commitments_sum, m)?)?;
     m.add_function(wrap_pyfunction!(create_range_proof, m)?)?;
     m.add_function(wrap_pyfunction!(verify_range_proof, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_range_proofs_batch, m)?)?;
     m.add_function(wrap_pyfunction!(rewind_range_proof, m)?)?;
     m.add_function(wrap_pyfunction!(validate_commitment, m)?)?;
     m.add_function(wrap_pyfunction!(validate_generator, m)?)?;

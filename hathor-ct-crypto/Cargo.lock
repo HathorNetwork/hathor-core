@@ -396,6 +396,7 @@ dependencies = [
  "proptest",
  "pyo3",
  "rand 0.8.5",
+ "rayon",
  "secp256k1-zkp",
  "sha2",
  "thiserror",

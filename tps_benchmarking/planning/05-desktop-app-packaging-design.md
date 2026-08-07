@@ -359,6 +359,21 @@ Finding 3, because batching does not change how much of the budget is parallelis
 > per-transaction budget, so the parallelism contributes little on this path.** What is genuinely
 > absent is cross-transaction parallelism, which this PR never attempted.
 
+**Parked — range proofs wider than 64 bits (limb decomposition).** `libsecp256k1-zkp` caps
+Borromean range proofs at 64 bits *in the C API* (`uint64_t value`, `min_bits … - 64`), so widening
+our Rust types would change nothing — 65/82/96/128 all fail at **creation**, inside the library.
+A wider range is reachable by decomposing the value: commit `v = v_lo + 2^64·v_hi` as `C_lo`/`C_hi`,
+range-prove each limb over `[0, 2^64)`, and have the verifier also check `C == C_lo + 2^64·C_hi`.
+That point equation is mandatory — without it the limbs are unrelated to the committed value, and
+two in-range numbers prove nothing about `C`. Cost: ~2× proof bytes (~10 KB/output), ~2×
+verification, plus a wire-format and balance-equation change.
+
+Not built, for two reasons: every Hathor amount is `u64` end to end, so no value can need it; and
+for benchmarking, "two proofs plus a point check" costs about what **two outputs** cost, which `-o`
+already measures. If magnitude (not precision) is ever the goal, the C API's base-10 `exp`
+parameter extends it natively and makes proofs *smaller* — though the same header notes values must
+stay in `[0, 2^63)` once `exp` is non-zero, so 2^64 remains the hard boundary either way.
+
 **Still unmeasured:** a **true block-sync workload** — vertices arriving dependency-ordered from the
 network rather than a synthetic batch on the per-tx driver. That is the one remaining place batch
 parallelism could pay, and building it is the natural companion to the axes in this section.

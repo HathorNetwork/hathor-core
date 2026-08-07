@@ -920,11 +920,23 @@ class TransactionVerifier:
                     )
 
     def verify_range_proofs(self, tx: Transaction) -> None:
-        """Every shielded output must have valid Bulletproof range proof."""
-        from hathor.crypto.shielded import verify_range_proof
+        """Every shielded output must have a valid Borromean range proof.
+
+        The proofs are gathered first and verified in ONE batched call that fans them across cores
+        with the GIL released. This is the dominant cost of a shielded transaction — 76-87% of the
+        per-tx budget, at ~4.5-6 ms per proof — and each proof is an independent pure function of
+        (proof, commitment, generator), so it is embarrassingly parallel. Verifying them one at a
+        time on the calling thread left almost all of the machine idle.
+
+        Generators are still derived here, per output: AMOUNT_ONLY proves against the token's
+        derived asset tag (so the token-index validation below must stay), FULLY_SHIELDED against
+        its own blinded asset commitment. Only the verification itself is batched.
+        """
+        from hathor.crypto.shielded import verify_range_proofs_batch
         from hathor.transaction.shielded_tx_output import AmountShieldedOutput, FullShieldedOutput
 
         asset_tag_cache: dict[bytes, bytes] = {}
+        items: list[tuple[bytes, bytes, bytes]] = []
         for i, output in enumerate(tx.shielded_outputs):
             if isinstance(output, AmountShieldedOutput):
                 token_index = output.token_data & 0x7F
@@ -940,8 +952,29 @@ class TransactionVerifier:
             else:
                 raise InvalidShieldedOutputError(f'shielded output {i}: unknown type')
 
+            items.append((output.range_proof, output.commitment, generator))
+
+        if not items:
+            return
+        try:
+            outcomes = verify_range_proofs_batch(items)
+        except ValueError as e:
+            # Deserialization failure. The batch call cannot say which proof was malformed, so
+            # fall back to the per-proof path to name the offending output — this is the error
+            # path, so its cost does not matter.
+            self._raise_first_bad_range_proof(tx, items)
+            raise InvalidRangeProofError(str(e)) from e   # unreachable unless the retry passes
+        for i, outcome in enumerate(outcomes):
+            if outcome is not None:
+                raise InvalidRangeProofError(f'shielded output {i}: {outcome}')
+
+    @staticmethod
+    def _raise_first_bad_range_proof(tx: Transaction, items: list[tuple[bytes, bytes, bytes]]) -> None:
+        """Re-verify one at a time to attribute a deserialization failure to its output index."""
+        from hathor.crypto.shielded import verify_range_proof
+        for i, (proof, commitment, generator) in enumerate(items):
             try:
-                if not verify_range_proof(output.range_proof, output.commitment, generator):
+                if not verify_range_proof(proof, commitment, generator):
                     raise InvalidRangeProofError(
                         f'shielded output {i}: range proof verification failed'
                     )

@@ -1,4 +1,4 @@
-# Baseline scenario — single batch, 1-tip-transparent (realistic, tip-confirming) 1-in/2-out txs.
+# Baseline scenario — single batch, 3-tip mesh (mainnet-like tip set) 1-in/2-out txs.
 # Validate with:  python -m hathor_tps_bench validate --config scenarios/basic.yaml
 name: baseline
 
@@ -15,7 +15,7 @@ benchmarks:
 # results_root: /some/abs/path
 
 workload:
-  tx_type: 1-tip-transparent
+  tx_type: 3-tip-transparent
   num_txs: 500
   num_inputs: 1      # I
   num_outputs: 2     # O

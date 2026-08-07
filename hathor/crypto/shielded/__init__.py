@@ -34,7 +34,12 @@ from hathor.crypto.shielded.ecdh import (
     extract_key_bytes,
     generate_ephemeral_keypair,
 )
-from hathor.crypto.shielded.range_proof import create_range_proof, rewind_range_proof, verify_range_proof
+from hathor.crypto.shielded.range_proof import (
+    create_range_proof,
+    rewind_range_proof,
+    verify_range_proof,
+    verify_range_proofs_batch,
+)
 from hathor.crypto.shielded.surjection import create_surjection_proof, verify_surjection_proof
 
 
@@ -76,5 +81,6 @@ __all__ = [
     'verify_balance',
     'verify_commitments_sum',
     'verify_range_proof',
+    'verify_range_proofs_batch',
     'verify_surjection_proof',
 ]

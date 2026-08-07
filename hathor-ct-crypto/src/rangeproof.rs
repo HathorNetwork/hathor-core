@@ -1,5 +1,8 @@
 use std::env;
 use std::ops::Range;
+use std::sync::OnceLock;
+
+use rayon::prelude::*;
 
 use secp256k1_zkp::{Generator, PedersenCommitment, RangeProof, SecretKey, Tweak, SECP256K1};
 
@@ -16,6 +19,14 @@ use crate::error::{HathorCtError, Result};
 /// but the committed `amount` is a u64 and secp256k1-zkp's Borromean range proof
 /// caps min_bits at 64 — 82/96 fail at creation with "failed to generate range
 /// proof". 40→3213 B, 64→5070 B; >64 is impossible without a wider amount type.)
+///
+/// TODO (parked, see planning/05-desktop-app-packaging-design.md): ranges wider than 64 bits are
+/// reachable by LIMB DECOMPOSITION — commit to v = v_lo + 2^64*v_hi as C_lo and C_hi, range-prove
+/// each limb over [0, 2^64), and have the verifier additionally check C == C_lo + 2^64*C_hi. The
+/// point equation is not optional: without it the limbs are unrelated to the committed value.
+/// Costs ~2x proof bytes and ~2x verification, plus a wire-format and balance-equation change.
+/// Not built because every Hathor amount is u64, so no value can need it. A cheaper native option
+/// for magnitude (at the cost of low-digit precision) is the C API's base-10 `exp` parameter.
 ///
 /// TOGGLEABLE at runtime via the `HATHOR_RANGE_PROOF_BITS` env var (read at proof
 /// creation time, so it can be changed per build without recompiling). Valid range
@@ -122,35 +133,107 @@ pub fn verify_range_proof(
     Ok(range)
 }
 
-/// Batch-verify multiple range proofs.
-// TODO: This is sequential, not truly batched. Investigate secp256k1-zkp batch verification API.
-pub fn batch_verify_range_proofs(
+/// The rayon pool used for range-proof verification.
+///
+/// Sized on FIRST USE from `HATHOR_SHIELDED_WORKERS`, falling back to rayon's default (one thread
+/// per logical core). Like htr-lib's script pool this is a `OnceLock`, so a later call with a
+/// different worker count reuses the existing pool — a worker sweep must therefore use one
+/// PROCESS per point.
+///
+/// Sizing matters: on the reference machine (4 physical / 8 logical cores) running one worker per
+/// *logical* core measured ~2x WORSE than one per physical core, because the extra threads preempt
+/// the single-threaded driver and RocksDB's compaction. The benchmark harness exports the env var
+/// so this pool and the script pool agree on a budget instead of each claiming every core.
+fn verify_pool() -> &'static rayon::ThreadPool {
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let workers = std::env::var("HATHOR_SHIELDED_WORKERS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(0); // 0 => rayon decides
+        let mut builder = rayon::ThreadPoolBuilder::new().thread_name(|i| format!("rp-verify-{i}"));
+        if workers > 0 {
+            builder = builder.num_threads(workers);
+        }
+        builder
+            .build()
+            .expect("a rayon pool with a valid thread count always builds")
+    })
+}
+
+/// Verify many range proofs in parallel, one result per input, in input order.
+///
+/// `None` means the proof is valid; `Some(message)` carries the reason it is not. Results are
+/// returned per index rather than short-circuiting on the first failure, because the caller must
+/// be able to say WHICH shielded output was bad — the sequential Python loop this replaces raised
+/// `InvalidRangeProofError('shielded output {i}: ...')`, and losing that index would degrade
+/// diagnostics on a consensus path. The two failure messages match the ones the per-proof binding
+/// produced, so the Python-visible behaviour is unchanged.
+///
+/// Verification is a pure function of (proof, commitment, generator) with no shared state, so this
+/// is embarrassingly parallel; the only ordering guarantee needed is that results line up with
+/// inputs, which `par_iter().map().collect()` provides.
+pub fn verify_range_proofs_parallel(
     proofs: &[RangeProof],
     commitments: &[PedersenCommitment],
     generators: &[Generator],
-) -> Result<()> {
+) -> Result<Vec<Option<String>>> {
     if proofs.len() != commitments.len() || proofs.len() != generators.len() {
         return Err(HathorCtError::RangeProofError(
             "mismatched lengths for batch verification".into(),
         ));
     }
+    let n = proofs.len();
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    if n == 1 {
+        // One job cannot be parallelised; skip the pool entirely rather than pay the hop.
+        return Ok(vec![check_one(&proofs[0], &commitments[0], &generators[0])]);
+    }
+    Ok(verify_pool().install(|| {
+        (0..n)
+            .into_par_iter()
+            .map(|i| check_one(&proofs[i], &commitments[i], &generators[i]))
+            .collect()
+    }))
+}
 
-    for (i, ((proof, commitment), generator)) in proofs
-        .iter()
-        .zip(commitments.iter())
-        .zip(generators.iter())
+/// Verify one proof, returning `None` when valid and the failure reason otherwise.
+///
+/// Mirrors the per-proof pyo3 binding exactly: a `min_value < 1` proof and a cryptographic failure
+/// are both rejections (not errors), so they surface as the same message the Python loop used.
+fn check_one(
+    proof: &RangeProof,
+    commitment: &PedersenCommitment,
+    generator: &Generator,
+) -> Option<String> {
+    match verify_range_proof(proof, commitment, generator) {
+        Ok(range) if range.start >= 1 => None,
+        Ok(_) => Some("range proof verification failed".into()),
+        Err(_) => Some("range proof verification failed".into()),
+    }
+}
+
+/// Batch-verify multiple range proofs, failing on the first bad one.
+///
+/// Retained for existing callers; now parallel underneath.
+pub fn batch_verify_range_proofs(
+    proofs: &[RangeProof],
+    commitments: &[PedersenCommitment],
+    generators: &[Generator],
+) -> Result<()> {
+    for (i, outcome) in verify_range_proofs_parallel(proofs, commitments, generators)?
+        .into_iter()
         .enumerate()
     {
-        let range = verify_range_proof(proof, commitment, generator)
-            .map_err(|e| HathorCtError::RangeProofError(format!("proof {} failed: {}", i, e)))?;
-        if range.start < 1 {
+        if let Some(msg) = outcome {
             return Err(HathorCtError::RangeProofError(format!(
-                "proof {} has min_value {} < 1 (zero-amount rejected)",
-                i, range.start
+                "proof {} failed: {}",
+                i, msg
             )));
         }
     }
-
     Ok(())
 }
 
@@ -315,11 +398,24 @@ mod tests {
 
     #[test]
     fn test_proof_size_fits_fullnode_cap() {
-        // The fullnode deserializer rejects proofs larger than MAX_RANGE_PROOF_SIZE.
-        // With min_bits=0 (auto → 64-bit Borromean), proofs are ~5070 bytes —
-        // far above the 1024-byte cap the Python layer enforces.  This test
-        // confirms the proof fits after we pin min_bits to RANGE_PROOF_BITS.
-        const MAX_RANGE_PROOF_SIZE: usize = 3328;
+        // A proof produced at the CONFIGURED bit width must fit the cap the fullnode deserializer
+        // enforces, or the transaction cannot be parsed.
+        //
+        // Source of truth: `hathorlib/transaction/shielded_tx_output.py`
+        //     MAX_RANGE_PROOF_SIZE = _env_capped_int('HATHOR_MAX_RANGE_PROOF_SIZE', 8192,
+        //                                            hard_max=65535)
+        // The 65535 ceiling is structural — `rp_len` is serialized as a 2-byte field.
+        //
+        // Mirror it here rather than guess: this constant previously read 3328, which was sized
+        // for the 40-bit default of the time (3213 bytes + margin) and silently became wrong when
+        // RANGE_PROOF_BITS moved to 64. Measured serialized sizes, worst case over representative
+        // amounts:  32-bit 3213 · 40-bit 3213 · 48-bit 3853 · 64-bit 5070 — so every supported
+        // width fits 8192, the tightest with ~3.1 KB to spare.
+        //
+        // The test deliberately does NOT pin HATHOR_RANGE_PROOF_BITS: cargo runs tests in threads
+        // within one process, so setting an env var here would leak into other tests. Reading
+        // whatever width is configured is also the more useful invariant.
+        const MAX_RANGE_PROOF_SIZE: usize = 8192;
 
         let gen = htr_asset_tag();
         let blinding = Tweak::new(&mut rand::thread_rng());

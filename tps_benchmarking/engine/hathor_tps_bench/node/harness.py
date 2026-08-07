@@ -136,6 +136,14 @@ class NodeHarness:
         # renders a repr per funding vertex (and S6 would carry it for the measured txs).
         configure_logging(self.verbose_logs)
 
+        # One worker budget for BOTH rayon pools. htr-lib sizes the script pool from
+        # `script_workers`; hathor-ct-crypto sizes the range-proof pool from this env var. Left
+        # unset the crypto pool would default to one thread per LOGICAL core and, together with
+        # the script pool, oversubscribe — the arrangement measured ~2x worse than one thread per
+        # physical core. Read once per process (OnceLock on the Rust side), so it must be set
+        # before the first shielded verification.
+        os.environ["HATHOR_SHIELDED_WORKERS"] = str(self.script_workers)
+
         # Export the per-section optimization gating to env BEFORE building the node, so the gated
         # hathor-core sites (read via hathor.opt_flags.opt_enabled) pick it up. HATHOR_OPT_<S>=1
         # optimized / 0 baseline. cache_clear() handles multiple harnesses in one process.

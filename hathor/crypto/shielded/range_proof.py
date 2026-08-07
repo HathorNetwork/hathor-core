@@ -22,10 +22,28 @@ def create_range_proof(
 
 
 def verify_range_proof(proof: bytes, commitment: bytes, generator: bytes) -> bool:
-    """Verify a Bulletproof range proof."""
+    """Verify a Borromean range proof."""
     if _lib is None:
         raise RuntimeError('hathor_ct_crypto native library is not available')
     return _lib.verify_range_proof(proof, commitment, generator)
+
+
+def verify_range_proofs_batch(
+    items: list[tuple[bytes, bytes, bytes]],
+) -> list[str | None]:
+    """Verify many range proofs in one call, in parallel, with the GIL released.
+
+    `items` is one (proof, commitment, generator) triple per shielded output. Returns a list of
+    the same length and order: None where the proof is valid, else the reason it is not — so the
+    caller can attribute a failure to a specific output.
+
+    Range-proof verification dominates shielded cost (76-87% of the per-tx budget at ~4.5-6 ms
+    each) and every proof is independent, which makes this the one place fanning out across cores
+    genuinely pays. Raises ValueError if any input fails to deserialize.
+    """
+    if _lib is None:
+        raise RuntimeError('hathor_ct_crypto native library is not available')
+    return _lib.verify_range_proofs_batch(items)
 
 
 def rewind_range_proof(
