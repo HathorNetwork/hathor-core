@@ -86,26 +86,6 @@ ekvilibro-no-rate-limit: clean set_real_ip_from_cloudfront
 	$(call generate_nginx_conf,--disable-rate-limits $(EKVILIBRO_TRUSTED_PROXIES))
 	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
 
-# GCP / Hathor Testnet Playground
-HATHOR_TESTNET_PLAYGROUND_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet-playground/fullnodes/webtank
-HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES = --trusted-proxy-ip 136.110.240.80 --trusted-proxy-ip 2600:1901:0:c75a::
-
-.PHONY: hathor-testnet-playground
-hathor-testnet-playground: hathor-testnet-playground-default hathor-testnet-playground-no-rate-limit
-	@echo "All Hathor Testnet Playground images built and pushed successfully!"
-
-.PHONY: hathor-testnet-playground-default
-hathor-testnet-playground-default: clean set_real_ip_from_cloudfront
-	@echo "Building and pushing latest image for Hathor Testnet Playground..."
-	$(call generate_nginx_conf,$(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG) .
-
-.PHONY: hathor-testnet-playground-no-rate-limit
-hathor-testnet-playground-no-rate-limit: clean set_real_ip_from_cloudfront
-	@echo "Building and pushing no-rate-limit image for Hathor Testnet Playground..."
-	$(call generate_nginx_conf,--disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES))
-	docker buildx build --pull --push --platform linux/arm64/v8,linux/amd64 --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_NO_RATE_LIMIT_TAG) .
-
 # GCP / Hathor Testnet Shielded Outputs
 HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY = us-central1-docker.pkg.dev/hathor-testnet-shielded-output/fullnodes/webtank
 HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES = --trusted-proxy-ip 34.117.3.220 --trusted-proxy-ip 2600:1901:0:74bf::
@@ -144,9 +124,6 @@ HATHOR_TESTNET_IMAGE_TAG_ARGS += --tag $(HATHOR_TESTNET_REGISTRY):$(DEFAULT_LATE
 EKVILIBRO_IMAGE_TAG_ARGS = --tag $(EKVILIBRO_REGISTRY):$(VERSION)
 EKVILIBRO_IMAGE_TAG_ARGS += --tag $(EKVILIBRO_REGISTRY):$(DEFAULT_LATEST_TAG)
 
-HATHOR_TESTNET_PLAYGROUND_IMAGE_TAG_ARGS = --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(VERSION)
-HATHOR_TESTNET_PLAYGROUND_IMAGE_TAG_ARGS += --tag $(HATHOR_TESTNET_PLAYGROUND_REGISTRY):$(DEFAULT_LATEST_TAG)
-
 .INTERMEDIATE: .aws-main-login.stamp
 
 .PHONY: aws-main
@@ -172,7 +149,7 @@ aws-main-no-rate-limit: clean set_real_ip_from_cloudfront .aws-main-login.stamp
 
 # Build All (convenience command)
 .PHONY: build-all
-build-all: hathor-testnet standalone-fullnodes ekvilibro hathor-testnet-playground hathor-testnet-shielded-outputs aws-main
+build-all: hathor-testnet standalone-fullnodes ekvilibro hathor-testnet-shielded-outputs aws-main
 	@echo "All images built and pushed successfully!"
 
 # Legacy commands for backward compatibility
@@ -234,10 +211,6 @@ endif
 	$(call generate_config,$(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_no_rate_limit.conf)
 	$(call generate_config,--enable-api-proxy $(EKVILIBRO_TRUSTED_PROXIES),ekvilibro/nginx_api_proxy.conf)
-	# hathor-testnet-playground
-	$(call generate_config,$(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx.conf)
-	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_no_rate_limit.conf)
-	$(call generate_config,--enable-api-proxy $(HATHOR_TESTNET_PLAYGROUND_TRUSTED_PROXIES),hathor-testnet-playground/nginx_api_proxy.conf)
 	# hathor-testnet-shielded-output
 	$(call generate_config,$(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx.conf)
 	$(call generate_config,--disable-rate-limits $(HATHOR_TESTNET_SHIELDED_OUTPUTS_TRUSTED_PROXIES),hathor-testnet-shielded-output/nginx_no_rate_limit.conf)
@@ -276,7 +249,7 @@ release: generate-all upload-to-s3 upload-to-s3-as-latest ## Generate and upload
 # ============================
 
 .PHONY: publish-images
-publish-images: publish-aws-main-image publish-standalone-fullnodes-image publish-hathor-testnet-image publish-ekvilibro-image publish-hathor-testnet-playground-image ## Build and push the generic nginx image to all workflow registries (requires VERSION and prior registry auth)
+publish-images: publish-aws-main-image publish-standalone-fullnodes-image publish-hathor-testnet-image publish-ekvilibro-image ## Build and push the generic nginx image to all workflow registries (requires VERSION and prior registry auth)
 	@echo "Published generic nginx image to all workflow registries for $(VERSION)."
 
 .PHONY: publish-aws-main-image
@@ -310,14 +283,6 @@ ifndef VERSION
 endif
 	@echo "Building and pushing generic nginx image to Ekvilibro..."
 	$(call build_and_push_image,$(EKVILIBRO_IMAGE_TAG_ARGS))
-
-.PHONY: publish-hathor-testnet-playground-image
-publish-hathor-testnet-playground-image: ## Build and push the generic nginx image to hathor-testnet-playground (requires VERSION and prior registry auth)
-ifndef VERSION
-	$(error VERSION is required. Usage: make publish-hathor-testnet-playground-image VERSION=v0.69.0)
-endif
-	@echo "Building and pushing generic nginx image to Hathor Testnet Playground..."
-	$(call build_and_push_image,$(HATHOR_TESTNET_PLAYGROUND_IMAGE_TAG_ARGS))
 
 # Generate nginx.conf only (for testing or manual use).
 # Usage:
@@ -358,9 +323,6 @@ help:
 	@echo "  ekvilibro                 			- Build and push all images for GCP Project Ekvilibro"
 	@echo "  ekvilibro-default         			- Build and push default image for GCP Project Ekvilibro"
 	@echo "  ekvilibro-no-rate-limit   			- Build and push no-rate-limit image for GCP Project Ekvilibro"
-	@echo "  hathor-testnet-playground                 - Build and push all images for GCP Project Hathor Testnet Playground"
-	@echo "  hathor-testnet-playground-default         - Build and push default image for GCP Project Hathor Testnet Playground"
-	@echo "  hathor-testnet-playground-no-rate-limit   - Build and push no-rate-limit image for GCP Project Hathor Testnet Playground"
 	@echo "  hathor-testnet-shielded-outputs                   - Build and push all images for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  hathor-testnet-shielded-outputs-default           - Build and push default image for GCP Project Hathor Testnet Shielded Outputs"
 	@echo "  hathor-testnet-shielded-outputs-no-rate-limit     - Build and push no-rate-limit image for GCP Project Hathor Testnet Shielded Outputs"
@@ -380,7 +342,6 @@ help:
 	@echo "  publish-standalone-fullnodes-image  - Build and push the generic nginx image to Standalone Fullnodes"
 	@echo "  publish-hathor-testnet-image        - Build and push the generic nginx image to Hathor Testnet"
 	@echo "  publish-ekvilibro-image             - Build and push the generic nginx image to Ekvilibro"
-	@echo "  publish-hathor-testnet-playground-image - Build and push the generic nginx image to Hathor Testnet Playground"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "  nginx.conf                - Generate nginx.conf only (use NGINX_ARGS for extra options)"
@@ -391,7 +352,6 @@ help:
 	@echo "  hathor-testnet             - Build and push all images for GCP Project Hathor Testnet"
 	@echo "  standalone-fullnodes       - Build and push all images for GCP Project Standalone Fullnodes"
 	@echo "  ekvilibro                  - Build and push all images for GCP Project Ekvilibro"
-	@echo "  hathor-testnet-playground  - Build and push all images for GCP Project Hathor Testnet Playground"
 	@echo "  aws-main                   - Build and push all images for AWS Main Account"
 	@echo "  build-all                  - Build and push all active project images"
 	@echo ""
@@ -404,7 +364,6 @@ help:
 	@echo "  - Hathor Testnet: $(HATHOR_TESTNET_REGISTRY)"
 	@echo "  - Standalone Fullnodes: $(STANDALONE_FULLNODES_REGISTRY)"
 	@echo "  - Ekvilibro: $(EKVILIBRO_REGISTRY)"
-	@echo "  - Hathor Testnet Playground: $(HATHOR_TESTNET_PLAYGROUND_REGISTRY)"
 	@echo "  - Hathor Testnet Shielded Outputs: $(HATHOR_TESTNET_SHIELDED_OUTPUTS_REGISTRY)"
 	@echo "  - AWS Main Account: $(AWS_MAIN_REGISTRY)"
 	@echo ""
