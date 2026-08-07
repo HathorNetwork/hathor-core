@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import unittest
+from struct import error as StructError
 
 from hathorlib import Block, TokenCreationTransaction, Transaction
 from hathorlib.base_transaction import get_cls_from_tx_version, tx_or_block_from_bytes
@@ -147,6 +148,14 @@ class HathorCommonsTestCase(unittest.TestCase):
 
     def test_script_basics(self):
         create_output_script(decode_address('HVZjvL1FJ23kH3buGNuttVRsRKq66WHUVZ'))
+
+    def test_tx_or_block_from_bytes_too_short(self):
+        # The version is read from the second byte, so anything shorter than 2 bytes has no version
+        # to read. It must raise StructError like any other undecodable input, and not let a bare
+        # IndexError escape to the callers.
+        for data in [b'', b'\x00']:
+            with self.assertRaises(StructError):
+                tx_or_block_from_bytes(data)
 
     def test_standard_tx(self):
         data = bytes.fromhex('0001000102000001e0e88216036e4e52872ba60a96df7570c3e29cc30eda6dd92ea0fd'

@@ -192,6 +192,15 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
+        # Valid hex but too short to hold a version byte
+        response_error3: Any = yield self.push_tx({'hex_tx': '00'})
+        data_error3 = response_error3.json_value()
+        self.assertFalse(data_error3['success'])
+
+        response_error4: Any = yield self.push_tx({'hex_tx': ''})
+        data_error4 = response_error4.json_value()
+        self.assertFalse(data_error4['success'])
+
     @inlineCallbacks
     def test_script_too_big(self) -> Generator:
         self.manager.wallet.unlock(b'MYPASS')
