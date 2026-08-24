@@ -775,10 +775,10 @@ def output_value_to_bytes(number: int) -> bytes:
 def tx_or_block_from_bytes(data: bytes) -> BaseTransaction:
     """ Creates the correct tx subclass from a sequence of bytes
 
-    Raise `StructError` when `data` cannot be parsed into a vertex, including when it is too short
-    to hold the version field.
+    Raise `StructError` when `data` is too short to hold the version field, or when the version
+    byte does not map to a supported vertex version.
     """
-    # version field takes up the second byte only
+    # version field takes up the second byte only, so `data` must be at least that long
     if len(data) < 2:
         raise StructError('Invalid bytes to create transaction subclass: too short.')
     version = data[1]
