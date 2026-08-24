@@ -1219,9 +1219,17 @@ class TransactionTest(unittest.TestCase):
 
         parser = self.manager.vertex_parser
 
-        for data in [b'', b'\x00']:
-            with self.assertRaises(StructError):
+        # `b'\x01'` carries a valid version value, so including it pins the guard to the length of
+        # `data` rather than to the version byte being unrecognized.
+        for data in [b'', b'\x00', b'\x01']:
+            with self.assertRaisesRegex(StructError, 'too short'):
                 parser.deserialize(data)
+
+        # Two bytes is exactly long enough to hold the version, so it must fail further in. Pinning
+        # the message here keeps the guard from silently widening past the version field.
+        with self.assertRaises(StructError) as cm:
+            parser.deserialize(b'\x00\x00')
+        self.assertNotIn('too short', str(cm.exception))
 
     def test_sighash_cache(self):
         from unittest import mock

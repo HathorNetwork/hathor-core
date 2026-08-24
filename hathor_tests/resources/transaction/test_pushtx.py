@@ -192,14 +192,18 @@ class BasePushTxTest(_BaseResourceTest._ResourceTest):
         data_error2 = response_error2.json_value()
         self.assertFalse(data_error2['success'])
 
-        # Valid hex but too short to hold a version byte
-        response_error3: Any = yield self.push_tx({'hex_tx': '00'})
-        data_error3 = response_error3.json_value()
-        self.assertFalse(data_error3['success'])
-
-        response_error4: Any = yield self.push_tx({'hex_tx': ''})
-        data_error4 = response_error4.json_value()
-        self.assertFalse(data_error4['success'])
+        # Valid hex but too short to hold a version byte. Asserting the message pins this to the
+        # `struct.error` branch: a resource-level `except IndexError` returning the generic
+        # 'Invalid hexadecimal data' would satisfy `success is False` but fail here.
+        for hex_tx in ['00', '']:
+            response_short: Any = yield self.push_tx({'hex_tx': hex_tx})
+            data_short = response_short.json_value()
+            self.assertFalse(data_short['success'])
+            self.assertEqual(
+                data_short['message'],
+                'This transaction is invalid. Try to decode it first to validate it.'
+            )
+            self.assertFalse(data_short['can_force'])
 
     @inlineCallbacks
     def test_script_too_big(self) -> Generator:
