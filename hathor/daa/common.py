@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 class DAAVersion(IntEnum):
     V1 = 1  # Original 30s target
     V2 = 2  # Reduced target (REDUCE_DAA_TARGET)
+    V3 = 3  # Original 30s target restored (RESTORE_DAA_TARGET)
 
 
 class TestMode(IntFlag):
@@ -36,20 +37,22 @@ class TestMode(IntFlag):
 class DAAConfig:
     """The values that distinguish one DAA version from another.
 
-    A DAA version (V1, V2, ...) is fully described by a `DAAConfig` instance: the target
-    block time, the reward reduction factor, and (for V2) the height where the reduction
-    takes effect. The algorithm itself is shared and parameterized by this object — see
-    ``hathor.daa.daa.DifficultyAdjustmentAlgorithm``.
+    A DAA version (V1, V2, V3) is fully described by a `DAAConfig` instance: the target
+    block time, the reward reduction factor, and the heights where V2 and V3 take effect.
+    The algorithm itself is shared and parameterized by this object — see
+    `hathor.daa.daa.DifficultyAdjustmentAlgorithm`.
 
-    ``v2_start_height`` — the height of the first V2 block — is required for
-    ``get_mined_tokens`` to split the cumulative sum between V1 and V2 ranges. It is
-    None for V1 configs, and may be None for V2 configs built outside the per-block
-    factory (e.g. tests that only exercise per-block reward methods).
+    `v2_start_height` — the height of the first V2 block — and `v3_start_height` — the height
+    of the first V3 block — are required for `get_mined_tokens` to split the cumulative sum
+    between the V1, V2 and V3 ranges. Only the V2 range has reduced rewards. They are None
+    for V1 configs, and may be None for V2 configs built outside the per-block factory
+    (e.g. tests that only exercise per-block reward methods).
     """
 
     avg_time_between_blocks: float
     reward_reduction_factor: int
     v2_start_height: int | None = None
+    v3_start_height: int | None = None
 
     @classmethod
     def for_v1(cls, settings: HathorSettings) -> DAAConfig:
@@ -64,11 +67,28 @@ class DAAConfig:
         """V2: shorter block target, reward reduced proportionally to the speed-up."""
         return cls(
             avg_time_between_blocks=settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X / 10,
-            reward_reduction_factor=(
-                (settings.AVG_TIME_BETWEEN_BLOCKS * 10) // settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X
-            ),
+            reward_reduction_factor=_get_v2_reward_reduction_factor(settings),
             v2_start_height=v2_start_height,
         )
+
+    @classmethod
+    def for_v3(cls, settings: HathorSettings, *, v2_start_height: int | None, v3_start_height: int) -> DAAConfig:
+        """V3: original block target and reward restored after V2.
+
+        `v2_start_height` is None when V2 never took effect in the chain, in which case the
+        whole history before `v3_start_height` is V1.
+        """
+        return cls(
+            avg_time_between_blocks=settings.AVG_TIME_BETWEEN_BLOCKS,
+            reward_reduction_factor=1,
+            v2_start_height=v2_start_height,
+            v3_start_height=v3_start_height,
+        )
+
+
+def _get_v2_reward_reduction_factor(settings: HathorSettings) -> int:
+    """Return the factor that divides the block reward during V2."""
+    return (settings.AVG_TIME_BETWEEN_BLOCKS * 10) // settings.REDUCED_AVG_TIME_BETWEEN_BLOCKS_10X
 
 
 def _calculate_N(settings: HathorSettings, parent_block: Block) -> int:
@@ -247,26 +267,28 @@ def _get_mined_tokens(
     settings: HathorSettings,
     height: int,
     *,
-    reward_reduction_factor: int,
     v2_start_height: int | None,
+    v3_start_height: int | None,
 ) -> int:
     """Return the number of tokens mined in total at height.
 
-    Heights below ``v2_start_height`` are treated as V1 (no reduction). Heights at or above
-    ``v2_start_height`` get their per-block reward divided by ``reward_reduction_factor``.
-    When ``v2_start_height`` is ``None`` or beyond ``height``, the entire range is V1.
+    Heights below `v2_start_height` are V1 (no reduction). Heights in `[v2_start_height, v3_start_height)`
+    are V2 and get their per-block reward divided by the V2 reward reduction factor. Heights at or above
+    `v3_start_height` are V3 (no reduction). V3 takes precedence over V2 if the ranges overlap. When a start
+    height is `None` or beyond `height`, the corresponding range is empty.
     """
-    if v2_start_height is None or v2_start_height > height:
-        return _sum_block_rewards_in_range(
-            settings, start_height=1, end_height=height, reward_reduction_factor=1,
-        )
+    v3_start = height + 1 if v3_start_height is None else min(v3_start_height, height + 1)
+    v2_start = v3_start if v2_start_height is None else min(v2_start_height, v3_start)
     return (
         _sum_block_rewards_in_range(
-            settings, start_height=1, end_height=v2_start_height - 1, reward_reduction_factor=1,
+            settings, start_height=1, end_height=v2_start - 1, reward_reduction_factor=1,
         )
         + _sum_block_rewards_in_range(
-            settings, start_height=v2_start_height, end_height=height,
-            reward_reduction_factor=reward_reduction_factor,
+            settings, start_height=v2_start, end_height=v3_start - 1,
+            reward_reduction_factor=_get_v2_reward_reduction_factor(settings),
+        )
+        + _sum_block_rewards_in_range(
+            settings, start_height=v3_start, end_height=height, reward_reduction_factor=1,
         )
     )
 

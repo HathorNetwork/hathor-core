@@ -104,16 +104,15 @@ class DifficultyAdjustmentAlgorithm:
     def get_mined_tokens(self, height: int) -> int:
         """Return the number of tokens mined in total at height.
 
-        ``reward_reduction_factor`` only applies to heights at or above ``v2_start_height``.
-        For V2 configs (factor > 1), ``v2_start_height`` must be set on the config —
-        otherwise the cumulative sum cannot tell pre-activation V1 blocks apart from
-        post-activation V2 blocks.
+        The V2 reward reduction only applies to heights in `[v2_start_height, v3_start_height)`.
+        For V2 configs (factor > 1), `v2_start_height` must be set on the config — otherwise the
+        cumulative sum cannot tell pre-activation V1 blocks apart from post-activation V2 blocks.
         """
         assert self._config.reward_reduction_factor == 1 or self._config.v2_start_height is not None, (
             'V2 DAAConfig must carry v2_start_height to compute cumulative mined tokens'
         )
         return _get_mined_tokens(
             self._settings, height,
-            reward_reduction_factor=self._config.reward_reduction_factor,
             v2_start_height=self._config.v2_start_height,
+            v3_start_height=self._config.v3_start_height,
         )

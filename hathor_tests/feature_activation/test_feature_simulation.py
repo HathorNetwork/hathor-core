@@ -122,8 +122,9 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     )
                 ]
             )
-            # so we calculate states all the way down to the first evaluation boundary (after genesis):
-            assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 4
+            # and no states are calculated, as the feature's start_height has not been reached (before it, the state
+            # is always DEFINED):
+            assert self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock) == []
             # no blocks are voided, so we only use the height index, and not get_ancestor_iteratively:
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
@@ -160,8 +161,8 @@ class BaseFeatureSimulationTest(SimulatorTestCase):
                     )
                 ]
             )
-            # so we calculate states down to block 12, as block 8's state is saved:
-            assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 12
+            # and still no states are calculated, as the feature's start_height has not been reached:
+            assert self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock) == []
             assert get_ancestor_iteratively_mock.call_count == 0
             calculate_new_state_mock.reset_mock()
 
@@ -741,8 +742,8 @@ class RocksDBStorageFeatureSimulationTest(BaseFeatureSimulationTest):
                 ]
             )
             # feature states have to be calculated for all blocks in evaluation interval boundaries,
-            # down to the first one (after genesis), as this is the first run:
-            assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 4
+            # down to the feature's start_height (before it, the state is always DEFINED), as this is the first run:
+            assert min(self._calculate_new_state_mock_block_height_calls(calculate_new_state_mock)) == 20
             # no blocks are voided, so we only use the height index:
             assert get_ancestor_iteratively_mock.call_count == 0
             assert artifacts1.tx_storage.get_vertices_count() == 67

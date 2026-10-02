@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: Hathor Labs
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
+import sys
+from typing import Callable, TypeVar
 from unittest.mock import Mock, patch
 
 import pytest
@@ -23,6 +26,8 @@ from hathor.transaction.storage import TransactionStorage
 from hathor.transaction.validation_state import ValidationState
 from hathor.util import not_none
 from hathor_tests.unittest import TestBuilder
+
+T = TypeVar('T')
 
 
 def get_storage(settings: HathorSettings, *, up_to_height: int) -> TransactionStorage:
@@ -101,7 +106,9 @@ def test_get_state_genesis() -> None:
 @pytest.mark.parametrize('block_height', [0, 1, 2, 3])
 def test_get_state_first_interval(block_height: int) -> None:
     settings = get_settings(features={
-        Feature.NOP_FEATURE_1: Mock()
+        Feature.NOP_FEATURE_1: Criteria.model_construct(
+            bit=Mock(), start_height=0, timeout_height=Mock(), version=Mock(),
+        ),
     })
     storage = get_storage(settings, up_to_height=block_height)
     service = FeatureService(settings=settings, tx_storage=storage)
@@ -645,3 +652,69 @@ def test_check_must_signal(
     result = service.is_signaling_mandatory_features(block)
 
     assert result == signaling_state
+
+
+def _get_long_storage(settings: HathorSettings, *, up_to_height: int) -> TransactionStorage:
+    """Like `get_storage`, but with a long chain of non-signaling blocks."""
+    artifacts = TestBuilder(settings).build()
+    storage = artifacts.tx_storage
+    parent = not_none(storage.get_block_by_height(0))
+    for height in range(1, up_to_height + 1):
+        block = Block(signal_bits=0, parents=[parent.hash], storage=storage)
+        block.update_hash()
+        block.get_metadata().validation = ValidationState.FULL
+        block.init_static_metadata_from_storage(settings, storage)
+        storage.save_transaction(block)
+        artifacts.indexes.height.add_new(height, block.hash, block.timestamp)
+        parent = block
+    return storage
+
+
+def _call_with_stack_headroom(headroom: int, func: Callable[[], T]) -> T:
+    """Call `func` allowing at most about `headroom` extra stack frames."""
+    previous_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(len(inspect.stack(0)) + headroom)
+    try:
+        return func()
+    finally:
+        sys.setrecursionlimit(previous_limit)
+
+
+def test_get_state_of_new_feature_on_long_chain_does_not_walk_history() -> None:
+    """A feature added to an existing chain has no cached states. Looking it up must not recurse through every
+    evaluation boundary down to genesis — testnet has ~9.5k boundaries, above the node's recursion limit."""
+    n_boundaries = 300
+    tip_height = 4 * n_boundaries + 2
+    start_height = 4 * (n_boundaries - 2)
+    settings = get_settings(features={
+        Feature.NOP_FEATURE_1: Criteria.model_construct(
+            bit=0, start_height=start_height, timeout_height=start_height + 40, minimum_activation_height=0,
+            lock_in_on_timeout=False, version=Mock(), signal_support_by_default=False,
+        ),
+    })
+    storage = _get_long_storage(settings, up_to_height=tip_height)
+    service = FeatureService(settings=settings, tx_storage=storage)
+    service.bit_signaling_service = Mock()
+    tip = not_none(storage.get_block_by_height(tip_height))
+
+    state = _call_with_stack_headroom(100, lambda: service.get_state(block=tip, feature=Feature.NOP_FEATURE_1))
+    assert state == FeatureState.STARTED
+
+
+def test_get_state_before_start_height_is_defined() -> None:
+    settings = get_settings(features={
+        Feature.NOP_FEATURE_1: Criteria.model_construct(
+            bit=0, start_height=40, timeout_height=80, minimum_activation_height=0,
+            lock_in_on_timeout=False, version=Mock(),
+        ),
+    })
+    storage = _get_long_storage(settings, up_to_height=45)
+    service = FeatureService(settings=settings, tx_storage=storage)
+    service.bit_signaling_service = Mock()
+
+    for height in range(0, 40):
+        block = not_none(storage.get_block_by_height(height))
+        assert service.get_state(block=block, feature=Feature.NOP_FEATURE_1) == FeatureState.DEFINED, height
+    for height in range(40, 46):
+        block = not_none(storage.get_block_by_height(height))
+        assert service.get_state(block=block, feature=Feature.NOP_FEATURE_1) == FeatureState.STARTED, height
