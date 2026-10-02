@@ -215,6 +215,17 @@ class VertexVerifier:
             raise TooManySigOps('TX[{}]: Maximum number of sigops for all outputs exceeded ({})'.format(
                 vertex.hash_hex, n_txops))
 
+    @staticmethod
+    def _pays_shielded_fee(vertex: BaseTransaction, params: VerificationParams) -> bool:
+        """Return whether the vertex must carry a `FeeHeader` to pay for its shielded outputs.
+
+        `verify_shielded_fee` requires a `FeeHeader` on every transaction with shielded outputs, so
+        the header must be admitted whenever shielded transactions are, even before `FEE_TOKENS`
+        is active. Otherwise no shielded output could be created on a network where shielded
+        transactions activate first.
+        """
+        return params.features.shielded_transactions and vertex.has_shielded_outputs()
+
     def get_allowed_headers(self, vertex: BaseTransaction, params: VerificationParams) -> set[type[AnyVertexHeader]]:
         """Return a set of allowed headers for the vertex."""
         allowed_headers: set[type[AnyVertexHeader]] = set()
@@ -230,7 +241,7 @@ class VertexVerifier:
             case TxVersion.TOKEN_CREATION_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
-                if params.features.fee_tokens:
+                if params.features.fee_tokens or self._pays_shielded_fee(vertex, params):
                     allowed_headers.add(FeeHeader)
                 # A shielded TCT carries shielded outputs of the new token plus a
                 # MintHeader declaring its initial supply. A MeltHeader is not
@@ -242,7 +253,7 @@ class VertexVerifier:
             case TxVersion.REGULAR_TRANSACTION:
                 if params.features.nanocontracts:
                     allowed_headers.add(NanoHeader)
-                if params.features.fee_tokens:
+                if params.features.fee_tokens or self._pays_shielded_fee(vertex, params):
                     allowed_headers.add(FeeHeader)
                 if params.features.shielded_transactions:
                     allowed_headers.add(ShieldedOutputsHeader)
