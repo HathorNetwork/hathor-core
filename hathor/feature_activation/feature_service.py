@@ -92,10 +92,17 @@ class FeatureService:
         if state := block.get_feature_state(feature=feature):
             return state
 
+        # A feature can only leave the DEFINED state on a boundary block at or after its `start_height`, so we don't
+        # have to walk back through previous boundaries. Otherwise, a feature added to an existing chain would recurse
+        # through every boundary down to genesis, which may exceed the recursion limit.
+        height = block.static_metadata.height
+        criteria = self._feature_settings.features.get(feature)
+        if criteria is None or height < criteria.start_height:
+            return FeatureState.DEFINED
+
         # All blocks within the same evaluation interval have the same state, that is, the state is only defined for
         # the block in each interval boundary. Therefore, we get the state of the previous boundary block or calculate
         # a new state if this block is a boundary block.
-        height = block.static_metadata.height
         offset_to_boundary = height % self._feature_settings.evaluation_interval
         offset_to_previous_boundary = offset_to_boundary or self._feature_settings.evaluation_interval
         previous_boundary_height = height - offset_to_previous_boundary
